@@ -13,6 +13,12 @@ export type { MissingValueColumn } from './orchestrator/table-data-ops';
 export { DuckDBSimplifiedType, RefineOperation } from './types';
 export { GEO_CONSTANTS } from './constants';
 export {
+  buildTableInBackground,
+  isBuiltTableFresh,
+  isTableBuildPending,
+  waitForTableBuild
+} from './operations/background-table-build';
+export {
   findGeometryColumnByName,
   isGeometryColumnName,
   isGeometryColumnType

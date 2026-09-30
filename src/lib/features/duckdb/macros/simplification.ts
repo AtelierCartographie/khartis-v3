@@ -186,6 +186,73 @@ const extract_land_macro = `CREATE OR REPLACE MACRO extract_land(
     WHERE NOT ST_IsEmpty(geom)
 );`;
 
+// The coverage_* macros are exact only on a coverage is_valid_polygon_coverage accepts.
+const is_valid_polygon_coverage_macro = `CREATE OR REPLACE MACRO is_valid_polygon_coverage(
+    input_table
+) AS TABLE (
+    WITH polygons AS (
+        FROM query_table(input_table)
+        SELECT ST_CollectionExtract(geom, 3) AS geom
+        WHERE geom IS NOT NULL
+    )
+    FROM polygons
+    SELECT
+        COALESCE(bool_and(ST_IsValid(geom)), TRUE)
+        AND ST_CoverageInvalidEdges_Agg(geom) IS NULL AS is_valid
+);`;
+
+const extract_coverage_land_macro = `CREATE OR REPLACE MACRO extract_coverage_land(
+    input_table
+) AS TABLE (
+    FROM query_table(input_table)
+    SELECT ST_CoverageUnion_Agg(ST_CollectionExtract(geom, 3)) AS geom
+    WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+);`;
+
+const extract_coverage_innerlines_macro = `CREATE OR REPLACE MACRO extract_coverage_innerlines(
+    input_table
+) AS TABLE (
+    WITH
+    rings AS (
+        FROM query_table(input_table)
+        SELECT UNNEST(ST_Dump(ST_Boundary(ST_CollectionExtract(geom, 3)))).geom AS ring
+        WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+    ),
+    vertex_pairs AS (
+        FROM rings
+        SELECT
+            ring,
+            UNNEST(generate_series(1, ST_NPoints(ring)::BIGINT - 1))::INTEGER AS i
+    ),
+    segments AS (
+        FROM vertex_pairs
+        SELECT
+            ST_X(ST_PointN(ring, i)) AS x1,
+            ST_Y(ST_PointN(ring, i)) AS y1,
+            ST_X(ST_PointN(ring, i + 1)) AS x2,
+            ST_Y(ST_PointN(ring, i + 1)) AS y2
+    ),
+    oriented AS (
+        FROM segments
+        SELECT
+            CASE WHEN (x1, y1) <= (x2, y2) THEN x1 ELSE x2 END AS start_x,
+            CASE WHEN (x1, y1) <= (x2, y2) THEN y1 ELSE y2 END AS start_y,
+            CASE WHEN (x1, y1) <= (x2, y2) THEN x2 ELSE x1 END AS end_x,
+            CASE WHEN (x1, y1) <= (x2, y2) THEN y2 ELSE y1 END AS end_y
+        WHERE x1 <> x2 OR y1 <> y2
+    ),
+    shared AS (
+        FROM oriented
+        SELECT start_x, start_y, end_x, end_y
+        GROUP BY ALL
+        HAVING COUNT(*) > 1
+    )
+    FROM shared
+    SELECT ST_LineMerge(ST_Collect(list(
+        ST_MakeLine(ST_Point(start_x, start_y), ST_Point(end_x, end_y))
+    ))) AS geom
+);`;
+
 const extract_outerlines_macro = `CREATE OR REPLACE MACRO extract_outerlines(
     input_table,
     noding_factor := 0.0
@@ -310,6 +377,9 @@ export const simplification_macros =
   noded_coverage_macro +
   extract_innerlines_macro +
   extract_land_macro +
+  is_valid_polygon_coverage_macro +
+  extract_coverage_land_macro +
+  extract_coverage_innerlines_macro +
   extract_outerlines_macro +
   simplify_and_clean_macro +
   snap_linestring_normalized_macro +

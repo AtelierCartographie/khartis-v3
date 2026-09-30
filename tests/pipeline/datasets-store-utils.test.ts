@@ -463,7 +463,7 @@ describe('cleanFileForStorage', () => {
       validation: undefined,
       parsedData: undefined,
       content: new ArrayBuffer(8),
-      preparedGeoJSON: undefined,
+      archiveLayerSnapshot: undefined,
       duplicates: undefined,
       statistics: undefined,
       sourceType: 'local' as never,

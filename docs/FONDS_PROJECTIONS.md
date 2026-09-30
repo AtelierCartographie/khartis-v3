@@ -23,7 +23,7 @@ Chemins relatifs à `src/lib/features/`.
 | Responsabilité                              | Fichier                                                                                                                            |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Métadonnées, chargement et cache des fonds  | `map/services/basemap.service.svelte.ts`                                                                                           |
-| Lecture GeoParquet et métadonnées GeoArrow  | `map/services/read-geojson-arrow.service.ts`                                                                                       |
+| Lecture GeoParquet et métadonnées GeoArrow  | `map/services/read-geoparquet-arrow.service.ts`                                                                                    |
 | Recherche dans le catalogue                 | `map/services/basemap-catalog.service.svelte.ts`                                                                                   |
 | Import d'un fond                            | `map/services/basemap-import.service.ts`                                                                                           |
 | Chargement et cadrage du fond de référence  | `map/hooks/use-map-reference-basemap.svelte.ts`                                                                                    |

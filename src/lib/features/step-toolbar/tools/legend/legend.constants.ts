@@ -6,7 +6,8 @@ import {
 export const LEGEND_DEFAULTS = {
   FONT_FAMILY: CARTOGRAPHIC_FONT_FAMILY,
   FONT_SIZE: DEFAULT_FONT_SIZE as number,
-  OPACITY: 100 as number
+  OPACITY: 100 as number,
+  AUTO_TITLE_MAX_LENGTH: 32 as number
 };
 
 export const LEGEND_ID_PREFIXES = {

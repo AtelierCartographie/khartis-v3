@@ -22,6 +22,7 @@ const {
   createFileFromAssetRef,
   ensureUploadedFileAssets,
   persistAssetBlob,
+  persistAssetContent,
   readAssetBytes
 } = await import('./asset-store.service');
 
@@ -296,42 +297,33 @@ describe('asset store errors', () => {
     });
   });
 
-  it('should persist an extracted archive layer as a GeoJSON asset', async () => {
+  it('should persist an extracted archive layer as a GeoParquet asset', async () => {
     const database = new FakeAssetDatabase();
     mocks.getProjectDatabase.mockResolvedValue(
       database as unknown as IDBDatabase
     );
     setStorageEstimate(100 * 1024 * 1024, 0);
-    const preparedGeoJSON = JSON.stringify({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [2.3, 48.8] },
-          properties: { name: 'Paris' }
-        }
-      ]
-    });
+    const archiveLayerSnapshot = new Uint8Array([80, 65, 82, 49]);
 
     const preparedFile = await ensureUploadedFileAssets({
       id: 'cities',
-      name: 'cities-points',
+      name: 'cities-points.shp',
       size: 256,
       type: 'application/zip',
       fileType: FileType.SHAPEFILE,
       status: FileStatus.COMPLETE,
       sourceType: DataSourceType.FILE_UPLOAD,
       sourceArchive: 'two-shapefiles.zip',
-      preparedGeoJSON,
+      archiveLayerSnapshot,
       originalFile: new File([new Uint8Array([1, 2, 3])], 'archive.zip', {
         type: 'application/zip'
       })
     });
 
     expect(preparedFile.assetRef).toMatchObject({
-      originalName: 'cities-points.geojson',
-      mimeType: 'application/geo+json',
-      size: new Blob([preparedGeoJSON]).size,
+      originalName: 'cities-points.parquet',
+      mimeType: 'application/x-geoparquet',
+      size: archiveLayerSnapshot.byteLength,
       kind: 'primary'
     });
 
@@ -340,8 +332,41 @@ describe('asset store errors', () => {
     }
 
     const restoredFile = await createFileFromAssetRef(preparedFile.assetRef);
-    expect(restoredFile.name).toBe('cities-points.geojson');
-    expect(restoredFile.type).toBe('application/geo+json');
-    expect(await restoredFile.text()).toBe(preparedGeoJSON);
+    expect(restoredFile.name).toBe('cities-points.parquet');
+    expect(new Uint8Array(await restoredFile.arrayBuffer())).toEqual(
+      archiveLayerSnapshot
+    );
+  });
+
+  it('should keep a legacy GeoJSON archive layer asset', async () => {
+    const database = new FakeAssetDatabase();
+    mocks.getProjectDatabase.mockResolvedValue(
+      database as unknown as IDBDatabase
+    );
+    setStorageEstimate(100 * 1024 * 1024, 0);
+    const legacyAssetRef = await persistAssetContent(
+      '{"type":"FeatureCollection","features":[]}',
+      {
+        originalName: 'cities-points.geojson',
+        mimeType: 'application/geo+json',
+        size: 42,
+        kind: 'primary'
+      }
+    );
+
+    const preparedFile = await ensureUploadedFileAssets({
+      id: 'cities',
+      name: 'cities-points.shp',
+      size: 256,
+      type: 'application/zip',
+      fileType: FileType.SHAPEFILE,
+      status: FileStatus.COMPLETE,
+      sourceType: DataSourceType.FILE_UPLOAD,
+      sourceArchive: 'two-shapefiles.zip',
+      assetRef: legacyAssetRef,
+      archiveLayerSnapshot: new Uint8Array([80, 65, 82, 49])
+    });
+
+    expect(preparedFile.assetRef).toEqual(legacyAssetRef);
   });
 });

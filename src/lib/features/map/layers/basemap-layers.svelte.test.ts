@@ -1,9 +1,20 @@
-import { COORDINATE_SYSTEM } from '@deck.gl/core';
-import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import {
+  GeoJsonLayer,
+  PathLayer,
+  ScatterplotLayer,
+  SolidPolygonLayer,
+  TextLayer
+} from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { geoEquirectangular } from 'd3-geo';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
-import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
+import type {
+  FeatureCollection,
+  LineString,
+  MultiLineString,
+  Polygon
+} from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
@@ -22,13 +33,19 @@ import {
   basemapLayersStore
 } from '../stores/basemap-layers.store.svelte';
 import type { BBox, GeometryInfo } from '../types';
+import { buildKhartisCompositeProjection } from '../utils/khartis-projection-factories.utils';
+import projectionPresets from '../../../../../static/basemaps/projection-presets.json';
 
 const {
   arrowTableToGeoJSONMock,
   extractGeometryInfoMock,
   projectGeoJSONMock,
+  parseSolidPolygonsMock,
   parseSolidPolygonsWithProjectionMock,
-  parsePathsWithProjectionMock
+  parsePathsMock,
+  parsePathsWithProjectionMock,
+  parsePointDataMock,
+  cityPointData
 } = vi.hoisted(() => {
   class WorkerStub {
     terminate() {}
@@ -48,8 +65,12 @@ const {
     arrowTableToGeoJSONMock: vi.fn(),
     extractGeometryInfoMock: vi.fn(),
     projectGeoJSONMock: vi.fn(),
+    parseSolidPolygonsMock: vi.fn(),
     parseSolidPolygonsWithProjectionMock: vi.fn(),
-    parsePathsWithProjectionMock: vi.fn()
+    parsePathsMock: vi.fn(),
+    parsePathsWithProjectionMock: vi.fn(),
+    parsePointDataMock: vi.fn(),
+    cityPointData: new WeakMap<object, unknown>()
   };
 });
 
@@ -71,8 +92,11 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
   return {
     ...actual,
     projectGeoJSON: projectGeoJSONMock,
+    parseSolidPolygons: parseSolidPolygonsMock,
     parseSolidPolygonsWithProjection: parseSolidPolygonsWithProjectionMock,
-    parsePathsWithProjection: parsePathsWithProjectionMock
+    parsePaths: parsePathsMock,
+    parsePathsWithProjection: parsePathsWithProjectionMock,
+    parsePointData: parsePointDataMock
   };
 });
 
@@ -84,9 +108,10 @@ import {
   createMersLayer,
   createReliefLayers,
   createTerreLayers,
-  createVillesLayer,
+  createVillesLayers,
   type MetadataLayerEntry
 } from './basemap-layers';
+import type { BasemapCity } from './basemap-cities';
 
 function createProjectionContext() {
   return {
@@ -189,36 +214,13 @@ function createCompositeGraticuleProjectionContext() {
   };
 }
 
-function createPolygonGeometryInfo(): GeometryInfo {
-  return {
-    type: 'Polygon',
-    encoding: 'geojson',
-    geoColumn: 'geometry',
-    isNativeGeoArrow: false,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: true
-  };
-}
-
 function createNativePolygonGeometryInfo(): GeometryInfo {
   return {
     type: 'MultiPolygon',
     encoding: 'geoarrow.multipolygon',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
-  };
-}
-
-function createLineGeometryInfo(): GeometryInfo {
-  return {
-    type: 'LineString',
-    encoding: 'geojson',
-    geoColumn: 'geometry',
-    isNativeGeoArrow: false,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: true
+    isWkbEncoded: false
   };
 }
 
@@ -228,45 +230,17 @@ function createNativeLineGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.linestring',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
-function createPointGeometryInfo(): GeometryInfo {
+function createNativePointGeometryInfo(): GeometryInfo {
   return {
     type: 'Point',
-    encoding: 'geojson',
+    encoding: 'geoarrow.point',
     geoColumn: 'geometry',
-    isNativeGeoArrow: false,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: true
-  };
-}
-
-function createPolygonGeoJSON(
-  id: string
-): FeatureCollection<Polygon, { id: string }> {
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: { id },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            [
-              [0, 0],
-              [1, 0],
-              [1, 1],
-              [0, 1],
-              [0, 0]
-            ]
-          ]
-        }
-      }
-    ]
+    isNativeGeoArrow: true,
+    isWkbEncoded: false
   };
 }
 
@@ -291,26 +265,103 @@ function createLineGeoJSON(
   };
 }
 
-function createPointGeoJSON(
-  id: string
-): FeatureCollection<Point, { id: string; adm0cap: number; pop_max: number }> {
+type CityLabel = { position: [number, number]; text: string };
+
+function createScalingProjectionContext(factor: number) {
   return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {
-          id,
-          adm0cap: 1,
-          pop_max: 1_000_000
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [2, 3]
-        }
-      }
-    ]
+    projection: {
+      stream: (sink: {
+        point: (x: number, y: number) => void;
+        lineStart: () => void;
+        lineEnd: () => void;
+        polygonStart: () => void;
+        polygonEnd: () => void;
+      }) => ({
+        ...sink,
+        point: (x: number, y: number) => sink.point(x * factor, y * factor)
+      })
+    } as ProjectionLike
   };
+}
+
+function createCityTable(
+  rows: Record<string, unknown>[],
+  positions: [number, number][],
+  featureIds = positions.map((_, index) => index)
+): ArrowTable {
+  const table = {
+    getChild(name: string) {
+      return rows.some((row) => name in row)
+        ? { get: (index: number) => rows[index]?.[name] }
+        : null;
+    }
+  } as unknown as ArrowTable;
+  cityPointData.set(table, {
+    length: positions.length,
+    positions: new Float64Array(positions.flat()),
+    featureIds: new Uint32Array(featureIds),
+    size: 2
+  });
+  return table;
+}
+
+function createCityMetadata(table: ArrowTable, type: BasemapLayerType) {
+  extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
+    candidate === table ? createNativePointGeometryInfo() : null
+  );
+  return {
+    metadataLayers: [
+      {
+        table,
+        style: null,
+        type,
+        file: 'cities.parquet'
+      } satisfies MetadataLayerEntry
+    ],
+    availableMetadataLayerTypes: [type],
+    stylePresets: null
+  };
+}
+
+function findCitySymbolLayer(layers: Layer[]): Layer | undefined {
+  return layers.find(
+    (layer) =>
+      String(layer.props.id).includes('basemap-villes') &&
+      !String(layer.props.id).includes('labels')
+  );
+}
+
+function findCityLabelLayer(layers: Layer[]): Layer | undefined {
+  return layers.find((layer) =>
+    String(layer.props.id).includes('basemap-villes-labels')
+  );
+}
+
+function readBinaryPositions(layer: Layer | undefined): number[] {
+  const data = layer?.props.data as
+    { attributes: { getPosition: { value: Float64Array } } } | undefined;
+  return Array.from(data?.attributes.getPosition.value ?? []);
+}
+
+function readBinaryPolygon(layer: Layer | undefined): Float64Array | undefined {
+  const data = layer?.props.data as
+    { attributes: { getPolygon: { value: Float64Array } } } | undefined;
+  return data?.attributes.getPolygon.value;
+}
+
+function readFirstVertexAttribute(
+  layer: Layer | undefined,
+  name: 'getColor' | 'getWidth'
+): number[] {
+  const data = layer?.props.data as
+    | {
+        attributes?: Partial<
+          Record<string, { value: ArrayLike<number>; size: number }>
+        >;
+      }
+    | undefined;
+  const attribute = data?.attributes?.[name];
+  return attribute ? Array.from(attribute.value).slice(0, attribute.size) : [];
 }
 
 function createTerreConfig() {
@@ -336,24 +387,31 @@ function clearDocumentFonts(): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  parsePointDataMock.mockImplementation((table: object) =>
+    cityPointData.get(table)
+  );
   clearDocumentFonts();
   basemapLayersStore.resetToDefaults();
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
-  parseSolidPolygonsWithProjectionMock.mockReturnValue({
+  const polygonData = {
     length: 1,
     positions: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
     polygonIndices: new Uint32Array([0, 4]),
     holeIndices: new Uint32Array([]),
     featureIds: new Uint32Array([0]),
     size: 2
-  });
-  parsePathsWithProjectionMock.mockReturnValue({
+  };
+  const pathData = {
     length: 1,
     positions: new Float32Array([0, 0, 1, 0, 1, 1]),
     startIndices: new Uint32Array([0, 3]),
     featureIds: new Uint32Array([0]),
     size: 2
-  });
+  };
+  parseSolidPolygonsMock.mockReturnValue(polygonData);
+  parseSolidPolygonsWithProjectionMock.mockReturnValue(polygonData);
+  parsePathsMock.mockReturnValue(pathData);
+  parsePathsWithProjectionMock.mockReturnValue(pathData);
 });
 
 describe('basemap projection fallbacks', () => {
@@ -713,27 +771,6 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeNull();
   });
 
-  it('projects terre GeoJSON fallback layers with the active projection', () => {
-    const sourceGeoJSON = createPolygonGeoJSON('raw-land');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-land');
-    const table = {} as ArrowTable;
-    const ctx = createProjectionContext();
-
-    extractGeometryInfoMock.mockReturnValue(createPolygonGeometryInfo());
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
-
-    const layers = createTerreLayers(table, createTerreConfig(), ctx);
-    const layer = layers[0] as GeoJsonLayer | undefined;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
-      ctx.projection
-    );
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
-  });
-
   it('uses Arrow native path for terre when a composite projection is active', () => {
     const table = {} as ArrowTable;
     const ctx = createCompositeProjectionContext();
@@ -767,27 +804,6 @@ describe('basemap projection fallbacks', () => {
     expect(layers.some((layer) => String(layer.id).endsWith('-stroke'))).toBe(
       false
     );
-  });
-
-  it('disables the stroke on the GeoJSON fallback path when strokeThickness is 0', () => {
-    const sourceGeoJSON = createPolygonGeoJSON('raw-land');
-    const table = {} as ArrowTable;
-    const ctx = createProjectionContext();
-
-    extractGeometryInfoMock.mockReturnValue(createPolygonGeometryInfo());
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
-    projectGeoJSONMock.mockImplementation((geojson) => geojson);
-
-    const layers = createTerreLayers(
-      table,
-      { ...createTerreConfig(), strokeThickness: 0 },
-      ctx
-    );
-    const layer = layers[0] as GeoJsonLayer | undefined;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.stroked).toBe(false);
-    expect(layer?.props.getLineWidth).toBe(0);
   });
 
   it('projects generated equator lines when a custom projection is active', () => {
@@ -1077,7 +1093,7 @@ describe('basemap projection fallbacks', () => {
     expect(last[1]).toBeCloseTo(50, 6);
   });
 
-  it('expands composite graticule clipping to the visible canvas extent', () => {
+  it('keeps composite graticules inside the sub-projection frame within the visible canvas', () => {
     const subFrameExtent: [[number, number], [number, number]] = [
       [25, 25],
       [75, 75]
@@ -1129,11 +1145,70 @@ describe('basemap projection fallbacks', () => {
     const first = coordinates[0];
     const last = coordinates[coordinates.length - 1];
 
-    expect(first[0]).toBeCloseTo(0, 6);
+    expect(first[0]).toBeCloseTo(25, 6);
     expect(first[1]).toBeCloseTo(50, 6);
-    expect(last[0]).toBeCloseTo(100, 6);
+    expect(last[0]).toBeCloseTo(75, 6);
     expect(last[1]).toBeCloseTo(50, 6);
     expect(projection.clipExtent()).toEqual(subFrameExtent);
+  });
+
+  it('does not draw a chord across the frame where a conic sub-projection is cut', () => {
+    const width = 1200;
+    const height = 800;
+    const preset = projectionPresets.BRESIL_ALBERS;
+    const projection = buildKhartisCompositeProjection({
+      width,
+      height,
+      entries: preset.entries.map((entry) => ({
+        id: entry.id,
+        proj4: entry.proj4,
+        bounds: [...entry.bounds[0], ...entry.bounds[1]] as BBox,
+        layout: entry.layout
+      }))
+    });
+
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 5,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {
+        bbox: [-76, -37, -29, 10],
+        graticuleClipExtent: [
+          [0, 0],
+          [width, height]
+        ],
+        projection
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<
+      LineString | MultiLineString
+    >;
+    const lines = data.features.flatMap((feature) =>
+      feature.geometry.type === 'LineString'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates
+    );
+    const longestStep = Math.max(
+      ...lines.flatMap((line) =>
+        line
+          .slice(1)
+          .map((point, index) =>
+            Math.hypot(point[0] - line[index][0], point[1] - line[index][1])
+          )
+      )
+    );
+
+    expect(lines.length).toBeGreaterThan(0);
+    expect(longestStep).toBeLessThan(width / 4);
   });
 
   it('keeps generated meridians and parallels visible when dotted styling is disabled', () => {
@@ -1249,9 +1324,8 @@ describe('basemap projection fallbacks', () => {
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.EQUATEUR, true);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERIDIENS, true);
     extractGeometryInfoMock.mockImplementation((table) =>
-      table === geographicLinesTable ? createLineGeometryInfo() : null
+      table === geographicLinesTable ? createNativeLineGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockReturnValue(createLineGeoJSON('geo-lines'));
 
     const layers = createBasemapLayers(
       null,
@@ -1740,14 +1814,12 @@ describe('basemap projection fallbacks', () => {
   });
 
   it('projects city point overlays before rendering them', () => {
-    const sourceCities = createPointGeoJSON('raw-city');
-    const projectedCities = createPointGeoJSON('projected-city');
-    const ctx = createProjectionContext();
+    const cities: BasemapCity[] = [
+      { position: [2, 3], properties: { adm0cap: 1, pop_max: 1_000_000 } }
+    ];
 
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-
-    const layer = createVillesLayer(
-      sourceCities,
+    const [layer] = createVillesLayers(
+      cities,
       {
         id: 'villes',
         visible: true,
@@ -1757,19 +1829,19 @@ describe('basemap projection fallbacks', () => {
         size: 6,
         opacity: 100
       },
-      ctx
-    ) as GeoJsonLayer | null;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceCities,
-      ctx.projection
+      createScalingProjectionContext(10)
     );
-    expect(layer?.props.data).toBe(projectedCities);
+
+    expect(layer).toBeInstanceOf(ScatterplotLayer);
+    expect(readBinaryPositions(layer)).toEqual([20, 30]);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+    expect(projectGeoJSONMock).not.toHaveBeenCalled();
   });
 
   it('does not replace cached raw city polygons while rendering projected symbols', () => {
-    const sourceCities = createPointGeoJSON('raw-city');
-    const projectedCities = createPointGeoJSON('projected-city');
+    const cities: BasemapCity[] = [
+      { position: [2, 3], properties: { adm0cap: 1, pop_max: 1_000_000 } }
+    ];
     const config = {
       id: 'villes' as const,
       visible: true,
@@ -1780,66 +1852,37 @@ describe('basemap projection fallbacks', () => {
       opacity: 100
     };
 
-    const rawLayer = createVillesLayer(
-      sourceCities,
+    const rawLayers = createVillesLayers(cities, config, {});
+    const projectedLayers = createVillesLayers(
+      cities,
       config,
-      {}
-    ) as GeoJsonLayer | null;
-    const rawPolygonData = rawLayer?.props.data;
+      createScalingProjectionContext(10)
+    );
+    const nextRawLayers = createVillesLayers(cities, config, {});
 
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-
-    const projectedLayer = createVillesLayer(
-      sourceCities,
-      config,
-      createProjectionContext()
-    ) as GeoJsonLayer | null;
-    const nextRawLayer = createVillesLayer(
-      sourceCities,
-      config,
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(projectedLayer?.props.data).not.toBe(rawPolygonData);
-    expect(nextRawLayer?.props.data).toBe(rawPolygonData);
+    expect(rawLayers.map((layer) => layer.constructor)).toEqual([
+      SolidPolygonLayer,
+      PathLayer
+    ]);
+    expect(readBinaryPolygon(projectedLayers[0])).not.toBe(
+      readBinaryPolygon(rawLayers[0])
+    );
+    expect(readBinaryPolygon(nextRawLayers[0])).toBe(
+      readBinaryPolygon(rawLayers[0])
+    );
   });
 
   it('connects centroid metadata to city symbols and labels', () => {
-    const centroidTable = { id: 'cities' } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'small',
-            name: 'Small',
-            pop_max: 10,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [1, 1]
-          }
-        },
-        {
-          type: 'Feature',
-          properties: {
-            id: 'large',
-            name: '東京',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
+    const centroidTable = createCityTable(
+      [
+        { id: 'small', name: 'Small', pop_max: 10, adm0cap: 0 },
+        { id: 'large', name: '東京', pop_max: 100n, adm0cap: 0 }
+      ],
+      [
+        [1, 1],
+        [2, 2]
       ]
-    };
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, {
@@ -1849,80 +1892,34 @@ describe('basemap projection fallbacks', () => {
       labelFontFamily: 'Cabin'
     });
 
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? citiesGeoJSON : null
-    );
-
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
 
-    const symbolLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const symbolData = symbolLayer?.props.data as
-      FeatureCollection<Point, { id: string }> | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-    const textCharacterSet = labelLayer?.props.textCharacterSet as
-      string[] | undefined;
+    const symbolLayer = findCitySymbolLayer(layers.foreground);
+    const labelLayer = findCityLabelLayer(layers.foreground) as
+      TextLayer<CityLabel> | undefined;
+    const labels = labelLayer?.props.data as CityLabel[] | undefined;
+    const characterSet = labelLayer?.props.characterSet as string[] | undefined;
 
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(symbolData?.features).toHaveLength(1);
-    expect(symbolData?.features[0]?.properties.id).toBe('large');
-    expect(labelData?.features).toHaveLength(1);
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe('東京');
-    expect(labelLayer?.props.getTextColor).toEqual([255, 0, 0, 255]);
-    expect(textCharacterSet).not.toBe('auto');
-    expect(textCharacterSet).toContain('東');
-    expect(textCharacterSet).toContain('京');
+    expect(symbolLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(readBinaryPositions(symbolLayer)).toEqual([2, 2]);
+    expect(labelLayer).toBeInstanceOf(TextLayer);
+    expect(labels?.map((label) => label.text)).toEqual(['東京']);
+    expect(labelLayer?.props.getColor).toEqual([255, 0, 0, 255]);
+    expect(characterSet).not.toBe('auto');
+    expect(characterSet).toContain('東');
+    expect(characterSet).toContain('京');
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 
   it('waits for font assets before rendering city labels', () => {
-    const centroidTable = {
-      id: 'cities-font-loading'
-    } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'city',
-            name: 'City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
+    const centroidTable = createCityTable(
+      [{ id: 'city', name: 'City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     Object.defineProperty(document, 'fonts', {
       configurable: true,
@@ -1932,342 +1929,121 @@ describe('basemap projection fallbacks', () => {
       }
     });
     fontAssetsStore.reset();
-
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? citiesGeoJSON : null
-    );
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
-    );
-
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
 
     expect(fontAssetsStore.ready).toBe(false);
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeUndefined();
+    expect(findCitySymbolLayer(layers.foreground)).toBeInstanceOf(
+      ScatterplotLayer
+    );
+    expect(findCityLabelLayer(layers.foreground)).toBeUndefined();
   });
 
-  it('normalizes single-coordinate centroid metadata to point city layers', () => {
-    const centroidTable = { id: 'geoarrow-centroids' } as unknown as ArrowTable;
-    const centroidsGeoJSON: FeatureCollection<
-      LineString,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'centroid-city',
-            name: 'Centroid City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'LineString',
-            coordinates: [[2, 2]]
-          }
-        }
-      ]
-    };
+  it('expands multipoint centroids into one city per point', () => {
+    const centroidTable = createCityTable(
+      [{ id: 'archipelago', name: 'Archipel', pop_max: 100, adm0cap: 0 }],
+      [
+        [2, 2],
+        [4, 4]
+      ],
+      [0, 0]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable
-        ? {
-            type: 'MULTIPOINT',
-            encoding: 'geoarrow.multipoint',
-            geoColumn: 'geometry',
-            isNativeGeoArrow: true,
-            isWkbEncoded: false,
-            isGeoJsonEncoded: false
-          }
-        : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? centroidsGeoJSON : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
 
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const symbolData = symbolLayer?.props.data as
-      FeatureCollection<Point, { id: string }> | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(symbolData?.features[0]?.geometry).toEqual({
-      type: 'Point',
-      coordinates: [2, 2]
-    });
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe(
-      'Centroid City'
+    expect(readBinaryPositions(findCitySymbolLayer(layers.foreground))).toEqual(
+      [2, 2, 4, 4]
     );
+    expect(labels?.map((label) => label.text)).toEqual([
+      'Archipel',
+      'Archipel'
+    ]);
   });
 
   it('falls back to point metadata for city symbols and labels', () => {
-    const pointTable = { id: 'point-cities' } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'point-city',
-            name: 'Point City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
+    const pointTable = createCityTable(
+      [{ id: 'point-city', name: 'Point City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === pointTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === pointTable ? citiesGeoJSON : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: pointTable,
-            style: null,
-            type: BasemapLayerType.POINT,
-            file: 'points.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.POINT],
-        stylePresets: null
-      }
+      createCityMetadata(pointTable, BasemapLayerType.POINT)
     );
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
 
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe(
-      'Point City'
+    expect(findCitySymbolLayer(layers.foreground)).toBeInstanceOf(
+      ScatterplotLayer
     );
+    expect(labels?.map((label) => label.text)).toEqual(['Point City']);
   });
 
   it('projects city symbols and labels with the active projection', () => {
-    const centroidTable = { id: 'projected-cities' } as unknown as ArrowTable;
-    const sourceCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'raw-city',
-            name: 'Raw City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
-    const projectedCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'projected-city',
-            name: 'Projected City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [20, 20]
-          }
-        }
-      ]
-    };
-    const ctx = createProjectionContext();
+    const centroidTable = createCityTable(
+      [{ id: 'raw-city', name: 'Raw City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
+
+    const layers = createBasemapLayers(
+      null,
+      createScalingProjectionContext(10),
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? sourceCities : null
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
+
+    expect(readBinaryPositions(findCitySymbolLayer(layers.foreground))).toEqual(
+      [20, 20]
     );
-
-    const layers = createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
-
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(2);
-    expect(symbolLayer?.props.data).toBe(projectedCities);
-    expect(labelLayer?.props.data).toBe(projectedCities);
+    expect(labels?.map((label) => label.position)).toEqual([[20, 20]]);
   });
 
-  it('reuses the labelled city subset across identical projected rebuilds', () => {
-    const centroidTable = {
-      id: 'memoized-projected-cities'
-    } as unknown as ArrowTable;
-    const sourceCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'city',
-            name: 'City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
-    const projectedCities = createPointGeoJSON('projected-city');
-    const ctx = createProjectionContext();
+  it('reuses the projected city subset across identical rebuilds', () => {
+    const centroidTable = createCityTable(
+      [{ id: 'city', name: 'City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
+    const ctx = createScalingProjectionContext(10);
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? sourceCities : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
-    createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
-    createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
+    const metadata = createCityMetadata(
+      centroidTable,
+      BasemapLayerType.CENTROID
+    );
+    const first = findCityLabelLayer(
+      createBasemapLayers(null, ctx, metadata).foreground
+    );
+    const second = findCityLabelLayer(
+      createBasemapLayers(null, ctx, metadata).foreground
+    );
+    const firstLabels = first?.props.data as CityLabel[] | undefined;
+    const secondLabels = second?.props.data as CityLabel[] | undefined;
 
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(2);
+    expect(secondLabels?.[0]?.position).toBe(firstLabels?.[0]?.position);
   });
 
   it('renders the Territoire from LAND metadata even when worldBaseTable is null', () => {
@@ -2351,60 +2127,16 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
-  it('projects metadata limit fallbacks inside createBasemapLayers', () => {
-    const metadataTable = { id: 'limit' } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('raw-meta-limit');
-    const projectedGeoJSON = createLineGeoJSON('projected-meta-limit');
-    const ctx = createProjectionContext();
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createLineGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
-
-    const layers = createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LIMIT,
-          file: 'limits.geojson'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-      stylePresets: null
-    });
-
-    const metaLimitLayer = layers.foreground.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id).includes('basemap-meta-limit')
-    ) as GeoJsonLayer | undefined;
-
-    expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
-  });
-
   it('places frontieres below the thematic block by default and above it when its placement is flipped', () => {
     const metadataTable = { id: 'limit-placement' } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('raw-meta-limit-placement');
     const ctx = createProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createLineGeometryInfo() : null
+      table === metadataTable ? createNativeLineGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(sourceGeoJSON);
 
     const buildLayers = () =>
       createBasemapLayers(null, ctx, {
@@ -2413,7 +2145,7 @@ describe('basemap projection fallbacks', () => {
             table: metadataTable,
             style: null,
             type: BasemapLayerType.LIMIT,
-            file: 'limits-placement.geojson'
+            file: 'limits-placement.parquet'
           } satisfies MetadataLayerEntry
         ],
         availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
@@ -2489,8 +2221,7 @@ describe('basemap projection fallbacks', () => {
             encoding: 'geoarrow.wkb',
             geoColumn: 'geometry',
             isNativeGeoArrow: true,
-            isWkbEncoded: true,
-            isGeoJsonEncoded: false
+            isWkbEncoded: true
           } satisfies GeometryInfo)
         : null
     );
@@ -2524,8 +2255,6 @@ describe('basemap projection fallbacks', () => {
       id: 'world-base-stroke'
     } as unknown as ArrowTable;
     const metadataTable = { id: 'limit-stroke' } as unknown as ArrowTable;
-    const worldGeoJSON = createPolygonGeoJSON('raw-world-land-stroke');
-    const limitGeoJSON = createLineGeoJSON('raw-meta-limit-stroke');
     const ctx = createProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
@@ -2536,55 +2265,50 @@ describe('basemap projection fallbacks', () => {
     });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
-      if (table === worldBaseTable) return createPolygonGeometryInfo();
-      if (table === metadataTable) return createLineGeometryInfo();
-      return null;
-    });
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
-      if (table === worldBaseTable) return worldGeoJSON;
-      if (table === metadataTable) return limitGeoJSON;
+      if (table === worldBaseTable) return createNativePolygonGeometryInfo();
+      if (table === metadataTable) return createNativeLineGeometryInfo();
       return null;
     });
 
-    const buildTerreLayer = () => {
+    const buildTerreStrokeLayer = () => {
       const layers = createBasemapLayers(worldBaseTable, ctx, {
         metadataLayers: [
           {
             table: metadataTable,
             style: null,
             type: BasemapLayerType.LIMIT,
-            file: 'limits.geojson'
+            file: 'limits.parquet'
           } satisfies MetadataLayerEntry
         ],
         availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
         stylePresets: null
       });
+      expect(
+        layers.foreground.some((layer) =>
+          String(layer.props.id).includes('basemap-meta-limit')
+        )
+      ).toBe(true);
       return layers.background.find(
         (layer) =>
-          layer instanceof GeoJsonLayer &&
-          String(layer.props.id) === 'basemap-terre-basemap-default'
-      ) as GeoJsonLayer | undefined;
+          layer instanceof PathLayer &&
+          String(layer.props.id) === 'basemap-terre-basemap-default-stroke'
+      ) as PathLayer | undefined;
     };
 
-    // Visible limits used to suppress it, which left the section's contour
-    // toggle inert.
-    const withStroke = buildTerreLayer();
-    expect(withStroke?.props.stroked).toBe(true);
-    expect(withStroke?.props.getLineWidth).toBeGreaterThan(0);
-    expect(withStroke?.props.getLineColor).not.toEqual([0, 0, 0, 0]);
+    const withStroke = buildTerreStrokeLayer();
+    expect(withStroke).toBeInstanceOf(PathLayer);
+    expect(withStroke?.props.getWidth).toBeGreaterThan(0);
+    expect(withStroke?.props.getColor).not.toEqual([0, 0, 0, 0]);
 
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.TERRE, {
       strokeVisible: false
     });
 
-    const withoutStroke = buildTerreLayer();
-    expect(withoutStroke?.props.stroked).toBe(false);
-    expect(withoutStroke?.props.getLineWidth).toBe(0);
+    expect(buildTerreStrokeLayer()).toBeUndefined();
   });
 
   it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
     const metadataTable = { id: 'limit-style' } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('styled-meta-limit');
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
@@ -2597,13 +2321,10 @@ describe('basemap projection fallbacks', () => {
     });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createLineGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
+      table === metadataTable ? createNativeLineGeometryInfo() : null
     );
 
-    const createLayers = () =>
+    const findLimitLayer = () =>
       createBasemapLayers(
         null,
         {},
@@ -2613,105 +2334,56 @@ describe('basemap projection fallbacks', () => {
               table: metadataTable,
               style: null,
               type: BasemapLayerType.LIMIT,
-              file: 'limits.geojson'
+              file: 'limits.parquet'
             } satisfies MetadataLayerEntry
           ],
           availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
           stylePresets: null
         }
-      );
+      ).foreground.find(
+        (layer) =>
+          layer instanceof PathLayer &&
+          String(layer.props.id).includes('basemap-meta-limit')
+      ) as PathLayer | undefined;
 
-    const solidLayer = createLayers().foreground.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id).includes('basemap-meta-limit')
-    ) as GeoJsonLayer | undefined;
+    const solidLayer = findLimitLayer();
 
-    expect(solidLayer).toBeInstanceOf(GeoJsonLayer);
-    if (!solidLayer) throw new Error('Expected metadata limit layer');
-
-    const solidProps = solidLayer.props as typeof solidLayer.props & {
-      getDashArray: [number, number];
-    };
-
-    expect(solidProps.getLineColor).toEqual([18, 52, 86, 255]);
-    expect(solidProps.getLineWidth).toBe(BASEMAP_LAYER_CONFIG.thickness.max);
-    expect(solidProps.lineWidthMaxPixels).toBe(
+    expect(solidLayer).toBeInstanceOf(PathLayer);
+    expect(parsePathsMock).toHaveBeenCalledWith(metadataTable);
+    expect(readFirstVertexAttribute(solidLayer, 'getColor')).toEqual([
+      18, 52, 86, 255
+    ]);
+    expect(readFirstVertexAttribute(solidLayer, 'getWidth')).toEqual([
+      BASEMAP_LAYER_CONFIG.thickness.max
+    ]);
+    expect(solidLayer?.props.widthMaxPixels).toBe(
       BASEMAP_LAYER_CONFIG.thickness.max
     );
-    expect(solidProps.getDashArray).toEqual([0, 0]);
+    expect(Reflect.get(solidLayer?.props ?? {}, 'getDashArray')).toEqual([
+      0, 0
+    ]);
+    expect(solidLayer?.props.extensions).toHaveLength(0);
 
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.FRONTIERES, {
       dotted: true,
       dottedPattern: BasemapDottedPattern.DASHES
     });
 
-    const dottedLayer = createLayers().foreground.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id).includes('basemap-meta-limit')
-    ) as GeoJsonLayer | undefined;
+    const dottedLayer = findLimitLayer();
 
-    expect(dottedLayer).toBeInstanceOf(GeoJsonLayer);
-    if (!dottedLayer) throw new Error('Expected metadata limit layer');
-
-    const dottedProps = dottedLayer.props as typeof dottedLayer.props & {
-      getDashArray: [number, number];
-      _subLayerProps: Record<
-        'polygons-stroke' | 'linestrings',
-        {
-          getDashArray: [number, number];
-          extensions: unknown[];
-        }
-      >;
-    };
-
-    expect(dottedProps.getLineWidth).toBe(BASEMAP_LAYER_CONFIG.thickness.max);
-    expect(dottedProps.getDashArray).toEqual([8, 4]);
-    expect(dottedProps.extensions).toHaveLength(1);
-    expect(dottedProps._subLayerProps.linestrings.getDashArray).toEqual([8, 4]);
-    expect(dottedProps._subLayerProps.linestrings.extensions).toHaveLength(1);
-    expect(dottedProps.updateTriggers).toMatchObject({
+    expect(dottedLayer).toBeInstanceOf(PathLayer);
+    expect(readFirstVertexAttribute(dottedLayer, 'getWidth')).toEqual([
+      BASEMAP_LAYER_CONFIG.thickness.max
+    ]);
+    expect(Reflect.get(dottedLayer?.props ?? {}, 'getDashArray')).toEqual([
+      8, 4
+    ]);
+    expect(dottedLayer?.props.extensions).toHaveLength(1);
+    expect(dottedLayer?.props.updateTriggers).toMatchObject({
       getLineColor: ['#123456', 1],
       getDashArray: [8, 4],
-      getLineWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
+      getWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
     });
-  });
-
-  it('projects frontieres fallback outlines when metadata limits are absent', () => {
-    const table = { id: 'frontieres-fallback' } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('raw-frontieres');
-    const projectedGeoJSON = createLineGeoJSON('projected-frontieres');
-    const ctx = createProjectionContext();
-
-    extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createLineGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
-
-    const layer = createFrontieresLayer(
-      table,
-      {
-        id: 'frontieres',
-        visible: true,
-        color: '#123456',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      ctx
-    ) as GeoJsonLayer | null;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
-      ctx.projection
-    );
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
   });
 
   it('uses Arrow native path for frontieres under composite projections', () => {
@@ -2745,17 +2417,13 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(PathLayer);
   });
 
-  it('connects imported frontieres thickness and dotted styling to fallback outlines', () => {
+  it('connects imported frontieres thickness and dotted styling to polygon outlines', () => {
     const table = {
-      id: 'imported-frontieres-fallback'
+      id: 'imported-frontieres-outline'
     } as unknown as ArrowTable;
-    const sourceGeoJSON = createPolygonGeoJSON('nuts2-outline');
 
     extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createPolygonGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? sourceGeoJSON : null
+      candidate === table ? createNativePolygonGeometryInfo() : null
     );
 
     const layer = createFrontieresLayer(
@@ -2770,43 +2438,31 @@ describe('basemap projection fallbacks', () => {
         opacity: 100
       },
       {}
-    ) as GeoJsonLayer | null;
+    );
 
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    if (!layer) throw new Error('Expected frontieres layer');
-
-    const props = layer.props as typeof layer.props & {
-      getDashArray: [number, number];
-      _subLayerProps: Record<
-        'polygons-stroke' | 'linestrings',
-        {
-          getDashArray: [number, number];
-          extensions: unknown[];
-        }
-      >;
-    };
-
-    expect(props.getLineWidth).toBe(3);
-    expect(props.lineWidthMaxPixels).toBe(BASEMAP_LAYER_CONFIG.thickness.max);
-    expect(props.getDashArray).toEqual([8, 4]);
-    expect(props.extensions).toHaveLength(1);
-    expect(props._subLayerProps['polygons-stroke'].getDashArray).toEqual([
-      8, 4
+    expect(layer).toBeInstanceOf(PathLayer);
+    expect(parsePathsMock).toHaveBeenCalledWith(table);
+    expect(readFirstVertexAttribute(layer ?? undefined, 'getColor')).toEqual([
+      18, 52, 86, 255
     ]);
-    expect(props._subLayerProps['polygons-stroke'].extensions).toHaveLength(1);
-    expect(props._subLayerProps.linestrings.getDashArray).toEqual([8, 4]);
-    expect(props.updateTriggers).toMatchObject({
+    expect(readFirstVertexAttribute(layer ?? undefined, 'getWidth')).toEqual([
+      3
+    ]);
+    expect(Reflect.get(layer?.props ?? {}, 'widthMaxPixels')).toBe(
+      BASEMAP_LAYER_CONFIG.thickness.max
+    );
+    expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual([8, 4]);
+    expect(layer?.props.extensions).toHaveLength(1);
+    expect(layer?.props.updateTriggers).toMatchObject({
       getLineColor: ['#123456', 1],
       getDashArray: [true, BasemapDottedPattern.DASHES],
-      getLineWidth: [3]
+      getWidth: [3]
     });
   });
 
   it('connects lakes and rivers metadata to background and foreground Deck.gl layers', () => {
     const lakesTable = { id: 'lakes' } as unknown as ArrowTable;
     const riversTable = { id: 'rivers' } as unknown as ArrowTable;
-    const lakesGeoJSON = createPolygonGeoJSON('lake');
-    const riversGeoJSON = createLineGeoJSON('river');
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
@@ -2815,7 +2471,8 @@ describe('basemap projection fallbacks', () => {
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.RIVIERES, true);
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.LACS, {
       color: '#00ff00',
-      opacity: 40
+      opacity: 40,
+      thickness: 2
     });
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.RIVIERES, {
       color: '#00ff00',
@@ -2824,13 +2481,8 @@ describe('basemap projection fallbacks', () => {
     });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
-      if (table === lakesTable) return createPolygonGeometryInfo();
-      if (table === riversTable) return createLineGeometryInfo();
-      return null;
-    });
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
-      if (table === lakesTable) return lakesGeoJSON;
-      if (table === riversTable) return riversGeoJSON;
+      if (table === lakesTable) return createNativePolygonGeometryInfo();
+      if (table === riversTable) return createNativeLineGeometryInfo();
       return null;
     });
 
@@ -2860,28 +2512,47 @@ describe('basemap projection fallbacks', () => {
       }
     );
 
-    const lakesLayer = layers.background.find((layer) =>
-      String(layer.props.id).includes('basemap-lacs')
-    ) as GeoJsonLayer | undefined;
-    const riversLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-rivieres')
-    ) as GeoJsonLayer | undefined;
+    const isLakesLayer = (layer: Layer) =>
+      String(layer.props.id).includes('basemap-lacs');
+    const isRiversLayer = (layer: Layer) =>
+      String(layer.props.id).includes('basemap-rivieres');
+    const lakesFillLayer = layers.background.find(
+      (layer) => layer instanceof SolidPolygonLayer && isLakesLayer(layer)
+    ) as SolidPolygonLayer | undefined;
+    const lakesStrokeLayer = layers.background.find(
+      (layer) => layer instanceof PathLayer && isLakesLayer(layer)
+    ) as PathLayer | undefined;
+    const riversLayer = layers.foreground.find(
+      (layer) => layer instanceof PathLayer && isRiversLayer(layer)
+    ) as PathLayer | undefined;
 
-    expect(lakesLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(lakesLayer?.props.getFillColor).toEqual([0, 255, 0, 51]);
-    expect(lakesLayer?.props.getLineColor).toEqual([0, 255, 0, 102]);
-    expect(lakesLayer?.props.lineWidthMinPixels).toBe(0);
-    expect(lakesLayer?.props.updateTriggers).toEqual({
-      getFillColor: ['#00ff00', 40],
-      getLineColor: ['#00ff00', 40]
+    expect(layers.foreground.some(isLakesLayer)).toBe(false);
+    expect(layers.background.some(isRiversLayer)).toBe(false);
+
+    expect(lakesFillLayer).toBeInstanceOf(SolidPolygonLayer);
+    expect(lakesFillLayer?.props.getFillColor).toEqual([0, 255, 0, 51]);
+    expect(lakesFillLayer?.props.updateTriggers).toEqual({
+      getFillColor: ['#00ff00', 40]
     });
 
-    expect(riversLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(riversLayer?.props.getLineColor).toEqual([0, 255, 0, 102]);
-    expect(riversLayer?.props.getLineWidth).toBe(3);
+    expect(lakesStrokeLayer).toBeInstanceOf(PathLayer);
+    expect(readFirstVertexAttribute(lakesStrokeLayer, 'getColor')).toEqual([
+      0, 255, 0, 102
+    ]);
+    expect(lakesStrokeLayer?.props.widthMinPixels).toBe(0);
+    expect(lakesStrokeLayer?.props.updateTriggers).toEqual({
+      getColor: ['#00ff00', 40],
+      getWidth: [2]
+    });
+
+    expect(riversLayer).toBeInstanceOf(PathLayer);
+    expect(readFirstVertexAttribute(riversLayer, 'getColor')).toEqual([
+      0, 255, 0, 102
+    ]);
+    expect(readFirstVertexAttribute(riversLayer, 'getWidth')).toEqual([3]);
     expect(riversLayer?.props.updateTriggers).toEqual({
-      getLineColor: ['#00ff00', 40],
-      getLineWidth: [3],
+      getColor: ['#00ff00', 40],
+      getWidth: [3],
       getDashArray: [false, BasemapDottedPattern.DOTS]
     });
   });
@@ -2975,13 +2646,9 @@ describe('basemap projection fallbacks', () => {
 
   it('connects relief representation, color, and opacity to Deck.gl layer props', () => {
     const table = { id: 'relief-world-base' } as unknown as ArrowTable;
-    const sourceGeoJSON = createPolygonGeoJSON('relief');
 
     extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createPolygonGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? sourceGeoJSON : null
+      candidate === table ? createNativePolygonGeometryInfo() : null
     );
 
     const createReliefConfig = (
@@ -2994,49 +2661,51 @@ describe('basemap projection fallbacks', () => {
       color: '#336699',
       opacity
     });
+    const splitReliefLayers = (representation: BasemapRepresentation) => {
+      const layers = createReliefLayers(
+        table,
+        createReliefConfig(representation, 50),
+        {}
+      );
+      return {
+        fill: layers.find((layer) => layer instanceof SolidPolygonLayer) as
+          SolidPolygonLayer | undefined,
+        stroke: layers.find((layer) => layer instanceof PathLayer) as
+          PathLayer | undefined
+      };
+    };
 
-    const shadingLayer = createReliefLayers(
-      table,
-      createReliefConfig(BasemapRepresentation.SHADING, 50),
-      {}
-    )[0] as GeoJsonLayer | undefined;
-    const elevationLayer = createReliefLayers(
-      table,
-      createReliefConfig(BasemapRepresentation.ELEVATION, 50),
-      {}
-    )[0] as GeoJsonLayer | undefined;
-    const contourLayer = createReliefLayers(
-      table,
-      createReliefConfig(BasemapRepresentation.CONTOURS, 50),
-      {}
-    )[0] as GeoJsonLayer | undefined;
+    const shading = splitReliefLayers(BasemapRepresentation.SHADING);
+    const elevation = splitReliefLayers(BasemapRepresentation.ELEVATION);
+    const contours = splitReliefLayers(BasemapRepresentation.CONTOURS);
 
-    expect(shadingLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(shadingLayer?.props.id).toContain('basemap-relief');
-    expect(shadingLayer?.props.filled).toBe(true);
-    expect(shadingLayer?.props.getFillColor).toEqual([51, 102, 153, 64]);
-    expect(shadingLayer?.props.updateTriggers).toEqual({
-      getFillColor: ['#336699', 50, BasemapRepresentation.SHADING],
-      getLineColor: ['#336699', 50, BasemapRepresentation.SHADING],
-      getLineWidth: [0.35]
+    expect(shading.fill).toBeInstanceOf(SolidPolygonLayer);
+    expect(shading.fill?.props.id).toContain('basemap-relief');
+    expect(shading.fill?.props.getFillColor).toEqual([51, 102, 153, 64]);
+    expect(shading.fill?.props.updateTriggers).toEqual({
+      getFillColor: ['#336699', 50, BasemapRepresentation.SHADING]
+    });
+    expect(shading.stroke?.props.updateTriggers).toEqual({
+      getColor: ['#336699', 50, BasemapRepresentation.SHADING],
+      getWidth: [0.35]
     });
 
-    expect(elevationLayer?.props.filled).toBe(true);
-    expect(elevationLayer?.props.getFillColor).toEqual([51, 102, 153, 102]);
-    expect(elevationLayer?.props.getLineColor).toEqual([96, 96, 96, 89]);
-    expect(elevationLayer?.props.updateTriggers).toMatchObject({
-      getFillColor: ['#336699', 50, BasemapRepresentation.ELEVATION],
-      getLineColor: ['#336699', 50, BasemapRepresentation.ELEVATION],
-      getLineWidth: [0.5]
+    expect(elevation.fill?.props.getFillColor).toEqual([51, 102, 153, 102]);
+    expect(elevation.stroke?.props.getColor).toEqual([96, 96, 96, 89]);
+    expect(elevation.fill?.props.updateTriggers).toMatchObject({
+      getFillColor: ['#336699', 50, BasemapRepresentation.ELEVATION]
+    });
+    expect(elevation.stroke?.props.updateTriggers).toMatchObject({
+      getColor: ['#336699', 50, BasemapRepresentation.ELEVATION],
+      getWidth: [0.5]
     });
 
-    expect(contourLayer?.props.filled).toBe(false);
-    expect(contourLayer?.props.getFillColor).toEqual([51, 102, 153, 0]);
-    expect(contourLayer?.props.getLineColor).toEqual([51, 102, 153, 128]);
-    expect(contourLayer?.props.updateTriggers).toMatchObject({
-      getFillColor: ['#336699', 50, BasemapRepresentation.CONTOURS],
-      getLineColor: ['#336699', 50, BasemapRepresentation.CONTOURS],
-      getLineWidth: [0.8]
+    expect(contours.fill).toBeUndefined();
+    expect(contours.stroke).toBeInstanceOf(PathLayer);
+    expect(contours.stroke?.props.getColor).toEqual([51, 102, 153, 128]);
+    expect(contours.stroke?.props.updateTriggers).toMatchObject({
+      getColor: ['#336699', 50, BasemapRepresentation.CONTOURS],
+      getWidth: [0.8]
     });
   });
 

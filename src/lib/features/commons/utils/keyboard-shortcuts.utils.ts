@@ -22,9 +22,7 @@ export const SHORTCUT_CODE = {
   saveProject: 'KeyS',
   duplicateProject: 'KeyD',
   deleteProject: 'KeyX',
-  zoomModeToggle: 'KeyZ',
-  undo: 'KeyZ',
-  redo: 'KeyY'
+  zoomModeToggle: 'KeyZ'
 } as const;
 
 export const PROJECT_SHORTCUT_TIMEOUT_MS = 2000;

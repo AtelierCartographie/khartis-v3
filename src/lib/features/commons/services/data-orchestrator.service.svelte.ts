@@ -9,10 +9,6 @@ import {
   RefineOperation,
   duckDBOrchestrator
 } from '$lib/features/duckdb';
-import {
-  isGeoJSONFeatureCollection,
-  type GeoJSONFeatureCollection
-} from '$lib/types/data';
 import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
 import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
@@ -24,12 +20,7 @@ import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
-import {
-  DuckDBError,
-  formatError,
-  isFatalError,
-  ParseError
-} from '../pipeline.errors';
+import { DuckDBError, formatError, isFatalError } from '../pipeline.errors';
 import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,
@@ -57,9 +48,7 @@ import {
   showError,
   showWarning
 } from '../utils/notification.utils.svelte';
-import { sanitizePreparedGeoJSON } from '../utils/persisted-geojson.utils';
 import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
-import { replaceFileExtension } from '../utils/file.utils';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import {
@@ -75,7 +64,7 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
-import { resolveRowScopeClause } from './row-scope.service';
+import { resolveValueScopeClause } from './row-scope.service';
 import {
   DEFAULT_CLASSIFICATION_CLASS_COUNT,
   FillMode
@@ -152,59 +141,6 @@ function createDataOrchestratorService() {
     }
   }
 
-  function convertKMLForDuckDB(file: UploadedFile): UploadedFile {
-    try {
-      let geojsonObject: GeoJSONFeatureCollection;
-
-      if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
-        geojsonObject = file.parsedData;
-      } else {
-        throw new ParseError(
-          'KML files should be processed by the data pipeline, not here',
-          file.fileType,
-          {
-            fileId: file.id,
-            fileName: file.name
-          }
-        );
-      }
-
-      const geojsonString =
-        file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
-      const normalizedName = file.name.replace(/\.(kml|kmz)$/i, '.geojson');
-
-      return {
-        ...file,
-        name: normalizedName,
-        type: 'application/geo+json',
-        fileType: FileType.GEOJSON,
-        content: geojsonString,
-        preparedGeoJSON: geojsonString,
-        parsedData: geojsonObject
-      };
-    } catch (error) {
-      throw new ParseError(m.error_kml_conversion_failed(), file.fileType, {
-        fileId: file.id,
-        fileName: file.name,
-        originalError: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
-
-  function createGeoJsonSnapshotForDuckDB(file: UploadedFile): UploadedFile {
-    const normalizedName = replaceFileExtension(file.name, '.geojson');
-    const preparedGeoJSON = sanitizePreparedGeoJSON(file.preparedGeoJSON);
-
-    return {
-      ...file,
-      name: normalizedName,
-      type: 'application/geo+json',
-      fileType: FileType.GEOJSON,
-      content: preparedGeoJSON,
-      originalFile: undefined
-    };
-  }
-
   async function prepareFileForDuckDB(
     file: UploadedFile,
     dataset: DatasetResult | undefined
@@ -222,14 +158,6 @@ function createDataOrchestratorService() {
     if (!requiresGeoProcessing) return null;
     if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
     if (dataset?.tableName) return null;
-
-    if (file.preparedGeoJSON) {
-      return createGeoJsonSnapshotForDuckDB(file);
-    }
-
-    if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
-      return convertKMLForDuckDB(file);
-    }
 
     return file;
   }
@@ -1085,7 +1013,7 @@ function createDataOrchestratorService() {
           ? requestedClassCount - breakpointLowerClassCount
           : undefined;
 
-      const rowScopeClause = resolveRowScopeClause({
+      const rowScopeClause = resolveValueScopeClause({
         datasetId: dataset.sourceFileId
       });
 

@@ -51,7 +51,7 @@ const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {
   cassini: { projection: 'geoCassini' }
 };
 
-function cloneD3UsageConfig(config: D3Usage): D3Usage {
+export function cloneD3UsageConfig(config: D3Usage): D3Usage {
   return {
     projection: config.projection,
     ...(config.rotate ? { rotate: [...config.rotate] } : {}),

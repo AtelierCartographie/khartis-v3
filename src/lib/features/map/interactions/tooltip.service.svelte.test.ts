@@ -5,7 +5,6 @@ import { Type } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import { formatDate } from '$lib/features/commons/utils/format.utils';
-import { registerGeoJsonSourceTable } from '../layers/geojson-source-table.registry';
 
 const { mockGlobalState, mockMapTooltipStore } = vi.hoisted(() => ({
   mockGlobalState: {
@@ -142,31 +141,19 @@ describe('extractTooltipEntries', () => {
     expect(keys(entries)).toEqual(['value', 'OGC_FID', 'id', 'name']);
   });
 
-  it('uses typed Arrow values for a GeoJSON layer tooltip', () => {
+  it('formats typed Arrow timestamps read from a binary layer source table', () => {
     const eventDate = new Date('2024-02-01T00:00:00.000Z');
-    const sourceTable = createArrowTable([{ event_date: eventDate }]);
+    const sourceTable = createArrowTable([{ event_date: eventDate.getTime() }]);
     Object.assign(sourceTable.schema.fields[0], {
       type: { typeId: Type.Timestamp }
     });
-    const geoJson = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          geometry: null,
-          properties: { event_date: eventDate.getTime() }
-        }
-      ]
-    };
-    registerGeoJsonSourceTable(geoJson, sourceTable);
 
     const entries = extractTooltipEntries({
       picked: true,
       index: 0,
-      object: geoJson.features[0],
       layer: {
         id: 'line-layer-dataset-1',
-        props: { data: geoJson }
+        props: { data: { length: 1, khartisSourceTable: sourceTable } }
       }
     } as PickingInfo);
 

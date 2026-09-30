@@ -1,6 +1,5 @@
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   ArrowExtension,
@@ -17,8 +16,6 @@ import {
 
 const VALID_LNG_RANGE = { min: -180, max: 180 };
 const VALID_LAT_RANGE = { min: -90, max: 90 };
-const GEOMETRY_READ_WARNING_LIMIT = 3;
-const geometryReadWarnings = new Map<string, number>();
 
 function normalizeGeometryEncoding(
   encoding: string | null | undefined
@@ -30,36 +27,6 @@ function normalizeGeometryEncoding(
   return encoding === ArrowExtension.OGC_WKB
     ? ArrowExtension.GEOARROW_WKB
     : encoding;
-}
-
-function warnGeometryReadFailureOnce(
-  geoColumn: string,
-  rowIndex: number,
-  error: unknown
-): void {
-  const warningCount = geometryReadWarnings.get(geoColumn) ?? 0;
-
-  if (warningCount >= GEOMETRY_READ_WARNING_LIMIT) {
-    return;
-  }
-
-  geometryReadWarnings.set(geoColumn, warningCount + 1);
-  logger.error('Failed to read geometry value', LogCategory.MAP, error, {
-    extra: { geoColumn, rowIndex }
-  });
-}
-
-function safeReadVectorValue(
-  vector: NonNullable<ReturnType<ArrowTable['getChild']>>,
-  rowIndex: number,
-  geoColumn: string
-): unknown {
-  try {
-    return vector.get(rowIndex);
-  } catch (error) {
-    warnGeometryReadFailureOnce(geoColumn, rowIndex, error);
-    return null;
-  }
 }
 
 export function isValidCoordinate(lng: number, lat: number): boolean {
@@ -426,71 +393,6 @@ export function parseGeoJsonGeometry(geom: unknown): Geometry | null {
   return null;
 }
 
-export function arrowTableToGeoJSON(
-  table: ArrowTable,
-  geoColumn: string
-): FeatureCollection | null {
-  try {
-    const features: FeatureCollection['features'] = [];
-    const geomVector = table.getChild(geoColumn);
-
-    if (!geomVector) {
-      return null;
-    }
-
-    const firstGeom = safeReadVectorValue(geomVector, 0, geoColumn);
-    const parsedFirstGeom = parseGeoJsonGeometry(firstGeom);
-    if (!parsedFirstGeom) {
-      return null;
-    }
-
-    const propertyColumns: Array<{
-      name: string;
-      vector: NonNullable<ReturnType<ArrowTable['getChild']>>;
-    }> = [];
-    for (const field of table.schema.fields) {
-      if (
-        field.name === geoColumn ||
-        field.name === INTERNAL_COLUMN.GEOM ||
-        field.name === INTERNAL_COLUMN.GEOMETRY
-      )
-        continue;
-      const col = table.getChild(field.name);
-      if (col) {
-        propertyColumns.push({ name: field.name, vector: col });
-      }
-    }
-
-    for (let i = 0; i < table.numRows; i++) {
-      const properties: Record<string, unknown> = {};
-
-      for (const { name, vector } of propertyColumns) {
-        const val = vector.get(i);
-        properties[name] = typeof val === 'bigint' ? Number(val) : val;
-      }
-
-      const geom = safeReadVectorValue(geomVector, i, geoColumn);
-      const parsedGeom = parseGeoJsonGeometry(geom);
-      if (parsedGeom) {
-        features.push({
-          type: GEOJSON_TYPE.FEATURE,
-          properties,
-          geometry: parsedGeom
-        });
-      }
-    }
-
-    return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
-  } catch (error) {
-    logger.error(
-      'Failed to convert Arrow geometry to GeoJSON',
-      LogCategory.MAP,
-      error
-    );
-    return null;
-  }
-}
-
 export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
   const geoMetadata = table.schema.metadata?.get(GeoArrowMetadataKey.GEO);
   if (!geoMetadata) {
@@ -534,15 +436,13 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     );
 
     const isWkbEncoded = isWkbExtension;
-    const isGeoJsonEncoded = arrowExtension === ArrowExtension.GEOJSON;
 
     return {
       type: resolvedGeometryType,
       encoding: arrowExtension,
       geoColumn,
       isNativeGeoArrow,
-      isWkbEncoded,
-      isGeoJsonEncoded
+      isWkbEncoded
     };
   } catch (error) {
     logger.error(

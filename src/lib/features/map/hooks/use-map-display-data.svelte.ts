@@ -19,7 +19,6 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import { untrack } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { basemapService } from '../services/basemap.service.svelte';
@@ -55,7 +54,6 @@ export interface UseMapDisplayDataReturn {
   readonly mapDisplayDatasets: DatasetResult[];
   readonly displayTables: SvelteMap<string, ArrowTable>;
   readonly displayDensityTables: SvelteMap<string, ArrowTable>;
-  readonly displayGeoJSONs: SvelteMap<string, FeatureCollection>;
   readonly displaySplitData: SvelteMap<string, SplitRenderingTable>;
   readonly displayDataVersion: number;
 }
@@ -70,9 +68,6 @@ export function useMapDisplayData(
   );
   let displayDensityTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
-  );
-  let displayGeoJSONs = $state.raw<SvelteMap<string, FeatureCollection>>(
-    new SvelteMap<string, FeatureCollection>()
   );
   let displaySplitData = $state.raw<SvelteMap<string, SplitRenderingTable>>(
     new SvelteMap<string, SplitRenderingTable>()
@@ -211,18 +206,13 @@ export function useMapDisplayData(
 
   function setDisplayArrowTable(datasetId: string, table: ArrowTable): void {
     const previousTable = displayTables.get(datasetId);
-    const hadGeoJSON = displayGeoJSONs.has(datasetId);
     const hadSplit = displaySplitData.has(datasetId);
 
     displayTables.set(datasetId, table);
-    displayGeoJSONs.delete(datasetId);
     displaySplitData.delete(datasetId);
 
-    if (previousTable !== table || hadGeoJSON || hadSplit) {
+    if (previousTable !== table || hadSplit) {
       displayTables = new SvelteMap(displayTables);
-      if (hadGeoJSON) {
-        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
-      }
       if (hadSplit) {
         displaySplitData = new SvelteMap(displaySplitData);
       }
@@ -245,24 +235,18 @@ export function useMapDisplayData(
     split: SplitRenderingTable
   ): void {
     const previousSplit = displaySplitData.get(datasetId);
-    const hadGeoJSON = displayGeoJSONs.has(datasetId);
 
     displaySplitData.set(datasetId, split);
 
     displayTables.set(datasetId, split.geometry);
-    displayGeoJSONs.delete(datasetId);
 
     if (
       previousSplit?.geometry !== split.geometry ||
       previousSplit?.dataset !== split.dataset ||
-      previousSplit?.featureIdColumn !== split.featureIdColumn ||
-      hadGeoJSON
+      previousSplit?.featureIdColumn !== split.featureIdColumn
     ) {
       displaySplitData = new SvelteMap(displaySplitData);
       displayTables = new SvelteMap(displayTables);
-      if (hadGeoJSON) {
-        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
-      }
       bumpDisplayDataVersion();
     }
   }
@@ -290,25 +274,6 @@ export function useMapDisplayData(
     return INTERNAL_COLUMN.FEATURE_ID;
   }
 
-  function setDisplayGeoJSON(
-    datasetId: string,
-    geoJSON: FeatureCollection
-  ): void {
-    const previousGeoJSON = displayGeoJSONs.get(datasetId);
-    const hadTable = displayTables.has(datasetId);
-
-    displayGeoJSONs.set(datasetId, geoJSON);
-    displayTables.delete(datasetId);
-
-    if (previousGeoJSON !== geoJSON || hadTable) {
-      displayGeoJSONs = new SvelteMap(displayGeoJSONs);
-      if (hadTable) {
-        displayTables = new SvelteMap(displayTables);
-      }
-      bumpDisplayDataVersion();
-    }
-  }
-
   function removeDensityTable(datasetId: string): void {
     if (displayDensityTables.delete(datasetId)) {
       displayDensityTables = new SvelteMap(displayDensityTables);
@@ -319,7 +284,7 @@ export function useMapDisplayData(
   async function loadGeoDatasetTable(
     dataset: DatasetResult,
     generation: number
-  ): Promise<ArrowTable | FeatureCollection | null> {
+  ): Promise<ArrowTable | null> {
     let tableName: string | undefined;
     try {
       if (dataset.geometry && dataset.sourceFileId) {
@@ -387,19 +352,15 @@ export function useMapDisplayData(
   function removeDatasetFromDisplay(datasetId: string): void {
     const removedTable = displayTables.delete(datasetId);
     const removedDensityTable = displayDensityTables.delete(datasetId);
-    const removedGeoJSON = displayGeoJSONs.delete(datasetId);
     const removedSplit = displaySplitData.delete(datasetId);
     joinedBasemapDisplayKeys.delete(datasetId);
 
-    if (removedTable || removedDensityTable || removedGeoJSON || removedSplit) {
+    if (removedTable || removedDensityTable || removedSplit) {
       if (removedTable) {
         displayTables = new SvelteMap(displayTables);
       }
       if (removedDensityTable) {
         displayDensityTables = new SvelteMap(displayDensityTables);
-      }
-      if (removedGeoJSON) {
-        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
       }
       if (removedSplit) {
         displaySplitData = new SvelteMap(displaySplitData);
@@ -447,9 +408,7 @@ export function useMapDisplayData(
     );
 
     const hasDisplayPayload =
-      displayTables.has(datasetId) ||
-      displayGeoJSONs.has(datasetId) ||
-      displaySplitData.has(datasetId);
+      displayTables.has(datasetId) || displaySplitData.has(datasetId);
     if (
       joinedBasemapDisplayKeys.get(datasetId) === displayKey &&
       hasDisplayPayload
@@ -731,11 +690,7 @@ export function useMapDisplayData(
       }
 
       if (result) {
-        if ('numRows' in result) {
-          setDisplayArrowTable(datasetId, result);
-        } else if ('features' in result) {
-          setDisplayGeoJSON(datasetId, result);
-        }
+        setDisplayArrowTable(datasetId, result);
       }
 
       await loadDensityTableForDisplay(dataset, generation);
@@ -810,17 +765,9 @@ export function useMapDisplayData(
           currentMapDisplayDatasets.map((d) => d.id)
         );
 
-        const tableIdsToRemove = [...displayTables.keys()].filter(
+        const datasetIdsToRemove = [...displayTables.keys()].filter(
           (id) => !currentMapDisplayIds.has(id)
         );
-        const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
-          (id) => !currentMapDisplayIds.has(id)
-        );
-
-        const datasetIdsToRemove = new Set([
-          ...tableIdsToRemove,
-          ...geojsonIdsToRemove
-        ]);
         for (const datasetId of datasetIdsToRemove) {
           removeDatasetFromDisplay(datasetId);
         }
@@ -887,9 +834,7 @@ export function useMapDisplayData(
 
     const missing = expectedDatasets.filter(
       (dataset) =>
-        !displayTables.has(dataset.id) &&
-        !displayGeoJSONs.has(dataset.id) &&
-        !displaySplitData.has(dataset.id)
+        !displayTables.has(dataset.id) && !displaySplitData.has(dataset.id)
     );
     if (missing.length === 0) return;
 
@@ -920,9 +865,6 @@ export function useMapDisplayData(
     },
     get displayDensityTables() {
       return displayDensityTables;
-    },
-    get displayGeoJSONs() {
-      return displayGeoJSONs;
     },
     get displaySplitData() {
       return displaySplitData;

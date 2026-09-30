@@ -2,7 +2,6 @@ import type { Color } from '@deck.gl/core';
 import { TextLayer } from '@deck.gl/layers';
 import type { TextLayerProps } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 
 import {
   ColorMode,
@@ -40,16 +39,12 @@ import {
 } from '../utils/data-styling.utils';
 import { resolveTextLabelPlacement } from '../utils/text-label-placement.utils';
 import { sortBySizeDescending, withOpacity } from './layer-helpers';
-import { getCachedGeoJSON } from './layer-geojson-cache';
 import {
   isMissingThematicValue,
   resolvePointMissingColumn
 } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
-import {
-  getTextRepresentativePointSource,
-  requiresRepresentativePointSource
-} from './layer-source.utils';
+import { getTextRepresentativePointSource } from './layer-source.utils';
 import { normalizeOpacity, resolvePageDisplayScale } from './layer-style.utils';
 import {
   buildSplitDatasetRowMapping,
@@ -70,7 +65,6 @@ import {
 } from './text-character-set';
 import {
   collectTextLayerGlyphs,
-  createTextLayerData,
   createTextLayerDataFromBinary,
   keepTextDataInRowScope,
   resolveAccessorValue,
@@ -136,9 +130,6 @@ export function createTextOverlayLayers(
     return [];
   }
 
-  const isNativeGeoArrow =
-    geometryInfo.isNativeGeoArrow ||
-    (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
   let textLayerData: TextLayerDatum[] | null = null;
   let secondaryLabelLayerData: TextLayerDatum[] | null = null;
   const representativePointSource = getTextRepresentativePointSource(ctx);
@@ -194,53 +185,23 @@ export function createTextOverlayLayers(
         );
       }
     } catch (error) {
-      logger.warn(
-        'Failed to build binary text layer data; falling back to GeoJSON',
-        LogCategory.MAP,
-        {
-          error,
-          flow: 'text_binary_geojson_fallback',
-          extra: {
-            geometryType: geometryInfo.type,
-            geoColumn: geometryInfo.geoColumn,
-            hasRepresentativePointSource: Boolean(representativePointSource),
-            hasSecondaryLabel: Boolean(secondaryLabelColumn)
-          }
+      logger.error('Failed to build binary text layer data', LogCategory.MAP, {
+        error,
+        flow: 'text_binary_layer_data',
+        extra: {
+          geometryType: geometryInfo.type,
+          geoColumn: geometryInfo.geoColumn,
+          hasRepresentativePointSource: Boolean(representativePointSource),
+          hasSecondaryLabel: Boolean(secondaryLabelColumn)
         }
-      );
+      });
       textLayerData = null;
       secondaryLabelLayerData = null;
     }
   }
 
-  if (
-    !textLayerData &&
-    isNativeGeoArrow &&
-    requiresRepresentativePointSource(geometryInfo.type)
-  ) {
-    return [];
-  }
-
   if (!textLayerData) {
-    let geojsonData: FeatureCollection | null;
-    try {
-      geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
-    } catch (error) {
-      logger.error(
-        'Failed to read GeoJSON for text layer',
-        LogCategory.MAP,
-        error
-      );
-      return [];
-    }
-    if (!geojsonData) return [];
-    textLayerData = createTextLayerData(geojsonData, textConfig.labelColumn);
-    if (secondaryLabelColumn) {
-      secondaryLabelLayerData = createTextLayerData(
-        geojsonData,
-        secondaryLabelColumn
-      );
-    }
+    return [];
   }
 
   // Split rendering already narrows the attribute table to the Texts scope;

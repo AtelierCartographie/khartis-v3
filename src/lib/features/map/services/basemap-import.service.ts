@@ -3,7 +3,11 @@ import type {
   BasemapLayer,
   BasemapMetadata
 } from '$lib/features/map/types/basemap.types';
-import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
+import {
+  buildTableInBackground,
+  Duck,
+  GEO_CONSTANTS
+} from '$lib/features/duckdb';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
 import { resolveCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 import { createCustomBasemapGeometryTableFromDuck } from './custom-basemap-geometry.service';
@@ -38,6 +42,14 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { zipSync } from 'fflate';
+import { FILE_EXTENSION_GROUPS } from '$lib/features/commons/constants/file-types.constants';
+import { MIME } from '$lib/features/commons/constants/mime.constants';
+import {
+  groupShapefiles,
+  isShapefileComponent
+} from '$lib/features/commons/utils/file-import.utils';
+import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import {
   DataValidationError,
   DuckDBError,
@@ -87,6 +99,45 @@ export function isImportedCustomBasemap(metadata: BasemapMetadata): boolean {
     !metadata.isDatasetGeometry &&
     metadata.file.startsWith(CUSTOM_BASEMAP_TABLE_PREFIX)
   );
+}
+
+export async function bundleBasemapImportFiles(files: File[]): Promise<File> {
+  if (files.length === 1) return files[0];
+
+  const groups = [...groupShapefiles(files)];
+  if (groups.length !== 1 || !isShapefileComponent(files[0].name)) {
+    throw new ParseError(
+      m.basemap_import_error_single_source(),
+      SHAPEFILE_FILE_TYPE,
+      { fileNames: files.map((file) => file.name) }
+    );
+  }
+
+  const [baseName, parts] = groups[0];
+  const extensions = new Set(
+    parts.map((part) => getFileExtensionWithDot(part.name))
+  );
+  const missingComponents = FILE_EXTENSION_GROUPS.SHAPEFILE_REQUIRED.filter(
+    (extension) => !extensions.has(extension)
+  );
+  if (missingComponents.length > 0) {
+    throw new ParseError(
+      m.error_shapefile_missing_components({
+        components: missingComponents.join(', ')
+      }),
+      SHAPEFILE_FILE_TYPE,
+      { fileName: `${baseName}.shp`, missingComponents }
+    );
+  }
+
+  const entries = await Promise.all(
+    parts.map(
+      async (part) =>
+        [part.name, new Uint8Array(await part.arrayBuffer())] as const
+    )
+  );
+  const archive = zipSync(Object.fromEntries(entries), { level: 0 });
+  return new File([archive], `${baseName}.zip`, { type: MIME.ZIP });
 }
 
 export async function processBasemapImport(
@@ -490,22 +541,27 @@ async function prepareRepresentativePointTable(
   layerType: BasemapLayerType
 ): Promise<void> {
   const centroidsTableName = getBasemapCentroidsTableName(tableName);
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCentroidsTable = escapeIdentifier(centroidsTableName);
-  const representativePointExpression = getRepresentativePointExpression(
-    geometryColumn,
-    layerType
-  );
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+  const projection = `* REPLACE (
+      CASE
+        WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
+        ELSE ${getRepresentativePointExpression(geometryColumn, layerType)}
+      END AS "${escapedGeometryColumn}"
+    )`;
+
+  if (isPolygonBasemapLayerType(layerType)) {
+    buildTableInBackground(duck, {
+      sourceTable: tableName,
+      targetTable: centroidsTableName,
+      projection
+    });
+    return;
+  }
 
   await duck.query(`
-    CREATE OR REPLACE TABLE "${escapedCentroidsTable}" AS
-    SELECT * REPLACE (
-      CASE
-        WHEN "${escapeIdentifier(geometryColumn)}" IS NULL THEN NULL
-        ELSE ${representativePointExpression}
-      END AS "${escapeIdentifier(geometryColumn)}"
-    )
-    FROM "${escapedTable}"
+    CREATE OR REPLACE TABLE "${escapeIdentifier(centroidsTableName)}" AS
+    SELECT ${projection}
+    FROM "${escapeIdentifier(tableName)}"
   `);
 }
 

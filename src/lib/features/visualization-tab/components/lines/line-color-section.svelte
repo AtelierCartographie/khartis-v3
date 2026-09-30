@@ -207,8 +207,8 @@
           FACET_SLOT.LINE_VALUE,
           ids
         )}
-      onToggleCollection={(en, ids) =>
-        facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en, ids)}
+      onToggleCollection={(en) =>
+        facetsSelection.toggle(FACET_SLOT.LINE_VALUE, en)}
     />
   </div>
   <DiscretizationRow
@@ -263,13 +263,8 @@
           FACET_SLOT.LINE_CATEGORY,
           ids
         )}
-      onToggleCollection={(en, ids) =>
-        facetsSelection.toggle(
-          categoryColumnName,
-          FACET_SLOT.LINE_CATEGORY,
-          en,
-          ids
-        )}
+      onToggleCollection={(en) =>
+        facetsSelection.toggle(FACET_SLOT.LINE_CATEGORY, en)}
     />
   </div>
   <DiscretizationRow

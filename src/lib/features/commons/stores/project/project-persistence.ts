@@ -35,7 +35,6 @@ import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
-import { addToHistory, resetHistory } from './project-history';
 import {
   beginProjectRuntime,
   resetProjectRuntimeState
@@ -282,7 +281,6 @@ async function restoreProjectAfterFailedImport(
     }
 
     container._state.isDirty = false;
-    resetHistory(container);
     await dataOrchestratorService.onProjectChanged();
   } catch (recoveryError) {
     logger.error(
@@ -313,9 +311,6 @@ export async function importProject(
     resetProjectRuntimeState({ resetPersistence: false });
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
-    resetHistory(container);
-
-    addToHistory(container, m.history_project_imported(), project);
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     await dataOrchestratorService.onProjectChanged();

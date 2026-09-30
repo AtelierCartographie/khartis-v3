@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   setReferenceBboxFromMetadataMock: vi.fn()
 }));
 
-vi.mock('./read-geojson-arrow.service', () => ({
+vi.mock('./read-geoparquet-arrow.service', () => ({
   readGeoParquetDirect: mocks.readGeoParquetDirectMock
 }));
 

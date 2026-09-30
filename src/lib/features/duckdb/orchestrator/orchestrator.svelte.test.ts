@@ -106,6 +106,10 @@ describe('duckDBOrchestrator similarity cache lifecycle', () => {
 
     const existingCacheTables = new Set<string>();
     mocks.analyse.mockResolvedValue([]);
+    mocks.describeTable.mockResolvedValue({
+      name: ['geo', 'geom'],
+      type: ['VARCHAR', "GEOMETRY('OGC:CRS84')"]
+    });
     mocks.query.mockImplementation(async (sql: string) => {
       const createMatch = sql.match(
         /CREATE OR REPLACE TEMP TABLE "(__similarity_cache__[^"]+)"/
@@ -163,6 +167,21 @@ describe('duckDBOrchestrator similarity cache lifecycle', () => {
     });
     await duckDBOrchestrator.computeJoinSynthesis('dataset-1', 'geo');
     expect(countSimilarityCacheBuilds()).toBe(2);
+  });
+
+  it('never scores a geometry column as join names', async () => {
+    const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+      'dataset-1',
+      'geom'
+    );
+    const estimate = await duckDBOrchestrator.estimateJoinFuzzyPass(
+      'dataset-1',
+      'geom'
+    );
+
+    expect(synthesis).toEqual([]);
+    expect(estimate).toMatchObject({ candidates: 0, withinBudget: true });
+    expect(countSimilarityCacheBuilds()).toBe(0);
   });
 });
 
