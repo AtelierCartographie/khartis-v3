@@ -64,7 +64,7 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
-import { resolveRowScopeClause } from './row-scope.service';
+import { resolveValueScopeClause } from './row-scope.service';
 import {
   DEFAULT_CLASSIFICATION_CLASS_COUNT,
   FillMode
@@ -1013,7 +1013,7 @@ function createDataOrchestratorService() {
           ? requestedClassCount - breakpointLowerClassCount
           : undefined;
 
-      const rowScopeClause = resolveRowScopeClause({
+      const rowScopeClause = resolveValueScopeClause({
         datasetId: dataset.sourceFileId
       });
 
