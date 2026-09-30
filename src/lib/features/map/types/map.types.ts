@@ -23,7 +23,6 @@ export interface GeometryInfo {
   geoColumn: string;
   isNativeGeoArrow: boolean;
   isWkbEncoded: boolean;
-  isGeoJsonEncoded: boolean;
 }
 
 export type RGBColor = [number, number, number];

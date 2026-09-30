@@ -1,5 +1,4 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
@@ -141,97 +140,6 @@ const textLabelCache = new WeakMap<
   ArrowTable,
   Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
 >();
-
-function collectCoordinates(
-  value: unknown,
-  output: Array<[number, number]>
-): void {
-  if (!Array.isArray(value) || value.length === 0) {
-    return;
-  }
-
-  const maybeLng = value[0];
-  const maybeLat = value[1];
-
-  if (
-    typeof maybeLng === 'number' &&
-    typeof maybeLat === 'number' &&
-    Number.isFinite(maybeLng) &&
-    Number.isFinite(maybeLat)
-  ) {
-    output.push([maybeLng, maybeLat]);
-    return;
-  }
-
-  for (const nested of value) {
-    collectCoordinates(nested, output);
-  }
-}
-
-function getGeometryAnchor(
-  geometry: Geometry | null | undefined
-): [number, number] | null {
-  if (!geometry || !('coordinates' in geometry)) {
-    return null;
-  }
-
-  const coordinates: Array<[number, number]> = [];
-  collectCoordinates(geometry.coordinates, coordinates);
-
-  if (coordinates.length === 0) {
-    return null;
-  }
-
-  if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
-    return coordinates[Math.floor(coordinates.length / 2)] ?? null;
-  }
-
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-
-  for (const [lng, lat] of coordinates) {
-    if (lng < minX) minX = lng;
-    if (lng > maxX) maxX = lng;
-    if (lat < minY) minY = lat;
-    if (lat > maxY) maxY = lat;
-  }
-
-  return [(minX + maxX) / 2, (minY + maxY) / 2];
-}
-
-export function createTextLayerData(
-  geojson: FeatureCollection,
-  primaryColumn: string,
-  secondaryColumn?: string
-): TextLayerDatum[] {
-  const output: TextLayerDatum[] = [];
-
-  for (const [rowIndex, feature] of geojson.features.entries()) {
-    const primaryText = toTextValue(feature.properties?.[primaryColumn]);
-    const position = getGeometryAnchor(feature.geometry);
-    if (!position) {
-      continue;
-    }
-
-    const isMissingData = primaryText === null;
-    const secondaryText =
-      !isMissingData && secondaryColumn
-        ? toTextValue(feature.properties?.[secondaryColumn])
-        : null;
-
-    output.push({
-      position,
-      primaryText,
-      secondaryText,
-      isMissingData,
-      rowIndex
-    });
-  }
-
-  return output;
-}
 
 export function createTextLayerDataFromBinary(
   table: ArrowTable,

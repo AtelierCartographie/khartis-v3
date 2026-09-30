@@ -20,13 +20,7 @@ export enum ArrowExtension {
   GEOARROW_POLYGON = 'geoarrow.polygon',
   GEOARROW_MULTIPOLYGON = 'geoarrow.multipolygon',
   GEOARROW_WKB = 'geoarrow.wkb',
-  OGC_WKB = 'ogc.wkb',
-  GEOJSON = 'geojson'
-}
-
-export enum GeometryEncoding {
-  WKB = 'WKB',
-  GEOJSON = 'geojson'
+  OGC_WKB = 'ogc.wkb'
 }
 
 export enum WKBGeometryTypeCode {
@@ -49,7 +43,6 @@ export enum DeckLayerId {
   POLYGON_LAYER = 'polygon-layer',
   TEXT_LAYER = 'text-layer',
   LABEL_LAYER = 'label-layer',
-  GEOJSON_LAYER = 'geojson-layer',
   WORLD_BASE_LAYER = 'world-base-layer',
   BASEMAP_TERRE = 'basemap-terre',
   BASEMAP_MERS = 'basemap-mers',
