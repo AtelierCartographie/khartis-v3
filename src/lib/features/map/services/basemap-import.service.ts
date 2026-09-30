@@ -3,7 +3,11 @@ import type {
   BasemapLayer,
   BasemapMetadata
 } from '$lib/features/map/types/basemap.types';
-import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
+import {
+  buildTableInBackground,
+  Duck,
+  GEO_CONSTANTS
+} from '$lib/features/duckdb';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
 import { resolveCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 import { createCustomBasemapGeometryTableFromDuck } from './custom-basemap-geometry.service';
@@ -537,22 +541,27 @@ async function prepareRepresentativePointTable(
   layerType: BasemapLayerType
 ): Promise<void> {
   const centroidsTableName = getBasemapCentroidsTableName(tableName);
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCentroidsTable = escapeIdentifier(centroidsTableName);
-  const representativePointExpression = getRepresentativePointExpression(
-    geometryColumn,
-    layerType
-  );
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+  const projection = `* REPLACE (
+      CASE
+        WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
+        ELSE ${getRepresentativePointExpression(geometryColumn, layerType)}
+      END AS "${escapedGeometryColumn}"
+    )`;
+
+  if (isPolygonBasemapLayerType(layerType)) {
+    buildTableInBackground(duck, {
+      sourceTable: tableName,
+      targetTable: centroidsTableName,
+      projection
+    });
+    return;
+  }
 
   await duck.query(`
-    CREATE OR REPLACE TABLE "${escapedCentroidsTable}" AS
-    SELECT * REPLACE (
-      CASE
-        WHEN "${escapeIdentifier(geometryColumn)}" IS NULL THEN NULL
-        ELSE ${representativePointExpression}
-      END AS "${escapeIdentifier(geometryColumn)}"
-    )
-    FROM "${escapedTable}"
+    CREATE OR REPLACE TABLE "${escapeIdentifier(centroidsTableName)}" AS
+    SELECT ${projection}
+    FROM "${escapeIdentifier(tableName)}"
   `);
 }
 

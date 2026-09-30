@@ -5,7 +5,11 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import {
+  Duck,
+  duckDBOrchestrator,
+  isBuiltTableFresh
+} from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -94,6 +98,7 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
+import { getBasemapCentroidsTableName } from '../services/basemap-import.service';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -641,9 +646,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         return null;
       }
 
+      const builtPointsTable = getBasemapCentroidsTableName(tableName);
+      const reuseBuiltPoints = await isBuiltTableFresh(builtPointsTable);
       return getRepresentativePointArrowTable(
-        tableName,
-        geometryInfo.type,
+        reuseBuiltPoints ? builtPointsTable : tableName,
+        reuseBuiltPoints ? GeometryType.POINT : geometryInfo.type,
         Duck
       );
     })()

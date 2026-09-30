@@ -2,6 +2,7 @@ import {
   ExampleCategory,
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
+import type { GeometryInfo } from '$lib/features/data-pipeline';
 import type { ParsedData } from '$lib/types/data';
 import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
@@ -76,6 +77,7 @@ export interface UploadedFile {
   parsedData?: ParsedData;
 
   preparedGeoJSON?: string;
+  geometry?: GeometryInfo;
   status: FileStatus;
   errorMessage?: string;
   validation?: FileValidation;

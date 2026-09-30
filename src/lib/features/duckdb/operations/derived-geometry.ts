@@ -42,32 +42,48 @@ async function createEmptyGeometryTable(
 async function createDerivedTable(
   duck: DuckDBClientForDerivedGeometry,
   targetTable: string,
-  buildSelect: (nodingFactor: number) => string
+  candidateSelects: string[]
 ): Promise<void> {
-  try {
-    await runDerivedTableQuery(duck, targetTable, buildSelect(0));
-    return;
-  } catch (error) {
-    logger.warn(
-      `Re-nodding the coverage to derive ${targetTable}`,
-      LogCategory.DUCKDB,
-      error
-    );
+  let lastError: unknown;
+  for (const select of candidateSelects) {
+    try {
+      await runDerivedTableQuery(duck, targetTable, select);
+      return;
+    } catch (error) {
+      lastError = error;
+      logger.warn(
+        `Retrying the derivation of ${targetTable}`,
+        LogCategory.DUCKDB,
+        error
+      );
+    }
   }
 
+  logger.error(
+    `Failed to derive geometry table ${targetTable}`,
+    LogCategory.DUCKDB,
+    lastError
+  );
+  await createEmptyGeometryTable(duck, targetTable);
+}
+
+async function isValidPolygonCoverage(
+  duck: DuckDBClientForDerivedGeometry,
+  sourceTable: string
+): Promise<boolean> {
   try {
-    await runDerivedTableQuery(
-      duck,
-      targetTable,
-      buildSelect(NODING_REPAIR_FACTOR)
-    );
+    const rows = (await duck.query(
+      `FROM is_valid_polygon_coverage('${escapeSqlString(sourceTable)}')`,
+      { format: 'array' }
+    )) as Array<{ is_valid: boolean | null }>;
+    return rows[0]?.is_valid === true;
   } catch (error) {
-    logger.error(
-      `Failed to derive geometry table ${targetTable}`,
+    logger.warn(
+      `Could not validate the coverage of ${sourceTable}`,
       LogCategory.DUCKDB,
       error
     );
-    await createEmptyGeometryTable(duck, targetTable);
+    return false;
   }
 }
 
@@ -99,8 +115,9 @@ function buildLineSelect(macroCall: string): string {
 
 /**
  * Builds the territory / outer contour / shared borders siblings of a polygon
- * coverage. The outer contour reuses the already dissolved land table, so the
- * whole set costs one dissolve more than the shared borders alone.
+ * coverage. A valid coverage is derived from its shared vertices, without any
+ * overlay; any other coverage, or a failure of that path, goes through the
+ * GEOS dissolve, re-noded on a second attempt.
  */
 export async function rebuildDerivedGeometryTables(
   duck: DuckDBClientForDerivedGeometry,
@@ -108,32 +125,42 @@ export async function rebuildDerivedGeometryTables(
 ): Promise<void> {
   const escapedSource = escapeSqlString(sourceTable);
   const landTable = getDerivedLandTableName(sourceTable);
+  const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
+  const landSelect = (macroCall: string) => `
+    SELECT geom
+    FROM ${macroCall}
+    WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+  `;
+  const withNodingRetry = (buildMacroCall: (nodingFactor: string) => string) =>
+    [0, NODING_REPAIR_FACTOR].map((nodingFactor) =>
+      buildMacroCall(`noding_factor := ${nodingFactor}`)
+    );
 
-  await createDerivedTable(
-    duck,
-    landTable,
-    (nodingFactor) => `
-      SELECT geom
-      FROM extract_land('${escapedSource}', noding_factor := ${nodingFactor})
-      WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
-    `
-  );
+  await createDerivedTable(duck, landTable, [
+    ...(coverageIsValid
+      ? [landSelect(`extract_coverage_land('${escapedSource}')`)]
+      : []),
+    ...withNodingRetry((noding) =>
+      landSelect(`extract_land('${escapedSource}', ${noding})`)
+    )
+  ]);
 
   await createDerivedTable(
     duck,
     getDerivedOuterlinesTableName(sourceTable),
-    (nodingFactor) =>
+    withNodingRetry((noding) =>
       buildLineSelect(
-        `extract_outerlines('${escapeSqlString(landTable)}', noding_factor := ${nodingFactor})`
+        `extract_outerlines('${escapeSqlString(landTable)}', ${noding})`
       )
+    )
   );
 
-  await createDerivedTable(
-    duck,
-    getDerivedInnerlinesTableName(sourceTable),
-    (nodingFactor) =>
-      buildLineSelect(
-        `extract_innerlines('${escapedSource}', noding_factor := ${nodingFactor})`
-      )
-  );
+  await createDerivedTable(duck, getDerivedInnerlinesTableName(sourceTable), [
+    ...(coverageIsValid
+      ? [buildLineSelect(`extract_coverage_innerlines('${escapedSource}')`)]
+      : []),
+    ...withNodingRetry((noding) =>
+      buildLineSelect(`extract_innerlines('${escapedSource}', ${noding})`)
+    )
+  ]);
 }

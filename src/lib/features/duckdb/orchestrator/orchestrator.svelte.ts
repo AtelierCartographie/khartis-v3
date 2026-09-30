@@ -103,6 +103,26 @@ function resetJoinRequestState(): void {
   joinQueues.clear();
 }
 
+const EMPTY_FUZZY_PASS_ESTIMATE: joinOps.JoinFuzzyPassEstimate = {
+  candidates: 0,
+  targetNames: 0,
+  estimatedMs: 0,
+  withinBudget: true,
+  fullPassRequested: false
+};
+
+async function isGeometryColumn(
+  duck: typeof Duck,
+  tableName: string,
+  columnName: string
+): Promise<boolean> {
+  const tableInfo = await duck.describe_table(tableName);
+  const columnIndex = tableInfo.name.indexOf(columnName);
+  return (
+    columnIndex !== -1 && isGeometryColumnType(tableInfo.type[columnIndex])
+  );
+}
+
 async function initialize(): Promise<void> {
   if (state.isInitialized()) return;
 
@@ -519,6 +539,10 @@ export const duckDBOrchestrator = {
       });
     }
 
+    if (await isGeometryColumn(Duck, dataset.tableName, geoColumn)) {
+      return [];
+    }
+
     return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck);
   },
 
@@ -534,6 +558,10 @@ export const duckDBOrchestrator = {
       throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
         datasetId
       });
+    }
+
+    if (await isGeometryColumn(Duck, dataset.tableName, geoColumn)) {
+      return EMPTY_FUZZY_PASS_ESTIMATE;
     }
 
     return joinOps.estimateJoinFuzzyPass(dataset, geoColumn, Duck);
