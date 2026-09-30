@@ -300,22 +300,6 @@ async function updateFileFromDuckDBDataset(
 
   callbacks.onProgress(uploadedFile.id, 80);
 
-  const geometryColumnName = geometry?.columnName ?? INTERNAL_COLUMN.GEOM;
-  const preparedGeoJSON = geometry
-    ? await buildPreparedGeoJSONFromDuckTable(
-        duck,
-        tableName,
-        geometryColumnName,
-        headers.filter(
-          (header) =>
-            header !== geometryColumnName &&
-            !EXCLUDED_COLUMNS.includes(
-              header as (typeof EXCLUDED_COLUMNS)[number]
-            )
-        )
-      )
-    : undefined;
-
   callbacks.onDataUpdate(uploadedFile.id, {
     parsedData: tabularData,
     rowCount,
@@ -323,7 +307,7 @@ async function updateFileFromDuckDBDataset(
     statistics,
     content: fileContent,
     duckdbTableName: tableName,
-    ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+    ...(geometry ? { geometry } : {})
   });
 
   const dataMatrix = createDataMatrix(sampleData, headers);
