@@ -33,7 +33,7 @@ import type {
 } from '$lib/features/map/types/basemap.types';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { Table } from 'apache-arrow/Arrow';
-import { addGeoArrowMetadata } from '$lib/features/map/services/read-geojson-arrow.service';
+import { addGeoArrowMetadata } from '$lib/features/map/services/read-geoparquet-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
 import type {
   JoinCandidate,

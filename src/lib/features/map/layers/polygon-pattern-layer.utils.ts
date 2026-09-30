@@ -1,6 +1,5 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer, SolidPolygonLayer } from '@deck.gl/layers';
-import type { FeatureCollection } from 'geojson';
+import { SolidPolygonLayer } from '@deck.gl/layers';
 import {
   createPolygonFillColorAttribute,
   type BinaryPolygonData
@@ -280,52 +279,6 @@ export function buildMissingDataPatternProps(
   }
 
   return createClassPatternProps([pattern], 0);
-}
-
-export function createPolygonPatternOverlayLayer(
-  layerId: string,
-  polygonPatternId: string | undefined,
-  patternGeojson: FeatureCollection,
-  patternProps: PolygonPatternProps,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
-  idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
-  getOverlayFillColor?: (feature: {
-    properties?: Record<string, unknown>;
-  }) => [number, number, number, number],
-  opacity: number = PATTERN_OVERLAY_OPACITY
-): GeoJsonLayer {
-  const { modelMatrix, beforeId } = ctx;
-
-  return new GeoJsonLayer({
-    id: `${layerId}-${idSuffix}`,
-    data: patternGeojson,
-    getFillColor: getOverlayFillColor ?? [0, 0, 0, 255],
-    stroked: false,
-    opacity,
-    pickable: false,
-    extensions: patternProps.extensions,
-    fillPatternAtlas: patternProps.fillPatternAtlas,
-    fillPatternMapping: patternProps.fillPatternMapping,
-    fillPatternMask: true,
-    getFillPattern: patternProps.getFillPattern,
-    getFillPatternScale: patternProps.getFillPatternScale,
-    getFillPatternRotation: patternProps.getFillPatternRotation,
-    ...({
-      khartisPatternId: patternProps.khartisPatternId,
-      khartisPatternSize: patternProps.khartisPatternSize,
-      khartisPatternScale: patternProps.khartisPatternScale,
-      khartisPatternAngle: patternProps.khartisPatternAngle,
-      khartisMotifOptions: patternProps.khartisMotifOptions
-    } as Record<string, unknown>),
-    ...(modelMatrix && { modelMatrix }),
-    ...(beforeId && { beforeId }),
-    updateTriggers: {
-      getFillPattern: [polygonPatternId],
-      getFillPatternScale: [patternProps.getFillPatternScale],
-      getFillPatternRotation: [patternProps.getFillPatternRotation]
-    },
-    dataComparator: (newData, oldData) => newData === oldData
-  });
 }
 
 function createVisiblePolygonFillColorAttribute(

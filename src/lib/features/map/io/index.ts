@@ -1,5 +1,4 @@
 export {
-  arrowTableToGeoJSON,
   extractGeometryInfo,
   isGeoJsonGeometry,
   parseGeoArrowNative,

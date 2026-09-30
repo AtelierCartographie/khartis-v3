@@ -17,7 +17,6 @@ export {
 } from './dataset-geometry-basemap.service';
 export { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
 export {
-  readGeoParquetViaDuckDB,
   readGeoParquetDirect,
   addGeoArrowMetadata
-} from './read-geojson-arrow.service';
+} from './read-geoparquet-arrow.service';

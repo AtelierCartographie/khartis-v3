@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import type { FeatureCollection } from 'geojson';
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { SplitRenderingTable } from '$lib/features/map';
   import AnnotationOverlay from '$lib/features/map/components/annotation-overlay.svelte';
@@ -26,7 +25,6 @@
     tables: Map<string, ArrowTable>;
     densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
-    geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
     width: number;
     height: number;
@@ -41,7 +39,6 @@
     tables,
     densityTables,
     splitData,
-    geoJSONs,
     layout,
     width,
     height,
@@ -124,7 +121,6 @@
       tables={tables}
       densityTables={densityTables}
       splitData={splitData}
-      geoJSONs={geoJSONs}
       layout={layout}
       containerWidth={mapStageWidth}
       containerHeight={mapStageHeight}

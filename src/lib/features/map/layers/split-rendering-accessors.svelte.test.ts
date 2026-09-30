@@ -11,8 +11,6 @@ import {
   buildSplitDatasetRowMapping,
   createSplitAwareNullableRowAccessor,
   createSplitAwareRowAccessor,
-  createSplitGeoJsonFeatureAccessor,
-  createSplitGeoJsonNullableFeatureAccessor,
   getSplitMatchedGeometryRowIndices,
   hasJoinedBasemapKey,
   resolveBestSplitFeatureIdColumn,
@@ -134,58 +132,6 @@ describe('split rendering accessors', () => {
     );
 
     expect([accessor(0), accessor(1)]).toEqual([10, null]);
-  });
-
-  it('maps projected GeoJSON features through geometry ids to joined dataset rows', () => {
-    const geometry = createTableWithRows(
-      [{ [CANONICAL_ID_COLUMN]: 'DEU' }, { [CANONICAL_ID_COLUMN]: 'FRA' }],
-      [CANONICAL_ID_COLUMN]
-    );
-    const dataset = createTableWithRows(
-      [
-        { [JOINED_BASEMAP_COLUMN.ID]: 'FRA', label: 'France' },
-        { [JOINED_BASEMAP_COLUMN.ID]: 'DEU', label: 'Germany' }
-      ],
-      [JOINED_BASEMAP_COLUMN.ID, 'label']
-    );
-    const accessor = createSplitGeoJsonFeatureAccessor(
-      createSplitContext(dataset),
-      geometry,
-      (row) => String(row.label ?? 'missing')
-    );
-
-    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'DEU' } })).toBe(
-      'Germany'
-    );
-    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'FRA' } })).toBe(
-      'France'
-    );
-    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'ESP' } })).toBe(
-      'missing'
-    );
-  });
-
-  it('preserves null for unmatched projected GeoJSON split features when requested', () => {
-    const geometry = createTableWithRows(
-      [{ [CANONICAL_ID_COLUMN]: 'DEU' }, { [CANONICAL_ID_COLUMN]: 'ESP' }],
-      [CANONICAL_ID_COLUMN]
-    );
-    const dataset = createTableWithRows(
-      [{ [JOINED_BASEMAP_COLUMN.ID]: 'DEU', label: 'Germany' }],
-      [JOINED_BASEMAP_COLUMN.ID, 'label']
-    );
-    const accessor = createSplitGeoJsonNullableFeatureAccessor(
-      createSplitContext(dataset),
-      geometry,
-      (row) => row?.label ?? null
-    );
-
-    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'DEU' } })).toBe(
-      'Germany'
-    );
-    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'ESP' } })).toBe(
-      null
-    );
   });
 
   it('builds tooltip row mappings from geometry rows to joined dataset rows', () => {

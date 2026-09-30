@@ -434,7 +434,7 @@ export function useEnrichmentJoin(
           sourceFileId: selectedDataset.sourceFileId,
           tableName: enrichedTableName,
           duckColumns: snapshot.duckColumns,
-          geometryColumnName: selectedDataset.geometry?.columnName
+          geometry: selectedDataset.geometry
         });
       }
 

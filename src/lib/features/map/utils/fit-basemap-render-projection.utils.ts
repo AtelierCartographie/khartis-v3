@@ -50,7 +50,12 @@ export function fitBasemapRenderProjection({
       projection: KHARTIS_PROJ4_FACTORY,
       params: {
         proj4: metadata.proj_to.proj4,
-        fit: { bbox: fitBbox, width, height, padding },
+        fit: {
+          bbox: [fitBbox[0], fitBbox[1], fitBbox[2], fitBbox[3]],
+          width,
+          height,
+          padding
+        },
         clipExtent
       }
     });

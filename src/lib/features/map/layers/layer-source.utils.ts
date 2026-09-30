@@ -109,15 +109,3 @@ export function getTextRepresentativePointSource(
     geometryInfo
   };
 }
-
-export function requiresRepresentativePointSource(
-  geometryType: GeometryInfo['type'] | GeometryType | undefined
-): boolean {
-  return (
-    geometryType === GeometryType.POLYGON ||
-    geometryType === GeometryType.MULTIPOLYGON ||
-    geometryType === GeometryType.LINESTRING ||
-    geometryType === GeometryType.MULTILINESTRING ||
-    geometryType === GeometryType.MULTIPOINT
-  );
-}

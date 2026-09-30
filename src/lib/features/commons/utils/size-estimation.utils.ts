@@ -13,7 +13,7 @@ function stripBinaryFields(project: unknown): unknown {
       const {
         content: _content,
         relatedFilesData: _relatedFilesData,
-        preparedGeoJSON: _preparedGeoJSON,
+        archiveLayerSnapshot: _archiveLayerSnapshot,
         originalFile: _originalFile,
         relatedFileObjects: _relatedFileObjects,
         ...rest
