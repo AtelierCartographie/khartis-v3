@@ -6,11 +6,18 @@ import {
   DataValidationError,
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
+import { FILE_EXTENSION_GROUPS, MIME } from '$lib/features/commons/constants';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
 import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
 import { getProjectDatabase } from './database-access.service';
+
+// Legacy archive layers were persisted as GeoJSON snapshots and stay readable.
+const ARCHIVE_SNAPSHOT_EXTENSIONS = [
+  FILE_EXTENSION_GROUPS.PARQUET[0],
+  FILE_EXTENSION_GROUPS.GEO[0]
+];
 
 interface StoredAssetMetadata {
   assetId: string;
@@ -240,12 +247,14 @@ export async function ensureUploadedFileAssets(
   file: UploadedFile
 ): Promise<UploadedFile> {
   const preparedFile = { ...file };
-  const shouldPersistArchiveSnapshot = Boolean(
-    preparedFile.sourceArchive && preparedFile.preparedGeoJSON
-  );
+  const archiveLayerSnapshot = preparedFile.sourceArchive
+    ? preparedFile.archiveLayerSnapshot
+    : undefined;
   const hasArchiveSnapshotAsset = Boolean(
-    preparedFile.assetRef?.mimeType === 'application/geo+json' &&
-    preparedFile.assetRef.originalName.endsWith('.geojson')
+    preparedFile.assetRef &&
+    ARCHIVE_SNAPSHOT_EXTENSIONS.some((extension) =>
+      preparedFile.assetRef?.originalName.endsWith(extension)
+    )
   );
 
   const primaryAssetMissing =
@@ -255,19 +264,17 @@ export async function ensureUploadedFileAssets(
   if (
     !preparedFile.assetRef ||
     primaryAssetMissing ||
-    (shouldPersistArchiveSnapshot && !hasArchiveSnapshotAsset)
+    (archiveLayerSnapshot && !hasArchiveSnapshotAsset)
   ) {
-    if (shouldPersistArchiveSnapshot && preparedFile.preparedGeoJSON) {
+    if (archiveLayerSnapshot) {
       const snapshotBaseName = preparedFile.name.replace(/\.[^.]+$/u, '');
-      preparedFile.assetRef = await persistAssetContent(
-        preparedFile.preparedGeoJSON,
-        {
-          originalName: `${snapshotBaseName}.geojson`,
-          mimeType: 'application/geo+json',
-          size: preparedFile.preparedGeoJSON.length,
-          kind: 'primary'
-        }
-      );
+      preparedFile.assetRef = await persistAssetBytes(archiveLayerSnapshot, {
+        assetId: crypto.randomUUID(),
+        originalName: `${snapshotBaseName}${FILE_EXTENSION_GROUPS.PARQUET[0]}`,
+        mimeType: MIME.GEOPARQUET,
+        size: archiveLayerSnapshot.byteLength,
+        kind: 'primary'
+      });
     } else if (preparedFile.originalFile) {
       preparedFile.assetRef = await createAssetRefFromFile(
         preparedFile.originalFile,
@@ -281,16 +288,6 @@ export async function ensureUploadedFileAssets(
         size: preparedFile.size,
         kind: 'primary'
       });
-    } else if (preparedFile.preparedGeoJSON) {
-      preparedFile.assetRef = await persistAssetContent(
-        preparedFile.preparedGeoJSON,
-        {
-          originalName: preparedFile.name,
-          mimeType: preparedFile.type || 'application/geo+json',
-          size: preparedFile.preparedGeoJSON.length,
-          kind: 'primary'
-        }
-      );
     }
   }
 

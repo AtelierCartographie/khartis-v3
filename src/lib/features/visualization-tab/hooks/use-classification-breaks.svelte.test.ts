@@ -34,7 +34,7 @@ const serviceMocks = vi.hoisted(() => ({
 }));
 
 const rowScopeMocks = vi.hoisted(() => ({
-  resolveRowScopeClause: vi.fn(() => null as string | null)
+  resolveValueScopeClause: vi.fn(() => null as string | null)
 }));
 
 const paletteMocks = vi.hoisted(() => ({
@@ -114,8 +114,8 @@ describe('use-classification-breaks', () => {
     paletteMocks.findPaletteById.mockReset();
     paletteMocks.generateCategoricalColorsFromSeed.mockClear();
     paletteMocks.generatePaletteColors.mockClear();
-    rowScopeMocks.resolveRowScopeClause.mockReset();
-    rowScopeMocks.resolveRowScopeClause.mockReturnValue(null);
+    rowScopeMocks.resolveValueScopeClause.mockReset();
+    rowScopeMocks.resolveValueScopeClause.mockReturnValue(null);
   });
 
   it('maps every classification scope target back to its primitive', () => {
@@ -488,7 +488,7 @@ describe('use-classification-breaks', () => {
       counts: [1, 1, 1]
     });
 
-    rowScopeMocks.resolveRowScopeClause.mockReturnValue('"pop" >= 1000');
+    rowScopeMocks.resolveValueScopeClause.mockReturnValue('"pop" >= 1000');
     await controller.compute({
       scopeKey: 'fill:polygon',
       primitive: PrimitiveFilterType.POLYGON,
@@ -502,7 +502,7 @@ describe('use-classification-breaks', () => {
       expect.objectContaining({ rowScopeClause: '"pop" >= 1000' })
     );
 
-    rowScopeMocks.resolveRowScopeClause.mockReturnValue('"pop" >= 2000');
+    rowScopeMocks.resolveValueScopeClause.mockReturnValue('"pop" >= 2000');
     await controller.compute({
       scopeKey: 'fill:polygon',
       primitive: PrimitiveFilterType.POLYGON,

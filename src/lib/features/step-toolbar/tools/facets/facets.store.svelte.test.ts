@@ -70,7 +70,7 @@ describe('facetsStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
-    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([]);
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['polygon']);
     mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
       ({
         variable,
@@ -137,7 +137,47 @@ describe('facetsStore', () => {
     ]);
   });
 
+  it('keeps a collection whose primitive is hidden and restores it when shown again', async () => {
+    mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['point']);
+    facetsStore.restoreFromSerialized({
+      enabled: true,
+      baseVisualizationId: 'base-viz',
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+      variables: ['a', 'b'],
+      layout: { columns: 2, gap: 16 },
+      scaleMode: SCALE_MODE.SHARED,
+      generatedVisualizationIds: ['facet-a', 'facet-b']
+    });
+
+    await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
+
+    expect(facetsStore.enabled).toBe(false);
+    expect(facetsStore.suspended).toBe(true);
+    expect(facetsStore.variables).toEqual(['a', 'b']);
+    expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
+      'facet-a',
+      'facet-b'
+    ]);
+
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['point', 'polygon']);
+    mocks.generateFacetVisualizationsMock.mockResolvedValue([
+      { id: 'facet-a2' },
+      { id: 'facet-b2' }
+    ]);
+
+    await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
+
+    expect(facetsStore.enabled).toBe(true);
+    expect(facetsStore.generatedVisualizationIds).toEqual([
+      'facet-a2',
+      'facet-b2'
+    ]);
+  });
+
   it('syncs generated facets from the latest base visualization without changing ids', async () => {
+    mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('text');
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['text']);
     const baseViz = {
       id: 'base-viz',
       name: 'Base visualization',
@@ -179,6 +219,7 @@ describe('facetsStore', () => {
         baseViz,
         visualization: baseViz,
         variable: 'a',
+        collectionVariables: ['a', 'b'],
         scaleMode: SCALE_MODE.INDEPENDENT,
         primarySlotPath: FACET_SLOT.TEXT_VALUE
       }
@@ -189,6 +230,7 @@ describe('facetsStore', () => {
         baseViz,
         visualization: baseViz,
         variable: 'b',
+        collectionVariables: ['a', 'b'],
         scaleMode: SCALE_MODE.INDEPENDENT,
         primarySlotPath: FACET_SLOT.TEXT_VALUE
       }
@@ -234,7 +276,7 @@ describe('facetsStore', () => {
   });
 
   describe('updateVariables', () => {
-    it('should disable the collection when fewer than 2 variables are provided', async () => {
+    it('should fall back to a single-map draft when fewer than 2 variables are provided', async () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
@@ -257,6 +299,10 @@ describe('facetsStore', () => {
         'facet-b',
         'facet-c'
       ]);
+      expect(facetsStore.draft).toEqual({
+        baseVisualizationId: 'base-viz',
+        slotPath: FACET_SLOT.POLYGON_VALUE
+      });
     });
 
     it('should enable a new collection when not yet enabled', async () => {
@@ -321,7 +367,7 @@ describe('facetsStore', () => {
       );
     });
 
-    it('does not auto-complete numeric facet slots with technical identifiers', async () => {
+    it('keeps a single chosen variable as a draft instead of auto-completing it', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -333,34 +379,25 @@ describe('facetsStore', () => {
         {
           id: 'dataset-1',
           columns: [
-            { name: 'OGC_FID', type: 'number' },
-            { name: 'capacity_total', type: 'number' },
-            { name: 'population_total', type: 'number' }
+            { name: 'label', type: 'text' },
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
           ]
         }
       ];
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-capacity' },
-        { id: 'facet-population' }
-      ]);
 
       await facetsStore.updateVariables(
         'base-viz',
-        ['capacity_total'],
-        FACET_SLOT.SYMBOL_FILL_VALUE
+        ['label', 'a'],
+        FACET_SLOT.POLYGON_VALUE
       );
 
-      expect(facetsStore.enabled).toBe(true);
-      expect(facetsStore.variables).toEqual([
-        'capacity_total',
-        'population_total'
-      ]);
-      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-        mocks.visualizations[0],
-        ['capacity_total', 'population_total'],
-        SCALE_MODE.SHARED,
-        FACET_SLOT.SYMBOL_FILL_VALUE
-      );
+      expect(facetsStore.enabled).toBe(false);
+      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
+      expect(facetsStore.draft).toEqual({
+        baseVisualizationId: 'base-viz',
+        slotPath: FACET_SLOT.POLYGON_VALUE
+      });
     });
 
     it('filters internal geometry columns from categorical facet slots', async () => {
@@ -439,45 +476,6 @@ describe('facetsStore', () => {
         ['a', 'b'],
         SCALE_MODE.SHARED,
         FACET_SLOT.SYMBOL_FILL_VALUE
-      );
-    });
-
-    it('fills the activation seed with another compatible numeric variable when the initial toggle includes text fields', async () => {
-      mocks.visualizations = [
-        {
-          id: 'base-viz',
-          name: 'Base visualization',
-          datasetId: 'dataset-1'
-        }
-      ];
-      mocks.datasets = [
-        {
-          id: 'dataset-1',
-          columns: [
-            { name: 'label', type: 'text' },
-            { name: 'a', type: 'number' },
-            { name: 'b', type: 'number' }
-          ]
-        }
-      ];
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-a' },
-        { id: 'facet-b' }
-      ]);
-
-      await facetsStore.updateVariables(
-        'base-viz',
-        ['label', 'a'],
-        FACET_SLOT.POLYGON_VALUE
-      );
-
-      expect(facetsStore.enabled).toBe(true);
-      expect(facetsStore.variables).toEqual(['a', 'b']);
-      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-        mocks.visualizations[0],
-        ['a', 'b'],
-        SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
       );
     });
 
@@ -834,55 +832,7 @@ describe('facetsStore', () => {
       );
     });
 
-    it('hides the other primitives of the base visualization and notifies', async () => {
-      mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([
-        'polygon',
-        'point'
-      ]);
-      mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('point');
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-a' },
-        { id: 'facet-b' }
-      ]);
-
-      await facetsStore.enable('base-viz', ['a', 'b'], FACET_SLOT.SYMBOL_SIZE);
-
-      expect(mocks.showInfoMock).toHaveBeenCalledTimes(1);
-      expect(mocks.showInfoMock).toHaveBeenCalledWith(
-        m.facets_notice_title(),
-        m.facets_notice_hidden()
-      );
-    });
-
-    it('combines the replaced and hidden notice when both happen', async () => {
-      mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([
-        'polygon',
-        'point'
-      ]);
-      mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('point');
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'new-a' },
-        { id: 'new-b' }
-      ]);
-      facetsStore.restoreFromSerialized({
-        enabled: true,
-        baseVisualizationId: 'base-viz',
-        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
-        variables: ['old-1', 'old-2'],
-        layout: { columns: 2, gap: 16 },
-        scaleMode: SCALE_MODE.INDEPENDENT,
-        generatedVisualizationIds: ['old-a', 'old-b']
-      });
-
-      await facetsStore.enable('base-viz', ['a', 'b'], FACET_SLOT.SYMBOL_SIZE);
-
-      expect(mocks.showInfoMock).toHaveBeenCalledWith(
-        m.facets_notice_title(),
-        m.facets_notice_replaced_and_hidden()
-      );
-    });
-
-    it('does not notify when starting a first collection with no other primitive', async () => {
+    it('does not notify when starting a first collection', async () => {
       mocks.generateFacetVisualizationsMock.mockResolvedValue([
         { id: 'facet-a' },
         { id: 'facet-b' }

@@ -22,7 +22,6 @@ import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
@@ -152,8 +151,6 @@ interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
 }
 
-const PREPARED_GEOJSON_GEOMETRY_COLUMN = '__khartis_geometry_json';
-
 function countUserColumns(
   columns: ReadonlyArray<{ name: string }>,
   geometry?: DatasetResult['geometry']
@@ -191,92 +188,6 @@ function withGeometryDetection(
   };
 }
 
-function toPreparedGeoJSONValue(value: unknown): unknown {
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value ?? null;
-  }
-
-  if (typeof value === 'bigint') {
-    return Number.isSafeInteger(Number(value)) ? Number(value) : String(value);
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => toPreparedGeoJSONValue(item));
-  }
-
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        toPreparedGeoJSONValue(item)
-      ])
-    );
-  }
-
-  return String(value);
-}
-
-function parsePreparedGeometry(geometryJson: unknown): unknown {
-  if (typeof geometryJson !== 'string') {
-    return null;
-  }
-
-  try {
-    return JSON.parse(geometryJson);
-  } catch {
-    return null;
-  }
-}
-
-async function buildPreparedGeoJSONFromDuckTable(
-  duck: typeof Duck,
-  tableName: string,
-  geometryColumnName: string,
-  propertyColumnNames: string[]
-): Promise<string> {
-  const escapedTableName = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
-  const propertySelect =
-    propertyColumnNames.length > 0
-      ? `${propertyColumnNames
-          .map((name) => `"${escapeIdentifier(name)}"`)
-          .join(', ')},`
-      : '';
-
-  const rows = (await duck.query(
-    `SELECT ${propertySelect}
-            ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS "${PREPARED_GEOJSON_GEOMETRY_COLUMN}"
-     FROM "${escapedTableName}"`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
-
-  const serialized = JSON.stringify({
-    type: 'FeatureCollection',
-    features: rows.map((row) => ({
-      type: 'Feature',
-      geometry: parsePreparedGeometry(row[PREPARED_GEOJSON_GEOMETRY_COLUMN]),
-      properties: Object.fromEntries(
-        propertyColumnNames.map((columnName) => [
-          columnName,
-          toPreparedGeoJSONValue(row[columnName])
-        ])
-      )
-    }))
-  });
-
-  return sanitizePreparedGeoJSON(serialized) ?? serialized;
-}
-
 async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
@@ -300,22 +211,6 @@ async function updateFileFromDuckDBDataset(
 
   callbacks.onProgress(uploadedFile.id, 80);
 
-  const geometryColumnName = geometry?.columnName ?? INTERNAL_COLUMN.GEOM;
-  const preparedGeoJSON = geometry
-    ? await buildPreparedGeoJSONFromDuckTable(
-        duck,
-        tableName,
-        geometryColumnName,
-        headers.filter(
-          (header) =>
-            header !== geometryColumnName &&
-            !EXCLUDED_COLUMNS.includes(
-              header as (typeof EXCLUDED_COLUMNS)[number]
-            )
-        )
-      )
-    : undefined;
-
   callbacks.onDataUpdate(uploadedFile.id, {
     parsedData: tabularData,
     rowCount,
@@ -323,7 +218,7 @@ async function updateFileFromDuckDBDataset(
     statistics,
     content: fileContent,
     duckdbTableName: tableName,
-    ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+    ...(geometry ? { geometry } : {})
   });
 
   const dataMatrix = createDataMatrix(sampleData, headers);
@@ -571,29 +466,27 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     );
   }
 
-  async function buildArchivePreparedGeoJSON(
+  async function buildArchiveLayerSnapshot(
     duck: typeof Duck,
     dataset: DatasetResult,
     headers: string[]
-  ): Promise<string | undefined> {
+  ): Promise<Uint8Array | undefined> {
     if (!dataset.geometry) {
       return undefined;
     }
 
     const geometryColumnName =
       dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM;
-    return buildPreparedGeoJSONFromDuckTable(
-      duck,
-      dataset.tableName,
-      geometryColumnName,
-      headers.filter(
+    return duck.copy_to_parquet_bytes(dataset.tableName, [
+      ...headers.filter(
         (header) =>
           header !== geometryColumnName &&
           !EXCLUDED_COLUMNS.includes(
             header as (typeof EXCLUDED_COLUMNS)[number]
           )
-      )
-    );
+      ),
+      geometryColumnName
+    ]);
   }
 
   async function processSingleDataset(
@@ -644,11 +537,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     )) as Array<Record<string, unknown>>;
 
     const tabularData = convertRowsToTabular(sampleData);
-    const preparedGeoJSON = await buildArchivePreparedGeoJSON(
-      duck,
-      dataset,
-      headers
-    );
 
     callbacks.onProgress(uploadedFile.id, 80);
 
@@ -659,7 +547,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       statistics,
       content: fileContent,
       duckdbTableName: tableName,
-      ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+      ...(dataset.geometry ? { geometry: dataset.geometry } : {})
     });
 
     const dataMatrix = createDataMatrix(sampleData, headers);
@@ -716,11 +604,15 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       }
 
       const tabularData = convertRowsToTabular(previewData);
-      const preparedGeoJSON = await buildArchivePreparedGeoJSON(
+      const archiveLayerSnapshot = await buildArchiveLayerSnapshot(
         duck,
         dataset,
         headers
       );
+      const geometryUpdates = {
+        ...(geometry ? { geometry } : {}),
+        ...(archiveLayerSnapshot ? { archiveLayerSnapshot } : {})
+      };
       const sampleForAnalysis = previewData;
       const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
 
@@ -757,7 +649,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
-          ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+          ...geometryUpdates
         });
         callbacks.onProgress(uploadedFile.id, progressBase + 50);
         callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
@@ -777,7 +669,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
-          ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+          ...geometryUpdates
         };
         callbacks.onAdditionalFile(additionalFile);
       }

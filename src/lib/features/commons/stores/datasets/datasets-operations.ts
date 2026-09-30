@@ -301,7 +301,10 @@ export async function duplicateDataset(
         : undefined,
       relatedFilesData: cloneRelatedFilesData(originalFile?.relatedFilesData),
       parsedData,
-      preparedGeoJSON: originalFile?.preparedGeoJSON,
+      archiveLayerSnapshot: originalFile?.archiveLayerSnapshot,
+      geometry: originalFile?.geometry
+        ? clonePlainValue(originalFile.geometry)
+        : undefined,
       statistics:
         originalFile?.statistics ??
         buildStatisticsFromDataset(dataset) ??

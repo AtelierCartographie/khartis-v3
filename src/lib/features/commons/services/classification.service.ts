@@ -39,6 +39,8 @@ export interface ClassificationOptions {
   numClasses: number;
   valueFilter?: ClassificationValueFilter;
   rowScopeClause?: string | null;
+  /** Classify the values of all these columns together, e.g. a map collection's common scale. */
+  pooledColumnNames?: string[];
 }
 
 export interface BreakCountOptions {
@@ -46,6 +48,7 @@ export interface BreakCountOptions {
   columnName: string;
   breaks: number[];
   rowScopeClause?: string | null;
+  pooledColumnNames?: string[];
 }
 
 export interface ClassificationValueFilter {
@@ -61,6 +64,7 @@ export interface DivergingClassificationOptions {
   lowerClassCount: number;
   upperClassCount: number;
   rowScopeClause?: string | null;
+  pooledColumnNames?: string[];
 }
 
 interface QueryContext {
@@ -373,14 +377,36 @@ function getValueFilterKey(
   return filter ? `${filter.operator}:${filter.value}` : 'all';
 }
 
+function resolvePooledColumnNames(
+  pooledColumnNames: string[] | undefined
+): string[] | null {
+  return pooledColumnNames && pooledColumnNames.length > 1
+    ? pooledColumnNames
+    : null;
+}
+
+function buildPooledValuesSource(
+  context: QueryContext,
+  pooledColumnNames: string[],
+  rowScopeClause: string | null | undefined
+): string {
+  const scope = rowScopeClause ? ` WHERE ${rowScopeClause}` : '';
+  const selects = pooledColumnNames.map(
+    (columnName) =>
+      `SELECT CAST("${escapeIdentifier(columnName)}" AS DOUBLE) AS "${context.escapedColumn}" FROM "${context.escapedTable}"${scope}`
+  );
+  return `(${selects.join(' UNION ALL ')})`;
+}
+
 async function prepareClassificationContext(
   context: QueryContext,
   filter: ClassificationValueFilter | undefined,
-  rowScopeClause: string | null | undefined
+  rowScopeClause: string | null | undefined,
+  pooledColumnNames: string[] | null
 ): Promise<{ context: QueryContext; cleanup: () => Promise<void> }> {
   const conditions: string[] = [];
 
-  if (rowScopeClause) {
+  if (rowScopeClause && !pooledColumnNames) {
     conditions.push(rowScopeClause);
   }
 
@@ -393,7 +419,7 @@ async function prepareClassificationContext(
     }
   }
 
-  if (conditions.length === 0) {
+  if (conditions.length === 0 && !pooledColumnNames) {
     return {
       context,
       cleanup: async () => {}
@@ -403,13 +429,19 @@ async function prepareClassificationContext(
   temporaryClassificationTableSequence += 1;
   const tableName = `kh_classification_${Date.now()}_${temporaryClassificationTableSequence}`;
   const escapedTable = escapeIdentifier(tableName);
+  const source = pooledColumnNames
+    ? buildPooledValuesSource(context, pooledColumnNames, rowScopeClause)
+    : `"${context.escapedTable}"`;
+  const whereClause = [
+    `"${context.escapedColumn}" IS NOT NULL`,
+    ...conditions
+  ].join(' AND ');
 
   await Duck.query(`
     CREATE TEMP TABLE "${escapedTable}" AS
     SELECT "${context.escapedColumn}" AS "${context.escapedColumn}"
-    FROM "${context.escapedTable}"
-    WHERE "${context.escapedColumn}" IS NOT NULL
-      AND ${conditions.join(' AND ')}
+    FROM ${source}
+    WHERE ${whereClause}
   `);
 
   return {
@@ -441,7 +473,11 @@ export async function calculateBreaks(
   }
   breaksCacheVersion = currentVersion;
 
-  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}:${getValueFilterKey(options.valueFilter)}:${options.rowScopeClause ?? 'all'}`;
+  const pooledColumnNames = resolvePooledColumnNames(options.pooledColumnNames);
+  const columnKey = pooledColumnNames
+    ? `pool(${pooledColumnNames.join('|')})`
+    : columnName;
+  const cacheKey = `${context.tableName}:${columnKey}:${method}:${numClasses}:${getValueFilterKey(options.valueFilter)}:${options.rowScopeClause ?? 'all'}`;
   const cached = breaksCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -450,7 +486,8 @@ export async function calculateBreaks(
   const prepared = await prepareClassificationContext(
     context,
     options.valueFilter,
-    options.rowScopeClause
+    options.rowScopeClause,
+    pooledColumnNames
   );
 
   try {
@@ -605,6 +642,7 @@ export async function calculateDivergingBreaks(
     method: options.method,
     numClasses: lowerClassCount,
     rowScopeClause: options.rowScopeClause,
+    pooledColumnNames: options.pooledColumnNames,
     valueFilter: {
       operator: '<',
       value: options.breakpointValue
@@ -621,6 +659,7 @@ export async function calculateDivergingBreaks(
     method: options.method,
     numClasses: upperClassCount,
     rowScopeClause: options.rowScopeClause,
+    pooledColumnNames: options.pooledColumnNames,
     valueFilter: {
       operator: '>=',
       value: options.breakpointValue
@@ -655,14 +694,23 @@ export async function calculateDivergingBreaks(
 export async function detectDivergingBreakpoint(options: {
   datasetId: string;
   columnName: string;
+  pooledColumnNames?: string[];
 }): Promise<number | null> {
   const context = getQueryContext(options.datasetId, options.columnName);
   if (!context) {
     return null;
   }
 
+  let cleanup = async () => {};
   try {
-    const stats = await queryColumnStats(context);
+    const prepared = await prepareClassificationContext(
+      context,
+      undefined,
+      null,
+      resolvePooledColumnNames(options.pooledColumnNames)
+    );
+    cleanup = prepared.cleanup;
+    const stats = await queryColumnStats(prepared.context);
     if (!stats) {
       return null;
     }
@@ -681,6 +729,8 @@ export async function detectDivergingBreakpoint(options: {
       }
     );
     return null;
+  } finally {
+    await cleanup();
   }
 }
 
@@ -695,7 +745,8 @@ export async function calculateBreakCounts(
   const prepared = await prepareClassificationContext(
     context,
     undefined,
-    options.rowScopeClause
+    options.rowScopeClause,
+    resolvePooledColumnNames(options.pooledColumnNames)
   );
 
   try {

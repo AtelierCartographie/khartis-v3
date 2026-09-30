@@ -1,6 +1,6 @@
 import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { GeoArrowMetadataKey } from '../constants';
@@ -370,55 +370,6 @@ export function calculateBoundsFromGeoArrow(
   } catch (error) {
     logger.error('Failed to calculate GeoArrow bounds', LogCategory.MAP, error);
     boundsCache.set(jsTable, null);
-    return null;
-  }
-}
-
-export function calculateBoundsFromGeoJSON(
-  geojson: FeatureCollection
-): LngLatBoundsLike | null {
-  try {
-    if (!geojson || !geojson.features || geojson.features.length === 0) {
-      return null;
-    }
-
-    let minLng = Infinity;
-    let minLat = Infinity;
-    let maxLng = -Infinity;
-    let maxLat = -Infinity;
-
-    for (const feature of geojson.features) {
-      const coords = extractCoordsFromGeometry(feature.geometry);
-
-      for (const [lng, lat] of coords) {
-        if (typeof lng === 'number' && typeof lat === 'number') {
-          if (lng < minLng) minLng = lng;
-          if (lng > maxLng) maxLng = lng;
-          if (lat < minLat) minLat = lat;
-          if (lat > maxLat) maxLat = lat;
-        }
-      }
-    }
-
-    if (
-      !isFinite(minLng) ||
-      !isFinite(minLat) ||
-      !isFinite(maxLng) ||
-      !isFinite(maxLat)
-    ) {
-      return null;
-    }
-
-    if (!isValidBbox(minLng, minLat, maxLng, maxLat)) {
-      return null;
-    }
-
-    return [
-      [minLng, minLat],
-      [maxLng, maxLat]
-    ];
-  } catch (error) {
-    logger.error('Failed to calculate feature bounds', LogCategory.MAP, error);
     return null;
   }
 }

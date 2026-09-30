@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ACCEPTED_BASEMAP_EXTENSIONS } from '../../utils/enrichment.utils';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
@@ -33,16 +34,6 @@
   let isDragging = $state(false);
   let fileInputRef = $state<HTMLInputElement | null>(null);
   let importUrl = $state('');
-
-  const acceptedExtensions = [
-    '.geojson',
-    '.json',
-    '.shp',
-    '.zip',
-    '.gpkg',
-    '.kml',
-    '.parquet'
-  ];
 
   async function handleLoadUrlClick() {
     if (!importUrl.trim()) return;
@@ -89,7 +80,8 @@
     <input
       bind:this={fileInputRef}
       type="file"
-      accept={acceptedExtensions.join(',')}
+      accept={ACCEPTED_BASEMAP_EXTENSIONS.join(',')}
+      multiple
       onchange={onFileInputChange}
       hidden
     />

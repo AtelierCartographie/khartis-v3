@@ -44,3 +44,34 @@ export async function exportToCsv(
     }
   }
 }
+
+export async function exportToParquet(
+  ctx: DuckDBContext,
+  table: string,
+  columns: string[]
+): Promise<Uint8Array> {
+  const filename = `export_${Date.now()}_${crypto.randomUUID()}.parquet`;
+  const selectColumns = columns
+    .map((column) => `"${escapeIdentifier(column)}"`)
+    .join(', ');
+
+  try {
+    await executeQuery(
+      ctx.connection,
+      `COPY (SELECT ${selectColumns} FROM "${escapeIdentifier(table)}") TO '${filename}' (FORMAT parquet)`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+    );
+
+    return await ctx.db.copyFileToBuffer(filename);
+  } finally {
+    try {
+      await ctx.db.dropFile(filename);
+    } catch (error) {
+      logger.error(
+        'Failed to cleanup DuckDB export file',
+        LogCategory.EXPORT,
+        error
+      );
+    }
+  }
+}

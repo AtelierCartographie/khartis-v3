@@ -2,6 +2,7 @@ import type { GeoProjection } from 'd3-geo';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { fitProjectionToBbox } from '$lib/features/commons/utils/projection.utils';
 import { registerProjectionSpec } from './geoarrow-stream-bridge.utils';
+import { applyBasemapFrame, isFramedExtent } from './basemap-frame.utils';
 import { KHARTIS_PROJ4_FACTORY } from './khartis-projection-factories.utils';
 import type { BBox } from '../types';
 import type { BasemapMetadata } from '../types/basemap.types';
@@ -38,6 +39,10 @@ export function fitBasemapRenderProjection({
   }
 
   fitProjectionToBbox(projection, fitBbox, width, height, padding);
+  const clipExtent =
+    metadata.bbox && isFramedExtent(metadata.bbox)
+      ? (applyBasemapFrame(projection, fitBbox) ?? undefined)
+      : undefined;
   // The fit mutates the instance, so the spec registered at construction no
   // longer describes it — re-register with the fit parameters included.
   if (metadata.proj_to?.proj4) {
@@ -45,7 +50,13 @@ export function fitBasemapRenderProjection({
       projection: KHARTIS_PROJ4_FACTORY,
       params: {
         proj4: metadata.proj_to.proj4,
-        fit: { bbox: fitBbox, width, height, padding }
+        fit: {
+          bbox: [fitBbox[0], fitBbox[1], fitBbox[2], fitBbox[3]],
+          width,
+          height,
+          padding
+        },
+        clipExtent
       }
     });
   }

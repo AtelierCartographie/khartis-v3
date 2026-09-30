@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeTable } from 'apache-arrow';
+import {
+  Field,
+  Float64,
+  List,
+  Table,
+  makeTable,
+  vectorFromArray
+} from 'apache-arrow';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BinaryPathData } from '@ateliercartographie/geoarrow-deck-stream';
 
@@ -30,9 +37,19 @@ function deferred<T>(): {
   };
 }
 
-function createLargeTable(): ArrowTable {
+function createSingleHeavyRowTable(): ArrowTable {
+  const coordinates = Array.from({ length: 40_000 }, (_, index) => index);
+  return new Table({
+    geometry: vectorFromArray(
+      [coordinates],
+      new List(new Field('xy', new Float64()))
+    )
+  }) as ArrowTable;
+}
+
+function createManyLightRowsTable(): ArrowTable {
   return makeTable({
-    geometry: Int32Array.from({ length: 2000 }, (_, index) => index)
+    geometry: Int32Array.from({ length: 5000 }, (_, index) => index)
   }) as ArrowTable;
 }
 
@@ -53,7 +70,7 @@ describe('GeoArrow stream worker bridge', () => {
       parseGeometry
     });
     const bridge = await import('./geoarrow-stream-bridge.utils');
-    const table = createLargeTable();
+    const table = createSingleHeavyRowTable();
     const parsed: BinaryPathData = {
       length: 1,
       positions: new Float32Array([2, 3]),
@@ -78,6 +95,17 @@ describe('GeoArrow stream worker bridge', () => {
     );
   });
 
+  it('should parse many light rows on the main thread', async () => {
+    const parseGeometry = vi.fn();
+    mocks.getParseWorkerClient.mockReturnValue({ parseGeometry });
+    const bridge = await import('./geoarrow-stream-bridge.utils');
+
+    expect(() => bridge.parsePaths(createManyLightRowsTable())).toThrow(
+      /Unsupported geometry type/
+    );
+    expect(parseGeometry).not.toHaveBeenCalled();
+  });
+
   it('should use the registered projection identity when requesting a worker parse', async () => {
     const response = deferred<BinaryPathData>();
     const parseGeometry = vi.fn(() => response.promise);
@@ -85,7 +113,7 @@ describe('GeoArrow stream worker bridge', () => {
       parseGeometry
     });
     const bridge = await import('./geoarrow-stream-bridge.utils');
-    const table = createLargeTable();
+    const table = createSingleHeavyRowTable();
 
     bridge.parsePaths(table);
 

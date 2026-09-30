@@ -78,10 +78,8 @@
       fieldIds: number[]
     ) => void | Promise<void>;
     onFacetsToggle: (
-      baseVariableName: string,
       slotPath: FacetSlotPath,
-      enabled: boolean,
-      fieldIds?: number[]
+      enabled: boolean
     ) => void | Promise<void>;
     onOpenDiscretization: () => void;
     onClassificationChange: (updates: Partial<ClassificationConfig>) => void;
@@ -267,8 +265,7 @@
       onSelect={onValueFieldSelect}
       onCollectionChange={(ids) =>
         onFacetsVariablesChange(valueColumnName, facetsValueSlotPath, ids)}
-      onToggleCollection={(en, ids) =>
-        onFacetsToggle(valueColumnName, facetsValueSlotPath, en, ids)}
+      onToggleCollection={(en) => onFacetsToggle(facetsValueSlotPath, en)}
     />
   </div>
   <DiscretizationRow
@@ -305,8 +302,7 @@
           facetsCategorySlotPath,
           ids
         )}
-      onToggleCollection={(en, ids) =>
-        onFacetsToggle(categoryColumnName, facetsCategorySlotPath, en, ids)}
+      onToggleCollection={(en) => onFacetsToggle(facetsCategorySlotPath, en)}
     />
   </div>
   <DiscretizationRow

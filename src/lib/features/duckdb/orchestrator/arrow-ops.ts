@@ -24,11 +24,10 @@ import {
   GeometryType
 } from '$lib/features/map/constants/map.constants';
 import {
-  isProjectionSupported,
-  reprojectPoint
-} from '$lib/features/duckdb/io/reprojection';
-import { tableFromArrays } from 'apache-arrow';
-import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
+  EPSG_DEFINITIONS,
+  normalizeProj4CrsCode
+} from '$lib/features/commons/utils/proj4-crs.utils';
+import { Field, Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
 let maximumInscribedCircleSupported = true;
@@ -151,117 +150,6 @@ async function resolveGeometryTypeForTable(
   return geometryType;
 }
 
-function reprojectGeoJsonCoordinates(
-  coordinates: unknown,
-  sourceCrs: string,
-  targetCrs: string
-): void {
-  if (!Array.isArray(coordinates)) {
-    return;
-  }
-
-  if (
-    coordinates.length >= 2 &&
-    typeof coordinates[0] === 'number' &&
-    typeof coordinates[1] === 'number'
-  ) {
-    const result = reprojectPoint(
-      coordinates[0],
-      coordinates[1],
-      sourceCrs,
-      targetCrs
-    );
-
-    if (result.success && result.coordinates) {
-      coordinates[0] = result.coordinates[0];
-      coordinates[1] = result.coordinates[1];
-    }
-    return;
-  }
-
-  for (const child of coordinates) {
-    reprojectGeoJsonCoordinates(child, sourceCrs, targetCrs);
-  }
-}
-
-function reprojectGeoJsonValue(
-  value: unknown,
-  sourceCrs: string,
-  targetCrs: string
-): unknown {
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  try {
-    const geometry = JSON.parse(value) as { coordinates?: unknown };
-    reprojectGeoJsonCoordinates(geometry.coordinates, sourceCrs, targetCrs);
-    return JSON.stringify(geometry);
-  } catch {
-    return value;
-  }
-}
-
-async function reprojectArrowTableWithProj4(
-  tableName: string,
-  Duck: DuckDBClientForArrow,
-  geomColumn: GeomColumnInfo,
-  sourceCrs: string,
-  targetCrs: string,
-  geometryType: string
-): Promise<Table> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geomColumn.column_name);
-  const rawResult = (await Duck.query(
-    `SELECT * EXCLUDE ("${escapedGeometryColumn}"),
-            ST_AsGeoJSON("${escapedGeometryColumn}") AS "${escapedGeometryColumn}"
-     FROM "${escapedTable}"`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  )) as Uint8Array;
-
-  const rawTable = tableFromIPC(rawResult);
-  // Column iteration keeps NULL slots null; toArray() zero-fills numeric NULLs.
-  const columns = Object.fromEntries(
-    rawTable.schema.fields.map((field) => {
-      const vector = rawTable.getChild(field.name);
-      const values: unknown[] = vector
-        ? Array.from(vector, (value): unknown => value ?? null)
-        : new Array<unknown>(rawTable.numRows).fill(null);
-
-      return [
-        field.name,
-        field.name === geomColumn.column_name
-          ? values.map((value) =>
-              reprojectGeoJsonValue(value, sourceCrs, targetCrs)
-            )
-          : values
-      ];
-    })
-  );
-
-  const reprojectedTable = tableFromArrays(columns);
-  const targetGeoArrowCrs = buildGeoArrowCrs(targetCrs);
-  const syntheticMetadata: GeoArrowMetadata = {
-    version: '1.0.0',
-    primary_column: geomColumn.column_name,
-    columns: {
-      [geomColumn.column_name]: {
-        encoding: ArrowExtension.GEOJSON,
-        geometry_types: [geometryType.replace('ST_', '')],
-        ...(targetGeoArrowCrs ? { crs: targetGeoArrowCrs } : {}),
-        bbox: [-180, -90, 180, 90]
-      }
-    }
-  };
-
-  return addGeoArrowMetadataFromDuckDB(
-    reprojectedTable,
-    tableName,
-    Duck,
-    syntheticMetadata
-  );
-}
-
 async function executeArrowIpcQuery(
   Duck: DuckDBClientForArrow,
   query: string,
@@ -349,7 +237,7 @@ export async function fetchArrowTableWithGeometry(
   whereClause?: string | null,
   targetCrs?: string | null,
   projectColumns?: readonly string[] | null,
-  options?: { skipStreaming?: boolean }
+  options?: { skipStreaming?: boolean; sourceCrs?: string }
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -366,9 +254,9 @@ export async function fetchArrowTableWithGeometry(
     : null;
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
-  const geometrySourceCrs = geomColumn
-    ? extractGeometryColumnCrs(geomColumn.column_type)
-    : undefined;
+  const geometrySourceCrs =
+    options?.sourceCrs ??
+    (geomColumn ? extractGeometryColumnCrs(geomColumn.column_type) : undefined);
   const projectedColumnNames = projectColumns
     ? projectColumns.filter((name) =>
         columns.some((c) => c.column_name === name)
@@ -567,20 +455,9 @@ export async function addGeoArrowMetadataFromDuckDB(
       }
     }
 
-    const geomColumnIndex = table.schema.fields.findIndex(
-      (f) => f.name === geomColumn!.column_name
-    );
-    const isGeoJsonString =
-      geomColumnIndex !== -1 &&
-      table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
     const cachedEncoding =
       cachedGeoArrowMetadata?.columns?.[geomColumn!.column_name]?.encoding;
-
-    // Normalize DuckDB geometry export to geoarrow.wkb so the layer factory
-    // always stays on the binary geoarrow-deck-stream path.
-    const encoding =
-      cachedEncoding ??
-      (isGeoJsonString ? ArrowExtension.GEOJSON : ArrowExtension.GEOARROW_WKB);
+    const encoding = cachedEncoding ?? ArrowExtension.GEOARROW_WKB;
     const resolvedGeometryCrs =
       geometryCrs ?? normalizeCrsName(GEO_CONSTANTS.WGS84_CRS);
     const geoArrowCrs = buildGeoArrowCrs(resolvedGeometryCrs);
@@ -729,12 +606,14 @@ export async function getArrowTableReprojected(
   Duck: DuckDBClientForArrow,
   targetCrs: string
 ): Promise<Table> {
-  try {
+  const reproject = async (sourceCrs?: string) => {
     const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
       tableName,
       Duck,
       null,
-      targetCrs
+      targetCrs,
+      null,
+      sourceCrs ? { sourceCrs } : undefined
     );
 
     return addGeoArrowMetadataFromDuckDB(
@@ -744,42 +623,26 @@ export async function getArrowTableReprojected(
       undefined,
       geomColumn
     );
-  } catch (error) {
-    const normalizedTargetCrs = normalizeCrsName(targetCrs);
-    if (!normalizedTargetCrs) {
-      throw error;
-    }
+  };
 
+  try {
+    return await reproject();
+  } catch (error) {
     const geomColumn = findGeometryColumn(
       await getTableColumns(tableName, Duck)
     );
     const sourceCrs = geomColumn
       ? extractGeometryColumnCrs(geomColumn.column_type)
       : undefined;
+    const sourceDefinition = sourceCrs
+      ? EPSG_DEFINITIONS[normalizeProj4CrsCode(sourceCrs)]
+      : undefined;
 
-    if (
-      !geomColumn ||
-      !sourceCrs ||
-      !isProjectionSupported(sourceCrs) ||
-      !isProjectionSupported(normalizedTargetCrs)
-    ) {
+    if (!sourceDefinition) {
       throw error;
     }
 
-    const geometryType = await resolveGeometryTypeForTable(
-      tableName,
-      geomColumn.column_name,
-      Duck
-    );
-
-    return reprojectArrowTableWithProj4(
-      tableName,
-      Duck,
-      geomColumn,
-      sourceCrs,
-      normalizedTargetCrs,
-      geometryType
-    );
+    return reproject(sourceDefinition);
   }
 }
 

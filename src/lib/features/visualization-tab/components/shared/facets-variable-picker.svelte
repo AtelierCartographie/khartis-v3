@@ -35,7 +35,7 @@
     open?: boolean;
     onSelect: (fieldId: number) => void;
     onCollectionChange?: (fieldIds: number[]) => void;
-    onToggleCollection?: (enabled: boolean, fieldIds?: number[]) => void;
+    onToggleCollection?: (enabled: boolean) => void;
   }
 
   let {
@@ -67,11 +67,12 @@
   const collectionDataFields = $derived(
     singleSelectItems.filter(isAutoFacetDataColumn)
   );
-  const selectedCollectionFieldIds = $derived(
-    selectedFieldIds.filter((id) =>
+  const selectedCollectionFieldIds = $derived.by(() => {
+    const ids = selectedFieldIds.length ? selectedFieldIds : [selectedFieldId];
+    return ids.filter((id) =>
       collectionDataFields.some((field) => field.id === id)
-    )
-  );
+    );
+  });
 
   const triggerLabel = $derived.by(() => {
     if (!isCollectionEnabled) return null;
@@ -128,38 +129,8 @@
     }
   }
 
-  function getSeedCollectionFieldIds(): number[] {
-    const next = selectedCollectionFieldIds.length
-      ? [...selectedCollectionFieldIds]
-      : selectedFieldId !== NONE_FIELD_ID &&
-          collectionDataFields.some((field) => field.id === selectedFieldId)
-        ? [selectedFieldId]
-        : [];
-    const selectedIndex = collectionDataFields.findIndex(
-      (field) => field.id === selectedFieldId
-    );
-    const orderedCollectionDataFields =
-      selectedIndex >= 0
-        ? [
-            ...collectionDataFields.slice(selectedIndex + 1),
-            ...collectionDataFields.slice(0, selectedIndex)
-          ]
-        : collectionDataFields;
-
-    for (const field of orderedCollectionDataFields) {
-      if (next.length >= 2) {
-        break;
-      }
-      if (!next.includes(field.id)) {
-        next.push(field.id);
-      }
-    }
-
-    return next;
-  }
-
   function handleToggle(checked: boolean) {
-    onToggleCollection?.(checked, checked ? getSeedCollectionFieldIds() : []);
+    onToggleCollection?.(checked);
   }
 
   $effect(() => {

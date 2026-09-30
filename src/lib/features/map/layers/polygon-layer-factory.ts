@@ -1,5 +1,5 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import { PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
@@ -20,8 +20,6 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import * as m from '$lib/paraglide/messages';
 
 import { ArrowExtension, DeckLayerId } from '../constants';
 import type {
@@ -42,22 +40,11 @@ import {
   createCategoryIndexAccessor,
   createChoroplethColorAccessor,
   createClassIndexAccessor,
-  createGeoJsonCategoricalColorAccessor,
-  createGeoJsonCategoryIndexAccessor,
-  createGeoJsonChoroplethColorAccessor,
-  createGeoJsonClassIndexAccessor,
   resolveMissingDataRenderProps,
-  withGeoJsonRowHighlight,
-  withGeoJsonRowHighlightAccessor,
   withOpacity,
-  withOpacityPreservingAlpha,
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
-import {
-  getCachedGeoJSON,
-  getCachedProjectedGeoJSON
-} from './layer-geojson-cache';
 import {
   resolvePathParser,
   resolvePolygonParser
@@ -66,7 +53,7 @@ import { HIGHLIGHT_DIMMING_FACTOR } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
 import {
   createHighlightedBinaryPolygonOverlay,
-  createHighlightedPolygonOverlay
+  createHighlightedFeatureOverlay
 } from './layer-selection-overlays';
 import { attachBinaryPickingMetadata } from './layer-source.utils';
 import {
@@ -79,11 +66,9 @@ import {
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
   OUT_OF_SCOPE_COLOR,
-  createSplitGeoJsonFeatureAccessor,
   withPrimitiveScope
 } from './split-rendering-accessors';
 import {
-  buildCategoryColorMapFromLabels,
   resolveEffectiveCategoryColorMap,
   resolveStyleColor
 } from './layer-color.utils';
@@ -92,7 +77,6 @@ import {
   buildPatternProps,
   createBinaryPolygonPatternOverlayLayer,
   createClassPatternProps,
-  createPolygonPatternOverlayLayer,
   resolveClassPatternPalette,
   resolveMissingDataClassPattern,
   resolveMissingDataPatternId,
@@ -100,19 +84,11 @@ import {
 } from './polygon-pattern-layer.utils';
 import {
   createClassPatternColorAccessor,
-  createGeoJsonClassPatternColorAccessor,
-  createGeoJsonPatternBackgroundFillAccessor,
-  createGeoJsonPatternOverlayColorAccessor,
-  createGeoJsonUniqueClassPatternIndexAccessor,
-  createGeoJsonUniquePatternBaseFillAccessor,
   createMissingPolygonPatternColorAccessor,
   createPatternBackgroundFillAccessor,
   createSplitUniqueBinaryColorAccessor,
-  createSplitUniqueGeoJsonColorAccessor,
   createUniqueClassPatternIndexAccessor,
-  createUniquePatternBaseFillAccessor,
-  filterMissingPolygonPatternFeatures,
-  filterSplitMatchedPolygonFeatures
+  createUniquePatternBaseFillAccessor
 } from './polygon-fill-accessors.utils';
 import { orderPrimitiveLayers } from './primitive-layer-order';
 
@@ -163,11 +139,9 @@ export function createPolygonLayerStack(
     geoColumn,
     encoding: arrowExtension,
     isNativeGeoArrow,
-    isWkbEncoded,
-    isGeoJsonEncoded
+    isWkbEncoded
   } = geometryInfo;
   const polygonConfig = viz ? getPolygonPrimitive(viz) : undefined;
-  const polygonEnabled = polygonConfig?.enabled ?? true;
   const polygonFillMode = polygonConfig?.fillMode ?? FillMode.UNIQUE;
   const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.NONE;
   const polygonValueColumn = polygonConfig?.valueColumn;
@@ -213,7 +187,6 @@ export function createPolygonLayerStack(
     strokeDashed &&
     resolveThematicStrokeCapRounded(polygonConfig?.strokeDashedPattern);
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
-  const projectedGeoJsonLayerId = `${layerId}-projected-geojson`;
   const patternProps = buildPatternProps(ctx);
   const classPatternPalette = resolveClassPatternPalette(
     polygonClassification,
@@ -253,7 +226,7 @@ export function createPolygonLayerStack(
     if (
       !showMissingPolygons ||
       !densityValueColumn ||
-      (!isNativeGeoArrow && !isWkbEncoded && !isGeoJsonEncoded)
+      (!isNativeGeoArrow && !isWkbEncoded)
     ) {
       return [];
     }
@@ -358,10 +331,10 @@ export function createPolygonLayerStack(
       ],
       primitiveOrder
     );
-    const selectionOverlay = createHighlightedPolygonOverlay(
+    const selectionOverlay = createHighlightedFeatureOverlay(
       layerId,
       jsTable,
-      geoColumn,
+      geometryInfo,
       polyHighlightedRowIds,
       hlVersion,
       ctx
@@ -372,7 +345,7 @@ export function createPolygonLayerStack(
     return layers;
   }
 
-  if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
+  if (!isNativeGeoArrow && !isWkbEncoded) {
     return [];
   }
 
@@ -380,13 +353,8 @@ export function createPolygonLayerStack(
     arrowExtension &&
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
-  const preferProjectedGeoJsonFallback =
-    Boolean(ctx.customProjection) && (isWkbEncoded || isGeoJsonEncoded);
 
-  if (
-    !preferProjectedGeoJsonFallback &&
-    (isNativeGeoArrowPolygon || isNativeGeoArrow)
-  ) {
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
     try {
       const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
       const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
@@ -842,559 +810,19 @@ export function createPolygonLayerStack(
 
       return layers;
     } catch (error) {
-      logger.warn(
-        'Failed to create binary polygon layers; falling back to GeoJSON',
-        LogCategory.MAP,
-        {
-          error,
-          flow: 'polygon_binary_geojson_fallback',
-          extra: {
-            layerId,
-            geoColumn,
-            arrowExtension,
-            geometryType: geometryInfo.type,
-            hasCustomProjection: Boolean(ctx.customProjection)
-          }
+      logger.error('Failed to create binary polygon layers', LogCategory.MAP, {
+        error,
+        flow: 'polygon_binary_layers',
+        extra: {
+          layerId,
+          geoColumn,
+          arrowExtension,
+          geometryType: geometryInfo.type,
+          hasCustomProjection: Boolean(ctx.customProjection)
         }
-      );
+      });
     }
   }
 
-  let geojsonData;
-  try {
-    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
-
-    geojsonData = rawGeoJSON
-      ? getCachedProjectedGeoJSON(rawGeoJSON, ctx.customProjection)
-      : rawGeoJSON;
-  } catch (error) {
-    logger.error(
-      'Failed to read GeoJSON for polygon layer',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
-  if (!geojsonData) {
-    showWarning(
-      m.error_geometry_conversion_title(),
-      m.error_geometry_conversion_message()
-    );
-    return [];
-  }
-
-  const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-    ctx.splitDatasetTable ?? jsTable,
-    viz,
-    polygonCategoryColorMap,
-    polygonCategoryColumn,
-    PrimitiveFilterType.POLYGON
-  );
-
-  const splitGeoJsonFillColor =
-    useChoropleth && viz
-      ? createSplitGeoJsonFeatureAccessor(
-          ctx,
-          jsTable,
-          createChoroplethColorAccessor(
-            polygonValueColumn!,
-            polygonClassification!.breaks!,
-            polygonClassification!.colors!,
-            polygonMissingColor,
-            showMissingPolygons
-          )
-        )
-      : useCategoricalColor && viz
-        ? createSplitGeoJsonFeatureAccessor(
-            ctx,
-            jsTable,
-            createCategoricalColorAccessor(
-              polygonCategoryColumn!,
-              effectiveCategoryColorMap,
-              polygonMissingColor,
-              showMissingPolygons,
-              polygonClassification?.disabledLabels ?? []
-            )
-          )
-        : polygonFillMode === FillMode.UNIQUE && !classPatternPalette
-          ? createSplitUniqueGeoJsonColorAccessor(
-              ctx,
-              jsTable,
-              polygonFillColor
-            )
-          : null;
-
-  const baseGeoJsonFillColor =
-    splitGeoJsonFillColor ??
-    (useChoropleth && viz
-      ? createGeoJsonChoroplethColorAccessor(
-          polygonValueColumn!,
-          polygonClassification!.breaks!,
-          polygonClassification!.colors!,
-          polygonFillColor,
-          polygonMissingColor,
-          showMissingPolygons
-        )
-      : useCategoricalColor && viz
-        ? createGeoJsonCategoricalColorAccessor(
-            polygonCategoryColumn!,
-            effectiveCategoryColorMap,
-            polygonFillColor,
-            polygonMissingColor,
-            showMissingPolygons,
-            polygonClassification?.disabledLabels ?? []
-          )
-        : classPatternPalette && polygonFillMode === FillMode.UNIQUE
-          ? createGeoJsonUniquePatternBaseFillAccessor(ctx, jsTable)
-          : null);
-
-  const geoJsonClassPatternIndexAccessor = classPatternPalette
-    ? polygonFillMode === FillMode.CLASSES
-      ? createGeoJsonClassIndexAccessor(
-          polygonValueColumn!,
-          polygonClassification!.breaks!,
-          classPatternPalette.length
-        )
-      : polygonFillMode === FillMode.CATEGORIES
-        ? createGeoJsonCategoryIndexAccessor(
-            polygonCategoryColumn!,
-            polygonClassification?.labels ?? [],
-            polygonClassification?.disabledLabels ?? []
-          )
-        : createGeoJsonUniqueClassPatternIndexAccessor(ctx, jsTable)
-    : null;
-
-  const patternedGeoJsonFillColor =
-    classPatternPalette &&
-    geoJsonClassPatternIndexAccessor &&
-    baseGeoJsonFillColor
-      ? createGeoJsonPatternBackgroundFillAccessor(
-          geoJsonClassPatternIndexAccessor,
-          baseGeoJsonFillColor
-        )
-      : baseGeoJsonFillColor;
-
-  const geoJsonFillColor =
-    hasPolyHighlights && polyHighlightedRowIds
-      ? patternedGeoJsonFillColor
-        ? withGeoJsonRowHighlightAccessor(
-            patternedGeoJsonFillColor,
-            polygonFillOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds
-          )
-        : withGeoJsonRowHighlight(
-            polygonFillColor,
-            polygonFillOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds
-          )
-      : (patternedGeoJsonFillColor ??
-        (patternProps && !classPatternPalette
-          ? ([255, 255, 255, 255] as [number, number, number, number])
-          : ([
-              polygonFillColor[0],
-              polygonFillColor[1],
-              polygonFillColor[2],
-              255
-            ] as [number, number, number, number])));
-  const polygonStrokeColors = polygonConfig?.strokeClassification?.colors;
-  const polygonStrokeBreaks =
-    polygonConfig?.strokeClassification?.breaks ??
-    polygonClassification?.breaks;
-  const polygonStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
-    polygonConfig?.strokeClassification?.labels ??
-      polygonClassification?.labels,
-    polygonConfig?.strokeClassification?.colors
-  );
-  const splitGeoJsonStrokeColor =
-    polygonStrokeMode === StrokeMode.CLASSES &&
-    polygonStrokeValueColumn &&
-    polygonStrokeBreaks &&
-    polygonStrokeColors?.length
-      ? createSplitGeoJsonFeatureAccessor(
-          ctx,
-          jsTable,
-          createChoroplethColorAccessor(
-            polygonStrokeValueColumn,
-            polygonStrokeBreaks,
-            polygonStrokeColors,
-            polygonMissingColor,
-            showMissingPolygons
-          )
-        )
-      : polygonStrokeMode === StrokeMode.CATEGORIES &&
-          polygonStrokeCategoryColumn &&
-          polygonStrokeColors?.length
-        ? createSplitGeoJsonFeatureAccessor(
-            ctx,
-            jsTable,
-            createCategoricalColorAccessor(
-              polygonStrokeCategoryColumn,
-              polygonStrokeGeoJsonColorMap,
-              polygonMissingColor,
-              showMissingPolygons,
-              polygonConfig?.strokeClassification?.disabledLabels ?? []
-            )
-          )
-        : polygonStrokeMode === StrokeMode.UNIQUE
-          ? createSplitUniqueGeoJsonColorAccessor(
-              ctx,
-              jsTable,
-              polygonStrokeColor
-            )
-          : null;
-
-  const baseGeoJsonStrokeColor = splitGeoJsonStrokeColor
-    ? (feature: { properties?: Record<string, unknown> }) =>
-        withOpacityPreservingAlpha(
-          splitGeoJsonStrokeColor(feature),
-          polygonStrokeOpacity
-        ) as [number, number, number, number]
-    : polygonStrokeMode === StrokeMode.CLASSES &&
-        polygonStrokeValueColumn &&
-        polygonStrokeBreaks &&
-        polygonStrokeColors?.length
-      ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacityPreservingAlpha(
-            createGeoJsonChoroplethColorAccessor(
-              polygonStrokeValueColumn,
-              polygonStrokeBreaks,
-              polygonStrokeColors,
-              polygonStrokeColor,
-              polygonMissingColor,
-              showMissingPolygons
-            )(feature),
-            polygonStrokeOpacity
-          ) as [number, number, number, number]
-      : polygonStrokeMode === StrokeMode.CATEGORIES &&
-          polygonStrokeCategoryColumn &&
-          polygonStrokeColors?.length
-        ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacityPreservingAlpha(
-              createGeoJsonCategoricalColorAccessor(
-                polygonStrokeCategoryColumn,
-                polygonStrokeGeoJsonColorMap,
-                polygonStrokeColor,
-                polygonMissingColor,
-                showMissingPolygons,
-                polygonConfig?.strokeClassification?.disabledLabels ?? []
-              )(feature),
-              polygonStrokeOpacity
-            ) as [number, number, number, number]
-        : null;
-
-  const showGeoJsonFill =
-    polygonEnabled &&
-    polygonFillMode !== FillMode.NONE &&
-    polygonFillOpacity > 0;
-  const showGeoJsonStroke =
-    polygonEnabled &&
-    polygonStrokeMode !== StrokeMode.NONE &&
-    polygonStrokeOpacity > 0 &&
-    polygonStrokeWidth > 0;
-  const geoJsonStrokeColor = showGeoJsonStroke
-    ? hasPolyHighlights && polyHighlightedRowIds
-      ? baseGeoJsonStrokeColor
-        ? withGeoJsonRowHighlightAccessor(
-            baseGeoJsonStrokeColor,
-            polygonStrokeOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds
-          )
-        : withGeoJsonRowHighlight(
-            polygonStrokeColor,
-            polygonStrokeOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds
-          )
-      : (baseGeoJsonStrokeColor ??
-        withOpacity(polygonStrokeColor, polygonStrokeOpacity))
-    : ([0, 0, 0, 0] as [number, number, number, number]);
-
-  const patternGeojsonData =
-    patternProps &&
-    !classPatternPalette &&
-    showGeoJsonFill &&
-    geojsonData.features.length > 0
-      ? filterSplitMatchedPolygonFeatures(geojsonData, ctx, jsTable)
-      : null;
-  const patternLayer =
-    patternProps &&
-    !classPatternPalette &&
-    showGeoJsonFill &&
-    patternGeojsonData &&
-    patternGeojsonData.features.length > 0
-      ? createPolygonPatternOverlayLayer(
-          layerId,
-          polygonClassification?.patternId,
-          patternGeojsonData,
-          patternProps,
-          ctx,
-          undefined,
-          createSplitUniqueGeoJsonColorAccessor(
-            ctx,
-            jsTable,
-            polygonFillColor
-          ) ??
-            (() =>
-              [
-                polygonFillColor[0],
-                polygonFillColor[1],
-                polygonFillColor[2],
-                255
-              ] as [number, number, number, number]),
-          polygonFillOpacity
-        )
-      : null;
-  const classPatternGeoJsonLayers: Layer<DeckDataRow>[] =
-    classPatternPalette && geoJsonClassPatternIndexAccessor && showGeoJsonFill
-      ? classPatternPalette
-          .map((pattern, index) => {
-            const classPatternProps = createClassPatternProps(
-              classPatternPalette,
-              index
-            );
-            const classGeojsonData = filterSplitMatchedPolygonFeatures(
-              geojsonData,
-              ctx,
-              jsTable
-            );
-            if (classGeojsonData.features.length === 0) {
-              return null;
-            }
-            return createPolygonPatternOverlayLayer(
-              layerId,
-              `c${index}`,
-              classGeojsonData,
-              classPatternProps,
-              ctx,
-              `pattern-c${index}`,
-              createGeoJsonClassPatternColorAccessor(
-                geoJsonClassPatternIndexAccessor,
-                index,
-                hexToRgb(pattern.fill)
-              ),
-              polygonFillOpacity
-            );
-          })
-          .filter((layer): layer is GeoJsonLayer => layer !== null)
-      : [];
-  const missingDataPatternGeojson =
-    missingDataPatternProps &&
-    showGeoJsonFill &&
-    geojsonData.features.length > 0
-      ? filterMissingPolygonPatternFeatures(
-          geojsonData,
-          ctx,
-          jsTable,
-          polygonFillMode,
-          polygonValueColumn,
-          polygonCategoryColumn,
-          effectiveCategoryColorMap
-        )
-      : null;
-  const missingDataPatternLayer =
-    missingDataPatternProps &&
-    missingDataPatternGeojson &&
-    missingDataPatternGeojson.features.length > 0
-      ? createPolygonPatternOverlayLayer(
-          layerId,
-          resolveMissingDataPatternId(polygonConfig?.missingData),
-          missingDataPatternGeojson,
-          missingDataPatternProps,
-          ctx,
-          'missing-data-pattern',
-          createGeoJsonPatternOverlayColorAccessor(missingDataPatternFillRgb),
-          1
-        )
-      : null;
-
-  const shouldSplitGeoJsonLayers = Boolean(
-    (patternLayer ||
-      missingDataPatternLayer ||
-      classPatternGeoJsonLayers.length > 0) &&
-    showGeoJsonStroke
-  );
-
-  let geoJsonLayers: Layer<DeckDataRow>[] = [];
-  if (shouldSplitGeoJsonLayers) {
-    geoJsonLayers = [
-      new GeoJsonLayer({
-        id: projectedGeoJsonLayerId,
-        data: geojsonData,
-        getFillColor: geoJsonFillColor,
-        filled: showGeoJsonFill,
-        stroked: false,
-        opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
-        pickable: true,
-        ...resolveHoverHighlightProps(),
-        parameters: {
-          depthCompare: 'always' as const,
-          stencilCompare: 'always' as const
-        },
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        updateTriggers: {
-          getFillColor: [
-            useChoropleth,
-            useCategoricalColor,
-            polygonValueColumn,
-            polygonCategoryColumn,
-            polygonClassification?.breaks,
-            polygonClassification?.colors,
-            polygonCategoryColorMap,
-            polygonClassification?.labels,
-            polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
-            showMissingPolygons,
-            polygonFillColor,
-            hlVersion
-          ]
-        },
-        dataComparator: (newData, oldData) => newData === oldData
-      }),
-      ...(patternLayer ? [patternLayer] : []),
-      ...classPatternGeoJsonLayers,
-      ...(missingDataPatternLayer ? [missingDataPatternLayer] : []),
-      ...(showGeoJsonStroke
-        ? [
-            new GeoJsonLayer({
-              id: `${layerId}-stroke`,
-              data: geojsonData,
-              getLineColor: geoJsonStrokeColor,
-              filled: false,
-              stroked: true,
-              extensions: strokeDashed ? [DASH_EXTENSION] : [],
-              getDashArray: strokeDashArray,
-              dashJustified: true,
-              capRounded: strokeCapRounded,
-              lineWidthUnits: 'pixels',
-              lineWidthScale: polygonStrokeWidthPx,
-              lineWidthMinPixels: 0.5,
-              pickable: false,
-              parameters: {
-                depthCompare: 'always' as const,
-                stencilCompare: 'always' as const
-              },
-              ...(modelMatrix && { modelMatrix }),
-              ...(beforeId && { beforeId }),
-              updateTriggers: {
-                getLineColor: [
-                  polygonStrokeColor,
-                  polygonStrokeOpacity,
-                  polygonStrokeValueColumn,
-                  polygonStrokeCategoryColumn,
-                  polygonConfig?.strokeMode,
-                  polygonConfig?.strokeClassification?.colors,
-                  polygonConfig?.strokeClassification?.breaks,
-                  polygonConfig?.strokeClassification?.labels,
-                  polygonConfig?.strokeClassification?.disabledLabels,
-                  showGeoJsonStroke,
-                  hlVersion
-                ],
-                getDashArray: [strokeDashed, polygonConfig?.strokeDashedPattern]
-              },
-              dataComparator: (newData, oldData) => newData === oldData
-            })
-          ]
-        : [])
-    ];
-  } else if (showGeoJsonFill || showGeoJsonStroke) {
-    geoJsonLayers = [
-      new GeoJsonLayer({
-        id: projectedGeoJsonLayerId,
-        data: geojsonData,
-        getFillColor: geoJsonFillColor,
-        getLineColor: geoJsonStrokeColor,
-        filled: showGeoJsonFill,
-        stroked: showGeoJsonStroke,
-        extensions: showGeoJsonStroke && strokeDashed ? [DASH_EXTENSION] : [],
-        getDashArray: showGeoJsonStroke ? strokeDashArray : [0, 0],
-        dashJustified: true,
-        capRounded: showGeoJsonStroke && strokeCapRounded,
-        opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
-        lineWidthUnits: 'pixels',
-        lineWidthScale: showGeoJsonStroke ? polygonStrokeWidthPx : 0,
-        lineWidthMinPixels: showGeoJsonStroke ? 0.5 : 0,
-        pickable: true,
-        ...resolveHoverHighlightProps(),
-        parameters: {
-          depthCompare: 'always' as const,
-          stencilCompare: 'always' as const
-        },
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        updateTriggers: {
-          getFillColor: [
-            useChoropleth,
-            useCategoricalColor,
-            polygonValueColumn,
-            polygonCategoryColumn,
-            polygonClassification?.breaks,
-            polygonClassification?.colors,
-            polygonCategoryColorMap,
-            polygonClassification?.labels,
-            polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
-            showMissingPolygons,
-            polygonFillColor,
-            hlVersion
-          ],
-          getLineColor: [
-            polygonStrokeColor,
-            polygonStrokeOpacity,
-            polygonStrokeValueColumn,
-            polygonStrokeCategoryColumn,
-            polygonConfig?.strokeMode,
-            polygonConfig?.strokeClassification?.colors,
-            polygonConfig?.strokeClassification?.breaks,
-            polygonConfig?.strokeClassification?.labels,
-            polygonConfig?.strokeClassification?.disabledLabels,
-            showGeoJsonStroke,
-            hlVersion
-          ],
-          getDashArray: [
-            showGeoJsonStroke,
-            strokeDashed,
-            polygonConfig?.strokeDashedPattern
-          ]
-        },
-        dataComparator: (newData, oldData) => newData === oldData
-      }),
-      ...(patternLayer ? [patternLayer] : []),
-      ...classPatternGeoJsonLayers,
-      ...(missingDataPatternLayer ? [missingDataPatternLayer] : [])
-    ];
-  }
-
-  const pointLayers = createRepresentativePointSymbolLayers(
-    jsTable,
-    withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
-  );
-  const layers = orderPrimitiveLayers(
-    [
-      ...geoJsonLayers.map((layer) => ({
-        primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
-        layer
-      })),
-      ...pointLayers.map((layer) => ({
-        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
-        layer
-      }))
-    ],
-    primitiveOrder
-  );
-
-  const selectionOverlay = createHighlightedPolygonOverlay(
-    layerId,
-    jsTable,
-    geoColumn,
-    polyHighlightedRowIds,
-    hlVersion,
-    ctx
-  );
-  if (selectionOverlay) {
-    layers.push(selectionOverlay);
-  }
-
-  return layers;
+  return [];
 }

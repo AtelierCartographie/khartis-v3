@@ -1,8 +1,10 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
-import { buildStatisticsSnapshot } from '$lib/features/data-pipeline';
+import {
+  buildStatisticsSnapshot,
+  type GeometryInfo
+} from '$lib/features/data-pipeline';
 import { Duck, type AnalysisResult } from '$lib/features/duckdb';
 import type { JsonValue } from '$lib/types/data';
 
@@ -72,45 +74,6 @@ async function buildTabularSnapshot(
   return rows.map((row) => toSnapshotRow(row, columnNames));
 }
 
-async function buildPreparedGeoJsonSnapshot(
-  tableName: string,
-  geometryColumnName: string,
-  propertyColumnNames: string[]
-): Promise<string> {
-  const escapedTableName = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
-  const propertySelect =
-    propertyColumnNames.length > 0
-      ? `${propertyColumnNames
-          .map((name) => `"${escapeIdentifier(name)}"`)
-          .join(', ')},`
-      : '';
-
-  const rows = (await Duck.query(
-    `SELECT ${propertySelect}
-            ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS __khartis_geometry_json
-     FROM "${escapedTableName}"`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
-
-  const serialized = JSON.stringify({
-    type: 'FeatureCollection',
-    features: rows.map((row) => {
-      const geometryJson = row.__khartis_geometry_json;
-      const properties = toSnapshotRow(row, propertyColumnNames);
-
-      return {
-        type: 'Feature',
-        geometry:
-          typeof geometryJson === 'string' ? JSON.parse(geometryJson) : null,
-        properties
-      };
-    })
-  });
-
-  return sanitizePreparedGeoJSON(serialized) ?? serialized;
-}
-
 type JoinSnapshotUpdates = Partial<
   Pick<
     UploadedFile,
@@ -124,14 +87,14 @@ function updateSourceFileSnapshot(
   rows: Record<string, JsonValue>[],
   statistics: Record<string, unknown>,
   updates: JoinSnapshotUpdates,
-  preparedGeoJSON?: string
+  geometry?: GeometryInfo
 ): void {
   sourceFile.duckdbTableName = tableName;
   sourceFile.parsedData = rows;
   sourceFile.statistics = statistics;
 
-  if (preparedGeoJSON) {
-    sourceFile.preparedGeoJSON = preparedGeoJSON;
+  if (geometry) {
+    sourceFile.geometry = geometry;
   }
 
   if ('joinedBasemap' in updates) {
@@ -155,14 +118,14 @@ export async function persistTabularSourceSnapshot(input: {
   sourceFileId: string;
   tableName: string;
   duckColumns: AnalysisResult[];
-  geometryColumnName?: string | null;
+  geometry?: GeometryInfo;
   joinState?: JoinSnapshotUpdates;
 }): Promise<void> {
   const {
     sourceFileId,
     tableName,
     duckColumns,
-    geometryColumnName: fallbackGeometryColumnName = null,
+    geometry,
     joinState = {}
   } = input;
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
@@ -175,20 +138,12 @@ export async function persistTabularSourceSnapshot(input: {
 
   const geometryColumnName =
     duckColumns.find((column) => column.type_simple === 'geometry')?.name ??
-    fallbackGeometryColumnName ??
-    undefined;
+    geometry?.columnName;
   const propertyColumnNames = duckColumns
     .filter((column) => column.name !== geometryColumnName)
     .map((column) => column.name);
   const rows = await buildTabularSnapshot(tableName, propertyColumnNames);
   const statistics = buildStatisticsSnapshot(duckColumns);
-  const preparedGeoJSON = geometryColumnName
-    ? await buildPreparedGeoJsonSnapshot(
-        tableName,
-        geometryColumnName,
-        propertyColumnNames
-      )
-    : undefined;
 
   updateSourceFileSnapshot(
     sourceFile,
@@ -196,7 +151,7 @@ export async function persistTabularSourceSnapshot(input: {
     rows,
     statistics,
     joinState,
-    preparedGeoJSON
+    geometry
   );
 
   await projectStore.saveCurrentProject();

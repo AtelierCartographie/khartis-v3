@@ -31,18 +31,8 @@ export interface ProjectState {
   lastSaved?: Date;
   autoSaveEnabled: boolean;
   autoSaveInterval: number;
-  history: ProjectHistoryEntry[];
-  historyIndex: number;
-  maxHistorySize: number;
   isInitialized: boolean;
   isLoading: boolean;
-}
-
-export interface ProjectHistoryEntry {
-  timestamp: Date;
-  action: string;
-  description?: string;
-  snapshot?: Partial<KhartisProject>;
 }
 
 export interface SavedProjectMetadata {

@@ -49,6 +49,11 @@ import {
   perfMeasure
 } from '$lib/features/commons/utils/perf-marks.utils';
 
+import {
+  createProjectionPointSampler,
+  sampleProjectedBbox
+} from './projected-bbox.utils';
+
 type BBoxTuple = [number, number, number, number];
 
 const EXPECTED_GEOM_COL = 'geometry';
@@ -57,72 +62,6 @@ const projectedBboxCache = new WeakMap<
   BasemapMetadata,
   Map<string, BBoxTuple | null>
 >();
-
-function createProjectionPointSampler(
-  projection: ProjectionLike
-): (coordinates: [number, number]) => [number, number] | null {
-  let projected: [number, number] | null = null;
-  const stream = projection.stream({
-    point(x: number, y: number): void {
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        projected = [x, y];
-      }
-    },
-    lineStart(): void {},
-    lineEnd(): void {},
-    polygonStart(): void {},
-    polygonEnd(): void {}
-  });
-
-  return (coordinates: [number, number]) => {
-    projected = null;
-    stream.point(coordinates[0], coordinates[1]);
-    return projected;
-  };
-}
-
-function sampleProjectedBbox(
-  projection: ProjectionLike,
-  bbox: BBoxTuple
-): BBoxTuple | null {
-  const [west, south, east, north] = bbox;
-  const steps = 32;
-  const interiorSteps = 8;
-  const xs: number[] = [];
-  const ys: number[] = [];
-  const projectPoint = createProjectionPointSampler(projection);
-
-  const tryProject = (lon: number, lat: number) => {
-    const result = projectPoint([lon, lat]);
-    if (result && Number.isFinite(result[0]) && Number.isFinite(result[1])) {
-      xs.push(result[0]);
-      ys.push(result[1]);
-    }
-  };
-
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const lon = west + t * (east - west);
-    const lat = south + t * (north - south);
-    tryProject(lon, south);
-    tryProject(lon, north);
-    tryProject(west, lat);
-    tryProject(east, lat);
-  }
-  tryProject((west + east) / 2, (south + north) / 2);
-
-  for (let xStep = 1; xStep < interiorSteps; xStep++) {
-    const lon = west + (xStep / interiorSteps) * (east - west);
-    for (let yStep = 1; yStep < interiorSteps; yStep++) {
-      const lat = south + (yStep / interiorSteps) * (north - south);
-      tryProject(lon, lat);
-    }
-  }
-
-  return xs.length === 0
-    ? null
-    : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-}
 
 function projectionPresetEntryToBbox(entry: ProjectionPresetEntry): BBoxTuple {
   return [
@@ -300,10 +239,11 @@ registerProjectionSpec(IDENTITY_OPTIONS.projection, {
   projection: 'geoIdentity'
 });
 
-// Below this row count a synchronous parse costs a few milliseconds at most —
-// cheaper than the worker round trip and it avoids an empty frame while the
-// transferred buffers travel back.
-const WORKER_PARSE_MIN_ROWS = 2000;
+// Below this geometry size a synchronous parse costs a few milliseconds at
+// most — cheaper than the worker round trip and it avoids an empty frame while
+// the transferred buffers travel back. Measured in bytes, not rows: a single
+// dissolved boundary row can hold hundreds of thousands of vertices.
+const WORKER_PARSE_MIN_GEOMETRY_BYTES = 256 * 1024;
 
 const EMPTY_PATH_DATA: BinaryPathData = {
   length: 0,
@@ -354,6 +294,14 @@ function rememberWorkerFailedKey(key: string): void {
   }
 }
 
+function getGeometryByteLength(table: ArrowTable): number {
+  const geometry = normalizeGeomColumnName(table).getChild(EXPECTED_GEOM_COL);
+  return (geometry?.data ?? []).reduce(
+    (total, data) => total + data.byteLength,
+    0
+  );
+}
+
 function workerKeyIdFor(reference: object): number {
   let id = workerKeyIds.get(reference);
   if (id === undefined) {
@@ -378,7 +326,7 @@ function requestWorkerParse<T>(
   storeResult: (data: T) => void,
   options: { rewind: boolean } = { rewind: true }
 ): T | null {
-  if (table.numRows < WORKER_PARSE_MIN_ROWS) {
+  if (getGeometryByteLength(table) < WORKER_PARSE_MIN_GEOMETRY_BYTES) {
     return null;
   }
   const spec = getProjectionSpec(projection);
@@ -1030,6 +978,32 @@ export function pathWidthAttr(
   }
 
   return { value: widths, size: 1 };
+}
+
+export function pathDashArrayAttr(
+  data: BinaryPathData,
+  dashArrayLookup: (featureId: number) => [number, number]
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const dashArrays = new Float32Array(vertexCount * 2);
+
+  for (let i = 0; i < data.length; i++) {
+    const [dash, gap] = dashArrayLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      dashArrays[vertexIndex * 2] = dash;
+      dashArrays[vertexIndex * 2 + 1] = gap;
+    }
+  }
+
+  return { value: dashArrays, size: 2 };
 }
 
 export function rowAccessor<T>(

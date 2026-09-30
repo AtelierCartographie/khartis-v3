@@ -3,6 +3,7 @@ import { tableFromIPC } from '@uwdata/flechette';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
+import { trackQuery } from './query-activity';
 import type {
   DuckDBStreamingBindings,
   DuckDBUnsafeBindings,
@@ -29,10 +30,12 @@ export async function executeQuery(
 
   let buffer: Uint8Array | ArrayBuffer;
   try {
-    buffer = await connection.useUnsafe(
-      async (bindings: DuckDBUnsafeBindings, conn: unknown) => {
-        return await bindings.runQuery(conn, query);
-      }
+    buffer = await trackQuery(() =>
+      connection.useUnsafe(
+        async (bindings: DuckDBUnsafeBindings, conn: unknown) => {
+          return await bindings.runQuery(conn, query);
+        }
+      )
     );
   } catch (error) {
     const message =
@@ -132,46 +135,48 @@ export async function executeQueryStreaming(
     const chunks: Uint8Array[] = [];
     let totalLength = 0;
 
-    await connection.useUnsafe(
-      async (bindings: DuckDBStreamingBindings, conn: unknown) => {
-        const cancelIfAborted = async (): Promise<void> => {
-          if (!signal?.aborted) return;
-          await bindings.cancelPendingQuery(conn);
-          throw createQueryAbortError();
-        };
+    await trackQuery(() =>
+      connection.useUnsafe(
+        async (bindings: DuckDBStreamingBindings, conn: unknown) => {
+          const cancelIfAborted = async (): Promise<void> => {
+            if (!signal?.aborted) return;
+            await bindings.cancelPendingQuery(conn);
+            throw createQueryAbortError();
+          };
 
-        let header = await bindings.startPendingQuery(conn, query, true);
-        while (header === null) {
-          if (bindings.isDetached?.()) {
-            throw new DuckDBError(m.error_worker_detached_query(), query);
-          }
-          await cancelIfAborted();
-          header = await bindings.pollPendingQuery(conn);
-        }
-
-        if (header && header.byteLength > 0) {
-          const chunk = new Uint8Array(header);
-          chunks.push(chunk);
-          totalLength += chunk.byteLength;
-        }
-
-        // Collect result batches until exhausted
-        while (true) {
-          let result = await bindings.fetchQueryResults(conn);
-          while (result === null) {
+          let header = await bindings.startPendingQuery(conn, query, true);
+          while (header === null) {
             if (bindings.isDetached?.()) {
-              throw new DuckDBError(m.error_worker_detached_results(), query);
+              throw new DuckDBError(m.error_worker_detached_query(), query);
             }
             await cancelIfAborted();
-            result = await bindings.fetchQueryResults(conn);
+            header = await bindings.pollPendingQuery(conn);
           }
 
-          if (result.byteLength === 0) break;
-          const chunk = new Uint8Array(result);
-          chunks.push(chunk);
-          totalLength += chunk.byteLength;
+          if (header && header.byteLength > 0) {
+            const chunk = new Uint8Array(header);
+            chunks.push(chunk);
+            totalLength += chunk.byteLength;
+          }
+
+          // Collect result batches until exhausted
+          while (true) {
+            let result = await bindings.fetchQueryResults(conn);
+            while (result === null) {
+              if (bindings.isDetached?.()) {
+                throw new DuckDBError(m.error_worker_detached_results(), query);
+              }
+              await cancelIfAborted();
+              result = await bindings.fetchQueryResults(conn);
+            }
+
+            if (result.byteLength === 0) break;
+            const chunk = new Uint8Array(result);
+            chunks.push(chunk);
+            totalLength += chunk.byteLength;
+          }
         }
-      }
+      )
     );
 
     if (chunks.length === 1) {

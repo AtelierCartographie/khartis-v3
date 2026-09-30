@@ -357,6 +357,95 @@ describe('extract_outerlines macro', () => {
   });
 });
 
+describe('coverage macros', () => {
+  beforeAll(async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE enclave_coverage (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO enclave_coverage VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 30 0, 30 30, 0 30, 0 0), (10 10, 10 20, 20 20, 20 10, 10 10))')),
+        (2, ST_GeomFromText('POLYGON((10 10, 20 10, 20 20, 10 20, 10 10))')),
+        (3, ST_GeomFromText('MULTIPOLYGON(((30 0, 40 0, 40 30, 30 30, 30 0)), ((50 0, 60 0, 60 10, 50 10, 50 0)))')),
+        (4, NULL)`
+    );
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE unnoded_coverage (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO unnoded_coverage VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
+        (2, ST_GeomFromText('POLYGON((10 0, 20 0, 20 10, 10 10, 10 5, 10 0))'))`
+    );
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE overlapping_coverage (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO overlapping_coverage VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 12 0, 12 10, 0 10, 0 0))')),
+        (2, ST_GeomFromText('POLYGON((10 0, 20 0, 20 10, 10 10, 10 0))'))`
+    );
+  });
+
+  async function isValidCoverage(table: string): Promise<unknown> {
+    const rows = await query(
+      db,
+      `FROM is_valid_polygon_coverage('${table}') SELECT is_valid`
+    );
+    return rows[0].is_valid;
+  }
+
+  it('accepts only coverages whose neighbours share identical edges', async () => {
+    expect(await isValidCoverage('adjacent_polygons')).toBe(true);
+    expect(await isValidCoverage('enclave_coverage')).toBe(true);
+    expect(await isValidCoverage('disjoint_polygons')).toBe(true);
+    expect(await isValidCoverage('unnoded_coverage')).toBe(false);
+    expect(await isValidCoverage('overlapping_coverage')).toBe(false);
+    expect(await isValidCoverage('invalid_coverage')).toBe(false);
+  });
+
+  it.each(['adjacent_polygons', 'enclave_coverage', 'disjoint_polygons'])(
+    'derives the same territory and shared borders as the dissolve on %s',
+    async (table) => {
+      const rows = await query(
+        db,
+        `SELECT
+             ST_Equals(c.geom, d.geom) AS same_land,
+             ST_Area(c.geom) AS coverage_area,
+             ST_Area(d.geom) AS dissolve_area
+           FROM extract_coverage_land('${table}') c, extract_land('${table}') d`
+      );
+      expect(rows[0].same_land).toBe(true);
+      expect(Number(rows[0].coverage_area)).toBeCloseTo(
+        Number(rows[0].dissolve_area),
+        9
+      );
+
+      const lines = await query(
+        db,
+        `SELECT
+           COALESCE(ST_Length(c.geom), 0) AS coverage_length,
+           COALESCE(ST_Length(d.geom), 0) AS dissolve_length,
+           c.geom IS NULL OR d.geom IS NULL OR ST_IsEmpty(d.geom)
+             OR ST_Equals(c.geom, d.geom) AS same_lines
+         FROM extract_coverage_innerlines('${table}') c,
+              extract_innerlines('${table}') d`
+      );
+      expect(Number(lines[0].coverage_length)).toBeCloseTo(
+        Number(lines[0].dissolve_length),
+        9
+      );
+      expect(lines[0].same_lines).toBe(true);
+    }
+  );
+});
+
 describe('simplify_and_clean macro (polygon wrapper)', () => {
   it('should preserve the row count of the source polygon coverage', async () => {
     const rows = await query(

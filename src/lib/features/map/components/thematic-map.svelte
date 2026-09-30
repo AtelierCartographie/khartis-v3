@@ -31,10 +31,7 @@
     useMapReferenceBasemap,
     useMapState
   } from '../hooks';
-  import {
-    calculateBoundsFromGeoArrow,
-    calculateBoundsFromGeoJSON
-  } from '../core';
+  import { calculateBoundsFromGeoArrow } from '../core';
   import {
     basemapService,
     getPreferredBasemapFile
@@ -110,7 +107,6 @@
     tables,
     densityTables,
     splitData,
-    geoJSONs,
     dataVersion = 0,
     width,
     height,
@@ -127,7 +123,7 @@
     isFacetCell = false
   }: DeckMapProps = $props();
 
-  const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
+  const hasData = $derived(tables.size > 0);
   const fmtState = $derived(getFormatState());
   const formatColor = $derived(
     typeof fmtState.color === 'object' && fmtState.color
@@ -219,9 +215,6 @@
   });
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
-  );
-  const firstGeoJSON = $derived(
-    geoJSONs.size > 0 ? geoJSONs.values().next().value : null
   );
   const firstDatasetId = $derived(
     tables.size > 0 ? tables.keys().next().value : undefined
@@ -336,7 +329,7 @@
       }
 
       mapLoadingStore.setUpdatingLayers(true);
-      mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
+      mapLayers.updateLayers(tables, splitData, densityTables);
       requestAnimationFrame(() => {
         mapLoadingStore.setUpdatingLayers(false);
       });
@@ -954,44 +947,6 @@
       }
     }
 
-    if (firstGeoJSON) {
-      const useBasemapBounds = Boolean(refBasemapId) && currentWorldBaseTable;
-      if (useBasemapBounds) {
-        const referenceState = resolveOrthographicBasemapReferenceState(
-          basemapService.currentMetadata,
-          currentWorldBaseTable
-        );
-
-        if (referenceState.bbox) {
-          projectionStore.setReferenceBbox(
-            referenceState.bbox,
-            undefined,
-            referenceState.isProjected,
-            referenceState.renderProjection
-          );
-          fitViewport(reasonOverride ?? 'basemap');
-          return;
-        }
-      }
-
-      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-
-      if (bounds) {
-        const [[minX, minY], [maxX, maxY]] = bounds as [
-          [number, number],
-          [number, number]
-        ];
-        projectionStore.setReferenceBbox(
-          [minX, minY, maxX, maxY],
-          undefined,
-          false,
-          null
-        );
-        fitViewport(reasonOverride ?? 'dataset');
-        return;
-      }
-    }
-
     if (currentWorldBaseTable) {
       const referenceState = resolveOrthographicBasemapReferenceState(
         basemapService.currentMetadata,
@@ -1027,12 +982,6 @@
   function resolveUserDataBounds() {
     if (firstTable) {
       const bounds = calculateBoundsFromGeoArrow(firstTable);
-      if (bounds) {
-        return bounds;
-      }
-    }
-    if (firstGeoJSON) {
-      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
       if (bounds) {
         return bounds;
       }
@@ -1546,69 +1495,6 @@
   });
 
   $effect(() => {
-    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-    if (firstGeoJSON && canUpdate) {
-      if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-        if (mapInstanceStore.applyPendingMapLibreRestore()) {
-          triggerOnReady();
-          return;
-        }
-        if (untrack(() => shouldPreserveManualViewport())) {
-          triggerOnReady();
-          return;
-        }
-        untrack(() =>
-          mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
-            reason: 'dataset'
-          })
-        );
-      } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-        untrack(() => {
-          const preserveManualViewport = shouldPreserveManualViewport();
-          const refBasemapId = basemapStyleStore.referenceBasemapId;
-          if (refBasemapId && worldBaseTable) {
-            const referenceState = resolveOrthographicBasemapReferenceState(
-              basemapService.currentMetadata,
-              worldBaseTable
-            );
-
-            if (referenceState.bbox) {
-              projectionStore.setReferenceBbox(
-                referenceState.bbox,
-                undefined,
-                referenceState.isProjected,
-                referenceState.renderProjection
-              );
-              scheduleLayerUpdate('effect:firstGeoJSON-basemap');
-              if (!preserveManualViewport) fitOrthographicViewport('basemap');
-              return;
-            }
-          }
-
-          const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-          if (bounds) {
-            const [[minX, minY], [maxX, maxY]] = bounds as [
-              [number, number],
-              [number, number]
-            ];
-            projectionStore.setReferenceBbox(
-              [minX, minY, maxX, maxY],
-              undefined,
-              false,
-              null
-            );
-            scheduleLayerUpdate('effect:firstGeoJSON');
-            if (!preserveManualViewport) fitOrthographicViewport('dataset');
-          }
-        });
-        triggerOnReady();
-      } else {
-        triggerOnReady();
-      }
-    }
-  });
-
-  $effect(() => {
     void basemapService.projectionPresets;
     untrack(() => scheduleLayerUpdate('effect:projectionPresets'));
   });
@@ -1859,7 +1745,7 @@
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
-    dataSize: `${tables.size}-${geoJSONs.size}`,
+    dataSize: `${tables.size}`,
     rowScopeVersion: rowScopeStore.version,
     projectionVersion: projectionRenderTrigger,
     selectedStep: globalState.selectedStep,

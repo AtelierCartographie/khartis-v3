@@ -1,18 +1,10 @@
 import {
-  GeoJsonLayer,
   PathLayer,
   ScatterplotLayer,
   SolidPolygonLayer,
   TextLayer
 } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type {
-  Feature,
-  FeatureCollection,
-  LineString,
-  Point,
-  Polygon
-} from 'geojson';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,7 +39,6 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeometryInfo, LayerContext } from '../types';
 
 const {
-  arrowTableToGeoJSONMock,
   createCompatibleSolidPolygonLayerPropsMock,
   createPathLayerPropsMock,
   createPolygonFillColorAttributeMock,
@@ -63,7 +54,6 @@ const {
   pathColorAttrMock,
   pathWidthAttrMock,
   pointPositionsMock,
-  projectGeoJSONMock,
   rowAccessorMock
 } = vi.hoisted(() => {
   class WorkerStub {
@@ -81,7 +71,6 @@ const {
   });
 
   return {
-    arrowTableToGeoJSONMock: vi.fn(),
     createCompatibleSolidPolygonLayerPropsMock: vi.fn(),
     createPathLayerPropsMock: vi.fn(),
     createPolygonFillColorAttributeMock: vi.fn(),
@@ -97,7 +86,6 @@ const {
     pathColorAttrMock: vi.fn(),
     pathWidthAttrMock: vi.fn(),
     pointPositionsMock: vi.fn(),
-    projectGeoJSONMock: vi.fn(),
     rowAccessorMock: vi.fn()
   };
 });
@@ -112,15 +100,6 @@ vi.mock('@ateliercartographie/geoarrow-deck-stream', async () => {
     createPathLayerProps: createPathLayerPropsMock,
     createPolygonFillColorAttribute: createPolygonFillColorAttributeMock,
     createScatterplotLayerProps: createScatterplotLayerPropsMock
-  };
-});
-
-vi.mock('../io', async () => {
-  const actual = await vi.importActual<typeof import('../io')>('../io');
-
-  return {
-    ...actual,
-    arrowTableToGeoJSON: arrowTableToGeoJSONMock
   };
 });
 
@@ -140,7 +119,6 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
     pathColorAttr: pathColorAttrMock,
     pathWidthAttr: pathWidthAttrMock,
     pointPositions: pointPositionsMock,
-    projectGeoJSON: projectGeoJSONMock,
     rowAccessor: rowAccessorMock
   };
 });
@@ -179,6 +157,7 @@ import {
   type TextLayerDatum
 } from './layer-factory';
 import { MultiShapeLayer } from './multi-shape-layer';
+import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { EXPLICIT_TEXT_CHARACTER_SET } from './text-character-set';
 
@@ -291,59 +270,6 @@ function createCategoricalSymbolVisualization(
         labels: ['North', 'South'],
         colors
       }
-    }
-  };
-}
-
-function createPolygonFeature(
-  id: string,
-  year: number
-): Feature<Polygon, { id: string; year: number }> {
-  return {
-    type: 'Feature',
-    properties: { id, year },
-    geometry: {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, 1],
-          [0, 0]
-        ]
-      ]
-    }
-  };
-}
-
-function createPointFeature(
-  id: string,
-  year: number
-): Feature<Point, { id: string; year: number }> {
-  return {
-    type: 'Feature',
-    properties: { id, year },
-    geometry: {
-      type: 'Point',
-      coordinates: [0, 0]
-    }
-  };
-}
-
-function createLineFeature(
-  id: string,
-  routeName: string
-): Feature<LineString, { id: string; route_name: string }> {
-  return {
-    type: 'Feature',
-    properties: { id, route_name: routeName },
-    geometry: {
-      type: 'LineString',
-      coordinates: [
-        [0, 0],
-        [1, 1]
-      ]
     }
   };
 }
@@ -486,11 +412,10 @@ function createTextVisualization(): VisualizationConfig {
 function createGeometryInfo(): GeometryInfo {
   return {
     type: 'Polygon',
-    encoding: 'geojson',
+    encoding: 'geoarrow.polygon',
     geoColumn: 'geometry',
-    isNativeGeoArrow: false,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: true
+    isNativeGeoArrow: true,
+    isWkbEncoded: false
   };
 }
 
@@ -500,8 +425,7 @@ function createPointGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.point',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
@@ -511,19 +435,18 @@ function createLineGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.linestring',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
 function getPatternLayer(
   layers: ReturnType<typeof createPolygonLayers>
-): GeoJsonLayer | SolidPolygonLayer | undefined {
+): SolidPolygonLayer | undefined {
   return layers.find(
     (layer) =>
-      (layer instanceof GeoJsonLayer || layer instanceof SolidPolygonLayer) &&
+      layer instanceof SolidPolygonLayer &&
       String(layer.props.id).includes('-pattern-')
-  ) as GeoJsonLayer | SolidPolygonLayer | undefined;
+  ) as SolidPolygonLayer | undefined;
 }
 
 function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
@@ -533,8 +456,6 @@ function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
 type ScatterBinaryTestData = {
   attributes: Record<string, { value: Uint8Array } | undefined>;
 };
-
-type TestLineFeature = Feature<LineString, Record<string, unknown>>;
 
 function hasScatterBinaryTestData(
   data: unknown
@@ -572,7 +493,6 @@ beforeEach(() => {
       )
     })
   );
-  projectGeoJSONMock.mockImplementation((geojson) => geojson);
   parseSolidPolygonsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
   });
@@ -832,23 +752,19 @@ describe('createTextOverlayLayers', () => {
     expect(secondaryCharacterSet).toContain('阪');
   });
 
-  it('logs and falls back to GeoJSON when binary text layer data fails', () => {
-    const fallbackError = new Error('binary text failed');
+  it('logs an error and renders no text layer when binary text layer data fails', () => {
+    const binaryError = new Error('binary text failed');
     parsePointDataWithProjectionMock.mockImplementationOnce(() => {
-      throw fallbackError;
+      throw binaryError;
     });
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPointFeature('fallback', 2024)]
-    } satisfies FeatureCollection<Point>);
-    const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const visualization = createTextVisualization();
     visualization.primitiveFilters = [PrimitiveFilterType.TEXT];
     visualization.symbol = { ...visualization.symbol!, enabled: false };
 
     const layers = createDeckLayers(
-      createTableWithRows([{ name: 'Fallback label' }], ['name']),
+      createTableWithRows([{ name: 'Binary label' }], ['name']),
       {
         ...createContext(visualization),
         geometryInfo: {
@@ -858,13 +774,13 @@ describe('createTextOverlayLayers', () => {
       }
     );
 
-    expect(layers.some((layer) => layer instanceof TextLayer)).toBe(true);
-    expect(loggerWarn).toHaveBeenCalledWith(
-      'Failed to build binary text layer data; falling back to GeoJSON',
+    expect(layers.some((layer) => layer instanceof TextLayer)).toBe(false);
+    expect(loggerError).toHaveBeenCalledWith(
+      'Failed to build binary text layer data',
       LogCategory.MAP,
       expect.objectContaining({
-        error: fallbackError,
-        flow: 'text_binary_geojson_fallback',
+        error: binaryError,
+        flow: 'text_binary_layer_data',
         extra: expect.objectContaining({
           geometryType: 'POINT',
           geoColumn: 'geometry',
@@ -1114,156 +1030,64 @@ describe('createTextOverlayLayers', () => {
 });
 
 describe('createPolygonLayers', () => {
-  it('projects the pattern overlay in the GeoJSON fallback path', () => {
-    const sourceGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [
-        createPolygonFeature('keep', 2024),
-        createPolygonFeature('drop', 2023)
-      ]
+  it('projects the pattern overlay from the same binary polygons as the fill', () => {
+    const projectedPolygons = {
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0, 1, 0, 1, 1]),
+      polygonIndices: new Uint32Array([0, 3]),
+      size: 2
     };
-    const projectedGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [
-        createPolygonFeature('keep-projected', 2024),
-        createPolygonFeature('drop-projected', 2023)
-      ]
-    };
-
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
+    parseSolidPolygonsWithProjectionMock.mockReturnValue(projectedPolygons);
+    const context = createContext(createVisualization(FillMode.UNIQUE));
 
     const layers = createPolygonLayers(
       createTableWithFields([]),
       createGeometryInfo(),
-      createContext(createVisualization(FillMode.UNIQUE))
+      context
     );
 
     const fillLayer = layers.find(
       (layer) =>
-        layer instanceof GeoJsonLayer &&
+        layer instanceof SolidPolygonLayer &&
         !String(layer.props.id).includes('-pattern-')
-    ) as GeoJsonLayer | undefined;
+    );
     const patternLayer = getPatternLayer(layers);
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJson,
-      expect.objectContaining({ stream: expect.any(Function) })
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      context.customProjection
     );
     expect(fillLayer).toBeDefined();
-    expect(patternLayer).toBeDefined();
+    expect(patternLayer).toBeInstanceOf(SolidPolygonLayer);
     expect(
-      (fillLayer?.props.data as FeatureCollection<Polygon>).features.map(
-        (feature) => feature.properties?.id
+      createCompatibleSolidPolygonLayerPropsMock.mock.calls.map(
+        ([polyData]) => polyData
       )
-    ).toEqual(['keep-projected', 'drop-projected']);
-    expect(
-      (patternLayer?.props.data as FeatureCollection<Polygon>).features.map(
-        (feature) => feature.properties?.id
-      )
-    ).toEqual(['keep-projected', 'drop-projected']);
+    ).toEqual([projectedPolygons, projectedPolygons]);
   });
 
-  it('uses the projected GeoJSON fallback for native polygons when a projection is active', () => {
-    const sourceGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    };
-    const projectedGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep-projected', 2024)]
-    };
-
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
-
+  it('parses projected WKB polygons through the binary path', () => {
+    const context = createContext(createVisualization(FillMode.UNIQUE));
     const layers = createPolygonLayers(
       createTableWithFields([]),
       {
         ...createGeometryInfo(),
         encoding: 'geoarrow.wkb',
-        isNativeGeoArrow: true,
-        isWkbEncoded: true,
-        isGeoJsonEncoded: false
+        isWkbEncoded: true
       },
-      createContext(createVisualization(FillMode.UNIQUE))
+      context
     );
 
-    expect(parseSolidPolygonsMock).not.toHaveBeenCalled();
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJson,
-      expect.objectContaining({ stream: expect.any(Function) })
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      context.customProjection
     );
-    expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
-  });
-
-  it('reuses projected GeoJSON fallback data for repeated rebuilds with the same projection', () => {
-    const sourceGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    };
-    const projectedGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep-projected', 2024)]
-    };
-    const table = createTableWithFields([]);
-    const geometryInfo = createGeometryInfo();
-    const context = createContext(createVisualization(FillMode.UNIQUE));
-
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
-
-    const firstLayers = createPolygonLayers(table, geometryInfo, context);
-    const secondLayers = createPolygonLayers(table, geometryInfo, context);
-
-    expect(arrowTableToGeoJSONMock).toHaveBeenCalledTimes(1);
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(1);
-    expect((firstLayers[0] as GeoJsonLayer | undefined)?.props.data).toBe(
-      projectedGeoJson
-    );
-    expect((secondLayers[0] as GeoJsonLayer | undefined)?.props.data).toBe(
-      projectedGeoJson
+    expect(layers.some((layer) => layer instanceof SolidPolygonLayer)).toBe(
+      true
     );
   });
 
-  it('uses a distinct layer id for the projected GeoJSON fallback', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
-    const table = createTableWithFields([]);
-    const geometryInfo = {
-      ...createGeometryInfo(),
-      encoding: 'geoarrow.wkb',
-      isNativeGeoArrow: true,
-      isWkbEncoded: true,
-      isGeoJsonEncoded: false
-    };
-    const projectedLayers = createPolygonLayers(
-      table,
-      geometryInfo,
-      createContext(createVisualization(FillMode.UNIQUE))
-    );
-    const binaryLayers = createPolygonLayers(table, geometryInfo, {
-      ...createContext(createVisualization(FillMode.UNIQUE)),
-      customProjection: undefined
-    });
-
-    const projectedLayer = projectedLayers.find(
-      (layer) => layer instanceof GeoJsonLayer
-    );
-
-    expect(projectedLayer?.props.id).toMatch(/-projected-geojson$/);
-    expect(binaryLayers[0]?.props.id).not.toBe(projectedLayer?.props.id);
-  });
-
-  it('renders GeoJSON polygon fallbacks without a visualization context', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
+  it('renders binary polygons without a visualization context', () => {
     const layers = createPolygonLayers(
       createTableWithFields([]),
       createGeometryInfo(),
@@ -1274,19 +1098,16 @@ describe('createPolygonLayers', () => {
     );
 
     const polygonLayer = layers.find(
-      (layer) => layer instanceof GeoJsonLayer
-    ) as GeoJsonLayer | undefined;
+      (layer) =>
+        layer instanceof SolidPolygonLayer &&
+        String(layer.props.id).startsWith('polygon-layer')
+    ) as SolidPolygonLayer | undefined;
 
     expect(polygonLayer).toBeDefined();
-    expect(polygonLayer?.props.filled).toBe(true);
+    expect(polygonLayer?.props.getFillColor).toEqual([51, 102, 204, 255]);
   });
 
   it('skips the pattern overlay when polygon fill is disabled', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
     const layers = createPolygonLayers(
       createTableWithFields([]),
       createGeometryInfo(),
@@ -1296,12 +1117,7 @@ describe('createPolygonLayers', () => {
     expect(getPatternLayer(layers)).toBeUndefined();
   });
 
-  it('renders representative point symbols in the projected GeoJSON polygon fallback', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
+  it('renders representative point symbols over projected binary polygons', () => {
     const layers = createPolygonLayers(
       createTableWithFields([]),
       createGeometryInfo(),
@@ -1315,7 +1131,7 @@ describe('createPolygonLayers', () => {
       }
     );
 
-    expect(projectGeoJSONMock).toHaveBeenCalled();
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalled();
     expect(parsePointDataWithProjectionMock).toHaveBeenCalled();
     expect(layers.some((layer) => layer instanceof ScatterplotLayer)).toBe(
       true
@@ -1323,17 +1139,13 @@ describe('createPolygonLayers', () => {
     expect(
       layers.some(
         (layer) =>
-          layer instanceof GeoJsonLayer &&
+          layer instanceof SolidPolygonLayer &&
           String(layer.props.id).startsWith('polygon-layer')
       )
     ).toBe(false);
   });
 
   it('maps split representative point symbols through representative feature ids', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
       featureIds: new Uint32Array([0, 1]),
@@ -1412,10 +1224,6 @@ describe('createPolygonLayers', () => {
     // The binary featureIds index the representative-point table, so radii must
     // follow that table's surviving row, not the geometry table's row at the
     // same positional index.
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
     const singlePointData = {
       length: 1,
       featureIds: new Uint32Array([0]),
@@ -1480,10 +1288,6 @@ describe('createPolygonLayers', () => {
   });
 
   it('does not apply category patterns to split representative point symbols', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
       featureIds: new Uint32Array([0, 1]),
@@ -1559,10 +1363,6 @@ describe('createPolygonLayers', () => {
   });
 
   it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
       featureIds: new Uint32Array([0, 1]),
@@ -1658,51 +1458,8 @@ describe('createPolygonLayers', () => {
     );
   });
 
-  it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
-    const visualization = createVisualization(FillMode.UNIQUE);
-    visualization.polygon = {
-      ...visualization.polygon!,
-      strokeMode: StrokeMode.UNIQUE,
-      strokeColor: '#ffffff',
-      strokeWidth: 3,
-      strokeOpacity: 1,
-      classification: {
-        ...visualization.polygon!.classification!,
-        patternId: 'dots'
-      }
-    };
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      createContext(visualization)
-    );
-    const layerIds = getLayerIds(layers);
-    const fillLayerIndex = layerIds.findIndex(
-      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
-    );
-    const patternLayerIndex = layerIds.findIndex((id) =>
-      id.includes('-pattern-')
-    );
-    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
-
-    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
-    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
-    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
-  });
-
   it('applies the selected dash pattern to dashed polygon strokes', () => {
     const buildStroke = (pattern: BasemapDottedPattern) => {
-      arrowTableToGeoJSONMock.mockReturnValue({
-        type: 'FeatureCollection',
-        features: [createPolygonFeature('keep', 2024)]
-      } satisfies FeatureCollection<Polygon>);
-
       const visualization = createVisualization(FillMode.UNIQUE);
       visualization.polygon = {
         ...visualization.polygon!,
@@ -1735,12 +1492,7 @@ describe('createPolygonLayers', () => {
     expect(dashes.capRounded).toBe(false);
   });
 
-  it('fully disables GeoJSON polygon stroke props when contour mode is none', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
+  it('omits the binary polygon stroke layer when contour mode is none', () => {
     const visualization = createVisualization(FillMode.UNIQUE);
     visualization.polygon = {
       ...visualization.polygon!,
@@ -1756,17 +1508,16 @@ describe('createPolygonLayers', () => {
       createContext(visualization)
     );
 
-    const polygonLayer = layers[0] as GeoJsonLayer;
-    const polygonLayerProps = polygonLayer.props as GeoJsonLayer['props'] & {
-      getDashArray?: [number, number];
-    };
-
-    expect(polygonLayerProps.stroked).toBe(false);
-    expect(polygonLayerProps.getLineColor).toEqual([0, 0, 0, 0]);
-    expect(polygonLayerProps.extensions).toEqual([]);
-    expect(polygonLayerProps.getDashArray).toEqual([0, 0]);
-    expect(polygonLayerProps.lineWidthScale).toBe(0);
-    expect(polygonLayerProps.lineWidthMinPixels).toBe(0);
+    expect(
+      layers.some(
+        (layer) =>
+          layer instanceof SolidPolygonLayer &&
+          String(layer.props.id).startsWith('polygon-layer')
+      )
+    ).toBe(true);
+    expect(
+      layers.some((layer) => String(layer.props.id).includes('-stroke'))
+    ).toBe(false);
   });
 
   it('propagates polygon missing-data styling to binary choropleth fills', () => {
@@ -1794,12 +1545,7 @@ describe('createPolygonLayers', () => {
 
     const layers = createPolygonLayers(
       createTableWithRows([{ value: null }], ['value']),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
+      createGeometryInfo(),
       {
         ...createContext(visualization),
         customProjection: undefined
@@ -1823,17 +1569,7 @@ describe('createPolygonLayers', () => {
     );
   });
 
-  it('keeps disabled GeoJSON polygon categories transparent', () => {
-    const disabledFeature: Feature<Polygon, { segment: string }> = {
-      type: 'Feature',
-      properties: { segment: 'Pause' },
-      geometry: createPolygonFeature('disabled', 2024).geometry
-    };
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [disabledFeature]
-    } satisfies FeatureCollection<Polygon>);
-
+  it('keeps disabled binary polygon categories transparent', () => {
     const visualization = createVisualization(FillMode.CATEGORIES);
     visualization.type = VisualizationType.CATEGORICAL;
     visualization.mapping = { categoryColumn: 'segment' };
@@ -1857,14 +1593,21 @@ describe('createPolygonLayers', () => {
       createContext(visualization)
     );
 
-    const polygonLayer = layers.find(
-      (layer) => layer instanceof GeoJsonLayer
-    ) as GeoJsonLayer | undefined;
-    const getFillColor = polygonLayer?.props.getFillColor as
-      | ((feature: typeof disabledFeature) => [number, number, number, number])
-      | undefined;
+    const fillLayer = layers.find(
+      (layer) =>
+        layer instanceof SolidPolygonLayer &&
+        String(layer.props.id).startsWith('polygon-layer') &&
+        !String(layer.props.id).includes('-pattern')
+    );
+    const fillColorAttribute = (
+      fillLayer?.props.data as
+        | { attributes: { getFillColor?: { value: Uint8ClampedArray } } }
+        | undefined
+    )?.attributes.getFillColor;
 
-    expect(getFillColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
+    expect(fillColorAttribute?.value).toEqual(
+      new Uint8ClampedArray([0, 0, 0, 0])
+    );
   });
 
   it('maps split polygon choropleth fills through geometry ids and dataset basemap ids', () => {
@@ -1919,21 +1662,12 @@ describe('createPolygonLayers', () => {
       ['basemap_id', 'growth_rate']
     );
 
-    const layers = createPolygonLayers(
-      geometryTable,
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
-      {
-        ...createContext(visualization),
-        customProjection: undefined,
-        splitDatasetTable: datasetTable,
-        splitFeatureIdColumn: 'id'
-      }
-    );
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      customProjection: undefined,
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
 
     const fillLayer = layers[0];
     const fillColorAttribute = (
@@ -1986,21 +1720,12 @@ describe('createPolygonLayers', () => {
       ['basemap_id', 'value']
     );
 
-    const layers = createPolygonLayers(
-      geometryTable,
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
-      {
-        ...createContext(visualization),
-        customProjection: undefined,
-        splitDatasetTable: datasetTable,
-        splitFeatureIdColumn: 'id'
-      }
-    );
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      customProjection: undefined,
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
     const fillLayer = layers[0];
     const fillColorAttribute = (
       fillLayer?.props.data as {
@@ -2013,164 +1738,7 @@ describe('createPolygonLayers', () => {
     );
   });
 
-  it('maps split projected GeoJSON choropleth fills through geometry ids and dataset basemap ids', () => {
-    const visualization = createVisualization(FillMode.CLASSES);
-    visualization.mapping = { valueColumn: 'growth_rate' };
-    visualization.polygon = {
-      ...visualization.polygon!,
-      enabled: true,
-      fillMode: FillMode.CLASSES,
-      valueColumn: 'growth_rate',
-      classification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 3,
-        numClasses: 3,
-        breaks: [1, 2],
-        colors: ['#2166ac', '#f7f7f7', '#b2182b']
-      }
-    };
-
-    const geometryTable = createTableWithRows(
-      [
-        { id: 'DEU', geometry: null },
-        { id: 'FRA', geometry: null }
-      ],
-      ['id', 'geometry']
-    );
-    const datasetTable = createTableWithRows(
-      [
-        { basemap_id: 'FRA', growth_rate: 2.5 },
-        { basemap_id: 'DEU', growth_rate: 0.5 }
-      ],
-      ['basemap_id', 'growth_rate']
-    );
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        createPolygonFeature('DEU', 2024),
-        createPolygonFeature('FRA', 2024)
-      ]
-    } satisfies FeatureCollection<Polygon>;
-    arrowTableToGeoJSONMock.mockReturnValue(geojson);
-
-    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
-      ...createContext(visualization),
-      splitDatasetTable: datasetTable,
-      splitFeatureIdColumn: 'id'
-    });
-
-    const fillLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      GeoJsonLayer | undefined;
-    const getFillColor = fillLayer?.props.getFillColor as
-      | ((feature: Feature<Polygon, { id: string; year: number }>) => number[])
-      | undefined;
-
-    expect(projectGeoJSONMock).toHaveBeenCalled();
-    expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
-      33, 102, 172, 255
-    ]);
-    expect(getFillColor?.(createPolygonFeature('FRA', 2024))).toEqual([
-      178, 24, 43, 255
-    ]);
-  });
-
-  it('keeps unmatched split polygons transparent for unique GeoJSON fills and pattern overlays', () => {
-    const visualization = createVisualization(FillMode.UNIQUE);
-    visualization.polygon = {
-      ...visualization.polygon!,
-      fillColor: '#ff0000'
-    };
-    const geometryTable = createTableWithRows(
-      [
-        { id: 'DEU', geometry: null },
-        { id: 'ESP', geometry: null }
-      ],
-      ['id', 'geometry']
-    );
-    const datasetTable = createTableWithRows(
-      [{ basemap_id: 'DEU', value: 10 }],
-      ['basemap_id', 'value']
-    );
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        createPolygonFeature('DEU', 2024),
-        createPolygonFeature('ESP', 2024)
-      ]
-    } satisfies FeatureCollection<Polygon>;
-    arrowTableToGeoJSONMock.mockReturnValue(geojson);
-
-    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
-      ...createContext(visualization),
-      splitDatasetTable: datasetTable,
-      splitFeatureIdColumn: 'id'
-    });
-    const fillLayer = layers.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        !String(layer.props.id).includes('-pattern-')
-    ) as GeoJsonLayer | undefined;
-    const getFillColor = fillLayer?.props.getFillColor as
-      | ((feature: Feature<Polygon, { id: string; year: number }>) => number[])
-      | undefined;
-    const patternLayer = getPatternLayer(layers);
-    const patternData = patternLayer?.props.data as FeatureCollection<Polygon>;
-
-    expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
-      255, 255, 255, 255
-    ]);
-    expect(getFillColor?.(createPolygonFeature('ESP', 2024))).toEqual([
-      0, 0, 0, 0
-    ]);
-    expect(
-      patternData.features.map((feature) => feature.properties?.id)
-    ).toEqual(['DEU']);
-  });
-
-  it('renders the binary polygon pattern below the stroke layer', () => {
-    const visualization = createVisualization(FillMode.UNIQUE);
-    visualization.polygon = {
-      ...visualization.polygon!,
-      strokeMode: StrokeMode.UNIQUE,
-      strokeColor: '#ffffff',
-      strokeWidth: 3,
-      strokeOpacity: 1,
-      classification: {
-        ...visualization.polygon!.classification!,
-        patternId: 'dots'
-      }
-    };
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
-      {
-        ...createContext(visualization),
-        customProjection: undefined
-      }
-    );
-    const layerIds = getLayerIds(layers);
-    const fillLayerIndex = layerIds.findIndex(
-      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
-    );
-    const patternLayerIndex = layerIds.findIndex((id) =>
-      id.includes('-pattern-')
-    );
-    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
-
-    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
-    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
-    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
-    expect(getPatternLayer(layers)).toBeInstanceOf(SolidPolygonLayer);
-    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
-  });
-
-  it('renders binary pattern overlays when GeoJSON conversion fails', () => {
+  it('keeps unmatched split polygons out of the binary unique fill and pattern overlay', () => {
     createPolygonFillColorAttributeMock.mockImplementation(
       (
         polyData: { featureIds?: Uint32Array },
@@ -2190,9 +1758,106 @@ describe('createPolygonLayers', () => {
     parseSolidPolygonsMock.mockReturnValue({
       featureIds: new Uint32Array([0, 1])
     });
-    const geoJsonError = new Error('pattern GeoJSON failed');
-    arrowTableToGeoJSONMock.mockImplementation(() => {
-      throw geoJsonError;
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillColor: '#ff0000'
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'ESP', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [{ basemap_id: 'DEU', value: 10 }],
+      ['basemap_id', 'value']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      customProjection: undefined,
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+    const readFillColors = (layer: (typeof layers)[number] | undefined) =>
+      Array.from(
+        (
+          layer?.props.data as
+            | { attributes: { getFillColor?: { value: Uint8ClampedArray } } }
+            | undefined
+        )?.attributes.getFillColor?.value ?? []
+      );
+    const fillLayer = layers.find(
+      (layer) =>
+        layer instanceof SolidPolygonLayer &&
+        !String(layer.props.id).includes('-pattern-')
+    );
+    const patternFillColors = readFillColors(getPatternLayer(layers));
+
+    expect(readFillColors(fillLayer)).toEqual([255, 255, 255, 255, 0, 0, 0, 0]);
+    expect(patternFillColors[3]).toBe(255);
+    expect(patternFillColors.slice(4)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('renders the binary polygon pattern below the stroke layer', () => {
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'dots'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+    const layerIds = getLayerIds(layers);
+    const fillLayerIndex = layerIds.findIndex(
+      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
+    );
+    const patternLayerIndex = layerIds.findIndex((id) =>
+      id.includes('-pattern-')
+    );
+    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
+
+    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
+    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
+    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
+    expect(getPatternLayer(layers)).toBeInstanceOf(SolidPolygonLayer);
+  });
+
+  it('renders a binary missing-data pattern overlay only for missing polygon class values', () => {
+    createPolygonFillColorAttributeMock.mockImplementation(
+      (
+        polyData: { featureIds?: Uint32Array },
+        getFillColor: (featureId: number) => [number, number, number, number]
+      ) => {
+        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
+        return {
+          value: new Uint8ClampedArray(
+            featureIds.flatMap((featureId) =>
+              Array.from(getFillColor(featureId))
+            )
+          ),
+          size: 4
+        };
+      }
+    );
+    parseSolidPolygonsMock.mockReturnValue({
+      featureIds: new Uint32Array([0, 1])
     });
     const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
 
@@ -2221,12 +1886,7 @@ describe('createPolygonLayers', () => {
 
     const layers = createPolygonLayers(
       createTableWithRows([{ value: null }, { value: 1 }], ['value']),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
+      createGeometryInfo(),
       {
         ...createContext(visualization),
         customProjection: undefined
@@ -2251,7 +1911,6 @@ describe('createPolygonLayers', () => {
     expect(missingPatternFill).toEqual(
       new Uint8ClampedArray([0, 0, 0, 255, 0, 0, 0, 0])
     );
-    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
     expect(loggerWarn).not.toHaveBeenCalled();
   });
 
@@ -2305,12 +1964,7 @@ describe('createPolygonLayers', () => {
     // index 1 — matching featureIds against row ids picks the wrong entity.
     const layers = createPolygonLayers(
       createTableWithRows([{ __id: 1 }, { __id: 2 }], ['__id']),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
+      createGeometryInfo(),
       {
         ...createContext(visualization),
         customProjection: undefined,
@@ -2337,41 +1991,31 @@ describe('createPolygonLayers', () => {
     expect(selectionData?.attributes.getWidth?.value).toEqual(
       new Float32Array([0, 3])
     );
-    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 
-  it('logs and falls back to GeoJSON when binary polygon layer creation fails', () => {
-    const fallbackError = new Error('binary polygon failed');
+  it('logs an error and renders no polygon layer when the binary parse fails', () => {
+    const binaryError = new Error('binary polygon failed');
     parseSolidPolygonsMock.mockImplementationOnce(() => {
-      throw fallbackError;
+      throw binaryError;
     });
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('fallback', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-    const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     const layers = createPolygonLayers(
       createTableWithFields([]),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.polygon',
-        isNativeGeoArrow: true,
-        isGeoJsonEncoded: false
-      },
+      createGeometryInfo(),
       {
         ...createContext(createVisualization(FillMode.UNIQUE)),
         customProjection: undefined
       }
     );
 
-    expect(layers.some((layer) => layer instanceof GeoJsonLayer)).toBe(true);
-    expect(loggerWarn).toHaveBeenCalledWith(
-      'Failed to create binary polygon layers; falling back to GeoJSON',
+    expect(layers).toEqual([]);
+    expect(loggerError).toHaveBeenCalledWith(
+      'Failed to create binary polygon layers',
       LogCategory.MAP,
       expect.objectContaining({
-        error: fallbackError,
-        flow: 'polygon_binary_geojson_fallback',
+        error: binaryError,
+        flow: 'polygon_binary_layers',
         extra: expect.objectContaining({
           layerId: expect.stringContaining('polygon-layer'),
           geoColumn: 'geometry',
@@ -2397,11 +2041,6 @@ describe('createPolygonLayers', () => {
         }
       }
     };
-
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('patterned', 2024)]
-    });
 
     const layers = createPolygonLayers(
       createTableWithFields([]),
@@ -2445,13 +2084,25 @@ describe('createPolygonLayers', () => {
       }
     };
 
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [5, 15, 25, 35].map((metric, index) => ({
-        ...createPolygonFeature(`feature-${index}`, 2024),
-        properties: { id: `feature-${index}`, metric }
-      }))
-    } satisfies FeatureCollection<Polygon>);
+    createPolygonFillColorAttributeMock.mockImplementation(
+      (
+        polyData: { featureIds?: Uint32Array },
+        getFillColor: (featureId: number) => [number, number, number, number]
+      ) => {
+        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
+        return {
+          value: new Uint8ClampedArray(
+            featureIds.flatMap((featureId) =>
+              Array.from(getFillColor(featureId))
+            )
+          ),
+          size: 4
+        };
+      }
+    );
+    parseSolidPolygonsWithProjectionMock.mockReturnValue({
+      featureIds: new Uint32Array([0, 1, 2, 3])
+    });
 
     const layers = createPolygonLayers(
       createTableWithRows(
@@ -2488,83 +2139,26 @@ describe('createPolygonLayers', () => {
     });
   });
 
-  it('renders a missing-data pattern overlay only for missing polygon class values', () => {
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          ...createPolygonFeature('missing', 2024),
-          properties: { id: 'missing', metric: null }
-        },
-        {
-          ...createPolygonFeature('known', 2024),
-          properties: { id: 'known', metric: 12 }
-        }
-      ]
-    } satisfies FeatureCollection<Polygon>;
-    arrowTableToGeoJSONMock.mockReturnValue(geojson);
-
-    const visualization = createVisualization(FillMode.CLASSES);
-    visualization.mapping = { valueColumn: 'metric' };
-    visualization.missingData = {
-      show: true,
-      shape: MissingDataShape.CIRCLE,
-      size: 2,
-      color: '#c6c6c6',
-      pattern: true
-    };
-    visualization.polygon = {
-      ...visualization.polygon!,
-      valueColumn: 'metric',
-      missingData: visualization.missingData,
-      classification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 2,
-        numClasses: 2,
-        breaks: [10],
-        colors: ['#2166ac', '#b2182b']
+  it('renders a binary missing-data pattern overlay for unmapped polygon categories', () => {
+    createPolygonFillColorAttributeMock.mockImplementation(
+      (
+        polyData: { featureIds?: Uint32Array },
+        getFillColor: (featureId: number) => [number, number, number, number]
+      ) => {
+        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
+        return {
+          value: new Uint8ClampedArray(
+            featureIds.flatMap((featureId) =>
+              Array.from(getFillColor(featureId))
+            )
+          ),
+          size: 4
+        };
       }
-    };
-
-    const layers = createPolygonLayers(
-      createTableWithRows(
-        [
-          { id: 'missing', metric: null },
-          { id: 'known', metric: 12 }
-        ],
-        ['id', 'metric']
-      ),
-      createGeometryInfo(),
-      createContext(visualization)
     );
-
-    const missingPatternLayer = layers.find((layer) =>
-      String(layer.props.id).includes('missing-data-pattern')
-    ) as GeoJsonLayer | undefined;
-    const patternData = missingPatternLayer?.props.data as
-      FeatureCollection<Polygon> | undefined;
-
-    expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(
-      patternData?.features.map((feature) => feature.properties?.id)
-    ).toEqual(['missing']);
-  });
-
-  it('renders a missing-data pattern overlay for unmapped polygon categories', () => {
-    const geojson = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          ...createPolygonFeature('known', 2024),
-          properties: { id: 'known', segment: 'known' }
-        },
-        {
-          ...createPolygonFeature('unknown', 2024),
-          properties: { id: 'unknown', segment: 'unknown' }
-        }
-      ]
-    } satisfies FeatureCollection<Polygon>;
-    arrowTableToGeoJSONMock.mockReturnValue(geojson);
+    parseSolidPolygonsWithProjectionMock.mockReturnValue({
+      featureIds: new Uint32Array([0, 1])
+    });
 
     const visualization = createVisualization(FillMode.CATEGORIES);
     visualization.type = VisualizationType.CATEGORICAL;
@@ -2604,14 +2198,17 @@ describe('createPolygonLayers', () => {
 
     const missingPatternLayer = layers.find((layer) =>
       String(layer.props.id).includes('missing-data-pattern')
-    ) as GeoJsonLayer | undefined;
-    const patternData = missingPatternLayer?.props.data as
-      FeatureCollection<Polygon> | undefined;
+    );
+    const missingPatternFill = (
+      missingPatternLayer?.props.data as
+        | { attributes: { getFillColor?: { value: Uint8ClampedArray } } }
+        | undefined
+    )?.attributes.getFillColor?.value;
 
-    expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(
-      patternData?.features.map((feature) => feature.properties?.id)
-    ).toEqual(['unknown']);
+    expect(missingPatternLayer).toBeInstanceOf(SolidPolygonLayer);
+    expect(missingPatternFill).toEqual(
+      new Uint8ClampedArray([0, 0, 0, 0, 0, 0, 0, 255])
+    );
   });
 
   it('renders density from the dedicated density table without falling back to polygon fill', () => {
@@ -2648,17 +2245,11 @@ describe('createPolygonLayers', () => {
     expect(
       (densityLayer?.props as Record<string, unknown>).radiusMinPixels
     ).toBe(0);
-    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 });
 
 describe('createPointLayers', () => {
   it('fully disables point circle stroke props when contour mode is none', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPointFeature('keep', 2024)]
-    } satisfies FeatureCollection<Point>);
-
     const layers = createPointLayers(
       createTableWithFields([]),
       createPointGeometryInfo(),
@@ -3128,139 +2719,7 @@ describe('createPointLayers', () => {
     expect(Array.from(layerData.attributes?.getPosition?.value ?? [])).toEqual([
       10, 10, 0, 0, 20, 20
     ]);
-  });
-
-  it('sorts GeoJSON proportional point fallbacks by descending zero-based radius without pixel clamps', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: { id: 'mid', population: 25 },
-          geometry: { type: 'Point', coordinates: [0, 0] }
-        },
-        {
-          type: 'Feature',
-          properties: { id: 'max', population: 100 },
-          geometry: { type: 'Point', coordinates: [1, 1] }
-        },
-        {
-          type: 'Feature',
-          properties: { id: 'zero', population: 0 },
-          geometry: { type: 'Point', coordinates: [2, 2] }
-        }
-      ]
-    } satisfies FeatureCollection<Point, { id: string; population: number }>);
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.PROPORTIONAL,
-      shape: ShapeType.CIRCLE,
-      sizeColumn: 'population',
-      minSize: 8,
-      maxSize: 40
-    };
-
-    const layers = createPointLayers(
-      createTableWithFields(['geometry', 'population']),
-      {
-        type: 'Point',
-        encoding: 'geojson',
-        geoColumn: 'geometry',
-        isNativeGeoArrow: false,
-        isWkbEncoded: false,
-        isGeoJsonEncoded: true
-      },
-      {
-        ...createContext(visualization),
-        customProjection: undefined,
-        statistics: { min: 25, max: 100 }
-      }
-    );
-
-    const pointLayer = layers[0] as GeoJsonLayer;
-    const layerData = pointLayer.props.data as FeatureCollection<
-      Point,
-      { id: string; population: number }
-    >;
-    const getPointRadius = pointLayer.props.getPointRadius as (feature: {
-      properties?: Record<string, unknown>;
-    }) => number;
-
-    expect(pointLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(layerData.features.map((feature) => feature.properties.id)).toEqual([
-      'max',
-      'mid',
-      'zero'
-    ]);
-    expect(
-      layerData.features.map((feature) => getPointRadius(feature))
-    ).toEqual([40, 20, 0]);
-    expect(
-      (pointLayer.props as Record<string, unknown>).pointRadiusMinPixels
-    ).toBe(0);
-    expect(source).not.toContain('radiusMinPixels');
-    expect(source).not.toContain('pointRadiusMinPixels');
-  });
-
-  it('renders GeoJSON-encoded missing-data shapes through MultiShapeLayer (REV2-SYM-6)', () => {
-    parsePointDataMock.mockReturnValue({
-      length: 3,
-      featureIds: new Uint32Array([0, 1, 2])
-    });
-    createScatterplotLayerPropsMock.mockReturnValue({
-      data: { attributes: {}, featureIds: new Uint32Array([0, 1, 2]) }
-    });
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.PROPORTIONAL,
-      shape: ShapeType.CIRCLE,
-      sizeColumn: 'population',
-      minSize: 8,
-      maxSize: 40,
-      missingData: {
-        show: true,
-        shape: MissingDataShape.SQUARE,
-        color: '#bbbbbb',
-        size: 6
-      }
-    };
-
-    const layers = createPointLayers(
-      createTableWithRows(
-        [{ population: 2100000 }, { population: 515000 }, { population: null }],
-        ['geometry', 'population']
-      ),
-      {
-        type: 'Point',
-        encoding: 'geojson',
-        geoColumn: 'geometry',
-        isNativeGeoArrow: false,
-        isWkbEncoded: false,
-        isGeoJsonEncoded: true
-      },
-      {
-        ...createContext(visualization),
-        customProjection: undefined,
-        statistics: { min: 515000, max: 2100000 }
-      }
-    );
-
-    const pointLayer = layers[0] as MultiShapeLayer;
-    const shapeAttribute = (
-      pointLayer.props.data as {
-        attributes?: { getShape?: { value?: Float32Array } };
-      }
-    ).attributes?.getShape;
-
-    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(Array.from(shapeAttribute?.value ?? [])).toContain(
-      SHAPE_ORDINAL[ShapeType.SQUARE]
-    );
-    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+    expect(pointLayer.props.radiusMinPixels).toBe(0);
   });
 
   it('merges overlaid double proportional symbols into one descending radius order', () => {
@@ -3725,150 +3184,24 @@ describe('createLineLayers', () => {
     );
   });
 
-  it('keeps disabled GeoJSON categorical line labels transparent', () => {
-    const disabledFeature = createLineFeature('disabled', 'Pause');
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [disabledFeature]
-    } satisfies FeatureCollection<LineString>);
-
-    const visualization: VisualizationConfig = {
-      id: 'viz-line-disabled-geojson',
-      name: 'Line disabled GeoJSON category test',
-      type: VisualizationType.CATEGORICAL,
-      datasetId: 'dataset-1',
-      enabled: true,
-      primitiveFilters: [PrimitiveFilterType.LINE],
-      line: {
-        enabled: true,
-        colorMode: ColorMode.CATEGORIES,
-        thicknessMode: ThicknessMode.UNIQUE,
-        color: '#3366cc',
-        width: 3,
-        maxWidth: 6,
-        opacity: 0.5,
-        dashed: false,
-        categoryColumn: 'route_name',
-        classification: {
-          method: ClassificationMethod.MANUAL,
-          classes: 2,
-          colors: ['#ff0000', '#00ff00'],
-          labels: ['Active', 'Pause'],
-          categoryValues: ['Active', 'Pause'],
-          disabledLabels: ['Pause']
-        }
-      },
-      style: {
-        fillOpacity: 1,
-        strokeOpacity: 1,
-        strokeWidth: 1
-      },
-      mapping: {}
-    };
-
-    const layers = createLineLayers(
-      createTableWithRows([{ route_name: 'Pause' }], ['route_name']),
-      {
-        ...createLineGeometryInfo(),
-        encoding: 'geojson',
-        isNativeGeoArrow: false,
-        isGeoJsonEncoded: true
-      },
-      createContext(visualization)
-    );
-    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      GeoJsonLayer | undefined;
-    const getLineColor = lineLayer?.props.getLineColor as
-      | ((feature: typeof disabledFeature) => [number, number, number, number])
-      | undefined;
-
-    expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
-  });
-
-  it('renders GeoJSON line fallbacks without a visualization context', () => {
-    const feature = createLineFeature('line-no-viz', 'A');
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [feature]
-    } satisfies FeatureCollection<LineString>);
-
+  it('renders binary lines without a visualization context', () => {
     const layers = createLineLayers(
       createTableWithRows([{ route_name: 'A' }], ['route_name']),
-      {
-        ...createLineGeometryInfo(),
-        encoding: 'geojson',
-        isNativeGeoArrow: false,
-        isGeoJsonEncoded: true
-      },
+      createLineGeometryInfo(),
       {
         ...createContext(createVisualization(FillMode.UNIQUE)),
         viz: null
       }
     );
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
 
-    expect(layers.some((layer) => layer instanceof GeoJsonLayer)).toBe(true);
-  });
-
-  it('uses the selected dash pattern for dashed GeoJSON line layers', () => {
-    const feature = createLineFeature('dashed', 'A');
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [feature]
-    } satisfies FeatureCollection<LineString>);
-
-    const visualization: VisualizationConfig = {
-      id: 'viz-line-dashed-pattern',
-      name: 'Line dashed pattern test',
-      type: VisualizationType.CATEGORICAL,
-      datasetId: 'dataset-1',
-      enabled: true,
-      primitiveFilters: [PrimitiveFilterType.LINE],
-      line: {
-        enabled: true,
-        colorMode: ColorMode.UNIQUE,
-        thicknessMode: ThicknessMode.UNIQUE,
-        color: '#3366cc',
-        width: 3,
-        maxWidth: 6,
-        opacity: 1,
-        dashed: true,
-        dashedPattern: BasemapDottedPattern.DASHES
-      },
-      style: {
-        fillOpacity: 1,
-        strokeOpacity: 1,
-        strokeWidth: 1
-      },
-      mapping: {}
-    };
-
-    const layers = createLineLayers(
-      createTableWithRows([{ route_name: 'A' }], ['route_name']),
-      {
-        ...createLineGeometryInfo(),
-        encoding: 'geojson',
-        isNativeGeoArrow: false,
-        isGeoJsonEncoded: true
-      },
-      createContext(visualization)
-    );
-    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      GeoJsonLayer | undefined;
-    const lineLayerProps = lineLayer?.props as
-      | { getDashArray?: (item: TestLineFeature) => [number, number] }
-      | undefined;
-
-    expect(lineLayerProps?.getDashArray?.(feature)).toEqual([6, 4]);
+    expect(lineLayer).toBeDefined();
+    expect(lineLayer?.props.getColor).toEqual([51, 102, 204, 255]);
   });
 
   it('renders dotted lines as round dots and dash-dot distinctly from dashes', () => {
     const buildLineLayer = (pattern: BasemapDottedPattern) => {
-      const feature = createLineFeature('dashed', 'A');
-      arrowTableToGeoJSONMock.mockReturnValue({
-        type: 'FeatureCollection',
-        features: [feature]
-      } satisfies FeatureCollection<LineString>);
-
       const visualization: VisualizationConfig = {
         id: `viz-line-${pattern}`,
         name: 'Line dash pattern',
@@ -3893,27 +3226,14 @@ describe('createLineLayers', () => {
 
       const layers = createLineLayers(
         createTableWithRows([{ route_name: 'A' }], ['route_name']),
-        {
-          ...createLineGeometryInfo(),
-          encoding: 'geojson',
-          isNativeGeoArrow: false,
-          isGeoJsonEncoded: true
-        },
+        createLineGeometryInfo(),
         createContext(visualization)
       );
-      const lineLayer = layers.find(
-        (layer) => layer instanceof GeoJsonLayer
-      ) as GeoJsonLayer | undefined;
+      const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+        PathLayer | undefined;
       const props = lineLayer?.props as
-        | {
-            getDashArray?: (item: TestLineFeature) => [number, number];
-            capRounded?: boolean;
-          }
-        | undefined;
-      return {
-        dash: props?.getDashArray?.(feature),
-        capRounded: props?.capRounded
-      };
+        { getDashArray?: [number, number]; capRounded?: boolean } | undefined;
+      return { dash: props?.getDashArray, capRounded: props?.capRounded };
     };
 
     const dots = buildLineLayer(BasemapDottedPattern.DOTS);
@@ -3929,22 +3249,44 @@ describe('createLineLayers', () => {
     expect(dashes.capRounded).toBe(false);
   });
 
-  it('applies missing-data color, width and dash style to GeoJSON lines', () => {
-    const feature: Feature<
-      LineString,
-      { id: string; route_name: string; flow: null }
-    > = {
-      ...createLineFeature('missing', 'A'),
-      properties: { id: 'missing', route_name: 'A', flow: null }
-    };
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [feature]
-    } satisfies FeatureCollection<LineString>);
+  it('applies missing-data color, width and dash style to binary lines', () => {
+    parsePathsWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0, 1, 1]),
+      startIndices: new Uint32Array([0, 2]),
+      size: 2
+    });
+    pathColorAttrMock.mockImplementation(
+      (
+        pathData: { featureIds?: Uint32Array },
+        getColor: (featureId: number) => [number, number, number, number]
+      ) => ({
+        value: new Uint8ClampedArray(
+          Array.from(pathData.featureIds ?? new Uint32Array()).flatMap(
+            (featureId) => Array.from(getColor(featureId))
+          )
+        ),
+        size: 4
+      })
+    );
+    pathWidthAttrMock.mockImplementation(
+      (
+        pathData: { featureIds?: Uint32Array },
+        getWidth: (featureId: number) => number
+      ) => ({
+        value: new Float32Array(
+          Array.from(pathData.featureIds ?? new Uint32Array()).map(
+            (featureId) => getWidth(featureId)
+          )
+        ),
+        size: 1
+      })
+    );
 
     const visualization: VisualizationConfig = {
-      id: 'viz-line-missing-geojson',
-      name: 'Line missing data GeoJSON test',
+      id: 'viz-line-missing-binary-style',
+      name: 'Line missing data binary style test',
       type: VisualizationType.PROPORTIONAL,
       datasetId: 'dataset-1',
       enabled: true,
@@ -3981,29 +3323,128 @@ describe('createLineLayers', () => {
         [{ route_name: 'A', flow: null }],
         ['route_name', 'flow']
       ),
-      {
-        ...createLineGeometryInfo(),
-        encoding: 'geojson',
-        isNativeGeoArrow: false,
-        isGeoJsonEncoded: true
-      },
+      createLineGeometryInfo(),
       createContext(visualization)
     );
-    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      GeoJsonLayer | undefined;
-    const lineLayerProps = lineLayer?.props as
-      | {
-          getLineColor?: (
-            item: TestLineFeature
-          ) => [number, number, number, number];
-          getLineWidth?: (item: TestLineFeature) => number;
-          getDashArray?: (item: TestLineFeature) => [number, number];
-        }
-      | undefined;
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
+    const attributes = (
+      lineLayer?.props.data as
+        | {
+            attributes: {
+              getColor?: { value: Uint8ClampedArray };
+              getWidth?: { value: Float32Array };
+              getDashArray?: { value: Float32Array };
+            };
+          }
+        | undefined
+    )?.attributes;
 
-    expect(lineLayerProps?.getLineColor?.(feature)).toEqual([18, 52, 86, 255]);
-    expect(lineLayerProps?.getLineWidth?.(feature)).toBe(7);
-    expect(lineLayerProps?.getDashArray?.(feature)).toEqual([12, 4]);
+    expect(attributes?.getColor?.value).toEqual(
+      new Uint8ClampedArray([18, 52, 86, 255])
+    );
+    expect(attributes?.getWidth?.value).toEqual(new Float32Array([7]));
+    expect(Array.from(attributes?.getDashArray?.value ?? [])).toEqual([
+      12, 4, 12, 4
+    ]);
+  });
+
+  it('draws dashed native lines on the binary PathLayer', () => {
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-dashed-binary',
+      name: 'Binary dashed line test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 1,
+        dashed: true,
+        dashedPattern: BasemapDottedPattern.DASHES
+      },
+      style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'A' }], ['route_name']),
+      createLineGeometryInfo(),
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
+
+    expect(lineLayer?.props.id).toMatch(/-dashed$/);
+    expect(lineLayer?.props.extensions).toHaveLength(1);
+    expect(
+      (lineLayer?.props as { getDashArray?: unknown } | undefined)?.getDashArray
+    ).toEqual([6, 4]);
+  });
+
+  it('gives missing native lines their own binary dash array', () => {
+    parsePathsWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float32Array([0, 0, 1, 1, 2, 2, 3, 3]),
+      startIndices: new Uint32Array([0, 2, 4]),
+      size: 2
+    });
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-missing-binary',
+      name: 'Binary missing line test',
+      type: VisualizationType.PROPORTIONAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.PROPORTIONAL,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 10,
+        opacity: 1,
+        dashed: false,
+        sizeColumn: 'flow',
+        missingData: {
+          show: true,
+          shape: MissingDataShape.CIRCLE,
+          size: 7,
+          color: '#123456',
+          dashed: true,
+          dashedPattern: BasemapDottedPattern.LONG_DASH
+        }
+      },
+      style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows(
+        [
+          { route_name: 'A', flow: 4 },
+          { route_name: 'B', flow: null }
+        ],
+        ['route_name', 'flow']
+      ),
+      createLineGeometryInfo(),
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
+    const dashArrays = (
+      lineLayer?.props.data as
+        { attributes: { getDashArray?: { value: Float32Array } } } | undefined
+    )?.attributes.getDashArray?.value;
+
+    expect(lineLayer?.props.extensions).toHaveLength(1);
+    expect(Array.from(dashArrays ?? [])).toEqual([0, 0, 0, 0, 12, 4, 12, 4]);
   });
 
   it('uses a dedicated thickness classification for classed line widths', () => {
@@ -4083,5 +3524,78 @@ describe('createLineLayers', () => {
   it('does not route text contour through legacy background boxes', () => {
     expect(source).not.toContain('textBackgroundConfig');
     expect(source).toContain('outlineWidth: resolveTextOutlineWidth(');
+  });
+});
+
+describe('createHighlightedFeatureOverlay', () => {
+  const rows = [{ __id: 1 }, { __id: 2 }, { __id: 3 }];
+
+  it('outlines highlighted polygons from binary paths', () => {
+    parsePathsWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array(12),
+      startIndices: new Uint32Array([0, 2, 4, 6]),
+      size: 2
+    });
+    const context = createContext(createVisualization(FillMode.UNIQUE));
+
+    const overlay = createHighlightedFeatureOverlay(
+      'polygon-layer',
+      createTableWithRows(rows, ['__id']),
+      createGeometryInfo(),
+      new Set([2]),
+      0,
+      context
+    );
+
+    expect(overlay).toBeInstanceOf(PathLayer);
+    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      context.customProjection
+    );
+  });
+
+  it('rings only the highlighted points', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array([10, 11, 20, 21, 30, 31]),
+      size: 2
+    });
+
+    const overlay = createHighlightedFeatureOverlay(
+      'point-layer',
+      createTableWithRows(rows, ['__id']),
+      createPointGeometryInfo(),
+      new Set([1, 3]),
+      0,
+      createContext(createVisualization(FillMode.UNIQUE))
+    ) as ScatterplotLayer | null;
+    const data = overlay?.props.data as unknown as {
+      length: number;
+      attributes: { getPosition: { value: Float64Array } };
+    };
+
+    expect(overlay).toBeInstanceOf(ScatterplotLayer);
+    expect(overlay?.props.filled).toBe(false);
+    expect(overlay?.props.stroked).toBe(true);
+    expect(data.length).toBe(2);
+    expect(Array.from(data.attributes.getPosition.value)).toEqual([
+      10, 11, 30, 31
+    ]);
+  });
+
+  it('returns no overlay when nothing is highlighted', () => {
+    expect(
+      createHighlightedFeatureOverlay(
+        'polygon-layer',
+        createTableWithRows(rows, ['__id']),
+        createGeometryInfo(),
+        new Set(),
+        0,
+        createContext(createVisualization(FillMode.UNIQUE))
+      )
+    ).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import {
   isPolarClipDegeneracyProjection
 } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { proj4d3 } from './proj4d3.utils';
+import { applyBasemapFrame, isFramedExtent } from './basemap-frame.utils';
 
 type BBoxTuple = [number, number, number, number];
 
@@ -167,6 +168,18 @@ export function isUsableGeoProjection(
 // code, ranked suggestion, or catalogue pick) from cloneable params. Runs
 // identically on the main thread and inside the parse worker.
 export function buildUserProjection(
+  params: UserProjectionBuildParams
+): GeoProjection | undefined {
+  const projection = buildFittedUserProjection(params);
+  const isWorldScale =
+    isWorldScaleSuggestion(params) || isWorldScaleProjectionId(params.selected);
+  if (projection && !isWorldScale && isFramedExtent(params.fitBbox)) {
+    applyBasemapFrame(projection, params.fitBbox);
+  }
+  return projection;
+}
+
+function buildFittedUserProjection(
   params: UserProjectionBuildParams
 ): GeoProjection | undefined {
   const { fitBbox, width, height, padding } = params;

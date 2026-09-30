@@ -29,6 +29,7 @@
     projectionActions
   } from './projection.store.svelte';
   import {
+    getPresetOfficialProjectionName,
     getProjectionShapeFilterId,
     type ProjectionShapeFilterId
   } from './projection-label.utils';
@@ -96,7 +97,26 @@
       title: m.projection_name_usa_albers(),
       tag: m.projection_group_discontinuous(),
       shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
-    }
+    },
+    // Any other catalog preset (e.g. the single-frame masks of the national
+    // basemaps: BRESIL_ALBERS, ALLEMAGNE_UTM32, CANADA_LAMBERT), named by the
+    // preset itself; availability keeps it to its own basemap.
+    ...Object.keys(basemapService.projectionPresets ?? {})
+      .filter(
+        (presetId) =>
+          !['FRANCE_DOM_TOM', 'EUROPE_DOM_TOM', 'USA_ALBERS'].includes(presetId)
+      )
+      .map((presetId) => ({
+        id: getCompositeProjectionSelectionId(presetId),
+        projectionId: getCompositeProjectionSelectionId(presetId),
+        title:
+          getPresetOfficialProjectionName(
+            presetId,
+            basemapService.projectionPresets
+          ) ?? presetId,
+        tag: m.projection_group_rectangular(),
+        shapeFilterId: 'Rectangulaire' as ProjectionShapeFilterId
+      }))
   ]);
 
   const projectionGroups = $derived.by(

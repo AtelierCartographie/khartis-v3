@@ -1,7 +1,6 @@
 import {
   visualizationStore,
   getEnabledPrimitiveFilters,
-  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -42,26 +41,6 @@ const DEFAULT_FACETS_FRAME_COLOR = '#c6c6c6';
 
 export const MAX_FACETS = 16;
 
-function getCompatibleDatasetVariables(
-  visualization: VisualizationConfig,
-  slotPath: FacetSlotPath
-): string[] {
-  const dataset = datasetsStore.datasets.find(
-    (candidate) => candidate.id === visualization.datasetId
-  );
-  if (!dataset?.columns?.length) {
-    return [];
-  }
-
-  return dataset.columns
-    .filter((column) =>
-      facetSlotRequiresNumericVariable(slotPath)
-        ? isAutoFacetNumericColumn(column)
-        : isAutoFacetDataColumn(column)
-    )
-    .map((column) => column.name);
-}
-
 function filterCompatibleFacetVariables(
   visualization: VisualizationConfig,
   variables: string[],
@@ -90,36 +69,6 @@ function filterCompatibleFacetVariables(
   return sanitized.filter((variable) => compatibleColumns.has(variable));
 }
 
-function normalizeFacetVariablesForEnable(
-  visualization: VisualizationConfig,
-  variables: string[],
-  slotPath: FacetSlotPath
-): string[] {
-  const compatible = filterCompatibleFacetVariables(
-    visualization,
-    variables,
-    slotPath
-  );
-  if (compatible.length >= 2 || !facetSlotRequiresNumericVariable(slotPath)) {
-    return compatible;
-  }
-
-  const nextCompatible = [...compatible];
-  for (const variable of getCompatibleDatasetVariables(
-    visualization,
-    slotPath
-  )) {
-    if (nextCompatible.length >= 2) {
-      break;
-    }
-    if (!nextCompatible.includes(variable)) {
-      nextCompatible.push(variable);
-    }
-  }
-
-  return nextCompatible;
-}
-
 function computeBestColumns(
   mapCount: number,
   maxCols: number = DEFAULT_MAX_FACETS_COLUMNS
@@ -137,6 +86,11 @@ export interface FacetsLayout {
   frameVisible: boolean;
   frameColor: string;
   frameThickness: number;
+}
+
+export interface FacetsDraft {
+  baseVisualizationId: string;
+  slotPath: FacetSlotPath;
 }
 
 export interface FacetsState {
@@ -205,33 +159,19 @@ function arraysEqual<T>(left: T[], right: T[]): boolean {
   );
 }
 
-function getHiddenPrimitivesForSlot(
+function isCollectionPrimitiveShown(
   baseViz: VisualizationConfig,
-  primarySlotPath: FacetSlotPath
-): PrimitiveFilter[] {
-  const targetPrimitive = resolveFacetPrimitiveFilter(primarySlotPath);
-  return getEnabledPrimitiveFilters(baseViz).filter(
-    (primitive) => primitive !== targetPrimitive
+  slotPath: FacetSlotPath
+): boolean {
+  return getEnabledPrimitiveFilters(baseViz).includes(
+    resolveFacetPrimitiveFilter(slotPath)
   );
 }
 
-function notifyCollectionConstraints(
-  replacedPreviousCollection: boolean,
-  hiddenPrimitives: PrimitiveFilter[]
-): void {
-  const hasHiddenPrimitives = hiddenPrimitives.length > 0;
-  if (!replacedPreviousCollection && !hasHiddenPrimitives) {
-    return;
+function notifyReplacedCollection(replacedPreviousCollection: boolean): void {
+  if (replacedPreviousCollection) {
+    showInfo(m.facets_notice_title(), m.facets_notice_replaced());
   }
-
-  const subtitle =
-    replacedPreviousCollection && hasHiddenPrimitives
-      ? m.facets_notice_replaced_and_hidden()
-      : replacedPreviousCollection
-        ? m.facets_notice_replaced()
-        : m.facets_notice_hidden();
-
-  showInfo(m.facets_notice_title(), subtitle);
 }
 
 function createFacetsStore() {
@@ -239,6 +179,7 @@ function createFacetsStore() {
   // Transient: which facet title the toolbar panel should focus, set when the
   // user clicks a title on the page.
   let editedTitleVariable = $state<string | null>(null);
+  let draft = $state<FacetsDraft | null>(null);
   let isRegenerating = false;
 
   function notifyPersistence(): void {
@@ -399,12 +340,13 @@ function createFacetsStore() {
       return;
     }
 
-    const compatible = normalizeFacetVariablesForEnable(
+    const compatible = filterCompatibleFacetVariables(
       baseViz,
       variables,
       primarySlotPath
     );
     if (compatible.length < 2) {
+      startDraft(baseVizId, primarySlotPath);
       return;
     }
 
@@ -414,10 +356,6 @@ function createFacetsStore() {
       : SCALE_MODE.INDEPENDENT;
     const replacedPreviousCollection =
       state.enabled && state.generatedVisualizationIds.length > 0;
-    const hiddenPrimitives = getHiddenPrimitivesForSlot(
-      baseViz,
-      primarySlotPath
-    );
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -434,6 +372,7 @@ function createFacetsStore() {
       }
       visualizationStore.createBulkVisualizations(facetConfigs);
 
+      draft = null;
       state.enabled = true;
       state.baseVisualizationId = baseVizId;
       state.primarySlotPath = primarySlotPath;
@@ -443,7 +382,7 @@ function createFacetsStore() {
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
 
-      notifyCollectionConstraints(replacedPreviousCollection, hiddenPrimitives);
+      notifyReplacedCollection(replacedPreviousCollection);
     } catch (error) {
       logger.error('Failed to enable facets', LogCategory.STORE, error);
     }
@@ -466,6 +405,9 @@ function createFacetsStore() {
       disable();
       return;
     }
+    if (!isCollectionPrimitiveShown(baseViz, state.primarySlotPath)) {
+      return;
+    }
 
     const existingVisualizationIds = new Set(
       visualizationStore.visualizations.map((visualization) => visualization.id)
@@ -480,7 +422,7 @@ function createFacetsStore() {
       return;
     }
 
-    const compatible = normalizeFacetVariablesForEnable(
+    const compatible = filterCompatibleFacetVariables(
       baseViz,
       state.variables,
       state.primarySlotPath
@@ -546,6 +488,14 @@ function createFacetsStore() {
       disable();
       return;
     }
+    if (!isCollectionPrimitiveShown(baseViz, primarySlotPath)) {
+      suspend();
+      return;
+    }
+    if (state.generatedVisualizationIds.length === 0) {
+      await restoreGeneratedVisualizations();
+      return;
+    }
 
     const generatedVisualizations = state.generatedVisualizationIds
       .map((id) =>
@@ -574,6 +524,7 @@ function createFacetsStore() {
           baseViz,
           visualization: baseViz,
           variable,
+          collectionVariables: state.variables,
           scaleMode: state.scaleMode,
           primarySlotPath
         });
@@ -594,6 +545,7 @@ function createFacetsStore() {
   }
 
   function disable(): void {
+    draft = null;
     if (!state.enabled) {
       return;
     }
@@ -609,6 +561,34 @@ function createFacetsStore() {
     state.generatedVisualizationIds = [];
     state.facetTitles = {};
     notifyPersistence();
+  }
+
+  function suspend(): void {
+    if (state.generatedVisualizationIds.length === 0) {
+      return;
+    }
+    visualizationStore.removeBulkVisualizations(
+      state.generatedVisualizationIds
+    );
+    state.generatedVisualizationIds = [];
+    notifyPersistence();
+  }
+
+  function isSuspended(): boolean {
+    if (!state.enabled || !state.primarySlotPath) {
+      return false;
+    }
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    return Boolean(
+      baseViz && !isCollectionPrimitiveShown(baseViz, state.primarySlotPath)
+    );
+  }
+
+  function startDraft(baseVizId: string, slotPath: FacetSlotPath): void {
+    disable();
+    draft = { baseVisualizationId: baseVizId, slotPath };
   }
 
   function setVariables(variables: string[]): void {
@@ -694,9 +674,7 @@ function createFacetsStore() {
       primarySlotPath
     );
     if (compatible.length < 2) {
-      if (state.enabled) {
-        disable();
-      }
+      startDraft(baseVizId, primarySlotPath);
       return;
     }
 
@@ -850,6 +828,7 @@ function createFacetsStore() {
                 baseViz,
                 visualization,
                 variable,
+                collectionVariables: state.variables,
                 scaleMode: newMode,
                 primarySlotPath
               });
@@ -890,7 +869,11 @@ function createFacetsStore() {
 
   return {
     get enabled() {
-      return state.enabled;
+      return state.enabled && !isSuspended();
+    },
+    /** Configured collection whose primitive is hidden: drawn as a single map until shown again. */
+    get suspended() {
+      return isSuspended();
     },
     get baseVisualizationId() {
       return state.baseVisualizationId;
@@ -916,11 +899,15 @@ function createFacetsStore() {
     get editedTitleVariable(): string | null {
       return editedTitleVariable;
     },
+    get draft(): FacetsDraft | null {
+      return draft;
+    },
     get facetVisualizations(): VisualizationConfig[] {
       return getFacetVisualizations();
     },
     enable,
     disable,
+    startDraft,
     setVariables,
     updateVariables,
     reorderVariables,
@@ -944,7 +931,7 @@ export const facetsStore = createFacetsStore();
 persistenceRegistry.register({
   key: 'facets',
   serialize: () => ({
-    enabled: facetsStore.enabled,
+    enabled: facetsStore.enabled || facetsStore.suspended,
     baseVisualizationId: facetsStore.baseVisualizationId,
     primarySlotPath: facetsStore.primarySlotPath,
     variables: [...facetsStore.variables],

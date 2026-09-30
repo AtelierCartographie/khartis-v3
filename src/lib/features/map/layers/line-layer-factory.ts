@@ -1,5 +1,5 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer, PathLayer } from '@deck.gl/layers';
+import { PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 
@@ -17,9 +17,6 @@ import {
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import * as m from '$lib/paraglide/messages';
 
 import { ArrowExtension, DeckLayerId } from '../constants';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
@@ -29,6 +26,7 @@ import {
 } from '../utils/data-styling.utils';
 import {
   pathColorAttr,
+  pathDashArrayAttr,
   pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
@@ -36,23 +34,13 @@ import {
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
   createClassedSizeAccessor,
-  createGeoJsonCategoricalColorAccessor,
-  createGeoJsonChoroplethColorAccessor,
-  createGeoJsonClassedSizeAccessor,
-  createGeoJsonProportionalLineWidthAccessor,
   createProportionalLineWidthAccessor,
   resolveMissingDataRenderProps,
-  withGeoJsonRowHighlight,
-  withGeoJsonRowHighlightAccessor,
   withOpacity,
   withOpacityPreservingAlpha,
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
-import {
-  getCachedGeoJSON,
-  getCachedProjectedGeoJSON
-} from './layer-geojson-cache';
 import { resolvePathParser } from './layer-geometry-parsers';
 import { HIGHLIGHT_DIMMING_FACTOR } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
@@ -119,11 +107,7 @@ export function createLineLayerStack(
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
   const hlVersion = ctx.highlightVersion ?? 0;
-  const {
-    geoColumn,
-    encoding: arrowExtension,
-    isNativeGeoArrow
-  } = geometryInfo;
+  const { encoding: arrowExtension, isNativeGeoArrow } = geometryInfo;
   const lineColorClassification = viz
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.LINE) ??
       viz.classification)
@@ -188,7 +172,7 @@ export function createLineLayerStack(
     (arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
-  if ((isNativeGeoArrowLine || isNativeGeoArrow) && !lineUsesDashExtension) {
+  if (isNativeGeoArrowLine || isNativeGeoArrow) {
     const lineData = resolvePathParser(ctx.customProjection)(jsTable);
     const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
       jsTable,
@@ -329,6 +313,19 @@ export function createLineLayerStack(
         )
       : null;
 
+    const dashArrayBinaryAttr = usesMissingLineDash
+      ? pathDashArrayAttr(
+          lineData,
+          ctxRowAccessor(
+            ctx,
+            jsTable,
+            (row) =>
+              isMissingLineRow(row) ? lineMissingDashArray : lineDashArray,
+            lineDashArray
+          )
+        )
+      : null;
+
     const pathProps = createPathLayerProps(lineData);
     const pathBinaryData = pathProps.data as {
       attributes: Record<string, unknown>;
@@ -342,6 +339,9 @@ export function createLineLayerStack(
     if (widthBinaryAttr) {
       pathBinaryData.attributes.getWidth = widthBinaryAttr;
     }
+    if (dashArrayBinaryAttr) {
+      pathBinaryData.attributes.getDashArray = dashArrayBinaryAttr;
+    }
 
     const lineLayer = new PathLayer({
       id: layerId,
@@ -349,8 +349,8 @@ export function createLineLayerStack(
       ...(!colorBinaryAttr && {
         getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
       }),
-      extensions: lineDashed ? [DASH_EXTENSION] : [],
-      getDashArray: lineDashArray,
+      extensions: lineUsesDashExtension ? [DASH_EXTENSION] : [],
+      ...(!dashArrayBinaryAttr && { getDashArray: lineDashArray }),
       dashJustified: true,
       capRounded: lineCapRounded,
       widthUnits: 'pixels',
@@ -378,7 +378,13 @@ export function createLineLayerStack(
           showLineMissingData,
           hlVersion
         ],
-        getDashArray: [lineDashed, lineConfig?.dashedPattern],
+        getDashArray: [
+          lineDashed,
+          lineConfig?.dashedPattern,
+          lineMissingData?.dashed,
+          lineMissingData?.dashedPattern,
+          showLineMissingData
+        ],
         getWidth: [
           usesVariableLineWidth,
           lineHasMissingDataStyle,
@@ -413,231 +419,5 @@ export function createLineLayerStack(
     );
   }
 
-  let lineGeojsonData;
-  try {
-    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
-    lineGeojsonData = rawGeoJSON
-      ? getCachedProjectedGeoJSON(rawGeoJSON, ctx.customProjection)
-      : rawGeoJSON;
-  } catch (error) {
-    logger.error(
-      'Failed to read GeoJSON for line layer',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
-  if (!lineGeojsonData) {
-    showWarning(
-      m.error_geometry_conversion_title(),
-      m.error_geometry_conversion_message()
-    );
-    return [];
-  }
-
-  const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-    jsTable,
-    viz,
-    lineCategoryColorMap,
-    lineCategoryColumn,
-    PrimitiveFilterType.LINE
-  );
-  const isMissingLineFeature = (feature: {
-    properties?: Record<string, unknown> | null;
-  }): boolean => {
-    if (!lineHasMissingDataStyle) return false;
-    const properties = feature.properties;
-    if (
-      useCategoricalColor &&
-      lineCategoryColumn &&
-      isMissingLineCategoryValue(
-        properties?.[lineCategoryColumn],
-        effectiveCategoryColorMap
-      )
-    ) {
-      return true;
-    }
-    if (
-      useChoropleth &&
-      lineValueColumn &&
-      isMissingLineNumericValue(properties?.[lineValueColumn])
-    ) {
-      return true;
-    }
-    if (
-      useClassedWidth &&
-      lineValueColumn &&
-      isMissingLineNumericValue(properties?.[lineValueColumn])
-    ) {
-      return true;
-    }
-    return (
-      useProportionalWidth &&
-      !!lineSizeColumn &&
-      isMissingLineNumericValue(properties?.[lineSizeColumn])
-    );
-  };
-
-  const baseGeoJsonLineColor =
-    useChoropleth && viz
-      ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacityPreservingAlpha(
-            createGeoJsonChoroplethColorAccessor(
-              lineValueColumn!,
-              lineColorClassification!.breaks!,
-              lineColorClassification!.colors!,
-              resolvedLineColor,
-              lineMissingColor,
-              showLineMissingData
-            )(feature),
-            normalizedLineOpacity
-          ) as [number, number, number, number]
-      : useCategoricalColor && viz
-        ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacityPreservingAlpha(
-              createGeoJsonCategoricalColorAccessor(
-                lineCategoryColumn!,
-                effectiveCategoryColorMap,
-                resolvedLineColor,
-                lineMissingColor,
-                showLineMissingData,
-                lineColorClassification?.disabledLabels ?? []
-              )(feature),
-              normalizedLineOpacity
-            ) as [number, number, number, number]
-        : lineHasMissingDataStyle
-          ? (feature: { properties?: Record<string, unknown> | null }) =>
-              isMissingLineFeature(feature)
-                ? lineMissingColorTuple
-                : (withOpacity(resolvedLineColor, normalizedLineOpacity) as [
-                    number,
-                    number,
-                    number,
-                    number
-                  ])
-          : null;
-
-  const geoJsonLineColor =
-    hasLineHighlights && lineHighlightedRowIds
-      ? baseGeoJsonLineColor
-        ? withGeoJsonRowHighlightAccessor(
-            baseGeoJsonLineColor,
-            normalizedLineOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            lineHighlightedRowIds
-          )
-        : withGeoJsonRowHighlight(
-            resolvedLineColor,
-            normalizedLineOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            lineHighlightedRowIds
-          )
-      : (baseGeoJsonLineColor ??
-        withOpacity(resolvedLineColor, normalizedLineOpacity));
-
-  const geoJsonVariableLineWidth =
-    useClassedWidth && viz
-      ? createGeoJsonClassedSizeAccessor(
-          lineValueColumn!,
-          lineThicknessClassification!.breaks!,
-          1,
-          maxLineWidth,
-          lineThicknessClassification?.numClasses ??
-            lineThicknessClassification?.colors?.length,
-          resolvedLineWidth
-        )
-      : useProportionalWidth && viz
-        ? createGeoJsonProportionalLineWidthAccessor(
-            lineSizeColumn!,
-            minValue,
-            maxValue,
-            maxLineWidth
-          )
-        : resolvedLineWidth;
-  const geoJsonLineWidth =
-    typeof geoJsonVariableLineWidth === 'function' || lineHasMissingDataStyle
-      ? (feature: { properties?: Record<string, unknown> | null }) =>
-          isMissingLineFeature(feature)
-            ? lineMissingWidth
-            : typeof geoJsonVariableLineWidth === 'function'
-              ? geoJsonVariableLineWidth(feature)
-              : geoJsonVariableLineWidth
-      : geoJsonVariableLineWidth;
-  const geoJsonDashArray = lineUsesDashExtension
-    ? (feature: { properties?: Record<string, unknown> | null }) =>
-        isMissingLineFeature(feature) ? lineMissingDashArray : lineDashArray
-    : lineDashArray;
-
-  const lineLayer = new GeoJsonLayer({
-    id: layerId,
-    data: lineGeojsonData,
-    stroked: true,
-    filled: false,
-    getLineColor: geoJsonLineColor,
-    extensions: lineUsesDashExtension ? [DASH_EXTENSION] : [],
-    getDashArray: geoJsonDashArray,
-    dashJustified: true,
-    capRounded: lineCapRounded,
-    lineWidthUnits: 'pixels',
-    lineWidthScale: pageDisplayScale,
-    getLineWidth: geoJsonLineWidth,
-    lineWidthMinPixels: lineWidthFloorPixels,
-    pickable: true,
-    ...resolveHoverHighlightProps(),
-    ...(modelMatrix && { modelMatrix }),
-    ...(beforeId && { beforeId }),
-    updateTriggers: {
-      getLineColor: [
-        useChoropleth,
-        useCategoricalColor,
-        lineValueColumn,
-        lineCategoryColumn,
-        lineColorClassification?.breaks,
-        lineColorClassification?.colors,
-        lineCategoryColorMap,
-        lineColorClassification?.labels,
-        lineColorClassification?.disabledLabels,
-        resolvedLineColor,
-        normalizedLineOpacity,
-        hlVersion
-      ],
-      getDashArray: [
-        lineDashed,
-        lineConfig?.dashedPattern,
-        lineMissingData?.dashed,
-        lineMissingData?.dashedPattern,
-        showLineMissingData
-      ],
-      getLineWidth: [
-        usesVariableLineWidth,
-        lineHasMissingDataStyle,
-        lineSizeColumn,
-        lineValueColumn,
-        minValue,
-        maxValue,
-        lineThicknessClassification?.breaks,
-        maxLineWidth,
-        resolvedLineWidth,
-        lineMissingWidth
-      ]
-    }
-  });
-
-  return orderPrimitiveLayers(
-    [
-      ...(!viz || primitiveFilters.includes(PrimitiveFilterType.LINE)
-        ? [
-            {
-              primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
-              layer: lineLayer
-            }
-          ]
-        : []),
-      ...representativePointLayers.map((layer) => ({
-        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
-        layer
-      }))
-    ],
-    primitiveOrder
-  );
+  return [];
 }

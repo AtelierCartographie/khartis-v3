@@ -14,6 +14,11 @@ import {
 } from './geoarrow-stream-bridge.utils';
 import { fitBasemapRenderProjection } from './fit-basemap-render-projection.utils';
 import { resolveOrthographicBasemapReferenceBboxes } from './orthographic-basemap-reference.utils';
+import {
+  getBasemapFrameBbox,
+  resolveUnprojectedFrameBbox,
+  withBasemapFrameMargin
+} from './basemap-frame.utils';
 import { resolveProjectionForRender } from './projection-priority.utils';
 import {
   resolveOrthographicDatasetBounds,
@@ -216,12 +221,17 @@ export function resolveOrthographicReferenceState({
     basemapMeta,
     projectionPresets,
     viewportSize,
+    renderProjection,
     projectBbox: projectBboxWith
   });
   const datasetBbox = toBboxFromOrthographicBounds(bounds);
-  const datasetProjectedBbox = shouldUseIdentityReferenceBounds
+  const unframedDatasetProjectedBbox = shouldUseIdentityReferenceBounds
     ? null
     : projectBboxWith(datasetBbox);
+  const datasetProjectedBbox =
+    unframedDatasetProjectedBbox && getBasemapFrameBbox(renderProjection)
+      ? withBasemapFrameMargin(unframedDatasetProjectedBbox)
+      : unframedDatasetProjectedBbox;
   const referenceBbox = resolveOrthographicReferenceBbox({
     datasetBounds: datasetBbox,
     datasetProjectedBbox,
@@ -233,9 +243,16 @@ export function resolveOrthographicReferenceState({
   const isProjected =
     referenceBbox === basemapReference.projectedBbox ||
     referenceBbox === datasetProjectedBbox;
+  const unprojectedFrameBbox =
+    !isProjected && referenceBbox
+      ? resolveUnprojectedFrameBbox(
+          referenceBbox,
+          dataset?.geometry?.crs ?? basemapMeta?.proj_source
+        )
+      : null;
 
   return {
-    bbox: referenceBbox,
+    bbox: unprojectedFrameBbox ?? referenceBbox,
     isProjected,
     renderProjection: isProjected ? renderProjection : null
   };
@@ -260,6 +277,7 @@ export function resolveOrthographicBasemapReferenceState({
     basemapMeta,
     projectionPresets,
     viewportSize,
+    renderProjection,
     projectBbox: projectBboxWith
   });
 
@@ -273,7 +291,11 @@ export function resolveOrthographicBasemapReferenceState({
 
   if (basemapReference.fallbackBbox) {
     return {
-      bbox: basemapReference.fallbackBbox,
+      bbox:
+        resolveUnprojectedFrameBbox(
+          basemapReference.fallbackBbox,
+          basemapMeta.proj_source
+        ) ?? basemapReference.fallbackBbox,
       isProjected: false,
       renderProjection: null
     };

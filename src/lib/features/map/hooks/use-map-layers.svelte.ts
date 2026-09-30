@@ -3,9 +3,12 @@ import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Matrix4 } from '@math.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import {
+  Duck,
+  duckDBOrchestrator,
+  isBuiltTableFresh
+} from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -22,11 +25,13 @@ import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap
 import {
   createBasemapLayers,
   createDeckLayers,
-  createGeoJsonLayers,
+  createSelectionOverlay,
   type BasemapRowOrderEntry,
   type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
+import { isPolygonGeometryType } from '../layers/layer-highlight.utils';
+import { resolveUnprojectedFrameBbox } from '../utils/basemap-frame.utils';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
 import {
@@ -91,6 +96,7 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
+import { getBasemapCentroidsTableName } from '../services/basemap-import.service';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -162,7 +168,6 @@ export interface UseMapLayersProps {
 export interface UseMapLayersReturn {
   updateLayers: (
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>,
     splitData?: Map<string, SplitRenderingTable>,
     densityTables?: Map<string, ArrowTable>
   ) => void;
@@ -202,6 +207,19 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const DATA_PREVIEW_FILL_OPACITY = 0.9;
   const DATA_PREVIEW_STROKE_WIDTH = 1;
   const DATA_PREVIEW_STROKE_OPACITY = 1;
+
+  function referenceBasemapDrawsPolygons(
+    basemapId: string | null | undefined
+  ): boolean {
+    const referenceBasemapId = basemapStyleStore.referenceBasemapId;
+    const metadata = basemapService.currentMetadata;
+    return (
+      Boolean(referenceBasemapId) &&
+      basemapId === referenceBasemapId &&
+      metadata?.file === referenceBasemapId &&
+      metadata.layers.some((layer) => layer.type === BasemapLayerType.LAND)
+    );
+  }
 
   function buildDatasetFallbackContext(datasetId: string): LayerContext {
     return {
@@ -625,9 +643,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         return null;
       }
 
+      const builtPointsTable = getBasemapCentroidsTableName(tableName);
+      const reuseBuiltPoints = await isBuiltTableFresh(builtPointsTable);
       return getRepresentativePointArrowTable(
-        tableName,
-        geometryInfo.type,
+        reuseBuiltPoints ? builtPointsTable : tableName,
+        reuseBuiltPoints ? GeometryType.POINT : geometryInfo.type,
         Duck
       );
     })()
@@ -904,7 +924,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>,
     splitData?: Map<string, SplitRenderingTable>,
     densityTables?: Map<string, ArrowTable>
   ): void {
@@ -970,6 +989,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionOverride,
         projectionState.overrideSource
       );
+      const unprojectedFrameBbox =
+        isOrthographicMode &&
+        currentMetadata?.isCustom &&
+        !activeBasemapProjection
+          ? resolveUnprojectedFrameBbox(
+              projectionFitBbox ?? currentMetadata.bbox,
+              currentMetadata.proj_source
+            )
+          : null;
+      const unprojectedFrame: [[number, number], [number, number]] | null =
+        unprojectedFrameBbox
+          ? [
+              [unprojectedFrameBbox[0], unprojectedFrameBbox[1]],
+              [unprojectedFrameBbox[2], unprojectedFrameBbox[3]]
+            ]
+          : null;
       // NOTE: the projection store is published exclusively by the
       // reference-fit path (resolveOrthographicReferenceState), which pairs
       // the render projection with the bbox it produced. Publishing
@@ -986,7 +1021,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const datasetContentIds = new Set<string>();
       for (const datasetId of tables.keys()) datasetContentIds.add(datasetId);
-      for (const datasetId of geoJSONs.keys()) datasetContentIds.add(datasetId);
       for (const viz of activeVisualizations)
         datasetContentIds.add(viz.datasetId);
       for (const dataset of datasetsStore.datasets) {
@@ -1064,7 +1098,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             bbox: shouldShowBasemapLayers
               ? (projectionFitBbox ?? currentMetadata?.bbox ?? null)
               : projectionFitBbox,
-            graticuleClipExtent
+            graticuleClipExtent,
+            unprojectedFrame
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
@@ -1254,7 +1289,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const table =
             getRenderableSplitGeometryTable(split) ?? tables.get(datasetId);
           const densityTable = densityTables?.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
 
           const ctx = buildLayerContextForViz(viz);
           if (split) {
@@ -1295,13 +1329,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             allowProjectionOverride
           );
 
-          if (geojson) {
-            const geojsonLayers = createGeoJsonLayers(geojson, ctx);
-            layers.push(...geojsonLayers);
-            if (geojsonLayers.length > 0) {
-              renderedDatasetIds.add(datasetId);
-            }
-          } else if (table) {
+          if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
               continue;
@@ -1393,17 +1421,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       }
 
       if (shouldRenderDatasetFallbacks) {
-        const fallbackDatasetIds = new Set<string>([
-          ...tables.keys(),
-          ...geoJSONs.keys()
-        ]);
+        const fallbackDatasetIds = new Set<string>(tables.keys());
 
         for (const renderedDatasetId of renderedDatasetIds) {
           fallbackDatasetIds.delete(renderedDatasetId);
         }
-
-        const activeReferenceBasemapId = basemapStyleStore.referenceBasemapId;
-        const hasReferenceBasemap = Boolean(activeReferenceBasemapId);
 
         for (const datasetId of fallbackDatasetIds) {
           const datasetJoinedBasemap = getDatasetJoinedBasemap(datasetId);
@@ -1412,30 +1434,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetHasOwnGeometry = Boolean(datasetEntry?.geometry);
           const table = tables.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
           const hasLoadedRenderableGeometry = Boolean(
-            geojson || table?.schema.metadata?.get('geo')
+            table?.schema.metadata?.get('geo')
           );
-          // Skip rendering when the dataset cannot produce geometry that is
-          // safe to project under the active basemap:
-          //   1. Joined to a basemap but user has explicitly toggled it off
-          //      (e.g. a country dataset waiting for a basemap reselection).
-          //   2. Joined to a basemap that does not match the active reference
-          //      basemap (e.g. Monde-joined dataset rendered through the
-          //      EUROPE_DOM_TOM composite leaves wedges for clipped countries).
-          //   3. No active join and the dataset has no own geometry — there is
-          //      nothing meaningful to draw and the stale table from a prior
-          //      join would otherwise leak through.
-          if (datasetJoinedBasemap && !hasReferenceBasemap) {
-            continue;
-          }
+          // A joined dataset whose basemap is not the reference one would be
+          // clipped by a foreign projection. Without a join or own geometry,
+          // only a stale table from a prior join would be left to leak through.
           if (
             datasetJoinedBasemap &&
-            activeReferenceBasemapId &&
-            datasetJoinedBasemap !== activeReferenceBasemapId
+            datasetJoinedBasemap !== basemapStyleStore.referenceBasemapId
           ) {
             continue;
           }
+          const hasPolygonGeometry = isPolygonGeometryType(
+            table ? extractGeometryInfo(table)?.type : undefined
+          );
+          const isDrawnByReferenceBasemap =
+            hasPolygonGeometry &&
+            referenceBasemapDrawsPolygons(
+              datasetJoinedBasemap ?? datasetEntry?.tableName
+            );
           if (
             !datasetJoinedBasemap &&
             !datasetHasOwnGeometry &&
@@ -1473,19 +1491,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             allowProjectionOverride
           );
 
-          if (geojson) {
-            const fallbackGeoJsonLayers = createGeoJsonLayers(
-              geojson,
-              fallbackCtx
-            );
-            layers.push(...fallbackGeoJsonLayers);
-          } else if (table) {
-            const geoMetadata = table.schema.metadata?.get('geo');
-            if (!geoMetadata) {
-              continue;
-            }
-            const fallbackArrowLayers = createDeckLayers(table, fallbackCtx);
-            layers.push(...fallbackArrowLayers);
+          const unhighlightedCtx: LayerContext = {
+            ...fallbackCtx,
+            highlightedRowIds: undefined
+          };
+          if (
+            !isDrawnByReferenceBasemap &&
+            table?.schema.metadata?.get('geo')
+          ) {
+            layers.push(...createDeckLayers(table, unhighlightedCtx));
+          }
+          const selectionOverlay = table
+            ? createSelectionOverlay(table, fallbackCtx)
+            : null;
+          if (selectionOverlay) {
+            layers.push(selectionOverlay);
           }
         }
       }
@@ -1564,9 +1584,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // toggle alone: a basemap on its own default projection used to stay
       // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
-        sphereProjectionInput && sphereVisible
+        (sphereProjectionInput || unprojectedFrame) && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
+              unprojectedFrame,
               modelMatrix: matrixToApply,
               ...(sphereOutlineOptions ?? {})
             })
@@ -1641,7 +1662,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         visualizationHasEnabledPrimitive
       );
       const hasExpectedDatasetFallbacks =
-        shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
+        shouldRenderDatasetFallbacks && tables.size > 0;
       // The layer store always holds its ten rows, so "one of them is visible"
       // says nothing about a basemap that draws none of them: it kept the
       // previous stack on screen after the user hid every row. What justifies

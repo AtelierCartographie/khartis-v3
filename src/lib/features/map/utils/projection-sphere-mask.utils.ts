@@ -12,10 +12,15 @@ import type { DeckDataRow } from '../types';
 import { createCompatibleSolidPolygonLayerProps } from './solid-polygon-layer-props.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
+import type { FeatureCollection, Polygon } from 'geojson';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   createProjectedCompositeOceanData,
-  hasCompositeGraticuleSubProjections
+  createScreenExtentPolygon,
+  hasCompositeGraticuleSubProjections,
+  type GraticuleClipExtent
 } from '../layers/basemap-graticule';
+import { getBasemapFrameExtent } from './basemap-frame.utils';
 
 export const PROJECTION_SPHERE_MASK_LAYER_ID = 'projection-sphere-mask';
 export const PROJECTION_SPHERE_OUTLINE_LAYER_ID = 'projection-sphere-outline';
@@ -121,8 +126,15 @@ export function createProjectionSphereMaskLayer({
     return null;
   }
 
-  if (hasCompositeGraticuleSubProjections(projection)) {
-    const frameData = createProjectedCompositeOceanData(projection);
+  const isComposite = hasCompositeGraticuleSubProjections(projection);
+  const sphereData = isComposite ? null : getCachedSpherePolygon(projection);
+  if (!sphereData) {
+    const frame = getBasemapFrameExtent(projection);
+    const frameData = isComposite
+      ? createProjectedCompositeOceanData(projection)
+      : frame
+        ? createFrameData(frame)
+        : null;
     if (!frameData) return null;
 
     return new GeoJsonLayer({
@@ -140,9 +152,6 @@ export function createProjectionSphereMaskLayer({
       ...(modelMatrix && { modelMatrix })
     });
   }
-
-  const sphereData = getCachedSpherePolygon(projection);
-  if (!sphereData) return null;
 
   try {
     return new SolidPolygonLayer({
@@ -175,41 +184,74 @@ export function createProjectionSphereMaskLayer({
 
 export interface SphereOutlineOptions {
   projection: ProjectionLike | undefined;
+  unprojectedFrame?: GraticuleClipExtent | null;
   modelMatrix: Matrix4 | null | undefined;
   color?: [number, number, number, number];
   width?: number;
 }
 
+function createFrameData(
+  frame: GraticuleClipExtent
+): FeatureCollection<Polygon> | null {
+  const feature = createScreenExtentPolygon(frame);
+  return feature
+    ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [feature] }
+    : null;
+}
+
+function createFrameOutlineLayer(
+  frameData: FeatureCollection<Polygon>,
+  modelMatrix: Matrix4 | null | undefined,
+  color: [number, number, number, number],
+  width: number
+): Layer<DeckDataRow> {
+  return new GeoJsonLayer({
+    id: PROJECTION_SPHERE_OUTLINE_LAYER_ID,
+    data: frameData,
+    filled: false,
+    stroked: true,
+    coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+    getLineColor: color,
+    getLineWidth: width,
+    lineWidthUnits: 'pixels',
+    pickable: false,
+    updateTriggers: {
+      getLineColor: [color[0], color[1], color[2], color[3]],
+      getLineWidth: [width]
+    },
+    ...(modelMatrix && { modelMatrix })
+  });
+}
+
 export function createProjectionSphereOutlineLayer({
   projection,
+  unprojectedFrame,
   modelMatrix,
   color = DEFAULT_SPHERE_OUTLINE_COLOR,
   width = DEFAULT_SPHERE_OUTLINE_WIDTH
 }: SphereOutlineOptions): Layer<DeckDataRow> | null {
   if (!isD3StreamProjection(projection)) {
-    return null;
+    const frameData = unprojectedFrame
+      ? createFrameData(unprojectedFrame)
+      : null;
+    return frameData
+      ? createFrameOutlineLayer(frameData, modelMatrix, color, width)
+      : null;
   }
 
   if (hasCompositeGraticuleSubProjections(projection)) {
     const frameData = createProjectedCompositeOceanData(projection);
-    if (!frameData) return null;
+    return frameData
+      ? createFrameOutlineLayer(frameData, modelMatrix, color, width)
+      : null;
+  }
 
-    return new GeoJsonLayer({
-      id: PROJECTION_SPHERE_OUTLINE_LAYER_ID,
-      data: frameData,
-      filled: false,
-      stroked: true,
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-      getLineColor: color,
-      getLineWidth: width,
-      lineWidthUnits: 'pixels',
-      pickable: false,
-      updateTriggers: {
-        getLineColor: [color[0], color[1], color[2], color[3]],
-        getLineWidth: [width]
-      },
-      ...(modelMatrix && { modelMatrix })
-    });
+  const frame = getBasemapFrameExtent(projection);
+  if (frame) {
+    const frameData = createFrameData(frame);
+    return frameData
+      ? createFrameOutlineLayer(frameData, modelMatrix, color, width)
+      : null;
   }
 
   const pathData = getCachedSpherePath(projection);
