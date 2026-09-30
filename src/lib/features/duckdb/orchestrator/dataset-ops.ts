@@ -262,7 +262,7 @@ export function updateDatasetJoinInfo(
   joinInfo: Partial<
     Pick<
       DuckDBDataset,
-      'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
+      'joinedBasemap' | 'hasJoinKey' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
     >
   >,
   options: { bumpVersion?: boolean } = {}
@@ -286,11 +286,18 @@ export function updateDatasetJoinInfo(
           : 'gpsColumns' in joinInfo
             ? joinInfo.gpsColumns
             : ds.gpsColumns;
+      const nextHasJoinKey =
+        nextGpsMode === true || !nextJoinedBasemap
+          ? undefined
+          : 'hasJoinKey' in joinInfo
+            ? joinInfo.hasJoinKey
+            : ds.hasJoinKey;
 
       changed =
         ds.joinedBasemap !== nextJoinedBasemap ||
         ds.geoColumn !== nextGeoColumn ||
         ds.gpsMode !== nextGpsMode ||
+        ds.hasJoinKey !== nextHasJoinKey ||
         !areGpsColumnsEqual(ds.gpsColumns, nextGpsColumns);
 
       if (!changed) {
@@ -298,6 +305,7 @@ export function updateDatasetJoinInfo(
       }
 
       ds.joinedBasemap = nextJoinedBasemap;
+      ds.hasJoinKey = nextHasJoinKey;
       ds.geoColumn = nextGeoColumn;
       ds.gpsMode = nextGpsMode;
       ds.gpsColumns = nextGpsColumns;

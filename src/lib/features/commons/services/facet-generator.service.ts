@@ -23,7 +23,7 @@ import {
   calculateDivergingBreaks
 } from './classification.service';
 import { resolveBreakpointLowerClassCount } from '../utils/discretization.utils';
-import { resolveRowScopeClause } from './row-scope.service';
+import { resolveValueScopeClause } from './row-scope.service';
 import {
   findPaletteById,
   generatePaletteColors,
@@ -279,7 +279,7 @@ async function buildFacetClassification(
     datasetId: datasetSourceFileId,
     columnName: variable,
     method: baseClassification.method,
-    rowScopeClause: resolveRowScopeClause({
+    rowScopeClause: resolveValueScopeClause({
       datasetId: datasetSourceFileId,
       vizFilters: baseViz.dataFilters,
       primitive: resolveFacetPrimitiveFilter(slotPath)

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   calculateDivergingBreaks: vi.fn(),
   getUniqueValues: vi.fn(),
   loadDistinctCategoryLabels: vi.fn(),
-  resolveRowScopeClause: vi.fn(() => null as string | null)
+  resolveValueScopeClause: vi.fn(() => null as string | null)
 }));
 
 // A visualization carries the store id, which stops matching the source file
@@ -19,7 +19,7 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
 }));
 
 vi.mock('./row-scope.service', () => ({
-  resolveRowScopeClause: mocks.resolveRowScopeClause
+  resolveValueScopeClause: mocks.resolveValueScopeClause
 }));
 
 vi.mock('$lib/features/commons/utils/category-labels.utils', () => ({
@@ -72,7 +72,7 @@ function makeBaseViz(overrides = {}) {
 describe('generateFacetVisualizations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.resolveRowScopeClause.mockReturnValue(null);
+    mocks.resolveValueScopeClause.mockReturnValue(null);
     mocks.loadDistinctCategoryLabels.mockResolvedValue([]);
     mocks.calculateBreaks.mockResolvedValue({
       breaks: [20, 30, 40],
@@ -345,7 +345,7 @@ describe('generateFacetVisualizations', () => {
   });
 
   it('recomputes independent facet breaks over the filtered rows', async () => {
-    mocks.resolveRowScopeClause.mockReturnValue('"pop" >= 1000');
+    mocks.resolveValueScopeClause.mockReturnValue('"pop" >= 1000');
 
     await generateFacetVisualizations(
       makeBaseViz() as never,
@@ -354,7 +354,7 @@ describe('generateFacetVisualizations', () => {
       FACET_SLOT.POLYGON_VALUE
     );
 
-    expect(mocks.resolveRowScopeClause).toHaveBeenCalledWith(
+    expect(mocks.resolveValueScopeClause).toHaveBeenCalledWith(
       expect.objectContaining({
         datasetId: 'source1',
         primitive: PrimitiveFilterType.POLYGON

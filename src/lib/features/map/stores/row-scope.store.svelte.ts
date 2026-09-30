@@ -1,11 +1,8 @@
 import { SvelteMap } from 'svelte/reactivity';
 import {
-  combineFilterClauses,
   duckDBOrchestrator,
   type MissingValueColumn
 } from '$lib/features/duckdb';
-import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import {
   resolveRowScope,
   type RowScopeRequest
@@ -26,7 +23,7 @@ export interface ColumnDomain {
 
 interface LoadedRowScope {
   key: string;
-  rowIds: Set<number>;
+  rowIds: Set<number> | null;
   domains: Map<string, ColumnDomain>;
 }
 
@@ -44,7 +41,8 @@ interface PendingMissingDataQuery {
 
 interface PendingQuery {
   tableName: string;
-  clause: string;
+  clause: string | null;
+  valueClause: string;
   columns: string[];
   scopeKeys: string[];
 }
@@ -60,10 +58,11 @@ function buildScopeKey(
 
 function buildLoadKey(
   tableName: string,
-  clause: string,
+  clause: string | null,
+  valueClause: string,
   columns: string[]
 ): string {
-  return [tableName, clause, ...columns].join(' ');
+  return [tableName, clause ?? '', valueClause, ...columns].join(' ');
 }
 
 function buildMissingDataLoadKey(
@@ -76,24 +75,6 @@ function buildMissingDataLoadKey(
     clause ?? '',
     ...columns.map(({ column, numeric }) => `${numeric ? 'n' : 't'}:${column}`)
   ].join(' ');
-}
-
-// Entities left unjoined never reach the map, so their values cannot be missing
-// from it.
-function resolveDisplayedRowsClause(datasetId: string): string | null {
-  const dataset = duckDBOrchestrator.getDatasetBySourceFile(datasetId);
-  const isJoinedToBasemap =
-    !dataset?.gpsMode &&
-    Boolean(dataset?.joinedBasemap) &&
-    Boolean(
-      dataset?.columns.some(
-        (column) => column.name === JOINED_BASEMAP_COLUMN.ID
-      )
-    );
-
-  return isJoinedToBasemap
-    ? `"${escapeIdentifier(JOINED_BASEMAP_COLUMN.ID)}" IS NOT NULL`
-    : null;
 }
 
 function createRowScopeStore() {
@@ -155,10 +136,7 @@ function createRowScopeStore() {
       const scopeKey = buildScopeKey(target.visualizationId, target.primitive);
       seenScopeKeys.add(scopeKey);
 
-      const clause = combineFilterClauses([
-        scope.clause ? `(${scope.clause})` : null,
-        resolveDisplayedRowsClause(target.datasetId)
-      ]);
+      const clause = scope.valueClause;
       const loadKey = buildMissingDataLoadKey(scope.tableName, clause, columns);
       if (missingData.get(scopeKey)?.key === loadKey) {
         continue;
@@ -232,7 +210,7 @@ function createRowScopeStore() {
       seenScopeKeys.add(scopeKey);
 
       const scope = resolveRowScope(target);
-      if (!scope?.clause) {
+      if (!scope?.valueClause) {
         if (scopes.delete(scopeKey)) {
           version += 1;
         }
@@ -240,7 +218,12 @@ function createRowScopeStore() {
       }
 
       const columns = [...new Set(target.numericColumns ?? [])].sort();
-      const loadKey = buildLoadKey(scope.tableName, scope.clause, columns);
+      const loadKey = buildLoadKey(
+        scope.tableName,
+        scope.clause,
+        scope.valueClause,
+        columns
+      );
       if (scopes.get(scopeKey)?.key === loadKey) {
         continue;
       }
@@ -255,6 +238,7 @@ function createRowScopeStore() {
       queries.set(loadKey, {
         tableName: scope.tableName,
         clause: scope.clause,
+        valueClause: scope.valueClause,
         columns,
         scopeKeys: [scopeKey]
       });
@@ -276,10 +260,12 @@ function createRowScopeStore() {
     for (const query of collectQueries(targets)) {
       try {
         const [rowIds, domains] = await Promise.all([
-          duckDBOrchestrator.getRowIdsInScope(query.tableName, query.clause),
+          query.clause
+            ? duckDBOrchestrator.getRowIdsInScope(query.tableName, query.clause)
+            : null,
           duckDBOrchestrator.getColumnDomainsInScope(
             query.tableName,
-            query.clause,
+            query.valueClause,
             query.columns
           )
         ]);
@@ -288,7 +274,12 @@ function createRowScopeStore() {
           break;
         }
 
-        const key = buildLoadKey(query.tableName, query.clause, query.columns);
+        const key = buildLoadKey(
+          query.tableName,
+          query.clause,
+          query.valueClause,
+          query.columns
+        );
         for (const scopeKey of query.scopeKeys) {
           scopes.set(scopeKey, { key, rowIds, domains });
         }

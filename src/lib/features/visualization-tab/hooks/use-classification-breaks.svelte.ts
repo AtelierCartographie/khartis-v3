@@ -7,7 +7,7 @@ import {
   detectDivergingBreakpoint,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
-import { resolveRowScopeClause } from '$lib/features/commons/services/row-scope.service';
+import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
 import type {
   ClassificationConfig,
   PrimitiveFilter,
@@ -612,7 +612,7 @@ export function useClassificationBreaksController({
       return;
     }
 
-    const rowScopeClause = resolveRowScopeClause({
+    const rowScopeClause = resolveValueScopeClause({
       datasetId: datasetSourceFileId,
       vizFilters: getVisualization()?.dataFilters,
       primitive: options.primitive

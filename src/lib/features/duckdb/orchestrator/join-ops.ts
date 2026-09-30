@@ -1675,6 +1675,7 @@ export async function finalizeJoin(
   perfMeasure(PERF_PHASE.JOIN_FINALIZE);
   return {
     joinedBasemap: basemap.file,
+    hasJoinKey: true,
     geoColumn,
     gpsMode: false,
     gpsColumns: undefined
@@ -1699,6 +1700,7 @@ function finalizeGPSJoin(
 
   return {
     joinedBasemap: basemap.file,
+    hasJoinKey: false,
     gpsMode: true,
     gpsColumns
   };

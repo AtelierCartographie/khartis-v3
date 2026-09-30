@@ -34,6 +34,7 @@ export interface GPSBounds {
 
 export interface FinalizeJoinResult {
   joinedBasemap: string;
+  hasJoinKey: boolean;
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: GPSColumns;
@@ -54,6 +55,8 @@ export interface DuckDBDataset {
   arrowTableWithMetadata?: Table;
   geoArrowMetadata?: GeoArrowMetadata;
   joinedBasemap?: string;
+  // True only once the table carries the basemap join key, which a restored join lacks until it is rebuilt.
+  hasJoinKey?: boolean;
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: GPSColumns;
