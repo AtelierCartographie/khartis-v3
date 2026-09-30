@@ -700,8 +700,7 @@ const VISUALIZATION_PREFIX_LABELS: [string, () => string][] = [
   [DeckLayerId.POINT_LAYER, m.svg_export_primitive_symbol],
   [DeckLayerId.LINE_LAYER, m.svg_export_primitive_line],
   [DeckLayerId.LABEL_LAYER, m.svg_export_primitive_label],
-  [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text],
-  [DeckLayerId.GEOJSON_LAYER, m.svg_export_primitive_geojson]
+  [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text]
 ];
 
 function matchLongestPrefix(
@@ -1646,6 +1645,14 @@ interface PathStrokeGroup {
   paths: string[];
   color: SvgColor;
   width: number;
+  dashAttribute: string;
+}
+
+function toSvgDashAttribute(value: unknown): string {
+  const dashArray = toNumberTuple(value, 2);
+  return dashArray
+    ? `stroke-dasharray="${roundSvgValue(dashArray[0])} ${roundSvgValue(dashArray[1])}"`
+    : '';
 }
 
 function serializePathLayer(
@@ -1666,6 +1673,7 @@ function serializePathLayer(
     getBinaryAttribute(data, 'getColor') ??
     getBinaryAttribute(data, 'getLineColor');
   const widthAttribute = getBinaryAttribute(data, 'getWidth');
+  const dashArrayAttribute = getBinaryAttribute(data, 'getDashArray');
   const layerOpacity = getLayerNumber(props, 'opacity', 1);
   const widthScale = getLayerNumber(
     props,
@@ -1673,10 +1681,7 @@ function serializePathLayer(
     getLayerNumber(props, 'lineWidthScale', 1)
   );
   const widthMinPixels = getLayerNumber(props, 'widthMinPixels', 0);
-  const dashArray = toNumberTuple(props.getDashArray, 2);
-  const dashAttribute = dashArray
-    ? `stroke-dasharray="${roundSvgValue(dashArray[0])} ${roundSvgValue(dashArray[1])}"`
-    : '';
+  const layerDashAttribute = toSvgDashAttribute(props.getDashArray);
   const groups: PathStrokeGroup[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1721,7 +1726,12 @@ function serializePathLayer(
       ) * widthScale
     );
 
-    const groupKey = `${svgColorKey(color)}|${width}`;
+    const dashAttribute = dashArrayAttribute
+      ? toSvgDashAttribute(
+          readFeatureBinaryTuple(dashArrayAttribute, index, startIndices)
+        )
+      : layerDashAttribute;
+    const groupKey = `${svgColorKey(color)}|${width}|${dashAttribute}`;
     const currentGroup = groups[groups.length - 1];
 
     if (currentGroup && currentGroup.groupKey === groupKey) {
@@ -1729,7 +1739,7 @@ function serializePathLayer(
       continue;
     }
 
-    groups.push({ groupKey, paths: [path], color, width });
+    groups.push({ groupKey, paths: [path], color, width, dashAttribute });
   }
 
   return groups
@@ -1742,7 +1752,7 @@ function serializePathLayer(
         stroke-width="${roundSvgValue(group.width)}"
         stroke-linecap="${escapeXml(String(props.lineCap ?? 'round'))}"
         stroke-linejoin="${escapeXml(String(props.lineJoin ?? 'round'))}"
-        ${dashAttribute}
+        ${group.dashAttribute}
       />
     `
     )

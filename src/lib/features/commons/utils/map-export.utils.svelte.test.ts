@@ -780,6 +780,54 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('stroke-width="6"');
   });
 
+  it('exports a per-feature binary PathLayer dash array', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const lineLayer = createDeckLayer('PathLayer', 'missing-dashed-lines', {
+      getColor: [0, 0, 0, 255],
+      getWidth: 2,
+      data: {
+        length: 2,
+        startIndices: new Uint32Array([0, 2, 4]),
+        attributes: {
+          getPath: {
+            value: new Float32Array([0, 0, 10, 0, 20, 0, 30, 0]),
+            size: 2
+          },
+          getDashArray: {
+            value: new Float32Array([0, 0, 0, 0, 12, 4, 12, 4]),
+            size: 2
+          }
+        }
+      }
+    });
+    const deck = createDeckExportFixture([lineLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('stroke-dasharray="0 0"');
+    expect(markup).toContain('stroke-dasharray="12 4"');
+  });
+
   it('exports Deck text layers as native SVG text elements', async () => {
     document.body.innerHTML = `
       <div class="page-container">

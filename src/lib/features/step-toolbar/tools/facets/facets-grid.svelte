@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import type { FeatureCollection } from 'geojson';
   import type { SplitRenderingTable } from '$lib/features/map';
   import FacetsSharedRenderer from './facets-shared-renderer.svelte';
   import type { FacetsLayout } from './facets.store.svelte';
@@ -11,7 +10,6 @@
     tables,
     densityTables,
     splitData,
-    geoJSONs,
     layout,
     containerWidth = 1200,
     containerHeight = 800,
@@ -22,7 +20,6 @@
     tables: Map<string, ArrowTable>;
     densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
-    geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
     containerWidth?: number;
     containerHeight?: number;
@@ -36,7 +33,6 @@
   tables={tables}
   densityTables={densityTables}
   splitData={splitData}
-  geoJSONs={geoJSONs}
   layout={layout}
   containerWidth={containerWidth}
   containerHeight={containerHeight}

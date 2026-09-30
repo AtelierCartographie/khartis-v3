@@ -2,10 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   createCategoricalColorAccessor,
-  createGeoJsonCategoricalColorAccessor,
   createStrokeClassificationAccessor,
   resolveMissingDataRenderProps,
-  withGeoJsonRowHighlightAccessor,
   withOpacityPreservingAlpha,
   withRowHighlightAccessor
 } from './layer-helpers';
@@ -80,27 +78,6 @@ describe('layer-helpers — disabled category labels', () => {
     expect(accessor?.({ segment: 'Pause' })).toEqual([0, 0, 0, 0]);
   });
 
-  it('hides disabled GeoJSON categorical labels', () => {
-    const accessor = createGeoJsonCategoricalColorAccessor(
-      'segment',
-      new Map([
-        ['Actif', [242, 135, 172]],
-        ['Pause', [0, 173, 146]]
-      ]),
-      [12, 34, 56],
-      [12, 34, 56],
-      true,
-      ['Pause']
-    );
-
-    expect(accessor({ properties: { segment: 'Actif' } })).toEqual([
-      242, 135, 172, 255
-    ]);
-    expect(accessor({ properties: { segment: 'Pause' } })).toEqual([
-      0, 0, 0, 0
-    ]);
-  });
-
   it('keeps source alpha when applying a global opacity', () => {
     expect(withOpacityPreservingAlpha([12, 34, 56], 0.5)).toEqual([
       12, 34, 56, 128
@@ -126,25 +103,5 @@ describe('layer-helpers — disabled category labels', () => {
     ]);
     expect(accessor({ [INTERNAL_COLUMN.ID]: 1 })).toEqual([12, 34, 56, 204]);
     expect(accessor({ [INTERNAL_COLUMN.ID]: 2 })).toEqual([12, 34, 56, 102]);
-  });
-
-  it('does not make hidden GeoJSON features visible again when highlighting', () => {
-    const accessor = withGeoJsonRowHighlightAccessor(
-      (feature) =>
-        feature.properties?.hidden ? [0, 0, 0, 0] : [12, 34, 56, 255],
-      0.8,
-      0.5,
-      new Set([1])
-    );
-
-    expect(
-      accessor({ properties: { [INTERNAL_COLUMN.ID]: 1, hidden: true } })
-    ).toEqual([0, 0, 0, 0]);
-    expect(accessor({ properties: { [INTERNAL_COLUMN.ID]: 1 } })).toEqual([
-      12, 34, 56, 204
-    ]);
-    expect(accessor({ properties: { [INTERNAL_COLUMN.ID]: 2 } })).toEqual([
-      12, 34, 56, 102
-    ]);
   });
 });

@@ -144,7 +144,6 @@ describe('createFileProcessorService geofile imports', () => {
         })
       })
     );
-    expect(updates.some((update) => update.preparedGeoJSON)).toBe(false);
     expect(
       mocks.duckQuery.mock.calls.some(([sql]) =>
         String(sql).includes('ST_AsGeoJSON')
@@ -200,14 +199,9 @@ describe('createFileProcessorService geofile imports', () => {
       }
     });
     mocks.duckQuery.mockReset();
-    mocks.duckQuery
-      .mockResolvedValueOnce([{ name: 'Station', geom: 'POINT (2.3 48.8)' }])
-      .mockResolvedValueOnce([
-        {
-          name: 'Station',
-          __khartis_geometry_json: '{"type":"Point","coordinates":[2.3,48.8]}'
-        }
-      ]);
+    mocks.duckQuery.mockResolvedValueOnce([
+      { name: 'Station', geom: 'POINT (2.3 48.8)' }
+    ]);
 
     const service = createFileProcessorService({
       onProgress: vi.fn(),
@@ -219,11 +213,16 @@ describe('createFileProcessorService geofile imports', () => {
 
     await service.processFile(uploadedFile, sourceFile);
 
-    const preparedGeoJSON = updates.find((update) => update.preparedGeoJSON)
-      ?.preparedGeoJSON as string;
-    expect(JSON.parse(preparedGeoJSON).features[0]).toMatchObject({
-      geometry: { type: 'Point', coordinates: [2.3, 48.8] },
-      properties: { name: 'Station' }
-    });
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        duckdbTableName: 'places_kmz_table',
+        geometry: expect.objectContaining({ type: 'Point', featureCount: 1 })
+      })
+    );
+    expect(
+      mocks.duckQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('ST_AsGeoJSON')
+      )
+    ).toBe(false);
   });
 });

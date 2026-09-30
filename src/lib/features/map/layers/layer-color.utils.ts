@@ -29,24 +29,6 @@ export function resolveStyleColor(
   return fallback;
 }
 
-export function buildCategoryColorMapFromLabels(
-  labels: string[] | undefined,
-  colors: string[] | undefined
-): Map<string, RGBColor> | null {
-  if (!labels?.length || !colors?.length) {
-    return null;
-  }
-
-  const map = new Map<string, RGBColor>();
-  labels.forEach((label, index) => {
-    const hex = colors[index % colors.length];
-    if (hex) {
-      map.set(label, hexToRgb(hex));
-    }
-  });
-  return map;
-}
-
 export function resolveEffectiveCategoryColorMap(
   jsTable: ArrowTable,
   viz: LayerContext['viz'],

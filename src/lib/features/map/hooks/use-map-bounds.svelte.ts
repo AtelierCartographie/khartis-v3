@@ -1,12 +1,7 @@
 import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
-import {
-  calculateBoundsFromGeoArrow,
-  calculateBoundsFromGeoJSON
-} from '../core';
+import { calculateBoundsFromGeoArrow } from '../core';
 import { MAP_TIMING } from '../constants/timing.constants';
-import { debounce } from '$lib/features/commons/utils/debounce.utils';
 import {
   mapInstanceStore,
   type ViewportFitReason
@@ -32,10 +27,6 @@ export interface UseMapBoundsReturn {
     datasetId?: string,
     options?: FitViewportOptions
   ) => void;
-  fitToGeoJSONBounds: (
-    geojson: FeatureCollection | null,
-    options?: FitViewportOptions
-  ) => void;
   fitToBounds: (bounds: LngLatBoundsLike, options?: FitViewportOptions) => void;
   resetFitState: () => void;
 }
@@ -51,7 +42,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   } = props;
 
   let lastFitDatasetId: string | null = null;
-  let lastFitGeoJSON: FeatureCollection | null = null;
 
   function getNormalizedFitPaddingPx(): number {
     const padding = getFitPaddingPx();
@@ -96,18 +86,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     map.once('moveend', onMoveEnd);
   }
 
-  const debouncedFitBounds = debounce(
-    executeFitBounds,
-    MAP_TIMING.FITBOUNDS_DEBOUNCE_MS
-  );
-
-  function handleBoundsUpdate(
-    bounds: LngLatBoundsLike,
-    options: FitViewportOptions = {}
-  ): void {
-    debouncedFitBounds(bounds, options);
-  }
-
   function fitToArrowBounds(
     jsTable: ArrowTable | null,
     datasetId?: string,
@@ -139,30 +117,8 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     }
   }
 
-  function fitToGeoJSONBounds(
-    geojson: FeatureCollection | null,
-    options: FitViewportOptions = {}
-  ): void {
-    const map = getMap();
-    if (!geojson || !getIsMapLoaded() || !map || lastFitGeoJSON === geojson) {
-      return;
-    }
-
-    const bounds = calculateBoundsFromGeoJSON(geojson);
-    if (bounds) {
-      handleBoundsUpdate(bounds, {
-        reason: options.reason ?? 'dataset',
-        animate: options.animate
-      });
-      lastFitGeoJSON = geojson;
-    } else {
-      onFitComplete?.();
-    }
-  }
-
   function resetFitState(): void {
     lastFitDatasetId = null;
-    lastFitGeoJSON = null;
   }
 
   function fitToBounds(
@@ -179,7 +135,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
 
   return {
     fitToArrowBounds,
-    fitToGeoJSONBounds,
     fitToBounds,
     resetFitState
   };

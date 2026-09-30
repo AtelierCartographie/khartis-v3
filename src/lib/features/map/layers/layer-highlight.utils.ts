@@ -1,5 +1,5 @@
 import type { Color } from '@deck.gl/core';
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Geometry } from 'geojson';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { SymbolMode } from '$lib/features/commons/constants/visualization.constants';
@@ -77,43 +77,6 @@ export function resolveHighlightedOpacityForRow(
   return highlightedRowIds.has(Number(rowId))
     ? baseOpacity
     : baseOpacity * HIGHLIGHT_DIMMING_FACTOR;
-}
-
-export function resolveGeoJsonFeatureRowId(
-  feature: { properties?: Record<string, unknown> | null },
-  fallbackIndex: number
-): number {
-  const rawId = feature.properties?.[INTERNAL_COLUMN.ID];
-  if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-    return rawId;
-  }
-
-  const coercedId = Number(rawId);
-  return Number.isFinite(coercedId) ? coercedId : fallbackIndex + 1;
-}
-
-export function ensureGeoJsonFeatureIds<T extends Geometry>(
-  geojson: FeatureCollection<T>
-): FeatureCollection<T> {
-  let didChange = false;
-
-  const features = geojson.features.map((feature, index) => {
-    const rowId = resolveGeoJsonFeatureRowId(feature, index);
-    if (feature.properties?.[INTERNAL_COLUMN.ID] === rowId) {
-      return feature;
-    }
-
-    didChange = true;
-    return {
-      ...feature,
-      properties: {
-        ...(feature.properties ?? {}),
-        [INTERNAL_COLUMN.ID]: rowId
-      }
-    };
-  });
-
-  return didChange ? { ...geojson, features } : geojson;
 }
 
 export function isPolygonGeometryType(

@@ -74,10 +74,10 @@ describe('getArrowTableReprojected', () => {
     );
   });
 
-  it('falls back to client-side proj4 when DuckDB ST_Transform fails', async () => {
-    const rawTable = tableFromArrays({
+  it('retries ST_Transform with the known PROJ definition when the source code is missing', async () => {
+    const transformedTable = tableFromArrays({
       label: ['Paris'],
-      geom: ['{"type":"Point","coordinates":[652000,6861000]}']
+      geom: [new Uint8Array([1, 2, 3])]
     });
 
     const Duck = {
@@ -85,19 +85,16 @@ describe('getArrowTableReprojected', () => {
         name: ['geom', 'label'],
         type: ["GEOMETRY('EPSG:2154')", 'VARCHAR']
       }),
+      queryStreaming: vi.fn(async (sql: string) => {
+        if (sql.includes(`'EPSG:2154'`)) {
+          throw new Error('crs not found');
+        }
+        return toIpcBuffer(transformedTable);
+      }),
       query: vi.fn(async (sql: string) => {
-        if (sql.includes('ST_Transform')) {
-          throw new Error('Unsupported projection');
-        }
-
         if (sql.includes('SELECT DISTINCT geom_type')) {
-          return [{ geom_type: 'ST_POINT' }];
+          return [{ geom_type: 'POINT' }];
         }
-
-        if (sql.includes('ST_AsGeoJSON("geom") AS "geom"')) {
-          return toIpcBuffer(rawTable);
-        }
-
         throw new Error(`Unexpected SQL: ${sql}`);
       })
     };
@@ -108,14 +105,28 @@ describe('getArrowTableReprojected', () => {
       'EPSG:4326'
     );
 
-    const geometry = table.getChild('geom')?.get(0);
-    expect(typeof geometry).toBe('string');
-
-    const parsedGeometry = JSON.parse(String(geometry));
-    expect(parsedGeometry.coordinates[0]).toBeCloseTo(2.34, 1);
-    expect(parsedGeometry.coordinates[1]).toBeCloseTo(48.85, 1);
+    expect(Duck.queryStreaming).toHaveBeenLastCalledWith(
+      expect.stringContaining(`ST_Transform("geom", '+proj=lcc`)
+    );
     expect(table.getChild('label')?.get(0)).toBe('Paris');
-    expect(table.schema.metadata?.get('geo')).toContain('"encoding":"geojson"');
+    expect(table.schema.metadata?.get('geo')).toContain(
+      '"encoding":"geoarrow.wkb"'
+    );
+  });
+
+  it('rethrows the DuckDB error when no PROJ definition is known for the source', async () => {
+    const Duck = {
+      describe_table: vi.fn().mockResolvedValue({
+        name: ['geom'],
+        type: ["GEOMETRY('EPSG:999999')"]
+      }),
+      queryStreaming: vi.fn().mockRejectedValue(new Error('crs not found')),
+      query: vi.fn()
+    };
+
+    await expect(
+      getArrowTableReprojected('projected_dataset', Duck, 'EPSG:4326')
+    ).rejects.toThrow('crs not found');
   });
 });
 

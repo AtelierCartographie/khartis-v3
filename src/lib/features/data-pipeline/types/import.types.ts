@@ -31,7 +31,6 @@ export interface UploadedFilePayload {
   parsedData?: unknown;
   fileType?: string;
   deepAnalysis?: DataAnalysisResult;
-  preparedGeoJSON?: string;
   relatedFileObjects?: File[];
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;
   assetRef?: AssetRef;

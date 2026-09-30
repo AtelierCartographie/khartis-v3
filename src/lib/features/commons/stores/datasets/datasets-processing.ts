@@ -1,12 +1,10 @@
 import type {
   DatasetResult,
   EnrichedColumn,
-  GeometryInfo,
   ZipDatasetResult
 } from '$lib/features/data-pipeline';
 import {
   ColumnType,
-  computeCentroid,
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
@@ -17,16 +15,10 @@ import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';
-import { sanitizePreparedGeoJSON } from '../../utils/persisted-geojson.utils';
 import { DataValidationError } from '../../pipeline.errors';
-import {
-  isGeoJSONFeatureCollection,
-  type GeoJSONFeatureCollection
-} from '$lib/types/data';
 import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
 import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
-import { replaceFileExtension } from '../../utils/file.utils';
 
 export interface VisualizationConfig {
   id: string;
@@ -67,122 +59,6 @@ function toOptionalNumber(value: unknown): number | undefined {
   return value != null && value !== '' ? Number(value) : undefined;
 }
 
-function extractCoordsFromGeometry(
-  geometry: Record<string, unknown> | null | undefined
-): Array<[number, number]> {
-  if (!geometry) {
-    return [];
-  }
-
-  const coordinates = geometry.coordinates;
-  if (!Array.isArray(coordinates)) {
-    return [];
-  }
-
-  const result: Array<[number, number]> = [];
-  const stack: unknown[] = [coordinates];
-
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!Array.isArray(current)) {
-      continue;
-    }
-
-    const [first, second] = current;
-    if (typeof first === 'number' && typeof second === 'number') {
-      result.push([first, second]);
-      continue;
-    }
-
-    stack.push(...current);
-  }
-
-  return result;
-}
-
-function getPreparedGeoJSON(
-  file: UploadedFile
-): GeoJSONFeatureCollection | undefined {
-  if (!file.preparedGeoJSON) {
-    return undefined;
-  }
-
-  try {
-    const parsed = JSON.parse(file.preparedGeoJSON);
-    return isGeoJSONFeatureCollection(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function buildRowsFromPreparedGeoJSON(
-  file: UploadedFile
-): Record<string, unknown>[] | undefined {
-  const preparedGeoJSON = getPreparedGeoJSON(file);
-  if (!preparedGeoJSON) {
-    return undefined;
-  }
-
-  return preparedGeoJSON.features.map((feature) => ({
-    ...(feature.properties ?? {})
-  }));
-}
-
-function buildGeometryInfoFromPreparedGeoJSON(
-  file: UploadedFile
-): GeometryInfo | undefined {
-  const preparedGeoJSON = getPreparedGeoJSON(file);
-  if (!preparedGeoJSON || preparedGeoJSON.features.length === 0) {
-    return undefined;
-  }
-
-  let minLon = Infinity;
-  let minLat = Infinity;
-  let maxLon = -Infinity;
-  let maxLat = -Infinity;
-
-  for (const feature of preparedGeoJSON.features) {
-    const coords = extractCoordsFromGeometry(
-      feature.geometry as Record<string, unknown> | null | undefined
-    );
-
-    for (const [lon, lat] of coords) {
-      if (lon < minLon) minLon = lon;
-      if (lat < minLat) minLat = lat;
-      if (lon > maxLon) maxLon = lon;
-      if (lat > maxLat) maxLat = lat;
-    }
-  }
-
-  if (
-    !Number.isFinite(minLon) ||
-    !Number.isFinite(minLat) ||
-    !Number.isFinite(maxLon) ||
-    !Number.isFinite(maxLat)
-  ) {
-    return undefined;
-  }
-
-  const firstGeometry = preparedGeoJSON.features.find(
-    (feature) => feature.geometry?.type
-  )?.geometry;
-  const bounds: [number, number, number, number] = [
-    minLon,
-    minLat,
-    maxLon,
-    maxLat
-  ];
-
-  return {
-    type:
-      typeof firstGeometry?.type === 'string' ? firstGeometry.type : 'Polygon',
-    columnName: 'geom',
-    bounds,
-    centroid: computeCentroid(bounds),
-    featureCount: preparedGeoJSON.features.length
-  };
-}
-
 function normalizeDatasetFormat(
   fileType: FileType
 ): NonNullable<DatasetResult['format']> {
@@ -201,35 +77,6 @@ function normalizeDatasetFormat(
     default:
       return FileType.UNKNOWN;
   }
-}
-
-function createRestorableGeoSnapshot(file: UploadedFile): UploadedFile | null {
-  if (!file.preparedGeoJSON || !file.duckdbTableName) {
-    return null;
-  }
-
-  const isGeoSnapshot =
-    file.fileType === FileType.GEOJSON ||
-    file.fileType === FileType.SHAPEFILE ||
-    file.fileType === FileType.GEOPACKAGE ||
-    file.fileType === FileType.GEOPARQUET ||
-    file.fileType === FileType.KML ||
-    file.fileType === FileType.KMZ ||
-    file.fileType === FileType.GPX ||
-    file.fileType === FileType.ZIP;
-
-  if (!isGeoSnapshot) {
-    return null;
-  }
-
-  return {
-    ...file,
-    name: replaceFileExtension(file.name, '.geojson'),
-    type: 'application/geo+json',
-    fileType: FileType.GEOJSON,
-    content: sanitizePreparedGeoJSON(file.preparedGeoJSON),
-    originalFile: undefined
-  };
 }
 
 export function createDatasetFromPreprocessedFile(
@@ -295,10 +142,9 @@ export function createDatasetFromPreprocessedFile(
   const data =
     parsedRows && parsedRows.some((row) => isNonEmptyRow(row))
       ? parsedRows
-      : buildRowsFromPreparedGeoJSON(file);
+      : undefined;
   const firstColStats = Object.values(statistics)[0];
-  const geometryInfo =
-    file.geometry ?? buildGeometryInfoFromPreparedGeoJSON(file);
+  const geometryInfo = file.geometry;
   const actualRowCount =
     firstColStats?.count ?? geometryInfo?.featureCount ?? data?.length ?? 0;
 
@@ -433,17 +279,12 @@ async function processUploadedDatasetFile(
     file.assetRef ||
     file.companionAssetRefs?.length
   );
-  const restorableGeoSnapshot = file.geometry
-    ? null
-    : createRestorableGeoSnapshot(file);
-  if (restorableGeoSnapshot) {
-    return dataPipeline.processUploadedFile(restorableGeoSnapshot);
-  }
-
   const hasPersistedAssetSource = Boolean(
     file.assetRef || file.companionAssetRefs?.length
   );
-  const hasInlineReplaySource = Boolean(file.content || file.originalFile);
+  const hasInlineReplaySource = Boolean(
+    file.content || file.originalFile || file.archiveLayerSnapshot
+  );
 
   if (
     file.duckdbTableName &&

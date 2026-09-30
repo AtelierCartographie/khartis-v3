@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { cloneD3UsageConfig } from '$lib/features/commons/utils/projection.utils';
 import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { BBox, CanvasSize } from '../types';
 import type { ProjectionPresets } from '../types/basemap.types';
@@ -111,13 +112,17 @@ export function resolveUserProjectionOverride({
     const params: UserProjectionBuildParams = {
       selected: state.selected,
       customCode: state.customCode || undefined,
-      suggestionD3Config: state.suggestionD3Config ?? undefined,
-      suggestionScale: state.suggestionScale ?? undefined,
-      center: state.center ?? undefined,
+      suggestionD3Config: state.suggestionD3Config
+        ? cloneD3UsageConfig(state.suggestionD3Config)
+        : undefined,
+      suggestionScale: state.suggestionScale
+        ? [...state.suggestionScale]
+        : undefined,
+      center: state.center ? [state.center[0], state.center[1]] : undefined,
       longitude: state.longitude,
       latitude: state.latitude,
       rotation: state.rotation,
-      fitBbox,
+      fitBbox: [fitBbox[0], fitBbox[1], fitBbox[2], fitBbox[3]],
       width: viewportSize.width,
       height: viewportSize.height,
       padding

@@ -76,7 +76,7 @@ export interface UploadedFile {
   relatedFileObjects?: File[];
   parsedData?: ParsedData;
 
-  preparedGeoJSON?: string;
+  archiveLayerSnapshot?: Uint8Array;
   geometry?: GeometryInfo;
   status: FileStatus;
   errorMessage?: string;
