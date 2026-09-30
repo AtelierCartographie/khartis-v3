@@ -95,4 +95,33 @@ describe('dataset-ops', () => {
     expect(getDatasetsVersion()).toBe(versionBefore + 1);
     expect(getState().datasets.get(dataset.id)?.geoColumn).toBe('country_name');
   });
+  it('keeps the join key across a basemap variant and drops it with the join', () => {
+    clearState();
+    const dataset: DuckDBDataset = {
+      id: 'dataset-1',
+      tableName: 'population',
+      sourceFileId: 'source-1',
+      name: 'population.csv',
+      columns: [],
+      rowCount: 20,
+      metadata: {
+        processedAt: new Date('2026-05-21T00:00:00Z'),
+        fileType: FileType.CSV
+      },
+      joinedBasemap: 'world-high',
+      hasJoinKey: true,
+      geoColumn: 'country_code',
+      gpsMode: false
+    };
+    getState().datasets.set(dataset.id, dataset);
+
+    updateDatasetJoinInfo(dataset.id, { joinedBasemap: 'world-low' });
+    expect(getState().datasets.get(dataset.id)?.hasJoinKey).toBe(true);
+
+    updateDatasetJoinInfo(dataset.id, {
+      joinedBasemap: undefined,
+      geoColumn: undefined
+    });
+    expect(getState().datasets.get(dataset.id)?.hasJoinKey).toBeUndefined();
+  });
 });

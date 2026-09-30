@@ -31,7 +31,10 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
-import { rowScopeStore } from '../stores/row-scope.store.svelte';
+import {
+  rowScopeStore,
+  type ColumnDomain
+} from '../stores/row-scope.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
   CategoryShapeMode,
@@ -567,44 +570,57 @@ function getSharedFacetScaleColumns(
   });
 }
 
-function getColumnStatistics(
+function getColumnDomain(
   viz: VisualizationConfig | undefined,
-  columnName: string | undefined
-) {
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
+): ColumnDomain | null {
   if (!viz?.datasetId || !columnName) {
     return null;
   }
 
   const sharedFacetColumns = getSharedFacetScaleColumns(viz, columnName);
-  if (sharedFacetColumns.length > 0) {
-    return combineColumnStatistics(sharedFacetColumns);
-  }
+  const columns =
+    sharedFacetColumns.length > 0
+      ? sharedFacetColumns
+      : [{ visualizationId: viz.id, datasetId: viz.datasetId, columnName }];
 
-  return datasetsStore.getColumnStatistics(viz.datasetId, columnName);
-}
-
-function combineColumnStatistics(
-  columns: SharedFacetScaleColumn[]
-): { min: number; max: number } | null {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
 
   for (const column of columns) {
-    const statistics = datasetsStore.getColumnStatistics(
-      column.datasetId,
-      column.columnName
-    );
-    const columnMin = getStatisticsNumber(statistics, 'min');
-    const columnMax = getStatisticsNumber(statistics, 'max');
-    if (columnMin === null || columnMax === null) {
+    const domain = resolveColumnDomain(column, primitive);
+    if (!domain) {
       continue;
     }
 
-    min = Math.min(min, columnMin);
-    max = Math.max(max, columnMax);
+    min = Math.min(min, domain.min);
+    max = Math.max(max, domain.max);
   }
 
   return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+}
+
+function resolveColumnDomain(
+  column: SharedFacetScaleColumn,
+  primitive: PrimitiveFilter
+): ColumnDomain | null {
+  const scopedDomain = rowScopeStore.getScopedDomain(
+    column.visualizationId,
+    primitive,
+    column.columnName
+  );
+  if (scopedDomain) {
+    return scopedDomain;
+  }
+
+  const statistics = datasetsStore.getColumnStatistics(
+    column.datasetId,
+    column.columnName
+  );
+  const min = getStatisticsNumber(statistics, 'min');
+  const max = getStatisticsNumber(statistics, 'max');
+  return min === null || max === null ? null : { min, max };
 }
 
 function getLegendStepLabel(
@@ -1168,12 +1184,7 @@ function getQuantitativeColorLegendDraft(
   classPatternFills?: (LegendPatternFill | null)[]
 ): LegendSegmentDraft | null {
   const valueColumn = getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
-  const scopedDomain = rowScopeStore.getScopedDomain(
-    viz.id,
-    PrimitiveFilterType.POLYGON,
-    valueColumn
-  );
-  const statistics = getColumnStatistics(viz, valueColumn);
+  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
   // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
   const hasSharedScale =
     getSharedFacetScaleColumns(viz, valueColumn).length > 0;
@@ -1182,10 +1193,8 @@ function getQuantitativeColorLegendDraft(
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
-    min:
-      roundedMin ?? scopedDomain?.min ?? getStatisticsNumber(statistics, 'min'),
-    max:
-      roundedMax ?? scopedDomain?.max ?? getStatisticsNumber(statistics, 'max')
+    min: roundedMin ?? domain?.min,
+    max: roundedMax ?? domain?.max
   });
 
   if (!thresholds) {
@@ -1321,7 +1330,7 @@ function getPointSizeLegendDrafts(
 ): LegendSegmentDraft[] {
   const scale = getPointSizeLegendScale(
     viz,
-    getColumnStatistics(viz, viz?.mapping.sizeColumn)
+    getColumnDomain(viz, viz?.mapping.sizeColumn, PrimitiveFilterType.POINT)
   );
 
   if (!viz || !scale) {
@@ -1577,7 +1586,11 @@ function getLineWidthLegendDraft(
   const line = getLinePrimitive(viz);
   const scale = getLineWidthLegendScale(
     viz,
-    getColumnStatistics(viz, line?.sizeColumn ?? viz?.mapping.sizeColumn)
+    getColumnDomain(
+      viz,
+      line?.sizeColumn ?? viz?.mapping.sizeColumn,
+      PrimitiveFilterType.LINE
+    )
   );
 
   if (!viz || !scale) {

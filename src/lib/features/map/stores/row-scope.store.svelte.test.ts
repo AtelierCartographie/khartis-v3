@@ -5,18 +5,14 @@ const mocks = vi.hoisted(() => ({
   getRowIdsInScope: vi.fn(),
   getColumnDomainsInScope: vi.fn(),
   getMissingValueCountsInScope: vi.fn(),
-  getDatasetBySourceFile: vi.fn(),
   resolveRowScope: vi.fn()
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
-  combineFilterClauses: (clauses: (string | null)[]) =>
-    clauses.filter(Boolean).join(' AND ') || null,
   duckDBOrchestrator: {
     getRowIdsInScope: mocks.getRowIdsInScope,
     getColumnDomainsInScope: mocks.getColumnDomainsInScope,
-    getMissingValueCountsInScope: mocks.getMissingValueCountsInScope,
-    getDatasetBySourceFile: mocks.getDatasetBySourceFile
+    getMissingValueCountsInScope: mocks.getMissingValueCountsInScope
   }
 }));
 
@@ -38,6 +34,14 @@ function target(
   };
 }
 
+function scope(
+  tableName: string,
+  clause: string | null,
+  valueClause: string | null = clause
+) {
+  return { tableName, clause, valueClause };
+}
+
 const EVERY_PRIMITIVE = [
   PrimitiveFilterType.POLYGON,
   PrimitiveFilterType.POINT,
@@ -53,18 +57,12 @@ describe('rowScopeStore', () => {
     mocks.getRowIdsInScope.mockResolvedValue(new Set([1, 2]));
     mocks.getColumnDomainsInScope.mockResolvedValue(new Map());
     mocks.getMissingValueCountsInScope.mockReset();
-    mocks.getDatasetBySourceFile.mockReset();
   });
 
   it('counts missing values on the joined rows even without a filter', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: null
-    });
-    mocks.getDatasetBySourceFile.mockReturnValue({
-      joinedBasemap: 'france-commune',
-      columns: [{ name: 'basemap_id' }]
-    });
+    mocks.resolveRowScope.mockReturnValue(
+      scope('communes', null, '"basemap_id" IS NOT NULL')
+    );
     mocks.getMissingValueCountsInScope.mockResolvedValue([2]);
     const rate = { column: 'rate', numeric: true };
 
@@ -87,14 +85,7 @@ describe('rowScopeStore', () => {
   });
 
   it('reports no missing data once the filter keeps only valued rows', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'sites',
-      clause: '"rate" >= 5'
-    });
-    mocks.getDatasetBySourceFile.mockReturnValue({
-      gpsMode: true,
-      columns: []
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('sites', '"rate" >= 5'));
     mocks.getMissingValueCountsInScope.mockResolvedValue([0]);
     const rate = { column: 'rate', numeric: true };
 
@@ -104,7 +95,7 @@ describe('rowScopeStore', () => {
 
     expect(mocks.getMissingValueCountsInScope).toHaveBeenCalledWith(
       'sites',
-      '("rate" >= 5)',
+      '"rate" >= 5',
       [rate]
     );
     expect(
@@ -113,10 +104,7 @@ describe('rowScopeStore', () => {
   });
 
   it('leaves every row in scope when no filter resolves', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: null
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', null));
 
     await rowScopeStore.sync(
       EVERY_PRIMITIVE.map((primitive) => target(primitive))
@@ -128,11 +116,36 @@ describe('rowScopeStore', () => {
     ).toBeNull();
   });
 
+  it('scopes the domains to the joined rows without narrowing the drawn rows', async () => {
+    mocks.resolveRowScope.mockReturnValue(
+      scope('communes', null, '"basemap_id" IS NOT NULL')
+    );
+    mocks.getColumnDomainsInScope.mockResolvedValue(
+      new Map([['rate', { min: 14, max: 61.1 }]])
+    );
+
+    await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON, ['rate'])]);
+
+    expect(mocks.getRowIdsInScope).not.toHaveBeenCalled();
+    expect(mocks.getColumnDomainsInScope).toHaveBeenCalledWith(
+      'communes',
+      '"basemap_id" IS NOT NULL',
+      ['rate']
+    );
+    expect(
+      rowScopeStore.getScopedRowIds('viz-1', PrimitiveFilterType.POLYGON)
+    ).toBeNull();
+    expect(
+      rowScopeStore.getScopedDomain(
+        'viz-1',
+        PrimitiveFilterType.POLYGON,
+        'rate'
+      )
+    ).toEqual({ min: 14, max: 61.1 });
+  });
+
   it('queries once for the primitives that share a clause', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
 
     await rowScopeStore.sync(
       EVERY_PRIMITIVE.map((primitive) => target(primitive))
@@ -153,11 +166,12 @@ describe('rowScopeStore', () => {
   it('queries per distinct clause when a primitive filters on its own', async () => {
     mocks.resolveRowScope.mockImplementation(
       (request: { primitive?: PrimitiveFilterType }) => ({
-        tableName: 'communes',
-        clause:
+        ...scope(
+          'communes',
           request.primitive === PrimitiveFilterType.POINT
             ? '"pop" >= 5000'
             : '"pop" >= 1000'
+        )
       })
     );
 
@@ -169,10 +183,7 @@ describe('rowScopeStore', () => {
   });
 
   it('re-queries only when the clause changes', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
     const versionAfterFirst = rowScopeStore.version;
 
@@ -180,10 +191,7 @@ describe('rowScopeStore', () => {
     expect(mocks.getRowIdsInScope).toHaveBeenCalledTimes(1);
     expect(rowScopeStore.version).toBe(versionAfterFirst);
 
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 2000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 2000'));
     mocks.getRowIdsInScope.mockResolvedValue(new Set([2]));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
 
@@ -195,10 +203,7 @@ describe('rowScopeStore', () => {
   });
 
   it('carries the domain of the columns the primitive drives', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     mocks.getColumnDomainsInScope.mockResolvedValue(
       new Map([['pop', { min: 1000, max: 9000 }]])
     );
@@ -219,10 +224,7 @@ describe('rowScopeStore', () => {
   });
 
   it('re-queries when the same clause starts driving another column', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['pop'])]);
 
     await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['density'])]);
@@ -235,10 +237,7 @@ describe('rowScopeStore', () => {
   });
 
   it('drops the scope of a visualization that is gone', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
 
     await rowScopeStore.sync([]);
@@ -249,16 +248,10 @@ describe('rowScopeStore', () => {
   });
 
   it('keeps the last scope when the query fails instead of showing filtered rows', async () => {
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 1000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
 
-    mocks.resolveRowScope.mockReturnValue({
-      tableName: 'communes',
-      clause: '"pop" >= 2000'
-    });
+    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 2000'));
     mocks.getRowIdsInScope.mockRejectedValue(new Error('duckdb is away'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
 
