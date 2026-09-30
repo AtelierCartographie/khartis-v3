@@ -220,8 +220,7 @@ function createNativePolygonGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.multipolygon',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
@@ -231,8 +230,7 @@ function createNativeLineGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.linestring',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
@@ -242,8 +240,7 @@ function createNativePointGeometryInfo(): GeometryInfo {
     encoding: 'geoarrow.point',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
-    isWkbEncoded: false,
-    isGeoJsonEncoded: false
+    isWkbEncoded: false
   };
 }
 
@@ -2224,8 +2221,7 @@ describe('basemap projection fallbacks', () => {
             encoding: 'geoarrow.wkb',
             geoColumn: 'geometry',
             isNativeGeoArrow: true,
-            isWkbEncoded: true,
-            isGeoJsonEncoded: false
+            isWkbEncoded: true
           } satisfies GeometryInfo)
         : null
     );

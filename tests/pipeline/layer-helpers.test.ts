@@ -11,8 +11,6 @@ import {
   createProportionalSymbolSizeAccessor,
   createClassedSizeAccessor,
   createChoroplethColorAccessor,
-  createGeoJsonCategoricalColorAccessor,
-  createGeoJsonProportionalSymbolSizeAccessor,
   HIGHLIGHT_FILL_COLOR,
   sortBySizeDescending
 } from '$lib/features/map/layers/layer-helpers';
@@ -154,22 +152,6 @@ describe('createProportionalSymbolSizeAccessor', () => {
   });
 });
 
-describe('createGeoJsonProportionalSymbolSizeAccessor', () => {
-  const accessor = createGeoJsonProportionalSymbolSizeAccessor(
-    'pop',
-    100,
-    50,
-    ScaleType.LINEAR
-  );
-
-  it('keeps GeoJSON symbol fallback on the same zero-based proportional contract', () => {
-    expect(accessor({ properties: { pop: 0 } })).toBe(0);
-    expect(accessor({ properties: { pop: 50 } })).toBe(25);
-    expect(accessor({ properties: { pop: -50 } })).toBe(25);
-    expect(accessor({ properties: { pop: null } })).toBe(0);
-  });
-});
-
 // ─── createClassedSizeAccessor ────────────────────────────────────────────
 
 describe('createClassedSizeAccessor', () => {
@@ -220,41 +202,6 @@ describe('createChoroplethColorAccessor', () => {
       HIGHLIGHT_FILL_COLOR[2],
       255
     ]);
-  });
-});
-
-// ─── createGeoJsonCategoricalColorAccessor ────────────────────────────────
-
-describe('createGeoJsonCategoricalColorAccessor', () => {
-  const colorMap = new Map<string, [number, number, number]>([
-    ['urban', [200, 100, 50]]
-  ]);
-  const defaultColor: [number, number, number] = [128, 128, 128];
-  const accessor = createGeoJsonCategoricalColorAccessor(
-    'type',
-    colorMap,
-    defaultColor
-  );
-
-  it('returns mapped color for known category in properties', () => {
-    const result = accessor({ properties: { type: 'urban' } });
-    expect(result).toEqual([200, 100, 50, 255]);
-  });
-
-  it('returns defaultColor for unknown category', () => {
-    expect(accessor({ properties: { type: 'rural' } })).toEqual([
-      128, 128, 128, 255
-    ]);
-  });
-
-  it('returns defaultColor for null value', () => {
-    expect(accessor({ properties: { type: null } })).toEqual([
-      128, 128, 128, 255
-    ]);
-  });
-
-  it('returns defaultColor for missing properties', () => {
-    expect(accessor({})).toEqual([128, 128, 128, 255]);
   });
 });
 

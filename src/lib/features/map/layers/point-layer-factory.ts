@@ -1,5 +1,4 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 
 import {
@@ -8,8 +7,7 @@ import {
   FillMode,
   SHAPE_ORDINAL,
   ShapeType,
-  SymbolMode,
-  StrokeMode
+  SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   getEnabledPrimitiveFilters,
@@ -22,11 +20,8 @@ import {
   PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import * as m from '$lib/paraglide/messages';
 
-import { ArrowExtension, DeckLayerId, GeometryType } from '../constants';
+import { DeckLayerId, GeometryType } from '../constants';
 import type {
   DeckDataRow,
   GeometryInfo,
@@ -55,16 +50,8 @@ import {
   sortScatterBinaryDataByRadius
 } from './binary-scatter-data';
 import { createDotDensityLayers } from './density-layer-factory';
+import { resolveEffectiveCategoryColorMap } from './layer-color.utils';
 import {
-  buildCategoryColorMapFromLabels,
-  resolveEffectiveCategoryColorMap
-} from './layer-color.utils';
-import {
-  getCachedGeoJSON,
-  getCachedProjectedGeoJSON
-} from './layer-geojson-cache';
-import {
-  HIGHLIGHT_DIMMING_FACTOR,
   isMissingThematicValue,
   resolveHighlightedOpacityForRow,
   resolvePointMissingColumn,
@@ -74,18 +61,11 @@ import { createThematicLayerId } from './layer-id.utils';
 import {
   createClassedSizeAccessor,
   createCategoricalColorAccessor,
-  createGeoJsonCategoricalColorAccessor,
-  createGeoJsonChoroplethColorAccessor,
-  createGeoJsonClassedSizeAccessor,
-  createGeoJsonProportionalSymbolSizeAccessor,
   createChoroplethColorAccessor,
   createProportionalSymbolSizeAccessor,
   createStrokeClassificationAccessor,
   HIGHLIGHT_FILL_COLOR,
-  withGeoJsonRowHighlight,
-  withGeoJsonRowHighlightAccessor,
-  withOpacity,
-  withOpacityPreservingAlpha
+  withOpacity
 } from './layer-helpers';
 import { resolvePointParser } from './layer-geometry-parsers';
 import {
@@ -1310,9 +1290,6 @@ export function createPointLayerStack(
   const pointCategoryColorMap = ctx.pointCategoryColorMap ?? categoryColorMap;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
   const hlVersion = ctx.highlightVersion ?? 0;
-  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } =
-    geometryInfo;
-  const arrowExtension = geometryInfo.encoding;
   const pointConfig = viz ? getSymbolPrimitive(viz) : undefined;
   const pointValueColumn = pointConfig?.valueColumn;
   const pointCategoryColumn = pointConfig?.categoryColumn;
@@ -1395,314 +1372,12 @@ export function createPointLayerStack(
     shape: missingPointShape
   } = resolveSymbolMissingDataStyle(pointConfig, uniquePointRadius);
 
-  const isNativeGeoArrowPoint =
-    arrowExtension &&
-    (arrowExtension === ArrowExtension.GEOARROW_POINT ||
-      arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
-
   if (densityActive) {
     return createDotDensityLayers(jsTable, ctx, layerId);
   }
 
   if (geometryInfo.type === GeometryType.MULTIPOINT) {
     return createRepresentativePointSymbolLayers(jsTable, ctx);
-  }
-
-  const shouldUseGeoJsonPointLayer =
-    !isNativeGeoArrowPoint &&
-    !isNativeGeoArrow &&
-    (isWkbEncoded || isGeoJsonEncoded) &&
-    pointShape === ShapeType.CIRCLE &&
-    missingPointShape === ShapeType.CIRCLE &&
-    !(pointStrokeDashed && showPointStroke);
-
-  if (shouldUseGeoJsonPointLayer) {
-    let geojsonData;
-    try {
-      const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
-      geojsonData = rawGeoJSON
-        ? getCachedProjectedGeoJSON(rawGeoJSON, ctx.customProjection)
-        : rawGeoJSON;
-    } catch (error) {
-      logger.error(
-        'Failed to read GeoJSON for proportional polygon layer',
-        LogCategory.MAP,
-        error
-      );
-      return [];
-    }
-    if (!geojsonData) {
-      showWarning(
-        m.error_geometry_conversion_title(),
-        m.error_geometry_conversion_message()
-      );
-      return [];
-    }
-    const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-      jsTable,
-      viz,
-      pointCategoryColorMap,
-      pointCategoryColumn,
-      PrimitiveFilterType.POINT
-    );
-
-    const baseFillColor =
-      useChoropleth && viz
-        ? createGeoJsonChoroplethColorAccessor(
-            pointValueColumn!,
-            pointClassification!.breaks!,
-            pointClassification!.colors!,
-            fillColor
-          )
-        : useCategoricalColor && viz
-          ? createGeoJsonCategoricalColorAccessor(
-              pointCategoryColumn!,
-              effectiveCategoryColorMap,
-              fillColor,
-              fillColor,
-              true,
-              pointClassification?.disabledLabels ?? []
-            )
-          : fillColor;
-    const pointStrokeColors = pointConfig?.strokeClassification?.colors;
-    const pointStrokeBreaks =
-      pointConfig?.strokeClassification?.breaks ?? pointClassification?.breaks;
-    const pointStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
-      pointConfig?.strokeClassification?.labels ?? pointClassification?.labels,
-      pointConfig?.strokeClassification?.colors
-    );
-
-    const geoJsonFillColor =
-      hasHighlights && highlightedRowIds
-        ? typeof baseFillColor === 'function'
-          ? withGeoJsonRowHighlightAccessor(
-              baseFillColor,
-              pointFillOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              highlightedRowIds
-            )
-          : withGeoJsonRowHighlight(
-              baseFillColor,
-              pointFillOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              highlightedRowIds
-            )
-        : baseFillColor;
-
-    const baseGeoJsonLineColor =
-      pointConfig?.strokeMode === StrokeMode.CLASSES &&
-      pointStrokeValueColumn &&
-      pointStrokeBreaks &&
-      pointStrokeColors?.length
-        ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacityPreservingAlpha(
-              createGeoJsonChoroplethColorAccessor(
-                pointStrokeValueColumn,
-                pointStrokeBreaks,
-                pointStrokeColors,
-                pointStrokeColor,
-                missingPointColor,
-                showMissingPoints
-              )(feature),
-              pointStrokeOpacity
-            ) as [number, number, number, number]
-        : pointConfig?.strokeMode === StrokeMode.CATEGORIES &&
-            pointStrokeCategoryColumn &&
-            pointStrokeColors?.length
-          ? (feature: { properties?: Record<string, unknown> }) =>
-              withOpacityPreservingAlpha(
-                createGeoJsonCategoricalColorAccessor(
-                  pointStrokeCategoryColumn,
-                  pointStrokeGeoJsonColorMap,
-                  pointStrokeColor,
-                  missingPointColor,
-                  showMissingPoints,
-                  pointConfig?.strokeClassification?.disabledLabels ?? []
-                )(feature),
-                pointStrokeOpacity
-              ) as [number, number, number, number]
-          : null;
-
-    const geoJsonLineColor =
-      hasHighlights && highlightedRowIds
-        ? baseGeoJsonLineColor
-          ? withGeoJsonRowHighlightAccessor(
-              baseGeoJsonLineColor,
-              pointStrokeOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              highlightedRowIds
-            )
-          : withGeoJsonRowHighlight(
-              pointStrokeColor,
-              pointStrokeOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              highlightedRowIds
-            )
-        : (baseGeoJsonLineColor ??
-          withOpacity(pointStrokeColor, pointStrokeOpacity));
-
-    const geoJsonRadius =
-      useClassedSymbols && viz
-        ? createGeoJsonClassedSizeAccessor(
-            pointValueColumn!,
-            pointClassification!.breaks!,
-            minPointRadius,
-            maxPointRadius,
-            pointClassification?.numClasses ??
-              pointClassification?.colors?.length,
-            uniquePointRadius
-          )
-        : useProportionalSymbols && viz
-          ? createGeoJsonProportionalSymbolSizeAccessor(
-              pointSizeColumn!,
-              proportionalDomainMax,
-              proportionalMaxPointRadius,
-              proportionalSymbolScale
-            )
-          : uniquePointRadius;
-    const isMissingGeoJsonPoint = (feature: {
-      properties?: Record<string, unknown> | null;
-    }): boolean =>
-      pointMissingColumn
-        ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
-        : false;
-    const disabledPointCategoryLabels = new Set(
-      (pointClassification?.disabledLabels ?? []).map(String)
-    );
-    const isDisabledGeoJsonPoint = (feature: {
-      properties?: Record<string, unknown> | null;
-    }): boolean =>
-      pointConfig?.mode === SymbolMode.CATEGORIES &&
-      pointCategoryColumn !== undefined &&
-      disabledPointCategoryLabels.has(
-        String(feature.properties?.[pointCategoryColumn])
-      );
-    const getGeoJsonPointRadius = (feature: {
-      properties?: Record<string, unknown> | null;
-    }): number =>
-      typeof geoJsonRadius === 'function'
-        ? geoJsonRadius(feature)
-        : geoJsonRadius;
-    const sortedGeoJsonData = useProportionalSymbols
-      ? {
-          ...geojsonData,
-          features: [...geojsonData.features].sort(
-            (a, b) => getGeoJsonPointRadius(b) - getGeoJsonPointRadius(a)
-          )
-        }
-      : geojsonData;
-
-    return [
-      new GeoJsonLayer({
-        id: layerId,
-        data: sortedGeoJsonData,
-        pointType: 'circle',
-        filled: !hideSymbolFill,
-        stroked: showPointStroke,
-        getFillColor: (feature: { properties?: Record<string, unknown> }) => {
-          if (isDisabledGeoJsonPoint(feature)) {
-            return [0, 0, 0, 0];
-          }
-          if (isMissingGeoJsonPoint(feature)) {
-            return showMissingPoints
-              ? withOpacity(
-                  missingPointColor,
-                  hasHighlights ? 1 : pointFillOpacity
-                )
-              : [0, 0, 0, 0];
-          }
-
-          return typeof geoJsonFillColor === 'function'
-            ? geoJsonFillColor(feature)
-            : geoJsonFillColor;
-        },
-        getLineColor: (feature: { properties?: Record<string, unknown> }) => {
-          if (isDisabledGeoJsonPoint(feature)) {
-            return [0, 0, 0, 0];
-          }
-          if (isMissingGeoJsonPoint(feature) && !showMissingPoints) {
-            return [0, 0, 0, 0];
-          }
-
-          if (!showPointStroke) {
-            return [0, 0, 0, 0];
-          }
-
-          return typeof geoJsonLineColor === 'function'
-            ? geoJsonLineColor(feature)
-            : geoJsonLineColor;
-        },
-        getPointRadius: (feature: { properties?: Record<string, unknown> }) => {
-          if (isDisabledGeoJsonPoint(feature)) {
-            return 0;
-          }
-          if (isMissingGeoJsonPoint(feature)) {
-            return showMissingPoints ? missingPointRadius : 0;
-          }
-
-          return getGeoJsonPointRadius(feature);
-        },
-        pointRadiusUnits: 'pixels',
-        pointRadiusScale: pageDisplayScale,
-        lineWidthUnits: 'pixels',
-        getLineWidth: showPointStroke
-          ? (pointStrokeWidth / SYMBOL_STROKE_WIDTH_DIVISOR) * pageDisplayScale
-          : 0,
-        opacity: hasHighlights ? 1 : pointFillOpacity,
-        pickable: true,
-        ...resolveHoverHighlightProps(),
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        updateTriggers: {
-          getFillColor: [
-            useChoropleth,
-            pointValueColumn,
-            pointClassification?.breaks,
-            pointClassification?.colors,
-            useCategoricalColor,
-            pointCategoryColumn,
-            pointCategoryColorMap,
-            pointClassification?.labels,
-            pointClassification?.categoryValues,
-            pointClassification?.disabledLabels,
-            fillColor,
-            pointMissingColumn,
-            pointConfig?.missingData?.show,
-            pointConfig?.missingData?.color,
-            hlVersion
-          ],
-          getPointRadius: [
-            usesVariablePointSize,
-            pointSizeColumn,
-            pointValueColumn,
-            maxValue,
-            pointClassification?.breaks,
-            pointConfig?.minSize,
-            pointConfig?.maxSize,
-            proportionalSymbolScale,
-            pointMissingColumn,
-            pointConfig?.missingData?.show,
-            pointConfig?.missingData?.size,
-            pointClassification?.disabledLabels
-          ],
-          getLineColor: [
-            pointStrokeColor,
-            pointStrokeOpacity,
-            pointStrokeValueColumn,
-            pointStrokeCategoryColumn,
-            showPointStroke,
-            pointConfig?.strokeClassification?.breaks,
-            pointConfig?.strokeClassification?.colors,
-            pointConfig?.strokeClassification?.labels,
-            pointConfig?.strokeClassification?.disabledLabels,
-            pointClassification?.disabledLabels,
-            pointMissingColumn,
-            pointConfig?.missingData?.show,
-            hlVersion
-          ]
-        }
-      })
-    ];
   }
 
   const pointData = resolvePointParser(ctx.customProjection)(jsTable);

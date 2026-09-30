@@ -11,10 +11,6 @@ import {
   splitRowAccessor
 } from '../utils/geoarrow-stream-bridge.utils';
 
-export type GeoJsonFeatureLike = {
-  properties?: Record<string, unknown>;
-};
-
 export function hasSplitRenderingContext(
   ctx: LayerContext
 ): ctx is LayerContext & {
@@ -155,76 +151,6 @@ export function createSplitAwareNullableRowAccessor<T>(
   );
 }
 
-export function createSplitGeoJsonFeatureAccessor<T>(
-  ctx: LayerContext,
-  geometryTable: ArrowTable,
-  accessor: (row: Record<string, unknown>) => T
-): ((feature: GeoJsonFeatureLike) => T) | null {
-  if (!hasSplitRenderingContext(ctx)) {
-    return null;
-  }
-
-  const featureIdColumn = resolveSplitMappingFeatureIdColumn(
-    geometryTable,
-    ctx.splitFeatureIdColumn
-  );
-  if (!featureIdColumn) {
-    return null;
-  }
-
-  const datasetByFeatureId = buildSplitDatasetRowLookup(
-    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
-    JOINED_BASEMAP_COLUMN.ID
-  );
-  if (!datasetByFeatureId) {
-    return null;
-  }
-
-  return (feature: GeoJsonFeatureLike): T => {
-    const rawFeatureId = feature.properties?.[featureIdColumn];
-    const row =
-      rawFeatureId !== null && rawFeatureId !== undefined
-        ? datasetByFeatureId.get(String(rawFeatureId))
-        : undefined;
-    return accessor((row ?? {}) as Record<string, unknown>);
-  };
-}
-
-export function createSplitGeoJsonNullableFeatureAccessor<T>(
-  ctx: LayerContext,
-  geometryTable: ArrowTable,
-  accessor: (row: Record<string, unknown> | null) => T
-): ((feature: GeoJsonFeatureLike) => T) | null {
-  if (!hasSplitRenderingContext(ctx)) {
-    return null;
-  }
-
-  const featureIdColumn = resolveSplitMappingFeatureIdColumn(
-    geometryTable,
-    ctx.splitFeatureIdColumn
-  );
-  if (!featureIdColumn) {
-    return null;
-  }
-
-  const datasetByFeatureId = buildSplitDatasetRowLookup(
-    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
-    JOINED_BASEMAP_COLUMN.ID
-  );
-  if (!datasetByFeatureId) {
-    return null;
-  }
-
-  return (feature: GeoJsonFeatureLike): T => {
-    const rawFeatureId = feature.properties?.[featureIdColumn];
-    const row =
-      rawFeatureId !== null && rawFeatureId !== undefined
-        ? (datasetByFeatureId.get(String(rawFeatureId)) ?? null)
-        : null;
-    return accessor(row);
-  };
-}
-
 export function buildSplitDatasetRowMapping(
   geometry: ArrowTable,
   dataset: ArrowTable,
@@ -357,26 +283,4 @@ export function getSplitMatchedGeometryRowIndices(
   }
 
   return indices;
-}
-
-function buildSplitDatasetRowLookup(
-  dataset: ArrowTable,
-  basemapIdColumn: string
-): Map<string, Record<string, unknown>> | null {
-  const datasetBasemapIdVector = dataset.getChild(basemapIdColumn);
-  if (!datasetBasemapIdVector) return null;
-
-  const datasetByFeatureId = new Map<string, Record<string, unknown>>();
-  for (let rowIndex = 0; rowIndex < dataset.numRows; rowIndex += 1) {
-    const rawId = datasetBasemapIdVector.get(rowIndex);
-    if (rawId === null || rawId === undefined) continue;
-    const row = dataset.get(rowIndex);
-    if (row) {
-      datasetByFeatureId.set(
-        String(rawId),
-        row as unknown as Record<string, unknown>
-      );
-    }
-  }
-  return datasetByFeatureId;
 }

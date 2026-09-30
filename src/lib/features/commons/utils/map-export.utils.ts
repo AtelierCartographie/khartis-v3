@@ -700,8 +700,7 @@ const VISUALIZATION_PREFIX_LABELS: [string, () => string][] = [
   [DeckLayerId.POINT_LAYER, m.svg_export_primitive_symbol],
   [DeckLayerId.LINE_LAYER, m.svg_export_primitive_line],
   [DeckLayerId.LABEL_LAYER, m.svg_export_primitive_label],
-  [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text],
-  [DeckLayerId.GEOJSON_LAYER, m.svg_export_primitive_geojson]
+  [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text]
 ];
 
 function matchLongestPrefix(

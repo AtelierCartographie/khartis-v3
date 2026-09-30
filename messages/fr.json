@@ -639,7 +639,6 @@
   "svg_export_primitive_line": "lignes",
   "svg_export_primitive_text": "textes",
   "svg_export_primitive_label": "etiquettes",
-  "svg_export_primitive_geojson": "geometries",
   "export_data_error": "Erreur d'export des données",
   "export_data_no_data": "Aucune donnée à exporter",
   "export_error": "Erreur d'export",
