@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 #
-# doc-sync — keep CLAUDE.md / docs in step with structural changes.
+# doc-sync: keep AGENTS.md / docs in step with structural changes.
 #
 # Runs from the Husky pre-commit hook and inspects *staged* files only.
 # If a commit touches the project's architecture surface (feature barrels)
@@ -20,7 +20,7 @@ struct=$(printf '%s\n' "$staged" | grep -E \
 
 # Documentation touched in the same commit clears the warning.
 doc=$(printf '%s\n' "$staged" | grep -E \
-  '^CLAUDE\.md$|^AGENTS\.md$|^docs/|^\.claude/rules/')
+  '^AGENTS\.md$|^docs/|^\.claude/rules/')
 [ -n "$doc" ] && exit 0
 
 {
@@ -29,10 +29,9 @@ doc=$(printf '%s\n' "$staged" | grep -E \
   echo
   printf '%s\n' "$struct" | sed 's/^/      • /'
   echo
-  echo "   If architecture, commands or conventions changed, update the docs:"
-  echo "     – in a Claude session:  /claude-md-management:revise-claude-md"
-  echo "     – or edit  CLAUDE.md  /  docs/  /  .claude/rules/"
-  echo "   Only a reminder — the commit proceeds. (DOC_SYNC_STRICT=1 to enforce.)"
+  echo "   If architecture, commands or conventions changed, update"
+  echo "   AGENTS.md, docs/ or .claude/rules/ in the same commit."
+  echo "   Only a reminder: the commit proceeds. (DOC_SYNC_STRICT=1 to enforce.)"
   echo
 } >&2
 

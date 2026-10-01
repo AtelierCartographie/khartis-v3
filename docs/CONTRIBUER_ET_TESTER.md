@@ -105,7 +105,7 @@ Husky installe deux hooks :
 - **pre-commit** : `lint-staged` (Prettier et ESLint sur les fichiers indexés),
   puis `scripts/check-doc-sync.sh`, qui signale un changement structurel (barrel
   de feature, config Vite, Svelte, TypeScript, Prettier ou ESLint) commité sans
-  mise à jour de `CLAUDE.md`, `AGENTS.md`, `docs/` ou `.claude/rules/`. Simple
+  mise à jour de `AGENTS.md`, `docs/` ou `.claude/rules/`. Simple
   avertissement, bloquant avec `DOC_SYNC_STRICT=1`.
 - **commit-msg** : commitlint vérifie le format Conventional Commits.
 
