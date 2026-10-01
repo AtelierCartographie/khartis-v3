@@ -1,53 +1,48 @@
-# Claude Code setup (shared)
+# Coding-agent setup
 
-This folder holds the **shared, version-controlled** [Claude Code](https://claude.com/claude-code) configuration for Khartis. It is committed on purpose so the whole team — and external contributors — get the same AI assistance, rules, and tooling. Using Claude Code is **optional**; nothing here is required to build, run, or contribute to the project.
+Shared, version-controlled configuration for coding agents working on Khartis. Using an agent is optional: nothing here is needed to build, run or contribute to the project.
 
-Personal or machine-specific settings live in `.claude/settings.local.json`, which is git-ignored. Only commit changes here that should apply to everyone.
+## How instructions are organized
 
-## What's in here
+| File                         | Role                                                                                                                         | Loaded                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `../AGENTS.md`               | Single source of truth for every agent: constraints, commands, validation, conventions, index of the area rules              | Every session                          |
+| `../CLAUDE.md`               | One-line import of `AGENTS.md`, for Claude Code versions before 2.1.277 that do not read `AGENTS.md` on their own            | Every Claude Code session              |
+| `rules/*.md`                 | Traps and contracts of one area, scoped by a `paths:` frontmatter                                                            | When Claude Code reads a matching file |
+| `skills/browser-check/`      | How to verify a change in the running app                                                                                    | On demand, or with `/browser-check`    |
+| `skills/svelte-code-writer/` | Svelte 5 documentation lookup and autofixer through the `@sveltejs/mcp` CLI (body mirrors the upstream `sveltejs/mcp` skill) | On demand                              |
+| `settings.json`              | Team settings: plugins and permission guardrails                                                                             | Every Claude Code session              |
+| `settings.local.json`        | Personal overrides, git-ignored                                                                                              | Your sessions only                     |
 
-| Path                  | Purpose                                                                                              |
-| --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `settings.json`       | Team config: the list of enabled Claude Code plugins (below).                                        |
-| `settings.local.json` | Your personal overrides (permissions, env). **Git-ignored** — never committed.                       |
-| `rules/`              | Path-scoped quality rules, auto-loaded when you edit matching files (see below).                     |
-| `skills/`             | Committed skills: the GitNexus skill set and `svelte-code-writer`.                                   |
-| `../.mcp.json`        | MCP servers shared with the team — currently **GitNexus** (code intelligence).                       |
-| `../CLAUDE.md`        | Project memory Claude reads at session start (commands, architecture, conventions, GitNexus how-to). |
+Agents other than Claude Code read `AGENTS.md`, then open the rule file it points to. Codex discovers the two skills through the relative links in `../.agents/skills/`, so a skill is written once, under `skills/`.
 
-## Rules (`rules/`)
+## Keeping it useful
 
-Each file is one topic. Files with a `paths:` frontmatter only load when Claude touches matching files; files without it are always loaded. They never contradict `CLAUDE.md` — they extend it.
+- `AGENTS.md` holds only what an agent needs in every session and cannot derive from the code. Keep it under 200 lines, and prefer fixing a line over adding one.
+- A constraint that concerns one area goes in a path-scoped rule. A multi-step procedure goes in a skill. Something that must never happen goes in `settings.json` permissions, because an instruction is a request, not a guarantee.
+- Every symbol, path and command cited in these files has to exist. `scripts/check-doc-sync.sh` reminds you at commit time when a structural change comes without a documentation update.
+- After a model upgrade, run `/doctor prompt-audit` in Claude Code. It reviews the whole set for instructions written for an older model, stale references and files that contradict each other.
 
-- `cartography-invariants.md` — domain primer + EN/FR glossary, graphic semiology, the two engine boundaries, privacy, live updates (always loaded).
-- `code-quality.md` — KISS/DRY/YAGNI/SOLID, atomic changes, value-driven tests (always loaded).
-- `critical-thinking.md` — challenge flawed requests, verify premises (always loaded).
-- `duckdb-data.md` · `render-pipeline.md` · `colors-classification.md` · `projections.md` · `state-persistence.md` · `svelte-carbon-ui.md` — path-scoped technical rules.
-- `chrome-devtools-testing.md` — how to validate/debug the running app in the browser.
+## Working with the agent
 
-## Enabled plugins (`settings.json`)
+Practices that fit current models, taken from Anthropic's guidance for Opus 5.5:
 
-All from the official `claude-plugins-official` marketplace. How to use each:
+- Give the whole task in one message and say what "done" means, for example "`pnpm test:duckdb` passes and every join bucket shows its count". Then let it run, and add to a running task instead of restarting it.
+- Leave out "think hard" or "be thorough". Depth comes from the effort level: low for a quick question, medium for routine work, high for a bug in the data or render pipeline and for a review. Max uses about three times the tokens of low.
+- For an audit or a change across many files, ask for subagents and for the evidence behind each finding.
+- Before a pull request, run `/code-review` on the diff, and `/browser-check` when the change touches rendering or persistence.
 
-| Plugin                 | What it's for                            | How to use                                                                                     |
-| ---------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `feature-dev`          | Plan & architect a feature before coding | Ask Claude to plan a feature, or run the `feature-dev` skill; spawns architect/explorer agents |
-| `code-review`          | Review the current diff                  | `/code-review` (add `--fix` to apply, `--comment` to post inline PR comments)                  |
-| `commit-commands`      | Conventional commits & PR flow           | `/commit`, `/commit-push-pr`, `/clean_gone`                                                    |
-| `claude-md-management` | Keep `CLAUDE.md` & rules current         | `/revise-claude-md` — pairs with the `check-doc-sync.sh` pre-commit reminder                   |
-| `pr-review-toolkit`    | Deep PR review                           | `/review-pr`; specialized reviewers (silent-failure, type-design, tests, comments)             |
-| `hookify`              | Create/manage Claude Code hooks          | `/hookify` to turn a repeated correction into a hook                                           |
-| `typescript-lsp`       | LSP-backed TS navigation & diagnostics   | Used automatically by Claude for accurate go-to-def / diagnostics                              |
-| `duckdb-skills`        | DuckDB-specific helpers                  | Auto-triggers on DuckDB/SQL work — see `rules/duckdb-data.md`                                  |
-| `chrome-devtools-mcp`  | Drive Chrome & inspect runtime           | Used for live browser debugging — see `rules/chrome-devtools-testing.md`                       |
+## Settings
 
-## GitNexus (code intelligence)
+- **Permissions**: reading or writing `.env` and `.env.*` files is denied (`.env.example` stays readable), so deployment secrets never enter a conversation. Editing generated output is denied (`src/lib/paraglide/`, `static/duckdb-extensions/`). The real deployment commands always ask for confirmation.
+- **Plugins** (official marketplace), installed once per developer with `claude plugin install <name>@claude-plugins-official --scope project`:
 
-The repo is indexed by GitNexus and exposed to Claude Code through `../.mcp.json` (started on demand via `npx gitnexus`). It powers impact analysis, dependency-aware navigation, and safe refactors. See the GitNexus how-to section in `../CLAUDE.md` and the skills under `skills/`.
+  | Plugin                | Purpose                                                    | Prerequisite                                           |
+  | --------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+  | `typescript-lsp`      | Go-to-definition, references and diagnostics on TypeScript | `npm install -g typescript-language-server typescript` |
+  | `duckdb-skills`       | Query data files and search the DuckDB documentation       | DuckDB CLI                                             |
+  | `chrome-devtools-mcp` | Drive Chrome for a live browser check                      | Chrome                                                 |
 
-```bash
-npx gitnexus analyze            # (re)build the local index after large changes
-npx gitnexus analyze --embeddings   # preserve embeddings if previously generated
-```
+## Optional local tool
 
-The index lives in a local `.gitnexus/` directory and is not required for normal development.
+**Ragmir** (`.ragmir/`, git-ignored) is a local retrieval index over the specification, the docs, the source and the tests. It is not required. `pnpm ragmir setup --agents claude,codex --no-ingest`, add sources to `.ragmir/config.json`, then `pnpm ragmir ingest`. The generated `.ragmir/agent-setup.md` explains how to register the MCP server.
