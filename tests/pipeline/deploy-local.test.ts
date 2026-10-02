@@ -15,6 +15,8 @@ const {
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
+  findUnchangedReleaseFiles,
+  parseReleaseFileManifest,
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
@@ -22,13 +24,15 @@ const {
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
+  reuseUnchangedReleaseFiles,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   verifyPublicInfrastructure,
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
-  writeReleaseAssetManifest
+  writeReleaseAssetManifest,
+  writeReleaseFileManifest
 } = await import(deployScriptUrl);
 
 interface FakeResponse {
@@ -1563,5 +1567,169 @@ describe('local deployment immutable asset retention', () => {
         uploadRemoteDir
       })
     ).rejects.toThrow('Legacy immutable asset scan exceeds 512.0 MB');
+  });
+});
+
+describe('local deployment unchanged file reuse', () => {
+  const previousRemoteDir = '/srv/html/pprd';
+  const uploadRemoteDir = '/srv/html/pprd.upload-new';
+  const hashOf = (character: string) => character.repeat(64);
+  let buildDir: string;
+
+  beforeEach(async () => {
+    buildDir = await mkdtemp(path.join(tmpdir(), 'khartis-reuse-test-'));
+    await mkdir(path.join(buildDir, 'basemaps'), { recursive: true });
+    await writeFile(path.join(buildDir, 'basemaps', 'world.parquet'), 'world');
+    await writeFile(path.join(buildDir, 'index.html'), 'html');
+  });
+
+  afterEach(async () => {
+    await rm(buildDir, { recursive: true, force: true });
+  });
+
+  function createLinkingSftp(
+    link: (sourcePath: string, destinationPath: string) => Error | null
+  ) {
+    const linked: string[] = [];
+    const client = {
+      put: vi.fn(async () => undefined),
+      rcopy: vi.fn(async () => undefined),
+      sftp: {
+        ext_openssh_hardlink: (
+          sourcePath: string,
+          destinationPath: string,
+          callback: (error: Error | null) => void
+        ) => {
+          const error = link(sourcePath, destinationPath);
+          if (!error) linked.push(destinationPath);
+          callback(error);
+        }
+      }
+    };
+    return { client, linked };
+  }
+
+  it('should hash every file of the build and leave the manifest out of itself', async () => {
+    const files = await writeReleaseFileManifest(buildDir);
+
+    expect([...files.keys()]).toEqual(['basemaps/world.parquet', 'index.html']);
+    expect(files.get('index.html')).toMatch(/^[0-9a-f]{64}$/);
+    const written = JSON.parse(
+      await readFile(path.join(buildDir, '.khartis-release-files.json'), 'utf8')
+    );
+    expect(written).toEqual({
+      formatVersion: 1,
+      files: Object.fromEntries(files)
+    });
+  });
+
+  it('should treat a file as unchanged only when its path and hash both match', () => {
+    const releaseFiles = new Map([
+      ['basemaps/world.parquet', hashOf('a')],
+      ['index.html', hashOf('b')],
+      ['basemaps/new.parquet', hashOf('c')]
+    ]);
+    const previousFiles = new Map([
+      ['basemaps/world.parquet', hashOf('a')],
+      ['index.html', hashOf('d')],
+      ['basemaps/removed.parquet', hashOf('c')]
+    ]);
+
+    expect([...findUnchangedReleaseFiles(releaseFiles, previousFiles)]).toEqual(
+      ['basemaps/world.parquet']
+    );
+  });
+
+  it('should ignore manifest entries that could point outside the release', () => {
+    const files = parseReleaseFileManifest(
+      JSON.stringify({
+        formatVersion: 1,
+        files: {
+          'basemaps/world.parquet': hashOf('a'),
+          '../outside.txt': hashOf('b'),
+          '/etc/passwd': hashOf('c'),
+          'index.html': 'not-a-hash'
+        }
+      })
+    );
+
+    expect([...files.keys()]).toEqual(['basemaps/world.parquet']);
+    expect(() =>
+      parseReleaseFileManifest(JSON.stringify({ formatVersion: 2, files: {} }))
+    ).toThrow('Unsupported release file manifest');
+  });
+
+  it('should link unchanged files on the server without uploading them', async () => {
+    const { client, linked } = createLinkingSftp(() => null);
+
+    await expect(
+      reuseUnchangedReleaseFiles(client, {
+        buildDir,
+        previousRemoteDir,
+        uploadRemoteDir,
+        unchangedPaths: new Set(['basemaps/world.parquet'])
+      })
+    ).resolves.toEqual({ linkedFiles: 1, uploadedFiles: 0 });
+    expect(linked).toEqual([`${uploadRemoteDir}/basemaps/world.parquet`]);
+    expect(client.put).not.toHaveBeenCalled();
+  });
+
+  it('should upload a file again when the server refuses to link it', async () => {
+    const { client, linked } = createLinkingSftp((sourcePath) =>
+      sourcePath.endsWith('index.html') ? new Error('No such file') : null
+    );
+
+    await expect(
+      reuseUnchangedReleaseFiles(client, {
+        buildDir,
+        previousRemoteDir,
+        uploadRemoteDir,
+        unchangedPaths: new Set(['index.html', 'basemaps/world.parquet'])
+      })
+    ).resolves.toEqual({ linkedFiles: 1, uploadedFiles: 1 });
+    expect(linked).toEqual([`${uploadRemoteDir}/basemaps/world.parquet`]);
+    expect(client.put).toHaveBeenCalledWith(
+      path.join(buildDir, 'index.html'),
+      `${uploadRemoteDir}/index.html`
+    );
+  });
+
+  it('should upload every file when the server has no hard link extension', async () => {
+    const client = { put: vi.fn(async () => undefined) };
+
+    await expect(
+      reuseUnchangedReleaseFiles(client, {
+        buildDir,
+        previousRemoteDir,
+        uploadRemoteDir,
+        unchangedPaths: new Set(['index.html', 'basemaps/world.parquet'])
+      })
+    ).resolves.toEqual({ linkedFiles: 0, uploadedFiles: 2 });
+    expect(client.put).toHaveBeenCalledTimes(2);
+  });
+
+  it('should retain previous immutable assets by link when the server allows it', async () => {
+    const asset = '_app/immutable/chunks/old.B2.js';
+    const { client: fake } = createFakeSftp({
+      [`${previousRemoteDir}/.khartis-release-assets.json`]: JSON.stringify({
+        formatVersion: 1,
+        assets: [asset]
+      }),
+      [`${previousRemoteDir}/${asset}`]: 'old'
+    });
+    const { client: linking, linked } = createLinkingSftp(() => null);
+
+    await expect(
+      retainPreviousReleaseAssets(
+        { ...fake, sftp: linking.sftp },
+        {
+          currentAssetPaths: ['_app/immutable/chunks/new.C3.js'],
+          previousRemoteDir,
+          uploadRemoteDir
+        }
+      )
+    ).resolves.toEqual({ copiedFiles: 1, previousFiles: 1 });
+    expect(linked).toEqual([`${uploadRemoteDir}/${asset}`]);
+    expect(fake.rcopy).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,8 @@ paths:
 
 - The safeguards are the point of the script, so a change keeps all of them: the tag retyped by hand for PROD (even with `--yes`), the green release-workflow gate, SSH host-key verification, the atomic remote swap, the public-route validation after the swap, and the rollback.
 - The release gate looks up the successful run of the `release.yml` workflow for the tag commit (`RELEASE_WORKFLOW` in the script). That run succeeds only when the tree was validated, in this run or an earlier one, and the release was published. Renaming the workflow file or moving the release out of it breaks the gate, so both change together.
+- The upload sends only what changed. Each build carries `.khartis-release-files.json` (path and SHA-256 of every file); files whose hash matches the live release, and the retained immutable assets, are hard-linked on the server (`hardlink@openssh.com`) instead of crossing the maintainer's connection. A missing manifest or a server without the extension falls back to a full upload and `rcopy`: slower, never blocking. Keep that fallback.
+- A real deployment can run for more than an hour on a slow uplink and needs the maintainer's network access. Start it where it cannot be cut short.
 - `KHARTIS_PUBLIC_URL_<TARGET>` is the source of truth for the SvelteKit base path of a target. A static build has one canonical public route; infrastructure aliases redirect to it.
 - A maintainer runs the real deployment. The `:dry-run` variants validate the release, the CI gate and the build without opening an SFTP session.
 
