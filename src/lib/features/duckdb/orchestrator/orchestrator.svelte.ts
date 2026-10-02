@@ -35,14 +35,12 @@ import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
 import type { Table } from 'apache-arrow/Arrow';
 import { Duck, initDuckDB } from '../duck';
 import {
-  FileType,
   RefineOperation,
   type AnalysisResult,
   type ArrowTableLike,
   type DataTableFilter,
   type DataTableFilterInput,
   type DuckDBDataset,
-  type FilterOperator,
   type FilterStats,
   type GPSColumns,
   type SearchStats
@@ -61,13 +59,11 @@ import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
 
 export {
-  FileType,
   RefineOperation,
   type AnalysisResult,
   type DataTableFilter,
   type DataTableFilterInput,
   type DuckDBDataset,
-  type FilterOperator,
   type FilterStats
 };
 

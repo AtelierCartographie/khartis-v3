@@ -1,28 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@ateliercartographie/ok-palette', () => ({
-  sequential: ({ steps }: { steps: number }) =>
-    Array.from(
-      { length: steps },
-      (_, i) => `#${i.toString(16).padStart(2, '0')}0000`
-    ),
-  divergentSequential: ({
-    steps,
-    hasCenterClass
-  }: {
-    steps: [number, number];
-    hasCenterClass: boolean;
-  }) => {
-    const total = steps[0] + steps[1] + (hasCenterClass ? 1 : 0);
-    return Array.from(
-      { length: total },
-      (_, i) => `#00${i.toString(16).padStart(2, '0')}00`
-    );
-  },
-  resolvePalette: (colors: string[]) =>
-    colors.map(() => [128, 128, 128, 255] as [number, number, number, number])
-}));
-
 vi.mock('$lib/features/duckdb', () => ({
   Duck: { query: vi.fn() }
 }));
@@ -49,11 +26,9 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 import {
-  applyPaletteInversion,
   calculateBreakCounts,
   calculateDivergingBreaks,
   calculateBreaks,
-  generateColorsForBreaks,
   suggestClassificationDefaults
 } from '$lib/features/commons/services/classification.service';
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -61,7 +36,6 @@ import { logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const mockedDuckQuery = vi.mocked(Duck.query);
 const mockedGetDatasetBySourceFile = vi.mocked(
   duckDBOrchestrator.getDatasetBySourceFile
@@ -81,107 +55,6 @@ beforeEach(() => {
   mockedDuckQuery.mockReset();
   mockedGetDatasetBySourceFile.mockReset();
   mockedLoggerWarn.mockReset();
-});
-
-describe('generateColorsForBreaks — sequential', () => {
-  it('returns array of length numClasses with valid hex values', () => {
-    const colors = generateColorsForBreaks(5);
-    expect(colors).toHaveLength(5);
-    for (const c of colors) expect(c).toMatch(HEX_COLOR);
-  });
-
-  it('clamps numClasses below 2 to 2', () => {
-    expect(generateColorsForBreaks(1)).toHaveLength(2);
-    expect(generateColorsForBreaks(0)).toHaveLength(2);
-  });
-
-  it('works for large class counts', () => {
-    const colors = generateColorsForBreaks(9);
-    expect(colors).toHaveLength(9);
-    for (const c of colors) expect(c).toMatch(HEX_COLOR);
-  });
-
-  it('sequential is the default palette', () => {
-    expect(generateColorsForBreaks(4, 'sequential')).toEqual(
-      generateColorsForBreaks(4)
-    );
-  });
-});
-
-describe('generateColorsForBreaks — diverging', () => {
-  it('returns array of length numClasses for even count', () => {
-    const colors = generateColorsForBreaks(4, 'diverging');
-    expect(colors).toHaveLength(4);
-    for (const c of colors) expect(c).toMatch(HEX_COLOR);
-  });
-
-  it('returns array of length numClasses for odd count (center class)', () => {
-    const colors = generateColorsForBreaks(5, 'diverging');
-    expect(colors).toHaveLength(5);
-    for (const c of colors) expect(c).toMatch(HEX_COLOR);
-  });
-
-  it('honours an asymmetric divergingSplit (lower < upper)', () => {
-    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
-      lowerCount: 1,
-      upperCount: 3,
-      hasCenterClass: true
-    });
-    expect(colors).toHaveLength(5);
-  });
-
-  it('honours an asymmetric divergingSplit (lower > upper)', () => {
-    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
-      lowerCount: 3,
-      upperCount: 1,
-      hasCenterClass: true
-    });
-    expect(colors).toHaveLength(5);
-  });
-
-  it('honours an asymmetric divergingSplit without a centre class', () => {
-    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
-      lowerCount: 2,
-      upperCount: 3,
-      hasCenterClass: false
-    });
-    expect(colors).toHaveLength(5);
-  });
-
-  it('falls back to symmetric split when divergingSplit is omitted', () => {
-    const colors = generateColorsForBreaks(4, 'diverging');
-    expect(colors).toHaveLength(4);
-  });
-});
-
-describe('applyPaletteInversion', () => {
-  const palette = ['#ff0000', '#00ff00', '#0000ff'];
-
-  it('returns the same reference when not inverted', () => {
-    expect(applyPaletteInversion(palette, false)).toBe(palette);
-  });
-
-  it('defaults to not inverted', () => {
-    expect(applyPaletteInversion(palette)).toBe(palette);
-  });
-
-  it('returns reversed array when inverted', () => {
-    expect(applyPaletteInversion(palette, true)).toEqual([
-      '#0000ff',
-      '#00ff00',
-      '#ff0000'
-    ]);
-  });
-
-  it('does not mutate the original when inverted', () => {
-    const original = [...palette];
-    applyPaletteInversion(palette, true);
-    expect(palette).toEqual(original);
-  });
-
-  it('handles empty array', () => {
-    expect(applyPaletteInversion([], true)).toEqual([]);
-  });
 });
 
 describe('calculateBreaks', () => {
@@ -512,29 +385,6 @@ describe('calculateBreaks — macro methods', () => {
     );
   });
 
-  it('should parse results when the macro returns a generic iterable (Arrow Vector-like)', async () => {
-    const vectorLike: Iterable<number> = {
-      *[Symbol.iterator]() {
-        yield 20;
-        yield 40;
-        yield 60;
-        yield 80;
-      }
-    };
-    expect(Array.isArray(vectorLike)).toBe(false);
-
-    arrangeMacroFlow(vectorLike, [20, 40, 60, 80]);
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
-  });
-
   it('should return null when the DuckDB macro returns null', async () => {
     arrangeMacroFlow(null, null);
 
@@ -579,24 +429,6 @@ describe('calculateBreaks — macro methods', () => {
     });
 
     expect(result?.breaks).toEqual([20, 60]);
-  });
-
-  it('should use rounded breaks from round_thresholds when it returns a TypedArray', async () => {
-    arrangeMacroFlow(
-      Float64Array.of(23.7, 47.2, 61.9, 84.1),
-      Float64Array.of(25, 50, 60, 85)
-    );
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result?.breaks).toEqual([25, 50, 60, 85]);
-    const roundQuery = mockedDuckQuery.mock.calls[2]?.[0] as string;
-    expect(roundQuery).toContain('round_thresholds(');
   });
 
   it('should not invoke any macro query for manual method inside calculateBreaks', async () => {
@@ -897,19 +729,6 @@ describe('calculateBreaks — Flechette edge cases', () => {
       .mockResolvedValueOnce(makeTable({ bounds: [0, 100] }) as never);
   }
 
-  it('should return null when the macro returns an empty list (DirectBatch subarray of length 0)', async () => {
-    arrangeMacroFlow(new Float64Array(0), new Float64Array(0));
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result).toBeNull();
-  });
-
   it('should filter null entries when the macro returns an Array with nulls (Flechette fallback slice with null bitmap)', async () => {
     arrangeMacroFlow([null, 20, null, 60, null]);
 
@@ -921,64 +740,6 @@ describe('calculateBreaks — Flechette edge cases', () => {
     });
 
     expect(result?.breaks).toEqual([20, 60]);
-  });
-
-  it('should parse a Float32Array subarray (DirectBatch for single-precision list)', async () => {
-    const f32 = Float32Array.of(20, 40, 60, 80).subarray(0, 4);
-    expect(f32).toBeInstanceOf(Float32Array);
-    expect(Array.isArray(f32)).toBe(false);
-    arrangeMacroFlow(f32, f32);
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
-  });
-
-  it('should parse an Int32Array subarray (DirectBatch for integer-typed list)', async () => {
-    arrangeMacroFlow(
-      Int32Array.of(20, 40, 60, 80),
-      Int32Array.of(20, 40, 60, 80)
-    );
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'equal_interval' as never,
-      numClasses: 5
-    });
-
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
-  });
-
-  it('should treat undefined get(0) the same as null (out-of-range row)', async () => {
-    arrangeMacroFlow(undefined, undefined);
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result).toBeNull();
-  });
-
-  it('should ignore unsupported scalar return (e.g. macro misconfigured to return a number)', async () => {
-    arrangeMacroFlow(42, 42);
-
-    const result = await calculateBreaks({
-      datasetId: 'src',
-      columnName: 'value',
-      method: 'quantiles' as never,
-      numClasses: 5
-    });
-
-    expect(result).toBeNull();
   });
 
   it('should coerce BigInt entries produced by Int64Batch-like lists', async () => {

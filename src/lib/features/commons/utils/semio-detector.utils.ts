@@ -51,19 +51,6 @@ export const SEMIO_TYPES = {
 
 export const MAX_SEMIO_SCORE = 6.5;
 
-export const ID_COLUMN_KEYWORDS = [
-  'id',
-  'fid',
-  'gid',
-  'oid',
-  'pk',
-  'code',
-  'iso',
-  'objectid',
-  'object_id',
-  'rowid'
-] as const;
-
 interface SemioScore {
   semioType: SemioType;
   score: number;

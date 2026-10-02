@@ -1,7 +1,6 @@
 import {
   PrimitiveFilterType,
   type ClassificationConfig,
-  type PrimitiveFilter,
   type SymbolPrimitiveConfig,
   type VisualizationConfig,
   type VisualizationModes,
@@ -11,22 +10,15 @@ import { SymbolMode } from '$lib/features/commons/constants/visualization.consta
 import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
+import type {
+  PrimitiveHandlersDeps,
+  PrimitiveStrokeHandlersDeps
+} from './primitive-handlers.types';
 
 type ClassificationUpdateOptions = { preserveOrigin?: boolean };
 
-export interface SymbolHandlersDeps {
-  getSelectedVisualization: () => VisualizationConfig | undefined;
-  updateSelectedVisualization: (
-    updates: Partial<VisualizationConfig>,
-    afterUpdate?: (next: VisualizationConfig) => void
-  ) => void;
-  buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilter, boolean>>
-  ) => PrimitiveFilter[];
-  updatePrimitiveClassificationState: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<ClassificationConfig>
-  ) => void;
+export interface SymbolHandlersDeps
+  extends PrimitiveHandlersDeps, PrimitiveStrokeHandlersDeps {
   updatePrimitiveStrokeClassificationState: (
     primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
     updates: Partial<ClassificationConfig>,
@@ -36,42 +28,14 @@ export interface SymbolHandlersDeps {
     updates: Partial<ClassificationConfig>,
     options?: ClassificationUpdateOptions
   ) => void;
-  applyPrimitiveMappingUpdate: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  applyPrimitiveStrokeMappingUpdate: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
   applySymbolFillMappingUpdate: (
     updates: Partial<VisualizationConfig['mapping']>
   ) => void;
-  invertPrimitivePalette: (primitive: PrimitiveFilterType) => void;
-  invertPrimitiveStrokePalette: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON
-  ) => void;
   invertSymbolFillPalette: () => void;
-  ensurePrimitiveClassificationDefaults: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensureAutoColumns: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
   ensureSymbolFillClassificationDefaults: (
     visualization: VisualizationConfig
   ) => void;
   ensureSymbolFillAutoColumns: (visualization: VisualizationConfig) => void;
-  ensurePrimitiveStrokeClassificationDefaults: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    visualization: VisualizationConfig
-  ) => void;
-  ensurePrimitiveStrokeAutoColumns: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    visualization: VisualizationConfig
-  ) => void;
 }
 
 export function createSymbolHandlers(deps: SymbolHandlersDeps) {

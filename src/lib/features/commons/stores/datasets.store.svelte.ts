@@ -50,13 +50,10 @@ import {
   resetDataset as resetDatasetFn,
   duplicateDataset as duplicateDatasetFn,
   createVisualizationsForGeoDatasets,
-  VisualizationType,
-  type VisualizationConfig,
   type VisualizationStoreOperations
 } from './datasets';
 
-export { VisualizationType };
-export type { VisualizationConfig, VisualizationStoreOperations };
+export type { VisualizationStoreOperations };
 
 function createDatasetsStore() {
   let visualizationStoreOps: VisualizationStoreOperations | null = null;

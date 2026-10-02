@@ -62,6 +62,21 @@ rapides (actuel → précédent, temporaire → actuel). Il conserve les assets
 immuables de la release précédente encore nécessaires, puis supprime l'ancienne
 arborescence.
 
+Seuls les fichiers modifiés sont transférés. Chaque build embarque un
+manifeste `.khartis-release-files.json` (chemin et empreinte SHA-256 de chaque
+fichier) ; au déploiement suivant, les fichiers dont l'empreinte n'a pas changé
+sont repris de la version en ligne par lien physique côté serveur
+(extension SFTP `hardlink@openssh.com`), sans transiter par le poste. Les
+assets conservés de la release précédente sont repris de la même façon. Si le
+serveur refuse les liens, ou si la version en ligne n'a pas de manifeste
+(premier déploiement après ce changement), le script renvoie les fichiers
+comme avant : c'est plus long, jamais bloquant.
+
+Ordre de grandeur mesuré sur la PPRD avant ce mécanisme : 34 min de transfert
+pour 442 Mo, 39 min de recopie des anciens assets, 15 min de suppression de
+l'ancienne arborescence. La suppression se fait désormais par lots en
+parallèle.
+
 Il valide ensuite la route publique canonique sur chaque backend de routage
 déclaré. Une redirection permanente (301/308) vers la route canonique est
 acceptée ; un autre chemin qui servirait un autre build ne l'est pas.

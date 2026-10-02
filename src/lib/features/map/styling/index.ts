@@ -1,7 +1,4 @@
 export {
   getCategoricalColorMap,
-  getColorForValue,
-  shouldApplyCategorical,
-  shouldApplyChoropleth,
-  shouldApplyProportionalSymbols
+  shouldApplyCategorical
 } from '../utils/data-styling.utils';

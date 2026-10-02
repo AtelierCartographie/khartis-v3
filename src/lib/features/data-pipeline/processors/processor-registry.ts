@@ -1,7 +1,5 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { FileProcessor, ProcessContext } from './file-processor.interface';
-
-export type { ProcessContext };
+import type { FileProcessor } from './file-processor.interface';
 
 const processors: FileProcessor[] = [];
 

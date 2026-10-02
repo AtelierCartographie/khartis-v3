@@ -295,17 +295,6 @@ export enum BasemapDottedPattern {
   LONG_DASH = 'long-dash'
 }
 
-export enum BasemapColorId {
-  GRAY_LIGHT = 'gray-light',
-  GRAY = 'gray',
-  GRAY_DARK = 'gray-dark',
-  BLUE_LIGHT = 'blue-light',
-  BLUE = 'blue',
-  BEIGE = 'beige',
-  WHITE = 'white',
-  BLACK = 'black'
-}
-
 export const BASEMAP_LAYER_CONFIG = {
   opacity: { min: 0, max: 100, step: 1 },
   thickness: { min: 0.25, max: 3, step: 0.25 },

@@ -4,9 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "devDependencies": {
-    "@jcode.labs/ragmir": "^4.2.2",
-    "@jcode.labs/ragmir-chat": "4.2.2",
-    "@jcode.labs/ragmir-tts": "4.2.2",
+    "@huggingface/transformers": "^4.3.0",
+    "@jcode.labs/ragmir": "^6.0.1",
     "apache-arrow": "18.1.0"
   }
 }

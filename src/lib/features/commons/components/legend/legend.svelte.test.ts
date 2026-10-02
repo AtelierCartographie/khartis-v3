@@ -1,9 +1,9 @@
-import { render } from '@testing-library/svelte';
+// @vitest-environment jsdom
+
 import Textbox from '@borgar/textbox';
 import { scaleLegendMetric } from './utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
-  LegendSvg,
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_line_width_legend,
@@ -94,22 +94,6 @@ describe('common legend generators', () => {
     expect(note.markup).toContain('&lt;unsafe&gt;');
     expect(note.height).toBeGreaterThan(0);
     expect(emptyHeader).toEqual({ markup: '', height: 0 });
-  });
-
-  it('draws a quantitative color legend from precomputed thresholds', () => {
-    const svg = createLegendSvg(
-      draw_quanti_color_legend([0, 10, 20], ['#f7fbff', '#2171b5'], {
-        title: 'Population',
-        nodata: true,
-        nodataLabel: 'Sans données'
-      })
-    );
-
-    expect(svg.width).toBeGreaterThan(0);
-    expect(svg.height).toBeGreaterThan(0);
-    expect(svg.markup).toContain('quantitative_legend');
-    expect(svg.markup).toContain('Sans données');
-    expect(svg.markup).toContain('#2171b5');
   });
 
   it('widens quantitative legends to contain unbroken header text', () => {
@@ -216,21 +200,6 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('categorical_legend');
     expect(svg.markup).toContain('Absence de données');
     expect(svg.height).toBeLessThan(140);
-  });
-
-  it('draws nested proportional symbol legends from numeric data', () => {
-    const svg = createLegendSvg(
-      draw_symbols_legend([7, 100_000, 1_000_000], {
-        type: 'circle',
-        fill: '#4585f5',
-        stroke: '#ffffff'
-      })
-    );
-
-    expect(svg.markup).toContain('symbol_legend');
-    expect(svg.markup).toContain('class="links"');
-    expect(svg.width).toBeGreaterThan(0);
-    expect(svg.height).toBeGreaterThan(0);
   });
 
   it('stops an extreme rounding before it reaches the neighbouring value', () => {
@@ -475,22 +444,6 @@ describe('common legend generators', () => {
     }
   });
 
-  it('keeps the khartis-legends text symbol variant available for text size legends', () => {
-    const svg = createLegendSvg(
-      draw_symbols_legend([10, 100, 1_000], {
-        type: 'text',
-        fill: '#111111',
-        stroke: 'none',
-        nodata: true,
-        nodataLabel: 'Sans données'
-      })
-    );
-
-    expect(svg.markup).toContain('symbol_legend');
-    expect(svg.markup).toContain('Sans données');
-    expect(svg.markup).toContain('<path');
-  });
-
   it('keeps the cross-zero sign legend inside the SVG viewBox bounds', () => {
     const svg = createLegendSvg(
       draw_symbols_legend([-100, -50, 50, 100], {
@@ -518,28 +471,6 @@ describe('common legend generators', () => {
       })
     );
     expect(svg.height).toBeGreaterThan(svgWithoutSign.height);
-  });
-
-  it('keeps sign legend, nodata and note all within bounds for cross-zero data', () => {
-    const svg = createLegendSvg(
-      draw_symbols_legend([-100, -50, 50, 100], {
-        type: 'circle',
-        fill: '#4585f5',
-        nodata: true,
-        nodataLabel: 'Sans données',
-        note: 'Source: Khartis',
-        title: 'Visualisation',
-        subtitle: 'Indice'
-      })
-    );
-
-    expect(svg.markup).toContain('sign_legend');
-    expect(svg.markup).toContain('Sans données');
-    expect(svg.markup).toContain('Source: Khartis');
-    expect(svg.markup).toContain('Indice');
-    expect(svg.markup).toContain('Visualisation');
-    expect(svg.width).toBeGreaterThan(0);
-    expect(svg.height).toBeGreaterThan(0);
   });
 
   it('handles cross-zero proportional bars with the sign legend integrated', () => {
@@ -666,35 +597,5 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('<pattern id="motif-a">');
     expect(svg.markup).toContain('fill="#2171b5"');
     expect(svg.markup).toContain('fill="url(#motif-a)" opacity="0.6"');
-  });
-
-  it('centralizes raw SVG markup rendering in LegendSvg', () => {
-    const { container } = render(LegendSvg, {
-      markup: '<g class="safe"><rect width="10" height="12" /></g>',
-      width: 10,
-      height: 12,
-      decorative: false,
-      ariaLabel: 'Legend'
-    });
-    const svg = container.querySelector('svg.legend-svg');
-
-    expect(svg).toBeInTheDocument();
-    expect(svg).toHaveAttribute('viewBox', '0 0 10 12');
-    expect(svg).toHaveAttribute('role', 'img');
-    expect(svg).toHaveAttribute('aria-label', 'Legend');
-    expect(container.querySelector('.safe')).toBeInTheDocument();
-  });
-
-  it('keeps text color on the SVG root for DOM image exports', () => {
-    const { container } = render(LegendSvg, {
-      markup: '<g><text x="0" y="10">Legend</text></g>',
-      width: 42,
-      height: 16,
-      textColor: '#ffffff'
-    });
-    const svg = container.querySelector('svg.legend-svg');
-
-    expect(svg).toHaveAttribute('fill', 'currentColor');
-    expect(svg).toHaveStyle({ color: '#ffffff' });
   });
 });

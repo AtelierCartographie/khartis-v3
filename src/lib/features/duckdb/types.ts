@@ -1,15 +1,11 @@
-import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
-
-export type { GeoArrowMetadata };
 export { FileType } from '$lib/features/commons/types/create-project.types';
 
 export {
   DuckDBSimplifiedType,
   FilterOperatorEnum,
-  QueryFormatEnum,
   RefineOperation
 } from './enums';
-export type { FilterOperator, QueryFormat } from './enums';
+export type { FilterOperator } from './enums';
 
 export type {
   AnalysisResult,
@@ -53,6 +49,5 @@ export type {
   DataTableFilter,
   DataTableFilterInput,
   FilterStats,
-  JoinInfo,
   TableMetadata
 } from './types/table.types';

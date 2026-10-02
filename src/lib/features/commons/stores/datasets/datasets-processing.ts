@@ -20,12 +20,10 @@ import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
 import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
 
-export interface VisualizationConfig {
+interface VisualizationConfig {
   id: string;
   datasetId: string;
 }
-
-export { VisualizationType };
 
 export interface VisualizationStoreOperations {
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];

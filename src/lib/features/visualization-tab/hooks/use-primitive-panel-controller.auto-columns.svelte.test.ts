@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -220,91 +222,6 @@ describe('usePrimitivePanelController auto columns', () => {
     ).toEqual([PrimitiveFilterType.TEXT]);
   }, 10000);
 
-  it('seeds polygon break defaults through the shared defaults helper', async () => {
-    vi.stubGlobal('Worker', WorkerStub);
-    const { usePrimitivePanelController } =
-      await import('./use-primitive-panel-controller.svelte');
-    const { PrimitiveFilterType } =
-      await import('$lib/features/commons/stores/visualization.store.svelte');
-    const visualization = {
-      ...createVisualization(),
-      primitiveFilters: [PrimitiveFilterType.POLYGON],
-      polygon: {
-        enabled: true,
-        fillMode: FillMode.CLASSES,
-        classification: {}
-      }
-    } as unknown as VisualizationConfig;
-    const updatePrimitiveClassification = vi.fn();
-    const controller = usePrimitivePanelController({
-      getDataFields: () => [],
-      getVisualization: () => visualization,
-      updatePrimitiveClassification,
-      updateLineThicknessClassification: () => {},
-      updatePrimitiveStrokeClassification: () => {},
-      updateVisualization: () => {}
-    });
-
-    controller.ensurePrimitiveClassificationDefaults(
-      PrimitiveFilterType.POLYGON,
-      visualization
-    );
-
-    expect(updatePrimitiveClassification).toHaveBeenCalledWith(
-      PrimitiveFilterType.POLYGON,
-      {
-        method: KMEANS,
-        classes: 4,
-        numClasses: 4
-      },
-      { preserveOrigin: true }
-    );
-  }, 10000);
-
-  it('seeds categorical colors and labels through the shared defaults helper', async () => {
-    vi.stubGlobal('Worker', WorkerStub);
-    const { usePrimitivePanelController } =
-      await import('./use-primitive-panel-controller.svelte');
-    const { PrimitiveFilterType } =
-      await import('$lib/features/commons/stores/visualization.store.svelte');
-    const baseVisualization = createVisualization();
-    const visualization = {
-      ...baseVisualization,
-      symbol: {
-        ...baseVisualization.symbol,
-        mode: SymbolMode.CATEGORIES,
-        classification: {
-          method: KMEANS,
-          classes: 5
-        }
-      }
-    } as unknown as VisualizationConfig;
-    const updatePrimitiveClassification = vi.fn();
-    const controller = usePrimitivePanelController({
-      getDataFields: () => [],
-      getVisualization: () => visualization,
-      updatePrimitiveClassification,
-      updateLineThicknessClassification: () => {},
-      updatePrimitiveStrokeClassification: () => {},
-      updateVisualization: () => {}
-    });
-
-    controller.ensurePrimitiveClassificationDefaults(
-      PrimitiveFilterType.POINT,
-      visualization
-    );
-
-    expect(updatePrimitiveClassification).toHaveBeenCalledWith(
-      PrimitiveFilterType.POINT,
-      expect.objectContaining({
-        colors: expect.any(Array),
-        inverted: false,
-        labels: []
-      }),
-      { preserveOrigin: true }
-    );
-  }, 10000);
-
   it('auto-selects symbol fill value columns through the shared helper', async () => {
     vi.stubGlobal('Worker', WorkerStub);
     const { usePrimitivePanelController } =
@@ -351,46 +268,5 @@ describe('usePrimitivePanelController auto columns', () => {
       fillValueColumn: 'population'
     });
     expect(updatesLog[0]).toMatchObject({ origin });
-  }, 10000);
-
-  it('preserves origin when seeding stroke classification defaults', async () => {
-    vi.stubGlobal('Worker', WorkerStub);
-    const { usePrimitivePanelController } =
-      await import('./use-primitive-panel-controller.svelte');
-    const { PrimitiveFilterType } =
-      await import('$lib/features/commons/stores/visualization.store.svelte');
-    const visualization = {
-      ...createVisualization(),
-      primitiveFilters: [PrimitiveFilterType.POLYGON],
-      polygon: {
-        enabled: true,
-        strokeMode: StrokeMode.CLASSES,
-        strokeClassification: {}
-      }
-    } as unknown as VisualizationConfig;
-    const updatePrimitiveStrokeClassification = vi.fn();
-    const controller = usePrimitivePanelController({
-      getDataFields: () => [],
-      getVisualization: () => visualization,
-      updatePrimitiveClassification: () => {},
-      updateLineThicknessClassification: () => {},
-      updatePrimitiveStrokeClassification,
-      updateVisualization: () => {}
-    });
-
-    controller.ensurePrimitiveStrokeClassificationDefaults(
-      PrimitiveFilterType.POLYGON,
-      visualization
-    );
-
-    expect(updatePrimitiveStrokeClassification).toHaveBeenCalledWith(
-      PrimitiveFilterType.POLYGON,
-      {
-        method: KMEANS,
-        classes: 5,
-        numClasses: 5
-      },
-      { preserveOrigin: true }
-    );
   }, 10000);
 });

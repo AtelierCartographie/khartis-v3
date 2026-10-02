@@ -5,7 +5,6 @@ import {
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
 import type { LayoutSizingContext } from '$lib/features/commons/utils/layout-sizing.utils';
-export { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
 import {
   createReadonlyStateFacade,
   createToolStore

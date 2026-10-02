@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { osmBasemapStore } from './osm-basemap.store.svelte';

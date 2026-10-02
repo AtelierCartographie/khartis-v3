@@ -44,6 +44,5 @@ est publié sur le
    qu'elle décrit.
 
 Les noms de fonctions et de fichiers cités servent à retrouver le code ; ils ne
-constituent pas une API publique. `CLAUDE.md`, `AGENTS.md` et `.claude/rules/`
-sont des consignes pour les assistants de code, pas une documentation de
-référence.
+constituent pas une API publique. `AGENTS.md` et `.claude/rules/` sont des
+consignes pour les assistants de code, pas une documentation de référence.
