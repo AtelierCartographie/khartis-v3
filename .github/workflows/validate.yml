@@ -1,0 +1,126 @@
+name: Validate
+
+# Lint, type check, tests and build, run once per source tree.
+#
+# A pull request, the push that merges it, the promotion pull request and the
+# push to main usually carry the same git tree. The first successful run
+# uploads an artifact named after the tree; later runs find it and skip the
+# checks. Any lookup failure falls back to a full validation.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  tree:
+    name: Validated tree lookup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      marker: ${{ steps.lookup.outputs.marker }}
+      validated: ${{ steps.lookup.outputs.validated }}
+    steps:
+      - name: Look for a previous validation of this tree
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker=''
+          validated=false
+          if tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${GITHUB_SHA}" --jq '.tree.sha')" && [ -n "${tree}" ]; then
+            marker="validated-tree-${tree}"
+            # Markers uploaded from a fork are ignored: only this repository vouches for a tree.
+            hits="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${marker}" \
+              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length' || echo 0)"
+            if [ "${hits:-0}" -gt 0 ]; then
+              validated=true
+            fi
+          fi
+          echo "marker=${marker}" >> "${GITHUB_OUTPUT}"
+          echo "validated=${validated}" >> "${GITHUB_OUTPUT}"
+          echo "Tree marker: ${marker:-unavailable}, already validated: ${validated}" >> "${GITHUB_STEP_SUMMARY}"
+
+  static:
+    name: Lint and type check
+    needs: tree
+    if: needs.tree.outputs.validated != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Compile Paraglide
+        run: pnpm compile:paraglide
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run type check
+        run: pnpm check
+
+  tests:
+    name: Tests
+    needs: tree
+    if: needs.tree.outputs.validated != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Run unit tests
+        run: pnpm test:unit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Run pipeline tests
+        run: pnpm test:pipeline
+
+      - name: Run DuckDB tests
+        run: pnpm test:duckdb
+
+  build:
+    name: Build
+    needs: tree
+    if: needs.tree.outputs.validated != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Build application
+        run: pnpm build
+        env:
+          # The artifact is not deployed from CI: deploy-local.mjs rebuilds the tag.
+          KHARTIS_SKIP_PRECOMPRESS: 'true'
+
+  record:
+    name: Record validated tree
+    needs: [tree, static, tests, build]
+    if: needs.tree.outputs.validated != 'true' && needs.tree.outputs.marker != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write the marker
+        run: echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > validated-tree.txt
+
+      - name: Upload the marker
+        uses: actions/upload-artifact@v4
+        # The marker only saves time on later runs, so its upload never fails a validation.
+        continue-on-error: true
+        with:
+          name: ${{ needs.tree.outputs.marker }}
+          path: validated-tree.txt
+          retention-days: 30
+          overwrite: true

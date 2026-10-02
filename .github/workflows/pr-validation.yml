@@ -15,53 +15,29 @@ on:
     types:
       - checks_requested
 
-env:
-  NODE_VERSION: '22'
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
   group: pr-validation-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate
+    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
+    uses: ./.github/workflows/validate.yml
+
+  # Branch rulesets require a check named "Quality Checks": keep this name.
   quality-checks:
     name: Quality Checks
-    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
+    needs: validate
+    if: ${{ always() && (github.event_name == 'merge_group' || !github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Run lint
-        run: pnpm lint
-
-      - name: Run type check
-        run: pnpm check
-
-      - name: Run unit tests
-        run: pnpm test:unit
+      - name: Require a successful validation
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Run pipeline tests
-        run: pnpm test:pipeline
-
-      - name: Run DuckDB tests
-        run: pnpm test:duckdb
-
-      - name: Build application
-        run: pnpm build
+          VALIDATION_RESULT: ${{ needs.validate.result }}
+        run: test "${VALIDATION_RESULT}" = "success"
