@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import {
   cp,
   mkdtemp,
@@ -39,6 +39,10 @@ const HTTP_BACKEND_HEADER_NAME_ENV = 'KHARTIS_HTTP_BACKEND_HEADER_NAME';
 const RELEASE_ASSET_ROOT = '_app/immutable';
 const RELEASE_ASSET_MANIFEST_FILENAME = '.khartis-release-assets.json';
 const RELEASE_ASSET_MANIFEST_VERSION = 1;
+const RELEASE_FILE_MANIFEST_FILENAME = '.khartis-release-files.json';
+const RELEASE_FILE_MANIFEST_VERSION = 1;
+// ssh2-sftp-client attaches listeners per pending call: stay under Node's limit of 10.
+const REMOTE_OPERATION_CONCURRENCY = 8;
 const LEGACY_ASSET_SCAN_MAX_FILES = 2_000;
 const LEGACY_ASSET_SCAN_MAX_BYTES = 512 * 1024 * 1024;
 const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 308]);
@@ -129,8 +133,10 @@ Local env files:
   ${LOCAL_ENV_FILES.join(', ')} are supported.
   pprd deploys the latest v*-pprd.* prerelease (legacy v*-staging.* accepted); prod deploys the latest stable v*.*.* tag.
   The build is uploaded to a temporary remote directory, then swapped into
-  place with two quick renames. Missing immutable assets from the immediately
-  previous release are retained, then the previous directory is removed.
+  place with two quick renames. Files unchanged since the live release are
+  linked on the server instead of being uploaded again. Missing immutable
+  assets from the immediately previous release are retained, then the
+  previous directory is removed.
   Use --migrate-legacy-assets only for the first deployment from a release
   without a valid .khartis-release-assets.json manifest.
   Use --recover-stale-lock only after confirming no other deployment is active.
@@ -241,6 +247,7 @@ async function main() {
     const snapshotSpinner = startSpinner('Preparing upload snapshot');
     await cp(buildDir, uploadBuildDir, { recursive: true });
     const releaseAssetPaths = await writeReleaseAssetManifest(uploadBuildDir);
+    const releaseFiles = await writeReleaseFileManifest(uploadBuildDir);
     const wasmAssetPath = findCompressedWasmAssetPath(releaseAssetPaths);
     snapshotSpinner.done(
       `Upload snapshot ready (${releaseAssetPaths.length} immutable assets tracked)`
@@ -266,6 +273,7 @@ async function main() {
         backendRouting,
         expectedVersion: tag,
         recoverStaleLock: options.recoverStaleLock,
+        releaseFiles,
         validateReleaseProvenance: () =>
           assertRemoteReleaseStillValid(tag, tagSha, target.releaseBranch),
         wasmAssetPath
@@ -994,6 +1002,7 @@ async function uploadBuild(
     backendRouting,
     expectedVersion,
     recoverStaleLock,
+    releaseFiles,
     validateReleaseProvenance,
     wasmAssetPath
   }
@@ -1048,13 +1057,36 @@ async function uploadBuild(
     await client.mkdir(tempRemoteDir, true);
     tempRemoteDirCreated = true;
 
+    const unchangedPaths = remoteType
+      ? findUnchangedReleaseFiles(
+          releaseFiles,
+          await readPreviousReleaseFiles(client, safeRemoteDir)
+        )
+      : new Set();
     log(
-      `Uploading ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory…`
+      `Sending ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory, ${unchangedPaths.size} of them unchanged since the live release…`
     );
     uploadProgress = createUploadProgress(manifest);
     client.on('upload', (info) => uploadProgress.onFileUploaded(info.source));
-    await client.uploadDir(buildDir, tempRemoteDir, { useFastput: false });
+    await client.uploadDir(buildDir, tempRemoteDir, {
+      useFastput: false,
+      filter: (localPath, isDirectory) =>
+        isDirectory ||
+        !unchangedPaths.has(toReleaseFilePath(buildDir, localPath))
+    });
+    const reuse = await reuseUnchangedReleaseFiles(client, {
+      buildDir,
+      previousRemoteDir: safeRemoteDir,
+      uploadRemoteDir: tempRemoteDir,
+      unchangedPaths,
+      onFileSent: (localPath) => uploadProgress.onFileUploaded(localPath)
+    });
     uploadProgress.finish();
+    if (unchangedPaths.size > 0) {
+      log(
+        `Linked ${reuse.linkedFiles} unchanged files on the server, uploaded ${reuse.uploadedFiles} of them again.`
+      );
+    }
     throwIfTerminationRequested('after the remote upload');
 
     if (remoteType) {
@@ -1314,6 +1346,185 @@ async function writeReleaseAssetManifest(buildDir) {
   return assetPaths;
 }
 
+function toReleaseFilePath(buildDir, localPath) {
+  return path
+    .relative(buildDir, localPath)
+    .split(path.sep)
+    .join(path.posix.sep);
+}
+
+function hashFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    createReadStream(filePath)
+      .on('error', reject)
+      .on('data', (chunk) => hash.update(chunk))
+      .on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+async function writeReleaseFileManifest(buildDir) {
+  const entries = await readdir(buildDir, {
+    recursive: true,
+    withFileTypes: true
+  });
+  const releasePaths = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) =>
+      toReleaseFilePath(buildDir, path.join(entry.parentPath, entry.name))
+    )
+    .filter((releasePath) => releasePath !== RELEASE_FILE_MANIFEST_FILENAME)
+    .sort();
+
+  const files = {};
+  for (const releasePath of releasePaths) {
+    files[releasePath] = await hashFile(
+      path.join(buildDir, ...releasePath.split(path.posix.sep))
+    );
+  }
+
+  // The next deployment reads it to tell which files it does not need to send again.
+  await writeFile(
+    path.join(buildDir, RELEASE_FILE_MANIFEST_FILENAME),
+    `${JSON.stringify({ formatVersion: RELEASE_FILE_MANIFEST_VERSION, files })}\n`,
+    'utf8'
+  );
+
+  return new Map(Object.entries(files));
+}
+
+function parseReleaseFileManifest(rawManifest) {
+  const manifest = JSON.parse(rawManifest);
+  if (
+    manifest?.formatVersion !== RELEASE_FILE_MANIFEST_VERSION ||
+    typeof manifest.files !== 'object' ||
+    manifest.files === null ||
+    Array.isArray(manifest.files)
+  ) {
+    throw new Error('Unsupported release file manifest.');
+  }
+
+  return new Map(
+    Object.entries(manifest.files).filter(
+      ([releasePath, hash]) =>
+        typeof hash === 'string' &&
+        /^[0-9a-f]{64}$/.test(hash) &&
+        !path.posix.isAbsolute(releasePath) &&
+        !/[\\\0]/.test(releasePath) &&
+        !releasePath.split(path.posix.sep).includes('..')
+    )
+  );
+}
+
+// A missing or unreadable manifest only means that every file is uploaded.
+async function readPreviousReleaseFiles(client, previousRemoteDir) {
+  const manifestPath = path.posix.join(
+    previousRemoteDir,
+    RELEASE_FILE_MANIFEST_FILENAME
+  );
+  try {
+    if ((await client.exists(manifestPath)) !== '-') {
+      return new Map();
+    }
+    const manifest = await client.get(manifestPath);
+    return parseReleaseFileManifest(manifest.toString('utf8'));
+  } catch {
+    return new Map();
+  }
+}
+
+function findUnchangedReleaseFiles(releaseFiles, previousFiles) {
+  return new Set(
+    [...releaseFiles]
+      .filter(([releasePath, hash]) => previousFiles.get(releasePath) === hash)
+      .map(([releasePath]) => releasePath)
+  );
+}
+
+async function runWithConcurrency(items, limit, worker) {
+  let nextIndex = 0;
+  let failed = false;
+
+  async function run() {
+    while (!failed && nextIndex < items.length) {
+      const item = items[nextIndex];
+      nextIndex += 1;
+      try {
+        await worker(item);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => run())
+  );
+}
+
+// The server creates a hard link at once, where a copy would send every byte
+// through this machine. Rejects when the server lacks the OpenSSH extension.
+function linkRemoteFile(client, sourcePath, destinationPath) {
+  return new Promise((resolve, reject) => {
+    const sftp = client.sftp;
+    try {
+      if (typeof sftp?.ext_openssh_hardlink !== 'function') {
+        throw new Error('The SFTP session does not expose hard links.');
+      }
+      // Throws synchronously when the server did not announce the extension.
+      sftp.ext_openssh_hardlink(sourcePath, destinationPath, (error) =>
+        error ? reject(error) : resolve()
+      );
+    } catch (error) {
+      reject(Object.assign(error, { linkUnsupported: true }));
+    }
+  });
+}
+
+async function reuseUnchangedReleaseFiles(
+  client,
+  { buildDir, previousRemoteDir, uploadRemoteDir, unchangedPaths, onFileSent }
+) {
+  let linkedFiles = 0;
+  let uploadedFiles = 0;
+  let linkingWorks = true;
+
+  await runWithConcurrency(
+    [...unchangedPaths],
+    REMOTE_OPERATION_CONCURRENCY,
+    async (releasePath) => {
+      const localPath = path.join(
+        buildDir,
+        ...releasePath.split(path.posix.sep)
+      );
+      const destinationPath = path.posix.join(uploadRemoteDir, releasePath);
+
+      if (linkingWorks) {
+        try {
+          await linkRemoteFile(
+            client,
+            path.posix.join(previousRemoteDir, releasePath),
+            destinationPath
+          );
+          linkedFiles += 1;
+          onFileSent?.(localPath);
+          return;
+        } catch (error) {
+          // Without the extension, the remaining files go straight to an upload.
+          if (error?.linkUnsupported) linkingWorks = false;
+        }
+      }
+
+      await client.put(localPath, destinationPath);
+      uploadedFiles += 1;
+      onFileSent?.(localPath);
+    }
+  );
+
+  return { linkedFiles, uploadedFiles };
+}
+
 function findCompressedWasmAssetPath(assetPaths) {
   const releaseAssets = new Set(
     assetPaths.map((assetPath) => assertReleaseAssetPath(assetPath))
@@ -1525,7 +1736,9 @@ async function retainPreviousReleaseAssets(
       createdDirectories.add(destinationDir);
     }
 
-    await client.rcopy(sourcePath, destinationPath);
+    await linkRemoteFile(client, sourcePath, destinationPath).catch(() =>
+      client.rcopy(sourcePath, destinationPath)
+    );
     copiedFiles += 1;
   }
 
@@ -1875,12 +2088,18 @@ async function removeRemoteDirRecursive(
   const progress = createRemoteRemovalProgress(label, manifest);
 
   try {
-    for (const entry of manifest.entries) {
-      if (entry.type === 'd') {
-        await client.rmdir(entry.path, false);
-      } else {
+    // Files first, several at a time; directories then go children first.
+    await runWithConcurrency(
+      manifest.entries.filter((entry) => entry.type !== 'd'),
+      REMOTE_OPERATION_CONCURRENCY,
+      async (entry) => {
         await client.delete(entry.path, true);
+        progress.onEntryRemoved();
       }
+    );
+    for (const entry of manifest.entries) {
+      if (entry.type !== 'd') continue;
+      await client.rmdir(entry.path, false);
       progress.onEntryRemoved();
     }
   } finally {
@@ -2954,6 +3173,8 @@ export {
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
+  findUnchangedReleaseFiles,
+  parseReleaseFileManifest,
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
@@ -2961,6 +3182,7 @@ export {
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
+  reuseUnchangedReleaseFiles,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   startProgress,
@@ -2970,5 +3192,6 @@ export {
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
-  writeReleaseAssetManifest
+  writeReleaseAssetManifest,
+  writeReleaseFileManifest
 };
