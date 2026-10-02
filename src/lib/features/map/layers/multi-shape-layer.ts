@@ -78,7 +78,7 @@ const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
   (ordinal) => `shapeOrdinal == ${ordinal}`
 ).join(' || ');
 
-// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.3.x), with two
+// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.4.x), with two
 // additions. (1) Linear shapes (BAR/SPIKE) encode the value as a height, so
 // their quad is lifted by half its height along its local +y axis (the SPIKE
 // apex direction in the fragment SDF) to anchor the shape's base on the data
@@ -97,7 +97,9 @@ in float instanceRadius;
 in float instanceLineWidths;
 in vec4 instanceFillColors;
 in vec4 instanceLineColors;
-in vec3 instancePickingColors;
+#ifdef USE_ROW_INDEXES
+in float rowIndexes;
+#endif
 in vec2 instancePixelOffset;
 in float instanceShapes;
 
@@ -142,7 +144,11 @@ void main(void) {
 
   unitPosition = edgePadding * positions.xy;
   geometry.uv = unitPosition;
-  geometry.pickingColor = instancePickingColors;
+#ifdef USE_ROW_INDEXES
+  geometry.pickingColor = picking_getPickingColorFromIndex(rowIndexes);
+#else
+  geometry.pickingColor = picking_getPickingColorFromInstanceID();
+#endif
 
   innerUnitRadius = 1.0 - scatterplot.stroked * lineWidthPixels / outerRadiusPixels;
 
