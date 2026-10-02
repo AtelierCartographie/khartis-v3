@@ -1,14 +1,15 @@
 name: Setup
-description: Install pnpm, the Node.js version of .nvmrc and the locked dependencies.
+description: Install the pnpm of package.json, the Node.js version of .nvmrc and the locked dependencies.
 
 runs:
   using: composite
   steps:
-    - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+    - name: Enable pnpm through Corepack
+      shell: bash
+      run: corepack enable pnpm
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         node-version-file: .nvmrc
         cache: pnpm

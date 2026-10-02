@@ -121,13 +121,15 @@ force le mode MapLibre.
 ## Intégration continue
 
 La validation est décrite une seule fois, dans `validate.yml`, et appelée par
-les deux workflows. Elle lance trois jobs en parallèle :
+les deux workflows. Elle lance cinq contrôles en parallèle :
 
-| Job                 | Étapes                                                |
-| ------------------- | ----------------------------------------------------- |
-| Lint and type check | compilation Paraglide, `pnpm lint`, `pnpm check`      |
-| Tests               | `pnpm test:unit`, `pnpm test:pipeline`, `test:duckdb` |
-| Build               | `pnpm build`, sans précompression Brotli et gzip      |
+| Contrôle     | Commande                                         |
+| ------------ | ------------------------------------------------ |
+| Lint         | compilation Paraglide, `pnpm lint`               |
+| Type check   | `pnpm check`                                     |
+| Unit tests   | `pnpm test:unit`                                 |
+| Engine tests | `pnpm test:pipeline`, `pnpm test:duckdb`         |
+| Build        | `pnpm build`, sans précompression Brotli et gzip |
 
 - `pr-validation.yml` l'appelle sur les pull requests non brouillons vers
   `staging` et `main`, et sur les files de fusion. Son job `Quality Checks` est
@@ -138,9 +140,9 @@ les deux workflows. Elle lance trois jobs en parallèle :
 
 **Un arbre n'est validé qu'une fois.** Une pull request, le push qui la
 fusionne, la pull request de promotion vers `main` et le push sur `main`
-portent en général le même arbre git. La première validation réussie dépose un
-artefact `validated-tree-<sha de l'arbre>` (conservé 30 jours) ; les runs
-suivants le trouvent et sautent les trois jobs. Dès que l'arbre diffère, par
+portent en général le même arbre git. Chaque contrôle réussi dépose un artefact
+`validated-tree-<sha de l'arbre>-<contrôle>` (conservé 30 jours) ; un run qui
+les trouve tous les cinq saute les contrôles. Dès que l'arbre diffère, par
 exemple quand `staging` a avancé entre la validation et la fusion, la
 validation complète repart. Un artefact venu d'un fork n'est jamais pris en
 compte.
@@ -148,6 +150,12 @@ compte.
 Le build de la CI ne sert qu'à prouver que l'application se construit :
 `KHARTIS_SKIP_PRECOMPRESS=true` y désactive la précompression. Le build
 déployé est refait par `scripts/deploy-local.mjs`, avec la précompression.
+
+Les contrôles ne récupèrent pas tout le dépôt : les géométries des fonds
+(`static/basemaps/**/*.parquet`) ne sont lues par aucun d'eux, et les jeux
+`tests-datasets/shp` et `tests-datasets/gpkg` ne le sont que par les tests
+moteur. Un test qui aurait besoin d'un de ces fichiers échouerait en CI sur un
+fichier manquant : adapter alors les motifs `SPARSE_*` de `validate.yml`.
 
 ## Hooks git
 

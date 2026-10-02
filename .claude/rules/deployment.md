@@ -24,9 +24,10 @@ paths:
 
 ## CI workflows
 
-- `validate.yml` is the single definition of the checks: lint and types, tests, build, as three parallel jobs. `pr-validation.yml` and `release.yml` call it.
-- A git tree is validated once. A successful run uploads a `validated-tree-<tree sha>` artifact, and later runs on the same tree (the merge push, the promotion pull request, the push to `main`) find it and skip the checks. The lookup trusts only artifacts produced by this repository and falls back to a full validation on any failure: keep both properties.
+- `validate.yml` is the single definition of the checks: lint, types, unit tests, engine tests and build, as five parallel legs of one matrix. `pr-validation.yml` and `release.yml` call it.
+- A git tree is validated once. Each successful check uploads a `validated-tree-<tree sha>-<check id>` artifact, and later runs on the same tree (the merge push, the promotion pull request, the push to `main`) that find all five skip the checks. The list of ids in the lookup step and the matrix stay in sync. The lookup trusts only artifacts produced by this repository and falls back to a full validation on any failure: keep both properties.
 - The job named `Quality Checks` in `pr-validation.yml` is the status check the branch rulesets require.
+- The checks use a sparse checkout without the basemap geometries (`static/basemaps/**/*.parquet`), and without the shapefile and GeoPackage fixtures except for the engine tests. A check that needs one of those files gets it by adjusting the `SPARSE_*` patterns.
 - The CI build sets `KHARTIS_SKIP_PRECOMPRESS=true` because its output is never deployed. A deployed build keeps the Brotli and gzip sidecars, which `deploy-local.mjs` requires.
 
 ## Secrets
