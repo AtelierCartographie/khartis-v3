@@ -153,35 +153,16 @@ vite.config.ts.timestamp-*
 test-results/
 playwright-report/
 
-# Claude Code — personal/local settings (shared team config lives in .claude/settings.json)
+# Coding agents: personal or generated state (shared config lives in AGENTS.md and .claude/)
 .claude/settings.local.json
-.gitnexus
+CLAUDE.local.md
 *-agent-tests.md
 
 # Codex agent artifacts (screenshots, ad-hoc captures, browser plans)
 .codex/
 .codex-artifacts/
 
-# Ragmir
+# Ragmir: local retrieval index and the skill links it generates
 .ragmir/
-
 .claude/skills/ragmir
-.claude/skills/ragmir-audio-summary
-.claude/skills/ragmir-markdown-report
-.claude/skills/ragmir-legal-dossier
 .agents/skills/ragmir
-.agents/skills/ragmir-audio-summary
-.agents/skills/ragmir-markdown-report
-.agents/skills/ragmir-legal-dossier
-.kimi/skills/ragmir
-.kimi/skills/ragmir-audio-summary
-.kimi/skills/ragmir-markdown-report
-.kimi/skills/ragmir-legal-dossier
-.opencode/skills/ragmir
-.opencode/skills/ragmir-audio-summary
-.opencode/skills/ragmir-markdown-report
-.opencode/skills/ragmir-legal-dossier
-.cline/skills/ragmir
-.cline/skills/ragmir-audio-summary
-.cline/skills/ragmir-markdown-report
-.cline/skills/ragmir-legal-dossier

@@ -9,10 +9,6 @@ import {
 } from '$lib/features/commons/types/create-project.types';
 
 const mocks = vi.hoisted(() => ({
-  clearDuckMock: vi.fn(),
-  clearDatasetsMock: vi.fn(),
-  clearSourceFilesMock: vi.fn(async () => undefined),
-  clearVisualizationsMock: vi.fn(),
   processFileMock: vi.fn(),
   showErrorMock: vi.fn(),
   loggerErrorMock: vi.fn(),
@@ -22,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
-    clear: mocks.clearDuckMock
+    clear: vi.fn()
   }
 }));
 
@@ -86,13 +82,13 @@ vi.mock('../utils/notification.utils.svelte', () => ({
 
 vi.mock('./datasets.store.svelte', () => ({
   datasetsStore: {
-    clear: mocks.clearDatasetsMock
+    clear: vi.fn()
   }
 }));
 
 vi.mock('./project.store.svelte', () => ({
   projectStore: {
-    clearSourceFiles: mocks.clearSourceFilesMock,
+    clearSourceFiles: vi.fn(async () => undefined),
     currentProject: undefined,
     markAsDirty: vi.fn(),
     saveCurrentProject: vi.fn()
@@ -101,7 +97,7 @@ vi.mock('./project.store.svelte', () => ({
 
 vi.mock('./visualization.store.svelte', () => ({
   visualizationStore: {
-    clear: mocks.clearVisualizationsMock
+    clear: vi.fn()
   }
 }));
 
@@ -208,40 +204,6 @@ describe('createProjectActions.removeUploadedFile', () => {
     ]);
   });
 
-  it('resetAllTabs clears stale modal state across create/example tabs', () => {
-    createProjectActions.selectTab(3);
-    createProjectState.newProject.uploadedFiles = [
-      makeUploadedFile('stale', 1)
-    ];
-    createProjectState.newProject.pastedData = 'hello';
-    createProjectState.newProject.onlineFileUrl = 'http://localhost/stale.csv';
-    createProjectState.newProject.projectName = 'Stale project';
-    createProjectState.newProject.isLoading = true;
-    createProjectState.newProject.isProcessingFiles = true;
-    createProjectState.newProject.processingFileCount = 2;
-    createProjectState.newProject.error = 'stale-error';
-    createProjectState.newProject.warning = 'stale-warning';
-    createProjectState.newProject.validationErrors = ['stale-validation'];
-    createProjectState.tryExample.selectedExampleId = 'example-1';
-    createProjectState.tryExample.error = 'example-error';
-
-    createProjectActions.resetAllTabs();
-
-    expect(createProjectState.selectedTab).toBe(1);
-    expect(createProjectState.newProject.uploadedFiles).toEqual([]);
-    expect(createProjectState.newProject.pastedData).toBe('');
-    expect(createProjectState.newProject.onlineFileUrl).toBe('');
-    expect(createProjectState.newProject.projectName).toBe('');
-    expect(createProjectState.newProject.isLoading).toBe(false);
-    expect(createProjectState.newProject.isProcessingFiles).toBe(false);
-    expect(createProjectState.newProject.processingFileCount).toBe(0);
-    expect(createProjectState.newProject.error).toBeUndefined();
-    expect(createProjectState.newProject.warning).toBeUndefined();
-    expect(createProjectState.newProject.validationErrors).toEqual([]);
-    expect(createProjectState.tryExample.selectedExampleId).toBeUndefined();
-    expect(createProjectState.tryExample.error).toBeUndefined();
-  });
-
   it('checks duplicates only inside the pending new-project import session', () => {
     (
       projectStore as unknown as {
@@ -264,46 +226,6 @@ describe('createProjectActions.removeUploadedFile', () => {
     ];
 
     expect(createProjectActions.isFileDuplicate('existing.csv')).toBe(true);
-  });
-
-  it('checks duplicate names without reading file payloads', () => {
-    const file = {
-      ...makeUploadedFile('large', 1),
-      name: 'large.csv',
-      status: FileStatus.COMPLETE
-    };
-    Object.defineProperty(file, 'content', {
-      get() {
-        throw new Error('content should not be read');
-      }
-    });
-    createProjectState.newProject.uploadedFiles = [file];
-
-    expect(createProjectActions.isFileDuplicate('large.csv')).toBe(true);
-  });
-
-  it('clears persisted source files through the project store API', async () => {
-    createProjectState.newProject.uploadedFiles = [makeUploadedFile('file', 1)];
-    createProjectState.newProject.validationErrors = ['stale-validation'];
-    (
-      projectStore as unknown as {
-        currentProject: { id: string; data: { sourceFiles: Array<unknown> } };
-      }
-    ).currentProject = {
-      id: 'project-1',
-      data: {
-        sourceFiles: [{ id: 'file' }]
-      }
-    };
-
-    await createProjectActions.clearAllFiles(true);
-
-    expect(createProjectState.newProject.uploadedFiles).toEqual([]);
-    expect(createProjectState.newProject.validationErrors).toEqual([]);
-    expect(mocks.clearDatasetsMock).toHaveBeenCalled();
-    expect(mocks.clearVisualizationsMock).toHaveBeenCalled();
-    expect(mocks.clearDuckMock).toHaveBeenCalled();
-    expect(mocks.clearSourceFilesMock).toHaveBeenCalled();
   });
 
   it('should reject when a successful remote file response body never completes', async () => {

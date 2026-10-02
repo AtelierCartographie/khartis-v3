@@ -35,3 +35,19 @@ export function resolveToolbarPanelWidthFromClassName(
 
   return TOOLBAR_WIDTHS[ToolbarState.Compact];
 }
+
+export function readToolbarPanelRight(resolveFallback: () => string): string {
+  if (typeof window === 'undefined') {
+    return resolveFallback();
+  }
+
+  const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
+  if (!toolbar) {
+    return resolveFallback();
+  }
+
+  const toolbarRect = toolbar.getBoundingClientRect();
+  const rightOffset = Math.max(0, window.innerWidth - toolbarRect.left);
+
+  return `${Math.round(rightOffset)}px`;
+}

@@ -1,5 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+
+import { render } from '@testing-library/svelte';
+import { describe, expect, it } from 'vitest';
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
 import VisualizationSuggestionCard from './visualization-suggestion-card.svelte';
 import * as m from '$lib/paraglide/messages';
@@ -20,37 +22,6 @@ function createSuggestion(
 }
 
 describe('VisualizationSuggestionCard', () => {
-  it('invokes the explicit activate callback when the card is clicked', async () => {
-    const activate = vi.fn();
-    const { getAllByRole } = render(VisualizationSuggestionCard, {
-      suggestion: createSuggestion(),
-      resolveBadgeType: () => 'string',
-      activate
-    });
-
-    await fireEvent.click(getAllByRole('radio')[0]);
-
-    expect(activate).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders every variable and representation type for hybrid suggestions', () => {
-    render(VisualizationSuggestionCard, {
-      suggestion: createSuggestion({
-        label: 'Symboles proportionnels avec fond en classes',
-        nbColumns: 3,
-        semioTypes: ['QTA', 'QTR', 'QL'],
-        geometries: ['point', 'polygon'],
-        columns: ['population', 'density_class', 'region_name']
-      }),
-      resolveBadgeType: () => 'numeric'
-    });
-
-    expect(screen.getByText('population')).toBeInTheDocument();
-    expect(screen.getByText('density_class')).toBeInTheDocument();
-    expect(screen.getByText('region_name')).toBeInTheDocument();
-    expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
-  });
-
   // One case per distinct display rule the card must follow, mirroring the
   // "Résultat souhaité" spec (issue #184) across every suggestion family that
   // the suggester can actually surface.

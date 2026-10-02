@@ -264,51 +264,24 @@ async function processGeofileBasemapImport(
     shapefile
   });
 
-  let geometryColumn = INTERNAL_COLUMN.GEOM;
+  const geometryColumn = INTERNAL_COLUMN.GEOM;
   const layerType = await queryGeometryType(duck, tableName, geometryColumn);
 
   if (isPolygonBasemapLayerType(layerType)) {
     await preparePolygonBasemapTables(duck, tableName, geometryColumn);
-    geometryColumn = INTERNAL_COLUMN.GEOM;
   } else if (isLineBasemapLayerType(layerType)) {
     await prepareLineBasemapTables(duck, tableName, geometryColumn);
-    geometryColumn = INTERNAL_COLUMN.GEOM;
   } else if (isPointBasemapLayerType(layerType)) {
     await preparePointBasemapTables(duck, tableName, geometryColumn);
   }
 
-  const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
-
-  if (!bounds) {
-    throw new DataValidationError(
-      m.basemap_import_modal_error_invalid_geometry(),
-      INTERNAL_COLUMN.GEOM,
-      {
-        fileName: file.name,
-        tableName
-      }
-    );
-  }
-
-  const layers = buildBasemapLayers(tableName, layerType);
-
-  const customBasemap: BasemapMetadata = {
-    file: tableName,
-    title_fr: file.name.replace(/\.[^/.]+$/, ''),
-    title_en: file.name.replace(/\.[^/.]+$/, ''),
-    source: m.basemap_custom_source(),
-    date: new Date().getFullYear().toString(),
-    bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    proj_source: GEO_CONSTANTS.WGS84_CRS,
-    proj_to: { type: 'identity' },
-    layers,
-    isCustom: true
-  };
-
-  await generateCustomBasemapAttributes(tableName, customBasemap.file);
-  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
-
-  return { basemap: customBasemap, tableName, geometryTable };
+  return buildCustomBasemapImportResult(
+    duck,
+    file,
+    tableName,
+    geometryColumn,
+    layerType
+  );
 }
 
 async function processParquetBasemapImport(
@@ -348,11 +321,28 @@ async function processParquetBasemapImport(
     await preparePointBasemapTables(duck, tableName, geomColName);
   }
 
-  const bounds = await queryBasemapBounds(duck, tableName, geomColName);
+  return buildCustomBasemapImportResult(
+    duck,
+    file,
+    tableName,
+    geomColName,
+    layerType
+  );
+}
+
+async function buildCustomBasemapImportResult(
+  duck: typeof Duck,
+  file: File,
+  tableName: string,
+  geometryColumn: string,
+  layerType: BasemapLayerType
+): Promise<BasemapImportResult> {
+  const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
+
   if (!bounds) {
     throw new DataValidationError(
       m.basemap_import_modal_error_invalid_geometry(),
-      geomColName,
+      geometryColumn,
       {
         fileName: file.name,
         tableName
@@ -361,11 +351,12 @@ async function processParquetBasemapImport(
   }
 
   const layers = buildBasemapLayers(tableName, layerType);
+  const title = file.name.replace(/\.[^/.]+$/, '');
 
   const customBasemap: BasemapMetadata = {
     file: tableName,
-    title_fr: file.name.replace(/\.[^/.]+$/, ''),
-    title_en: file.name.replace(/\.[^/.]+$/, ''),
+    title_fr: title,
+    title_en: title,
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],

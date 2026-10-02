@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import { syncProjectOSMBasemap } from './osm-basemap-sync.service';

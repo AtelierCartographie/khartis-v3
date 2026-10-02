@@ -1,5 +1,1 @@
-export {
-  simplificationActions,
-  getSimplificationState
-} from './simplification.store.svelte';
-export type { SimplificationState } from '../../types/simplification.types';
+export { getSimplificationState } from './simplification.store.svelte';

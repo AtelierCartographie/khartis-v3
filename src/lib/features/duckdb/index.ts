@@ -19,30 +19,18 @@ export {
   waitForTableBuild
 } from './operations/background-table-build';
 export {
-  findGeometryColumnByName,
   isGeometryColumnName,
   isGeometryColumnType
 } from './utils/geometry-column.utils';
 export type {
-  AnalyseOptions,
   AnalysisResult,
   AnalysisResults,
-  ArrowTableLike,
-  CellSearchResult,
   DataTableFilter,
   DataTableFilterInput,
-  DuckDBContext,
   DuckDBDataset,
-  DuckDBMetadata,
   FileWithId,
   FilterOperator,
   FilterStats,
-  FinalizeJoinResult,
   GPSBounds,
-  GPSColumns,
-  QueryOptions,
-  ReadGeofileOptions,
-  ReadTabularOptions,
-  SearchStats,
-  TableMetadata
+  SearchStats
 } from './types';

@@ -83,15 +83,6 @@ export const DECK_DEVICE_TYPE = 'webgl';
 export const BASEMAP_DATASET_ID = 'basemap';
 export const DEFAULT_PROJECTION_SUFFIX = 'default';
 
-export const GEO_TYPE_TO_EXTENSION: Record<GeometryType, ArrowExtension> = {
-  [GeometryType.POINT]: ArrowExtension.GEOARROW_POINT,
-  [GeometryType.MULTIPOINT]: ArrowExtension.GEOARROW_MULTIPOINT,
-  [GeometryType.LINESTRING]: ArrowExtension.GEOARROW_LINESTRING,
-  [GeometryType.MULTILINESTRING]: ArrowExtension.GEOARROW_MULTILINESTRING,
-  [GeometryType.POLYGON]: ArrowExtension.GEOARROW_POLYGON,
-  [GeometryType.MULTIPOLYGON]: ArrowExtension.GEOARROW_MULTIPOLYGON
-};
-
 export const GEO_EXTENSION_TO_TYPE: Record<string, GeometryType> = {
   [ArrowExtension.GEOARROW_POINT]: GeometryType.POINT,
   [ArrowExtension.GEOARROW_MULTIPOINT]: GeometryType.MULTIPOINT,
@@ -99,15 +90,6 @@ export const GEO_EXTENSION_TO_TYPE: Record<string, GeometryType> = {
   [ArrowExtension.GEOARROW_MULTILINESTRING]: GeometryType.MULTILINESTRING,
   [ArrowExtension.GEOARROW_POLYGON]: GeometryType.POLYGON,
   [ArrowExtension.GEOARROW_MULTIPOLYGON]: GeometryType.MULTIPOLYGON
-};
-
-export const COMPATIBLE_GEOMETRY_TYPES: Record<GeometryType, GeometryType[]> = {
-  [GeometryType.POINT]: [GeometryType.MULTIPOINT],
-  [GeometryType.MULTIPOINT]: [GeometryType.POINT],
-  [GeometryType.LINESTRING]: [GeometryType.MULTILINESTRING],
-  [GeometryType.MULTILINESTRING]: [GeometryType.LINESTRING],
-  [GeometryType.POLYGON]: [GeometryType.MULTIPOLYGON],
-  [GeometryType.MULTIPOLYGON]: [GeometryType.POLYGON]
 };
 
 export function createLayerId(

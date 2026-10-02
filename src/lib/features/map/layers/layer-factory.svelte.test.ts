@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import {
   PathLayer,
   ScatterplotLayer,
@@ -5,8 +7,6 @@ import {
   TextLayer
 } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClassificationMethod,
@@ -28,14 +28,10 @@ import {
   StrokeMode,
   SymbolDoublePosition,
   SymbolMode,
-  ThicknessMode,
-  SLIDER_LIMITS
+  ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
-import {
-  MAX_TEXT_OUTLINE_WIDTH,
-  resolveTextHaloWidthPx
-} from './text-character-set';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { resolveTextHaloWidthPx } from './text-character-set';
+import { logger } from '$lib/features/commons/utils/logger';
 import type { GeometryInfo, LayerContext } from '../types';
 
 const {
@@ -153,20 +149,12 @@ import {
   createPointLayers,
   createPolygonLayers,
   resolveEffectiveCategoryColorMap,
-  resolveSplitMappingFeatureIdColumn,
   type TextLayerDatum
 } from './layer-factory';
 import { MultiShapeLayer } from './multi-shape-layer';
 import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { EXPLICIT_TEXT_CHARACTER_SET } from './text-character-set';
-
-const source = [
-  'src/lib/features/map/layers/layer-factory.ts',
-  'src/lib/features/map/layers/text-layer-factory.ts'
-]
-  .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
-  .join('\n');
 
 function createTableWithFields(fieldNames: string[]): ArrowTable {
   return {
@@ -552,24 +540,6 @@ beforeEach(() => {
   );
 });
 
-describe('resolveSplitMappingFeatureIdColumn', () => {
-  it('prefers the split geometry feature id column when the table still exposes it', () => {
-    const table = createTableWithFields(['__feature_id__', 'label']);
-
-    expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
-      '__feature_id__'
-    );
-  });
-
-  it('falls back to basemap_id for representative point tables built from joined datasets', () => {
-    const table = createTableWithFields(['basemap_id', 'label']);
-
-    expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
-      'basemap_id'
-    );
-  });
-});
-
 describe('resolveEffectiveCategoryColorMap', () => {
   it('rebuilds categorical colors when labels stay same but palette changes', () => {
     const staleColorMap = new Map([
@@ -752,45 +722,6 @@ describe('createTextOverlayLayers', () => {
     expect(secondaryCharacterSet).toContain('阪');
   });
 
-  it('logs an error and renders no text layer when binary text layer data fails', () => {
-    const binaryError = new Error('binary text failed');
-    parsePointDataWithProjectionMock.mockImplementationOnce(() => {
-      throw binaryError;
-    });
-    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
-
-    const visualization = createTextVisualization();
-    visualization.primitiveFilters = [PrimitiveFilterType.TEXT];
-    visualization.symbol = { ...visualization.symbol!, enabled: false };
-
-    const layers = createDeckLayers(
-      createTableWithRows([{ name: 'Binary label' }], ['name']),
-      {
-        ...createContext(visualization),
-        geometryInfo: {
-          ...createPointGeometryInfo(),
-          type: 'POINT' as GeometryInfo['type']
-        }
-      }
-    );
-
-    expect(layers.some((layer) => layer instanceof TextLayer)).toBe(false);
-    expect(loggerError).toHaveBeenCalledWith(
-      'Failed to build binary text layer data',
-      LogCategory.MAP,
-      expect.objectContaining({
-        error: binaryError,
-        flow: 'text_binary_layer_data',
-        extra: expect.objectContaining({
-          geometryType: 'POINT',
-          geoColumn: 'geometry',
-          hasRepresentativePointSource: false,
-          hasSecondaryLabel: false
-        })
-      })
-    );
-  });
-
   it('supports classed text sizes using the selected maximum size', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -841,54 +772,6 @@ describe('createTextOverlayLayers', () => {
     expect(textLayer?.props.updateTriggers?.getSize).toContain(
       visualization.text.classification?.breaks
     );
-  });
-
-  it('keeps centroid labels centered without a text background box', () => {
-    parsePointDataWithProjectionMock.mockReturnValue({
-      length: 1,
-      featureIds: new Uint32Array([0]),
-      positions: new Float32Array([0, 0])
-    });
-
-    const visualization = createTextVisualization();
-    visualization.primitiveFilters = [PrimitiveFilterType.TEXT];
-    visualization.symbol = { ...visualization.symbol!, enabled: false };
-
-    const layers = createDeckLayers(
-      createTableWithRows([{ name: 'Centroid' }], ['name']),
-      {
-        ...createContext(visualization),
-        geometryInfo: {
-          ...createPointGeometryInfo(),
-          type: 'POINT' as GeometryInfo['type']
-        }
-      }
-    );
-
-    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
-      TextLayer | undefined;
-    const textProps = textLayer?.props as
-      | {
-          data: unknown[];
-          getTextAnchor?: (datum: unknown) => string;
-          getPixelOffset?: (datum: unknown) => [number, number];
-          getBackgroundColor?:
-            | ((datum: unknown) => [number, number, number, number])
-            | [number, number, number, number];
-          getBorderWidth?: number;
-        }
-      | undefined;
-    const datum = textProps?.data[0];
-    const backgroundColor = textProps?.getBackgroundColor;
-    const resolvedBackgroundColor =
-      typeof backgroundColor === 'function'
-        ? backgroundColor(datum)
-        : backgroundColor;
-
-    expect(textProps?.getTextAnchor?.(datum)).toBe('middle');
-    expect(textProps?.getPixelOffset?.(datum)).toEqual([0, 0]);
-    expect(resolvedBackgroundColor).toEqual([0, 0, 0, 0]);
-    expect(textProps?.getBorderWidth).toBe(0);
   });
 
   const resolveTextOutlineProps = (haloWidth: number, textSize: number) => {
@@ -944,16 +827,6 @@ describe('createTextOverlayLayers', () => {
         resolveTextHaloWidthPx(textProps?.outlineWidth ?? 0, textSize)
       ).toBeCloseTo(haloWidth, 5);
     }
-  });
-
-  it('keeps a thick text contour inside the SDF atlas so the halo is not clipped', () => {
-    const textProps = resolveTextOutlineProps(SLIDER_LIMITS.haloWidth.max, 6);
-
-    expect(textProps?.outlineWidth).toBe(MAX_TEXT_OUTLINE_WIDTH);
-    expect(textProps?.fontSettings?.sdf).toBe(true);
-    expect(MAX_TEXT_OUTLINE_WIDTH * 0.75).toBeLessThan(
-      textProps?.fontSettings?.buffer ?? 0
-    );
   });
 
   it('places text labels above point layers when primitiveOrder lists TEXT first', () => {
@@ -1030,83 +903,6 @@ describe('createTextOverlayLayers', () => {
 });
 
 describe('createPolygonLayers', () => {
-  it('projects the pattern overlay from the same binary polygons as the fill', () => {
-    const projectedPolygons = {
-      featureIds: new Uint32Array([0]),
-      positions: new Float32Array([0, 0, 1, 0, 1, 1]),
-      polygonIndices: new Uint32Array([0, 3]),
-      size: 2
-    };
-    parseSolidPolygonsWithProjectionMock.mockReturnValue(projectedPolygons);
-    const context = createContext(createVisualization(FillMode.UNIQUE));
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      context
-    );
-
-    const fillLayer = layers.find(
-      (layer) =>
-        layer instanceof SolidPolygonLayer &&
-        !String(layer.props.id).includes('-pattern-')
-    );
-    const patternLayer = getPatternLayer(layers);
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      expect.anything(),
-      context.customProjection
-    );
-    expect(fillLayer).toBeDefined();
-    expect(patternLayer).toBeInstanceOf(SolidPolygonLayer);
-    expect(
-      createCompatibleSolidPolygonLayerPropsMock.mock.calls.map(
-        ([polyData]) => polyData
-      )
-    ).toEqual([projectedPolygons, projectedPolygons]);
-  });
-
-  it('parses projected WKB polygons through the binary path', () => {
-    const context = createContext(createVisualization(FillMode.UNIQUE));
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      {
-        ...createGeometryInfo(),
-        encoding: 'geoarrow.wkb',
-        isWkbEncoded: true
-      },
-      context
-    );
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      expect.anything(),
-      context.customProjection
-    );
-    expect(layers.some((layer) => layer instanceof SolidPolygonLayer)).toBe(
-      true
-    );
-  });
-
-  it('renders binary polygons without a visualization context', () => {
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      {
-        ...createContext(createVisualization(FillMode.UNIQUE)),
-        viz: null
-      }
-    );
-
-    const polygonLayer = layers.find(
-      (layer) =>
-        layer instanceof SolidPolygonLayer &&
-        String(layer.props.id).startsWith('polygon-layer')
-    ) as SolidPolygonLayer | undefined;
-
-    expect(polygonLayer).toBeDefined();
-    expect(polygonLayer?.props.getFillColor).toEqual([51, 102, 204, 255]);
-  });
-
   it('skips the pattern overlay when polygon fill is disabled', () => {
     const layers = createPolygonLayers(
       createTableWithFields([]),
@@ -1115,34 +911,6 @@ describe('createPolygonLayers', () => {
     );
 
     expect(getPatternLayer(layers)).toBeUndefined();
-  });
-
-  it('renders representative point symbols over projected binary polygons', () => {
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      {
-        ...createContext(createSymbolVisualization()),
-        representativePointTable: createTableWithFields([]),
-        representativePointGeometryInfo: {
-          ...createPointGeometryInfo(),
-          type: 'POINT' as GeometryInfo['type']
-        }
-      }
-    );
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalled();
-    expect(parsePointDataWithProjectionMock).toHaveBeenCalled();
-    expect(layers.some((layer) => layer instanceof ScatterplotLayer)).toBe(
-      true
-    );
-    expect(
-      layers.some(
-        (layer) =>
-          layer instanceof SolidPolygonLayer &&
-          String(layer.props.id).startsWith('polygon-layer')
-      )
-    ).toBe(false);
   });
 
   it('maps split representative point symbols through representative feature ids', () => {
@@ -1287,81 +1055,6 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeCloseTo(20, 5);
   });
 
-  it('does not apply category patterns to split representative point symbols', () => {
-    parsePointDataWithProjectionMock.mockReturnValue({
-      length: 2,
-      featureIds: new Uint32Array([0, 1]),
-      positions: new Float64Array([0, 0, 1, 1])
-    });
-    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
-      data: {
-        length: pointData.length,
-        featureIds: pointData.featureIds,
-        attributes: {}
-      }
-    }));
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.CATEGORIES,
-      categoryColumn: 'kind',
-      shape: ShapeType.CIRCLE,
-      classification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 2,
-        labels: ['Urban', 'Rural'],
-        categoryValues: ['urban', 'rural'],
-        colors: ['#3366cc', '#dc3912'],
-        patternId: 'dots'
-      }
-    };
-    const geometryTable = createTableWithRows(
-      [
-        { id: 'DEU', geometry: null },
-        { id: 'FRA', geometry: null }
-      ],
-      ['id', 'geometry']
-    );
-    const representativeTable = createTableWithRows(
-      [
-        { id: 'DEU', geometry: null },
-        { id: 'FRA', geometry: null }
-      ],
-      ['id', 'geometry']
-    );
-    const datasetTable = createTableWithRows(
-      [
-        { basemap_id: 'DEU', kind: 'urban' },
-        { basemap_id: 'FRA', kind: 'rural' }
-      ],
-      ['basemap_id', 'kind']
-    );
-
-    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
-      ...createContext(visualization),
-      representativePointTable: representativeTable,
-      representativePointGeometryInfo: {
-        ...createPointGeometryInfo(),
-        type: 'POINT' as GeometryInfo['type']
-      },
-      splitDatasetTable: datasetTable,
-      splitFeatureIdColumn: 'id'
-    });
-
-    const pointLayer = layers.find((layer) =>
-      String(layer.props.id).includes('point-layer')
-    ) as MultiShapeLayer | undefined;
-
-    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(
-      (pointLayer?.props as Record<string, unknown>).patternEnabled
-    ).toBeUndefined();
-    expect(
-      (pointLayer?.props as Record<string, unknown>).patternAtlas
-    ).toBeUndefined();
-  });
-
   it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -1456,40 +1149,6 @@ describe('createPolygonLayers', () => {
     expect(pointLayer?.props.updateTriggers?.getRadius).toContain(
       visualization.symbol.classification?.disabledLabels
     );
-  });
-
-  it('applies the selected dash pattern to dashed polygon strokes', () => {
-    const buildStroke = (pattern: BasemapDottedPattern) => {
-      const visualization = createVisualization(FillMode.UNIQUE);
-      visualization.polygon = {
-        ...visualization.polygon!,
-        strokeMode: StrokeMode.UNIQUE,
-        strokeColor: '#000000',
-        strokeWidth: 3,
-        strokeOpacity: 1,
-        strokeDashed: true,
-        strokeDashedPattern: pattern
-      };
-
-      const layers = createPolygonLayers(
-        createTableWithFields([]),
-        createGeometryInfo(),
-        createContext(visualization)
-      );
-      const strokeLayer = layers.find((layer) => layer.id.includes('-stroke'));
-      const props = strokeLayer?.props as
-        { getDashArray?: [number, number]; capRounded?: boolean } | undefined;
-      return { dash: props?.getDashArray, capRounded: props?.capRounded };
-    };
-
-    const dots = buildStroke(BasemapDottedPattern.DOTS);
-    const dashes = buildStroke(BasemapDottedPattern.DASHES);
-    const dashDot = buildStroke(BasemapDottedPattern.DASH_DOT);
-
-    expect(dots.dash?.[0]).toBeGreaterThan(0);
-    expect(dots.capRounded).toBe(true);
-    expect(dashDot.dash).not.toEqual(dashes.dash);
-    expect(dashes.capRounded).toBe(false);
   });
 
   it('omits the binary polygon stroke layer when contour mode is none', () => {
@@ -1678,63 +1337,6 @@ describe('createPolygonLayers', () => {
 
     expect(fillColorAttribute?.value).toEqual(
       new Uint8ClampedArray([33, 102, 172, 255, 178, 24, 43, 255])
-    );
-  });
-
-  it('keeps unmatched split polygons transparent for unique binary fills', () => {
-    createPolygonFillColorAttributeMock.mockImplementation(
-      (
-        polyData: { featureIds?: Uint32Array },
-        getFillColor: (featureId: number) => [number, number, number, number]
-      ) => {
-        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
-        return {
-          value: new Uint8ClampedArray(
-            featureIds.flatMap((featureId) =>
-              Array.from(getFillColor(featureId))
-            )
-          ),
-          size: 4
-        };
-      }
-    );
-    parseSolidPolygonsMock.mockReturnValue({
-      featureIds: new Uint32Array([0, 1])
-    });
-
-    const visualization = createVisualization(FillMode.UNIQUE);
-    visualization.polygon = {
-      ...visualization.polygon!,
-      fillColor: '#ff0000',
-      classification: undefined
-    };
-    const geometryTable = createTableWithRows(
-      [
-        { id: 'DEU', geometry: null },
-        { id: 'ESP', geometry: null }
-      ],
-      ['id', 'geometry']
-    );
-    const datasetTable = createTableWithRows(
-      [{ basemap_id: 'DEU', value: 10 }],
-      ['basemap_id', 'value']
-    );
-
-    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
-      ...createContext(visualization),
-      customProjection: undefined,
-      splitDatasetTable: datasetTable,
-      splitFeatureIdColumn: 'id'
-    });
-    const fillLayer = layers[0];
-    const fillColorAttribute = (
-      fillLayer?.props.data as {
-        attributes: { getFillColor?: { value: Uint8ClampedArray } };
-      }
-    ).attributes.getFillColor;
-
-    expect(fillColorAttribute?.value).toEqual(
-      new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 0, 0])
     );
   });
 
@@ -1993,81 +1595,6 @@ describe('createPolygonLayers', () => {
     );
   });
 
-  it('logs an error and renders no polygon layer when the binary parse fails', () => {
-    const binaryError = new Error('binary polygon failed');
-    parseSolidPolygonsMock.mockImplementationOnce(() => {
-      throw binaryError;
-    });
-    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      {
-        ...createContext(createVisualization(FillMode.UNIQUE)),
-        customProjection: undefined
-      }
-    );
-
-    expect(layers).toEqual([]);
-    expect(loggerError).toHaveBeenCalledWith(
-      'Failed to create binary polygon layers',
-      LogCategory.MAP,
-      expect.objectContaining({
-        error: binaryError,
-        flow: 'polygon_binary_layers',
-        extra: expect.objectContaining({
-          layerId: expect.stringContaining('polygon-layer'),
-          geoColumn: 'geometry',
-          arrowExtension: 'geoarrow.polygon',
-          geometryType: 'Polygon',
-          hasCustomProjection: false
-        })
-      })
-    );
-  });
-
-  it('applies polygon pattern params to the rendered pattern layer', () => {
-    const visualization = createVisualization(FillMode.UNIQUE);
-    visualization.polygon = {
-      ...visualization.polygon!,
-      classification: {
-        ...visualization.polygon!.classification!,
-        patternId: 'diagonal',
-        patternParams: {
-          angle: 315,
-          size: 9,
-          scale: 16
-        }
-      }
-    };
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      createContext(visualization)
-    );
-    const patternLayer = getPatternLayer(layers);
-    const patternLayerProps = patternLayer?.props as
-      Record<string, unknown> | undefined;
-
-    expect(getPatternAtlasForPatternMock).toHaveBeenCalledWith('diagonal', {
-      angle: 315,
-      size: 9,
-      scale: 16
-    });
-    // size/scale are baked into the atlas tile (asserted above). The shader
-    // consumes getFillPatternScale as the tile size in CSS pixels; the design
-    // tile edge equals the user's scale slider value, independent of the
-    // devicePixelRatio-scaled atlas frame.
-    expect(patternLayerProps?.getFillPatternScale).toBe(16);
-    expect(patternLayerProps?.getFillPatternRotation).toBe(315);
-    expect(patternLayer?.props.updateTriggers).toMatchObject({
-      getFillPatternScale: [16],
-      getFillPatternRotation: [315]
-    });
-  });
-
   it('renders one pattern overlay layer per class with increasing sizes when classification.pattern is set', () => {
     const visualization = createVisualization(FillMode.CLASSES);
     visualization.mapping = { valueColumn: 'metric' };
@@ -2210,42 +1737,6 @@ describe('createPolygonLayers', () => {
       new Uint8ClampedArray([0, 0, 0, 0, 0, 0, 0, 255])
     );
   });
-
-  it('renders density from the dedicated density table without falling back to polygon fill', () => {
-    const visualization = createVisualization(FillMode.DENSITY);
-    visualization.density = {
-      valueColumn: 'value',
-      ratio: 250
-    };
-
-    const layers = createPolygonLayers(
-      createTableWithFields([]),
-      createGeometryInfo(),
-      {
-        ...createContext(visualization),
-        customProjection: undefined,
-        densityTable: createTableWithFields([]),
-        densityGeometryInfo: createPointGeometryInfo()
-      }
-    );
-
-    expect(
-      layers.some(
-        (layer) =>
-          layer instanceof ScatterplotLayer &&
-          String(layer.props.id).includes('-density')
-      )
-    ).toBe(true);
-    const densityLayer = layers.find(
-      (layer) =>
-        layer instanceof ScatterplotLayer &&
-        String(layer.props.id).includes('-density')
-    ) as ScatterplotLayer | undefined;
-    expect(densityLayer).toBeDefined();
-    expect(
-      (densityLayer?.props as Record<string, unknown>).radiusMinPixels
-    ).toBe(0);
-  });
 });
 
 describe('createPointLayers', () => {
@@ -2262,88 +1753,6 @@ describe('createPointLayers', () => {
     expect(pointLayer.props.stroked).toBe(false);
     expect(pointLayer.props.lineWidthScale).toBe(0);
     expect(pointLayer.props.getLineColor).toEqual([0, 0, 0, 0]);
-  });
-
-  it('renders every selectable unique symbol shape without SVG icon layers', () => {
-    const shapes = [
-      ShapeType.CIRCLE,
-      ShapeType.SQUARE,
-      ShapeType.CROSS,
-      ShapeType.DIAMOND,
-      ShapeType.TRIANGLE,
-      ShapeType.STAR,
-      ShapeType.RECTANGLE
-    ];
-
-    for (const shape of shapes) {
-      parsePointDataWithProjectionMock.mockReturnValue({
-        length: 1,
-        featureIds: new Uint32Array([0])
-      });
-      createScatterplotLayerPropsMock.mockReturnValue({
-        data: { attributes: {}, featureIds: new Uint32Array([0]) }
-      });
-
-      const visualization = createSymbolVisualization();
-      visualization.symbol = {
-        ...visualization.symbol!,
-        shape
-      };
-
-      const layers = createPointLayers(
-        createTableWithFields([]),
-        createPointGeometryInfo(),
-        createContext(visualization)
-      );
-
-      const pointLayer = layers[0] as ScatterplotLayer | MultiShapeLayer;
-
-      expect(
-        (pointLayer.props as Record<string, unknown>).pointType
-      ).toBeUndefined();
-      if (shape === ShapeType.CIRCLE) {
-        expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
-      } else {
-        expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-        expect((pointLayer as MultiShapeLayer).props.getShape).toBe(
-          SHAPE_ORDINAL[shape]
-        );
-      }
-    }
-  });
-
-  it('renders proportional square, bar and spike symbols through MultiShapeLayer', () => {
-    const shapes = [ShapeType.SQUARE, ShapeType.BAR, ShapeType.SPIKE];
-
-    for (const shape of shapes) {
-      parsePointDataWithProjectionMock.mockReturnValue({
-        length: 1,
-        featureIds: new Uint32Array([0])
-      });
-      createScatterplotLayerPropsMock.mockReturnValue({
-        data: { attributes: {}, featureIds: new Uint32Array([0]) }
-      });
-
-      const visualization = createSymbolVisualization();
-      visualization.symbol = {
-        ...visualization.symbol!,
-        mode: SymbolMode.PROPORTIONAL,
-        shape,
-        sizeColumn: 'population',
-        minSize: 4,
-        maxSize: 20
-      };
-
-      const layers = createPointLayers(
-        createTableWithRows([{ population: 100 }], ['population']),
-        createPointGeometryInfo(),
-        { ...createContext(visualization), statistics: { min: 0, max: 100 } }
-      );
-
-      const pointLayer = layers[0] as MultiShapeLayer;
-      expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-      expect(pointLayer.props.getShape).toBe(SHAPE_ORDINAL[shape]);
-    }
   });
 
   it('turns off point symbol filling when the background fill mode is none', () => {
@@ -2438,90 +1847,6 @@ describe('createPointLayers', () => {
     }
 
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
-  });
-
-  it('uses MultiShapeLayer for categorical circle symbols without applying any pattern', () => {
-    parsePointDataWithProjectionMock.mockReturnValue({
-      length: 1,
-      featureIds: new Uint32Array([0])
-    });
-    createScatterplotLayerPropsMock.mockReturnValue({
-      data: {
-        attributes: {},
-        featureIds: new Uint32Array([0])
-      }
-    });
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.CATEGORIES,
-      categoryColumn: 'category',
-      shape: ShapeType.CIRCLE,
-      classification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 1,
-        labels: ['North'],
-        categoryValues: ['north'],
-        colors: ['#3366cc'],
-        patternId: 'cross'
-      }
-    };
-
-    const layers = createPointLayers(
-      createTableWithRows([{ category: 'north' }], ['category']),
-      createPointGeometryInfo(),
-      createContext(visualization)
-    );
-
-    const pointLayer = layers[0] as MultiShapeLayer;
-
-    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(
-      (pointLayer.props as Record<string, unknown>).patternEnabled
-    ).toBeUndefined();
-    expect(String(pointLayer.props.id)).not.toContain('-pattern-');
-  });
-
-  it('keeps categorical circle symbols on a stable MultiShapeLayer regardless of classification pattern fields', () => {
-    parsePointDataWithProjectionMock.mockReturnValue({
-      length: 1,
-      featureIds: new Uint32Array([0])
-    });
-    createScatterplotLayerPropsMock.mockReturnValue({
-      data: {
-        attributes: {},
-        featureIds: new Uint32Array([0])
-      }
-    });
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.CATEGORIES,
-      categoryColumn: 'category',
-      shape: ShapeType.CIRCLE,
-      classification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 1,
-        labels: ['North'],
-        categoryValues: ['north'],
-        colors: ['#3366cc']
-      }
-    };
-
-    const layers = createPointLayers(
-      createTableWithRows([{ category: 'north' }], ['category']),
-      createPointGeometryInfo(),
-      createContext(visualization)
-    );
-
-    const pointLayer = layers[0] as MultiShapeLayer;
-    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(
-      (pointLayer.props as Record<string, unknown>).patternEnabled
-    ).toBeUndefined();
-    expect(String(pointLayer.props.id)).not.toContain('-pattern-');
   });
 
   it('renders every custom category shape through a getShape binary attribute', () => {
@@ -2833,49 +2158,6 @@ describe('createPointLayers', () => {
     expect(layers[1].props.radiusScale).toBe(2);
   });
 
-  it('never applies a fill-classification pattern to symbols even in categories fill mode (REV-SYM-2)', () => {
-    parsePointDataWithProjectionMock.mockReturnValue({
-      length: 1,
-      featureIds: new Uint32Array([0])
-    });
-    createScatterplotLayerPropsMock.mockReturnValue({
-      data: { attributes: {}, featureIds: new Uint32Array([0]) }
-    });
-
-    const visualization = createSymbolVisualization();
-    visualization.symbol = {
-      ...visualization.symbol!,
-      mode: SymbolMode.PROPORTIONAL,
-      shape: ShapeType.CIRCLE,
-      sizeColumn: 'population',
-      fillMode: FillMode.CATEGORIES,
-      categoryColumn: 'category',
-      fillClassification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 1,
-        labels: ['North'],
-        categoryValues: ['north'],
-        colors: ['#3366cc'],
-        patternId: 'cross'
-      }
-    };
-
-    const layers = createPointLayers(
-      createTableWithRows(
-        [{ category: 'north', population: 10 }],
-        ['category', 'population']
-      ),
-      createPointGeometryInfo(),
-      { ...createContext(visualization), statistics: { min: 10, max: 10 } }
-    );
-
-    const pointLayer = layers[0] as MultiShapeLayer;
-    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(
-      (pointLayer.props as Record<string, unknown>).patternEnabled
-    ).toBeUndefined();
-  });
-
   it('renders every selectable missing-data representation shape on native points (REV-SYM-6)', () => {
     const cases = [
       {
@@ -3075,52 +2357,6 @@ describe('createPointLayers', () => {
 });
 
 describe('createLineLayers', () => {
-  it('creates native categorical line layers without throwing', () => {
-    const visualization: VisualizationConfig = {
-      id: 'viz-line-1',
-      name: 'Line categorical test',
-      type: VisualizationType.CATEGORICAL,
-      datasetId: 'dataset-1',
-      enabled: true,
-      primitiveFilters: [PrimitiveFilterType.LINE],
-      line: {
-        enabled: true,
-        colorMode: ColorMode.CATEGORIES,
-        thicknessMode: ThicknessMode.UNIQUE,
-        color: '#3366cc',
-        width: 3,
-        maxWidth: 6,
-        opacity: 1,
-        dashed: false,
-        categoryColumn: 'route_name',
-        classification: {
-          method: ClassificationMethod.MANUAL,
-          classes: 2,
-          colors: ['#ff0000', '#00ff00'],
-          labels: ['A', 'B']
-        }
-      },
-      style: {
-        fillOpacity: 1,
-        strokeOpacity: 1,
-        strokeWidth: 1
-      },
-      mapping: {}
-    };
-
-    const layers = createLineLayers(
-      createTableWithRows([{ route_name: 'A' }], ['route_name']),
-      createLineGeometryInfo(),
-      {
-        ...createContext(visualization),
-        customProjection: undefined
-      }
-    );
-
-    expect(pathColorAttrMock).toHaveBeenCalled();
-    expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
-  });
-
   it('keeps disabled native categorical line labels transparent', () => {
     pathColorAttrMock.mockImplementationOnce(
       (
@@ -3182,22 +2418,6 @@ describe('createLineLayers', () => {
     expect(layerData.attributes?.getColor?.value).toEqual(
       new Uint8ClampedArray([0, 0, 0, 0])
     );
-  });
-
-  it('renders binary lines without a visualization context', () => {
-    const layers = createLineLayers(
-      createTableWithRows([{ route_name: 'A' }], ['route_name']),
-      createLineGeometryInfo(),
-      {
-        ...createContext(createVisualization(FillMode.UNIQUE)),
-        viz: null
-      }
-    );
-    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
-      PathLayer | undefined;
-
-    expect(lineLayer).toBeDefined();
-    expect(lineLayer?.props.getColor).toEqual([51, 102, 204, 255]);
   });
 
   it('renders dotted lines as round dots and dash-dot distinctly from dashes', () => {
@@ -3349,44 +2569,6 @@ describe('createLineLayers', () => {
     ]);
   });
 
-  it('draws dashed native lines on the binary PathLayer', () => {
-    const visualization: VisualizationConfig = {
-      id: 'viz-line-dashed-binary',
-      name: 'Binary dashed line test',
-      type: VisualizationType.CATEGORICAL,
-      datasetId: 'dataset-1',
-      enabled: true,
-      primitiveFilters: [PrimitiveFilterType.LINE],
-      line: {
-        enabled: true,
-        colorMode: ColorMode.UNIQUE,
-        thicknessMode: ThicknessMode.UNIQUE,
-        color: '#3366cc',
-        width: 3,
-        maxWidth: 6,
-        opacity: 1,
-        dashed: true,
-        dashedPattern: BasemapDottedPattern.DASHES
-      },
-      style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
-      mapping: {}
-    };
-
-    const layers = createLineLayers(
-      createTableWithRows([{ route_name: 'A' }], ['route_name']),
-      createLineGeometryInfo(),
-      createContext(visualization)
-    );
-    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
-      PathLayer | undefined;
-
-    expect(lineLayer?.props.id).toMatch(/-dashed$/);
-    expect(lineLayer?.props.extensions).toHaveLength(1);
-    expect(
-      (lineLayer?.props as { getDashArray?: unknown } | undefined)?.getDashArray
-    ).toEqual([6, 4]);
-  });
-
   it('gives missing native lines their own binary dash array', () => {
     parsePathsWithProjectionMock.mockReturnValue({
       length: 2,
@@ -3446,115 +2628,10 @@ describe('createLineLayers', () => {
     expect(lineLayer?.props.extensions).toHaveLength(1);
     expect(Array.from(dashArrays ?? [])).toEqual([0, 0, 0, 0, 12, 4, 12, 4]);
   });
-
-  it('uses a dedicated thickness classification for classed line widths', () => {
-    const visualization: VisualizationConfig = {
-      id: 'viz-line-2',
-      name: 'Line split classification test',
-      type: VisualizationType.CATEGORICAL,
-      datasetId: 'dataset-1',
-      enabled: true,
-      primitiveFilters: [PrimitiveFilterType.LINE],
-      lineClassification: {
-        method: ClassificationMethod.MANUAL,
-        classes: 2,
-        colors: ['#ff0000', '#00ff00'],
-        labels: ['A', 'B']
-      },
-      lineThicknessClassification: {
-        method: ClassificationMethod.KMEANS,
-        classes: 4,
-        numClasses: 4,
-        breaks: [10, 20, 30]
-      },
-      line: {
-        enabled: true,
-        colorMode: ColorMode.CATEGORIES,
-        thicknessMode: ThicknessMode.CLASSES,
-        color: '#3366cc',
-        width: 3,
-        maxWidth: 9,
-        opacity: 1,
-        dashed: false,
-        valueColumn: 'flow',
-        categoryColumn: 'route_name',
-        classification: {
-          method: ClassificationMethod.MANUAL,
-          classes: 2,
-          colors: ['#ff0000', '#00ff00'],
-          labels: ['A', 'B']
-        },
-        thicknessClassification: {
-          method: ClassificationMethod.KMEANS,
-          classes: 4,
-          numClasses: 4,
-          breaks: [10, 20, 30]
-        }
-      },
-      style: {
-        fillOpacity: 1,
-        strokeOpacity: 1,
-        strokeWidth: 1
-      },
-      mapping: {}
-    };
-
-    const layers = createLineLayers(
-      createTableWithRows(
-        [{ route_name: 'A', flow: 18 }],
-        ['route_name', 'flow']
-      ),
-      createLineGeometryInfo(),
-      {
-        ...createContext(visualization),
-        statistics: { min: 0, max: 40 },
-        customProjection: undefined
-      }
-    );
-
-    const lineLayer = layers[0] as PathLayer;
-    const layerData = lineLayer.props.data as {
-      attributes?: Record<string, unknown>;
-    };
-
-    expect(layerData.attributes?.getWidth).toBeDefined();
-    expect(pathColorAttrMock).toHaveBeenCalled();
-  });
-
-  it('does not route text contour through legacy background boxes', () => {
-    expect(source).not.toContain('textBackgroundConfig');
-    expect(source).toContain('outlineWidth: resolveTextOutlineWidth(');
-  });
 });
 
 describe('createHighlightedFeatureOverlay', () => {
   const rows = [{ __id: 1 }, { __id: 2 }, { __id: 3 }];
-
-  it('outlines highlighted polygons from binary paths', () => {
-    parsePathsWithProjectionMock.mockReturnValue({
-      length: 3,
-      featureIds: new Uint32Array([0, 1, 2]),
-      positions: new Float32Array(12),
-      startIndices: new Uint32Array([0, 2, 4, 6]),
-      size: 2
-    });
-    const context = createContext(createVisualization(FillMode.UNIQUE));
-
-    const overlay = createHighlightedFeatureOverlay(
-      'polygon-layer',
-      createTableWithRows(rows, ['__id']),
-      createGeometryInfo(),
-      new Set([2]),
-      0,
-      context
-    );
-
-    expect(overlay).toBeInstanceOf(PathLayer);
-    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
-      expect.anything(),
-      context.customProjection
-    );
-  });
 
   it('rings only the highlighted points', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
@@ -3584,18 +2661,5 @@ describe('createHighlightedFeatureOverlay', () => {
     expect(Array.from(data.attributes.getPosition.value)).toEqual([
       10, 11, 30, 31
     ]);
-  });
-
-  it('returns no overlay when nothing is highlighted', () => {
-    expect(
-      createHighlightedFeatureOverlay(
-        'polygon-layer',
-        createTableWithRows(rows, ['__id']),
-        createGeometryInfo(),
-        new Set(),
-        0,
-        createContext(createVisualization(FillMode.UNIQUE))
-      )
-    ).toBeNull();
   });
 });

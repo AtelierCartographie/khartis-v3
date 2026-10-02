@@ -1,0 +1,122 @@
+name: Validate
+
+# Lint, type check, tests and build, run once per source tree.
+#
+# A pull request, the push that merges it, the promotion pull request and the
+# push to main usually carry the same git tree. Each check that succeeds
+# uploads an artifact named after the tree; later runs that find one for every
+# check skip them all. Any lookup failure falls back to a full validation.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  # No check reads the basemap geometries, and only the engine tests read the
+  # shapefile and GeoPackage fixtures: leaving them out makes a checkout five
+  # times smaller. A check that starts reading them fails on a missing file.
+  SPARSE_LIGHT: |
+    /*
+    !/static/basemaps/**/*.parquet
+    !/tests-datasets/shp/
+    !/tests-datasets/gpkg/
+  SPARSE_WITH_FIXTURES: |
+    /*
+    !/static/basemaps/**/*.parquet
+
+jobs:
+  tree:
+    name: Validated tree lookup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      marker: ${{ steps.lookup.outputs.marker }}
+      validated: ${{ steps.lookup.outputs.validated }}
+    steps:
+      - name: Look for a previous validation of this tree
+        id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Keep in sync with the ids of the check matrix below.
+          CHECKS: lint types unit-1 unit-2 engine build
+        run: |
+          marker=''
+          validated=false
+          if tree="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${GITHUB_SHA}" --jq '.tree.sha')" && [ -n "${tree}" ]; then
+            marker="validated-tree-${tree}"
+            validated=true
+            for check in ${CHECKS}; do
+              # Markers uploaded from a fork are ignored: only this repository vouches for a tree.
+              hits="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${marker}-${check}" \
+                --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_repository_id == .workflow_run.repository_id)] | length' || echo 0)"
+              if [ "${hits:-0}" -eq 0 ]; then
+                validated=false
+                break
+              fi
+            done
+          fi
+          echo "marker=${marker}" >> "${GITHUB_OUTPUT}"
+          echo "validated=${validated}" >> "${GITHUB_OUTPUT}"
+          echo "Tree marker: ${marker:-unavailable}, already validated: ${validated}" >> "${GITHUB_STEP_SUMMARY}"
+
+  check:
+    name: ${{ matrix.name }}
+    needs: tree
+    if: needs.tree.outputs.validated != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: lint
+            name: Lint
+            run: pnpm compile:paraglide && pnpm lint
+          - id: types
+            name: Type check
+            run: pnpm check
+          - id: unit-1
+            name: Unit tests (1/2)
+            run: pnpm test:unit --shard=1/2
+          - id: unit-2
+            name: Unit tests (2/2)
+            run: pnpm test:unit --shard=2/2
+          - id: engine
+            name: Engine tests
+            run: pnpm test:pipeline && pnpm test:duckdb
+            fixtures: true
+          - id: build
+            name: Build
+            run: pnpm build
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      # The build output is not deployed from CI: deploy-local.mjs rebuilds the tag.
+      KHARTIS_SKIP_PRECOMPRESS: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: ${{ matrix.fixtures && env.SPARSE_WITH_FIXTURES || env.SPARSE_LIGHT }}
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup
+
+      - name: ${{ matrix.name }}
+        run: ${{ matrix.run }}
+
+      - name: Write the tree marker
+        if: needs.tree.outputs.marker != ''
+        run: echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" > validated-tree.txt
+
+      - name: Upload the tree marker
+        if: needs.tree.outputs.marker != ''
+        uses: actions/upload-artifact@v7
+        # The marker only saves time on later runs, so its upload never fails a check.
+        continue-on-error: true
+        with:
+          name: ${{ needs.tree.outputs.marker }}-${{ matrix.id }}
+          path: validated-tree.txt
+          retention-days: 30
+          overwrite: true

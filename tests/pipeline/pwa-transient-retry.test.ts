@@ -41,16 +41,19 @@ describe('PWA transient HTTP retry', () => {
     ).resolves.toBe(recoveredResponse);
   });
 
-  it('should return non-transient errors without retrying them', async () => {
-    const notFoundResponse = new Response('Not found', { status: 404 });
-    const fetchImpl = vi.fn<typeof fetch>();
+  it.each([403, 404, 429])(
+    'should return a %i response without retrying it',
+    async (status) => {
+      const response = new Response('Refused', { status });
+      const fetchImpl = vi.fn<typeof fetch>();
 
-    await expect(
-      retryTransientResponse(request, notFoundResponse, {
-        fetchImpl,
-        wait: async () => {}
-      })
-    ).resolves.toBe(notFoundResponse);
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
+      await expect(
+        retryTransientResponse(request, response, {
+          fetchImpl,
+          wait: async () => {}
+        })
+      ).resolves.toBe(response);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  );
 });

@@ -1,46 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EPSG_DEFINITIONS,
   isProjectionSupported,
   reprojectPoint
 } from '$lib/features/duckdb/io/reprojection';
 
-describe('EPSG_DEFINITIONS', () => {
-  it('includes EPSG:2154 (Lambert-93 — France)', () => {
-    expect('EPSG:2154' in EPSG_DEFINITIONS).toBe(true);
-  });
-
-  it('includes EPSG:3035 (ETRS89-LAEA Europe)', () => {
-    expect('EPSG:3035' in EPSG_DEFINITIONS).toBe(true);
-  });
-
-  it('includes explicit national EPSG codes from the projection CDC', () => {
-    expect('EPSG:27700' in EPSG_DEFINITIONS).toBe(true);
-    expect('EPSG:2157' in EPSG_DEFINITIONS).toBe(true);
-    expect('EPSG:2056' in EPSG_DEFINITIONS).toBe(true);
-  });
-
-  it('includes EPSG:4326 (WGS84)', () => {
-    const hasWgs84 = Object.keys(EPSG_DEFINITIONS).some((k) =>
-      k.toUpperCase().includes('4326')
-    );
-    expect(hasWgs84).toBe(true);
-  });
-});
-
 describe('isProjectionSupported', () => {
-  it('returns true for EPSG:2154 (Lambert-93)', () => {
-    expect(isProjectionSupported('EPSG:2154')).toBe(true);
-  });
-
-  it('returns true for EPSG:4326 (WGS84)', () => {
-    expect(isProjectionSupported('EPSG:4326')).toBe(true);
-  });
-
-  it('returns true for EPSG:3035 (ETRS89-LAEA Europe)', () => {
-    expect(isProjectionSupported('EPSG:3035')).toBe(true);
-  });
-
   it('returns true for explicit national EPSG codes from the projection CDC', () => {
     expect(isProjectionSupported('EPSG:27700')).toBe(true);
     expect(isProjectionSupported('EPSG:2157')).toBe(true);

@@ -1,84 +1,112 @@
-<!-- gitnexus:start -->
+# Khartis v3
 
-# GitNexus — Code Intelligence
+Thematic mapping tool that runs entirely in the browser: users import data, join it to map geometry, style it, and export print-quality maps. SvelteKit SPA with a static build and no backend. Data work runs in DuckDB WASM, rendering in Deck.gl and MapLibre, persistence in IndexedDB.
 
-This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This file is the entry point for every coding agent. Area-specific rules live in `.claude/rules/` and the reference documentation (French) in `docs/`.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+## Constraints that shape every change
 
-## Always Do
+- **User data stays in the browser.** Imported rows, files, place names and anything derived from them are never sent anywhere. A new fetch, upload or third-party SDK is acceptable only when it carries no user data; analytics record anonymous usage events only.
+- **DuckDB reads the data.** Every format goes through `read_csv`, `ST_Read` or `read_parquet`. A JavaScript parser for a format DuckDB handles duplicates the engine and its edge cases. GPX is the one documented exception (`gpx-processor.ts`).
+- **Geometry stays binary up to the GPU:** `DuckDB → Arrow IPC → geoarrow-deck-stream → Deck.gl`. Converting to GeoJSON on the render path costs the frame rate and empties the WeakMap caches keyed on Arrow tables. GeoJSON is for export and fallback only.
+- **Project files are a public API.** `.kh` archive v2 and project schema `3.9.0` are the compatibility baseline. A schema bump needs a tested migration from the previous version, published migrations stay, and an unknown schema is rejected rather than restamped. Read `docs/PROJECT_FORMAT_COMPATIBILITY.md` before touching persistence, archive import or export, or a public API.
+- **Features are isolated.** Code lives in `src/lib/features/<feature>/`, and a feature imports another one only through its `index.ts`. `features/commons` is the shared kernel and is imported directly.
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+## Commands
 
-## Never Do
+pnpm through Corepack, Node `>=22 <25` (`.nvmrc`). If pnpm stops with `ERR_PNPM_UNSUPPORTED_ENGINE`, the shell is on another Node: run the command through your version manager, for example `mise exec -- pnpm check`.
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+| Command                                  | Purpose                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------- |
+| `pnpm dev`                               | dev server on `http://localhost:5176`                                      |
+| `pnpm check`                             | compile Paraglide, then svelte-check                                       |
+| `pnpm lint`, `pnpm format`               | Prettier check and ESLint, Prettier write                                  |
+| `pnpm test:unit`                         | `client` project: `src/**/*.svelte.{test,spec}.ts`, Node, jsdom on request |
+| `pnpm test:pipeline`, `pnpm test:duckdb` | `server` project: Node and real DuckDB, `tests/pipeline/`, `tests/duckdb/` |
+| `pnpm build`                             | static production build into `build/`                                      |
 
-## Resources
+Single test file: `pnpm exec vitest run --project client <path>`, or `--project server <path>`.
 
-| Resource                                    | Use for                                  |
-| ------------------------------------------- | ---------------------------------------- |
-| `gitnexus://repo/khartis-v3/context`        | Codebase overview, check index freshness |
-| `gitnexus://repo/khartis-v3/clusters`       | All functional areas                     |
-| `gitnexus://repo/khartis-v3/processes`      | All execution flows                      |
-| `gitnexus://repo/khartis-v3/process/{name}` | Step-by-step execution trace             |
+## Validating a change
 
-## CLI
+Start with the narrowest check and widen it when the change crosses a boundary. CI runs lint, check, the three test suites and the build on every pull request, and validates a given source tree only once, so a full local run is for large changes.
 
-| Task                                         | Read this skill file                                        |
-| -------------------------------------------- | ----------------------------------------------------------- |
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
-| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
-| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
-| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
-| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
+| Change                                          | Check                                      |
+| ----------------------------------------------- | ------------------------------------------ |
+| Documentation or config without runtime effect  | `pnpm lint`                                |
+| Component, store or client utility              | the nearest client test, then `pnpm check` |
+| Import, pipeline, persistence, `.kh` archive    | `pnpm test:pipeline`                       |
+| SQL, DuckDB macro, reader, join, classification | `pnpm test:duckdb`                         |
+| Rendering, WebGL, PWA, browser lifecycle        | the tests above, then a live browser check |
 
-<!-- gitnexus:end -->
+- Run heavy commands one at a time. `pnpm check`, Vitest, the build and a dev server compete for memory, and the client suite can time out when they overlap.
+- Client tests mock DuckDB, so they prove neither the DuckDB worker, nor WebGL rendering, nor an IndexedDB restore. Those need the running app: follow `.claude/skills/browser-check/SKILL.md`.
+- There is no end-to-end suite. Browser verification is done live, not committed as Playwright tests.
+- The suite is small on purpose. A test earns its place when it guards a domain invariant (class breaks, join grading, reprojection, suggestion scoring, parsing boundaries), real-engine SQL, the project-format contract or a release gate. Component renders, wiring between mocked modules and constants are not tested, and a test is written first only when the expected output can be stated up front. `.claude/rules/testing.md` holds the criteria.
 
-## Communication Economy
+## Where things are
 
-- Keep routine progress updates terse and action-oriented; avoid detailed summaries unless the user asks for one.
-- Prefer doing the work over narrating it. At the end, report only the outcome, validation performed, and blockers or handoff commands.
-- Preserve full reasoning quality internally, but do not expand explanations by default.
+| Need                       | Entry point                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| File import                | `dataPipeline.processFile()` in `features/data-pipeline`                                         |
+| High-level data operations | `duckDBOrchestrator` in `features/duckdb/orchestrator/`                                          |
+| Low-level SQL              | `Duck.query()` in `features/duckdb/duck.ts`                                                      |
+| Map rendering              | `useMapInit`, `useMapLayers`, `useMapBasemap` in `features/map/hooks/`                           |
+| Class breaks and colors    | `calculateBreaks()`, `generateColorsForBreaks()` in `commons/services/classification.service.ts` |
+| Visualization suggestions  | `vizSuggester.suggestVisualizations()` in `commons/services/viz-suggester.service.ts`            |
+| Project persistence        | `persistenceRegistry` in `features/project-management/core/`                                     |
 
-## Local Deployment Safety
+Two render engines coexist, chosen by `resolveMapRenderEngine`: Deck.gl orthographic with d3-geo projections, and MapLibre interleaved for Web Mercator, Globe or an OpenStreetMap basemap. State flows from local `$state` to feature stores, the global stores in `commons/stores/`, DuckDB tables, then IndexedDB.
 
-- The versioned local deployment helper supports PPRD and PROD. Keep the PROD tag-echo confirmation, green release-workflow gate, host-key verification, atomic remote swap, strict public-route validation, and rollback behavior intact.
-- Treat each target's `KHARTIS_PUBLIC_URL_*` as the source of truth for its SvelteKit base path. A static build has one canonical public route; infrastructure aliases must redirect to it.
-- Cookiebot is the only analytics-consent owner. Khartis may observe `Cookiebot.consent.statistics` and open `Cookiebot.renew()`, but it must not persist a second consent state, emit Consent Mode commands, or manage analytics cookies. Load GTM independently and gate only Khartis custom events.
-- Never commit real SFTP hosts, usernames, remote paths, passwords, private keys, VPN details, or GitLab credentials. Keep them in ignored local env files or the user's shell.
-- Keep `docs/DEPLOYMENT.md` public-safe: document placeholders, commands, and guardrails, not institution-specific secrets or infrastructure values.
+`docs/README.md` indexes the reference documentation by question: architecture, import, rendering, classification, basemaps and projections, persistence, performance, PWA, deployment, troubleshooting. Read the document for the area before a non-trivial change. When the docs and the code disagree, the code and its tests win, and the doc is fixed in the same change.
 
-## Project and API Compatibility
+## Conventions
 
-- Treat `.kh` archive v2 and project schema `3.9.0` as the first public compatibility baseline.
-- Never silently restamp an unknown, missing, old, or future project schema as current.
-- Every public schema bump must add a tested, continuous migration from the previous current version. Never remove a migration published after the `3.9.0` baseline.
-- Every archive-format bump must keep readers for all public versions listed in `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS`, including v2.
-- Preserve public API compatibility through additive changes or deprecation adapters. When a breaking change is unavoidable, introduce a versioned API and document migration before removing the old contract.
-- Follow `docs/PROJECT_FORMAT_COMPATIBILITY.md` whenever changing project persistence, archive import/export, or a public API.
+- Svelte 5 runes only (`$state`, `$derived`, `$effect`, `$props`, `$bindable`), with snippets instead of slots. Props are declared through a `Props` interface.
+- The UI is built with Carbon components. ESLint rejects native `<button>`, `<input>` and `<select>` outside an explicit list of wrapper components.
+- Stores are factories (`*.store.svelte.ts`) that expose getters and explicit mutation methods. Internal `$state` is never assigned from outside.
+- Every visible string goes through Paraglide (`m.key()`), with `snake_case` keys in both `messages/fr.json` (the reference) and `messages/en.json`. Numbers, percentages and dates are formatted for the locale.
+- Errors derive from `PipelineError` and reach the user through `showError` or `showWarning`. Log through `commons/utils/logger`, not `console`.
+- TypeScript is strict: `unknown` plus narrowing instead of `any`. Files are kebab-case, components included.
+- Reuse the existing services (classification, viz-suggester, projection-suggest, `duckDBOrchestrator`) instead of re-deriving breaks, scores or SQL.
+- Comments are reserved for a non-obvious invariant or workaround. Rationale goes in the commit message.
+- One intent per change. Code made redundant by the change is removed in the same change.
+- Map export renders the layout through `globalState.isMapExporting`. It does not switch `selectedStep`.
 
-## Local Validation Safety
+## Area rules
 
-- Follow the code-quality plan's validation mode, including Chrome/browser validation when the plan marks an item for browser proof.
-- Run heavyweight validations sequentially. Do not run `pnpm check`, `pnpm lint`, Vitest, browser tools, or dev servers in parallel.
-- Prefer the narrowest relevant check for mechanical code-quality-plan items.
-- For `visualization-tab` behavior checks, cover multiple bundled examples and representative `tests-datasets` formats instead of relying on a single project fixture.
-- Before and during Chrome/browser validation, monitor memory-heavy processes. If a browser, dev server, Vitest, ESLint, or TypeScript process starts runaway memory/CPU behavior, stop it before continuing.
+Each file in `.claude/rules/` holds the traps and contracts of one area. Claude Code loads a rule when it reads a matching file. Other agents read the matching rule before editing.
 
-## Cartography Styling
+| Area                                                            | Rule                       |
+| --------------------------------------------------------------- | -------------------------- |
+| Cartographic vocabulary (French terms to code names), semiology | `cartography.md`           |
+| DuckDB SQL, import, join, caches                                | `duckdb-data.md`           |
+| Deck.gl and MapLibre render path, layers, labels                | `render-pipeline.md`       |
+| Classification, palettes, patterns, color-blindness             | `colors-classification.md` |
+| Projections and CRS                                             | `projections.md`           |
+| Stores, persistence, `.kh` import and export                    | `state-persistence.md`     |
+| Svelte 5 with Carbon components                                 | `svelte-carbon-ui.md`      |
+| Deployment helper, CI workflows, analytics consent, secrets     | `deployment.md`            |
+| Dependency upgrades, patched packages, DuckDB extensions        | `dependencies.md`          |
+| What to test, when to test first, Vitest projects               | `testing.md`               |
 
-- Use `NEUTRAL_CARTOGRAPHY_COLORS` / `NEUTRAL_CARTOGRAPHY_RGBA_COLORS` from `src/lib/features/commons/constants/colors.constants.ts` for neutral map, basemap, and blank-visualization defaults instead of hardcoded grayscale literals.
+## Git and delivery
 
-## Carbon Dialog Styling
+- Pull requests target `staging`. Commits follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `build:`, `ci:`, `chore:`), checked by commitlint. Maintainers merge with a merge commit, never a squash.
+- semantic-release publishes prereleases from `staging` and stable releases from `main`, so commit types drive version numbers.
+- A maintainer runs the deployments (`pnpm deploy:pprd`, `pnpm deploy:prod`). The `:dry-run` variants check the release, the CI gate and the build without opening an SFTP session.
+- Environment files, credentials, SFTP hosts and remote paths stay out of the repository and out of the conversation. `.env.example` holds placeholders only.
 
-- In Carbon dialogs, textual close, cancel, and destructive action buttons must use the danger red treatment. Close icons keep their normal Carbon appearance. Other non-destructive action buttons must use `#6F6F6F`.
-- Exception: in danger modals (`.bx--modal--danger`, i.e. dialogs whose primary action is already red), the cancel/secondary button stays neutral (`#6F6F6F`) so both footer buttons don't read as destructive.
+## Working agreement
+
+- Check the premises of a request against the code and the docs before implementing. When it crosses one of the constraints above, or looks aimed at the wrong problem, say so with the evidence and a concrete alternative, then follow the maintainer's decision.
+- When a step does not need the maintainer, keep going, and put status notes in the same message as the next action. Stop and ask only when the work cannot continue without a decision, or before an action that is hard to undo or reaches beyond the working tree: deleting data, force-pushing, pushing to `staging` or `main`, deploying, bumping the project schema or archive version.
+- In a report, mark what could not be confirmed and say where you looked.
+
+## Project knowledge base
+
+A local Ragmir index (`.ragmir/`, not versioned) may cover the functional specification, the docs, the source, the tests, CI and the i18n messages. When it exists, use it for questions about intended behavior and for concept searches. Plain search stays better for exact identifiers.
+
+- Query through the MCP server named `ragmir` when it is connected, otherwise `pnpm ragmir search "<question>" --compact`. A Ragmir server under another name indexes another project.
+- The specification is `.ragmir/raw/cdc.md` (March 2025). `.ragmir/raw/cdc-overrides.md` records the decisions that changed since and takes precedence. Scope a search to both with `--include-path .ragmir/raw`.
+- `pnpm ragmir ingest` refreshes the index after a pull or an edit. `pnpm ragmir doctor` reports its freshness.

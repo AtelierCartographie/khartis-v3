@@ -68,6 +68,14 @@ describe('density macros', () => {
     expect(digits).toContain(normalized);
   });
 
+  it('should return a ratio of 1 when the total stays under max_points', async () => {
+    const rows = await query(
+      db,
+      `SELECT get_nice_ratio('density_polys', population, max_points := 100000) AS ratio`
+    );
+    expect(Number(rows[0].ratio)).toBe(1);
+  });
+
   it('returns 3 levels (more/standard/less) from get_density_levels', async () => {
     const rows = await query(
       db,

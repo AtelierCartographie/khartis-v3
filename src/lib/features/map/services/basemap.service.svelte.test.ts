@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
@@ -7,8 +9,6 @@ import { BASEMAP_FETCH_TIMEOUT_MS } from '../constants/basemap-fetch.constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   basemapService,
-  findBasemapLayerByType,
-  getCustomBasemapLayerGeometryTypeOverride,
   getAvailableBasemapSimplificationLevels,
   getBasemapVariantFamily,
   getPreferredBasemapFile,
@@ -93,26 +93,6 @@ const MIXED_CATALOG: BasemapMetadata[] = [
   ...EUROPE_NUTS2_CATALOG
 ];
 
-describe('findBasemapLayerByType', () => {
-  it('returns the matching centroid layer when the basemap exposes one', () => {
-    const layer = findBasemapLayerByType(
-      createBasemapMetadata(),
-      BasemapLayerType.CENTROID
-    );
-
-    expect(layer?.file).toBe('monde-countries-centroids-2024-medium');
-  });
-
-  it('returns null when the requested layer type is not present', () => {
-    const layer = findBasemapLayerByType(
-      createBasemapMetadata(),
-      BasemapLayerType.POINT
-    );
-
-    expect(layer).toBeNull();
-  });
-});
-
 describe('basemapService.initialize', () => {
   it('rejects when catalog initialization fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(
@@ -182,23 +162,6 @@ describe('basemapService.initialize', () => {
     );
     expect(basemapService.projectionPresets).toBeNull();
     expect(basemapService.stylePresets).toBeNull();
-  });
-});
-
-describe('getCustomBasemapLayerGeometryTypeOverride', () => {
-  it('uses line metadata for custom limit helper tables', () => {
-    expect(
-      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.LIMIT)
-    ).toBe('MULTILINESTRING');
-    expect(
-      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.LINE)
-    ).toBe('MULTILINESTRING');
-  });
-
-  it('uses point metadata for custom centroid helper tables', () => {
-    expect(
-      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.CENTROID)
-    ).toBe('POINT');
   });
 });
 

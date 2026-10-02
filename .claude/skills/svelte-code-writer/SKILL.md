@@ -1,6 +1,6 @@
 ---
 name: svelte-code-writer
-description: CLI tools for Svelte 5 documentation lookup and code analysis. MUST be used whenever creating, editing or analyzing any Svelte component (.svelte) or Svelte module (.svelte.ts/.svelte.js). If possible, this skill should be executed within the svelte-file-editor agent for optimal results.
+description: Svelte 5 and SvelteKit documentation lookup and static analysis through the official `@sveltejs/mcp` CLI. Use when unsure about runes or SvelteKit syntax, or to run the autofixer on a `.svelte`, `.svelte.ts` or `.svelte.js` file before finishing a change to it.
 ---
 
 # Svelte 5 Code Writer

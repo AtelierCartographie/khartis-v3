@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

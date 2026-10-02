@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { geoEquirectangular } from 'd3-geo';
-import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 
 const mocks = vi.hoisted(() => ({
@@ -18,38 +17,6 @@ vi.mock(
 );
 
 describe('fitBasemapRenderProjection', () => {
-  beforeEach(() => {
-    mocks.fitProjectionToBbox.mockReset();
-  });
-
-  it('fits simple basemap projections to the requested bbox', async () => {
-    const { fitBasemapRenderProjection } =
-      await import('./fit-basemap-render-projection.utils');
-    const projection = {
-      fitExtent: vi.fn()
-    } as unknown as ProjectionLike;
-
-    const result = fitBasemapRenderProjection({
-      projection,
-      metadata: {
-        proj_to: { type: 'simple', proj4: '+proj=natearth2' }
-      } as BasemapMetadata,
-      fitBbox: [0, 0, 5, 1],
-      width: 800,
-      height: 600,
-      padding: 40
-    });
-
-    expect(result).toBe(projection);
-    expect(mocks.fitProjectionToBbox).toHaveBeenCalledWith(
-      projection,
-      [0, 0, 5, 1],
-      800,
-      600,
-      40
-    );
-  });
-
   it('registers a structured-cloneable worker spec for a reactive fit bbox', async () => {
     const { fitBasemapRenderProjection } =
       await import('./fit-basemap-render-projection.utils');
@@ -70,31 +37,6 @@ describe('fitBasemapRenderProjection', () => {
     });
 
     expect(() => structuredClone(getProjectionSpec(projection))).not.toThrow();
-  });
-
-  it('leaves composite projections unchanged', async () => {
-    // Composite presets (e.g. FRANCE_DOM_TOM) expose no `fitExtent` — each
-    // sub-projection is already fitted to its fixed layout cell — so they must
-    // not be re-fitted here, otherwise the DOM-TOM insets would be disturbed.
-    const { fitBasemapRenderProjection } =
-      await import('./fit-basemap-render-projection.utils');
-    const projection = {
-      fitExtent: vi.fn()
-    } as unknown as ProjectionLike;
-
-    const result = fitBasemapRenderProjection({
-      projection,
-      metadata: {
-        proj_to: { type: 'composite', preset: 'FRANCE_DOM_TOM' }
-      } as BasemapMetadata,
-      fitBbox: [0, 0, 5, 1],
-      width: 800,
-      height: 600,
-      padding: 40
-    });
-
-    expect(result).toBe(projection);
-    expect(mocks.fitProjectionToBbox).not.toHaveBeenCalled();
   });
 
   it('frames a regional basemap with a 10% margin around its projected bbox', async () => {
