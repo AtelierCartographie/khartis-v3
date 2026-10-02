@@ -143,7 +143,9 @@
         <span class="source">{source}</span>
         <span class="date">
           <Calendar size={16} />
-          {formatBasemapValidity(basemap)}
+          <!-- A validity period wraps after its dash ("2018–" / "2026") to keep
+               the date column close to the width of a single year. -->
+          <span class="date-text">{formatBasemapValidity(basemap)}</span>
         </span>
       </div>
     {/if}
@@ -380,13 +382,17 @@
 
   .date {
     display: flex;
-    white-space: nowrap;
     align-items: center;
     gap: var(--kh-gap-label);
     font-size: 0.75rem;
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
+  }
+
+  .date-text {
+    /* longest unbreakable part: "2018–" for a period, the year otherwise */
+    width: min-content;
   }
 
   .basemap-card--suggestion .source,
