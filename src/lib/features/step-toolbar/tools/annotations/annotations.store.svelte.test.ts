@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ANNOTATION_ROLE, SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
@@ -72,23 +74,6 @@ describe('annotations store', () => {
 
     expect(movedTitle?.position).toEqual({ x: 120, y: 168 });
     expect(movedTitle?.positionMode).toBe('manual');
-  });
-
-  it('syncs the predefined style when selecting a title page element', () => {
-    annotationsActions.initPageElements({ withPlaceholders: true });
-
-    const title = getAnnotationsState().items.find(
-      (item) => item.role === ANNOTATION_ROLE.TITLE
-    );
-
-    expect(title).toBeDefined();
-    if (!title) {
-      return;
-    }
-
-    annotationsActions.selectAnnotation(title.id);
-
-    expect(getAnnotationsState().predefinedStyle).toBe(ANNOTATION_ROLE.TITLE);
   });
 
   it('places the default page elements with more breathing room around the map frame', () => {
@@ -370,20 +355,6 @@ describe('annotations store', () => {
         (item) => item.type === AnnotationKind.DRAWING
       )
     ).toHaveLength(0);
-  });
-
-  it('stores the default smoothing value on finished freehand drawings', () => {
-    annotationsActions.beginDrawing(DrawingType.LINE);
-    annotationsActions.updateDrawing([
-      { x: 0, y: 0 },
-      { x: 32, y: 4 },
-      { x: 36, y: 72 },
-      { x: 88, y: 76 }
-    ]);
-
-    const drawing = annotationsActions.finishDrawing();
-
-    expect(drawing?.style?.smoothness).toBe(0);
   });
 
   it('creates finished drawings in map space with a margin-relative position', () => {

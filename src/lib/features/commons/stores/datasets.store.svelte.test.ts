@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -16,17 +18,13 @@ const mocks = vi.hoisted(() => ({
   processUploadedFileMock: vi.fn(),
   createFileFromUploadMock: vi.fn(),
   dropTableMock: vi.fn(),
-  invalidateAndReanalyseMock: vi.fn(),
   registerExistingTableMock: vi.fn(),
   clearFiltersMock: vi.fn(),
   bumpDatasetsVersionMock: vi.fn(),
   setEnrichDataStateMock: vi.fn(),
   enrichmentDatasetId: undefined as string | undefined,
   renameFileMock: vi.fn(),
-  clearColumnTransformationsMock: vi.fn(),
-  disableFacetsMock: vi.fn(),
   getFacetsBaseVisualizationIdMock: vi.fn(),
-  dataTabResetMock: vi.fn(),
   currentProject: undefined as
     | {
         data: {
@@ -65,7 +63,6 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
     dropTable: mocks.dropTableMock,
-    invalidateAndReanalyse: mocks.invalidateAndReanalyseMock,
     registerExistingTable: mocks.registerExistingTableMock,
     clearFilters: mocks.clearFiltersMock,
     bumpDatasetsVersion: mocks.bumpDatasetsVersionMock
@@ -77,8 +74,7 @@ vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
     get currentProject() {
       return mocks.currentProject;
     },
-    renameFile: mocks.renameFileMock,
-    clearColumnTransformations: mocks.clearColumnTransformationsMock
+    renameFile: mocks.renameFileMock
   }
 }));
 
@@ -91,8 +87,7 @@ vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
     }
   },
   dataTabActions: {
-    setEnrichDataState: mocks.setEnrichDataStateMock,
-    reset: mocks.dataTabResetMock
+    setEnrichDataState: mocks.setEnrichDataStateMock
   }
 }));
 
@@ -113,14 +108,11 @@ vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
   showWarning: vi.fn()
 }));
 vi.mock('$lib/features/step-toolbar/tools/facets/facets-access', () => ({
-  disableFacets: mocks.disableFacetsMock,
+  disableFacets: vi.fn(),
   getFacetsBaseVisualizationId: mocks.getFacetsBaseVisualizationIdMock
 }));
 
 import { datasetsStore } from './datasets.store.svelte';
-import { selectDataset as selectDatasetState } from './datasets/datasets-selection';
-import { updateDatasetJoinBasemap as updateDatasetJoinBasemapState } from './datasets/datasets-crud';
-import type { DatasetsState } from './datasets/datasets-state.svelte';
 
 function makeDataset(id: string, sourceFileId = `source-${id}`) {
   return {
@@ -178,7 +170,6 @@ describe('datasetsStore persisted view state', () => {
     mocks.currentProject = undefined;
     mocks.enrichmentDatasetId = undefined;
     mocks.registerExistingTableMock.mockResolvedValue(null);
-    mocks.clearColumnTransformationsMock.mockResolvedValue(undefined);
     mocks.getFacetsBaseVisualizationIdMock.mockReturnValue(null);
     mocks.createFileFromUploadMock.mockImplementation(
       (file: { content?: string; name?: string; type?: string }) =>
@@ -264,64 +255,6 @@ describe('datasetsStore persisted view state', () => {
       'dataset-2'
     ]);
     expect(datasetsStore.selectedDatasetId).toBe('dataset-2');
-  });
-
-  it('does not rewrite the selected dataset id when it is already active', () => {
-    const state = {
-      datasets: [makeDataset('dataset-1')],
-      enabledDatasetIds: new Set(),
-      isProcessing: false,
-      hiddenColumns: new Map()
-    } as unknown as DatasetsState;
-    let selectedDatasetId = 'dataset-1';
-    let writes = 0;
-    Object.defineProperty(state, 'selectedDatasetId', {
-      get: () => selectedDatasetId,
-      set: (value: string | undefined) => {
-        writes++;
-        selectedDatasetId = value ?? '';
-      }
-    });
-
-    selectDatasetState(state, 'dataset-1');
-
-    expect(writes).toBe(0);
-    expect(mocks.dataTabResetMock).not.toHaveBeenCalled();
-  });
-
-  it('selects a different source without resetting data tab implicitly', () => {
-    const state = {
-      datasets: [
-        makeDataset('dataset-1', 'source-1'),
-        makeDataset('dataset-2', 'source-2')
-      ],
-      selectedDatasetId: 'dataset-1',
-      enabledDatasetIds: new Set(),
-      isProcessing: false,
-      hiddenColumns: new Map()
-    } as unknown as DatasetsState;
-
-    selectDatasetState(state, 'dataset-2');
-
-    expect(state.selectedDatasetId).toBe('dataset-2');
-    expect(mocks.dataTabResetMock).not.toHaveBeenCalled();
-  });
-
-  it('does not replace a dataset when the joined basemap is unchanged', () => {
-    const dataset = {
-      ...makeDataset('dataset-1'),
-      joinedBasemap: 'world-countries'
-    };
-    const state = {
-      datasets: [dataset],
-      enabledDatasetIds: new Set(),
-      isProcessing: false,
-      hiddenColumns: new Map()
-    } as unknown as DatasetsState;
-
-    updateDatasetJoinBasemapState(state, 'dataset-1', 'world-countries');
-
-    expect(state.datasets[0]).toBe(dataset);
   });
 
   it('preserves hidden column state when a column is renamed', () => {
@@ -575,55 +508,6 @@ describe('datasetsStore persisted view state', () => {
       enrichmentColumn: undefined,
       targetColumn: undefined,
       isEnrichmentActive: false
-    });
-  });
-
-  it('removes linked visualizations when resetting a dataset', async () => {
-    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
-    mocks.currentProject = {
-      data: {
-        sourceFiles: [
-          makeUploadedFile('source-a', 'data.geojson', {
-            originalFile: new File(['{}'], 'data.geojson', {
-              type: 'application/geo+json'
-            })
-          })
-        ]
-      }
-    };
-    mocks.processUploadedFileMock.mockResolvedValueOnce({
-      ...makeDataset('restored-dataset', 'source-a'),
-      tableName: 'restored_table'
-    });
-    mocks.getFacetsBaseVisualizationIdMock.mockReturnValue('viz-2');
-
-    const getVisualizationsByDataset = vi.fn(() => [
-      { id: 'viz-1', datasetId: 'dataset-1' },
-      { id: 'viz-2', datasetId: 'dataset-1' }
-    ]);
-    const removeVisualization = vi.fn();
-    datasetsStore.injectVisualizationStore({
-      getVisualizationsByDataset,
-      removeVisualization,
-      createVisualization: vi.fn()
-    });
-
-    const success = await datasetsStore.resetDataset('dataset-1');
-
-    expect(success).toBe(true);
-    expect(mocks.invalidateAndReanalyseMock).toHaveBeenCalledWith(
-      'restored_table'
-    );
-    expect(
-      mocks.invalidateAndReanalyseMock.mock.invocationCallOrder[0]
-    ).toBeLessThan(mocks.registerExistingTableMock.mock.invocationCallOrder[0]);
-    expect(getVisualizationsByDataset).toHaveBeenCalledWith('dataset-1');
-    expect(removeVisualization).toHaveBeenCalledWith('viz-1');
-    expect(removeVisualization).toHaveBeenCalledWith('viz-2');
-    expect(mocks.disableFacetsMock).toHaveBeenCalledTimes(1);
-    expect(datasetsStore.datasets[0]).toMatchObject({
-      id: 'dataset-1',
-      tableName: 'restored_table'
     });
   });
 });

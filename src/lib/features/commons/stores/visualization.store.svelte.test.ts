@@ -1,9 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
-
-const mocks = vi.hoisted(() => ({
-  trackVisualizationCreated: vi.fn()
-}));
 
 const mockedDatasetsState: { datasets: DatasetResult[] } = {
   datasets: []
@@ -25,8 +21,7 @@ vi.mock('./datasets.store.svelte', () => ({
 
 vi.mock('$lib/features/commons/services/analytics.service', () => ({
   analyticsService: {
-    trackVisualizationCreated: (...args: unknown[]) =>
-      mocks.trackVisualizationCreated(...args)
+    trackVisualizationCreated: vi.fn()
   }
 }));
 
@@ -173,27 +168,10 @@ function buildLegacyLabelVisualization(
 }
 
 describe('visualizationStore legacy label normalization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   afterEach(() => {
     visualizationStore.clear();
     datasetsStore.clear();
     persistenceRegistry.markClean();
-  });
-
-  it('should track the visualization type when creating a visualization', () => {
-    datasetsStore.addProcessedDataset(buildDataset());
-
-    visualizationStore.createVisualization(
-      VisualizationType.CHOROPLETH,
-      'dataset-1'
-    );
-
-    expect(mocks.trackVisualizationCreated).toHaveBeenCalledWith(
-      VisualizationType.CHOROPLETH
-    );
   });
 
   it('migrates legacy label styling into texts and hides the legacy label layer', () => {

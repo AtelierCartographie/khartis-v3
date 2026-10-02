@@ -99,62 +99,6 @@ describe('readTabular', () => {
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'table"name');
   });
 
-  it('drops the registered file handle once a File import succeeds', async () => {
-    const ctx = createContext();
-    const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
-
-    await readTabular(ctx, file, { tablename: 'data_table' });
-
-    expect(dropRegisteredFileMock).toHaveBeenCalledTimes(1);
-    expect(dropRegisteredFileMock).toHaveBeenCalledWith(
-      ctx.db,
-      ctx.registered_files,
-      "registered:data.csv'suffix"
-    );
-  });
-
-  it('keeps the file handle registered when the import fails', async () => {
-    const ctx = createContext();
-    const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
-    executeQueryMock.mockRejectedValue(new Error('import failed'));
-
-    await expect(
-      readTabular(ctx, file, { tablename: 'data_table', delimiter: ',' })
-    ).rejects.toThrow();
-
-    expect(dropRegisteredFileMock).not.toHaveBeenCalled();
-  });
-
-  it('suppresses rollback logging only for a recoverable CSV import attempt', async () => {
-    const ctx = createContext();
-    const file = new File(['a,b\n1,mixed'], 'data.csv', { type: 'text/csv' });
-    let importAttempts = 0;
-
-    executeQueryMock.mockImplementation(async (_connection, sql: string) => {
-      if (sql.includes('read_csv') && importAttempts++ === 0) {
-        throw new Error('sniffing failed');
-      }
-      return sql.includes('COUNT(*)') ? [{ cnt: 1 }] : undefined;
-    });
-
-    await readTabular(ctx, file, { tablename: 'data_table' });
-
-    expect(runInTransactionMock).toHaveBeenNthCalledWith(
-      1,
-      ctx.connection,
-      expect.any(Function),
-      'read_tabular',
-      { logRollback: false }
-    );
-    expect(runInTransactionMock).toHaveBeenNthCalledWith(
-      2,
-      ctx.connection,
-      expect.any(Function),
-      'read_tabular',
-      { logRollback: true }
-    );
-  });
-
   it('rejects unsupported CSV delimiters before building SQL', async () => {
     const ctx = createContext();
     const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });

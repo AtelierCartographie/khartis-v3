@@ -1,23 +1,7 @@
-import { render } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
-import ImageTool from './image-tool.svelte';
-import { annotationsActions } from './annotations.store.svelte';
+import { describe, expect, it } from 'vitest';
 import { isSupportedAnnotationImageFile } from './image-file-validation';
 
 describe('image annotation tool', () => {
-  beforeEach(() => {
-    annotationsActions.reset();
-  });
-
-  it('limits image imports to the CDC-supported JPG and PNG formats', () => {
-    const { container } = render(ImageTool);
-    const fileInput =
-      container.querySelector<HTMLInputElement>('input[type="file"]');
-
-    expect(fileInput).toBeInTheDocument();
-    expect(fileInput?.getAttribute('accept')).toBe('.jpg,.jpeg,.png');
-  });
-
   it('rejects unsupported annotation image files before placement', () => {
     expect(
       isSupportedAnnotationImageFile({

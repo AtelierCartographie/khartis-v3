@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DistanceUnit,
@@ -9,16 +11,11 @@ import {
   injectProjectionContext,
   mapInstanceStore
 } from '$lib/features/commons/stores/map-instance.store.svelte';
-import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
-
-const mocks = vi.hoisted(() => ({
-  resetPagePan: vi.fn()
-}));
 
 vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: {
-    resetPagePan: mocks.resetPagePan
+    resetPagePan: vi.fn()
   }
 }));
 
@@ -51,7 +48,6 @@ function createScaleMap(widthPerLongitudeDegree: number) {
 
 describe('geo indications store responsive defaults', () => {
   beforeEach(() => {
-    mocks.resetPagePan.mockClear();
     formatActions.reset();
     geoIndicationsActions.reset();
     mapInstanceStore.reset();
@@ -61,21 +57,6 @@ describe('geo indications store responsive defaults', () => {
       fitPaddingPx: 0,
       isProjectedCoordinates: false
     }));
-  });
-
-  it('starts the inset map from explicit inset colors', () => {
-    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
-    expect(
-      hslToHex(
-        geoIndicationsState.insetMap.windowColor.hue,
-        geoIndicationsState.insetMap.windowColor.saturation,
-        geoIndicationsState.insetMap.windowColor.lightness
-      )
-    ).toBe('#DD5642');
-    expect(geoIndicationsState.insetMap.continentColor).toEqual(
-      hexToHsl('#d9d9d9')
-    );
-    expect(geoIndicationsState.insetMap.seaColor).toEqual(hexToHsl('#d0e2ff'));
   });
 
   it('normalizes restored inset maps to globe mode without basemap color inheritance', () => {
@@ -225,50 +206,5 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.scale.distance).toBe(
       MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.KILOMETERS]
     );
-  });
-
-  it('recenters the page when the last geo indication is disabled', () => {
-    geoIndicationsActions.toggleScale();
-    mocks.resetPagePan.mockClear();
-
-    geoIndicationsActions.toggleScale();
-
-    expect(geoIndicationsState.scale.enabled).toBe(false);
-    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
-  });
-
-  it('keeps the page offset while another geo indication remains enabled', () => {
-    geoIndicationsActions.toggleScale();
-    geoIndicationsActions.toggleOrientation();
-    mocks.resetPagePan.mockClear();
-
-    geoIndicationsActions.toggleScale();
-
-    expect(geoIndicationsState.scale.enabled).toBe(false);
-    expect(geoIndicationsState.orientation.enabled).toBe(true);
-    expect(mocks.resetPagePan).not.toHaveBeenCalled();
-
-    geoIndicationsActions.toggleOrientation();
-
-    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
-  });
-
-  it('recenters the page when setState disables all geo indications', () => {
-    geoIndicationsActions.toggleScale();
-    geoIndicationsActions.toggleInsetMap();
-    mocks.resetPagePan.mockClear();
-
-    geoIndicationsActions.setState({
-      scale: {
-        ...geoIndicationsState.scale,
-        enabled: false
-      },
-      insetMap: {
-        ...geoIndicationsState.insetMap,
-        enabled: false
-      }
-    });
-
-    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
   });
 });

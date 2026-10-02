@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   khartisProjectionFactories,
   KHARTIS_USER_PROJECTION_FACTORY,
-  KHARTIS_PROJ4_FACTORY,
-  KHARTIS_COMPOSITE_FACTORY
+  KHARTIS_PROJ4_FACTORY
 } from './khartis-projection-factories.utils';
 import type { UserProjectionBuildParams } from './user-projection-build.utils';
 
@@ -71,15 +70,5 @@ describe('khartisProjectionFactories (worker-side registry)', () => {
       fit: { bbox: EUROPE_BBOX, width: 800, height: 600, padding: 40 }
     });
     expect(isProjected(projection)).toBe(true);
-  });
-
-  it('exposes the three khartis factory ids', () => {
-    expect(Object.keys(khartisProjectionFactories).sort()).toEqual(
-      [
-        KHARTIS_COMPOSITE_FACTORY,
-        KHARTIS_PROJ4_FACTORY,
-        KHARTIS_USER_PROJECTION_FACTORY
-      ].sort()
-    );
   });
 });

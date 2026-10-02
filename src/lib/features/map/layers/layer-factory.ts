@@ -22,7 +22,6 @@ import {
 import { createTextOverlayLayers } from './text-layer-factory';
 import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 
-export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors';
 export { resolveEffectiveCategoryColorMap } from './layer-color.utils';
 export type { TextLayerDatum } from './text-layer-data.utils';
 

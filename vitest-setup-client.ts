@@ -22,18 +22,21 @@ if (typeof globalThis.Worker === 'undefined') {
   vi.stubGlobal('Worker', WorkerStub);
 }
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  enumerable: true,
-  value: vi.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn()
-  }))
-});
+// Files run in Node unless they ask for jsdom with `// @vitest-environment jsdom`.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    enumerable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  });
+}
 
 vi.mock('$env/dynamic/public', () => ({
   env: {}

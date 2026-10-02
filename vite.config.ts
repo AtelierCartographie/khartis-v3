@@ -392,7 +392,9 @@ export default defineConfig(({ mode }) => {
           plugins: [svelteTesting()],
           test: {
             name: 'client',
-            environment: 'jsdom',
+            // A file that needs a DOM opts in with `// @vitest-environment jsdom`:
+            // creating jsdom for every file cost more than the tests themselves.
+            environment: 'node',
             clearMocks: true,
             include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
             exclude: ['src/lib/server/**'],
@@ -410,8 +412,8 @@ export default defineConfig(({ mode }) => {
             ],
             exclude: ['tests/**/tmp-*.{test,spec}.{js,ts}'],
             setupFiles: ['./vitest-setup-server.ts'],
-            pool: 'forks',
-            fileParallelism: false
+            globalSetup: ['./vitest-global-setup-server.ts'],
+            pool: 'forks'
           }
         }
       ]

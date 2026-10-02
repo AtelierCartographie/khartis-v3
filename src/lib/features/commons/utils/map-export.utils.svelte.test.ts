@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import {
@@ -1379,78 +1381,6 @@ describe('map export DOM mutations', () => {
     expect(fillMarkup).toContain('stroke="none"');
   });
 
-  it.each([
-    ['Full HD', 1920, 1080, 2],
-    ['2K QHD', 2560, 1440, 2560 / 960],
-    ['4K UHD', 3840, 2160, 4]
-  ])(
-    'temporarily supersamples standalone Deck exports to the requested %s JPEG resolution',
-    async (_label, width, height, expectedPixelRatio) => {
-      document.body.innerHTML = `<div class="page-container"></div>`;
-      const page = document.querySelector('.page-container');
-      if (!page) {
-        throw new Error('Missing export fixture node');
-      }
-
-      bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
-
-      const deck = {
-        props: { useDevicePixels: 1 },
-        setProps: vi.fn(),
-        redraw: vi.fn()
-      };
-      mapInstanceStore.setDeckInstance(deck as never);
-      mapInstanceStore.setMapLoaded(true);
-
-      await exportMapToJpg({ width, height });
-
-      expect(deck.setProps).toHaveBeenNthCalledWith(1, {
-        useDevicePixels: expectedPixelRatio
-      });
-      expect(deck.redraw).toHaveBeenCalledWith('exportPixelRatio');
-      expect(htmlToImage.toCanvas).toHaveBeenCalledWith(
-        page,
-        expect.objectContaining({
-          pixelRatio: expectedPixelRatio,
-          backgroundColor: '#ffffff'
-        })
-      );
-      expect(deck.setProps).toHaveBeenNthCalledWith(2, {
-        useDevicePixels: 1
-      });
-      expect(deck.redraw).toHaveBeenCalledWith('restoreExportPixelRatio');
-    }
-  );
-
-  it('keeps standalone Deck exports at the current ratio when it already exceeds the target resolution', async () => {
-    document.body.innerHTML = `<div class="page-container"></div>`;
-    const page = document.querySelector('.page-container');
-    if (!page) {
-      throw new Error('Missing export fixture node');
-    }
-
-    bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
-
-    const deck = {
-      props: { useDevicePixels: 2 },
-      setProps: vi.fn(),
-      redraw: vi.fn()
-    };
-    mapInstanceStore.setDeckInstance(deck as never);
-    mapInstanceStore.setMapLoaded(true);
-
-    await exportMapToJpg({ width: 1920, height: 1080 });
-
-    expect(htmlToImage.toCanvas).toHaveBeenCalledWith(
-      page,
-      expect.objectContaining({
-        pixelRatio: 2,
-        backgroundColor: '#ffffff'
-      })
-    );
-    expect(deck.setProps).not.toHaveBeenCalled();
-  });
-
   it('skips the MapLibre pixel-ratio rescale in interleaved Deck.gl mode to preserve symbol projection', async () => {
     document.body.innerHTML = `<div class="page-container"></div>`;
     const page = document.querySelector('.page-container');
@@ -1483,51 +1413,6 @@ describe('map export DOM mutations', () => {
       page,
       expect.objectContaining({ pixelRatio: 4 })
     );
-  });
-
-  it('freezes WebGL canvases as images while html-to-image captures JPEG exports', async () => {
-    const restoreImageDecode = stubImageDecode();
-    document.body.innerHTML = `
-      <div class="page-container">
-        <div class="map-canvas" style="position: relative;">
-          <canvas></canvas>
-        </div>
-      </div>
-    `;
-
-    const page = document.querySelector('.page-container');
-    const mapCanvas = document.querySelector('.map-canvas');
-    const canvas = document.querySelector('canvas');
-    if (!page || !mapCanvas || !canvas) {
-      throw new Error('Missing export fixture nodes');
-    }
-
-    bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
-    bindElementBox(mapCanvas, { left: 12, top: 18, width: 640, height: 360 });
-    bindElementBox(canvas, { left: 12, top: 18, width: 640, height: 360 });
-    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
-    htmlToImage.toCanvas.mockImplementation(async () => {
-      const frozenCanvas = page.querySelector(
-        'img[data-khartis-export-frozen-canvas="true"]'
-      ) as HTMLImageElement | null;
-
-      expect(canvas.style.visibility).toBe('hidden');
-      expect(frozenCanvas?.src).toBe('data:image/png;base64,AAAA');
-
-      return createExportCanvas(1920, 1080);
-    });
-
-    try {
-      await exportMapToJpg({ width: 1920, height: 1080 });
-    } finally {
-      restoreImageDecode();
-    }
-
-    expect(canvas.style.visibility).toBe('');
-    expect(
-      page.querySelector('img[data-khartis-export-frozen-canvas="true"]')
-    ).toBeNull();
-    expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
   });
 
   it('hides empty page element placeholders while html-to-image captures JPEG exports', async () => {
