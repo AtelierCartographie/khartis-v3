@@ -9,41 +9,45 @@ paths:
   - 'src/lib/features/visualization-tab/hooks/**'
 ---
 
-# Color, classification & patterns
+# Color, classification and patterns
 
-Color and discretization are the heart of thematic semiology. Palettes are generated in a **perceptual color space (OKLab/OKLCH) via `@ateliercartographie/ok-palette`** — don't bypass it with ad-hoc RGB/HSL interpolation.
+Color and discretization are the heart of thematic semiology: a wrong break or palette changes how the map reads without raising any error. Palettes are generated in a perceptual color space (OKLab/OKLCH) through `@ateliercartographie/ok-palette`; ad-hoc RGB or HSL interpolation bypasses it. Reference: `docs/DISCRETISATION_ET_COULEURS.md`.
 
 ## Three palette families, matched to the variable
 
-- **Sequential** (`sequential`) — ordered quantitative data, light → dark.
-- **Diverging** (`divergentSequential`) — quantitative data with a meaningful breakpoint; pass the diverging split (`hasCenterClass`) computed from the break position, don't fake it by reversing a sequential ramp.
-- **Qualitative / categorical** — nominal categories, from the project presets (`qualitative-palette.constants.ts`).
+- **Sequential** (`sequential`): ordered quantitative data, light to dark.
+- **Diverging** (`divergentSequential`): quantitative data with a meaningful breakpoint. Pass the diverging split (`hasCenterClass`) computed from the break position; reversing a sequential ramp does not produce one.
+- **Qualitative**: nominal categories, from the project presets (`qualitative-palette.constants.ts`).
 
-Generate class colors through `generateColorsForBreaks()` in `classification.service.ts`; export to the renderer via `resolvePalette(..., { format: 'webgl' })` then `webglToHex`. Palette inversion is a flip of the resolved array, not a re-generation.
+Generate class colors with `generateColorsForBreaks()` in `classification.service.ts`, and export them to the renderer with `resolvePalette(..., { format: 'webgl' })` then `webglToHex`. Inverting a palette flips the resolved array; it does not regenerate it.
 
-## Discretization follows the user, not a default
+## Discretization follows the user
 
-- Methods live in `ClassificationMethod` (equal interval, quantiles, k-means, q6, nested means, head/tail, **manual**) and map to DuckDB break macros via `mapMethodToMacro()`. Add new methods there, computed in DuckDB.
-- Always honor the user's class count and any manually edited class bounds; `manual` performs no recompute — only counts per class.
-- A **breakpoint** turns the ramp diverging (`calculateDivergingBreaks` / `computeDivergingSplit`); validate it with `Number.isFinite` and keep the frequency-histogram view in sync.
-- Round class bounds to the data with the existing rounding step; don't surface raw floats as breaks.
+- Methods live in `ClassificationMethod` (equal interval, quantiles, k-means, q6, nested means, head/tail, manual) and map to DuckDB break macros through `mapMethodToMacro()`. A new method is added there and computed in DuckDB.
+- The user's class count and manually edited bounds are always honored. `manual` recomputes nothing except the counts per class.
+- A breakpoint turns the ramp diverging (`calculateDivergingBreaks`, `computeDivergingSplit`). Validate it with `Number.isFinite` and keep the frequency histogram in sync.
+- Class bounds are rounded to the data with the existing rounding step. Raw floats are not shown as breaks.
 
-## Color-blindness is first-class
+## Color-blindness
 
-- **Daltonism is a suggestion preset, not a filter.** `SUGGESTION_PRESET.COLORBLIND` sits beside Monochrome/Bicolore/Sépia/Vif/Pastel and proposes palettes grounded in published work — Bang Wong (Nature Methods, 2011) and Paul Tol (SRON) in `colorblind-palette.constants.ts`. Never re-introduce a boolean that hides the other suggestions; the user picks a colour-blind-safe palette, they don't filter the catalogue.
-- Wong's black is deliberately excluded from the categorical scheme: categories must carry comparable visual weight.
-- Any palette a suggestion preset or a dropdown can hand out **must** be resolvable by `findPaletteById` (add it to `ADDRESSABLE_PALETTES`). An id that does not resolve makes `resolveClassificationColors` regenerate the default ramp and silently discard the user's choice.
-- A hand-built ramp has no palette id: the colour-sync path passes `preserveCustomColors` so it survives a refresh, while the break/breakpoint path must still regenerate.
-- The simulation tool (`color-blindness/`) only **previews** deficiencies (protanopia, deuteranopia, tritanopia, …) via CSS `feColorMatrix`; it must never alter exported colors.
+- Color-blind safety is a suggestion preset, not a filter. `SUGGESTION_PRESET.COLORBLIND` sits beside the other presets and proposes palettes from published work (Bang Wong, Paul Tol) in `colorblind-palette.constants.ts`. The user picks a color-blind-safe palette among the suggestions; no switch hides the other ones.
+- Wong's black is excluded from the categorical scheme so that categories carry comparable visual weight.
+- Any palette a preset or a dropdown can hand out has to resolve through `findPaletteById` (add it to `ADDRESSABLE_PALETTES`). An id that does not resolve makes `resolveClassificationColors` regenerate the default ramp and silently discard the user's choice.
+- A hand-built ramp has no palette id. The color-sync path passes `preserveCustomColors` so it survives a refresh, while the break and breakpoint path still regenerates.
+- The simulation tool (`color-blindness/`) only previews deficiencies through a CSS `feColorMatrix`. It never alters exported colors.
 
-## Custom color & intensity
+## Custom color and intensity
 
-Use `color-utils.ts` (`hslToHex`, `hexToHsl`, `createColorValue`) for the HSL↔hex round-trip; ranges are H 0–359, S/L 0–100. Keep hue/saturation/lightness and the hex value in sync through `ColorValue`.
+`color-utils.ts` (`hslToHex`, `hexToHsl`, `createColorValue`) handles the HSL to hex round trip, with H in 0..359 and S, L in 0..100. Hue, saturation, lightness and the hex value stay in sync through `ColorValue`.
 
-## Patterns (`@ateliercartographie/motif.js` + ok-palette)
+## Patterns (`@ateliercartographie/motif.js` with ok-palette)
 
-Pattern palettes **replace** the flat fill (white background + per-class motif), they don't overlay it. Class pattern sets come from ok-palette (`sequentialPatterns` / `categoricalPatterns`) via `resolveClassPatterns()` in `pattern-palette.service.ts` — never hand-roll size/angle ramps. `PatternPaletteConfig.scale` is in **native motif units** (design tile = scale × 10 CSS px; the UI slider shows ×10). Categorical pattern palettes are capped at `MAX_CATEGORICAL_PATTERN_COUNT` (24). Never feed devicePixelRatio-scaled atlas frame widths to the deck.gl shader, and never build previews from `motif().tile()` (canvas tiles are DPR-scaled and unrotated) — use the SVG-defs helpers (`buildPatternSvgBackground`, `buildClassPatternSvgBackground`, legend `patternFill`). The legacy single-motif model (`patternId`/`patternParams`, angles 0/45/315 via `PATTERN_TYPE_MAP`) remains only for unique fills, symbols, and missing data.
+- A pattern palette replaces the flat fill (white background plus one motif per class); it is not an overlay.
+- Class pattern sets come from ok-palette (`sequentialPatterns`, `categoricalPatterns`) through `resolveClassPatterns()` in `pattern-palette.service.ts`. Size and angle ramps are not hand-rolled.
+- `PatternPaletteConfig.scale` is in native motif units: the design tile is scale × 10 CSS px, and the UI slider shows the ×10 value. Categorical pattern palettes are capped at `MAX_CATEGORICAL_PATTERN_COUNT`.
+- Atlas frame widths scaled by `devicePixelRatio` are not fed to the Deck.gl shader, and previews are not built from `motif().tile()` (canvas tiles are DPR-scaled and unrotated). Use the SVG-defs helpers: `buildPatternSvgBackground`, `buildClassPatternSvgBackground`, the legend `patternFill`.
+- The legacy single-motif model (`patternId`, `patternParams`, `PATTERN_TYPE_MAP`) remains only for unique fills, symbols and missing data.
 
-## Carbon inputs (Svelte 5 traps)
+## Carbon inputs
 
-Color/classification UI uses Carbon, never native controls. Per `CLAUDE.md`: `<Slider>` use `on:input` only; debounce slider → DuckDB recompute (see `slider-with-input.svelte`, ~120 ms) so dragging doesn't spam classification queries. `<Checkbox>` / `<Toggle>` use `on:change` / `onchange`, not `bind:checked`.
+The Carbon event traps are listed in `svelte-carbon-ui.md`. One is specific to this area: debounce a slider before it triggers a DuckDB recompute (`slider-with-input.svelte`, about 120 ms), so that dragging does not flood classification queries.

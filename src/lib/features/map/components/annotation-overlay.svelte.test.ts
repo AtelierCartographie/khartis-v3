@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -6,7 +8,6 @@ import {
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
 import { SHAPE_TYPE } from '$lib/features/commons/constants';
-import * as m from '$lib/paraglide/messages';
 import {
   PAGE_PRESETS,
   PageModel
@@ -24,14 +25,11 @@ import {
   annotationsActions,
   getAnnotationsState
 } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-import { computeDrawingBounds } from '../utils/annotation-drawing.utils';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
-import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import AnnotationOverlay from './annotation-overlay.svelte';
 
-// Drive the map-anchoring helper from the deck view-state zoom so a data-anchored
-// annotation's resolved screen position changes when the MAP zooms. Legacy/page
-// tests never set an anchor, so they keep the pixel-page path untouched.
+// No map instance exists in jsdom: anchoring is stubbed as available so that
+// annotations drawn on the map are created in 'map' space.
 const anchorMocks = vi.hoisted(() => ({
   canAnchorToMap: vi.fn<() => boolean>(() => true),
   dataToScreenPx: vi.fn<
@@ -55,21 +53,6 @@ vi.mock('../utils/map-anchor-projection.utils', () => ({
   buildAnchorFromScreenPx: anchorMocks.buildAnchorFromScreenPx,
   getAnchorScaleFactor: anchorMocks.getAnchorScaleFactor
 }));
-
-function extractPathPoints(
-  path: string | null
-): Array<{ x: number; y: number }> {
-  if (!path) {
-    return [];
-  }
-
-  return Array.from(
-    path.matchAll(/[ML]\s(-?\d+(?:\.\d+)?)\s(-?\d+(?:\.\d+)?)/g)
-  ).map(([, x, y]) => ({
-    x: Number(x),
-    y: Number(y)
-  }));
-}
 
 function getStylePx(style: string, property: string): number {
   const match = style.match(
@@ -272,66 +255,6 @@ describe('annotation overlay drawing interactions', () => {
     formatActions.setMargins({ ...DEFAULT_MARGINS });
   });
 
-  it('positions the drawing preview from its computed origin instead of the page top-left', () => {
-    annotationsActions.beginDrawing(DrawingType.LINE);
-    annotationsActions.updateDrawing([
-      { x: 50, y: 60 },
-      { x: 120, y: 90 }
-    ]);
-
-    const { container } = setupCaptureLayer();
-    const preview = container.querySelector('.drawing-preview');
-
-    expect(preview).toBeTruthy();
-    expect(preview?.getAttribute('style')).toContain('left: 47px; top: 57px;');
-  });
-
-  it('keeps uneven high-smoothness drawings within tight rendered bounds', () => {
-    const points = [
-      { x: 0, y: 0 },
-      { x: 10, y: 0 },
-      { x: 11, y: 100 },
-      { x: 20, y: 100 }
-    ];
-
-    annotationsActions.updateDefaultStyle({ smoothness: 100 });
-    annotationsActions.beginDrawing(DrawingType.LINE);
-    annotationsActions.updateDrawing(points);
-    annotationsActions.finishDrawing();
-
-    const bounds = computeDrawingBounds(points, 2, 100, false);
-    const { container } = render(AnnotationOverlay);
-    const drawing = container.querySelector('.annotation-drawing');
-    const path = container.querySelector('.annotation-drawing path');
-    const pathSegments = path?.getAttribute('d')?.match(/L/g) ?? [];
-
-    expect(drawing?.getAttribute('viewBox')).toBe(bounds.viewBox);
-    expect(Number(drawing?.getAttribute('height'))).toBeLessThan(120);
-    expect(pathSegments.length).toBeGreaterThan(points.length);
-  });
-
-  it('renders freehand drawings without smoothing by default', () => {
-    const points = [
-      { x: 0, y: 0 },
-      { x: 20, y: 20 },
-      { x: 40, y: 0 },
-      { x: 60, y: 20 },
-      { x: 120, y: 104 }
-    ];
-
-    annotationsActions.beginDrawing(DrawingType.LINE);
-    annotationsActions.updateDrawing(points);
-    annotationsActions.finishDrawing();
-
-    const { container } = render(AnnotationOverlay);
-    const path = container.querySelector('.annotation-drawing path');
-    const pathPoints = extractPathPoints(path?.getAttribute('d') ?? null);
-
-    expect(getAnnotationsState().items[0]?.style?.smoothness).toBe(0);
-    expect(pathPoints).toHaveLength(points.length);
-    expect(pathPoints[1]).toEqual(points[1]);
-  });
-
   it('keeps the untouched vector anchor visually fixed when another anchor changes bounds', async () => {
     annotationsActions.addAnnotation(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
     const arrow = getAnnotationsState().items.at(-1);
@@ -371,75 +294,6 @@ describe('annotation overlay drawing interactions', () => {
       expect(after.x).toBeCloseTo(before.x, 3);
       expect(after.y).toBeCloseTo(before.y, 3);
     });
-  });
-
-  it('keeps geometric shape strokes non-scaling under asymmetric sizing', () => {
-    const stretchedShapes = [
-      {
-        type: SHAPE_TYPE.RECTANGLE,
-        width: 180,
-        height: 48,
-        selector: 'path'
-      },
-      {
-        type: SHAPE_TYPE.CIRCLE,
-        width: 160,
-        height: 64,
-        selector: 'circle'
-      },
-      {
-        type: SHAPE_TYPE.TRIANGLE,
-        width: 140,
-        height: 52,
-        selector: 'path'
-      }
-    ] as const;
-
-    for (const shape of stretchedShapes) {
-      annotationsActions.addAnnotation(AnnotationKind.SHAPE, shape.type);
-      const item = getAnnotationsState().items.at(-1);
-      if (!item) {
-        throw new Error(`Expected a ${shape.type} annotation`);
-      }
-
-      annotationsActions.updateAnnotation(item.id, {
-        id: `stretched-${shape.type}`,
-        coordinateSpace: 'page',
-        style: {
-          ...(item.style ?? {}),
-          shapeWidth: shape.width,
-          shapeHeight: shape.height,
-          strokeWidth: 6
-        }
-      });
-    }
-
-    const { container } = render(AnnotationOverlay);
-    const svgs = Array.from(container.querySelectorAll('svg.annotation-shape'));
-
-    expect(svgs).toHaveLength(stretchedShapes.length);
-
-    for (const [index, shape] of stretchedShapes.entries()) {
-      const svg = svgs[index];
-      const strokedElement = svg?.querySelector(shape.selector);
-
-      expect(svg?.getAttribute('width')).toBe(String(shape.width));
-      expect(svg?.getAttribute('height')).toBe(String(shape.height));
-      expect(svg?.getAttribute('preserveAspectRatio')).toBe('none');
-      expect(strokedElement?.getAttribute('stroke-width')).toBe('6');
-      expect(strokedElement?.getAttribute('vector-effect')).toBe(
-        'non-scaling-stroke'
-      );
-    }
-  });
-
-  it('should expose the triangle annotation with its actual shape label', () => {
-    annotationsActions.addAnnotation(AnnotationKind.SHAPE, SHAPE_TYPE.TRIANGLE);
-
-    const { container } = render(AnnotationOverlay);
-    const triangle = container.querySelector('.annotation-item');
-
-    expect(triangle).toHaveAttribute('aria-label', m.triangle());
   });
 
   it('keeps zone drawings active when the pointer is released away from the starting point', async () => {
@@ -597,37 +451,6 @@ describe('annotation overlay drawing interactions', () => {
     const [image] = getAnnotationsState().items;
     expect(image.coordinateSpace).toBe('page');
     expect(image.position).toEqual({ x: 0, y: 0 });
-  });
-
-  it('scales page element positions with the rendered page size', () => {
-    globalActions.setPageZoomScale(1.2);
-    annotationsActions.initPageElements({ withPlaceholders: true });
-
-    const { container } = render(AnnotationOverlay);
-    const title = container.querySelector(
-      '.annotation-item[data-annotation-role="title"]'
-    );
-
-    const style = title?.getAttribute('style');
-
-    expect(style).toContain(`left: ${12 * 1.2}px`);
-    expect(style).toContain(`top: ${12 * 1.2}px`);
-    expect(style).toContain('transform: scale(1.2)');
-  });
-
-  it('marks default page element placeholders for export filtering', () => {
-    annotationsActions.initPageElements({ withPlaceholders: true });
-
-    const { container } = render(AnnotationOverlay);
-    const title = container.querySelector(
-      '.annotation-item[data-annotation-role="title"]'
-    );
-    const credit = container.querySelector(
-      '.annotation-item[data-annotation-role="credit"]'
-    );
-
-    expect(title?.getAttribute('data-khartis-export-placeholder')).toBe('true');
-    expect(credit?.hasAttribute('data-khartis-export-placeholder')).toBe(false);
   });
 
   it('recenters the page when a centered annotation loses focus', async () => {
@@ -841,103 +664,5 @@ describe('annotation overlay drawing interactions', () => {
     await fireEvent.keyDown(item, { key: 'Escape' });
 
     expect(getAnnotationsState().selectedId).toBeNull();
-  });
-
-  it('repositions a data-anchored map annotation when the map view state changes', async () => {
-    anchorMocks.canAnchorToMap.mockReturnValue(true);
-    anchorMocks.dataToScreenPx.mockImplementation(() => {
-      const zoom = mapInstanceStore.deckViewState.zoom;
-      return { x: zoom * 100, y: zoom * 50 };
-    });
-
-    annotationsActions.beginPlacement(AnnotationKind.SHAPE, 'circle');
-    const placed = annotationsActions.commitPlacement({
-      coordinateSpace: 'page',
-      type: AnnotationKind.SHAPE,
-      position: { x: 10, y: 10 },
-      size: { width: 56, height: 56 },
-      content: 'circle'
-    });
-    if (!placed) {
-      throw new Error('Expected a placed shape annotation');
-    }
-    // Promote to a data-anchored map annotation.
-    annotationsActions.updateAnnotation(placed.id, {
-      coordinateSpace: 'map',
-      anchor: { lon: 2.35, lat: 48.86 }
-    });
-
-    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 1 });
-
-    const { container } = render(AnnotationOverlay);
-    const item = container.querySelector('.annotation-item');
-    if (!(item instanceof HTMLElement)) {
-      throw new Error('Annotation item was not rendered');
-    }
-
-    const zoom1 = mapInstanceStore.deckViewState.zoom;
-    await waitFor(() => {
-      expect(item.getAttribute('style')).toContain(`left: ${zoom1 * 100}px`);
-    });
-
-    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 2 });
-
-    const zoom2 = mapInstanceStore.deckViewState.zoom;
-    expect(zoom2).not.toBe(zoom1);
-    await waitFor(() => {
-      expect(item.getAttribute('style')).toContain(`left: ${zoom2 * 100}px`);
-    });
-
-    anchorMocks.dataToScreenPx.mockReset();
-    anchorMocks.dataToScreenPx.mockReturnValue({ x: 0, y: 0 });
-    mapInstanceStore.reset();
-  });
-
-  it('scales a data-anchored map annotation with the map zoom factor', async () => {
-    anchorMocks.canAnchorToMap.mockReturnValue(true);
-    anchorMocks.dataToScreenPx.mockReturnValue({ x: 40, y: 20 });
-    anchorMocks.getAnchorScaleFactor.mockImplementation(
-      () => mapInstanceStore.deckViewState.zoom
-    );
-
-    annotationsActions.beginPlacement(AnnotationKind.SHAPE, 'circle');
-    const placed = annotationsActions.commitPlacement({
-      coordinateSpace: 'page',
-      type: AnnotationKind.SHAPE,
-      position: { x: 10, y: 10 },
-      size: { width: 56, height: 56 },
-      content: 'circle'
-    });
-    if (!placed) {
-      throw new Error('Expected a placed shape annotation');
-    }
-    annotationsActions.updateAnnotation(placed.id, {
-      coordinateSpace: 'map',
-      anchor: { lon: 2.35, lat: 48.86, spanLon: 3.35, spanLat: 48.86 }
-    });
-
-    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 2 });
-
-    const { container } = render(AnnotationOverlay);
-    const item = container.querySelector('.annotation-item');
-    if (!(item instanceof HTMLElement)) {
-      throw new Error('Annotation item was not rendered');
-    }
-
-    await waitFor(() => {
-      expect(item.getAttribute('style')).toContain('transform: scale(2)');
-    });
-
-    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 4 });
-
-    await waitFor(() => {
-      expect(item.getAttribute('style')).toContain('transform: scale(4)');
-    });
-
-    anchorMocks.dataToScreenPx.mockReset();
-    anchorMocks.dataToScreenPx.mockReturnValue({ x: 0, y: 0 });
-    anchorMocks.getAnchorScaleFactor.mockReset();
-    anchorMocks.getAnchorScaleFactor.mockReturnValue(1);
-    mapInstanceStore.reset();
   });
 });

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -9,8 +11,7 @@ import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBClientForJoin } from './join-ops';
 
 const mocks = vi.hoisted(() => ({
-  ensureAttributesLoaded: vi.fn(),
-  getLocale: vi.fn(() => 'fr')
+  ensureAttributesLoaded: vi.fn()
 }));
 
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
@@ -18,15 +19,6 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
     ensureAttributesLoaded: mocks.ensureAttributesLoaded
   }
 }));
-
-vi.mock('$lib/paraglide/runtime', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('$lib/paraglide/runtime')>();
-  return {
-    ...actual,
-    getLocale: mocks.getLocale
-  };
-});
 
 const {
   applyJoinCorrections,
@@ -91,26 +83,6 @@ function createDataset(tableName: string): DuckDBDataset {
     metadata: { processedAt: new Date(), fileType: 'csv' as never }
   };
 }
-
-describe('join-ops basemap attribute values', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getLocale.mockReturnValue('fr');
-  });
-
-  it('returns one display value per basemap entity using the localized display variant first', async () => {
-    const { duck, queries } = createDuck();
-
-    const values = await getBasemapAttributeValues(createBasemap(), duck);
-
-    expect(values).toEqual(['Brésil', 'France']);
-    const valueQuery = queries.find((query) =>
-      query.includes('PARTITION BY entity_id')
-    );
-    expect(valueQuery).toContain("variant = 'name_fren'");
-    expect(valueQuery).toContain('COALESCE(id, raw) AS entity_id');
-  });
-});
 
 describe('join-ops error typing', () => {
   beforeEach(() => {

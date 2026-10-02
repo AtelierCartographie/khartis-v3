@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
-  DEFAULT_TEXT_LINE_HEIGHT,
   EXPLICIT_TEXT_CHARACTER_SET,
   MAX_TEXT_OUTLINE_WIDTH,
   TEXT_ATLAS_BUFFER,
   TEXT_ATLAS_FONT_SIZE,
   TEXT_ATLAS_RADIUS,
   extendTextCharacterSet,
-  resolveTextFontSettings,
   resolveTextHaloWidthPx,
   resolveTextOutlineWidth,
   resolveTextSmoothing
@@ -84,15 +82,6 @@ describe('text-character-set — coverage', () => {
       expect(isC1Control).toBe(false);
     }
   });
-
-  it('exposes a frozen reference so a shared instance is safe to pass to Deck.gl', () => {
-    expect(Object.isFrozen(EXPLICIT_TEXT_CHARACTER_SET)).toBe(true);
-  });
-
-  it('contains no duplicate glyphs', () => {
-    const set = new Set(EXPLICIT_TEXT_CHARACTER_SET);
-    expect(set.size).toBe(EXPLICIT_TEXT_CHARACTER_SET.length);
-  });
 });
 
 describe('text-character-set — SDF atlas geometry', () => {
@@ -111,20 +100,6 @@ describe('text-character-set — SDF atlas geometry', () => {
     expect(TEXT_ATLAS_FONT_SIZE + 2 * TEXT_ATLAS_BUFFER).toBeLessThanOrEqual(
       128
     );
-  });
-});
-
-describe('resolveTextFontSettings', () => {
-  it('always renders through the SDF atlas so glyphs stay sharp at any scale', () => {
-    expect(resolveTextFontSettings(10).sdf).toBe(true);
-    expect(resolveTextFontSettings(64).sdf).toBe(true);
-  });
-
-  it('exposes the shared atlas geometry so a single atlas serves every layer', () => {
-    const settings = resolveTextFontSettings(12);
-    expect(settings.fontSize).toBe(TEXT_ATLAS_FONT_SIZE);
-    expect(settings.buffer).toBe(TEXT_ATLAS_BUFFER);
-    expect(settings.radius).toBe(TEXT_ATLAS_RADIUS);
   });
 });
 
@@ -205,13 +180,6 @@ describe('resolveTextHaloWidthPx', () => {
   it('scales with the glyph so an SVG export mirrors what the GPU draws', () => {
     const outlineWidth = resolveTextOutlineWidth(2, 12);
     expect(resolveTextHaloWidthPx(outlineWidth, 24)).toBeCloseTo(4, 5);
-  });
-});
-
-describe('text-character-set — DEFAULT_TEXT_LINE_HEIGHT', () => {
-  it('leaves room between primary and secondary label rows', () => {
-    expect(DEFAULT_TEXT_LINE_HEIGHT).toBeGreaterThan(1);
-    expect(DEFAULT_TEXT_LINE_HEIGHT).toBeLessThanOrEqual(1.3);
   });
 });
 

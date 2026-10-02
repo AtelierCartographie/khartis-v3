@@ -76,27 +76,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-export function registerAssetStores(db: IDBDatabase): void {
-  if (!db.objectStoreNames.contains(ASSET_STORE_NAME)) {
-    db.createObjectStore(ASSET_STORE_NAME, { keyPath: 'assetId' });
-  }
-
-  if (!db.objectStoreNames.contains(ASSET_CHUNK_STORE_NAME)) {
-    const chunkStore = db.createObjectStore(ASSET_CHUNK_STORE_NAME, {
-      keyPath: ['assetId', 'chunkIndex']
-    });
-    chunkStore.createIndex('assetId', 'assetId', { unique: false });
-  }
-
-  if (!db.objectStoreNames.contains(ASSET_REF_STORE_NAME)) {
-    const refStore = db.createObjectStore(ASSET_REF_STORE_NAME, {
-      keyPath: 'id'
-    });
-    refStore.createIndex('projectId', 'projectId', { unique: false });
-    refStore.createIndex('assetId', 'assetId', { unique: false });
-  }
-}
-
 export async function assetExists(assetId: string): Promise<boolean> {
   const db = await getDb();
 

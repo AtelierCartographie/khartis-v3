@@ -1,14 +1,13 @@
+// @vitest-environment jsdom
+
 import { Table, vectorFromArray } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
-import type { LngLatBoundsLike } from 'maplibre-gl';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   resolveOrthographicBasemapReferenceState,
   resolveOrthographicReferenceState,
-  resolveOrthographicRenderedDatasetBounds,
-  toBboxFromOrthographicBounds,
-  toOrthographicBounds
+  resolveOrthographicRenderedDatasetBounds
 } from './orthographic-render-resolution.utils';
 
 const viewportSize = { width: 800, height: 600 };
@@ -26,34 +25,6 @@ const basemapMeta: BasemapMetadata = {
 };
 
 describe('orthographic render resolution utils', () => {
-  it('normalizes supported bounds shapes', () => {
-    expect(toOrthographicBounds([1, 2, 3, 4])).toEqual([
-      [1, 2],
-      [3, 4]
-    ]);
-    expect(
-      toOrthographicBounds({
-        toArray: () => [
-          [5, 6],
-          [7, 8]
-        ]
-      } as unknown as LngLatBoundsLike)
-    ).toEqual([
-      [5, 6],
-      [7, 8]
-    ]);
-  });
-
-  it('converts orthographic bounds to bbox tuples', () => {
-    expect(
-      toBboxFromOrthographicBounds([
-        [1, 2],
-        [3, 4]
-      ])
-    ).toEqual([1, 2, 3, 4]);
-    expect(toBboxFromOrthographicBounds(null)).toBeNull();
-  });
-
   it('prefers the dataset bbox, framed with a 10% margin, when requested', () => {
     const state = resolveOrthographicReferenceState({
       dataset: null,

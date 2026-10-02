@@ -27,7 +27,6 @@ vi.mock('$lib/features/commons/utils/geo-detector.utils', () => ({
 
 import { dataTabStore } from './data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { persistenceRegistry } from '$lib/features/project-management/core';
 
 type MockedDatasets = {
   datasets: Array<Record<string, unknown>>;
@@ -35,7 +34,6 @@ type MockedDatasets = {
 };
 
 const mockDatasets = datasetsStore as unknown as MockedDatasets;
-const notifyChangeMock = vi.mocked(persistenceRegistry.notifyChange);
 
 function setSelected(dataset: Record<string, unknown> | undefined) {
   mockDatasets.selectedDataset = dataset;
@@ -45,7 +43,6 @@ function setSelected(dataset: Record<string, unknown> | undefined) {
 beforeEach(() => {
   dataTabStore.reset();
   setSelected(undefined);
-  notifyChangeMock.mockClear();
 });
 
 describe('[S06] dataTabStore — workflow mode detection', () => {
@@ -86,12 +83,6 @@ describe('[S06] dataTabStore — step progression', () => {
     setSelected({ geometry: null, columns: [], geoDetection: {} });
   });
 
-  it('starts at step 0 with only step 0 navigable', () => {
-    expect(dataTabStore.activeStepIndex).toBe(0);
-    expect(dataTabStore.canNavigateToStep).toEqual([true, false, false]);
-    expect(dataTabStore.hasCompletedStep).toEqual([false, false, false]);
-  });
-
   it('unlocks the next step once the current one is marked complete', () => {
     dataTabStore.markStepComplete(0);
     expect(dataTabStore.hasCompletedStep[0]).toBe(true);
@@ -105,22 +96,6 @@ describe('[S06] dataTabStore — step progression', () => {
     dataTabStore.markStepComplete(0);
     dataTabStore.setActiveStep(1);
     expect(dataTabStore.activeStepIndex).toBe(1);
-  });
-
-  it('resets a completed step back to incomplete when requested', () => {
-    dataTabStore.markStepComplete(0);
-    dataTabStore.resetStepCompletion(0);
-    expect(dataTabStore.hasCompletedStep[0]).toBe(false);
-  });
-
-  it('does not persist unchanged navigation permissions', () => {
-    setSelected({ geometry: null, columns: [], geoDetection: {} });
-
-    dataTabStore.updateNavigationPermissions();
-    dataTabStore.updateNavigationPermissions();
-
-    expect(dataTabStore.canNavigateToStep).toEqual([true, false, false]);
-    expect(notifyChangeMock).not.toHaveBeenCalled();
   });
 });
 
@@ -152,57 +127,5 @@ describe('[S06] dataTabStore — isReadyForVisualization', () => {
     dataTabStore.markStepComplete(1);
     dataTabStore.markStepComplete(2);
     expect(dataTabStore.isReadyForVisualization).toBe(true);
-  });
-});
-
-describe('[S06] dataTabStore — displayed step numbering', () => {
-  it('maps "join" to step 3 in tabular mode', () => {
-    setSelected({ geometry: null, columns: [], geoDetection: {} });
-    expect(dataTabStore.getDisplayedStepNumber('join')).toBe(3);
-  });
-
-  it('maps "basemap" to step 3 in tabular-gps mode', () => {
-    setSelected({
-      geometry: null,
-      columns: [],
-      geoDetection: { gpsCoordinates: { latitude: 'lat', longitude: 'lon' } }
-    });
-    expect(dataTabStore.getDisplayedStepNumber('basemap')).toBe(3);
-  });
-
-  it('maps "basemap" input to the tabular "join" step when not in GPS mode', () => {
-    setSelected({ geometry: null, columns: [], geoDetection: {} });
-    expect(dataTabStore.getDisplayedStepNumber('basemap')).toBe(3);
-  });
-
-  it('maps "enrich" to step 2 in geographic mode', () => {
-    setSelected({ geometry: true, columns: [], geoDetection: {} });
-    expect(dataTabStore.getDisplayedStepNumber('enrich')).toBe(2);
-  });
-
-  it('returns null for unreachable steps (geolocate in geographic mode)', () => {
-    setSelected({ geometry: true, columns: [], geoDetection: {} });
-    expect(dataTabStore.getDisplayedStepNumber('geolocate')).toBeNull();
-  });
-});
-
-describe('[S06] dataTabStore — basemapStepIndex', () => {
-  it('returns -1 in geographic mode (no basemap-join step)', () => {
-    setSelected({ geometry: true, columns: [], geoDetection: {} });
-    expect(dataTabStore.basemapStepIndex).toBe(-1);
-  });
-
-  it('returns the last step index in tabular mode', () => {
-    setSelected({ geometry: null, columns: [], geoDetection: {} });
-    expect(dataTabStore.basemapStepIndex).toBe(2);
-  });
-
-  it('returns the last step index in tabular-gps mode', () => {
-    setSelected({
-      geometry: null,
-      columns: [],
-      geoDetection: { gpsCoordinates: { latitude: 'lat', longitude: 'lon' } }
-    });
-    expect(dataTabStore.basemapStepIndex).toBe(2);
   });
 });

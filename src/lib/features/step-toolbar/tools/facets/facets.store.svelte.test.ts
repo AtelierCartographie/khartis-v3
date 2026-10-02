@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   removeBulkVisualizationsMock: vi.fn(),
   setVisualizationOrderMock: vi.fn(),
   generateFacetVisualizationsMock: vi.fn(),
-  buildFacetVisualizationUpdatesMock: vi.fn(),
   resolveFacetPrimitiveFilterMock: vi.fn(() => 'polygon'),
   getEnabledPrimitiveFiltersMock: vi.fn(() => [] as string[]),
   showInfoMock: vi.fn()
@@ -27,7 +26,7 @@ vi.mock('$lib/features/project-management/core', () => ({
 
 vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
-  buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock,
+  buildFacetVisualizationUpdates: vi.fn(),
   resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock
 }));
 
@@ -43,8 +42,6 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   }
 }));
 
-const updateVisualizationMock = vi.hoisted(() => vi.fn());
-
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: {
     get visualizations() {
@@ -53,7 +50,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
     createBulkVisualizations: mocks.createBulkVisualizationsMock,
     removeBulkVisualizations: mocks.removeBulkVisualizationsMock,
     setVisualizationOrder: mocks.setVisualizationOrderMock,
-    updateVisualization: updateVisualizationMock
+    updateVisualization: vi.fn()
   },
   getEnabledPrimitiveFilters: mocks.getEnabledPrimitiveFiltersMock
 }));
@@ -71,20 +68,6 @@ describe('facetsStore', () => {
     vi.clearAllMocks();
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
     mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['polygon']);
-    mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
-      ({
-        variable,
-        baseViz
-      }: {
-        variable: string;
-        baseViz: { id: string };
-      }) => ({
-        name: variable,
-        facet: {
-          baseVisualizationId: baseViz.id
-        }
-      })
-    );
 
     mocks.visualizations = [
       {
@@ -173,106 +156,6 @@ describe('facetsStore', () => {
       'facet-a2',
       'facet-b2'
     ]);
-  });
-
-  it('syncs generated facets from the latest base visualization without changing ids', async () => {
-    mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('text');
-    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['text']);
-    const baseViz = {
-      id: 'base-viz',
-      name: 'Base visualization',
-      datasetId: 'dataset-1',
-      text: {
-        enabled: true,
-        valueColumn: 'base-value'
-      }
-    };
-    mocks.visualizations = [
-      baseViz,
-      {
-        id: 'facet-a',
-        name: 'a',
-        text: { valueColumn: 'a' }
-      },
-      {
-        id: 'facet-b',
-        name: 'b',
-        text: { valueColumn: 'custom-b' }
-      }
-    ];
-
-    facetsStore.restoreFromSerialized({
-      enabled: true,
-      baseVisualizationId: 'base-viz',
-      primarySlotPath: FACET_SLOT.TEXT_VALUE,
-      variables: ['a', 'b'],
-      layout: { columns: 2, gap: 16 },
-      scaleMode: SCALE_MODE.INDEPENDENT,
-      generatedVisualizationIds: ['facet-a', 'facet-b']
-    });
-
-    await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
-
-    expect(mocks.buildFacetVisualizationUpdatesMock).toHaveBeenNthCalledWith(
-      1,
-      {
-        baseViz,
-        visualization: baseViz,
-        variable: 'a',
-        collectionVariables: ['a', 'b'],
-        scaleMode: SCALE_MODE.INDEPENDENT,
-        primarySlotPath: FACET_SLOT.TEXT_VALUE
-      }
-    );
-    expect(mocks.buildFacetVisualizationUpdatesMock).toHaveBeenNthCalledWith(
-      2,
-      {
-        baseViz,
-        visualization: baseViz,
-        variable: 'b',
-        collectionVariables: ['a', 'b'],
-        scaleMode: SCALE_MODE.INDEPENDENT,
-        primarySlotPath: FACET_SLOT.TEXT_VALUE
-      }
-    );
-    expect(updateVisualizationMock).toHaveBeenNthCalledWith(1, 'facet-a', {
-      id: 'facet-a',
-      name: 'a',
-      text: { valueColumn: 'a' },
-      facet: { baseVisualizationId: 'base-viz' }
-    });
-    expect(updateVisualizationMock).toHaveBeenNthCalledWith(2, 'facet-b', {
-      id: 'facet-b',
-      name: 'b',
-      text: { valueColumn: 'custom-b' },
-      facet: { baseVisualizationId: 'base-viz' }
-    });
-  });
-
-  it('does not sync generated facets when a non-base visualization changes', async () => {
-    mocks.visualizations = [
-      {
-        id: 'base-viz',
-        name: 'Base visualization',
-        datasetId: 'dataset-1'
-      },
-      { id: 'facet-a', name: 'a' }
-    ];
-
-    facetsStore.restoreFromSerialized({
-      enabled: true,
-      baseVisualizationId: 'base-viz',
-      primarySlotPath: FACET_SLOT.POLYGON_VALUE,
-      variables: ['a'],
-      layout: { columns: 1, gap: 16 },
-      scaleMode: SCALE_MODE.INDEPENDENT,
-      generatedVisualizationIds: ['facet-a']
-    });
-
-    await facetsStore.syncGeneratedVisualizationsFromBase('facet-a');
-
-    expect(mocks.buildFacetVisualizationUpdatesMock).not.toHaveBeenCalled();
-    expect(updateVisualizationMock).not.toHaveBeenCalled();
   });
 
   describe('updateVariables', () => {
@@ -518,104 +401,6 @@ describe('facetsStore', () => {
         'facet-d'
       ]);
     });
-
-    it('should skip regeneration when the requested collection already matches the current one', async () => {
-      facetsStore.restoreFromSerialized({
-        enabled: true,
-        baseVisualizationId: 'base-viz',
-        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
-        variables: ['a', 'b'],
-        layout: { columns: 2, gap: 16 },
-        scaleMode: SCALE_MODE.SHARED,
-        generatedVisualizationIds: ['facet-a', 'facet-b']
-      });
-
-      await facetsStore.updateVariables(
-        'base-viz',
-        ['a', 'b'],
-        FACET_SLOT.POLYGON_VALUE
-      );
-
-      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
-      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
-      expect(mocks.createBulkVisualizationsMock).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('toggleScaleMode', () => {
-    it('should toggle from independent to shared without regenerating facets when generated visualizations are present', async () => {
-      mocks.visualizations = [
-        {
-          id: 'base-viz',
-          name: 'Base'
-        },
-        {
-          id: 'facet-a',
-          name: 'a',
-          mapping: { valueColumn: 'a' },
-          polygon: {
-            valueColumn: 'a',
-            classification: { breaks: [0, 5, 10] }
-          },
-          classification: { breaks: [0, 5, 10] }
-        },
-        {
-          id: 'facet-b',
-          name: 'b',
-          mapping: { valueColumn: 'b' },
-          polygon: {
-            valueColumn: 'b',
-            classification: { breaks: [0, 5, 10] }
-          },
-          classification: { breaks: [0, 5, 10] }
-        }
-      ];
-      facetsStore.restoreFromSerialized({
-        enabled: true,
-        baseVisualizationId: 'base-viz',
-        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
-        variables: ['a', 'b'],
-        layout: { columns: 2, gap: 16 },
-        scaleMode: SCALE_MODE.INDEPENDENT,
-        generatedVisualizationIds: ['facet-a', 'facet-b']
-      });
-
-      await facetsStore.toggleScaleMode();
-
-      expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
-      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
-      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
-      expect(mocks.createBulkVisualizationsMock).not.toHaveBeenCalled();
-      expect(updateVisualizationMock).toHaveBeenCalledTimes(2);
-      expect(updateVisualizationMock).toHaveBeenNthCalledWith(
-        1,
-        'facet-a',
-        expect.objectContaining({
-          name: 'a',
-          facet: { baseVisualizationId: 'base-viz' }
-        })
-      );
-    });
-
-    it('should toggle from shared to independent', async () => {
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'new-a' }
-      ]);
-
-      facetsStore.restoreFromSerialized({
-        enabled: true,
-        baseVisualizationId: 'base-viz',
-        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
-        variables: ['a'],
-        layout: { columns: 1, gap: 16 },
-        scaleMode: SCALE_MODE.SHARED,
-        generatedVisualizationIds: ['facet-a']
-      });
-
-      await facetsStore.toggleScaleMode();
-
-      expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
-    });
   });
 
   describe('setColumns', () => {
@@ -638,23 +423,6 @@ describe('facetsStore', () => {
 
       facetsStore.setColumns(0);
       expect(facetsStore.layout.columns).toBe(1);
-    });
-
-    it('should notify persistence', () => {
-      facetsStore.setColumns(2);
-      expect(mocks.notifyChangeMock).toHaveBeenCalledWith('facets');
-    });
-  });
-
-  describe('setGap', () => {
-    it('should update layout gap', () => {
-      facetsStore.setGap(24);
-      expect(facetsStore.layout.gap).toBe(24);
-    });
-
-    it('should notify persistence', () => {
-      facetsStore.setGap(8);
-      expect(mocks.notifyChangeMock).toHaveBeenCalledWith('facets');
     });
   });
 
@@ -830,21 +598,6 @@ describe('facetsStore', () => {
         m.facets_notice_title(),
         m.facets_notice_replaced()
       );
-    });
-
-    it('does not notify when starting a first collection', async () => {
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-a' },
-        { id: 'facet-b' }
-      ]);
-
-      await facetsStore.enable(
-        'base-viz',
-        ['a', 'b'],
-        FACET_SLOT.POLYGON_VALUE
-      );
-
-      expect(mocks.showInfoMock).not.toHaveBeenCalled();
     });
   });
 

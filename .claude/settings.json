@@ -1,12 +1,23 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Edit(/src/lib/paraglide/**)",
+      "Edit(/static/duckdb-extensions/**)"
+    ],
+    "ask": [
+      "Bash(pnpm deploy:pprd)",
+      "Bash(pnpm deploy:prod)",
+      "Bash(* pnpm deploy:pprd)",
+      "Bash(* pnpm deploy:prod)",
+      "Bash(*deploy-local.sh pprd)",
+      "Bash(*deploy-local.sh prod)"
+    ]
+  },
   "enabledPlugins": {
-    "feature-dev@claude-plugins-official": true,
-    "code-review@claude-plugins-official": true,
-    "commit-commands@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "hookify@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "duckdb-skills@claude-plugins-official": true,
     "chrome-devtools-mcp@claude-plugins-official": true

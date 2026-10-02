@@ -19,19 +19,63 @@ Le serveur de développement (port 5176) et `pnpm preview` envoient les en-tête
 Les fichiers `.env` ne servent qu'au déploiement ([Déploiement](DEPLOYMENT.md)) ;
 `.env.example` ne contient que des valeurs fictives.
 
+## Quoi tester
+
+La suite est volontairement réduite. Les bugs de Khartis viennent surtout de
+combinaisons d'interactions, du rendu WebGL, du worker DuckDB WASM et de la
+restauration IndexedDB : un test jsdom bardé de mocks n'en prouve aucun, et il
+doit être réécrit à chaque refactorisation.
+
+Un test a sa place quand il garde :
+
+- une règle cartographique ou statistique : bornes de classes et arrondis,
+  affectation des couleurs, qualification des jointures, détection de CRS et
+  reprojection, score des suggestions, valeurs de légende, taille des
+  symboles, placement des étiquettes ;
+- une frontière d'import : dialecte et en-têtes CSV, séparateur décimal,
+  fichiers malformés, validation GPS, détection de format, archives ;
+- du SQL, une macro ou un lecteur, exécutés sur le vrai moteur dans
+  `tests/duckdb/` ;
+- le contrat de compatibilité : migrations de schéma, import et export `.kh`,
+  restauration de l'état persistant ;
+- un algorithme pur non trivial, avec ses cas limites ;
+- un garde-fou de livraison : script de déploiement, politique de cache PWA,
+  règles de confidentialité ;
+- un bug dont la cause était une erreur de logique non évidente, exprimé en
+  entrée et sortie attendue.
+
+Ne pas écrire de test pour : le câblage entre modules internes simulés
+(`toHaveBeenCalled` sur des `vi.mock` du dépôt), le rendu jsdom d'un composant
+(balisage, classes, libellés, props transmises, clic qui appelle un callback),
+des assertions sur le texte du code source, des constantes ou des accesseurs,
+une simulation de WebGL, de Deck.gl, de MapLibre, du service worker ou
+d'IndexedDB. Ces points se vérifient dans le navigateur.
+
+Écrire le test avant le code n'a d'intérêt que si le résultat attendu peut
+s'énoncer d'avance : règle métier, frontière de parsing, résultat SQL,
+migration, bug reproduit. Pour l'interface, la mise en page et le rendu, on
+code, on vérifie en vrai, et on n'ajoute un test que s'il répond aux critères
+ci-dessus. Quand un composant porte une règle qui mérite un test, extraire la
+règle dans une fonction pure et tester la fonction.
+
 ## Projets Vitest
 
 Deux projets sont définis dans `vite.config.ts` :
 
-| Projet   | Environnement | Fichiers                                         | Commande                                 |
-| -------- | ------------- | ------------------------------------------------ | ---------------------------------------- |
-| `client` | jsdom         | `src/**/*.svelte.{test,spec}.ts`, à côté du code | `pnpm test:unit`                         |
-| `server` | Node          | `tests/pipeline/**`, `tests/duckdb/**`           | `pnpm test:pipeline`, `pnpm test:duckdb` |
+| Projet   | Environnement                  | Fichiers                                         | Commande                                 |
+| -------- | ------------------------------ | ------------------------------------------------ | ---------------------------------------- |
+| `client` | Node, jsdom sur demande        | `src/**/*.svelte.{test,spec}.ts`, à côté du code | `pnpm test:unit`                         |
+| `server` | Node, un processus par fichier | `tests/pipeline/**`, `tests/duckdb/**`           | `pnpm test:pipeline`, `pnpm test:duckdb` |
 
-- **client** simule `@duckdb/duckdb-wasm` et `$lib/features/duckdb` ; utiliser
-  `vi.hoisted()` pour les mocks à déclarer avant les imports.
-- **server** s'exécute en `pool: 'forks'`, sans parallélisme entre fichiers.
-  Les tests qui ont besoin d'un vrai DuckDB utilisent `@duckdb/node-api` via
+- **client** tourne sous Node. Un fichier qui a besoin d'un DOM commence par
+  `// @vitest-environment jsdom` : créer jsdom pour chaque fichier coûtait
+  plus que les tests eux-mêmes. Le projet simule `@duckdb/duckdb-wasm` et
+  `$lib/features/duckdb` ; utiliser `vi.hoisted()` pour les mocks à déclarer
+  avant les imports.
+- **server** s'exécute en `pool: 'forks'`, fichiers en parallèle.
+  `vitest-global-setup-server.ts` installe l'extension `spatial` une fois
+  avant le lancement. Les tests qui ont besoin d'un vrai DuckDB ouvrent leur
+  propre instance en mémoire avec `@duckdb/node-api`, via
   `tests/pipeline/duckdb-node-helper`.
 
 Pour itérer :
@@ -41,10 +85,6 @@ pnpm exec vitest --project client
 pnpm exec vitest run --project client src/chemin/vers/le-test.svelte.test.ts
 pnpm exec vitest run --project server tests/pipeline/nom-du-test.test.ts
 ```
-
-Un test sous jsdom ne prouve pas un rendu GPU : une modification WebGL, de
-couche Deck.gl ou de cycle de vie MapLibre demande aussi une vérification dans
-un navigateur.
 
 ## Jeux de données de test
 
@@ -80,23 +120,42 @@ force le mode MapLibre.
 
 ## Intégration continue
 
-`pr-validation.yml` s'exécute sur les pull requests non brouillons vers
-`staging` et `main`, et sur les files de fusion. Après
-`pnpm install --frozen-lockfile` :
+La validation est décrite une seule fois, dans `validate.yml`, et appelée par
+les deux workflows. Elle lance six contrôles en parallèle :
 
-```text
-compilation Paraglide
-pnpm lint
-pnpm check
-pnpm test:unit
-pnpm test:pipeline
-pnpm test:duckdb
-pnpm build
-```
+| Contrôle     | Commande                                            |
+| ------------ | --------------------------------------------------- |
+| Lint         | compilation Paraglide, `pnpm lint`                  |
+| Type check   | `pnpm check`                                        |
+| Unit tests   | `pnpm test:unit`, réparti sur deux jobs (`--shard`) |
+| Engine tests | `pnpm test:pipeline`, `pnpm test:duckdb`            |
+| Build        | `pnpm build`, sans précompression Brotli et gzip    |
 
-`release.yml` rejoue les mêmes étapes à chaque push sur `staging` ou `main`,
-puis lance `semantic-release` : prérelease `vX.Y.Z-pprd.N` depuis `staging`,
-release stable `vX.Y.Z` depuis `main`.
+- `pr-validation.yml` l'appelle sur les pull requests non brouillons vers
+  `staging` et `main`, et sur les files de fusion. Son job `Quality Checks` est
+  le contrôle exigé par les règles de branche : ne pas le renommer.
+- `release.yml` l'appelle à chaque push sur `staging` ou `main`, puis lance
+  `semantic-release` : prérelease `vX.Y.Z-pprd.N` depuis `staging`, release
+  stable `vX.Y.Z` depuis `main`.
+
+**Un arbre n'est validé qu'une fois.** Une pull request, le push qui la
+fusionne, la pull request de promotion vers `main` et le push sur `main`
+portent en général le même arbre git. Chaque contrôle réussi dépose un artefact
+`validated-tree-<sha de l'arbre>-<contrôle>` (conservé 30 jours) ; un run qui
+les trouve tous saute les contrôles. Dès que l'arbre diffère, par
+exemple quand `staging` a avancé entre la validation et la fusion, la
+validation complète repart. Un artefact venu d'un fork n'est jamais pris en
+compte.
+
+Le build de la CI ne sert qu'à prouver que l'application se construit :
+`KHARTIS_SKIP_PRECOMPRESS=true` y désactive la précompression. Le build
+déployé est refait par `scripts/deploy-local.mjs`, avec la précompression.
+
+Les contrôles ne récupèrent pas tout le dépôt : les géométries des fonds
+(`static/basemaps/**/*.parquet`) ne sont lues par aucun d'eux, et les jeux
+`tests-datasets/shp` et `tests-datasets/gpkg` ne le sont que par les tests
+moteur. Un test qui aurait besoin d'un de ces fichiers échouerait en CI sur un
+fichier manquant : adapter alors les motifs `SPARSE_*` de `validate.yml`.
 
 ## Hooks git
 
@@ -105,7 +164,7 @@ Husky installe deux hooks :
 - **pre-commit** : `lint-staged` (Prettier et ESLint sur les fichiers indexés),
   puis `scripts/check-doc-sync.sh`, qui signale un changement structurel (barrel
   de feature, config Vite, Svelte, TypeScript, Prettier ou ESLint) commité sans
-  mise à jour de `CLAUDE.md`, `AGENTS.md`, `docs/` ou `.claude/rules/`. Simple
+  mise à jour de `AGENTS.md`, `docs/` ou `.claude/rules/`. Simple
   avertissement, bloquant avec `DOC_SYNC_STRICT=1`.
 - **commit-msg** : commitlint vérifie le format Conventional Commits.
 

@@ -16,7 +16,9 @@ const config = {
       pages: 'build',
       assets: 'build',
       fallback: 'index.html',
-      precompress: true,
+      // CI only checks that the build succeeds; a deployed build keeps the
+      // Brotli and gzip sidecars, which deploy-local.mjs requires.
+      precompress: process.env.KHARTIS_SKIP_PRECOMPRESS !== 'true',
       strict: true
     }),
     paths: {

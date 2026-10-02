@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {

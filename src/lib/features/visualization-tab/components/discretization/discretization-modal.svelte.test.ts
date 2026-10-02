@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
-import * as m from '$lib/paraglide/messages';
+// @vitest-environment jsdom
+
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
@@ -69,52 +70,6 @@ function createVisualization(options?: {
 }
 
 describe('DiscretizationModal', () => {
-  it('offers the SQL discretization methods plus manual', () => {
-    const visualization = createVisualization();
-    render(DiscretizationModal, {
-      open: true,
-      visualization,
-      classification: visualization.classification,
-      valueColumn: visualization.mapping.valueColumn
-    });
-    const panel = document.body.querySelector('.discretization-floating-panel');
-
-    expect(panel).not.toBeNull();
-    const select = document.body.querySelector(
-      '#classification-method'
-    ) as HTMLSelectElement | null;
-
-    expect(select).not.toBeNull();
-    expect(
-      Array.from(select?.options ?? []).map((option) =>
-        option.textContent?.trim()
-      )
-    ).toEqual([
-      'K-means (seuils naturels)',
-      'Quantiles',
-      'Intervalles égaux',
-      'Q6',
-      'Moyennes emboîtées',
-      'Head/Tail',
-      'Manuel'
-    ]);
-  });
-
-  it('defaults the discretization select to K-means when no method is configured', () => {
-    const visualization = createVisualization({ classification: undefined });
-    render(DiscretizationModal, {
-      open: true,
-      visualization
-    });
-
-    const select = document.body.querySelector(
-      '#classification-method'
-    ) as HTMLSelectElement | null;
-
-    expect(select).not.toBeNull();
-    expect(select?.value).toBe('kmeans');
-  });
-
   it('does not fall back to the root classification when a channel override is undefined', () => {
     const visualization = createVisualization();
     render(DiscretizationModal, {
@@ -219,51 +174,6 @@ describe('DiscretizationModal', () => {
     expect(reopenedSelect?.value).toBe(ClassificationMethod.QUANTILES);
   });
 
-  it('propagates the selected method change from the panel to the parent callback', async () => {
-    const onmethodchange = vi.fn();
-    const { container } = render(DiscretizationPanel, {
-      method: ClassificationMethod.KMEANS,
-      numClasses: 5,
-      breaks: [
-        { min: 0, max: 10, count: 1, color: '#111111' },
-        { min: 10, max: 20, count: 1, color: '#222222' },
-        { min: 20, max: 30, count: 1, color: '#333333' },
-        { min: 30, max: 40, count: 1, color: '#444444' },
-        { min: 40, max: 50, count: 1, color: '#555555' }
-      ],
-      onmethodchange
-    });
-
-    const select = container.querySelector(
-      '#classification-method'
-    ) as HTMLSelectElement | null;
-
-    expect(select).not.toBeNull();
-
-    await fireEvent.change(select!, {
-      target: { value: ClassificationMethod.EQUAL_INTERVAL }
-    });
-
-    expect(onmethodchange).toHaveBeenCalledWith(
-      ClassificationMethod.EQUAL_INTERVAL
-    );
-    expect(select?.value).toBe(ClassificationMethod.EQUAL_INTERVAL);
-  });
-
-  it('keeps rendering when an unknown panel method value reaches the description', () => {
-    const unknownMethod = 'quantile' as never;
-    const { container } = render(DiscretizationPanel, {
-      method: unknownMethod,
-      breaks: [
-        { min: 0, max: 10, count: 1, color: '#111111' },
-        { min: 10, max: 20, count: 1, color: '#222222' }
-      ]
-    });
-
-    expect(container.querySelector('#classification-method')).not.toBeNull();
-    expect(container.textContent).toContain(m.discretization_desc_kmeans());
-  });
-
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
     const onbreakschange = vi.fn();
     const { container } = render(DiscretizationPanel, {
@@ -348,66 +258,6 @@ describe('DiscretizationModal', () => {
     expect(onbreakpointchange).toHaveBeenLastCalledWith(200000);
   });
 
-  it('disables the breakpoint position slider until a break value is set', () => {
-    const breaks = [
-      { min: 14, max: 7600, count: 4, color: '#f7fbff' },
-      { min: 7600, max: 30000, count: 8, color: '#c6dbef' },
-      { min: 30000, max: 80000, count: 3, color: '#6baed6' },
-      { min: 80000, max: 200000, count: 2, color: '#2171b5' },
-      { min: 200000, max: 227119, count: 1, color: '#08519c' }
-    ];
-
-    const withoutBreakpoint = render(DiscretizationPanel, {
-      breakpointValue: null,
-      breaks
-    });
-
-    expect(
-      withoutBreakpoint.container.querySelector<HTMLInputElement>(
-        '.breakpoint-slider-host input'
-      )?.disabled
-    ).toBe(true);
-
-    cleanup();
-
-    const withBreakpoint = render(DiscretizationPanel, {
-      breakpointValue: 30000,
-      breaks
-    });
-
-    expect(
-      withBreakpoint.container.querySelector<HTMLInputElement>(
-        '.breakpoint-slider-host input'
-      )?.disabled
-    ).toBe(false);
-  });
-
-  it('should show an informative note when tied values merge classes below the requested count', async () => {
-    // Zero-inflated column: quantile bounds collapse, 5 requested -> 2 effective.
-    vi.mocked(calculateBreaks).mockResolvedValueOnce({
-      breaks: [1],
-      counts: [8, 2],
-      min: 0,
-      max: 10
-    });
-
-    const visualization = createVisualization();
-    render(DiscretizationModal, {
-      open: true,
-      visualization,
-      classification: visualization.classification,
-      valueColumn: 'zero_inflated_rate'
-    });
-
-    await waitFor(() => {
-      expect(
-        document.body.querySelector('.class-count-note')?.textContent
-      ).toContain(
-        'Avec cette méthode, la série ne permet pas plus de 2 classes distinctes'
-      );
-    });
-  });
-
   it('keeps the Head/Tail class-count ceiling at the natural count when fewer classes are requested', async () => {
     vi.mocked(calculateBreaks).mockResolvedValue({
       breaks: [21, 127, 515],
@@ -477,36 +327,6 @@ describe('DiscretizationModal', () => {
     ).toBe('3');
   });
 
-  it('reports the classes that hold no value', async () => {
-    vi.mocked(calculateBreaks).mockResolvedValue({
-      breaks: [7000, 13000, 20000, 26000, 33000, 40000],
-      counts: [30, 1, 0, 0, 1, 0, 1],
-      min: 1,
-      max: 46341
-    });
-
-    const visualization = createVisualization({
-      classification: {
-        method: ClassificationMethod.EQUAL_INTERVAL,
-        classes: 7,
-        numClasses: 7,
-        colors: []
-      }
-    });
-    render(DiscretizationModal, {
-      open: true,
-      visualization,
-      classification: visualization.classification,
-      valueColumn: 'spending'
-    });
-
-    await waitFor(() => {
-      expect(
-        document.body.querySelector('.class-count-note')?.textContent
-      ).toContain('3 classe(s) de cette discrétisation ne contiennent aucune');
-    });
-  });
-
   it('refuses to switch to Q6 when the series cannot hold its six classes', async () => {
     vi.mocked(calculateBreaks).mockResolvedValue({
       breaks: [2, 4, 10, 61],
@@ -554,75 +374,5 @@ describe('DiscretizationModal', () => {
         ).value
       ).toBe('kmeans');
     });
-  });
-
-  it('explains a degenerate Head/Tail ladder instead of blaming merged bounds', async () => {
-    vi.mocked(calculateBreaks).mockResolvedValue({
-      breaks: [52],
-      counts: [19, 15],
-      min: 1,
-      max: 94,
-      naturalClassCount: 2
-    });
-
-    const visualization = createVisualization({
-      classification: {
-        method: ClassificationMethod.HEAD_TAIL,
-        classes: 5,
-        numClasses: 5,
-        colors: ['#f7fbff', '#08519c']
-      }
-    });
-    render(DiscretizationModal, {
-      open: true,
-      visualization,
-      classification: visualization.classification,
-      valueColumn: 'region_code'
-    });
-
-    await waitFor(() => {
-      expect(
-        document.body.querySelector('.class-count-note')?.textContent
-      ).toContain('Head/Tail ne dégage que 2 classes');
-    });
-  });
-
-  it('should not show the merged-classes note when the computed classes match the request', async () => {
-    vi.mocked(calculateBreaks).mockResolvedValueOnce({
-      breaks: [2, 4, 6, 8],
-      counts: [2, 2, 2, 2, 2],
-      min: 0,
-      max: 10
-    });
-
-    const visualization = createVisualization();
-    render(DiscretizationModal, {
-      open: true,
-      visualization,
-      classification: visualization.classification,
-      valueColumn: 'well_distributed_rate'
-    });
-
-    await waitFor(() => {
-      expect(document.body.querySelector('#break-value-1')).not.toBeNull();
-    });
-    expect(document.body.querySelector('.class-count-note')).toBeNull();
-  });
-
-  it('can hide breakpoint controls for non-color discretizations', () => {
-    render(DiscretizationModal, {
-      open: true,
-      visualization: createVisualization(),
-      showBreakpointControls: false,
-      role: 'size'
-    });
-
-    expect(document.body.querySelector('.breakpoint-section')).toBeNull();
-    expect(document.body.querySelector('#breakpoint-value')).toBeNull();
-    expect(
-      document.body.querySelector(
-        '.discretization-floating-panel[data-role="size"]'
-      )
-    ).not.toBeNull();
   });
 });

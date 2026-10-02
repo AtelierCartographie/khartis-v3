@@ -90,13 +90,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 
 import {
-  CLASSIFICATION_BREAKS_TRIGGER,
-  areClassificationColorsEqual,
-  buildClassificationColorParamsKey,
-  buildClassificationScopeKey,
   computeClassificationBreaks,
-  resolveScopeTargetPrimitive,
-  SYMBOL_FILL_SCOPE_TARGET,
   resolveClassificationColors,
   resolveClassificationBreakColors,
   useClassificationBreaksController
@@ -116,87 +110,6 @@ describe('use-classification-breaks', () => {
     paletteMocks.generatePaletteColors.mockClear();
     rowScopeMocks.resolveValueScopeClause.mockReset();
     rowScopeMocks.resolveValueScopeClause.mockReturnValue(null);
-  });
-
-  it('maps every classification scope target back to its primitive', () => {
-    expect(resolveScopeTargetPrimitive(SYMBOL_FILL_SCOPE_TARGET)).toBe(
-      PrimitiveFilterType.POINT
-    );
-    expect(resolveScopeTargetPrimitive(PrimitiveFilterType.POLYGON)).toBe(
-      PrimitiveFilterType.POLYGON
-    );
-  });
-
-  it('centralizes scope keys and trigger labels for break orchestration', () => {
-    expect(
-      buildClassificationScopeKey('fill', PrimitiveFilterType.POLYGON)
-    ).toBe('fill:polygon');
-    expect(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS).toBe('missing-breaks');
-  });
-
-  describe('buildClassificationColorParamsKey', () => {
-    it('returns a "<key>:none" sentinel when target is missing', () => {
-      expect(buildClassificationColorParamsKey('polygon', null)).toBe(
-        'polygon:none'
-      );
-      expect(buildClassificationColorParamsKey('polygon', undefined)).toBe(
-        'polygon:none'
-      );
-    });
-
-    it('encodes sequential params (no breakpoint) without break info', () => {
-      const key = buildClassificationColorParamsKey('polygon', {
-        usesCategories: false,
-        classification: {
-          paletteId: 'blues',
-          inverted: false,
-          classes: 5
-        } as ClassificationConfig
-      });
-      expect(key).toBe('polygon:blues:false:5:sequential:::false');
-    });
-
-    it('encodes diverging params with breakpoint and breaks joined', () => {
-      const key = buildClassificationColorParamsKey('polygon', {
-        usesCategories: false,
-        classification: {
-          paletteId: 'red-blue',
-          inverted: true,
-          classes: 4,
-          breakpointValue: 0,
-          breaks: [-1, 0, 1]
-        } as ClassificationConfig
-      });
-      expect(key).toBe('polygon:red-blue:true:4:diverging:0:-1,0,1:false');
-    });
-
-    it('uses label count when usesCategories is true', () => {
-      const key = buildClassificationColorParamsKey('symbol', {
-        usesCategories: true,
-        classification: {
-          paletteId: 'set1',
-          inverted: false,
-          labels: ['a', 'b', 'c']
-        } as ClassificationConfig
-      });
-      expect(key).toBe('symbol:set1:false:3:sequential:::true');
-    });
-  });
-
-  it('resolves categorical colors through the shared helper', () => {
-    const colors = resolveClassificationColors({
-      classification: {
-        labels: ['A', 'B', 'C'],
-        colors: ['#old'],
-        classes: 3
-      } as ClassificationConfig,
-      usesCategories: true
-    });
-
-    expect(colors).toEqual(['#cat-0', '#cat-1', '#cat-2']);
-    expect(
-      paletteMocks.generateCategoricalColorsFromSeed
-    ).not.toHaveBeenCalled();
   });
 
   it('preserves custom categorical colors when no named palette resolves', () => {
@@ -291,51 +204,6 @@ describe('use-classification-breaks', () => {
 
     expect(colors).toEqual(['#auto-0', '#auto-1', '#auto-2']);
     expect(serviceMocks.generateColorsForBreaks).toHaveBeenCalled();
-  });
-
-  it('compares color arrays without false positives', () => {
-    expect(
-      areClassificationColorsEqual(
-        ['#111111', '#222222'],
-        ['#111111', '#222222']
-      )
-    ).toBe(true);
-    expect(
-      areClassificationColorsEqual(['#111111'], ['#111111', '#222222'])
-    ).toBe(false);
-  });
-
-  it('computes automatic breaks and resolves colors through the shared service', async () => {
-    serviceMocks.calculateBreaks.mockResolvedValue({
-      min: 0,
-      max: 100,
-      breaks: [25, 50, 75],
-      counts: [1, 2, 3, 4]
-    });
-
-    const computation = await computeClassificationBreaks({
-      datasetSourceFileId: 'dataset-source',
-      valueColumn: 'population',
-      classification: {
-        method: ClassificationMethod.KMEANS,
-        numClasses: 4,
-        classes: 4
-      } as ClassificationConfig
-    });
-
-    expect(serviceMocks.calculateBreaks).toHaveBeenCalledWith({
-      datasetId: 'dataset-source',
-      columnName: 'population',
-      method: ClassificationMethod.KMEANS,
-      numClasses: 4
-    });
-    expect(computation?.actualClassCount).toBe(4);
-    expect(computation?.colors).toEqual([
-      '#auto-0',
-      '#auto-1',
-      '#auto-2',
-      '#auto-3'
-    ]);
   });
 
   it('uses the effective class count when computed breaks collapse duplicate values', async () => {

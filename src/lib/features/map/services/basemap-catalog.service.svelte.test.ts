@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from 'vitest';
 import type { GPSBounds } from '$lib/features/duckdb';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';

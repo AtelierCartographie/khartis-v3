@@ -76,6 +76,14 @@ boundaries.
 Client tests mock DuckDB: passing them does not prove that the DuckDB Worker,
 WebGL rendering or IndexedDB restore work.
 
+Add a test when the change carries a rule that can be stated as input and
+expected output: a classification or join rule, a parsing boundary, SQL run
+against the real engine, a project migration, a non-trivial algorithm, or a bug
+caused by a logic error. Do not add one for markup, wiring between mocked
+modules, constants or anything only a real browser can prove; check those live
+instead. The full criteria are in
+[Contribuer et tester](docs/CONTRIBUER_ET_TESTER.md).
+
 - **Rendering:** try several basemaps and datasets from `tests-datasets/`.
 - **Persistence:** prove a real save, reload and `.kh` round trip.
 - **Project format:** add migrations and test archives before changing the
@@ -96,9 +104,10 @@ Test projects, fixtures and browser checks are detailed in
   source datasets.
 - In the description, state the observable behavior, the checks you ran and
   any browser or deployment check left to do.
-- CI runs on every non-draft pull request to `staging` or `main`: Paraglide
-  compilation, `pnpm lint`, `pnpm check`, the three test suites and
-  `pnpm build`.
+- CI runs on every non-draft pull request to `staging` or `main`: lint and
+  type check, the three test suites and the build, as parallel jobs. A source
+  tree that already passed is not validated again when it is merged or
+  promoted.
 - Maintainers merge with a merge commit, not a squash, so reviewed commits are
   kept.
 
