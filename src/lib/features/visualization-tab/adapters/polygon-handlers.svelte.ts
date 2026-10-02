@@ -1,8 +1,6 @@
 import {
   PrimitiveFilterType,
-  type ClassificationConfig,
   type PolygonPrimitiveConfig,
-  type PrimitiveFilter,
   type VisualizationConfig,
   type VisualizationModes,
   getPolygonPrimitive
@@ -10,49 +8,13 @@ import {
 import type { DensityConfig } from '$lib/features/commons/constants/visualization.constants';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
+import type {
+  PrimitiveHandlersDeps,
+  PrimitiveStrokeHandlersDeps
+} from './primitive-handlers.types';
 
-export interface PolygonHandlersDeps {
-  getSelectedVisualization: () => VisualizationConfig | undefined;
-  updateSelectedVisualization: (
-    updates: Partial<VisualizationConfig>,
-    afterUpdate?: (next: VisualizationConfig) => void
-  ) => void;
-  buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilter, boolean>>
-  ) => PrimitiveFilter[];
-  updatePrimitiveClassificationState: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<ClassificationConfig>
-  ) => void;
-  applyPrimitiveMappingUpdate: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  applyPrimitiveStrokeMappingUpdate: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  invertPrimitivePalette: (primitive: PrimitiveFilterType) => void;
-  invertPrimitiveStrokePalette: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON
-  ) => void;
-  ensurePrimitiveClassificationDefaults: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensureAutoColumns: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensurePrimitiveStrokeClassificationDefaults: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    visualization: VisualizationConfig
-  ) => void;
-  ensurePrimitiveStrokeAutoColumns: (
-    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    visualization: VisualizationConfig
-  ) => void;
-}
+export type PolygonHandlersDeps = PrimitiveHandlersDeps &
+  PrimitiveStrokeHandlersDeps;
 
 export function createPolygonHandlers(deps: PolygonHandlersDeps) {
   const polygonAdapter = createPrimitiveAdapter<PolygonPrimitiveConfig>(deps, {

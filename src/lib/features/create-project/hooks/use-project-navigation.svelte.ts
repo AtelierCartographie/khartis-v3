@@ -9,12 +9,10 @@ import { globalState } from '$lib/features/commons/stores/global.svelte';
 
 export type {
   ProjectNavigation,
-  ProjectNavigationOptions,
-  UseProjectNavigationProps,
-  UseProjectNavigationReturn
+  ProjectNavigationOptions
 } from '../types/navigation.types';
 
-export function createProjectNavigation(
+export function useProjectNavigation(
   options: ProjectNavigationOptions
 ): ProjectNavigation {
   async function navigateAfterAction(): Promise<void> {
@@ -26,5 +24,3 @@ export function createProjectNavigation(
 
   return { navigateAfterAction };
 }
-
-export const useProjectNavigation = createProjectNavigation;

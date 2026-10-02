@@ -24,9 +24,6 @@ export const SYNTHETIC_AUX_LAYER_KEY = {
   SPHERE: 'synthetic:sphere'
 } as const;
 
-export type SyntheticAuxLayerKey =
-  (typeof SYNTHETIC_AUX_LAYER_KEY)[keyof typeof SYNTHETIC_AUX_LAYER_KEY];
-
 export type BasemapLayerId =
   (typeof BASEMAP_LAYER_ID)[keyof typeof BASEMAP_LAYER_ID];
 

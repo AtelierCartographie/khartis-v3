@@ -1,9 +1,5 @@
 // Re-exports from commons geoarrow types
-export type {
-  GeoArrowCRS,
-  GeoArrowColumnMetadata,
-  GeoArrowMetadata
-} from '$lib/features/commons/types/geoarrow.types';
+export type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 export { isGeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 
 // Enums and runtime helpers
@@ -28,7 +24,6 @@ export type {
 
 // Geometry-related types
 export type {
-  AnalysisResult,
   GeoColumnInfo,
   GeometryInfo,
   ProcessedDatasetAnalysisResult
@@ -44,7 +39,6 @@ export type {
 // Import/file-related types
 export type {
   CsvImportOptions,
-  DatasetMetadata,
   FileFormat,
   FileInfo,
   UploadedFilePayload

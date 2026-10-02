@@ -6,6 +6,7 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
     MAIN_TOOLBAR_ID,
+    readToolbarPanelRight,
     resolveToolbarPanelWidth
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -54,21 +55,10 @@
     onClose
   }: Props = $props();
 
-  function getFallbackPanelRight(): string {
-    return resolveToolbarPanelWidth(globalState.toolbarState);
-  }
-
   function readPanelRight(): string {
-    if (typeof window === 'undefined') {
-      return getFallbackPanelRight();
-    }
-    const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
-    if (!toolbar) {
-      return getFallbackPanelRight();
-    }
-    const toolbarRect = toolbar.getBoundingClientRect();
-    const rightOffset = Math.max(0, window.innerWidth - toolbarRect.left);
-    return `${Math.round(rightOffset)}px`;
+    return readToolbarPanelRight(() =>
+      resolveToolbarPanelWidth(globalState.toolbarState)
+    );
   }
 
   let panelRight = $state(readPanelRight());

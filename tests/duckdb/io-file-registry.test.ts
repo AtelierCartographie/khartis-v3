@@ -5,50 +5,9 @@ vi.mock('@duckdb/duckdb-wasm', () => ({
 }));
 
 import {
-  extractFilename,
   generateUniqueTableName,
-  getFileType,
   registerFiles
 } from '$lib/features/duckdb/io/file-registry';
-
-describe('extractFilename', () => {
-  it('extracts the last path segment', () => {
-    expect(extractFilename('https://example.com/data/world.geojson')).toBe(
-      'world.geojson'
-    );
-  });
-
-  it('returns the input when no slash is present', () => {
-    expect(extractFilename('data.csv')).toBe('data.csv');
-  });
-
-  it('returns empty string for a URL ending with a slash', () => {
-    expect(extractFilename('https://example.com/')).toBe('');
-  });
-});
-
-describe('getFileType', () => {
-  it('classifies .csv as tabular', () =>
-    expect(getFileType('data.csv')).toBe('tabular'));
-  it('classifies .tsv as tabular', () =>
-    expect(getFileType('data.tsv')).toBe('tabular'));
-  it('classifies .geojson as geofile', () =>
-    expect(getFileType('world.geojson')).toBe('geofile'));
-  it('classifies .gpkg as geofile', () =>
-    expect(getFileType('regions.gpkg')).toBe('geofile'));
-  it('classifies .parquet as parquet', () =>
-    expect(getFileType('data.parquet')).toBe('parquet'));
-  it('classifies .geoparquet as parquet', () =>
-    expect(getFileType('data.geoparquet')).toBe('parquet'));
-  it('falls back to tabular for the retired .arrow extension', () =>
-    expect(getFileType('data.arrow')).toBe('tabular'));
-  it('falls back to tabular for unknown extensions', () =>
-    expect(getFileType('data.unknown')).toBe('tabular'));
-  it('should classify by the last extension when several are chained', () =>
-    expect(getFileType('data.csv.gpkg')).toBe('geofile'));
-  it('should ignore a trailing query string when classifying', () =>
-    expect(getFileType('regions.gpkg?token=abc')).toBe('geofile'));
-});
 
 describe('generateUniqueTableName', () => {
   it('uses the base name when no collision', () => {

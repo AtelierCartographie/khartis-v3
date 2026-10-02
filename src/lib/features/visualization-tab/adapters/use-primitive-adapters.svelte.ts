@@ -47,5 +47,3 @@ export function usePrimitiveAdapters(deps: PrimitiveAdaptersDeps) {
     handlePolygonStrokeClassificationChange
   } satisfies Record<string, unknown>;
 }
-
-export type PrimitiveAdapters = ReturnType<typeof usePrimitiveAdapters>;

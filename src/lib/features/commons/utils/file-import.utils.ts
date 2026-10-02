@@ -30,7 +30,6 @@ export type ColumnStatSummary = {
 };
 
 export { DataSourceType, FileType } from '../types/create-project.types';
-export { formatFileSize } from './format.utils';
 export { detectFileType } from './file-type-detection.utils';
 
 export function isShapefileComponent(filename: string): boolean {

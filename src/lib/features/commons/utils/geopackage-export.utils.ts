@@ -434,23 +434,6 @@ function insertFeatures(
   }
 }
 
-export async function exportGeoPackage(
-  features: GeoPackageFeatureRow[],
-  options: GeoPackageExportOptions
-): Promise<Blob> {
-  if (features.length === 0) {
-    throw new DataValidationError(
-      m.error_geopackage_no_features_to_export(),
-      'features',
-      {
-        layerName: options.layerName
-      }
-    );
-  }
-
-  return exportGeoPackageLayers([{ ...options, features }]);
-}
-
 export async function exportGeoPackageLayers(
   layers: GeoPackageLayerExportOptions[]
 ): Promise<Blob> {

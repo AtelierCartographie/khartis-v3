@@ -2,7 +2,6 @@ import {
   PrimitiveFilterType,
   type ClassificationConfig,
   type LinePrimitiveConfig,
-  type PrimitiveFilter,
   type VisualizationConfig,
   type VisualizationModes,
   getLinePrimitive
@@ -10,38 +9,14 @@ import {
 import { resolveLineModeTransition } from '../hooks/use-line-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
+import type { PrimitiveHandlersDeps } from './primitive-handlers.types';
 
 type ClassificationUpdateOptions = { preserveOrigin?: boolean };
 
-export interface LineHandlersDeps {
-  getSelectedVisualization: () => VisualizationConfig | undefined;
-  updateSelectedVisualization: (
-    updates: Partial<VisualizationConfig>,
-    afterUpdate?: (next: VisualizationConfig) => void
-  ) => void;
-  buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilter, boolean>>
-  ) => PrimitiveFilter[];
-  updatePrimitiveClassificationState: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<ClassificationConfig>
-  ) => void;
+export interface LineHandlersDeps extends PrimitiveHandlersDeps {
   updateLineThicknessClassificationState: (
     updates: Partial<ClassificationConfig>,
     options?: ClassificationUpdateOptions
-  ) => void;
-  applyPrimitiveMappingUpdate: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  invertPrimitivePalette: (primitive: PrimitiveFilterType) => void;
-  ensurePrimitiveClassificationDefaults: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensureAutoColumns: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
   ) => void;
 }
 
