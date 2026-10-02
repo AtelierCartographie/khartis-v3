@@ -1,0 +1,21 @@
+name: Setup
+description: Install the pnpm of package.json, the Node.js version of .nvmrc and the locked dependencies.
+
+runs:
+  using: composite
+  steps:
+    - name: Enable pnpm through Corepack
+      shell: bash
+      run: corepack enable pnpm
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version-file: .nvmrc
+        # Downloading the locked dependencies takes as long as restoring a store cache,
+        # and a cache has to be saved again after every lockfile change.
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

@@ -1,7 +1,5 @@
 import {
   PrimitiveFilterType,
-  type ClassificationConfig,
-  type PrimitiveFilter,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
   type VisualizationConfig,
@@ -18,6 +16,7 @@ import {
 } from '../hooks/use-text-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
+import type { PrimitiveHandlersDeps } from './primitive-handlers.types';
 
 const TEXT_STYLE_MIRROR_KEYS = [
   'textColor',
@@ -52,33 +51,7 @@ const SECONDARY_LABEL_STYLE_MIRROR: ReadonlyArray<{
   { from: 'dxpMasking', to: 'labelDxpMasking' }
 ];
 
-export interface TextHandlersDeps {
-  getSelectedVisualization: () => VisualizationConfig | undefined;
-  updateSelectedVisualization: (
-    updates: Partial<VisualizationConfig>,
-    afterUpdate?: (next: VisualizationConfig) => void
-  ) => void;
-  buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilter, boolean>>
-  ) => PrimitiveFilter[];
-  updatePrimitiveClassificationState: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<ClassificationConfig>
-  ) => void;
-  applyPrimitiveMappingUpdate: (
-    primitive: PrimitiveFilterType,
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  invertPrimitivePalette: (primitive: PrimitiveFilterType) => void;
-  ensurePrimitiveClassificationDefaults: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensureAutoColumns: (
-    primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-}
+export type TextHandlersDeps = PrimitiveHandlersDeps;
 
 export function createTextHandlers(deps: TextHandlersDeps) {
   const textAdapter = createPrimitiveAdapter<TextPrimitiveConfig>(deps, {

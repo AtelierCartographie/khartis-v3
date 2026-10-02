@@ -33,6 +33,7 @@ import {
   getProportionalLineWidthForValue,
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
+import { toFiniteNumber } from './finite-number.utils';
 
 const LEGEND_MIN_SWATCH_OPACITY = 0.2;
 
@@ -85,24 +86,6 @@ export type LineWidthLegendScale = {
 };
 
 type ColumnStatisticsLike = unknown;
-
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === 'bigint') {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  }
-
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  }
-
-  return null;
-}
 
 function resolveStyleColor(
   color: string | string[] | undefined,

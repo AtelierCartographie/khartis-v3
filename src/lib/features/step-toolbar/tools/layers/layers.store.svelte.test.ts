@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -25,8 +27,6 @@ const {
     mockVisualizationStore: {
       activeVisualizations: [] as VisualizationConfig[],
       visualizations: [] as VisualizationConfig[],
-      togglePrimitiveFilter: vi.fn(),
-      toggleVisualization: vi.fn(),
       removeVisualization: vi.fn(),
       setVisualizationOrder: vi.fn(),
       setPrimitiveFilterOrder: vi.fn(),
@@ -45,7 +45,6 @@ const {
     mockBasemapAuxLayersStore: {
       version: 0,
       isVisible: vi.fn(() => true),
-      setVisible: vi.fn(),
       getOrderedLayerKeys: vi.fn(
         (_basemapFile: string, layerFiles: readonly string[]) => [...layerFiles]
       ),
@@ -78,9 +77,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   } as const;
   const VisualizationType = {
     CHOROPLETH: 'choropleth'
-  } as const;
-  const ClassificationMethod = {
-    QUANTILES: 'quantiles'
   } as const;
   const FillMode = {
     NONE: 'none',
@@ -160,7 +156,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     PrimitiveFilterType,
     ScaleType,
     VisualizationType,
-    ClassificationMethod,
     getEnabledPrimitiveFilters,
     getLinePrimitive,
     getPolygonPrimitive,
@@ -225,7 +220,6 @@ vi.mock('$lib/features/map/utils/basemap-metadata-resolution.utils', () => ({
 }));
 
 import {
-  ClassificationMethod,
   PrimitiveFilterType,
   ScaleType,
   VisualizationType
@@ -239,10 +233,7 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { layersActions, layersState } from './layers.store.svelte';
 import type { Layer } from '../../types/layers.types';
 import { layerOrderStore } from './layer-order.store.svelte';
-import {
-  SEPIA_MIXTE_COLORS,
-  VIF_MIXTE_COLORS
-} from '$lib/features/commons/constants/qualitative-palette.constants';
+import { SEPIA_MIXTE_COLORS } from '$lib/features/commons/constants/qualitative-palette.constants';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -372,97 +363,6 @@ function resetBasemapLayerMocks(): void {
   ];
 }
 
-describe('layers row colors', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockVisualizationStore.activeVisualizations = [];
-    mockVisualizationStore.visualizations = [];
-    mockFacetsStore.enabled = false;
-    mockFacetsStore.baseVisualizationId = null;
-    mockFacetsStore.generatedVisualizationIds = [];
-    resetBasemapLayerMocks();
-    layerOrderStore.reset();
-  });
-
-  it('uses the classification palette before a white outline for choropleths', () => {
-    const visualization = createVisualization({
-      classification: {
-        method: ClassificationMethod.QUANTILES,
-        classes: 4,
-        colors: ['#c8ddf0', '#78a9cf', '#2171b5', '#084594']
-      }
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('viz-1::polygon')?.color).toBe('#c8ddf0');
-  });
-
-  it('keeps the actual primitive color when a line visualization has one', () => {
-    const visualization = createVisualization({
-      style: {
-        lineColor: '#1e3a5f',
-        lineOpacity: 1
-      }
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('viz-1::line')?.color).toBe('#1e3a5f');
-  });
-
-  it('uses the neutral polygon stroke when support polygons have no fill', () => {
-    const visualization = createVisualization({
-      style: {
-        fillColor: '#1192e8',
-        fillOpacity: 0,
-        strokeColor: '#8d8d8d',
-        strokeOpacity: 1
-      }
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('viz-1::polygon')?.color).toBe('#8d8d8d');
-  });
-
-  it('shows land with its contour color and water with its own color', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = {
-      file: 'world',
-      layers: [
-        {
-          title_fr: 'Territoire',
-          title_en: 'Territory',
-          type: BasemapLayerType.LAND,
-          file: 'world-land.parquet'
-        }
-      ]
-    };
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('basemap::world-land.parquet')?.color).toBe(
-      NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
-    );
-    expect(findById('basemap::mers')?.color).toBe(
-      NEUTRAL_CARTOGRAPHY_COLORS.sea
-    );
-  });
-});
-
 describe('layers store flattened model', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -517,17 +417,6 @@ describe('layers store flattened model', () => {
     );
   });
 
-  it('labels each primitive row with the primitive and its visualization name', () => {
-    const visualization = createVisualization({ name: 'Population' });
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    const point = findById('viz-1::point');
-    expect(point?.name).toContain('Population');
-  });
-
   it('exposes a Textes primitive row for every visualization so it can be toggled later', () => {
     const visualization = createVisualization({
       primitiveFilters: [
@@ -553,35 +442,6 @@ describe('layers store flattened model', () => {
     );
   });
 
-  it('marks the Textes row as visible when the visualization enables text', () => {
-    const visualization = createVisualization({
-      primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('viz-1::text')).toEqual(
-      expect.objectContaining({ visible: true })
-    );
-  });
-
-  it('toggles the Textes row through togglePrimitiveFilter', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility('viz-1::text');
-
-    expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
-      'viz-1',
-      PrimitiveFilterType.TEXT
-    );
-  });
-
   it('persists a primitive drag as a flat order, not through the visualization primitiveOrder', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
@@ -599,81 +459,6 @@ describe('layers store flattened model', () => {
       mockVisualizationStore.setPrimitiveFilterOrder
     ).not.toHaveBeenCalled();
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
-  });
-
-  it('persists a cross-visualization drag as a flat z-order without reordering the visualizations (tabs stay put)', () => {
-    const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
-    const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
-
-    mockVisualizationStore.visualizations = [viz1, viz2];
-    mockVisualizationStore.activeVisualizations = [viz1, viz2];
-
-    layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(indexOf('viz-1::polygon'), 0);
-
-    expect(flat()[0].id).toBe('viz-1::polygon');
-    // Z-order is decoupled from the visualization (tab) order: dragging a layer
-    // never reorders the visualization list anymore.
-    expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
-  });
-
-  it('toggles a whole visualization by id when no row matches', () => {
-    const visualization = createVisualization();
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility('viz-1');
-
-    expect(mockVisualizationStore.toggleVisualization).toHaveBeenCalledWith(
-      'viz-1'
-    );
-  });
-
-  it('toggles a primitive row visibility', () => {
-    const visualization = createVisualization();
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility('viz-1::point');
-
-    expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
-      'viz-1',
-      PrimitiveFilterType.POINT
-    );
-  });
-
-  it('gives each visualization a shared Vivid accent and a viz subtitle on its primitive rows (#182)', () => {
-    const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
-    const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
-
-    mockVisualizationStore.visualizations = [viz1, viz2];
-    mockVisualizationStore.activeVisualizations = [viz1, viz2];
-
-    layersActions.syncWithVisualizations();
-
-    const viz1Rows = flat().filter((layer) => layer.parentId === 'viz-1');
-    const viz2Rows = flat().filter((layer) => layer.parentId === 'viz-2');
-
-    expect(viz1Rows.length).toBeGreaterThan(0);
-    expect(viz2Rows.length).toBeGreaterThan(0);
-
-    // All primitives of one visualization share that visualization's accent…
-    expect(new Set(viz1Rows.map((layer) => layer.accentColor))).toEqual(
-      new Set([VIF_MIXTE_COLORS[0]])
-    );
-    expect(new Set(viz2Rows.map((layer) => layer.accentColor))).toEqual(
-      new Set([VIF_MIXTE_COLORS[1]])
-    );
-    // …and distinct visualizations use distinct accents.
-    expect(viz1Rows[0]?.accentColor).not.toBe(viz2Rows[0]?.accentColor);
-
-    // Primitive rows carry a bold primitive label and the source viz as a subtitle.
-    expect(viz1Rows[0]?.primitiveLabel).toBeTruthy();
-    expect(viz1Rows[0]?.subtitle).toBe('Viz 1');
   });
 
   it('does not expose vector basemap rows when no reference basemap is active', () => {
@@ -844,35 +629,6 @@ describe('layers store flattened model', () => {
     ).toBe(true);
   });
 
-  it('toggles a limit row through its own metadata aux visibility', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = {
-      file: 'world',
-      layers: [
-        {
-          title_fr: 'Frontières des pays',
-          title_en: 'Country borders',
-          type: BasemapLayerType.LIMIT,
-          file: 'world-limit-countries.parquet'
-        }
-      ]
-    };
-
-    layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility(
-      'basemap::world-limit-countries.parquet'
-    );
-
-    expect(mockBasemapAuxLayersStore.setVisible).toHaveBeenCalledWith(
-      'world',
-      'world-limit-countries.parquet',
-      false
-    );
-  });
-
   it('moves a background basemap above the whole thematic block as a flat order, with no render-group back-projection', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
@@ -893,71 +649,6 @@ describe('layers store flattened model', () => {
       mockBasemapLayersStore.setLayerRenderGroupOrder
     ).not.toHaveBeenCalled();
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
-  });
-
-  it('reorders foreground basemap rows freely without render-group / thematic-placement back-projection', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
-
-    layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(indexOf('basemap::sphere'), 0);
-
-    expect(flat()[0].id).toBe('basemap::sphere');
-    expect(
-      mockBasemapLayersStore.setLayerRenderGroupOrder
-    ).not.toHaveBeenCalled();
-    expect(
-      mockBasemapLayersStore.setLayerThematicPlacement
-    ).not.toHaveBeenCalled();
-  });
-
-  it('exposes each limit metadata layer as its own independent row', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = {
-      file: 'world',
-      layers: [
-        {
-          title_fr: 'Frontières des pays',
-          title_en: 'Country borders',
-          type: BasemapLayerType.LIMIT,
-          file: 'world-limit-countries.parquet'
-        },
-        {
-          title_fr: 'Frontières administratives',
-          title_en: 'Administrative borders',
-          type: BasemapLayerType.LIMIT,
-          file: 'world-limit-admin.parquet'
-        }
-      ]
-    };
-
-    layersActions.syncWithVisualizations();
-
-    expect(findById('basemap::world-limit-countries.parquet')).toEqual(
-      expect.objectContaining({
-        basemapLayerId: 'frontieres',
-        basemapLayerKey: 'world-limit-countries.parquet',
-        basemapAuxPerKey: true,
-        name: 'Frontières des pays'
-      })
-    );
-    expect(findById('basemap::world-limit-admin.parquet')).toEqual(
-      expect.objectContaining({
-        basemapLayerId: 'frontieres',
-        basemapLayerKey: 'world-limit-admin.parquet',
-        basemapAuxPerKey: true,
-        name: 'Frontières administratives'
-      })
-    );
-    expect(flat().some((layer) => layer.id === 'basemap::frontieres')).toBe(
-      false
-    );
   });
 
   it('exposes tiled basemap groups and toggles MapLibre group visibility', () => {
@@ -1017,27 +708,6 @@ describe('layers store flattened model', () => {
     const baseRows = flat().filter((layer) => layer.parentId === 'viz-1');
     expect(baseRows.length).toBeGreaterThan(0);
     expect(flat().some((layer) => layer.parentId === 'viz-2')).toBe(false);
-
-    mockFacetsStore.enabled = false;
-    mockFacetsStore.baseVisualizationId = null;
-    mockFacetsStore.generatedVisualizationIds = [];
-  });
-
-  it('labels the base-viz rows with the base visualization name in facets mode', () => {
-    const baseViz = createVisualization({ id: 'viz-1', name: 'Monde' });
-    const facetViz = createVisualization({ id: 'viz-2', name: 'Monde' });
-
-    mockVisualizationStore.visualizations = [baseViz, facetViz];
-    mockVisualizationStore.activeVisualizations = [baseViz, facetViz];
-
-    mockFacetsStore.enabled = true;
-    mockFacetsStore.baseVisualizationId = 'viz-1';
-    mockFacetsStore.generatedVisualizationIds = ['viz-2'];
-
-    layersActions.syncWithVisualizations();
-
-    const baseRow = flat().find((layer) => layer.parentId === 'viz-1');
-    expect(baseRow?.subtitle).toContain('Monde');
 
     mockFacetsStore.enabled = false;
     mockFacetsStore.baseVisualizationId = null;

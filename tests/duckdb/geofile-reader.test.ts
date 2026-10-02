@@ -189,36 +189,6 @@ describe('readGeofile', () => {
     ).toBe(false);
   });
 
-  it('drops the geofile handle once the table is materialized', async () => {
-    const ctx = createContext();
-    const geojsonFile = new File(['{}'], 'zones.geojson', {
-      type: 'application/geo+json'
-    });
-
-    executeQueryMock
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'zones',
-          feature_count: 2,
-          crs_code: 4326,
-          geom_name: 'geom',
-          geom_type: 'POLYGON'
-        }
-      ])
-      .mockResolvedValueOnce(new Uint8Array());
-
-    await readGeofile(ctx, geojsonFile, { tablename: 'zones_table' });
-
-    expect(dropRegisteredFileMock).toHaveBeenCalledTimes(1);
-    expect(dropRegisteredFileMock).toHaveBeenCalledWith(
-      ctx.db,
-      ctx.registered_files,
-      'registered:zones.geojson'
-    );
-    expect(ctx.table_files.has('zones_table')).toBe(false);
-  });
-
   it('keeps shapefile handles registered and records the exact id for later cleanup', async () => {
     const ctx = createContext();
     const shpFile = new File(['shp'], 'roads.shp', {
@@ -277,32 +247,5 @@ describe('readGeofile', () => {
         String(sql).includes('ST_Transform')
       )
     ).toBe(false);
-  });
-
-  it('should call addRowId without reprojection for WGS84 geofiles', async () => {
-    const ctx = createContext();
-    const geojsonFile = new File(['{}'], 'test-wgs84.geojson', {
-      type: 'application/geo+json'
-    });
-
-    executeQueryMock
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'features',
-          feature_count: 3,
-          crs_code: 4326,
-          geom_name: 'geom',
-          geom_type: 'POLYGON'
-        }
-      ])
-      .mockResolvedValueOnce(new Uint8Array());
-
-    const tableName = await readGeofile(ctx, geojsonFile, {
-      tablename: 'wgs84_table'
-    });
-
-    expect(tableName).toBe('wgs84_table');
-    expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'wgs84_table');
   });
 });

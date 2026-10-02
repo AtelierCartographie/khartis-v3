@@ -2,6 +2,5 @@ export {
   DEFAULT_DEBOUNCE_INTERVAL,
   persistenceRegistry,
   SavePriority,
-  type SavePriorityType,
-  type PersistenceEntry
+  type SavePriorityType
 } from './persistence-registry';

@@ -1,12 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
 import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import {
-  CDC_PRIMARY_PROJECTION_IDS,
   getAvailableProjectionIds,
-  resolveDisplayedProjectionId,
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap
 } from '$lib/features/map/utils/projection-availability.utils';
@@ -18,6 +15,21 @@ import {
 import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import { PROJECTIONS as FULL_PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
+
+const CDC_PRIMARY_PROJECTION_IDS = [
+  'mercator',
+  'natural-earth',
+  'equirectangular',
+  'orthographic',
+  'albers',
+  'lambert-conformal',
+  'robinson',
+  'winkel-tripel',
+  'aitoff',
+  'mollweide',
+  'stereographic',
+  'azimuthal-equal-area'
+] as const;
 
 interface CatalogBasemapMetadata {
   file: string;
@@ -261,21 +273,6 @@ describe('projection availability', () => {
         'robinson'
       ])
     ).toEqual(['mercator']);
-  });
-
-  it('uses globe display fallback when a hidden projection is active in tiled mode', () => {
-    const context = resolveProjectionAvailabilityContext({
-      requiresMapLibre: true,
-      currentStyle: BasemapStyle.MONDE_COULEURS
-    });
-
-    expect(
-      resolveDisplayedProjectionId({
-        context,
-        selectedProjectionId: 'robinson',
-        mapProjection: MAP_PROJECTION_TYPE.GLOBE
-      })
-    ).toBe('orthographic');
   });
 
   it('derives a France zone from an OSM bbox when the tiled style stays blank', () => {

@@ -1,11 +1,7 @@
 export {
   datasetsState,
   datasetsInternals,
-  startProcessing,
-  endProcessing,
-  clearState,
-  type DatasetsState,
-  type DatasetsInternals
+  clearState
 } from './datasets-state.svelte';
 
 export {
@@ -34,22 +30,12 @@ export {
   renameDatasetColumn
 } from './datasets-columns';
 
-export {
-  getColumnValues,
-  getUniqueValues,
-  getColumnStatistics,
-  type NumericStatistics,
-  type CategoricalStatistics,
-  type ColumnStatistics
-} from './datasets-statistics';
+export { getUniqueValues, getColumnStatistics } from './datasets-statistics';
 
 export {
-  createDatasetFromPreprocessedFile,
   createVisualizationsForGeoDatasets,
   processFiles,
   addFile,
-  VisualizationType,
-  type VisualizationConfig,
   type VisualizationStoreOperations
 } from './datasets-processing';
 

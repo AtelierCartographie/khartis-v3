@@ -1,7 +1,6 @@
 export {
   createProjectState,
-  type ProjectStateContainer,
-  DEFAULT_AUTO_SAVE_INTERVAL
+  type ProjectStateContainer
 } from './project-state.svelte';
 
 export {
@@ -15,17 +14,6 @@ export {
 } from './project-lifecycle';
 
 export {
-  beginProjectRuntime,
-  captureProjectRuntime,
-  isCurrentProjectRuntime,
-  projectRuntime,
-  resetProjectRuntimeState,
-  type ProjectRuntimeSnapshot
-} from './project-runtime.svelte';
-
-export {
-  getSourceFileIndex,
-  cleanFileForStorage,
   addFilesToProject,
   addVirtualSourceFile,
   removeFileFromProject,
@@ -38,7 +26,6 @@ export {
   exportProject,
   importProject,
   markDirty,
-  markDirtyAndSave,
   type SaveCurrentProjectOptions
 } from './project-persistence';
 

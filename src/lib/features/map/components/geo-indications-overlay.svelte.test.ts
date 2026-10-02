@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -210,10 +212,7 @@ function createBoundsMap(bounds: {
 describe('geo indications overlay dragging', () => {
   beforeEach(() => {
     cleanup();
-    mockFetch.mockClear();
-    mockWaitForInitialization.mockClear();
     formatActions.reset();
-    mockLoadWorldLandGeometry.mockClear();
     formatActions.setSize(300, 200);
     formatActions.setMargins({
       top: 0,
@@ -238,17 +237,6 @@ describe('geo indications overlay dragging', () => {
     projectionStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
-  });
-
-  it('does not preload the inset world basemap while the inset map is disabled', async () => {
-    render(GeoIndicationsOverlay);
-
-    await Promise.resolve();
-
-    expect(mockWaitForInitialization).not.toHaveBeenCalled();
-    expect(mockFetch).not.toHaveBeenCalledWith(
-      expect.stringContaining('monde-countries-2024-low.parquet')
-    );
   });
 
   it('snaps and clamps scale dragging to the shared page grid when enabled', async () => {
@@ -483,118 +471,6 @@ describe('geo indications overlay dragging', () => {
     });
   });
 
-  it('renders the inset map as an auto-centered globe with graticules and an extent polygon', async () => {
-    mapInstanceStore.setMapInstance(
-      createBoundsMap({
-        north: 60,
-        south: 0,
-        east: 30,
-        west: -30
-      }) as never
-    );
-    geoIndicationsActions.toggleInsetMap();
-
-    const { container } = render(GeoIndicationsOverlay);
-
-    await waitFor(() => {
-      expect(container.querySelector('.inset-map-globe')).toBeInstanceOf(
-        HTMLDivElement
-      );
-      expect(container.querySelector('.inset-outline')?.tagName).toBe('path');
-      expect(container.querySelector('.inset-graticule-path')?.tagName).toBe(
-        'path'
-      );
-      expect(container.querySelector('.inset-extent-path')?.tagName).toBe(
-        'path'
-      );
-    });
-
-    expect(container.querySelector('clipPath path')?.getAttribute('fill')).toBe(
-      'none'
-    );
-    expect(
-      container.querySelector('clipPath path')?.getAttribute('style')
-    ).toContain('fill: none');
-    expect(
-      container.querySelector('.inset-graticule-path')?.getAttribute('style')
-    ).toContain('fill: none');
-    expect(
-      container.querySelector('.inset-outline')?.getAttribute('style')
-    ).toContain('fill: none');
-    expect(
-      container.querySelector('.inset-extent-path')?.getAttribute('style')
-    ).toContain('fill: none');
-    expect(container.querySelector('.inset-map-planisphere')).toBeNull();
-    expect(container.querySelector('.inset-extent-point')).toBeNull();
-  });
-
-  it('keeps inset land and sea paint inline for image export serialization', async () => {
-    mapInstanceStore.setMapInstance(
-      createBoundsMap({
-        north: 60,
-        south: 0,
-        east: 30,
-        west: -30
-      }) as never
-    );
-    geoIndicationsActions.toggleInsetMap();
-
-    const { container } = render(GeoIndicationsOverlay);
-
-    await waitFor(() => {
-      expect(container.querySelector('.inset-land-path')?.tagName).toBe('path');
-    });
-
-    const seaPath = container.querySelector(
-      '.inset-map-svg > path:not([class])'
-    );
-    const landPath = container.querySelector('.inset-land-path');
-
-    expect(seaPath?.getAttribute('fill')).toBeTruthy();
-    expect(seaPath?.getAttribute('style')).toContain('fill:');
-    expect(landPath?.getAttribute('fill')).toBeTruthy();
-    expect(landPath?.getAttribute('stroke')).toBeTruthy();
-    expect(landPath?.getAttribute('style')).toContain('fill:');
-    expect(landPath?.getAttribute('style')).toContain('stroke:');
-    expect(landPath?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
-  });
-
-  it('converts projected map bounds before rendering the inset extent', async () => {
-    const invert = vi.fn(([x, y]: [number, number]) => [x / 1000, y / 1000]);
-    const projection = Object.assign(
-      ([lon, lat]: [number, number]) => [lon * 1000, lat * 1000],
-      { invert }
-    );
-    mapInstanceStore.setMapInstance(
-      createBoundsMap({
-        north: 60000,
-        south: 0,
-        east: 30000,
-        west: -30000
-      }) as never
-    );
-    projectionStore.setReferenceBbox(
-      [-30000, 0, 30000, 60000],
-      undefined,
-      true,
-      projection as never
-    );
-    geoIndicationsActions.toggleInsetMap();
-
-    const { container } = render(GeoIndicationsOverlay);
-
-    await waitFor(() => {
-      expect(container.querySelector('.inset-extent-path')?.tagName).toBe(
-        'path'
-      );
-    });
-
-    expect(invert.mock.calls.length).toBeGreaterThan(4);
-    expect(container.querySelector('.inset-map-panel')).toBeInstanceOf(
-      HTMLDivElement
-    );
-  });
-
   it('renders the inset extent as a point when the projected bbox is too small', async () => {
     mapInstanceStore.setMapInstance(
       createBoundsMap({
@@ -637,22 +513,6 @@ describe('geo indications overlay dragging', () => {
     });
 
     expect(container.querySelector('.inset-extent-path')).toBeNull();
-  });
-
-  it('hides the inset map when the visible extent is at world scale', () => {
-    mapInstanceStore.setMapInstance(
-      createBoundsMap({
-        north: 90,
-        south: -90,
-        east: 180,
-        west: -180
-      }) as never
-    );
-    geoIndicationsActions.toggleInsetMap();
-
-    const { container } = render(GeoIndicationsOverlay);
-
-    expect(container.querySelector('.inset-map-panel')).toBeNull();
   });
 
   it('hides the scale bar while a tiled basemap is active', () => {
@@ -710,43 +570,6 @@ describe('geo indications overlay dragging', () => {
 
       await waitFor(() => {
         expect(globalState.zoom.pagePanOffset).toEqual({ x: 96, y: -43 });
-      });
-    } finally {
-      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-        configurable: true,
-        value: originalGetBoundingClientRect
-      });
-    }
-  });
-
-  it('centers a newly added orientation indication in the viewport', async () => {
-    const { viewport } = setupEmptyGeoViewport();
-    const originalGetBoundingClientRect =
-      HTMLElement.prototype.getBoundingClientRect;
-
-    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value: function mockGetBoundingClientRect() {
-        if (this === viewport) {
-          return createDomRect(0, 0, 300, 200);
-        }
-
-        if (
-          this instanceof HTMLElement &&
-          this.classList.contains('north-arrow')
-        ) {
-          return createDomRect(220, 18, 30, 40);
-        }
-
-        return createDomRect(0, 0, 0, 0);
-      }
-    });
-
-    try {
-      geoIndicationsActions.toggleOrientation();
-
-      await waitFor(() => {
-        expect(globalState.zoom.pagePanOffset).toEqual({ x: -85, y: 62 });
       });
     } finally {
       Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {

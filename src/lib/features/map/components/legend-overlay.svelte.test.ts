@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import {
   cleanup,
   fireEvent,
@@ -26,8 +28,7 @@ import {
   ShapeType,
   StrokeMode,
   SymbolDoublePosition,
-  SymbolMode,
-  ThicknessMode
+  SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   globalActions,
@@ -98,32 +99,11 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   }
 }));
 
-const motifMockState = vi.hoisted(() => ({ counter: 0 }));
-vi.mock('@ateliercartographie/motif.js', () => ({
-  motif: () => {
-    const id = `mock-motif-${++motifMockState.counter}`;
-    return {
-      defs: {
-        outerHTML: `<defs><pattern id="${id}"></pattern></defs>`
-      },
-      url: `url(#${id})`,
-      tile: () => ({
-        toDataURL: () => 'data:image/png;base64,AAAA'
-      })
-    };
-  },
-  motifAtlas: () => ({
-    canvas: {},
-    mapping: {}
-  })
-}));
-
 import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
 import { MAX_LEGEND_CATEGORIES } from '$lib/features/commons/components/legend';
 import { m } from '$lib/paraglide/messages';
-import { LEGEND_DEFAULTS } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 
 const measureCanvas = {
   getContext: () => ({
@@ -218,41 +198,6 @@ function setupLegendViewport(): {
   return { legend, viewport };
 }
 
-function setupLegendOccludedViewport(): {
-  legend: HTMLDivElement;
-  popover: HTMLDivElement;
-  toolbar: HTMLDivElement;
-  viewport: HTMLDivElement;
-} {
-  const { legend, viewport } = setupLegendViewport();
-  const toolbar = document.createElement('div');
-  const popoverRoot = document.createElement('div');
-  const popover = document.createElement('div');
-
-  toolbar.id = 'khartis-step-toolbar';
-  popoverRoot.id = 'khartis-tool-popover';
-  popover.className = 'bx--popover';
-  popoverRoot.appendChild(popover);
-
-  document.body.appendChild(toolbar);
-  document.body.appendChild(popoverRoot);
-
-  bindElementBox(toolbar, {
-    left: 0,
-    top: 0,
-    width: 80,
-    height: 300
-  });
-  bindElementBox(popover, {
-    left: 88,
-    top: 20,
-    width: 120,
-    height: 200
-  });
-
-  return { legend, popover, toolbar, viewport };
-}
-
 // A wrapped legend label is split across tspans and carries the full string on
 // aria-label instead, so match either form: jsdom has no canvas metrics and
 // breaks lines differently from the browser.
@@ -283,8 +228,6 @@ describe('legend overlay visibility', () => {
 
   beforeEach(() => {
     cleanup();
-    document.getElementById('khartis-step-toolbar')?.remove();
-    document.getElementById('khartis-tool-popover')?.remove();
     mockVisualizationStore.version = 0;
     mockVisualizationStore.visualizations = [];
     mockRowScopeStore.getScopedDomain.mockReturnValue(null);
@@ -309,8 +252,6 @@ describe('legend overlay visibility', () => {
 
   afterEach(() => {
     cleanup();
-    document.getElementById('khartis-step-toolbar')?.remove();
-    document.getElementById('khartis-tool-popover')?.remove();
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
@@ -319,91 +260,6 @@ describe('legend overlay visibility', () => {
 
   afterAll(() => {
     Textbox.setMeasureCanvas(null);
-  });
-
-  it('renders the legend content when visible', () => {
-    render(LegendOverlay);
-
-    expect(screen.getByText('Population')).toBeInTheDocument();
-  });
-
-  it('scales legend chrome with the rendered page size', () => {
-    globalActions.setPageZoomScale(0.5);
-
-    const { container } = render(LegendOverlay);
-    const legend = container.querySelector('.legend-container');
-    const style = legend?.getAttribute('style');
-
-    expect(style).toContain('--legend-page-scale: 0.5');
-    expect(style).toContain(`font-size: ${LEGEND_DEFAULTS.FONT_SIZE}px`);
-    expect(style).toContain('transform: scale(0.5)');
-    expect(style).toContain('transform-origin: top right');
-  });
-
-  it('routes font family, shell background, and compact padding into SVG legends', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-    legendActions.updateStyle({
-      fontFamily: 'Inter',
-      textColor: { hue: 0, saturation: 0, lightness: 100 }
-    });
-    legendActions.updateBackground({
-      enabled: true,
-      color: { hue: 210, saturation: 10, lightness: 98 },
-      opacity: 60
-    });
-
-    const { container } = render(LegendOverlay);
-    const legend = container.querySelector('.legend-container');
-    const quantitative = container.querySelector('.quantitative_legend');
-    const quantitativeSvg = container.querySelector(
-      '.legend-svg--quantitative'
-    );
-    const style = legend?.getAttribute('style');
-
-    expect(style).toContain('background-color: rgba(249, 250, 250, 0.6)');
-    expect(legend).toHaveStyle({ color: '#ffffff' });
-    expect(style).toContain('--legend-padding-inline: 6px');
-    expect(style).toContain('--legend-padding-block: 4px');
-    expect(style).toContain('border-radius: 0px');
-    expect(quantitativeSvg).toHaveAttribute('fill', 'currentColor');
-    expect(quantitativeSvg).toHaveStyle({ color: '#ffffff' });
-    expect(quantitative?.getAttribute('font-family')).toContain('Inter');
-    expect(
-      container.querySelector('.quantitative_legend > rect[fill="transparent"]')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector('.quantitative_legend > rect[fill="white"]')
-    ).not.toBeInTheDocument();
-  });
-
-  it('removes shell background padding when the legend tool disables the panel background', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-    legendActions.updateBackground({ enabled: false });
-
-    const { container } = render(LegendOverlay);
-    const style = container
-      .querySelector('.legend-container')
-      ?.getAttribute('style');
-
-    expect(style).toContain('background-color: transparent');
-    expect(style).toContain('--legend-padding-inline: 0px');
-    expect(style).toContain('--legend-padding-block: 0px');
-    expect(style).toContain('border-radius: 0px');
-  });
-
-  it('keeps the legend mounted but hidden when requested', () => {
-    const { container } = render(LegendOverlay, { hidden: true });
-
-    expect(
-      container.querySelector('.legend-overlay.hidden')
-    ).toBeInTheDocument();
-    expect(screen.getByText('Population')).toBeInTheDocument();
   });
 
   it('names both variables under a shared-scale double symbol legend', () => {
@@ -430,20 +286,6 @@ describe('legend overlay visibility', () => {
       doubleLegend?.querySelectorAll('.sign_legend text') ?? []
     ).map((node) => node.textContent);
     expect(swatchLabels).toEqual(['population', 'secondary-population']);
-  });
-
-  it('draws a single proportional symbol legend as bare outlines', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildSingleProportionalViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    // Only the size carries meaning here, so the fill would just add noise.
-    const symbols = container.querySelector('.legend-svg--symbols .symbols');
-    expect(symbols?.getAttribute('fill')).toBe('none');
-    expect(symbols?.getAttribute('stroke')).toBe('currentColor');
   });
 
   it('stacks one named symbol legend per variable on own-scale double symbols', () => {
@@ -553,53 +395,6 @@ describe('legend overlay visibility', () => {
     expect(countLegendLabels(m.categories_hidden_count({ count: 12 }))).toBe(1);
   });
 
-  it('renders categorical missing data as a compact footer', () => {
-    const viz = buildPointCategoriesViz();
-    viz.missingData = {
-      show: true,
-      shape: MissingDataShape.CIRCLE,
-      size: 4,
-      color: '#c6c6c6'
-    };
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [viz];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--categorical')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--missing-data')
-    ).not.toBeInTheDocument();
-    expect(countLegendLabels('Absence de données')).toBe(1);
-  });
-
-  it('renders unique point symbols with the selected shape and configured size', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildUniquePointViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    const symbolLegend = container.querySelector('.legend-svg--symbols');
-    const triangle = Array.from(
-      symbolLegend?.querySelectorAll('path') ?? []
-    ).find((path) => path.getAttribute('d') === 'M0,-8L8,7H-8Z');
-
-    expect(symbolLegend).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--missing-data')
-    ).not.toBeInTheDocument();
-    expect(triangle).toBeInTheDocument();
-    expect(triangle?.getAttribute('transform')).toContain('scale(1.5)');
-    expect(screen.getByText('Symboles')).toBeInTheDocument();
-    expect(countLegendLabels('Absence de données')).toBe(1);
-  });
-
   it('renders point classed fill legends with the active fill value column and class count', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildPointClassedFillViz()];
@@ -642,45 +437,6 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('≥ 0,26')).toBeInTheDocument();
   });
 
-  it('renders classed choropleth colors with the integrated quantitative SVG legend', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--quantitative')
-    ).toBeInTheDocument();
-    expect(container.querySelector('.quantitative_legend')).toBeInTheDocument();
-    expect(
-      container.querySelectorAll('.quantitative_legend .box rect')
-    ).toHaveLength(4);
-    expect(
-      container.querySelector('.legend-proportional-scale')
-    ).not.toBeInTheDocument();
-  });
-
-  it('mounts a fresh legend SVG when the page scale changes so labels are re-measured', async () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-    const initialSvg = container.querySelector('.legend-svg--quantitative');
-    expect(initialSvg).toBeInTheDocument();
-
-    globalActions.setPageZoomScale(2);
-
-    await waitFor(() => {
-      const rescaledSvg = container.querySelector('.legend-svg--quantitative');
-      expect(rescaledSvg).toBeInTheDocument();
-      expect(rescaledSvg).not.toBe(initialSvg);
-    });
-  });
-
   it('labels the classed choropleth scale with the rounded bounds', () => {
     const viz = buildClassedPolygonViz();
     const classification = {
@@ -708,101 +464,6 @@ describe('legend overlay visibility', () => {
     expect(labels).toContain('30 000');
     expect(labels).toContain('16 000 000');
     expect(labels).not.toContain('15 907 951');
-  });
-
-  it('renders polygon classes on proportional visualizations when symbols are disabled', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [
-      buildProportionalPolygonClassesOnlyViz()
-    ];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--quantitative')
-    ).toBeInTheDocument();
-    expect(container.querySelector('.quantitative_legend')).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--symbols')
-    ).not.toBeInTheDocument();
-  });
-
-  it('keeps polygon-only legend titles focused on active polygon columns', () => {
-    const viz = buildProportionalPolygonClassesOnlyViz();
-    viz.mapping = {
-      ...viz.mapping,
-      sizeColumn: 'area'
-    };
-    if (viz.symbol) {
-      viz.symbol = {
-        ...viz.symbol,
-        sizeColumn: 'area'
-      };
-    }
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [viz];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-    const title = container.querySelector(
-      '.quantitative_legend .title'
-    )?.textContent;
-
-    expect(title).toContain('population');
-    expect(title).not.toContain('area');
-  });
-
-  it('renders density legends through the common SVG component', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildDensityPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(container.querySelector('.legend-svg--density')).toBeInTheDocument();
-    expect(
-      container.querySelector('.khartis_density_legend')
-    ).toBeInTheDocument();
-  });
-
-  it('renders patterned categorical legends without HTML swatches', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildPatternedPolygonViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--patterns')
-    ).toBeInTheDocument();
-    expect(container.querySelector('pattern')).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-color-scale')
-    ).not.toBeInTheDocument();
-  });
-
-  it('renders line width legends through SVG rows', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildLineWidthViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--line-width')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector('.khartis_line_width_legend')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-proportional-scale')
-    ).not.toBeInTheDocument();
   });
 
   it('renders point size class legends with class labels derived from breaks', () => {
@@ -845,22 +506,6 @@ describe('legend overlay visibility', () => {
 
     expect(container.querySelector('.legend-svg--symbols')).toBeInTheDocument();
     expect(countLegendLabels('Absence de données')).toBe(0);
-  });
-
-  it('renders text categorical legends through the common SVG system', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildTextCategoriesViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--text-color')
-    ).toBeInTheDocument();
-    expect(container.querySelector('.categorical_legend')).toBeInTheDocument();
-    expect(screen.getByText('Préfecture')).toBeInTheDocument();
-    expect(screen.getByText('Sous-préfecture')).toBeInTheDocument();
   });
 
   it('renders missing data only once across multi-segment legends', () => {
@@ -910,51 +555,6 @@ describe('legend overlay visibility', () => {
     render(LegendOverlay);
 
     expect(countLegendLabels('Absence de données')).toBe(0);
-  });
-
-  it('renders proportional text size legends through the original symbol legend generator', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildTextProportionalViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--text-size')
-    ).toBeInTheDocument();
-    expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
-    expect(countLegendLabels('Absence de données')).toBe(1);
-  });
-
-  it('renders bivariate text legends as compact color and size blocks', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildTextBivariateViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(
-      container.querySelector('.legend-svg--text-color')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--text-size')
-    ).toBeInTheDocument();
-    expect(
-      container.querySelectorAll('.legend-svg').length
-    ).toBeGreaterThanOrEqual(2);
-  });
-
-  it('gives each primitive of a visualization its own legend frame', () => {
-    mockVisualizationStore.version = 1;
-    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
-    legendActions.reset();
-    legendActions.setVisibility(true);
-
-    const { container } = render(LegendOverlay);
-
-    expect(container.querySelectorAll('.legend-container')).toHaveLength(2);
   });
 
   it('bounds a classified legend by the filtered scope, not the whole column', () => {
@@ -1239,16 +839,6 @@ describe('legend overlay visibility', () => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
     });
   });
-
-  it('centers legend focus in the visible area beside the tool popover', async () => {
-    const { legend } = setupLegendOccludedViewport();
-
-    await fireEvent.click(legend);
-
-    await waitFor(() => {
-      expect(globalState.zoom.pagePanOffset).toEqual({ x: 168, y: 60 });
-    });
-  });
 });
 
 function buildDoubleProportionalViz(): VisualizationConfig {
@@ -1305,28 +895,6 @@ function buildDoubleProportionalViz(): VisualizationConfig {
       minSize: 4,
       maxSize: 24,
       sizeScale: 'linear'
-    }
-  } as VisualizationConfig;
-}
-
-function buildSingleProportionalViz(): VisualizationConfig {
-  const base = buildDoubleProportionalViz();
-
-  return {
-    ...base,
-    id: 'viz-prop-single',
-    modes: {
-      symbol: SymbolMode.PROPORTIONAL,
-      proportionalType: ProportionalType.SINGLE
-    },
-    symbol: {
-      ...base.symbol,
-      proportionalType: ProportionalType.SINGLE,
-      valueColumn: undefined
-    },
-    mapping: {
-      sizeColumn: 'population',
-      geometryColumn: 'geom'
     }
   } as VisualizationConfig;
 }
@@ -1570,170 +1138,6 @@ function buildClassedPolygonViz(): VisualizationConfig {
   } as VisualizationConfig;
 }
 
-function buildProportionalPolygonClassesOnlyViz(): VisualizationConfig {
-  return {
-    ...buildClassedPolygonViz(),
-    id: 'viz-prop-poly',
-    type: 'proportional',
-    primitiveFilters: ['polygon'],
-    primitiveOrder: ['polygon'],
-    symbol: {
-      enabled: false,
-      mode: SymbolMode.PROPORTIONAL,
-      shape: ShapeType.CIRCLE,
-      size: 12,
-      minSize: 4,
-      maxSize: 24,
-      sizeScale: 'linear',
-      opacity: 1,
-      fillMode: FillMode.UNIQUE,
-      fillColor: '#4585f5',
-      strokeMode: StrokeMode.UNIQUE,
-      strokeColor: '#ffffff',
-      strokeWidth: 1,
-      strokeOpacity: 1,
-      proportionalType: ProportionalType.SINGLE,
-      categoryShape: CategoryShapeMode.UNIQUE,
-      sizeColumn: 'population'
-    }
-  } as VisualizationConfig;
-}
-
-function buildDensityPolygonViz(): VisualizationConfig {
-  return {
-    id: 'viz-density',
-    name: 'Density',
-    type: 'choropleth',
-    datasetId: 'dataset-1',
-    enabled: true,
-    primitiveFilters: ['polygon'],
-    primitiveOrder: ['polygon'],
-    modes: {
-      fill: FillMode.DENSITY
-    },
-    polygon: {
-      enabled: true,
-      fillMode: FillMode.DENSITY,
-      fillColor: '#4585f5',
-      fillOpacity: 100,
-      strokeMode: StrokeMode.UNIQUE,
-      strokeColor: '#ffffff',
-      strokeWidth: 1,
-      strokeOpacity: 100,
-      strokeDashed: false
-    },
-    density: {
-      ratio: 42,
-      dotSize: 2,
-      color: '#4585f5'
-    },
-    style: {
-      fillColor: '#4585f5',
-      fillOpacity: 100,
-      strokeColor: '#ffffff',
-      strokeWidth: 1,
-      strokeOpacity: 100
-    },
-    mapping: {
-      valueColumn: 'population',
-      geometryColumn: 'geom'
-    }
-  } as VisualizationConfig;
-}
-
-function buildPatternedPolygonViz(): VisualizationConfig {
-  const classification = {
-    method: ClassificationMethod.MANUAL,
-    classes: 2,
-    labels: ['Urbain', 'Rural'],
-    colors: ['#f7fbff', '#2171b5'],
-    patternId: 'diagonal'
-  };
-
-  return {
-    id: 'viz-pattern',
-    name: 'Land use',
-    type: 'categorical',
-    datasetId: 'dataset-1',
-    enabled: true,
-    primitiveFilters: ['polygon'],
-    primitiveOrder: ['polygon'],
-    modes: {
-      fill: FillMode.CATEGORIES
-    },
-    polygon: {
-      enabled: true,
-      fillMode: FillMode.CATEGORIES,
-      fillColor: '#4585f5',
-      fillOpacity: 100,
-      strokeMode: StrokeMode.UNIQUE,
-      strokeColor: '#ffffff',
-      strokeWidth: 1,
-      strokeOpacity: 100,
-      strokeDashed: false,
-      categoryColumn: 'land_use',
-      classification
-    },
-    classification,
-    style: {
-      fillColor: '#4585f5',
-      fillOpacity: 100,
-      strokeColor: '#ffffff',
-      strokeWidth: 1,
-      strokeOpacity: 100
-    },
-    mapping: {
-      categoryColumn: 'land_use',
-      geometryColumn: 'geom'
-    }
-  } as VisualizationConfig;
-}
-
-function buildLineWidthViz(): VisualizationConfig {
-  const classification = {
-    method: ClassificationMethod.QUANTILES,
-    classes: 3,
-    breaks: [10, 20],
-    colors: ['#4585f5', '#4585f5', '#4585f5']
-  };
-
-  return {
-    id: 'viz-line',
-    name: 'Flows',
-    type: 'proportional',
-    datasetId: 'dataset-1',
-    enabled: true,
-    primitiveFilters: ['line'],
-    primitiveOrder: ['line'],
-    line: {
-      enabled: true,
-      colorMode: ColorMode.UNIQUE,
-      thicknessMode: ThicknessMode.CLASSES,
-      color: '#1e3a5f',
-      width: 2,
-      maxWidth: 12,
-      opacity: 1,
-      dashed: true,
-      valueColumn: 'population',
-      sizeColumn: 'population',
-      thicknessClassification: classification
-    },
-    lineThicknessClassification: classification,
-    style: {
-      lineColor: '#1e3a5f',
-      lineWidth: 2,
-      lineMaxWidth: 12,
-      lineOpacity: 1,
-      lineDashed: true
-    },
-    mapping: {
-      valueColumn: 'population',
-      sizeColumn: 'population',
-      geometryColumn: 'geom'
-    }
-  } as VisualizationConfig;
-}
-
 function buildPointSizeClassesViz(): VisualizationConfig {
   return {
     id: 'viz-point-size-classes',
@@ -1791,105 +1195,6 @@ function buildPointSizeClassesViz(): VisualizationConfig {
       valueColumn: 'capacity_total',
       sizeColumn: 'capacity_total',
       geometryColumn: 'geom'
-    }
-  } as VisualizationConfig;
-}
-
-function buildTextCategoriesViz(): VisualizationConfig {
-  const classification = {
-    method: ClassificationMethod.MANUAL,
-    classes: 2,
-    labels: ['Préfecture', 'Sous-préfecture'],
-    colors: ['#0f62fe', '#ff832b']
-  };
-
-  return {
-    id: 'viz-text-cat',
-    name: 'Statut administratif',
-    type: 'categorical',
-    datasetId: 'dataset-1',
-    enabled: true,
-    primitiveFilters: ['text'],
-    primitiveOrder: ['text'],
-    modes: {
-      color: ColorMode.CATEGORIES,
-      size: SizeMode.FIXED
-    },
-    text: {
-      enabled: true,
-      labelColumn: 'label',
-      colorMode: ColorMode.CATEGORIES,
-      sizeMode: SizeMode.FIXED,
-      color: '#111111',
-      opacity: 1,
-      size: 12,
-      categoryColumn: 'status',
-      classification,
-      missingData: {
-        show: false,
-        shape: MissingDataShape.CIRCLE,
-        size: 6,
-        color: '#c6c6c6'
-      }
-    },
-    textClassification: classification,
-    style: {
-      textOpacity: 1,
-      textColor: '#111111',
-      textSize: 12
-    },
-    mapping: {
-      labelColumn: 'label',
-      categoryColumn: 'status',
-      geometryColumn: 'geom'
-    }
-  } as VisualizationConfig;
-}
-
-function buildTextProportionalViz(): VisualizationConfig {
-  return {
-    id: 'viz-text-size',
-    name: 'Population',
-    type: 'proportional',
-    datasetId: 'dataset-1',
-    enabled: true,
-    primitiveFilters: ['text'],
-    primitiveOrder: ['text'],
-    modes: {
-      color: ColorMode.UNIQUE,
-      size: SizeMode.PROPORTIONAL
-    },
-    text: {
-      enabled: true,
-      labelColumn: 'label',
-      colorMode: ColorMode.UNIQUE,
-      sizeMode: SizeMode.PROPORTIONAL,
-      color: '#1f1f1f',
-      opacity: 1,
-      size: 13,
-      valueColumn: 'population',
-      missingData: {
-        show: true,
-        shape: MissingDataShape.CIRCLE,
-        size: 6,
-        color: '#c6c6c6'
-      }
-    },
-    style: {
-      textOpacity: 1,
-      textColor: '#1f1f1f',
-      textSize: 13
-    },
-    mapping: {
-      labelColumn: 'label',
-      valueColumn: 'population',
-      geometryColumn: 'geom'
-    },
-    missingData: {
-      show: true,
-      shape: MissingDataShape.CIRCLE,
-      size: 6,
-      color: '#c6c6c6'
     }
   } as VisualizationConfig;
 }

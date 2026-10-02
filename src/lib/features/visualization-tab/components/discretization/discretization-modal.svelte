@@ -4,6 +4,7 @@
   import { portal } from '$lib/features/commons/utils/portal';
   import {
     MAIN_TOOLBAR_ID,
+    readToolbarPanelRight,
     resolveToolbarPanelWidthFromClassName
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import { Close } from 'carbon-icons-svelte';
@@ -135,24 +136,8 @@
     'discretization-modal'
   );
 
-  function getFallbackPanelRight(toolbarClassName = ''): string {
-    return resolveToolbarPanelWidthFromClassName(toolbarClassName);
-  }
-
   function readPanelRight(): string {
-    if (typeof window === 'undefined') {
-      return getFallbackPanelRight();
-    }
-
-    const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
-    if (!toolbar) {
-      return getFallbackPanelRight();
-    }
-
-    const toolbarRect = toolbar.getBoundingClientRect();
-    const rightOffset = Math.max(0, window.innerWidth - toolbarRect.left);
-
-    return `${Math.round(rightOffset)}px`;
+    return readToolbarPanelRight(() => resolveToolbarPanelWidthFromClassName());
   }
 
   function updatePanelPosition(): void {

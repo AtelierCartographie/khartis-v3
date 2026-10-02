@@ -53,15 +53,6 @@ import {
 export type { PatternParams };
 export {
   DEFAULT_QUALITATIVE_PRESET,
-  GRAYSCALE_COLORS,
-  PASTEL_CHAUD_COLORS,
-  PASTEL_FROID_COLORS,
-  PASTEL_MIXTE_COLORS,
-  SEPIA_CHAUD_COLORS,
-  SEPIA_FROID_COLORS,
-  SEPIA_MIXTE_COLORS,
-  VIF_CHAUD_COLORS,
-  VIF_FROID_COLORS,
   VIF_MIXTE_COLORS
 } from '$lib/features/commons/constants/qualitative-palette.constants';
 

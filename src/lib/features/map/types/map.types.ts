@@ -7,12 +7,6 @@ import type {
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 
-export type {
-  PickingInfo,
-  ViewStateChangeParameters,
-  OrthographicViewState
-} from '@deck.gl/core';
-
 export type DeckDataRow = Record<string, unknown>;
 
 export type ThematicLayer = Layer<DeckDataRow>;

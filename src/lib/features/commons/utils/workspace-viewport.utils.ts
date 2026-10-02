@@ -124,10 +124,6 @@ export function clampWorkspacePanOffset(
 }
 
 const FIT_PADDING_PX = 30;
-const MIN_FIT_ZOOM_PERCENT = 20;
-const MAX_FIT_ZOOM_PERCENT = 500;
-
-export const MIN_READABLE_PAGE_PREVIEW_SCALE = 0.6;
 
 export interface ResolveFitZoomParams {
   viewportWidth: number;
@@ -140,43 +136,6 @@ export interface ResolveFitZoomParams {
 export interface ResolveWorkspaceFitScaleParams extends ResolveFitZoomParams {
   reservedInlineStartPx?: number;
   maxViewportCoverageRatio?: number;
-}
-
-export function resolveFitToWorkspaceZoom({
-  viewportWidth,
-  viewportHeight,
-  pageWidth,
-  pageHeight,
-  paddingPx = FIT_PADDING_PX
-}: ResolveFitZoomParams): number {
-  if (
-    viewportWidth <= 0 ||
-    viewportHeight <= 0 ||
-    pageWidth <= 0 ||
-    pageHeight <= 0
-  ) {
-    return 100;
-  }
-
-  const availableWidth = Math.max(1, viewportWidth - paddingPx * 2);
-  const availableHeight = Math.max(1, viewportHeight - paddingPx * 2);
-
-  const ratio = Math.min(
-    availableWidth / pageWidth,
-    availableHeight / pageHeight
-  );
-
-  const percent = Math.round(ratio * 100);
-
-  return clamp(percent, MIN_FIT_ZOOM_PERCENT, MAX_FIT_ZOOM_PERCENT);
-}
-
-export function resolveReadablePagePreviewScale(scale: number): number {
-  if (!Number.isFinite(scale) || scale <= 0) {
-    return 1;
-  }
-
-  return clamp(scale, MIN_READABLE_PAGE_PREVIEW_SCALE, 1);
 }
 
 export function resolveWorkspaceFitScale({

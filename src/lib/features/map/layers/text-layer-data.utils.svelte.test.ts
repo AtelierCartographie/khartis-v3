@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import { resolveVariableTextSizeBounds } from './text-layer-data.utils';
