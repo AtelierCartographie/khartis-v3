@@ -1,0 +1,141 @@
+diff --git a/dist/deck-utils.js b/dist/deck-utils.js
+index f6d6b69..4c4b6c1 100644
+--- a/dist/deck-utils.js
++++ b/dist/deck-utils.js
+@@ -165 +165,6 @@ function centerCameraOnTerrain(map, viewState) {
+-    if (map.getFreeCameraOptions) {
++    const centerElevation = map.getCenterElevation?.();
++    if (typeof centerElevation === 'number') {
++        // maplibre-gl v5+
++        viewState.position = [0, 0, centerElevation];
++    }
++    else if (map.getFreeCameraOptions) {
+@@ -171,2 +176 @@ function centerCameraOnTerrain(map, viewState) {
+-        // @ts-ignore transform is not typed
+-        const height = map.transform.height;
++        const height = map.getCanvas().clientHeight;
+@@ -194,4 +198,2 @@ function centerCameraOnTerrain(map, viewState) {
+-    // @ts-ignore transform is not typed
+-    else if (typeof map.transform.elevation === 'number') {
+-        // maplibre-gl
+-        // @ts-ignore transform is not typed
++    else if (typeof map.transform?.elevation === 'number') {
++        // maplibre-gl v4 compatibility fallback
+@@ -213,5 +215,6 @@ function getViewport(deck, map, renderParameters) {
+-    const nearZ = renderParameters?.nearZ ?? map.transform._nearZ;
+-    const farZ = renderParameters?.farZ ?? map.transform._farZ;
+-    if (Number.isFinite(nearZ)) {
+-        viewState.nearZ = nearZ / map.transform.height;
+-        viewState.farZ = farZ / map.transform.height;
++    const nearZ = renderParameters?.nearZ ?? map.transform?._nearZ;
++    const farZ = renderParameters?.farZ ?? map.transform?._farZ;
++    const height = map.getCanvas().clientHeight;
++    if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
++        viewState.nearZ = nearZ / height;
++        viewState.farZ = farZ / height;
+diff --git a/dist/dist.dev.js b/dist/dist.dev.js
+index 3659a10..f1014d4 100644
+--- a/dist/dist.dev.js
++++ b/dist/dist.dev.js
+@@ -331 +331,4 @@ var __exports__ = (() => {
+-    if (map.getFreeCameraOptions) {
++    const centerElevation = map.getCenterElevation?.();
++    if (typeof centerElevation === "number") {
++      viewState.position = [0, 0, centerElevation];
++    } else if (map.getFreeCameraOptions) {
+@@ -336 +339 @@ var __exports__ = (() => {
+-      const height = map.transform.height;
++      const height = map.getCanvas().clientHeight;
+@@ -355 +358 @@ var __exports__ = (() => {
+-    } else if (typeof map.transform.elevation === "number") {
++    } else if (typeof map.transform?.elevation === "number") {
+@@ -365,5 +368,6 @@ var __exports__ = (() => {
+-    const nearZ = renderParameters?.nearZ ?? map.transform._nearZ;
+-    const farZ = renderParameters?.farZ ?? map.transform._farZ;
+-    if (Number.isFinite(nearZ)) {
+-      viewState.nearZ = nearZ / map.transform.height;
+-      viewState.farZ = farZ / map.transform.height;
++    const nearZ = renderParameters?.nearZ ?? map.transform?._nearZ;
++    const farZ = renderParameters?.farZ ?? map.transform?._farZ;
++    const height = map.getCanvas().clientHeight;
++    if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
++      viewState.nearZ = nearZ / height;
++      viewState.farZ = farZ / height;
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 9e083a9..4e4a651 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -262 +262,4 @@ function centerCameraOnTerrain(map, viewState) {
+-  if (map.getFreeCameraOptions) {
++  const centerElevation = map.getCenterElevation?.();
++  if (typeof centerElevation === "number") {
++    viewState.position = [0, 0, centerElevation];
++  } else if (map.getFreeCameraOptions) {
+@@ -267 +270 @@ function centerCameraOnTerrain(map, viewState) {
+-    const height = map.transform.height;
++    const height = map.getCanvas().clientHeight;
+@@ -286 +289 @@ function centerCameraOnTerrain(map, viewState) {
+-  } else if (typeof map.transform.elevation === "number") {
++  } else if (typeof (map.transform == null ? void 0 : map.transform.elevation) === "number") {
+@@ -296,5 +299,6 @@ function getViewport(deck, map, renderParameters) {
+-  const nearZ = (renderParameters == null ? void 0 : renderParameters.nearZ) ?? map.transform._nearZ;
+-  const farZ = (renderParameters == null ? void 0 : renderParameters.farZ) ?? map.transform._farZ;
+-  if (Number.isFinite(nearZ)) {
+-    viewState.nearZ = nearZ / map.transform.height;
+-    viewState.farZ = farZ / map.transform.height;
++  const nearZ = (renderParameters == null ? void 0 : renderParameters.nearZ) ?? (map.transform == null ? void 0 : map.transform._nearZ);
++  const farZ = (renderParameters == null ? void 0 : renderParameters.farZ) ?? (map.transform == null ? void 0 : map.transform._farZ);
++  const height = map.getCanvas().clientHeight;
++  if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
++    viewState.nearZ = nearZ / height;
++    viewState.farZ = farZ / height;
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index 059e11a..a8da1ab 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -80,0 +81 @@ export interface Map extends Evented {
++    getCenterElevation?(): number;
+diff --git a/src/deck-utils.ts b/src/deck-utils.ts
+index 6f02c5b..3b396bf 100644
+--- a/src/deck-utils.ts
++++ b/src/deck-utils.ts
+@@ -223 +223,5 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+-  if (map.getFreeCameraOptions) {
++  const centerElevation = map.getCenterElevation?.();
++  if (typeof centerElevation === 'number') {
++    // maplibre-gl v5+
++    viewState.position = [0, 0, centerElevation];
++  } else if (map.getFreeCameraOptions) {
+@@ -230,2 +234 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+-    // @ts-ignore transform is not typed
+-    const height = map.transform.height;
++    const height = map.getCanvas().clientHeight;
+@@ -257,5 +260,2 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+-  }
+-  // @ts-ignore transform is not typed
+-  else if (typeof map.transform.elevation === 'number') {
+-    // maplibre-gl
+-    // @ts-ignore transform is not typed
++  } else if (typeof map.transform?.elevation === 'number') {
++    // maplibre-gl v4 compatibility fallback
+@@ -290,5 +290,8 @@ function getViewport(deck: Deck, map: Map, renderParameters?: unknown): Viewport
+-  const nearZ = (renderParameters as MaplibreRenderParameters)?.nearZ ?? map.transform._nearZ;
+-  const farZ = (renderParameters as MaplibreRenderParameters)?.farZ ?? map.transform._farZ;
+-  if (Number.isFinite(nearZ)) {
+-    viewState.nearZ = nearZ / map.transform.height;
+-    viewState.farZ = farZ / map.transform.height;
++  const nearZ =
++    (renderParameters as MaplibreRenderParameters)?.nearZ ?? map.transform?._nearZ;
++  const farZ =
++    (renderParameters as MaplibreRenderParameters)?.farZ ?? map.transform?._farZ;
++  const height = map.getCanvas().clientHeight;
++  if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
++    viewState.nearZ = nearZ / height;
++    viewState.farZ = farZ / height;
+diff --git a/src/types.ts b/src/types.ts
+index 4669bd8..1711e06 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -120,0 +121,2 @@ export interface Map extends Evented {
++  // maplibre v5+
++  getCenterElevation?(): number;
