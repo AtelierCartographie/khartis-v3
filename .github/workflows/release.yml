@@ -6,9 +6,6 @@ on:
       - staging
       - main
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 permissions:
   contents: write
   issues: write
@@ -33,10 +30,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      # The release reads commits, tags and notes, not the data files.
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
+          sparse-checkout: |
+            /*
+            !/static/basemaps/**/*.parquet
+            !/tests-datasets/
+          sparse-checkout-cone-mode: false
 
       - name: Configure git identity
         run: |
