@@ -7,23 +7,31 @@ on:
       - main
 
 env:
-  NODE_VERSION: '22'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+      actions: read
+
   semantic-release:
     name: Semantic Release (${{ github.ref_name }})
+    needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,40 +46,7 @@ jobs:
       - name: Fetch semantic-release notes
         run: git fetch origin 'refs/notes/semantic-release:refs/notes/semantic-release' || true
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Run lint
-        run: pnpm lint
-
-      - name: Run type check
-        run: pnpm check
-
-      - name: Run unit tests
-        run: pnpm test:unit
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Run pipeline tests
-        run: pnpm test:pipeline
-
-      - name: Run DuckDB tests
-        run: pnpm test:duckdb
-
-      - name: Build application
-        run: pnpm build
+      - uses: ./.github/actions/setup
 
       - name: Run semantic-release
         run: pnpm exec semantic-release
