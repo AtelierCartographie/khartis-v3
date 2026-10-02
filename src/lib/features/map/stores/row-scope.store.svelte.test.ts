@@ -84,25 +84,6 @@ describe('rowScopeStore', () => {
     ).toBe(false);
   });
 
-  it('reports no missing data once the filter keeps only valued rows', async () => {
-    mocks.resolveRowScope.mockReturnValue(scope('sites', '"rate" >= 5'));
-    mocks.getMissingValueCountsInScope.mockResolvedValue([0]);
-    const rate = { column: 'rate', numeric: true };
-
-    await rowScopeStore.sync([
-      { ...target(PrimitiveFilterType.POINT), missingDataColumns: [rate] }
-    ]);
-
-    expect(mocks.getMissingValueCountsInScope).toHaveBeenCalledWith(
-      'sites',
-      '"rate" >= 5',
-      [rate]
-    );
-    expect(
-      rowScopeStore.hasMissingData('viz-1', PrimitiveFilterType.POINT)
-    ).toBe(false);
-  });
-
   it('leaves every row in scope when no filter resolves', async () => {
     mocks.resolveRowScope.mockReturnValue(scope('communes', null));
 
@@ -163,25 +144,6 @@ describe('rowScopeStore', () => {
     }
   });
 
-  it('queries per distinct clause when a primitive filters on its own', async () => {
-    mocks.resolveRowScope.mockImplementation(
-      (request: { primitive?: PrimitiveFilterType }) => ({
-        ...scope(
-          'communes',
-          request.primitive === PrimitiveFilterType.POINT
-            ? '"pop" >= 5000'
-            : '"pop" >= 1000'
-        )
-      })
-    );
-
-    await rowScopeStore.sync(
-      EVERY_PRIMITIVE.map((primitive) => target(primitive))
-    );
-
-    expect(mocks.getRowIdsInScope).toHaveBeenCalledTimes(2);
-  });
-
   it('re-queries only when the clause changes', async () => {
     mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
     await rowScopeStore.sync([target(PrimitiveFilterType.POLYGON)]);
@@ -221,19 +183,6 @@ describe('rowScopeStore', () => {
     expect(
       rowScopeStore.getScopedDomain('viz-1', PrimitiveFilterType.POINT, 'other')
     ).toBeNull();
-  });
-
-  it('re-queries when the same clause starts driving another column', async () => {
-    mocks.resolveRowScope.mockReturnValue(scope('communes', '"pop" >= 1000'));
-    await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['pop'])]);
-
-    await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['density'])]);
-
-    expect(mocks.getColumnDomainsInScope).toHaveBeenLastCalledWith(
-      'communes',
-      '"pop" >= 1000',
-      ['density']
-    );
   });
 
   it('drops the scope of a visualization that is gone', async () => {

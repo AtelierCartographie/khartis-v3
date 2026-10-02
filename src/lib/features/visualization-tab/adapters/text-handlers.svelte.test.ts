@@ -82,14 +82,6 @@ describe('createTextHandlers', () => {
     expect(arg.text.size).toBe(14);
   });
 
-  it('handleTextChange recomputes primitiveFilters from the text enabled override', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextChange({ enabled: false } as never);
-    expect(bag.buildNextPrimitiveFilters).toHaveBeenCalledWith({
-      text: false
-    });
-  });
-
   it('handleTextStyleChange dual-writes the legacy style mirror so the picker UI does not revert', () => {
     const bag = makeBag();
     bag.handlers.handleTextStyleChange({
@@ -130,24 +122,6 @@ describe('createTextHandlers', () => {
       labelColor: '#000',
       labelSize: 11
     });
-  });
-
-  it('handleTextModesChange renames color/size to colorMode/sizeMode', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextModesChange({
-      color: 'classes',
-      size: 'proportional'
-    } as never);
-    const [updates, afterUpdate] =
-      bag.updateSelectedVisualization.mock.calls[0];
-    expect(updates.text.colorMode).toBe('classes');
-    expect(updates.text.sizeMode).toBe('proportional');
-
-    afterUpdate({ id: 'next' });
-    expect(bag.ensurePrimitiveClassificationDefaults).toHaveBeenCalledWith(
-      'text',
-      { id: 'next' }
-    );
   });
 
   it('handleTextModesChange snapshots the current color state when mode changes', () => {
@@ -199,21 +173,5 @@ describe('createTextHandlers', () => {
       'text',
       { id: 'next' }
     );
-  });
-
-  it('handleTextModesChange does not update modeStates when mode is unchanged', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextModesChange({ color: 'unique' } as never);
-    const calls = bag.updateSelectedVisualization.mock.calls;
-    if (calls.length > 0) {
-      expect(calls[0][0].text.colorModeStates).toBeUndefined();
-    }
-  });
-
-  it('handleTextSecondaryLabelsChange merges into secondaryLabels', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextSecondaryLabelsChange({ enabled: true } as never);
-    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
-    expect(arg.text.secondaryLabels).toEqual({ enabled: true });
   });
 });

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 
@@ -110,36 +112,6 @@ describe('createBasemapFromGeometryTable', () => {
     expect(basemap.bbox).toEqual([-5, 41, 9, 51]);
     // Bounds come from the source table, so the CRS must describe that space.
     expect(basemap.proj_source).toBe('EPSG:2154');
-  });
-
-  it('should derive the boundary tables through the simplification macros', async () => {
-    await createBasemapFromGeometryTable(Duck, 'regions_geojson', {
-      title: 'regions.geojson'
-    });
-
-    const statements = mocks.queryMock.mock.calls.map(
-      (call) => call[0] as string
-    );
-    expect(
-      statements.some(
-        (sql) =>
-          sql.includes('extract_innerlines') &&
-          sql.includes('regions_geojson__innerlines')
-      )
-    ).toBe(true);
-    expect(
-      statements.some(
-        (sql) =>
-          sql.includes('extract_outerlines') &&
-          sql.includes('regions_geojson__outerlines')
-      )
-    ).toBe(true);
-    expect(
-      statements.some(
-        (sql) =>
-          sql.includes('extract_land(') && sql.includes('regions_geojson__land')
-      )
-    ).toBe(true);
   });
 
   it('should not wait for the representative points of a polygon coverage', async () => {

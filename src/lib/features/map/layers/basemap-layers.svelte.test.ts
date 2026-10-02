@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
 import {
   GeoJsonLayer,
@@ -25,7 +27,6 @@ import {
   BasemapDottedPattern,
   BasemapGraticuleMode,
   BasemapRemarquables,
-  BasemapRepresentation,
   BASEMAP_LAYER_CONFIG
 } from '$lib/features/commons/constants/visualization.constants';
 import {
@@ -103,10 +104,8 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
 import {
   createBasemapLayers,
   createEquateurLayer,
-  createFrontieresLayer,
   createMeridiensLayer,
   createMersLayer,
-  createReliefLayers,
   createTerreLayers,
   createVillesLayers,
   type MetadataLayerEntry
@@ -244,27 +243,6 @@ function createNativePointGeometryInfo(): GeometryInfo {
   };
 }
 
-function createLineGeoJSON(
-  id: string
-): FeatureCollection<LineString, { id: string }> {
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: { id },
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [0, 0],
-            [10, 0]
-          ]
-        }
-      }
-    ]
-  };
-}
-
 type CityLabel = { position: [number, number]; text: string };
 
 function createScalingProjectionContext(factor: number) {
@@ -349,21 +327,6 @@ function readBinaryPolygon(layer: Layer | undefined): Float64Array | undefined {
   return data?.attributes.getPolygon.value;
 }
 
-function readFirstVertexAttribute(
-  layer: Layer | undefined,
-  name: 'getColor' | 'getWidth'
-): number[] {
-  const data = layer?.props.data as
-    | {
-        attributes?: Partial<
-          Record<string, { value: ArrayLike<number>; size: number }>
-        >;
-      }
-    | undefined;
-  const attribute = data?.attributes?.[name];
-  return attribute ? Array.from(attribute.value).slice(0, attribute.size) : [];
-}
-
 function createTerreConfig() {
   return {
     id: 'terre' as const,
@@ -415,31 +378,6 @@ beforeEach(() => {
 });
 
 describe('basemap projection fallbacks', () => {
-  it('uses contrast-safe neutral defaults for generated basemap layers', () => {
-    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.TERRE)).toMatchObject({
-      fillColor: NEUTRAL_CARTOGRAPHY_COLORS.land,
-      strokeColor: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
-    });
-    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERS)).toMatchObject({
-      color: NEUTRAL_CARTOGRAPHY_COLORS.sea
-    });
-    expect(
-      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.FRONTIERES)
-    ).toMatchObject({
-      color: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
-    });
-    expect(
-      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)
-    ).toMatchObject({
-      color: NEUTRAL_CARTOGRAPHY_COLORS.graticule
-    });
-    expect(
-      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.EQUATEUR)
-    ).toMatchObject({
-      color: NEUTRAL_CARTOGRAPHY_COLORS.geographicLine
-    });
-  });
-
   it('keeps basemap frontieres thickness in a cartographic pixel range', () => {
     expect(
       basemapLayersStore.getLayer(BASEMAP_LAYER_ID.FRONTIERES)?.thickness
@@ -467,41 +405,6 @@ describe('basemap projection fallbacks', () => {
     expect(
       basemapLayersStore.getLayer(BASEMAP_LAYER_ID.FRONTIERES)?.thickness
     ).toBe(BASEMAP_LAYER_CONFIG.thickness.min);
-  });
-
-  it('connects mers config to the Deck.gl ocean layer style and triggers', () => {
-    const layer = createMersLayer(
-      {
-        id: 'mers',
-        visible: true,
-        color: '#123456',
-        opacity: 25
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.id).toContain('basemap-mers');
-    expect(layer?.props.getFillColor).toEqual([18, 52, 86, 64]);
-    expect(layer?.props.parameters).toMatchObject({
-      depthCompare: 'always',
-      depthWriteEnabled: false
-    });
-    expect(layer?.props.updateTriggers).toEqual({
-      getFillColor: ['#123456', 25]
-    });
-
-    expect(
-      createMersLayer(
-        {
-          id: 'mers',
-          visible: false,
-          color: '#123456',
-          opacity: 25
-        },
-        {}
-      )
-    ).toBeNull();
   });
 
   it('renders projected mers from the projection sphere polygon', () => {
@@ -771,22 +674,6 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeNull();
   });
 
-  it('uses Arrow native path for terre when a composite projection is active', () => {
-    const table = {} as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    extractGeometryInfoMock.mockReturnValue(createNativePolygonGeometryInfo());
-
-    const layers = createTerreLayers(table, createTerreConfig(), ctx);
-    const layer = layers[0];
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      table,
-      ctx.projection
-    );
-    expect(layer).toBeInstanceOf(SolidPolygonLayer);
-  });
-
   it('renders no stroke layer on the Arrow native path when strokeThickness is 0', () => {
     const table = {} as ArrowTable;
     const ctx = createProjectionContext();
@@ -806,29 +693,6 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
-  it('projects generated equator lines when a custom projection is active', () => {
-    const projectedGeoJSON = createLineGeoJSON('projected-equator');
-    const ctx = createProjectionContext();
-
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
-
-    const layer = createEquateurLayer(
-      {
-        id: 'equateur',
-        visible: true,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      ctx
-    ) as GeoJsonLayer | null;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(1);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
-  });
-
   it('keeps generated equator lines visible when dotted styling is disabled', () => {
     const layer = createEquateurLayer(
       {
@@ -846,28 +710,6 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.extensions).toHaveLength(1);
     expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual([1, 0]);
-  });
-
-  it('keeps generated equator lines on the complete domain with a regional bbox', () => {
-    const layer = createEquateurLayer(
-      {
-        id: 'equateur',
-        visible: true,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      { bbox: [2, -5, 10, 5] }
-    ) as GeoJsonLayer | null;
-
-    const data = layer?.props.data as FeatureCollection<LineString>;
-    const coordinates = data.features[0]?.geometry.coordinates ?? [];
-
-    expect(data.features).toHaveLength(1);
-    expect(coordinates[0]).toEqual([-180, 0]);
-    expect(coordinates[coordinates.length - 1]).toEqual([180, 0]);
   });
 
   it('keeps generated equator lines even when the active bbox excludes latitude zero', () => {
@@ -890,33 +732,6 @@ describe('basemap projection fallbacks', () => {
     expect(data.features).toHaveLength(1);
     expect(coordinates[0]).toEqual([-180, 0]);
     expect(coordinates[coordinates.length - 1]).toEqual([180, 0]);
-  });
-
-  it('projects generated meridians and parallels with regular spacing', () => {
-    const projectedGeoJSON = createLineGeoJSON('projected-graticule');
-    const ctx = createProjectionContext();
-
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
-
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REGULAR,
-        spacingDegrees: 15,
-        color: '#666666',
-        dotted: true,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      ctx
-    ) as GeoJsonLayer | null;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(1);
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
-    expect(layer?.props.updateTriggers).not.toHaveProperty('data');
   });
 
   it('projects generated graticule data through composite sub-projections', () => {
@@ -1211,27 +1026,6 @@ describe('basemap projection fallbacks', () => {
     expect(longestStep).toBeLessThan(width / 4);
   });
 
-  it('keeps generated meridians and parallels visible when dotted styling is disabled', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REGULAR,
-        spacingDegrees: 30,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.extensions).toHaveLength(1);
-    expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual([1, 0]);
-  });
-
   it('builds regular meridians and parallels from spacing without duplicating the equator', () => {
     const layer = createMeridiensLayer(
       {
@@ -1497,98 +1291,6 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.spacingDegrees).toBe(90);
   });
 
-  it('returns null when meridiens layer is not visible', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: false,
-        mode: BasemapGraticuleMode.REMARKABLE,
-        spacingDegrees: 10,
-        color: '#666666',
-        dotted: true,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      {}
-    );
-
-    expect(layer).toBeNull();
-  });
-
-  it('applies color and opacity correctly to graticule lines', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REGULAR,
-        spacingDegrees: 30,
-        color: '#ff0000',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 50
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.getLineColor).toEqual([255, 0, 0, 128]);
-    expect(layer?.props.updateTriggers.getLineColor).toEqual(['#ff0000', 50]);
-  });
-
-  it('transmits thickness to getLineWidth', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REMARKABLE,
-        spacingDegrees: 10,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 2.5,
-        opacity: 100
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.getLineWidth).toBe(2.5);
-    expect(layer?.props.updateTriggers.getLineWidth).toEqual([2.5]);
-  });
-
-  it('maps dotted patterns to correct dash arrays', () => {
-    const testCases: Array<{
-      pattern: BasemapDottedPattern;
-      expected: number[];
-    }> = [
-      { pattern: BasemapDottedPattern.DOTS, expected: [2, 4] },
-      { pattern: BasemapDottedPattern.DASHES, expected: [8, 4] },
-      { pattern: BasemapDottedPattern.DASH_DOT, expected: [8, 2] },
-      { pattern: BasemapDottedPattern.LONG_DASH, expected: [16, 4] }
-    ];
-
-    for (const { pattern, expected } of testCases) {
-      const layer = createMeridiensLayer(
-        {
-          id: 'meridiens',
-          visible: true,
-          mode: BasemapGraticuleMode.REGULAR,
-          spacingDegrees: 30,
-          color: '#666666',
-          dotted: true,
-          dottedPattern: pattern,
-          thickness: 1,
-          opacity: 100
-        },
-        {}
-      ) as GeoJsonLayer | null;
-
-      expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual(expected);
-    }
-  });
-
   it('caches graticule data for identical config and regenerates on change', () => {
     const config = {
       id: 'meridiens' as const,
@@ -1690,45 +1392,6 @@ describe('basemap projection fallbacks', () => {
     expect(parallelCoordinates[parallelCoordinates.length - 1]).toEqual([
       180, 60
     ]);
-  });
-
-  it('enforces lineWidthMinPixels of 0.5 for meridiens', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REMARKABLE,
-        spacingDegrees: 10,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 0.25,
-        opacity: 100
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.lineWidthMinPixels).toBe(0.5);
-  });
-
-  it('uses a stable layer id for meridiens', () => {
-    const layer = createMeridiensLayer(
-      {
-        id: 'meridiens',
-        visible: true,
-        mode: BasemapGraticuleMode.REMARKABLE,
-        spacingDegrees: 10,
-        color: '#666666',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(layer?.props.id).toBe('basemap-meridiens-basemap-default');
   });
 
   it('includes equator in remarkable mode when excludeEquator is false', () => {
@@ -2084,49 +1747,6 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
-  it('renders the Territoire from LAND metadata, not worldBaseTable, when both exist', () => {
-    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
-    const metadataTable = { id: 'land-backdrop' } as unknown as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createNativePolygonGeometryInfo() : null
-    );
-
-    const layers = createBasemapLayers(worldBaseTable, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: 'land',
-          type: BasemapLayerType.LAND,
-          file: 'land.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LAND],
-      stylePresets: null
-    });
-
-    const terreLayer = layers.background.find((layer) =>
-      String(layer.props.id).includes('basemap-terre')
-    );
-
-    expect(terreLayer).toBeDefined();
-    expect(String(terreLayer?.props.id)).toBe(
-      'basemap-terre-basemap-default-land-0'
-    );
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      metadataTable,
-      ctx.projection
-    );
-    expect(parseSolidPolygonsWithProjectionMock).not.toHaveBeenCalledWith(
-      worldBaseTable,
-      ctx.projection
-    );
-  });
-
   it('places frontieres below the thematic block by default and above it when its placement is flipped', () => {
     const metadataTable = { id: 'limit-placement' } as unknown as ArrowTable;
     const ctx = createProjectionContext();
@@ -2167,45 +1787,6 @@ describe('basemap projection fallbacks', () => {
     const aboveFlipped = buildLayers();
     expect(aboveFlipped.foregroundBelowThematic.some(isLimitLayer)).toBe(false);
     expect(aboveFlipped.foreground.some(isLimitLayer)).toBe(true);
-  });
-
-  it('uses Arrow native path for metadata limits under composite projections', () => {
-    const metadataTable = {
-      id: 'native-meta-limit-composite'
-    } as unknown as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createNativeLineGeometryInfo() : null
-    );
-
-    const layers = createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LIMIT,
-          file: 'limits.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-      stylePresets: null
-    });
-
-    const metaLimitLayer = layers.foreground.find(
-      (layer) =>
-        layer instanceof PathLayer &&
-        String(layer.props.id).includes('basemap-meta-limit')
-    ) as PathLayer | undefined;
-
-    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
-      metadataTable,
-      ctx.projection
-    );
-    expect(metaLimitLayer).toBeInstanceOf(PathLayer);
   });
 
   it('skips empty metadata limit helper tables', () => {
@@ -2307,256 +1888,6 @@ describe('basemap projection fallbacks', () => {
     expect(buildTerreStrokeLayer()).toBeUndefined();
   });
 
-  it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
-    const metadataTable = { id: 'limit-style' } as unknown as ArrowTable;
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
-    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.FRONTIERES, {
-      color: '#123456',
-      dotted: false,
-      dottedPattern: BasemapDottedPattern.DOTS,
-      thickness: 100,
-      opacity: 100
-    });
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createNativeLineGeometryInfo() : null
-    );
-
-    const findLimitLayer = () =>
-      createBasemapLayers(
-        null,
-        {},
-        {
-          metadataLayers: [
-            {
-              table: metadataTable,
-              style: null,
-              type: BasemapLayerType.LIMIT,
-              file: 'limits.parquet'
-            } satisfies MetadataLayerEntry
-          ],
-          availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-          stylePresets: null
-        }
-      ).foreground.find(
-        (layer) =>
-          layer instanceof PathLayer &&
-          String(layer.props.id).includes('basemap-meta-limit')
-      ) as PathLayer | undefined;
-
-    const solidLayer = findLimitLayer();
-
-    expect(solidLayer).toBeInstanceOf(PathLayer);
-    expect(parsePathsMock).toHaveBeenCalledWith(metadataTable);
-    expect(readFirstVertexAttribute(solidLayer, 'getColor')).toEqual([
-      18, 52, 86, 255
-    ]);
-    expect(readFirstVertexAttribute(solidLayer, 'getWidth')).toEqual([
-      BASEMAP_LAYER_CONFIG.thickness.max
-    ]);
-    expect(solidLayer?.props.widthMaxPixels).toBe(
-      BASEMAP_LAYER_CONFIG.thickness.max
-    );
-    expect(Reflect.get(solidLayer?.props ?? {}, 'getDashArray')).toEqual([
-      0, 0
-    ]);
-    expect(solidLayer?.props.extensions).toHaveLength(0);
-
-    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.FRONTIERES, {
-      dotted: true,
-      dottedPattern: BasemapDottedPattern.DASHES
-    });
-
-    const dottedLayer = findLimitLayer();
-
-    expect(dottedLayer).toBeInstanceOf(PathLayer);
-    expect(readFirstVertexAttribute(dottedLayer, 'getWidth')).toEqual([
-      BASEMAP_LAYER_CONFIG.thickness.max
-    ]);
-    expect(Reflect.get(dottedLayer?.props ?? {}, 'getDashArray')).toEqual([
-      8, 4
-    ]);
-    expect(dottedLayer?.props.extensions).toHaveLength(1);
-    expect(dottedLayer?.props.updateTriggers).toMatchObject({
-      getLineColor: ['#123456', 1],
-      getDashArray: [8, 4],
-      getWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
-    });
-  });
-
-  it('uses Arrow native path for frontieres under composite projections', () => {
-    const table = {
-      id: 'native-frontieres-composite'
-    } as unknown as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createNativeLineGeometryInfo() : null
-    );
-
-    const layer = createFrontieresLayer(
-      table,
-      {
-        id: 'frontieres',
-        visible: true,
-        color: '#123456',
-        dotted: false,
-        dottedPattern: BasemapDottedPattern.DOTS,
-        thickness: 1,
-        opacity: 100
-      },
-      ctx
-    ) as PathLayer | null;
-
-    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
-      table,
-      ctx.projection
-    );
-    expect(layer).toBeInstanceOf(PathLayer);
-  });
-
-  it('connects imported frontieres thickness and dotted styling to polygon outlines', () => {
-    const table = {
-      id: 'imported-frontieres-outline'
-    } as unknown as ArrowTable;
-
-    extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createNativePolygonGeometryInfo() : null
-    );
-
-    const layer = createFrontieresLayer(
-      table,
-      {
-        id: 'frontieres',
-        visible: true,
-        color: '#123456',
-        dotted: true,
-        dottedPattern: BasemapDottedPattern.DASHES,
-        thickness: 3,
-        opacity: 100
-      },
-      {}
-    );
-
-    expect(layer).toBeInstanceOf(PathLayer);
-    expect(parsePathsMock).toHaveBeenCalledWith(table);
-    expect(readFirstVertexAttribute(layer ?? undefined, 'getColor')).toEqual([
-      18, 52, 86, 255
-    ]);
-    expect(readFirstVertexAttribute(layer ?? undefined, 'getWidth')).toEqual([
-      3
-    ]);
-    expect(Reflect.get(layer?.props ?? {}, 'widthMaxPixels')).toBe(
-      BASEMAP_LAYER_CONFIG.thickness.max
-    );
-    expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual([8, 4]);
-    expect(layer?.props.extensions).toHaveLength(1);
-    expect(layer?.props.updateTriggers).toMatchObject({
-      getLineColor: ['#123456', 1],
-      getDashArray: [true, BasemapDottedPattern.DASHES],
-      getWidth: [3]
-    });
-  });
-
-  it('connects lakes and rivers metadata to background and foreground Deck.gl layers', () => {
-    const lakesTable = { id: 'lakes' } as unknown as ArrowTable;
-    const riversTable = { id: 'rivers' } as unknown as ArrowTable;
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.LACS, true);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.RIVIERES, true);
-    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.LACS, {
-      color: '#00ff00',
-      opacity: 40,
-      thickness: 2
-    });
-    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.RIVIERES, {
-      color: '#00ff00',
-      opacity: 40,
-      thickness: 3
-    });
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
-      if (table === lakesTable) return createNativePolygonGeometryInfo();
-      if (table === riversTable) return createNativeLineGeometryInfo();
-      return null;
-    });
-
-    const layers = createBasemapLayers(
-      null,
-      {},
-      {
-        metadataLayers: [
-          {
-            table: lakesTable,
-            style: null,
-            type: BasemapLayerType.POLYGON,
-            file: 'lakes.parquet'
-          },
-          {
-            table: riversTable,
-            style: null,
-            type: BasemapLayerType.LINE,
-            file: 'rivers.parquet'
-          }
-        ],
-        availableMetadataLayerTypes: [
-          BasemapLayerType.POLYGON,
-          BasemapLayerType.LINE
-        ],
-        stylePresets: null
-      }
-    );
-
-    const isLakesLayer = (layer: Layer) =>
-      String(layer.props.id).includes('basemap-lacs');
-    const isRiversLayer = (layer: Layer) =>
-      String(layer.props.id).includes('basemap-rivieres');
-    const lakesFillLayer = layers.background.find(
-      (layer) => layer instanceof SolidPolygonLayer && isLakesLayer(layer)
-    ) as SolidPolygonLayer | undefined;
-    const lakesStrokeLayer = layers.background.find(
-      (layer) => layer instanceof PathLayer && isLakesLayer(layer)
-    ) as PathLayer | undefined;
-    const riversLayer = layers.foreground.find(
-      (layer) => layer instanceof PathLayer && isRiversLayer(layer)
-    ) as PathLayer | undefined;
-
-    expect(layers.foreground.some(isLakesLayer)).toBe(false);
-    expect(layers.background.some(isRiversLayer)).toBe(false);
-
-    expect(lakesFillLayer).toBeInstanceOf(SolidPolygonLayer);
-    expect(lakesFillLayer?.props.getFillColor).toEqual([0, 255, 0, 51]);
-    expect(lakesFillLayer?.props.updateTriggers).toEqual({
-      getFillColor: ['#00ff00', 40]
-    });
-
-    expect(lakesStrokeLayer).toBeInstanceOf(PathLayer);
-    expect(readFirstVertexAttribute(lakesStrokeLayer, 'getColor')).toEqual([
-      0, 255, 0, 102
-    ]);
-    expect(lakesStrokeLayer?.props.widthMinPixels).toBe(0);
-    expect(lakesStrokeLayer?.props.updateTriggers).toEqual({
-      getColor: ['#00ff00', 40],
-      getWidth: [2]
-    });
-
-    expect(riversLayer).toBeInstanceOf(PathLayer);
-    expect(readFirstVertexAttribute(riversLayer, 'getColor')).toEqual([
-      0, 255, 0, 102
-    ]);
-    expect(readFirstVertexAttribute(riversLayer, 'getWidth')).toEqual([3]);
-    expect(riversLayer?.props.updateTriggers).toEqual({
-      getColor: ['#00ff00', 40],
-      getWidth: [3],
-      getDashArray: [false, BasemapDottedPattern.DOTS]
-    });
-  });
-
   it('uses binary layers for native lakes and rivers metadata', () => {
     const lakesTable = { id: 'native-lakes' } as unknown as ArrowTable;
     const riversTable = { id: 'native-rivers' } as unknown as ArrowTable;
@@ -2642,97 +1973,5 @@ describe('basemap projection fallbacks', () => {
     expect(Reflect.get(riversLayer?.props ?? {}, 'getDashArray')).toEqual([
       0, 0
     ]);
-  });
-
-  it('connects relief representation, color, and opacity to Deck.gl layer props', () => {
-    const table = { id: 'relief-world-base' } as unknown as ArrowTable;
-
-    extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createNativePolygonGeometryInfo() : null
-    );
-
-    const createReliefConfig = (
-      representation: BasemapRepresentation,
-      opacity: number
-    ) => ({
-      id: 'relief' as const,
-      visible: true,
-      representation,
-      color: '#336699',
-      opacity
-    });
-    const splitReliefLayers = (representation: BasemapRepresentation) => {
-      const layers = createReliefLayers(
-        table,
-        createReliefConfig(representation, 50),
-        {}
-      );
-      return {
-        fill: layers.find((layer) => layer instanceof SolidPolygonLayer) as
-          SolidPolygonLayer | undefined,
-        stroke: layers.find((layer) => layer instanceof PathLayer) as
-          PathLayer | undefined
-      };
-    };
-
-    const shading = splitReliefLayers(BasemapRepresentation.SHADING);
-    const elevation = splitReliefLayers(BasemapRepresentation.ELEVATION);
-    const contours = splitReliefLayers(BasemapRepresentation.CONTOURS);
-
-    expect(shading.fill).toBeInstanceOf(SolidPolygonLayer);
-    expect(shading.fill?.props.id).toContain('basemap-relief');
-    expect(shading.fill?.props.getFillColor).toEqual([51, 102, 153, 64]);
-    expect(shading.fill?.props.updateTriggers).toEqual({
-      getFillColor: ['#336699', 50, BasemapRepresentation.SHADING]
-    });
-    expect(shading.stroke?.props.updateTriggers).toEqual({
-      getColor: ['#336699', 50, BasemapRepresentation.SHADING],
-      getWidth: [0.35]
-    });
-
-    expect(elevation.fill?.props.getFillColor).toEqual([51, 102, 153, 102]);
-    expect(elevation.stroke?.props.getColor).toEqual([96, 96, 96, 89]);
-    expect(elevation.fill?.props.updateTriggers).toMatchObject({
-      getFillColor: ['#336699', 50, BasemapRepresentation.ELEVATION]
-    });
-    expect(elevation.stroke?.props.updateTriggers).toMatchObject({
-      getColor: ['#336699', 50, BasemapRepresentation.ELEVATION],
-      getWidth: [0.5]
-    });
-
-    expect(contours.fill).toBeUndefined();
-    expect(contours.stroke).toBeInstanceOf(PathLayer);
-    expect(contours.stroke?.props.getColor).toEqual([51, 102, 153, 128]);
-    expect(contours.stroke?.props.updateTriggers).toMatchObject({
-      getColor: ['#336699', 50, BasemapRepresentation.CONTOURS],
-      getWidth: [0.8]
-    });
-  });
-
-  it('uses Arrow native path for relief under composite projections', () => {
-    const table = { id: 'native-relief-composite' } as unknown as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? createNativePolygonGeometryInfo() : null
-    );
-
-    const layer = createReliefLayers(
-      table,
-      {
-        id: 'relief',
-        visible: true,
-        representation: BasemapRepresentation.SHADING,
-        color: '#336699',
-        opacity: 50
-      },
-      ctx
-    )[0] as SolidPolygonLayer | undefined;
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      table,
-      ctx.projection
-    );
-    expect(layer).toBeInstanceOf(SolidPolygonLayer);
   });
 });

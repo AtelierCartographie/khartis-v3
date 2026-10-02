@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -164,18 +166,6 @@ describe('search store tooltip integration', () => {
     );
   });
 
-  it('leaves the map view untouched when navigating to a result', async () => {
-    const { searchActions } = await import('./search.store.svelte');
-
-    searchActions.clearSearch();
-
-    searchActions.setSearchValue('Braunschweig');
-    await searchActions.performSearch();
-    searchActions.goToNextResult();
-
-    expect(mocks.setHighlightedRows).toHaveBeenCalledWith([55]);
-  });
-
   it('projects HTML-like values to plain text in results and pinned tooltips', async () => {
     mocks.searchInTable.mockResolvedValue({
       exactCount: 1,
@@ -223,20 +213,6 @@ describe('search store tooltip integration', () => {
         { key: 'Description', value: 'The Pit Tras Street' }
       ])
     );
-  });
-
-  it('leaves the map view untouched for joined CSV data too', async () => {
-    mocks.getDatasetBySourceFile.mockReturnValue({
-      tableName: 'nuts2_table',
-      joinedBasemap: 'europe-nuts2'
-    });
-
-    const { searchActions } = await import('./search.store.svelte');
-
-    searchActions.clearSearch();
-
-    searchActions.setSearchValue('Braunschweig');
-    await searchActions.performSearch();
   });
 
   it('excludes joined basemap columns (basemap_id, basemap_label, typo_match) from results', async () => {

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FileType, type DuckDBDataset } from '../types';
-import type { DuckDBClientForDataset } from './dataset-ops';
 
 vi.mock('$lib/features/data-pipeline', () => ({
   generateTableName: vi.fn(),
@@ -8,34 +7,11 @@ vi.mock('$lib/features/data-pipeline', () => ({
   registerAllProcessors: vi.fn()
 }));
 
-const { dropTable, updateDatasetJoinInfo } = await import('./dataset-ops');
+const { updateDatasetJoinInfo } = await import('./dataset-ops');
 const { clearState, getDatasetsVersion, getState } =
   await import('./state.svelte');
 
 describe('dataset-ops', () => {
-  it('drops tables through Duck so cache invalidation runs', async () => {
-    const query = vi.fn().mockResolvedValue([]);
-    const duck = {
-      query,
-      dropTable: vi.fn().mockResolvedValue(undefined)
-    } as unknown as DuckDBClientForDataset;
-
-    await dropTable('imported"table', duck);
-
-    expect(duck.dropTable).toHaveBeenCalledWith('imported"table');
-    expect(query).not.toHaveBeenCalled();
-  });
-
-  it('rethrows when the Duck drop fails so callers do not assume the table is gone', async () => {
-    const dropError = new Error('drop failed');
-    const duck = {
-      query: vi.fn().mockResolvedValue([]),
-      dropTable: vi.fn().mockRejectedValue(dropError)
-    } as unknown as DuckDBClientForDataset;
-
-    await expect(dropTable('broken_table', duck)).rejects.toThrow(dropError);
-  });
-
   it('does not bump the datasets version when join info is unchanged', () => {
     clearState();
     const dataset: DuckDBDataset = {

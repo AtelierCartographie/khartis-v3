@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { Table, vectorFromArray } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
 import { calculateBoundsFromGeoArrow } from './bounds';
