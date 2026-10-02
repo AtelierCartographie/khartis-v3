@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           # Keep in sync with the ids of the check matrix below.
-          CHECKS: lint types unit engine build
+          CHECKS: lint types unit-1 unit-2 engine build
         run: |
           marker=''
           validated=false
@@ -78,9 +78,12 @@ jobs:
           - id: types
             name: Type check
             run: pnpm check
-          - id: unit
-            name: Unit tests
-            run: pnpm test:unit
+          - id: unit-1
+            name: Unit tests (1/2)
+            run: pnpm test:unit --shard=1/2
+          - id: unit-2
+            name: Unit tests (2/2)
+            run: pnpm test:unit --shard=2/2
           - id: engine
             name: Engine tests
             run: pnpm test:pipeline && pnpm test:duckdb

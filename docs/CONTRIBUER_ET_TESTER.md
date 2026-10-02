@@ -121,15 +121,15 @@ force le mode MapLibre.
 ## Intégration continue
 
 La validation est décrite une seule fois, dans `validate.yml`, et appelée par
-les deux workflows. Elle lance cinq contrôles en parallèle :
+les deux workflows. Elle lance six contrôles en parallèle :
 
-| Contrôle     | Commande                                         |
-| ------------ | ------------------------------------------------ |
-| Lint         | compilation Paraglide, `pnpm lint`               |
-| Type check   | `pnpm check`                                     |
-| Unit tests   | `pnpm test:unit`                                 |
-| Engine tests | `pnpm test:pipeline`, `pnpm test:duckdb`         |
-| Build        | `pnpm build`, sans précompression Brotli et gzip |
+| Contrôle     | Commande                                            |
+| ------------ | --------------------------------------------------- |
+| Lint         | compilation Paraglide, `pnpm lint`                  |
+| Type check   | `pnpm check`                                        |
+| Unit tests   | `pnpm test:unit`, réparti sur deux jobs (`--shard`) |
+| Engine tests | `pnpm test:pipeline`, `pnpm test:duckdb`            |
+| Build        | `pnpm build`, sans précompression Brotli et gzip    |
 
 - `pr-validation.yml` l'appelle sur les pull requests non brouillons vers
   `staging` et `main`, et sur les files de fusion. Son job `Quality Checks` est
@@ -142,7 +142,7 @@ les deux workflows. Elle lance cinq contrôles en parallèle :
 fusionne, la pull request de promotion vers `main` et le push sur `main`
 portent en général le même arbre git. Chaque contrôle réussi dépose un artefact
 `validated-tree-<sha de l'arbre>-<contrôle>` (conservé 30 jours) ; un run qui
-les trouve tous les cinq saute les contrôles. Dès que l'arbre diffère, par
+les trouve tous saute les contrôles. Dès que l'arbre diffère, par
 exemple quand `staging` a avancé entre la validation et la fusion, la
 validation complète repart. Un artefact venu d'un fork n'est jamais pris en
 compte.

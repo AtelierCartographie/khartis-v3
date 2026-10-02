@@ -12,7 +12,9 @@ runs:
       uses: actions/setup-node@v7
       with:
         node-version-file: .nvmrc
-        cache: pnpm
+        # Downloading the locked dependencies takes as long as restoring a store cache,
+        # and a cache has to be saved again after every lockfile change.
+        package-manager-cache: false
 
     - name: Install dependencies
       shell: bash
