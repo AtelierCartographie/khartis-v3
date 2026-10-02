@@ -18,9 +18,16 @@ paths:
 `scripts/deploy-local.mjs` (through `deploy-local.sh`) deploys the latest release tag to PPRD or PROD over SFTP. `pnpm deploy:pprd` takes the latest `pprd` prerelease, `pnpm deploy:prod` the latest stable `v*.*.*` tag. Its behavior is covered by `tests/pipeline/deploy-local.test.ts`.
 
 - The safeguards are the point of the script, so a change keeps all of them: the tag retyped by hand for PROD (even with `--yes`), the green release-workflow gate, SSH host-key verification, the atomic remote swap, the public-route validation after the swap, and the rollback.
-- The release gate looks up the successful run of the `release.yml` workflow for the tag commit (`RELEASE_WORKFLOW` in the script). Renaming, splitting or restructuring that workflow breaks the gate, so both change together.
+- The release gate looks up the successful run of the `release.yml` workflow for the tag commit (`RELEASE_WORKFLOW` in the script). That run succeeds only when the tree was validated, in this run or an earlier one, and the release was published. Renaming the workflow file or moving the release out of it breaks the gate, so both change together.
 - `KHARTIS_PUBLIC_URL_<TARGET>` is the source of truth for the SvelteKit base path of a target. A static build has one canonical public route; infrastructure aliases redirect to it.
 - A maintainer runs the real deployment. The `:dry-run` variants validate the release, the CI gate and the build without opening an SFTP session.
+
+## CI workflows
+
+- `validate.yml` is the single definition of the checks: lint and types, tests, build, as three parallel jobs. `pr-validation.yml` and `release.yml` call it.
+- A git tree is validated once. A successful run uploads a `validated-tree-<tree sha>` artifact, and later runs on the same tree (the merge push, the promotion pull request, the push to `main`) find it and skip the checks. The lookup trusts only artifacts produced by this repository and falls back to a full validation on any failure: keep both properties.
+- The job named `Quality Checks` in `pr-validation.yml` is the status check the branch rulesets require.
+- The CI build sets `KHARTIS_SKIP_PRECOMPRESS=true` because its output is never deployed. A deployed build keeps the Brotli and gzip sidecars, which `deploy-local.mjs` requires.
 
 ## Secrets
 

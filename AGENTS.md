@@ -21,7 +21,7 @@ pnpm through Corepack, Node `>=22 <25` (`.nvmrc`). If pnpm stops with `ERR_PNPM_
 | `pnpm dev`                               | dev server on `http://localhost:5176`                                      |
 | `pnpm check`                             | compile Paraglide, then svelte-check                                       |
 | `pnpm lint`, `pnpm format`               | Prettier check and ESLint, Prettier write                                  |
-| `pnpm test:unit`                         | `client` project: jsdom, `src/**/*.svelte.{test,spec}.ts`                  |
+| `pnpm test:unit`                         | `client` project: `src/**/*.svelte.{test,spec}.ts`, Node, jsdom on request |
 | `pnpm test:pipeline`, `pnpm test:duckdb` | `server` project: Node and real DuckDB, `tests/pipeline/`, `tests/duckdb/` |
 | `pnpm build`                             | static production build into `build/`                                      |
 
@@ -29,7 +29,7 @@ Single test file: `pnpm exec vitest run --project client <path>`, or `--project 
 
 ## Validating a change
 
-Start with the narrowest check and widen it when the change crosses a boundary. CI runs lint, check, the three test suites and the build on every pull request, so a full local run is for large changes.
+Start with the narrowest check and widen it when the change crosses a boundary. CI runs lint, check, the three test suites and the build on every pull request, and validates a given source tree only once, so a full local run is for large changes.
 
 | Change                                          | Check                                      |
 | ----------------------------------------------- | ------------------------------------------ |
@@ -42,7 +42,7 @@ Start with the narrowest check and widen it when the change crosses a boundary. 
 - Run heavy commands one at a time. `pnpm check`, Vitest, the build and a dev server compete for memory, and the client suite can time out when they overlap.
 - Client tests mock DuckDB, so they prove neither the DuckDB worker, nor WebGL rendering, nor an IndexedDB restore. Those need the running app: follow `.claude/skills/browser-check/SKILL.md`.
 - There is no end-to-end suite. Browser verification is done live, not committed as Playwright tests.
-- A test earns its place when it guards an observable behavior or a domain invariant (class breaks, join grading, reprojection, suggestion scoring, parsing boundaries). Put it in the matching Vitest project.
+- The suite is small on purpose. A test earns its place when it guards a domain invariant (class breaks, join grading, reprojection, suggestion scoring, parsing boundaries), real-engine SQL, the project-format contract or a release gate. Component renders, wiring between mocked modules and constants are not tested, and a test is written first only when the expected output can be stated up front. `.claude/rules/testing.md` holds the criteria.
 
 ## Where things are
 
@@ -86,8 +86,9 @@ Each file in `.claude/rules/` holds the traps and contracts of one area. Claude 
 | Projections and CRS                                             | `projections.md`           |
 | Stores, persistence, `.kh` import and export                    | `state-persistence.md`     |
 | Svelte 5 with Carbon components                                 | `svelte-carbon-ui.md`      |
-| Deployment helper, analytics consent, secrets                   | `deployment.md`            |
+| Deployment helper, CI workflows, analytics consent, secrets     | `deployment.md`            |
 | Dependency upgrades, patched packages, DuckDB extensions        | `dependencies.md`          |
+| What to test, when to test first, Vitest projects               | `testing.md`               |
 
 ## Git and delivery
 
