@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    formatBasemapValidity,
+    getBasemapValidYears,
+    isBasemapValidForYear
+  } from '$lib/features/map/utils/basemap-validity.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -60,7 +65,7 @@
   let searchSelectedId = $state<string | undefined>(undefined);
 
   const availableYears = $derived.by(() => {
-    const years = new Set(allBasemaps.map((b) => b.date));
+    const years = new Set(allBasemaps.flatMap((b) => getBasemapValidYears(b)));
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   });
 
@@ -87,7 +92,7 @@
     }
 
     if (selectedYear !== 'all') {
-      results = results.filter((b) => b.date === selectedYear);
+      results = results.filter((b) => isBasemapValidForYear(b, selectedYear));
     }
 
     return results;
@@ -108,7 +113,9 @@
   const yearCounts = $derived.by(() => {
     const counts: Record<string, number> = {};
     allBasemaps.forEach((b) => {
-      counts[b.date] = (counts[b.date] || 0) + 1;
+      for (const year of getBasemapValidYears(b)) {
+        counts[year] = (counts[year] || 0) + 1;
+      }
     });
     return counts;
   });
@@ -131,9 +138,9 @@
           ? m.basemap_search_item_with_subtitle({
               title,
               subtitle,
-              date: b.date
+              date: formatBasemapValidity(b)
             })
-          : m.basemap_search_item({ title, date: b.date }),
+          : m.basemap_search_item({ title, date: formatBasemapValidity(b) }),
         basemap: b
       };
     });
