@@ -96,7 +96,6 @@ export {
   getLinePrimitive,
   getLineThicknessClassification,
   getPolygonPrimitive,
-  getPrimitive,
   getPrimitiveCategoryColumn,
   getPrimitiveClassification,
   getPrimitiveSizeColumn,

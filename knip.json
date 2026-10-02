@@ -10,7 +10,6 @@
   ],
   "project": ["src/**/*.{ts,js,svelte,css,scss}"],
   "ignore": [
-    "src/lib/features/data-pipeline/__tests__/test-file-loader.ts",
     "src/lib/paraglide/**/*",
     "src/lib/features/create-project/index.ts",
     "src/lib/features/data-tab/index.ts",
@@ -19,8 +18,7 @@
     "src/lib/features/side-nav/index.ts",
     "src/lib/features/step-toolbar/index.ts",
     "src/lib/features/step-toolbar/tools/search/index.ts",
-    "src/lib/features/visualization-tab/index.ts",
-    "src/lib/features/map/layers/density-layer-factory.ts"
+    "src/lib/features/visualization-tab/index.ts"
   ],
   "ignoreDependencies": [
     "@fontsource/cabin",

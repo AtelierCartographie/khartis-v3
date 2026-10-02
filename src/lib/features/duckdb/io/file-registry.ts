@@ -1,7 +1,6 @@
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { DUCK_CONST } from '../constants';
 import type { FileWithId, RegisterFilesOptions } from '../types';
 
 const DBF_HEADER_LENGTH_OFFSET = 8;
@@ -26,20 +25,6 @@ function normalizeName(str: string): string {
   }
 
   return normalized;
-}
-
-export function extractFilename(url: string): string {
-  return url.split('/').pop() || '';
-}
-
-export function getFileType(
-  filename: string
-): 'tabular' | 'geofile' | 'parquet' {
-  const basename = filename.split(/[?#]/, 1)[0];
-  if (DUCK_CONST.REGEX.TABULAR.test(basename)) return DUCK_CONST.TYPE.TABULAR;
-  if (DUCK_CONST.REGEX.GEO.test(basename)) return DUCK_CONST.TYPE.GEOFILE;
-  if (DUCK_CONST.REGEX.PARQUET.test(basename)) return DUCK_CONST.TYPE.PARQUET;
-  return DUCK_CONST.TYPE.TABULAR;
 }
 
 export function generateUniqueTableName(

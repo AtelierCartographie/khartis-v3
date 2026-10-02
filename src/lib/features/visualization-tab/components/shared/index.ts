@@ -9,4 +9,3 @@ export { default as InfoPopover } from '$lib/features/commons/components/viz-con
 export { default as StrokeSection } from './stroke-section.svelte';
 export { default as VizFilterButton } from './viz-filter-button.svelte';
 export { default as VizFilterPanel } from './viz-filter-panel.svelte';
-export { default as FacetsVariablePicker } from './facets-variable-picker.svelte';

@@ -489,81 +489,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     ]);
   }
 
-  async function processSingleDataset(
-    uploadedFile: UploadedFile,
-    dataset: DatasetResult & {
-      tableName: string;
-      columns: Array<{
-        name: string;
-        type: unknown;
-        stats: {
-          count?: number;
-          nulls?: number;
-          uniques?: number;
-          min?: unknown;
-          max?: unknown;
-          mean?: number;
-        };
-      }>;
-    },
-    fileContent: ArrayBuffer,
-    duck: typeof Duck
-  ): Promise<void> {
-    const { tableName, columns, rowCount } = dataset as {
-      tableName: string;
-      columns: Array<{
-        name: string;
-        type: string;
-        stats: {
-          count?: number;
-          nulls?: number;
-          uniques?: number;
-          min?: unknown;
-          max?: unknown;
-          mean?: number;
-        };
-      }>;
-      rowCount: number;
-    };
-    const headers = columns.map((col) => col.name);
-
-    callbacks.onProgress(uploadedFile.id, 50);
-
-    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
-
-    const sampleData = (await duck.query(
-      `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const tabularData = convertRowsToTabular(sampleData);
-
-    callbacks.onProgress(uploadedFile.id, 80);
-
-    callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: tabularData,
-      rowCount,
-      columnCount: countUserColumns(columns, dataset.geometry),
-      statistics,
-      content: fileContent,
-      duckdbTableName: tableName,
-      ...(dataset.geometry ? { geometry: dataset.geometry } : {})
-    });
-
-    const dataMatrix = createDataMatrix(sampleData, headers);
-
-    const deepAnalysis = withGeometryDetection(
-      await DeepDataValidator.analyzeDataContent(headers, dataMatrix, {
-        sampleSize: Math.min(100, dataMatrix.length)
-      }),
-      dataset.geometry
-    );
-
-    callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-    callbacks.onProgress(uploadedFile.id, 100);
-    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-  }
-
   async function processMultipleDatasets(
     uploadedFile: UploadedFile,
     zipResult: ProcessFileResult,
@@ -695,7 +620,13 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       return;
     }
 
-    await processSingleDataset(uploadedFile, result, fileContent, Duck);
+    await updateFileFromDuckDBDataset(
+      callbacks,
+      uploadedFile,
+      result,
+      fileContent,
+      Duck
+    );
   }
 
   return { process };

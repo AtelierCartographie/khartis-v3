@@ -23,10 +23,7 @@ import { createTextOverlayLayers } from './text-layer-factory';
 import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 
 export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors';
-export { resolveTextAnchor } from './text-layer-data.utils';
-export { resolveStyleColor } from './layer-color.utils';
 export { resolveEffectiveCategoryColorMap } from './layer-color.utils';
-export { normalizeOpacity } from './layer-style.utils';
 export type { TextLayerDatum } from './text-layer-data.utils';
 
 export function createPointLayers(

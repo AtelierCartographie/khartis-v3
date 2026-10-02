@@ -23,15 +23,3 @@ export interface GeoJSONFeatureCollection {
 
 export type ParsedData =
   TabularData | GeoJSONFeature | GeoJSONFeatureCollection;
-
-export function isGeoJSONFeatureCollection(
-  data: ParsedData
-): data is GeoJSONFeatureCollection {
-  return (
-    !Array.isArray(data) &&
-    typeof data === 'object' &&
-    data !== null &&
-    'type' in data &&
-    data.type === 'FeatureCollection'
-  );
-}

@@ -1,11 +1,21 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, vi } from 'vitest';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import {
-  exportGeoPackage,
-  exportGeoPackageLayers
+  exportGeoPackageLayers,
+  type GeoPackageExportOptions,
+  type GeoPackageFeatureRow
 } from './geopackage-export.utils';
 import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
+
+function exportSingleLayer(
+  features: GeoPackageFeatureRow[],
+  options: GeoPackageExportOptions
+): Promise<Blob> {
+  return exportGeoPackageLayers([{ ...options, features }]);
+}
 
 function createPointWkb(x: number, y: number): Uint8Array {
   const wkb = new Uint8Array(21);
@@ -50,7 +60,7 @@ async function selectGeoPackageRows<T extends Record<string, unknown>>(
 
 describe('GeoPackage export utils', () => {
   it('creates a readable GeoPackage feature layer from WKB rows', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: {
@@ -87,7 +97,7 @@ describe('GeoPackage export utils', () => {
   });
 
   it('keeps safe DuckDB bigint properties as GeoPackage integers', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: {
@@ -138,7 +148,7 @@ describe('GeoPackage export utils', () => {
   });
 
   it('keeps user properties that collide with GeoPackage fid and geom columns', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: {
@@ -171,7 +181,7 @@ describe('GeoPackage export utils', () => {
   });
 
   it('declares a generic geometry type when one layer contains mixed WKB types', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: { name: 'Point' },
@@ -265,7 +275,7 @@ describe('GeoPackage export utils', () => {
   });
 
   it('writes known non-WGS84 EPSG definitions as projection WKT', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: { name: 'Lambert point' },
@@ -296,7 +306,7 @@ describe('GeoPackage export utils', () => {
   });
 
   it('warns when browser GeoPackage fallback cannot reproject coordinates', async () => {
-    const blob = await exportGeoPackage(
+    const blob = await exportSingleLayer(
       [
         {
           properties: { name: 'Unknown CRS point' },

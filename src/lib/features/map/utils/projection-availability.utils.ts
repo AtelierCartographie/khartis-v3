@@ -1,8 +1,4 @@
 import {
-  MAP_PROJECTION_TYPE,
-  type MapProjectionTypeValue
-} from '$lib/features/commons/constants';
-import {
   BasemapStyle,
   getBasemapViewportPreset,
   getBasemapZone,
@@ -50,21 +46,6 @@ export interface ProjectionSuggestionBasemapBoundsInput {
   currentBasemapBbox?: [number, number, number, number] | null;
   osmBasemapBbox?: [number, number, number, number] | null;
 }
-
-export const CDC_PRIMARY_PROJECTION_IDS = [
-  'mercator',
-  'natural-earth',
-  'equirectangular',
-  'orthographic',
-  'albers',
-  'lambert-conformal',
-  'robinson',
-  'winkel-tripel',
-  'aitoff',
-  'mollweide',
-  'stereographic',
-  'azimuthal-equal-area'
-] as const;
 
 const MAPLIBRE_GLOBE_PROJECTION_IDS = new Set(['mercator', 'orthographic']);
 const FRANCE_COMPOSITE_PROJECTION_ID = 'composite:FRANCE_DOM_TOM';
@@ -176,34 +157,6 @@ function isDeckProjectionCompatibleWithContext(
   }
 
   return isCompositeCompatibleWithContext(presetId, context);
-}
-
-export function isProjectionAvailable(
-  projectionId: string,
-  context: ProjectionAvailabilityContext
-): boolean {
-  return getAvailableProjectionIds(context, [projectionId]).length > 0;
-}
-
-export function resolveDisplayedProjectionId(params: {
-  context: ProjectionAvailabilityContext;
-  selectedProjectionId: string;
-  mapProjection: MapProjectionTypeValue;
-}): string {
-  const { context, selectedProjectionId, mapProjection } = params;
-
-  if (isProjectionAvailable(selectedProjectionId, context)) {
-    return selectedProjectionId;
-  }
-
-  if (
-    mapProjection === MAP_PROJECTION_TYPE.GLOBE &&
-    isProjectionAvailable('orthographic', context)
-  ) {
-    return 'orthographic';
-  }
-
-  return 'mercator';
 }
 
 export function resolveProjectionSuggestionBoundsFromBasemap(

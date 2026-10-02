@@ -4,10 +4,7 @@ import {
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import type {
-  BasemapLayer,
-  BasemapMetadata
-} from '$lib/features/map/types/basemap.types';
+import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import {
   PrimitiveFilterType,
   type PrimitiveFilter
@@ -169,14 +166,6 @@ export function mapMetadataLayerTypeToBasemapLayerId(
     default:
       return null;
   }
-}
-
-/** The aux-store key a metadata layer is filed under (matches the panel). */
-export function resolveMetadataLayerKey(
-  layer: Pick<BasemapLayer, 'file' | 'type'>,
-  metadataFile: string
-): string {
-  return layer.file ?? `${metadataFile}:${layer.type}`;
 }
 
 /**
