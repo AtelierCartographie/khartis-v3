@@ -1,3 +1,4 @@
+import { getBasemapLatestValidYear } from '../utils/basemap-validity.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline';
 import type { GPSBounds } from '$lib/features/duckdb';
@@ -165,9 +166,10 @@ function getBBoxArea(bbox: [number, number, number, number]): number {
   return width * height;
 }
 
+// Most recent year the basemap is valid for: end of its validity period when
+// declared (regions valid 2017-2026 rank with the 2026 vintages), else `date`.
 function getBasemapYearValue(basemap: BasemapMetadata): number {
-  const parsedYear = Number.parseInt(basemap.date, 10);
-  return Number.isNaN(parsedYear) ? Number.NEGATIVE_INFINITY : parsedYear;
+  return getBasemapLatestValidYear(basemap) ?? Number.NEGATIVE_INFINITY;
 }
 
 function getGPSAutoSelectionFamilyRank(basemap: BasemapMetadata): number {
@@ -446,8 +448,8 @@ export function calculateGeoColumnBasemapMatchScore(
   }
 
   const currentYear = new Date().getFullYear();
-  const basemapYear = parseInt(basemap.date);
-  if (!isNaN(basemapYear)) {
+  const basemapYear = getBasemapLatestValidYear(basemap);
+  if (basemapYear !== null) {
     const yearDiff = Math.abs(currentYear - basemapYear);
     if (yearDiff <= 2) {
       score += 20;
