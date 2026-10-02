@@ -53,5 +53,5 @@ Table names, column names and values almost always come from user files (`saniti
 
 ## Tests
 
-- Server tests (`tests/pipeline/**`, `tests/duckdb/**`) run a real DuckDB through `@duckdb/node-api` (`tests/pipeline/duckdb-node-helper.ts`).
-- Client tests mock `executeQuery` and file I/O with `vi.hoisted()`, and assert on the SQL string that was built, not on a live engine.
+- SQL, macros and readers are proven in `tests/duckdb/` against a real DuckDB through `@duckdb/node-api` (`tests/pipeline/duckdb-node-helper.ts`): run the statement and assert on the rows.
+- A test that mocks `executeQuery` and asserts on the SQL string mirrors the implementation. Keep one only when no real-engine test can reach the behavior. `testing.md` holds the full criteria.
