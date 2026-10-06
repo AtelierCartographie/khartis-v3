@@ -181,6 +181,35 @@ describe('simplify_topology_normalized macro', () => {
     );
     expect(Number(rows[0].cnt)).toBe(2);
   });
+
+  it('should hand each geometry back to its own _gid within linear memory', async () => {
+    // 3 000 cells, with _gid neither dense nor in insertion order. Carrying
+    // every _gid on every dumped part costs n² memory and overflows the limit.
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE large_grid AS
+       SELECT (3000 - i) * 7 AS _gid,
+         ST_MakeEnvelope(i % 60, i // 60, i % 60 + 1, i // 60 + 1) AS geom
+       FROM range(3000) t(i)`
+    );
+    await run(db, "SET memory_limit = '64MB'");
+    try {
+      const rows = await query(
+        db,
+        `WITH simplified AS (FROM simplify_topology_normalized('large_grid', 0.0))
+         SELECT
+           COUNT(*) AS cnt,
+           COUNT(*) FILTER (WHERE NOT ST_Equals(s.geom, g.geom)) AS moved
+         FROM simplified s
+         JOIN large_grid g USING (_gid)`
+      );
+      expect(Number(rows[0].cnt)).toBe(3000);
+      expect(Number(rows[0].moved)).toBe(0);
+    } finally {
+      await run(db, 'RESET memory_limit');
+      await run(db, 'DROP TABLE large_grid');
+    }
+  });
 });
 
 describe('prune_triangles macro', () => {
