@@ -15,16 +15,21 @@ const {
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
+  findUnchangedLiveFiles,
   findUnchangedReleaseFiles,
+  findUnchangedStaticFiles,
+  parseGitStaticTree,
   parseReleaseFileManifest,
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
+  publishNewAssetsBeforeSwap,
   reportPublicInfrastructurePreflight,
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
   reuseUnchangedReleaseFiles,
+  selectPropagationSample,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   verifyPublicInfrastructure,
@@ -1731,5 +1736,257 @@ describe('local deployment unchanged file reuse', () => {
     ).resolves.toEqual({ copiedFiles: 1, previousFiles: 1 });
     expect(linked).toEqual([`${uploadRemoteDir}/${asset}`]);
     expect(fake.rcopy).not.toHaveBeenCalled();
+  });
+});
+
+describe('local deployment without a live file manifest', () => {
+  const liveDir = '/srv/html/prod';
+  const hashOf = (character: string) => character.repeat(64);
+
+  it('should read the static blobs listed by git ls-tree', () => {
+    const blobs = parseGitStaticTree(
+      [
+        `100644 blob ${'a'.repeat(40)}\tstatic/basemaps/world.parquet`,
+        `100644 blob ${'b'.repeat(40)}\tstatic/favicon.ico`,
+        `040000 tree ${'c'.repeat(40)}\tstatic/basemaps`,
+        `100644 blob ${'d'.repeat(40)}\tsrc/app.html`
+      ].join('\n')
+    );
+
+    expect([...blobs]).toEqual([
+      ['basemaps/world.parquet', 'a'.repeat(40)],
+      ['favicon.ico', 'b'.repeat(40)]
+    ]);
+  });
+
+  it('should keep only static files whose blob did not change between the two tags', async () => {
+    const trees: Record<string, Map<string, string>> = {
+      v1: new Map([
+        ['basemaps/world.parquet', 'blob-1'],
+        ['basemaps/old.parquet', 'blob-2'],
+        ['index.html', 'blob-3']
+      ]),
+      v2: new Map([
+        ['basemaps/world.parquet', 'blob-1'],
+        ['basemaps/old.parquet', 'blob-changed'],
+        ['index.html', 'blob-3']
+      ])
+    };
+
+    await expect(
+      findUnchangedStaticFiles('v1', 'v2', async (ref: string) => trees[ref])
+    ).resolves.toEqual(['basemaps/world.parquet']);
+    await expect(
+      findUnchangedStaticFiles('v1', 'v2', async () => {
+        throw new Error('unknown revision');
+      })
+    ).resolves.toEqual([]);
+  });
+
+  it('should combine hashed assets and unchanged static files with their sidecars', async () => {
+    const { client } = createFakeSftp({
+      [`${liveDir}/.khartis-release-assets.json`]: JSON.stringify({
+        formatVersion: 1,
+        assets: [
+          '_app/immutable/chunks/shared.A1.js',
+          '_app/immutable/chunks/old.B2.js'
+        ]
+      }),
+      [`${liveDir}/_app/version.json`]: JSON.stringify({ version: 'v1.22.0' })
+    });
+    const releaseFiles = new Map([
+      ['_app/immutable/chunks/shared.A1.js', hashOf('a')],
+      ['_app/immutable/chunks/new.C3.js', hashOf('b')],
+      ['duckdb-extensions/spatial.wasm', hashOf('c')],
+      ['duckdb-extensions/spatial.wasm.gz', hashOf('d')],
+      ['basemaps/changed.parquet', hashOf('e')],
+      ['index.html', hashOf('f')]
+    ]);
+    const readTree = vi.fn(async (ref: string) =>
+      ref === 'v1.22.0'
+        ? new Map([
+            ['duckdb-extensions/spatial.wasm', 'same'],
+            ['basemaps/changed.parquet', 'before']
+          ])
+        : new Map([
+            ['duckdb-extensions/spatial.wasm', 'same'],
+            ['basemaps/changed.parquet', 'after']
+          ])
+    );
+
+    const unchanged = await findUnchangedLiveFiles(client, {
+      liveDir,
+      releaseCommit: 'f'.repeat(40),
+      releaseFiles,
+      readTree
+    });
+
+    expect([...unchanged].sort()).toEqual([
+      '_app/immutable/chunks/shared.A1.js',
+      'duckdb-extensions/spatial.wasm',
+      'duckdb-extensions/spatial.wasm.gz'
+    ]);
+    expect(readTree).toHaveBeenCalledWith('f'.repeat(40));
+  });
+
+  it('should trust only the file manifest when the live release has one', async () => {
+    const { client } = createFakeSftp({
+      [`${liveDir}/.khartis-release-files.json`]: JSON.stringify({
+        formatVersion: 1,
+        files: { 'index.html': hashOf('a') }
+      }),
+      [`${liveDir}/.khartis-release-assets.json`]: JSON.stringify({
+        formatVersion: 1,
+        assets: ['_app/immutable/chunks/shared.A1.js']
+      })
+    });
+    const readTree = vi.fn();
+
+    const unchanged = await findUnchangedLiveFiles(client, {
+      liveDir,
+      releaseCommit: 'f'.repeat(40),
+      releaseFiles: new Map([
+        ['index.html', hashOf('a')],
+        ['_app/immutable/chunks/shared.A1.js', hashOf('b')]
+      ]),
+      readTree
+    });
+
+    expect([...unchanged]).toEqual(['index.html']);
+    expect(readTree).not.toHaveBeenCalled();
+  });
+});
+
+describe('local deployment new asset publication before the swap', () => {
+  const liveDir = '/srv/html/prod';
+  const uploadRemoteDir = '/srv/html/prod.upload-new';
+  const deployment = resolveDeploymentPublicUrl(
+    'https://example.org/cartographie/khartis/',
+    'KHARTIS_PUBLIC_URL_TEST'
+  );
+  const liveManifest = {
+    [`${liveDir}/.khartis-release-assets.json`]: JSON.stringify({
+      formatVersion: 1,
+      assets: ['_app/immutable/chunks/shared.A1.js']
+    })
+  };
+  const releaseAssetPaths = [
+    '_app/immutable/chunks/shared.A1.js',
+    '_app/immutable/entry/start.N1.js',
+    '_app/immutable/entry/start.N1.js.br'
+  ];
+
+  function withHardLinks(client: Record<string, unknown>) {
+    const linked: string[] = [];
+    return {
+      linked,
+      client: {
+        ...client,
+        sftp: {
+          ext_openssh_hardlink: (
+            _sourcePath: string,
+            destinationPath: string,
+            callback: (error: Error | null) => void
+          ) => {
+            linked.push(destinationPath);
+            callback(null);
+          }
+        }
+      }
+    };
+  }
+
+  it('should prefer the entry scripts and leave compressed sidecars out of the sample', () => {
+    expect(
+      selectPropagationSample([
+        '_app/immutable/chunks/a.A1.js',
+        '_app/immutable/chunks/a.A1.js.br',
+        '_app/immutable/entry/app.B2.js',
+        '_app/immutable/entry/start.C3.js'
+      ])
+    ).toEqual([
+      '_app/immutable/entry/app.B2.js',
+      '_app/immutable/entry/start.C3.js',
+      '_app/immutable/chunks/a.A1.js'
+    ]);
+  });
+
+  it('should link only the new assets next to the live release and wait until they are served', async () => {
+    const { client: fake } = createFakeSftp(liveManifest);
+    const { client, linked } = withHardLinks(fake);
+    let calls = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls += 1;
+      return createResponse(url, {
+        body: 'console.log(1)',
+        contentType: 'text/javascript',
+        status: calls === 1 ? 404 : 200
+      });
+    });
+
+    await expect(
+      publishNewAssetsBeforeSwap(client, {
+        backendRouting: null,
+        delaysMs: [0],
+        deployment,
+        fetchImpl,
+        liveDir,
+        releaseAssetPaths,
+        uploadRemoteDir
+      })
+    ).resolves.toEqual({ stagedFiles: 2 });
+    expect(linked.sort()).toEqual([
+      `${liveDir}/_app/immutable/entry/start.N1.js`,
+      `${liveDir}/_app/immutable/entry/start.N1.js.br`
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[1][0])).toMatch(
+      /^https:\/\/example\.org\/cartographie\/khartis\/_app\/immutable\/entry\/start\.N1\.js\?khartis-deploy-check=/
+    );
+  });
+
+  it('should refuse to go on when a backend never serves the new assets', async () => {
+    const { client: fake } = createFakeSftp(liveManifest);
+    const { client } = withHardLinks(fake);
+    const routingCookies: (string | null)[] = [];
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      routingCookies.push(new Headers(init.headers).get('cookie'));
+      return createResponse(url, { status: 404, contentType: 'text/html' });
+    });
+
+    await expect(
+      publishNewAssetsBeforeSwap(client, {
+        backendRouting: {
+          backendHeaderName: null,
+          backendValues: ['web1', 'web2'],
+          cookieName: 'SERVERID'
+        },
+        delaysMs: [0],
+        deployment,
+        fetchImpl,
+        liveDir,
+        releaseAssetPaths,
+        uploadRemoteDir
+      })
+    ).rejects.toThrow('The live release was not swapped');
+    expect(routingCookies).toContain('SERVERID=web2');
+  });
+
+  it('should fall back to publishing with the swap when the server cannot link', async () => {
+    const { client } = createFakeSftp(liveManifest);
+    const fetchImpl = vi.fn();
+
+    await expect(
+      publishNewAssetsBeforeSwap(client, {
+        backendRouting: null,
+        delaysMs: [0],
+        deployment,
+        fetchImpl,
+        liveDir,
+        releaseAssetPaths,
+        uploadRemoteDir
+      })
+    ).resolves.toEqual({ stagedFiles: 0 });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

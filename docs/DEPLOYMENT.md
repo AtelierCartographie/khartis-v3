@@ -56,30 +56,81 @@ les détaille) :
 
 ## Transfert et publication
 
-Hors `dry-run`, le script vérifie l'empreinte SSH de l'hôte, dépose le build
-dans un répertoire temporaire, puis le met en place par deux renommages
-rapides (actuel → précédent, temporaire → actuel). Il conserve les assets
-immuables de la release précédente encore nécessaires, puis supprime l'ancienne
-arborescence.
+Hors `dry-run`, le script vérifie l'empreinte SSH de l'hôte, prend un verrou
+sur la cible, puis enchaîne :
 
-Seuls les fichiers modifiés sont transférés. Chaque build embarque un
-manifeste `.khartis-release-files.json` (chemin et empreinte SHA-256 de chaque
-fichier) ; au déploiement suivant, les fichiers dont l'empreinte n'a pas changé
-sont repris de la version en ligne par lien physique côté serveur
-(extension SFTP `hardlink@openssh.com`), sans transiter par le poste. Les
-assets conservés de la release précédente sont repris de la même façon. Si le
-serveur refuse les liens, ou si la version en ligne n'a pas de manifeste
-(premier déploiement après ce changement), le script renvoie les fichiers
-comme avant : c'est plus long, jamais bloquant.
+1. **Dépôt dans un répertoire temporaire.** Seuls les fichiers modifiés sont
+   envoyés. Chaque build embarque un manifeste `.khartis-release-files.json`
+   (chemin et empreinte SHA-256 de chaque fichier) ; les fichiers dont
+   l'empreinte n'a pas changé sont repris de la version en ligne par lien
+   physique côté serveur (extension SFTP `hardlink@openssh.com`), sans
+   transiter par le poste. Si la version en ligne n'a pas encore ce manifeste,
+   le script reconnaît quand même les assets à nom haché (leur nom change avec
+   leur contenu) et les fichiers de `static/` dont le blob git est identique
+   entre le tag en ligne et le tag déployé.
+2. **Conservation des assets immuables de la version précédente**, repris par
+   lien de la même façon : un onglet resté sur l'ancienne version continue de
+   charger ses chunks.
+3. **Publication des nouveaux assets immuables à côté de la version en
+   ligne**, puis attente qu'ils soient servis par chaque backend de routage
+   déclaré. Ce sont des fichiers à nom haché que rien ne référence encore : la
+   version en ligne n'en est pas affectée.
+4. **Bascule** par deux renommages rapides (actuel → précédent, temporaire →
+   actuel).
+5. **Validation de la route publique** sur chaque backend, puis suppression de
+   l'ancienne arborescence par lots en parallèle.
 
-Ordre de grandeur mesuré sur la PPRD avant ce mécanisme : 34 min de transfert
-pour 442 Mo, 39 min de recopie des anciens assets, 15 min de suppression de
-l'ancienne arborescence. La suppression se fait désormais par lots en
-parallèle.
+Si le serveur refuse les liens, le script renvoie tout et publie les nouveaux
+assets avec la bascule, comme avant : c'est plus long, jamais bloquant. Si un
+backend ne sert toujours pas les nouveaux assets après environ 2 min 30, le
+déploiement s'arrête avant la bascule et la version en ligne reste intacte.
 
-Il valide ensuite la route publique canonique sur chaque backend de routage
-déclaré. Une redirection permanente (301/308) vers la route canonique est
-acceptée ; un autre chemin qui servirait un autre build ne l'est pas.
+Ordre de grandeur mesuré sur la PPRD avant ce mécanisme : 1 h 28, dont 34 min
+de transfert pour 442 Mo, 39 min de recopie des anciens assets et 15 min de
+suppression de l'ancienne arborescence. Le premier déploiement d'une cible
+après ce changement renvoie encore les fichiers que le bootstrap ne reconnaît
+pas ; les suivants n'envoient que ce qui a changé.
+
+Une redirection permanente (301/308) vers la route canonique est acceptée ; un
+autre chemin qui servirait un autre build ne l'est pas.
+
+## Mise à jour PWA pendant un déploiement
+
+La PWA ne bascule jamais d'elle-même : un nouveau `sw.js` s'installe, précache
+les nouveaux assets puis attend l'accord de l'utilisateur
+([Runtime PWA](PWA_RUNTIME.md)). Le déploiement garantit donc deux choses :
+
+- **Un nouveau point d'entrée ne précède jamais ses assets.** `index.html` et
+  `sw.js` ne changent qu'à la bascule, une fois les nouveaux assets servis par
+  chaque backend (étape 3). Sans cela, pendant la propagation vers les backends,
+  un navigateur pourrait recevoir le nouveau HTML et un 404 pour ses chunks.
+- **Un ancien onglet garde ses assets.** Les assets immuables de la version
+  précédente restent servis (étape 2), en plus de l'instantané que garde le
+  service worker.
+
+L'installation du nouveau service worker télécharge les entrées précachées en
+`cache: 'reload'` (Workbox), donc sans passer par le cache HTTP du navigateur.
+
+Le cycle complet a été rejoué localement le 3 octobre 2026 (serveur OpenSSH,
+serveur web reproduisant les en-têtes de l'hébergement, propagation différée vers un
+backend) : version A en ligne avec un projet ouvert, déploiement de B (1 555
+fichiers sur 1 599 repris par lien), invite de mise à jour, activation : B
+chargée, projet conservé, aucun 404 côté navigateur, assets de A toujours
+servis.
+
+## En-têtes attendus de l'hébergement
+
+La mise à jour PWA suppose ces réponses, que la validation publique du script
+contrôle :
+
+- `index.html`, `sw.js`, `_app/version.json` et `manifest.webmanifest` en
+  `no-store` ;
+- les assets sous `_app/immutable/` en cache long et `immutable`, pour les
+  seules réponses 200 : une erreur reste en `no-store`, sinon un navigateur
+  garderait en échec un asset pas encore propagé ;
+- le WASM servi compressé (gzip ou Brotli) ;
+- un fond de carte modifié change de nom (année ou version), car les fonds
+  sont mis en cache plusieurs semaines.
 
 La PROD demande de ressaisir le tag, même avec `--yes`. Cette confirmation ne
 se contourne pas.
