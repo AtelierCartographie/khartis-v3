@@ -83,8 +83,10 @@ async function configureRuntimeSettings(): Promise<void> {
     `PRAGMA enable_progress_bar=false;`,
     `PRAGMA preserve_insertion_order=false;`,
     `PRAGMA enable_object_cache=true;`,
-    `PRAGMA temp_directory='/tmp/duckdb';`,
-    `PRAGMA max_temp_directory_size='5GB';`
+    // DuckDB WASM cannot read back the blocks it spills ("Corrupt temporary
+    // file"), and a spilled table is lost for the session. Without a temporary
+    // directory, exceeding memory_limit raises a plain out-of-memory error.
+    `PRAGMA temp_directory='';`
   ];
 
   await executeQuery(connection, pragmas.join('\n'), {
