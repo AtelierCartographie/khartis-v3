@@ -23,8 +23,7 @@ describe('facets shared renderer utils', () => {
       mapCount: 4,
       layout: createLayout(2),
       containerWidth: 800,
-      containerHeight: 600,
-      pageAspectRatio: 0.75
+      containerHeight: 600
     });
 
     expect(metrics.columns).toBe(2);
@@ -45,7 +44,6 @@ describe('facets shared renderer utils', () => {
       layout: createLayout(2),
       containerWidth: 900,
       containerHeight: 700,
-      pageAspectRatio: 0.75,
       primarySlotPath: null
     });
 
@@ -70,8 +68,7 @@ describe('facets shared renderer utils', () => {
       mapCount: 2,
       layout: createLayout(2),
       containerWidth,
-      containerHeight: 700,
-      pageAspectRatio: 0.75
+      containerHeight: 700
     });
 
     expect(metrics.originX + metrics.gridWidth).toBeLessThanOrEqual(
@@ -86,7 +83,6 @@ describe('facets shared renderer utils', () => {
       layout: createLayout(2),
       containerWidth,
       containerHeight: 700,
-      pageAspectRatio: 0.75,
       primarySlotPath: null
     });
 
@@ -112,7 +108,6 @@ describe('facets shared renderer utils', () => {
       layout: createLayout(1),
       containerWidth: 600,
       containerHeight: 400,
-      pageAspectRatio: 0.75,
       primarySlotPath: FACET_SLOT.POLYGON_VALUE
     });
 

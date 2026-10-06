@@ -13,7 +13,6 @@
     layout,
     containerWidth = 1200,
     containerHeight = 800,
-    pageAspectRatio = 0.75,
     onReady
   }: {
     visualizations: VisualizationConfig[];
@@ -23,7 +22,6 @@
     layout: FacetsLayout;
     containerWidth?: number;
     containerHeight?: number;
-    pageAspectRatio?: number;
     onReady?: () => void;
   } = $props();
 </script>
@@ -36,6 +34,5 @@
   layout={layout}
   containerWidth={containerWidth}
   containerHeight={containerHeight}
-  pageAspectRatio={pageAspectRatio}
   onReady={onReady}
 />

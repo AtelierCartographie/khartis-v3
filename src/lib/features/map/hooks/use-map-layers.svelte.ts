@@ -55,7 +55,10 @@ import {
   selectRowsByIndices,
   selectRowsInScope
 } from '../utils/arrow-filter.utils';
-import { rowScopeStore } from '../stores/row-scope.store.svelte';
+import {
+  buildDatasetPreviewScopeId,
+  rowScopeStore
+} from '../stores/row-scope.store.svelte';
 import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
@@ -222,7 +225,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   function buildDatasetFallbackContext(datasetId: string): LayerContext {
+    const scopedRowIds = rowScopeStore.getScopedRowIds(
+      buildDatasetPreviewScopeId(datasetId),
+      undefined
+    );
     return {
+      ...(scopedRowIds && {
+        scopedRowIdsByPrimitive: Object.fromEntries(
+          ALL_PRIMITIVE_FILTERS.map((primitive) => [primitive, scopedRowIds])
+        )
+      }),
       viz: null,
       datasetId,
       fillColor: DATA_PREVIEW_FILL_COLOR,
@@ -393,8 +405,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function getProjectionViewportSize(): { width: number; height: number } {
     return {
-      width: Math.max(1, projectionStore.canvasSize.width),
-      height: Math.max(1, projectionStore.canvasSize.height)
+      width: Math.max(1, projectionStore.fitSize.width),
+      height: Math.max(1, projectionStore.fitSize.height)
     };
   }
 
@@ -1567,7 +1579,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               true
             )
           : true;
-      const sphereVisible = (sphereConfig?.visible ?? true) && sphereAuxVisible;
+      // The contour belongs to the Mers/Océans section: hiding the sea hides it.
+      const sphereVisible =
+        mersEffectiveVisible &&
+        (sphereConfig?.visible ?? true) &&
+        sphereAuxVisible;
       const sphereOutlineOptions = sphereConfig
         ? (() => {
             const [r, g, b] = hexToRgb(sphereConfig.color);
@@ -1580,9 +1596,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // The outline of the ocean shape, driven by the Mers/Océans contour
-      // toggle alone: a basemap on its own default projection used to stay
-      // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
         (sphereProjectionInput || unprojectedFrame) && sphereVisible
           ? createProjectionSphereOutlineLayer({

@@ -49,6 +49,12 @@ interface PendingQuery {
 
 const EVERY_PRIMITIVE_KEY = 'all';
 
+// The data-step preview draws datasets without a visualization; it follows the
+// table filters under this pseudo visualization id.
+export function buildDatasetPreviewScopeId(datasetId: string): string {
+  return `dataset-preview:${datasetId}`;
+}
+
 function buildScopeKey(
   visualizationId: string,
   primitive: PrimitiveFilter | undefined

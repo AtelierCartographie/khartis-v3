@@ -11,6 +11,11 @@ interface ProjectionState {
   referenceBbox: BBox | null;
   referenceGeoMetadata: string | null;
   canvasSize: CanvasSize;
+  // The size the reference projection, the layer projections and the model
+  // matrix are all fitted to. It stays put while the canvas is resized by a
+  // crop or a page change, so geometry keeps its scale; only an explicit refit
+  // moves it, together with the reference.
+  fitSize: CanvasSize | null;
   fitPaddingPx: number;
   renderScale: number;
   modelMatrix: Matrix4 | null;
@@ -27,27 +32,27 @@ function createProjectionStore() {
     referenceBbox: null,
     referenceGeoMetadata: null,
     canvasSize: DEFAULT_CANVAS_SIZE,
+    fitSize: null,
     fitPaddingPx: DEFAULT_FIT_PADDING_PX,
     renderScale: 1,
     modelMatrix: null,
     renderProjection: null,
     isProjectedCoordinates: false
   });
-  let needsCanvasFit = true;
+
+  function getFitSize(): CanvasSize {
+    return state.fitSize ?? state.canvasSize;
+  }
 
   function recalculateModelMatrix(): void {
-    const {
-      referenceBbox,
-      referenceGeoMetadata,
-      canvasSize,
-      fitPaddingPx,
-      isProjectedCoordinates
-    } = state;
+    const { referenceBbox, referenceGeoMetadata, fitPaddingPx } = state;
+    const { isProjectedCoordinates } = state;
+    const fitSize = getFitSize();
 
     if (referenceGeoMetadata) {
       state.modelMatrix = get_model_matrix(
         referenceGeoMetadata,
-        canvasSize,
+        fitSize,
         undefined,
         fitPaddingPx
       );
@@ -57,7 +62,7 @@ function createProjectionStore() {
     if (referenceBbox) {
       state.modelMatrix = get_model_matrix_from_bbox(
         referenceBbox,
-        canvasSize,
+        fitSize,
         isProjectedCoordinates,
         fitPaddingPx
       );
@@ -75,7 +80,6 @@ function createProjectionStore() {
       state.isProjectedCoordinates = false;
       // Geographic reference (raw lng/lat): no d3 projection drives it.
       state.renderProjection = null;
-      needsCanvasFit = true;
       recalculateModelMatrix();
     }
   }
@@ -97,7 +101,6 @@ function createProjectionStore() {
     if (renderProjection !== undefined) {
       state.renderProjection = renderProjection;
     }
-    needsCanvasFit = true;
     recalculateModelMatrix();
   }
 
@@ -110,10 +113,21 @@ function createProjectionStore() {
     }
 
     state.canvasSize = size;
-    if (needsCanvasFit) {
+    if (state.fitSize === null) {
+      state.fitSize = size;
       recalculateModelMatrix();
-      needsCanvasFit = false;
     }
+  }
+
+  /** Refits to `size`; the caller refreshes the reference right after. */
+  function setFitSize(size: CanvasSize): void {
+    const current = getFitSize();
+    if (size.width === current.width && size.height === current.height) {
+      return;
+    }
+
+    state.fitSize = size;
+    recalculateModelMatrix();
   }
 
   function setFitPadding(fitPaddingPx: number): void {
@@ -127,7 +141,6 @@ function createProjectionStore() {
     }
 
     state.fitPaddingPx = nextFitPaddingPx;
-    needsCanvasFit = true;
     recalculateModelMatrix();
   }
 
@@ -146,7 +159,7 @@ function createProjectionStore() {
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
-    needsCanvasFit = true;
+    state.fitSize = null;
   }
 
   function reset(): void {
@@ -158,7 +171,7 @@ function createProjectionStore() {
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
-    needsCanvasFit = true;
+    state.fitSize = null;
   }
 
   return {
@@ -177,6 +190,9 @@ function createProjectionStore() {
     get canvasSize(): CanvasSize {
       return state.canvasSize;
     },
+    get fitSize(): CanvasSize {
+      return getFitSize();
+    },
     get fitPaddingPx(): number {
       return state.fitPaddingPx;
     },
@@ -189,6 +205,7 @@ function createProjectionStore() {
     setReferenceBboxFromMetadata,
     setReferenceBbox,
     updateCanvasSize,
+    setFitSize,
     setFitPadding,
     setRenderScale,
     clear,
