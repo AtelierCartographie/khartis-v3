@@ -196,7 +196,7 @@ describe('simplify_topology_normalized macro', () => {
     try {
       const rows = await query(
         db,
-        `WITH simplified AS (FROM simplify_topology_normalized('large_grid', 0.0))
+        `WITH simplified AS (FROM simplify_topology_normalized('large_grid', 0.1))
          SELECT
            COUNT(*) AS cnt,
            COUNT(*) FILTER (WHERE NOT ST_Equals(s.geom, g.geom)) AS moved
