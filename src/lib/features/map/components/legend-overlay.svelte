@@ -23,6 +23,7 @@
     PAGE_GRID_SIZE_PX,
     clampPointToBounds,
     getDragBounds,
+    remapPointToResizedArea,
     snapPointWithinBounds,
     type PageGridPoint,
     type PageGridSize
@@ -44,7 +45,9 @@
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
     getFormatLayoutSizingContext,
-    getFormatState
+    getFormatState,
+    getLastPageResize,
+    type PageResize
   } from '$lib/features/step-toolbar/tools/format';
   import * as m from '$lib/paraglide/messages';
   import { tick, untrack, onDestroy } from 'svelte';
@@ -261,9 +264,23 @@
     return formatState.gridEnabled ? PAGE_GRID_SIZE_PX * 5 : 10;
   }
 
+  function getMapAreaSize(): PageGridSize {
+    const { margins } = formatState;
+    return {
+      width: Math.max(0, formatState.width - margins.left - margins.right),
+      height: Math.max(0, formatState.height - margins.top - margins.bottom)
+    };
+  }
+
   function getOverlaySize(): PageGridSize | null {
     if (!overlayElement) {
       return null;
+    }
+
+    // The page legend sits on the map area. Its DOM size follows a resize
+    // observer, so it lags one layout behind a page format change.
+    if (!inline) {
+      return getMapAreaSize();
     }
 
     return {
@@ -421,6 +438,34 @@
     }
   }
 
+  let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
+
+  // A page resize keeps the margins, so the legend stage changes by the same
+  // amount as the page; a dragged frame keeps its distance to the nearest edge.
+  function remapDraggedFrames(pageResize: PageResize): void {
+    const { margins } = formatState;
+    const toStageSize = (page: PageGridSize): PageGridSize => ({
+      width: page.width - margins.left - margins.right,
+      height: page.height - margins.top - margins.bottom
+    });
+
+    for (const item of visibleItems) {
+      const frameSize = getFrameSize(item.id);
+      if (!item.dragPosition || !frameSize) {
+        continue;
+      }
+
+      legendActions.updateLegendItem(item.id, {
+        dragPosition: remapPointToResizedArea(
+          item.dragPosition,
+          frameSize,
+          toStageSize(pageResize.from),
+          toStageSize(pageResize.to)
+        )
+      });
+    }
+  }
+
   function reclampDraggedFrames(snapEnabled: boolean): void {
     for (const item of visibleItems) {
       if (!item.dragPosition) {
@@ -462,6 +507,12 @@
 
     if (draggingItemId) {
       return;
+    }
+
+    const pageResize = getLastPageResize();
+    if (pageResize && pageResize.id !== handledPageResizeId) {
+      handledPageResizeId = pageResize.id;
+      untrack(() => remapDraggedFrames(pageResize));
     }
 
     reclampDraggedFrames(untrack(() => formatState.gridEnabled));
