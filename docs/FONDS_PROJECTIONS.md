@@ -56,14 +56,18 @@ l'utilisateur a déplacée.
 
 ## Fonds importés
 
-`processBasemapImport` a son propre chemin de lecture, distinct du pipeline des
-jeux de données :
+`processBasemapImport` lit le fichier avec le même lecteur que les jeux de
+données (`readFileIntoTable` du pipeline) : mêmes formats, même normalisation
+GeoParquet, même CRS source, même repli navigateur pour les GeoPackages. Un
+shapefile zippé est décompressé avant lecture ; un `.shp` isolé est refusé.
 
-- Shapefile zippé ; un `.shp` isolé est refusé ;
-- Parquet et GeoParquet par `read_parquet` ;
-- GeoPackage et autres formats géographiques par `ST_Read`, avec un repli
-  navigateur (SQLite WASM, WKB, proj4) pour les GeoPackages que le build WASM ne
-  lit pas.
+Le fond reçoit ensuite ce qui lui est propre : une colonne de géométrie nommée
+`geom`, l'identifiant `__feature_id__` de la jointure et la table d'attributs de
+jointure. Les couches dérivées (territoire, limites, centroïdes) et la
+métadonnée du fond sont produites par le même code que pour un jeu de données
+qui porte sa géométrie (`createBasemapFromGeometryTable`). L'import ne simplifie
+ni ne modifie la géométrie : la copie `__raw` qui sert à l'outil Simplification
+n'est créée qu'à sa première application.
 
 Le résultat est une table DuckDB `custom_basemap_*`. Sa géométrie n'est pas
 encore persistée (voir

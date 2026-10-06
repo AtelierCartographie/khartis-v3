@@ -365,6 +365,7 @@
   "basemap_import_modal_error_select_file": "Veuillez sélectionner un fichier à importer",
   "basemap_import_error_single_source": "Sélectionnez un seul fond de carte : un fichier, ou l'ensemble des composants d'un même Shapefile (.shp, .shx, .dbf…)",
   "basemap_import_modal_error_invalid_geometry": "Le fichier ne contient pas de géométrie valide ou la colonne de géométrie est manquante",
+  "basemap_import_error_out_of_memory": "Ce fond de carte est trop volumineux pour la mémoire disponible dans le navigateur. Simplifiez-le ou découpez-le en plusieurs fichiers avant de l'importer.",
   "basemap_import_dropzone_text": "Glisser-déposer un fichier ou cliquer pour importer",
   "basemap_import_url_label": "Lien vers un fichier stocké en ligne",
   "basemap_import_url_button": "Charger",
