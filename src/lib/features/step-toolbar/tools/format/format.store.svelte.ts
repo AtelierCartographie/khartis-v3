@@ -85,6 +85,30 @@ type FormatActions = {
   toggleGrid: () => void;
 };
 
+export type PageResize = {
+  id: number;
+  from: { width: number; height: number };
+  to: { width: number; height: number };
+};
+
+// Kept out of the persisted state: only a page resize the user asked for
+// moves the layout items, never a project being restored or switched.
+let lastPageResize = $state<PageResize | null>(null);
+
+function recordPageResize(
+  from: { width: number; height: number },
+  to: { width: number; height: number }
+): void {
+  if (from.width === to.width && from.height === to.height) {
+    return;
+  }
+  lastPageResize = { id: (lastPageResize?.id ?? 0) + 1, from, to };
+}
+
+export function getLastPageResize(): PageResize | null {
+  return lastPageResize;
+}
+
 const { state, actions, getState } = createToolStore<
   FormatState,
   FormatActions
@@ -98,13 +122,19 @@ const { state, actions, getState } = createToolStore<
       s.model = model;
       const preset = PAGE_PRESETS[model];
       if (preset) {
+        recordPageResize(
+          { width: s.width, height: s.height },
+          { width: preset.width, height: preset.height }
+        );
         s.width = preset.width;
         s.height = preset.height;
       }
     },
     setSize: (width: number, height: number) => {
-      s.width = Math.max(1, width);
-      s.height = Math.max(1, height);
+      const next = { width: Math.max(1, width), height: Math.max(1, height) };
+      recordPageResize({ width: s.width, height: s.height }, next);
+      s.width = next.width;
+      s.height = next.height;
     },
     setColor: (color) => {
       s.color = normalizePageColor(color);

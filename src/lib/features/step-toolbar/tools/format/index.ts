@@ -3,5 +3,7 @@ export {
   formatActions,
   formatState,
   DEFAULT_PAGE_COLOR,
-  getFormatLayoutSizingContext
+  getFormatLayoutSizingContext,
+  getLastPageResize,
+  type PageResize
 } from './format.store.svelte';

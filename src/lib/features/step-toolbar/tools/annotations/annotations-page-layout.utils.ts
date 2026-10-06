@@ -8,6 +8,7 @@ import { TextAlign } from '$lib/features/commons/types/enums';
 import {
   clampToRange,
   PAGE_GRID_SIZE_PX,
+  remapPointToResizedArea,
   snapPointWithinBounds
 } from '$lib/features/commons/utils/page-grid.utils';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -136,6 +137,20 @@ export function clampPageElementPosition(
       maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
     isGridEnabled() && snapToGridEnabled
+  );
+}
+
+export function remapPageElementPosition(
+  position: { x: number; y: number },
+  role: PageElementRole,
+  from: Pick<PageLayout, 'width' | 'height'>,
+  to: Pick<PageLayout, 'width' | 'height'>
+): { x: number; y: number } {
+  return remapPointToResizedArea(
+    position,
+    { width: PAGE_ELEMENT_WIDTHS[role], height: PAGE_ELEMENT_HEIGHTS[role] },
+    from,
+    to
   );
 }
 
