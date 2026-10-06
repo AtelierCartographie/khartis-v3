@@ -263,6 +263,13 @@
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
   let handledMarginsEditId = untrack(() => getMarginsEditId());
+  // A manual view inherited from another renderer (the facet collection) was
+  // framed on its fit; the first reference refresh refits it to this canvas.
+  let inheritedFramingScale = untrack(() =>
+    mapInstanceStore.isViewportAutoFitManaged
+      ? null
+      : mapInstanceStore.measureFramingScale()
+  );
   let lastFrameLayout: {
     pageWidth: number;
     pageHeight: number;
@@ -733,6 +740,21 @@
       return;
     }
     scheduleLayerUpdate('refitProjectionToCanvas');
+  }
+
+  function refitInheritedManualView(): void {
+    const framingScale = inheritedFramingScale;
+    inheritedFramingScale = null;
+    if (
+      framingScale === null ||
+      mapInstanceStore.isViewportAutoFitManaged ||
+      mapInstanceStore.hasPendingOrthographicRestore
+    ) {
+      return;
+    }
+
+    refitProjectionToCanvas();
+    mapInstanceStore.rescaleTargetFrom(framingScale);
   }
 
   function applyMapLibreInteractionMode(): void {
@@ -1357,19 +1379,17 @@
     lastMapViewportSnapshot = viewportSnapshot;
 
     untrack(() => {
-      const previousRenderScale = projectionStore.renderScale;
+      const previousFramingScale = mapInstanceStore.measureFramingScale();
       projectionStore.setRenderScale(pageDisplayScale);
+      projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
+      updateCanvasSize();
       if (
         mapInit.isMapLoaded &&
         !isSwitchingViewMode &&
         mapInit.viewMode === ViewMode.ORTHOGRAPHIC
       ) {
-        mapInstanceStore.rescaleTargetForRenderScale(
-          pageDisplayScale / previousRenderScale
-        );
+        mapInstanceStore.rescaleTargetFrom(previousFramingScale);
       }
-      projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
-      updateCanvasSize();
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         if (mapInit.viewMode === ViewMode.MAPLIBRE) {
           mapInit.map?.resize();
@@ -1554,6 +1574,7 @@
           untrack(() => {
             scheduleLayerUpdate('effect:firstTable-bounds');
             if (shouldFitViewport) fitOrthographicViewport('dataset');
+            refitInheritedManualView();
           });
           triggerOnReady();
         } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
