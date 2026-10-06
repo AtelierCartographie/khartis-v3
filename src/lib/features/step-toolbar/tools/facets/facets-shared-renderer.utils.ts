@@ -41,14 +41,12 @@ export function buildFacetsGridMetrics({
   mapCount,
   layout,
   containerWidth,
-  containerHeight,
-  pageAspectRatio
+  containerHeight
 }: {
   mapCount: number;
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
-  pageAspectRatio: number;
 }): FacetsGridMetrics {
   const totalMaps = Math.max(0, mapCount);
   const columns = Math.max(1, Math.min(layout.columns, totalMaps || 1));
@@ -66,19 +64,16 @@ export function buildFacetsGridMetrics({
   const availableHeight =
     contentHeight - (rows - 1) * layout.gap - FACET_TITLE_HEIGHT * rows;
 
-  const widthPerColumn = Math.max(
+  // Cells fill the frame like a single map does: each facet fits its map to
+  // its own cell, so a forced aspect ratio only leaves bands of empty frame.
+  const cellWidth = Math.max(
     FACET_MIN_CELL,
     Math.floor(availableWidth / columns)
   );
-  const heightPerRow = Math.max(
+  const cellHeight = Math.max(
     FACET_MIN_CELL,
     Math.floor(availableHeight / rows)
   );
-  const aspectRatio = pageAspectRatio > 0 ? pageAspectRatio : 0.75;
-  const constrainedByHeight = Math.floor(heightPerRow / aspectRatio);
-  const constrainedByWidth = Math.floor(widthPerColumn * aspectRatio);
-  const cellWidth = Math.min(widthPerColumn, constrainedByHeight);
-  const cellHeight = Math.min(heightPerRow, constrainedByWidth);
   const gridWidth = columns * cellWidth + (columns - 1) * layout.gap;
   const gridHeight =
     rows * (cellHeight + FACET_TITLE_HEIGHT) + (rows - 1) * layout.gap;
@@ -102,22 +97,19 @@ export function buildFacetRenderDescriptors({
   layout,
   containerWidth,
   containerHeight,
-  pageAspectRatio,
   primarySlotPath
 }: {
   visualizations: VisualizationConfig[];
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
-  pageAspectRatio: number;
   primarySlotPath: FacetSlotPath | null;
 }): FacetRenderDescriptor[] {
   const metrics = buildFacetsGridMetrics({
     mapCount: visualizations.length,
     layout,
     containerWidth,
-    containerHeight,
-    pageAspectRatio
+    containerHeight
   });
 
   return visualizations.map((visualization, index) => {
