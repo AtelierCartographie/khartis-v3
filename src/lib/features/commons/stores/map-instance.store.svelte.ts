@@ -427,6 +427,23 @@ function createMapInstanceStore() {
     );
   }
 
+  /**
+   * The render model matrix scales the world by the page display scale, so
+   * the target lives in display-scaled units: when that scale changes (step,
+   * page format, page zoom), the target follows it or the centre drifts.
+   */
+  function rescaleTargetForRenderScale(ratio: number): void {
+    if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return;
+
+    const [targetX, targetY] = normalizeTarget(state.deckViewState.target);
+    if (targetX === 0 && targetY === 0) return;
+
+    state.deckViewState = resolveDeckViewState({
+      target: [targetX * ratio, targetY * ratio, 0]
+    });
+    applyDeckViewState();
+  }
+
   function getMapZoom(): number {
     return state.map?.getZoom() ?? 0;
   }
@@ -931,6 +948,7 @@ function createMapInstanceStore() {
     projectDataToViewportPx,
     unprojectViewportPxToData,
     panForResizedFrame,
+    rescaleTargetForRenderScale,
     getMapZoom,
     getMapCenter,
     setBaseZoomLevel,
