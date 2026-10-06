@@ -402,6 +402,7 @@
   "color_saturation": "Saturation",
   "color_brightness": "Brightness",
   "color_hex_code": "Hexadecimal code",
+  "color_pick_from_screen": "Pick a color from the screen",
   "color_preview": "Preview",
   "button_cancel": "Cancel",
   "button_validate": "Confirm",

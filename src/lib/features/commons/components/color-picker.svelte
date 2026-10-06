@@ -9,13 +9,18 @@
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
-  import { ChevronDown } from 'carbon-icons-svelte';
+  import { ChevronDown, Eyedropper } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { KEY, EVENT } from '../constants/dom.constants';
   import {
     readCarbonNumberValue,
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
+
+  // The EyeDropper API is Chromium-only and missing from the TypeScript DOM lib.
+  type EyeDropperConstructor = new () => {
+    open: () => Promise<{ sRGBHex: string }>;
+  };
 
   type ColorPayload = {
     hex: string;
@@ -47,6 +52,9 @@
   let dropdownPosition = $state({ top: 0, left: 0, width: 0, maxHeight: 0 });
   let openUpward = $state(false);
   let initialColor: ColorPayload | null = null;
+  let isPickingScreenColor = false;
+  const EyeDropperApi = (globalThis as { EyeDropper?: EyeDropperConstructor })
+    .EyeDropper;
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('color-picker');
   // Each track previews the colour its own axis reaches, the other two held.
@@ -121,6 +129,45 @@
     lightness = readCarbonNumberValue(event, lightness);
   }
 
+  function setColorFromHex(normalizedHex: string): void {
+    const parsedColor = hexToHsl(normalizedHex);
+    hex = normalizedHex;
+    hue = parsedColor.hue;
+    saturation = parsedColor.saturation;
+    lightness = parsedColor.lightness;
+  }
+
+  async function pickScreenColor(): Promise<void> {
+    if (!EyeDropperApi) {
+      return;
+    }
+
+    // Escape cancels the pick; it must not also close the picker or the
+    // styling tool, whose shortcuts listen on the document.
+    const swallowEscape = (event: KeyboardEvent) => {
+      if (event.key === KEY.ESCAPE) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener(EVENT.KEYDOWN, swallowEscape, { capture: true });
+    isPickingScreenColor = true;
+    try {
+      const { sRGBHex } = await new EyeDropperApi().open();
+      const normalizedHex = normalizeHexInput(sRGBHex);
+      if (normalizedHex) {
+        setColorFromHex(normalizedHex);
+      }
+    } catch {
+      // Escape aborts the pick: the current colour stays.
+    } finally {
+      isPickingScreenColor = false;
+      window.removeEventListener(EVENT.KEYDOWN, swallowEscape, {
+        capture: true
+      });
+    }
+  }
+
   function getValidatedColor(): ColorPayload {
     const normalizedHex = normalizeHexInput(hex);
     if (normalizedHex) {
@@ -184,6 +231,9 @@
   });
 
   function handleOutsideClick() {
+    if (isPickingScreenColor) {
+      return;
+    }
     revertPreviewState();
     colorOpen = false;
   }
@@ -413,18 +463,27 @@
                   return;
                 }
 
-                const parsedColor = hexToHsl(normalizedHex);
-                hex = normalizedHex;
-                hue = parsedColor.hue;
-                saturation = parsedColor.saturation;
-                lightness = parsedColor.lightness;
+                setColorFromHex(normalizedHex);
               }}
             />
           </Column>
 
           <Column sm={2} md={4} lg={8}>
             <span class="form-label mb-2">{m.color_preview()}</span>
-            <div class="preview" style={`background:${hex}`}></div>
+            <div class="preview-row">
+              <div class="preview" style={`background:${hex}`}></div>
+              {#if EyeDropperApi}
+                <Button
+                  kind="ghost"
+                  size="field"
+                  icon={Eyedropper}
+                  iconDescription={m.color_pick_from_screen()}
+                  tooltipPosition="top"
+                  tooltipAlignment="end"
+                  onclick={pickScreenColor}
+                />
+              {/if}
+            </div>
           </Column>
         </Row>
 
@@ -660,6 +719,11 @@
     font-size: var(--cds-body-short-01-font-size);
     text-align: center;
     font-weight: normal;
+  }
+
+  .preview-row {
+    display: flex;
+    align-items: stretch;
   }
 
   .preview {
