@@ -43,6 +43,10 @@ const RELEASE_FILE_MANIFEST_FILENAME = '.khartis-release-files.json';
 const RELEASE_FILE_MANIFEST_VERSION = 1;
 // ssh2-sftp-client attaches listeners per pending call: stay under Node's limit of 10.
 const REMOTE_OPERATION_CONCURRENCY = 8;
+const ASSET_PROPAGATION_RETRY_DELAYS_MS = [
+  5_000, 10_000, 15_000, 30_000, 30_000, 60_000
+];
+const ASSET_PROPAGATION_SAMPLE_SIZE = 4;
 const LEGACY_ASSET_SCAN_MAX_FILES = 2_000;
 const LEGACY_ASSET_SCAN_MAX_BYTES = 512 * 1024 * 1024;
 const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 308]);
@@ -273,6 +277,7 @@ async function main() {
         backendRouting,
         expectedVersion: tag,
         recoverStaleLock: options.recoverStaleLock,
+        releaseCommit: tagSha,
         releaseFiles,
         validateReleaseProvenance: () =>
           assertRemoteReleaseStillValid(tag, tagSha, target.releaseBranch),
@@ -1002,6 +1007,7 @@ async function uploadBuild(
     backendRouting,
     expectedVersion,
     recoverStaleLock,
+    releaseCommit,
     releaseFiles,
     validateReleaseProvenance,
     wasmAssetPath
@@ -1058,10 +1064,11 @@ async function uploadBuild(
     tempRemoteDirCreated = true;
 
     const unchangedPaths = remoteType
-      ? findUnchangedReleaseFiles(
-          releaseFiles,
-          await readPreviousReleaseFiles(client, safeRemoteDir)
-        )
+      ? await findUnchangedLiveFiles(client, {
+          liveDir: safeRemoteDir,
+          releaseCommit,
+          releaseFiles
+        })
       : new Set();
     log(
       `Sending ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory, ${unchangedPaths.size} of them unchanged since the live release…`
@@ -1109,6 +1116,14 @@ async function uploadBuild(
         retentionSpinner.fail('Could not retain previous immutable assets');
         throw error;
       }
+      throwIfTerminationRequested('before publishing the new assets');
+      await publishNewAssetsBeforeSwap(client, {
+        backendRouting,
+        deployment,
+        liveDir: safeRemoteDir,
+        releaseAssetPaths,
+        uploadRemoteDir: tempRemoteDir
+      });
     }
     throwIfTerminationRequested('before the public swap');
 
@@ -1523,6 +1538,257 @@ async function reuseUnchangedReleaseFiles(
   );
 
   return { linkedFiles, uploadedFiles };
+}
+
+// A live release deployed before the file manifest existed: hashed asset names
+// change with their content, and a file under static/ is copied as is, so both
+// can be recognized without downloading anything.
+async function findUnchangedLiveFiles(
+  client,
+  { liveDir, releaseCommit, releaseFiles, readTree = readGitStaticTree }
+) {
+  const liveFiles = await readPreviousReleaseFiles(client, liveDir);
+  if (liveFiles.size > 0) {
+    return findUnchangedReleaseFiles(releaseFiles, liveFiles);
+  }
+
+  const unchanged = new Set(
+    (await readLiveReleaseAssetPaths(client, liveDir)).filter((assetPath) =>
+      releaseFiles.has(assetPath)
+    )
+  );
+  const liveVersion = await readLiveReleaseVersion(client, liveDir);
+  if (liveVersion && releaseCommit) {
+    const staticPaths = await findUnchangedStaticFiles(
+      liveVersion,
+      releaseCommit,
+      readTree
+    );
+    for (const releasePath of staticPaths) {
+      for (const candidate of [
+        releasePath,
+        `${releasePath}.br`,
+        `${releasePath}.gz`
+      ]) {
+        if (releaseFiles.has(candidate)) unchanged.add(candidate);
+      }
+    }
+  }
+  return unchanged;
+}
+
+async function readLiveReleaseAssetPaths(client, liveDir) {
+  const manifestPath = path.posix.join(
+    liveDir,
+    RELEASE_ASSET_MANIFEST_FILENAME
+  );
+  try {
+    if ((await client.exists(manifestPath)) !== '-') return [];
+    const manifest = await client.get(manifestPath);
+    return parseReleaseAssetManifest(manifest.toString('utf8'), manifestPath);
+  } catch {
+    return [];
+  }
+}
+
+async function readLiveReleaseVersion(client, liveDir) {
+  try {
+    const raw = await client.get(path.posix.join(liveDir, '_app/version.json'));
+    const version = JSON.parse(raw.toString('utf8'))?.version;
+    return typeof version === 'string' &&
+      /^v\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?$/.test(version)
+      ? version
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function findUnchangedStaticFiles(
+  liveRef,
+  releaseRef,
+  readTree = readGitStaticTree
+) {
+  try {
+    const [liveBlobs, releaseBlobs] = await Promise.all([
+      readTree(liveRef),
+      readTree(releaseRef)
+    ]);
+    return [...releaseBlobs]
+      .filter(([releasePath, blob]) => liveBlobs.get(releasePath) === blob)
+      .map(([releasePath]) => releasePath)
+      .filter(
+        // The build writes these at the root itself, over any static file.
+        (releasePath) =>
+          releasePath.includes('/') ||
+          !/\.(?:html|js|webmanifest)$/.test(releasePath)
+      );
+  } catch {
+    return [];
+  }
+}
+
+async function readGitStaticTree(ref) {
+  return parseGitStaticTree(
+    await output('git', ['ls-tree', '-r', '--full-tree', ref, '--', 'static'], {
+      cwd: process.cwd()
+    })
+  );
+}
+
+function parseGitStaticTree(raw) {
+  const blobs = new Map();
+  for (const line of raw.split('\n')) {
+    const match = /^\d+ blob ([0-9a-f]{40,64})\tstatic\/(.+)$/.exec(line);
+    if (match) blobs.set(match[2], match[1]);
+  }
+  return blobs;
+}
+
+// The live index.html and sw.js are replaced only once every backend serves the
+// new hashed assets they reference. A browser therefore never meets a new entry
+// point whose chunks are still missing on its backend, a 404 that the web tier
+// would let it cache for a year under /_app/immutable/.
+async function publishNewAssetsBeforeSwap(
+  client,
+  {
+    backendRouting,
+    deployment,
+    delaysMs = ASSET_PROPAGATION_RETRY_DELAYS_MS,
+    fetchImpl,
+    liveDir,
+    releaseAssetPaths,
+    uploadRemoteDir
+  }
+) {
+  const liveAssets = new Set(await readLiveReleaseAssetPaths(client, liveDir));
+  const newAssets = releaseAssetPaths.filter(
+    (assetPath) => !liveAssets.has(assetPath)
+  );
+  if (newAssets.length === 0) return { stagedFiles: 0 };
+
+  const spinner = startSpinner(
+    `Publishing ${newAssets.length} new immutable assets next to the live release`
+  );
+  let stagedFiles = 0;
+  try {
+    for (const assetDir of new Set(
+      newAssets.map((assetPath) => path.posix.dirname(assetPath))
+    )) {
+      await client.mkdir(path.posix.join(liveDir, assetDir), true);
+    }
+    await runWithConcurrency(
+      newAssets,
+      REMOTE_OPERATION_CONCURRENCY,
+      async (assetPath) => {
+        const destinationPath = path.posix.join(liveDir, assetPath);
+        try {
+          await linkRemoteFile(
+            client,
+            path.posix.join(uploadRemoteDir, assetPath),
+            destinationPath
+          );
+        } catch (error) {
+          // An interrupted earlier attempt may already have published it.
+          if (error?.linkUnsupported) throw error;
+          if ((await client.exists(destinationPath)) !== '-') throw error;
+        }
+        stagedFiles += 1;
+      }
+    );
+  } catch (error) {
+    if (error?.linkUnsupported) {
+      spinner.fail('The server cannot link files');
+      warn(
+        'New assets go live with the swap, without a propagation check: the server does not support hard links.'
+      );
+      return { stagedFiles: 0 };
+    }
+    // Hashed files that nothing references yet are harmless if left behind.
+    spinner.fail(
+      'Could not publish the new assets; the live release is unchanged'
+    );
+    throw error;
+  }
+  spinner.done(`Published ${stagedFiles} new immutable assets`);
+
+  await waitForPublicAssets(deployment, selectPropagationSample(newAssets), {
+    backendRouting,
+    delaysMs,
+    fetchImpl
+  });
+  return { stagedFiles };
+}
+
+function selectPropagationSample(assetPaths) {
+  const scripts = assetPaths.filter((assetPath) =>
+    /\.(?:js|css|wasm)$/.test(assetPath)
+  );
+  const entries = scripts.filter((assetPath) =>
+    assetPath.startsWith(`${RELEASE_ASSET_ROOT}/entry/`)
+  );
+  return [...new Set([...entries, ...scripts])].slice(
+    0,
+    Math.max(ASSET_PROPAGATION_SAMPLE_SIZE, entries.length)
+  );
+}
+
+async function waitForPublicAssets(
+  deployment,
+  assetPaths,
+  { backendRouting, delaysMs = ASSET_PROPAGATION_RETRY_DELAYS_MS, fetchImpl }
+) {
+  const routes = buildBackendValidationRoutes(backendRouting);
+  // A query string the web tier ignores keeps any cache from answering for it.
+  const checkQuery = `khartis-deploy-check=${randomUUID()}`;
+
+  for (let attempt = 0; ; attempt += 1) {
+    const missing = [];
+    for (const route of routes) {
+      for (const assetPath of assetPaths) {
+        const url = `${resolvePublicAssetUrl(deployment, assetPath)}?${checkQuery}`;
+        const backendLabel = route
+          ? `, backend ${route.index}/${route.total}`
+          : '';
+        try {
+          const response = await fetchPublicUrl(
+            url,
+            withBackendValidationRoute(
+              { accept: '*/*', ...(fetchImpl ? { fetchImpl } : {}) },
+              route
+            )
+          );
+          try {
+            if (response.status !== 200) {
+              missing.push(`${assetPath} (${response.status}${backendLabel})`);
+            }
+          } finally {
+            await cancelPublicResponse(response);
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          missing.push(`${assetPath} (${message}${backendLabel})`);
+        }
+      }
+    }
+
+    if (missing.length === 0) {
+      log(
+        `New assets served by ${routes.length === 1 ? 'the public route' : `all ${routes.length} backends`}.`
+      );
+      return;
+    }
+    if (attempt >= delaysMs.length) {
+      throw new Error(
+        `New immutable assets are still not served after ${formatDuration(delaysMs.reduce((sum, delayMs) => sum + delayMs, 0))}: ${missing.join(', ')}. The live release was not swapped.`
+      );
+    }
+    warn(
+      `${missing.length} new asset checks failed (${missing[0]}); retrying in ${formatDuration(delaysMs[attempt])} while the web tier syncs.`
+    );
+    await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+  }
 }
 
 function findCompressedWasmAssetPath(assetPaths) {
@@ -3173,16 +3439,21 @@ export {
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
+  findUnchangedLiveFiles,
   findUnchangedReleaseFiles,
+  findUnchangedStaticFiles,
+  parseGitStaticTree,
   parseReleaseFileManifest,
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
+  publishNewAssetsBeforeSwap,
   reportPublicInfrastructurePreflight,
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
   reuseUnchangedReleaseFiles,
+  selectPropagationSample,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   startProgress,
