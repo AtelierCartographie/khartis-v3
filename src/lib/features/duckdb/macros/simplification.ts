@@ -79,10 +79,16 @@ const simplify_topology_normalized_macro = `CREATE OR REPLACE MACRO simplify_top
             END as geom
         GROUP BY d.path[1]
     )
+    -- A zero tolerance leaves the coverage untouched: skip collecting it.
     FROM final_reconstruction r
     JOIN positions p ON p.pos = r.pos
     SELECT p._gid, r.geom
-    ORDER BY p._gid
+    WHERE normalized_factor > 0
+    UNION ALL
+    FROM source_data
+    SELECT _gid, geom
+    WHERE normalized_factor <= 0
+    ORDER BY _gid
 );`;
 
 const prune_triangles_macro = `CREATE OR REPLACE MACRO prune_triangles(input_table) AS TABLE (
