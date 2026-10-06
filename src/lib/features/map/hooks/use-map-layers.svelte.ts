@@ -405,8 +405,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function getProjectionViewportSize(): { width: number; height: number } {
     return {
-      width: Math.max(1, projectionStore.canvasSize.width),
-      height: Math.max(1, projectionStore.canvasSize.height)
+      width: Math.max(1, projectionStore.fitSize.width),
+      height: Math.max(1, projectionStore.fitSize.height)
     };
   }
 
