@@ -24,8 +24,8 @@ partir des fichiers source ([Persistance et archives](PERSISTANCE_ET_ARCHIVES.md
 l'initialisation entre tous les appelants :
 
 1. sélection du bundle WASM (`eh` ou `mvp`) et création du Worker ;
-2. connexion avec `maximumThreads: 1`, limite mémoire, répertoire temporaire
-   (5 Go) et cache d'objets ;
+2. connexion avec `maximumThreads: 1`, limite mémoire, cache d'objets et sans
+   répertoire temporaire ;
 3. chargement de l'extension `spatial` et préchauffage des CRS ;
 4. chargement des macros SQL : classification, analyse, jointure, recherche,
    simplification, densité.
@@ -34,6 +34,13 @@ l'initialisation entre tous les appelants :
 | -------------------------------------------- | ------------------------------------------------------------------------ |
 | Timeouts d'instanciation et d'initialisation | 180 s                                                                    |
 | Limite mémoire                               | `navigator.deviceMemory` × 0,5 Gio, plafonnée à 3 Gio ; 2 Gio si inconnu |
+| Répertoire temporaire                        | aucun : au-delà de la limite, la requête échoue en « Out of Memory »     |
+
+DuckDB WASM ne relit pas les blocs qu'il déverse sur disque (« Corrupt
+temporary file ») : une table déversée est perdue pour la session, et la
+requête suivante qui la lit échoue. Sans répertoire temporaire, dépasser la
+limite lève une erreur de mémoire propre et les tables existantes restent
+lisibles.
 
 Les extensions sont servies depuis `/duckdb-extensions`, où `pnpm install` les
 dépose. Si `spatial` ne se charge pas, un avertissement est affiché et les
