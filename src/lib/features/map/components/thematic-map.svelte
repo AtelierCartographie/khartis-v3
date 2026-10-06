@@ -1357,7 +1357,17 @@
     lastMapViewportSnapshot = viewportSnapshot;
 
     untrack(() => {
+      const previousRenderScale = projectionStore.renderScale;
       projectionStore.setRenderScale(pageDisplayScale);
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.ORTHOGRAPHIC
+      ) {
+        mapInstanceStore.rescaleTargetForRenderScale(
+          pageDisplayScale / previousRenderScale
+        );
+      }
       projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
       updateCanvasSize();
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
