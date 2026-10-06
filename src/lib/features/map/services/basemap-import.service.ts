@@ -146,6 +146,50 @@ export async function processBasemapImport(
 ): Promise<BasemapImportResult> {
   const tableName =
     options.tableName ?? `${CUSTOM_BASEMAP_TABLE_PREFIX}${Date.now()}`;
+  try {
+    return await importBasemapFile(file, tableName);
+  } catch (error) {
+    // Restore skips a basemap whose table exists, so a failed import must not
+    // leave a partial one behind.
+    await dropBasemapImportTables(tableName);
+    if (error instanceof Error && error.message.includes('Out of Memory')) {
+      throw new DuckDBError(m.basemap_import_error_out_of_memory(), undefined, {
+        fileName: file.name,
+        cause: error.message
+      });
+    }
+    throw error;
+  }
+}
+
+async function dropBasemapImportTables(tableName: string): Promise<void> {
+  if (!Duck.db) return;
+  try {
+    const rows = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_name = '${escapeSqlString(tableName)}'
+         OR starts_with(table_name, '${escapeSqlString(tableName)}__')`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
+    for (const { table_name } of rows) {
+      await Duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(String(table_name))}"`
+      );
+      Duck.invalidateTableCache(String(table_name));
+    }
+  } catch (error) {
+    logger.warn(
+      `Failed to drop the tables of the failed import ${tableName}`,
+      LogCategory.MAP,
+      error
+    );
+  }
+}
+
+async function importBasemapFile(
+  file: File,
+  tableName: string
+): Promise<BasemapImportResult> {
   const isZip = file.name.toLowerCase().endsWith('.zip');
   if (isZip) {
     return processZipShapefileImport(file, tableName);
