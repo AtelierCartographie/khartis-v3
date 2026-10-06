@@ -49,6 +49,13 @@
   let initialColor: ColorPayload | null = null;
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('color-picker');
+  // Each track previews the colour its own axis reaches, the other two held.
+  const saturationTrack = $derived(
+    `linear-gradient(90deg, hsl(${hue} 0% ${lightness}%), hsl(${hue} 100% ${lightness}%))`
+  );
+  const lightnessTrack = $derived(
+    `linear-gradient(90deg, hsl(${hue} ${saturation}% 0%), hsl(${hue} ${saturation}% 50%), hsl(${hue} ${saturation}% 100%))`
+  );
   const effectiveTriggerAriaLabel = $derived(
     triggerAriaLabel || triggerLabel || undefined
   );
@@ -325,7 +332,7 @@
 
         <Row noGutter>
           <Column sm={3} md={6} lg={13}>
-            <div class="slider">
+            <div class="slider gradient" style:--slider-track={saturationTrack}>
               <Slider
                 min={0}
                 max={100}
@@ -357,7 +364,7 @@
 
         <Row noGutter>
           <Column sm={3} md={6} lg={13}>
-            <div class="slider">
+            <div class="slider gradient" style:--slider-track={lightnessTrack}>
               <Slider
                 min={0}
                 max={100}
@@ -565,8 +572,30 @@
     );
   }
 
-  .slider.rainbow :global(.bx--slider__filled-track) {
+  .slider.gradient :global(.bx--slider__track) {
+    background: var(--slider-track);
+  }
+
+  .slider.rainbow :global(.bx--slider__filled-track),
+  .slider.gradient :global(.bx--slider__filled-track) {
     background: transparent;
+  }
+
+  .slider.rainbow :global(.bx--slider__track),
+  .slider.gradient :global(.bx--slider__track) {
+    height: var(--cds-spacing-04);
+    border-radius: var(--cds-spacing-02);
+    box-shadow: inset 0 0 0 1px var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .slider.rainbow :global(.bx--slider__thumb),
+  .slider.gradient :global(.bx--slider__thumb) {
+    width: var(--cds-spacing-05);
+    height: var(--cds-spacing-05);
+    background: var(--cds-field-01);
+    box-shadow:
+      0 0 0 2px var(--cds-text-01),
+      0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
   .input-wrapper {
