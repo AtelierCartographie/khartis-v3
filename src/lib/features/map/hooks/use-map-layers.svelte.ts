@@ -55,7 +55,10 @@ import {
   selectRowsByIndices,
   selectRowsInScope
 } from '../utils/arrow-filter.utils';
-import { rowScopeStore } from '../stores/row-scope.store.svelte';
+import {
+  buildDatasetPreviewScopeId,
+  rowScopeStore
+} from '../stores/row-scope.store.svelte';
 import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
@@ -222,7 +225,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   function buildDatasetFallbackContext(datasetId: string): LayerContext {
+    const scopedRowIds = rowScopeStore.getScopedRowIds(
+      buildDatasetPreviewScopeId(datasetId),
+      undefined
+    );
     return {
+      ...(scopedRowIds && {
+        scopedRowIdsByPrimitive: Object.fromEntries(
+          ALL_PRIMITIVE_FILTERS.map((primitive) => [primitive, scopedRowIds])
+        )
+      }),
       viz: null,
       datasetId,
       fillColor: DATA_PREVIEW_FILL_COLOR,

@@ -25,6 +25,7 @@ import { basemapService } from '../services/basemap.service.svelte';
 import { densityLoadingStore } from '../stores/density-loading.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
+  buildDatasetPreviewScopeId,
   rowScopeStore,
   type RowScopeTarget
 } from '../stores/row-scope.store.svelte';
@@ -128,7 +129,20 @@ export function useMapDisplayData(
     );
   }
 
-  const rowScopeTargets = $derived.by(() =>
+  const datasetPreviewScopeTargets = $derived(
+    datasetsStore.datasets.flatMap((dataset): RowScopeTarget[] =>
+      dataset.sourceFileId
+        ? [
+            {
+              visualizationId: buildDatasetPreviewScopeId(dataset.id),
+              datasetId: dataset.sourceFileId
+            }
+          ]
+        : []
+    )
+  );
+
+  const visualizationScopeTargets = $derived.by(() =>
     visualizationStore.activeVisualizations.flatMap((viz) => {
       const sourceFileId = datasetsStore.datasets.find(
         (dataset) => dataset.id === viz.datasetId
@@ -814,7 +828,10 @@ export function useMapDisplayData(
 
   $effect(() => {
     void duckDBDatasetsVersion;
-    const targets = rowScopeTargets;
+    const targets = [
+      ...visualizationScopeTargets,
+      ...datasetPreviewScopeTargets
+    ];
 
     void rowScopeStore.sync(targets);
   });
