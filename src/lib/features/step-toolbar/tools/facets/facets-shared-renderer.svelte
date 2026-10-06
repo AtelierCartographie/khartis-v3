@@ -88,7 +88,6 @@
     layout: FacetsLayout;
     containerWidth: number;
     containerHeight: number;
-    pageAspectRatio: number;
     onReady?: () => void;
   }
 
@@ -100,7 +99,6 @@
     layout,
     containerWidth,
     containerHeight,
-    pageAspectRatio,
     onReady
   }: Props = $props();
 
@@ -121,7 +119,6 @@
       layout,
       containerWidth,
       containerHeight,
-      pageAspectRatio,
       primarySlotPath: facetsStore.primarySlotPath
     })
   );
