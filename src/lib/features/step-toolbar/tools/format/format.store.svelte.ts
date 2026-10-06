@@ -109,6 +109,14 @@ export function getLastPageResize(): PageResize | null {
   return lastPageResize;
 }
 
+// Same rule for the map frame: only a margin edit the user makes crops the
+// map, never margins restored with a project.
+let marginsEditId = $state(0);
+
+export function getMarginsEditId(): number {
+  return marginsEditId;
+}
+
 const { state, actions, getState } = createToolStore<
   FormatState,
   FormatActions
@@ -141,6 +149,7 @@ const { state, actions, getState } = createToolStore<
     },
     setMargins: (margins) => {
       s.margins = margins;
+      marginsEditId += 1;
     },
     toggleGrid: () => {
       s.gridEnabled = !s.gridEnabled;

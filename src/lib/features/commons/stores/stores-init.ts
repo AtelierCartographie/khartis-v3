@@ -29,6 +29,7 @@ export function initializeStores(): void {
   injectProjectionContext(() => ({
     referenceBbox: projectionStore.referenceBbox,
     canvasSize: projectionStore.canvasSize,
+    fitSize: projectionStore.fitSize,
     fitPaddingPx: projectionStore.fitPaddingPx,
     renderScale: projectionStore.renderScale,
     isProjectedCoordinates: projectionStore.isProjectedCoordinates
