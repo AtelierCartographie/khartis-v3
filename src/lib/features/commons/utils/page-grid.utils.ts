@@ -17,6 +17,41 @@ export interface PageGridSize {
   height: number;
 }
 
+// An item keeps its distance to the edge it is closest to on each axis, so
+// one in a bottom-right corner stays there when its area is resized; one
+// about as far from both edges stays centred.
+const CENTERED_GAP_TOLERANCE = 0.1;
+
+function remapAxis(
+  start: number,
+  extent: number,
+  fromSize: number,
+  toSize: number
+): number {
+  const startGap = start;
+  const endGap = fromSize - start - extent;
+  if (Math.abs(startGap - endGap) <= fromSize * CENTERED_GAP_TOLERANCE) {
+    return ((start + extent / 2) / fromSize) * toSize - extent / 2;
+  }
+  return startGap < endGap ? start : start + toSize - fromSize;
+}
+
+export function remapPointToResizedArea(
+  point: PageGridPoint,
+  size: PageGridSize,
+  from: PageGridSize,
+  to: PageGridSize
+): PageGridPoint {
+  if (from.width === to.width && from.height === to.height) {
+    return point;
+  }
+
+  return {
+    x: remapAxis(point.x, size.width, from.width, to.width),
+    y: remapAxis(point.y, size.height, from.height, to.height)
+  };
+}
+
 export function clampToRange(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

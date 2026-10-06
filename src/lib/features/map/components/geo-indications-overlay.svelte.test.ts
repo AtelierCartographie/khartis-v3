@@ -433,7 +433,7 @@ describe('geo indications overlay dragging', () => {
     });
   });
 
-  it('reclamps an inset map after the page size shrinks', async () => {
+  it('keeps an inset map at its distance to the nearest edges when the page shrinks', async () => {
     geoIndicationsActions.toggleInsetMap();
     geoIndicationsActions.setInsetMapSize(80);
 
@@ -466,7 +466,7 @@ describe('geo indications overlay dragging', () => {
     await waitFor(() => {
       expect(geoIndicationsState.insetMap.dragPosition).toEqual({
         x: 96,
-        y: 36
+        y: 12
       });
     });
   });

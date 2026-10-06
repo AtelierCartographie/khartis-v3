@@ -118,5 +118,7 @@ export const ACCEPTED_BASEMAP_EXTENSIONS = [
   '.zip',
   '.gpkg',
   '.kml',
-  '.parquet'
+  '.parquet',
+  '.geoparquet',
+  '.gpq'
 ];

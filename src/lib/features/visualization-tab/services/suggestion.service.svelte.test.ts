@@ -590,7 +590,7 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.geometryColumn).toBe('geometry');
     expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
     expect(updatedVisualization?.classification).toBeUndefined();
-    expect(updatedVisualization?.style.fillOpacity).toBe(0.8);
+    expect(updatedVisualization?.style.fillOpacity).toBe(1);
     expect(updatedVisualization?.style.strokeColor).toBe(
       DEFAULT_COLORS.neutralStroke
     );

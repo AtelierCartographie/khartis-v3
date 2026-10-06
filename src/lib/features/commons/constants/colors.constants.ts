@@ -56,7 +56,7 @@ export const DEFAULT_STROKE_COLOR = '#ffffff';
 
 export const DEFAULT_STYLE_OPACITY = {
   FILL: 0.7,
-  FILL_HIGH: 0.8,
+  FILL_OPAQUE: 1,
   FILL_LOW: 0.6,
   STROKE: 1
 } as const;
