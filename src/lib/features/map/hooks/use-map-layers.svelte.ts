@@ -1579,7 +1579,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               true
             )
           : true;
-      const sphereVisible = (sphereConfig?.visible ?? true) && sphereAuxVisible;
+      // The contour belongs to the Mers/Océans section: hiding the sea hides it.
+      const sphereVisible =
+        mersEffectiveVisible &&
+        (sphereConfig?.visible ?? true) &&
+        sphereAuxVisible;
       const sphereOutlineOptions = sphereConfig
         ? (() => {
             const [r, g, b] = hexToRgb(sphereConfig.color);
@@ -1592,9 +1596,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // The outline of the ocean shape, driven by the Mers/Océans contour
-      // toggle alone: a basemap on its own default projection used to stay
-      // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
         (sphereProjectionInput || unprojectedFrame) && sphereVisible
           ? createProjectionSphereOutlineLayer({
