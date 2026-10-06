@@ -428,11 +428,27 @@ function createMapInstanceStore() {
   }
 
   /**
-   * The render model matrix scales the world by the page display scale, so
-   * the target lives in display-scaled units: when that scale changes (step,
-   * page format, page zoom), the target follows it or the centre drifts.
+   * World units spanned by the reference extent: the fit size, the fit
+   * padding and the render scale all change it, and the target lives in
+   * those units, so a manual view keeps its framing when the target is
+   * scaled by the ratio of two measures taken around such a change.
    */
-  function rescaleTargetForRenderScale(ratio: number): void {
+  function measureFramingScale(): number | null {
+    const ctx = projectionContextGetter();
+    if (!ctx.referenceBbox) return null;
+
+    const span =
+      (ctx.referenceBbox[2] - ctx.referenceBbox[0]) *
+      get_max_scale(
+        ctx.fitSize ?? ctx.canvasSize,
+        ctx.referenceBbox,
+        ctx.fitPaddingPx
+      ) *
+      (ctx.renderScale ?? 1);
+    return Number.isFinite(span) && span > 0 ? span : null;
+  }
+
+  function rescaleTarget(ratio: number): void {
     if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return;
 
     const [targetX, targetY] = normalizeTarget(state.deckViewState.target);
@@ -442,6 +458,14 @@ function createMapInstanceStore() {
       target: [targetX * ratio, targetY * ratio, 0]
     });
     applyDeckViewState();
+  }
+
+  /** Keeps a manual view's framing across a change of fit or render scale. */
+  function rescaleTargetFrom(previousFramingScale: number | null): void {
+    const framingScale = measureFramingScale();
+    if (previousFramingScale === null || framingScale === null) return;
+
+    rescaleTarget(framingScale / previousFramingScale);
   }
 
   function getMapZoom(): number {
@@ -948,7 +972,8 @@ function createMapInstanceStore() {
     projectDataToViewportPx,
     unprojectViewportPxToData,
     panForResizedFrame,
-    rescaleTargetForRenderScale,
+    measureFramingScale,
+    rescaleTargetFrom,
     getMapZoom,
     getMapCenter,
     setBaseZoomLevel,
