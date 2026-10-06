@@ -6,24 +6,21 @@ import type {
 import {
   buildTableInBackground,
   Duck,
-  GEO_CONSTANTS
+  GEO_CONSTANTS,
+  isGeometryColumnType
 } from '$lib/features/duckdb';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
 import { resolveCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 import { createCustomBasemapGeometryTableFromDuck } from './custom-basemap-geometry.service';
-import {
-  type GeoParquetColumnMeta,
-  readGeoParquetMetadataFromDuck
-} from './geo-parquet-metadata.service';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createFileFromExtracted,
   extractGeometryColumnCrs,
   extractZip,
-  getShapefileFilesFromArchive
+  getShapefileFilesFromArchive,
+  readFileIntoTable
 } from '$lib/features/data-pipeline';
-import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
   getDerivedInnerlinesTableName as getBasemapInnerlinesTableName,
@@ -207,45 +204,7 @@ async function importBasemapFile(
     );
   }
 
-  if (!Duck.db) {
-    throw new DuckDBError(m.error_duckdb_not_initialized());
-  }
-
-  const duck = Duck;
-  await duck.register_files([file]);
-
-  const lowerFileName = file.name.toLowerCase();
-  const isParquet =
-    lowerFileName.endsWith('.parquet') ||
-    lowerFileName.endsWith('.geoparquet') ||
-    lowerFileName.endsWith('.gpq');
-
-  if (isParquet) {
-    return processParquetBasemapImport(duck, file, tableName);
-  }
-
-  if (lowerFileName.endsWith('.gpkg')) {
-    try {
-      return await processGeofileBasemapImport(duck, file, tableName);
-    } catch (error) {
-      logger.error(
-        'Failed to import GeoPackage directly, trying browser fallback',
-        LogCategory.MAP,
-        error
-      );
-      await duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`,
-        {
-          format: 'arrow-ipc'
-        }
-      );
-
-      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(file);
-      return processGeofileBasemapImport(duck, fallbackGeoJsonFile, tableName);
-    }
-  }
-
-  return processGeofileBasemapImport(duck, file, tableName);
+  return readAndPrepareBasemap(file, tableName);
 }
 
 async function processZipShapefileImport(
@@ -287,149 +246,83 @@ async function processZipShapefileImport(
     );
   }
 
+  return readAndPrepareBasemap(
+    mainShpFile,
+    tableName,
+    shapefileFiles.filter((part) => part !== mainShpFile)
+  );
+}
+
+// An imported basemap is read exactly like a dataset, then gets what only a
+// basemap needs: a geometry column named `geom`, a feature id for the join and
+// the derived layers shared with a dataset that carries its own geometry.
+async function readAndPrepareBasemap(
+  file: File,
+  tableName: string,
+  companionFiles?: File[]
+): Promise<BasemapImportResult> {
   if (!Duck.db) {
     throw new DuckDBError(m.error_duckdb_not_initialized());
   }
 
   const duck = Duck;
-  await duck.register_files(shapefileFiles, { shapefile: true });
-
-  return processGeofileBasemapImport(duck, mainShpFile, tableName, true);
-}
-
-async function processGeofileBasemapImport(
-  duck: typeof Duck,
-  file: File,
-  tableName: string,
-  shapefile = false
-): Promise<BasemapImportResult> {
-  await duck.read_geofile(file, {
-    tablename: tableName,
-    shapefile
-  });
-
-  const geometryColumn = INTERNAL_COLUMN.GEOM;
-  const layerType = await queryGeometryType(duck, tableName, geometryColumn);
-
-  if (isPolygonBasemapLayerType(layerType)) {
-    await preparePolygonBasemapTables(duck, tableName, geometryColumn);
-  } else if (isLineBasemapLayerType(layerType)) {
-    await prepareLineBasemapTables(duck, tableName, geometryColumn);
-  } else if (isPointBasemapLayerType(layerType)) {
-    await preparePointBasemapTables(duck, tableName, geometryColumn);
-  }
-
-  return buildCustomBasemapImportResult(
-    duck,
-    file,
-    tableName,
-    geometryColumn,
-    layerType
-  );
-}
-
-async function processParquetBasemapImport(
-  duck: typeof Duck,
-  file: File,
-  tableName: string
-): Promise<BasemapImportResult> {
-  const fileWithId = file as File & { id?: string };
-  const fileId = fileWithId.id ?? `${file.lastModified}-${file.name}`;
-  const escapedFileId = escapeSqlString(fileId);
-
-  await duck.query(
-    `CREATE OR REPLACE TABLE "${tableName}" AS FROM read_parquet('${escapedFileId}')`,
-    { format: 'arrow-ipc' }
-  );
-
-  const geoMeta = await readGeoParquetMetadataFromDuck(
-    duck,
-    escapedFileId,
-    'Failed to read imported basemap GeoParquet metadata'
-  );
-  let geomColName = geoMeta?.primary_column ?? INTERNAL_COLUMN.GEOM;
-  const colMeta = geoMeta?.columns?.[geomColName];
-  let layerType = colMeta
-    ? extractGeometryTypeFromMeta(colMeta)
-    : await queryGeometryType(duck, tableName, geomColName);
-
-  if (isPolygonBasemapLayerType(layerType)) {
-    await preparePolygonBasemapTables(duck, tableName, geomColName);
-    geomColName = INTERNAL_COLUMN.GEOM;
-    layerType = BasemapLayerType.POLYGON;
-  } else if (isLineBasemapLayerType(layerType)) {
-    await prepareLineBasemapTables(duck, tableName, geomColName);
-    geomColName = INTERNAL_COLUMN.GEOM;
-    layerType = BasemapLayerType.LINE;
-  } else if (isPointBasemapLayerType(layerType)) {
-    await preparePointBasemapTables(duck, tableName, geomColName);
-  }
-
-  return buildCustomBasemapImportResult(
-    duck,
-    file,
-    tableName,
-    geomColName,
-    layerType
-  );
-}
-
-async function buildCustomBasemapImportResult(
-  duck: typeof Duck,
-  file: File,
-  tableName: string,
-  geometryColumn: string,
-  layerType: BasemapLayerType
-): Promise<BasemapImportResult> {
-  const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
-
-  if (!bounds) {
-    throw new DataValidationError(
-      m.basemap_import_modal_error_invalid_geometry(),
-      geometryColumn,
-      {
-        fileName: file.name,
-        tableName
-      }
+  const read = await readFileIntoTable(file, { tableName, companionFiles });
+  if (read.tableName !== tableName) {
+    await duck.query(
+      `ALTER TABLE "${escapeIdentifier(read.tableName)}" RENAME TO "${escapeIdentifier(tableName)}"`
     );
   }
 
-  const layers = buildBasemapLayers(tableName, layerType);
-  const title = file.name.replace(/\.[^/.]+$/, '');
+  await normalizeGeometryColumnName(duck, tableName, file.name);
+  const geometryColumn = INTERNAL_COLUMN.GEOM;
+  const layerType = await queryGeometryType(duck, tableName, geometryColumn);
 
-  const customBasemap: BasemapMetadata = {
-    file: tableName,
-    title_fr: title,
-    title_en: title,
-    source: m.basemap_custom_source(),
-    date: new Date().getFullYear().toString(),
-    bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    proj_source: GEO_CONSTANTS.WGS84_CRS,
-    proj_to: { type: 'identity' },
-    layers,
-    isCustom: true
-  };
+  await ensureFeatureIdColumn(duck, tableName);
+  await refreshImportedBasemapHelperTables(duck, tableName, layerType);
 
-  await generateCustomBasemapAttributes(tableName, customBasemap.file);
+  const basemap = await describeGeometryBasemap(duck, tableName, {
+    title: file.name.replace(/\.[^/.]+$/, ''),
+    geometryColumn,
+    layerType
+  });
+
+  await generateCustomBasemapAttributes(tableName, basemap.file);
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return { basemap: customBasemap, tableName, geometryTable };
+  return { basemap, tableName, geometryTable };
 }
 
-function extractGeometryTypeFromMeta(
-  colMeta: GeoParquetColumnMeta | undefined
-): BasemapLayerType {
-  const geomTypes = (colMeta?.geometry_types ?? []).map((type) =>
-    type.toLowerCase()
+// The derived-layer macros and the basemap renderer read a column named
+// `geom`, while GeoParquet and some readers keep the source column name.
+async function normalizeGeometryColumnName(
+  duck: typeof Duck,
+  tableName: string,
+  fileName: string
+): Promise<void> {
+  const description = await duck.describe_table(tableName);
+  const index = description.type.findIndex((type) =>
+    isGeometryColumnType(type)
   );
+  if (index === -1) {
+    throw new DataValidationError(
+      m.basemap_import_modal_error_invalid_geometry(),
+      INTERNAL_COLUMN.GEOM,
+      { fileName, tableName }
+    );
+  }
 
-  if (geomTypes.some((t) => t.includes('point'))) {
-    return BasemapLayerType.POINT;
+  const geometryColumn = description.name[index];
+  if (geometryColumn === INTERNAL_COLUMN.GEOM) {
+    return;
   }
-  if (geomTypes.some((t) => t.includes('line'))) {
-    return BasemapLayerType.LINE;
-  }
-  return BasemapLayerType.POLYGON;
+
+  await duck.query(`
+    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
+    SELECT * EXCLUDE ("${escapeIdentifier(geometryColumn)}"),
+      "${escapeIdentifier(geometryColumn)}" AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
+    FROM "${escapeIdentifier(tableName)}"
+  `);
+  duck.invalidateTableCache(tableName);
 }
 
 function isPolygonBasemapLayerType(layerType: BasemapLayerType): boolean {
@@ -600,27 +493,6 @@ async function prepareRepresentativePointTable(
   `);
 }
 
-function buildNormalizedGeometrySelect(
-  sourceTableName: string,
-  geometryColumn: string,
-  geometryExpression: string
-): string {
-  const escapedSourceTable = escapeIdentifier(sourceTableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
-  const escapedDefaultGeom = escapeIdentifier(INTERNAL_COLUMN.GEOM);
-  const defaultGeomExpression = `"${escapedDefaultGeom}"`;
-
-  if (geometryColumn === INTERNAL_COLUMN.GEOM) {
-    if (geometryExpression === defaultGeomExpression) {
-      return `SELECT * FROM "${escapedSourceTable}"`;
-    }
-
-    return `SELECT * REPLACE (${geometryExpression} AS "${escapedDefaultGeom}") FROM "${escapedSourceTable}"`;
-  }
-
-  return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${geometryExpression} AS "${escapedDefaultGeom}" FROM "${escapedSourceTable}"`;
-}
-
 async function rebuildPolygonDerivedTables(
   duck: typeof Duck,
   tableName: string
@@ -672,96 +544,6 @@ export async function refreshImportedBasemapHelperTables(
   }
 }
 
-async function preparePolygonBasemapTables(
-  duck: typeof Duck,
-  tableName: string,
-  geometryColumn: string
-): Promise<void> {
-  const rawTableName = getBasemapRawTableName(tableName);
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedRawTable = escapeIdentifier(rawTableName);
-
-  await duck.query(
-    `CREATE OR REPLACE TABLE "${escapedRawTable}" AS SELECT * FROM "${escapedTable}"`
-  );
-
-  try {
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedTable}" AS
-      FROM simplify_and_clean('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
-    `);
-  } catch (error) {
-    logger.error(
-      'Failed to normalize imported basemap polygon geometry with macro, using SQL fallback',
-      LogCategory.MAP,
-      error
-    );
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedTable}" AS
-      ${buildNormalizedGeometrySelect(
-        rawTableName,
-        geometryColumn,
-        `"${escapeIdentifier(geometryColumn)}"`
-      )}
-    `);
-  }
-
-  await ensureFeatureIdColumn(duck, tableName);
-  await rebuildPolygonDerivedTables(duck, tableName);
-}
-
-async function prepareLineBasemapTables(
-  duck: typeof Duck,
-  tableName: string,
-  geometryColumn: string
-): Promise<void> {
-  const rawTableName = getBasemapRawTableName(tableName);
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedRawTable = escapeIdentifier(rawTableName);
-
-  await duck.query(
-    `CREATE OR REPLACE TABLE "${escapedRawTable}" AS SELECT * FROM "${escapedTable}"`
-  );
-
-  try {
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedTable}" AS
-      FROM simplify_and_clean_linestring('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
-    `);
-  } catch (error) {
-    logger.error(
-      'Failed to normalize imported basemap line geometry with macro, using SQL fallback',
-      LogCategory.MAP,
-      error
-    );
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedTable}" AS
-      ${buildNormalizedGeometrySelect(
-        rawTableName,
-        geometryColumn,
-        `"${escapeIdentifier(geometryColumn)}"`
-      )}
-    `);
-  }
-
-  await ensureFeatureIdColumn(duck, tableName);
-  await rebuildLineDerivedTables(duck, tableName);
-}
-
-async function preparePointBasemapTables(
-  duck: typeof Duck,
-  tableName: string,
-  geometryColumn: string
-): Promise<void> {
-  await prepareRepresentativePointTable(
-    duck,
-    tableName,
-    geometryColumn,
-    BasemapLayerType.POINT
-  );
-  await ensureFeatureIdColumn(duck, tableName);
-}
-
 async function ensureFeatureIdColumn(
   duck: typeof Duck,
   tableName: string
@@ -811,6 +593,32 @@ export async function createBasemapFromGeometryTable(
 
   await refreshImportedBasemapHelperTables(duck, tableName, layerType);
 
+  const basemap = await describeGeometryBasemap(duck, tableName, {
+    title: options.title,
+    geometryColumn,
+    layerType,
+    crs: options.crs,
+    isDatasetGeometry: true
+  });
+  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
+
+  return { basemap, tableName, geometryTable };
+}
+
+interface GeometryBasemapDescription {
+  title: string;
+  geometryColumn: string;
+  layerType: BasemapLayerType;
+  crs?: string;
+  isDatasetGeometry?: boolean;
+}
+
+async function describeGeometryBasemap(
+  duck: typeof Duck,
+  tableName: string,
+  description: GeometryBasemapDescription
+): Promise<BasemapMetadata> {
+  const { title, geometryColumn, layerType } = description;
   const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
   if (!bounds) {
     throw new DataValidationError(
@@ -821,31 +629,27 @@ export async function createBasemapFromGeometryTable(
   }
 
   // Bounds and CRS must describe the same space, or the basemap projection is
-  // fitted to the source units while the dataset is drawn in another.
+  // fitted to the source units while the geometry is drawn in another.
   const sourceCrs =
-    options.crs ??
+    description.crs ??
     (await readGeometryColumnCrs(duck, tableName, geometryColumn)) ??
     GEO_CONSTANTS.WGS84_CRS;
 
-  const basemap: BasemapMetadata = {
+  return {
     file: tableName,
-    title_fr: options.title,
-    title_en: options.title,
+    title_fr: title,
+    title_en: title,
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
     proj_source: sourceCrs,
     proj_to: { type: 'identity' },
     layers: buildBasemapLayers(tableName, layerType, {
-      omitPrimaryLayer: true
+      omitPrimaryLayer: description.isDatasetGeometry === true
     }),
     isCustom: true,
-    isDatasetGeometry: true
+    ...(description.isDatasetGeometry ? { isDatasetGeometry: true } : {})
   };
-
-  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
-
-  return { basemap, tableName, geometryTable };
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {
