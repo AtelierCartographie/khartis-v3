@@ -57,7 +57,8 @@
   import {
     DEFAULT_PAGE_COLOR,
     getFormatLayoutSizingContext,
-    getFormatState
+    getFormatState,
+    getLastPageResize
   } from '$lib/features/step-toolbar/tools/format';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
@@ -264,6 +265,7 @@
   let pendingMapLibreSyncFrameId: number | null = null;
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastLayoutSnapshot: string | null = null;
+  let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
   let lastSelectedBasemapZone = getBasemapZone(basemapStyleStore.selectedStyle);
 
   let isApplyingMapLibreSync = false;
@@ -1207,6 +1209,13 @@
     const margins = pageMargins;
     const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
 
+    const pageResize = getLastPageResize();
+    const previousPageSize =
+      pageResize && pageResize.id !== handledPageResizeId
+        ? pageResize.from
+        : undefined;
+    handledPageResizeId = pageResize?.id ?? handledPageResizeId;
+
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
       return;
@@ -1229,11 +1238,14 @@
       }
 
       if (!globalState.isResizingMapFrame) {
-        annotationsActions.redistributePageElements({
-          width: fmtState.width,
-          height: fmtState.height,
-          margins
-        });
+        annotationsActions.redistributePageElements(
+          {
+            width: fmtState.width,
+            height: fmtState.height,
+            margins
+          },
+          previousPageSize
+        );
       }
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
