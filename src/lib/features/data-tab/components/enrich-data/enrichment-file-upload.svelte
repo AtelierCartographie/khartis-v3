@@ -51,8 +51,8 @@
 
   <div class="import-grid">
     <FileUploaderDropContainer
-      labelText={m.enrich_drag_drop_csv()}
-      accept={[...PIPELINE_CONST.EXTENSIONS.TABULAR]}
+      labelText={m.enrich_drag_drop_file()}
+      accept={[...PIPELINE_CONST.EXTENSIONS.ALL]}
       disabled={isUploading}
       on:change={(e) => onFileUpload(e.detail)}
     />
