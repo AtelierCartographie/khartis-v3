@@ -5,6 +5,7 @@ import {
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import { DuckDBSimplifiedType } from '$lib/features/duckdb';
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: {},
@@ -15,6 +16,8 @@ const { createDatasetFromPreprocessedFile } =
   await import('$lib/features/commons/stores/datasets/datasets-processing');
 const { cleanFileForStorage } =
   await import('$lib/features/commons/stores/project/project-files');
+const { buildStatisticsFromColumns, enrichColumns } =
+  await import('$lib/features/data-pipeline/operations/analysis');
 
 const geometry = {
   type: 'MULTIPOLYGON',
@@ -62,5 +65,33 @@ describe('geo dataset created from the import modal', () => {
       maxLon: 9.56,
       maxLat: 51.09
     });
+  });
+});
+
+describe('column statistics from the import modal', () => {
+  it('should keep every statistic the suggester reads when the project is created from the modal', () => {
+    const [column] = enrichColumns([
+      {
+        name: 'pib',
+        type_simple: DuckDBSimplifiedType.NUMERIC,
+        count: 10,
+        nulls: 0,
+        uniques: 10,
+        min: 120n,
+        max: 25_000n,
+        share_integers: 1,
+        share_floats: 0,
+        share_rank_interval: 0.1,
+        extent_magnitude: 2.3,
+        skewness: 2.4,
+        value_sample: [120, 25_000]
+      }
+    ]);
+    const dataset = createDatasetFromPreprocessedFile({
+      ...makeModalGeoFile(),
+      statistics: buildStatisticsFromColumns([column])
+    });
+
+    expect(dataset.columns[0].stats).toEqual(column.stats);
   });
 });

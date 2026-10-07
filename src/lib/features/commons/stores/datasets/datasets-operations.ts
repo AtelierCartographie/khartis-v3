@@ -1,5 +1,6 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import {
+  buildStatisticsFromColumns,
   createFileFromUpload,
   dataPipeline,
   isZipDatasetResult
@@ -89,22 +90,8 @@ function cloneDatasetParsedData(
 function buildStatisticsFromDataset(
   dataset: DatasetResult
 ): UploadedFile['statistics'] | undefined {
-  const statistics = Object.fromEntries(
-    dataset.columns
-      .filter((column) => column.stats)
-      .map((column) => [
-        column.name,
-        {
-          type: column.type,
-          count: column.stats?.count ?? 0,
-          nullCount: column.stats?.nulls ?? 0,
-          unique: column.stats?.uniques ?? 0,
-          min: column.stats?.min,
-          max: column.stats?.max,
-          mean: column.stats?.mean,
-          value_sample: column.stats?.value_sample
-        }
-      ])
+  const statistics = buildStatisticsFromColumns(
+    dataset.columns.filter((column) => column.stats)
   );
 
   return Object.keys(statistics).length > 0 ? statistics : undefined;

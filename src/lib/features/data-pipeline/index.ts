@@ -20,6 +20,7 @@ export { generateTableName } from './core/format-detector';
 export { extractGeoArrowMetadata } from './io/geoarrow-metadata';
 
 export {
+  buildStatisticsFromColumns,
   buildStatisticsSnapshot,
   readDatasetTableSnapshot
 } from './operations/analysis';
