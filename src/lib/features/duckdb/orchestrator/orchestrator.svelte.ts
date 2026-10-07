@@ -1442,6 +1442,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await datasetOps.dropTable(tableName, Duck);
+    joinOps.invalidateSimilarityCache(tableName, Duck);
     state.clearFiltersForTable(tableName);
   },
 
