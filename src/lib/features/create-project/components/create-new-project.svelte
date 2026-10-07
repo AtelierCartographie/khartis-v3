@@ -350,6 +350,10 @@
     return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
   };
 
+  const rowsLabel = (count: number) => (count <= 1 ? m.rows_one() : m.rows());
+  const columnsLabel = (count: number) =>
+    count <= 1 ? m.columns_one() : m.columns();
+
   function getFileExtension(fileName: string): string {
     const extensionStart = fileName.lastIndexOf('.');
     return extensionStart >= 0
@@ -426,10 +430,10 @@
           </span>
           <span class="paste-feedback-metrics">
             {formatValue(pastedFile.rowCount ?? 0)}
-            {m.rows()}
+            {rowsLabel(pastedFile.rowCount ?? 0)}
             {m.separator_middle_dot_space()}
             {formatValue(pastedFile.columnCount ?? 0)}
-            {m.columns()}
+            {columnsLabel(pastedFile.columnCount ?? 0)}
           </span>
         </div>
       {/if}
@@ -545,7 +549,9 @@
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
           <span class="files-imported-label">
-            {m.create_project_file_imported()}
+            {createProjectState.newProject.uploadedFiles.length > 1
+              ? m.create_project_files_imported()
+              : m.create_project_file_imported()}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
             <Button
@@ -690,12 +696,12 @@
                         <span data-testid="file-row-count"
                           >{formatValue(rowCount)}</span
                         >
-                        {m.rows()}
+                        {rowsLabel(rowCount)}
                         {m.separator_middle_dot_space()}
                         <span data-testid="file-column-count"
                           >{formatValue(columnCount)}</span
                         >
-                        {m.columns()}
+                        {columnsLabel(columnCount)}
                       </div>
                     {/if}
                   </div>
