@@ -1029,24 +1029,17 @@
     const scale = getPageScale();
     const rect = layer.getBoundingClientRect();
 
-    const minX =
-      context.scope === 'page' && context.role ? pageMargins.left : 0;
-    const minY = context.scope === 'page' && context.role ? pageMargins.top : 0;
-    const maxX =
-      context.scope === 'page' && context.role
-        ? Math.max(minX, formatState.width - pageMargins.right - context.width)
-        : Math.max(0, rect.width / scale - context.width);
-    const maxY =
-      context.scope === 'page' && context.role
-        ? Math.max(
-            minY,
-            formatState.height - pageMargins.bottom - context.height
-          )
-        : Math.max(0, rect.height / scale - context.height);
+    const isPageElement = context.scope === 'page' && context.role;
+    const maxX = isPageElement
+      ? Math.max(0, formatState.width - context.width)
+      : Math.max(0, rect.width / scale - context.width);
+    const maxY = isPageElement
+      ? Math.max(0, formatState.height - context.height)
+      : Math.max(0, rect.height / scale - context.height);
 
     return {
-      x: clamp(position.x, minX, maxX),
-      y: clamp(position.y, minY, maxY)
+      x: clamp(position.x, 0, maxX),
+      y: clamp(position.y, 0, maxY)
     };
   }
 

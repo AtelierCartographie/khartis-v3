@@ -8,6 +8,7 @@ import { TextAlign } from '$lib/features/commons/types/enums';
 import {
   clampToRange,
   PAGE_GRID_SIZE_PX,
+  remapPointToResizedArea,
   snapPointWithinBounds
 } from '$lib/features/commons/utils/page-grid.utils';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -115,29 +116,41 @@ function resolveMapFrame(layout: PageLayout): PageFrame {
   };
 }
 
+// Page elements may sit anywhere on the page, margins included: shrinking the
+// map frame is how room is made for a title outside the map. The rendered size
+// varies with the sizing profile, so only a grip has to stay on the page; the
+// overlay clamps drags against the measured size.
+const PAGE_ELEMENT_MIN_VISIBLE_PX = PAGE_GRID_SIZE_PX * 2;
+
 export function clampPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   layout: PageLayout,
   snapToGridEnabled = true
 ): { x: number; y: number } {
-  const frame = resolveMapFrame(layout);
-  const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
-  const minX = frame.left;
-  const maxX = Math.max(minX, frame.right - roleWidth);
-  const minY = frame.top;
-  const maxY = Math.max(minY, frame.bottom - roleHeight);
-
   return snapPointWithinBounds(
     position,
     {
-      minX,
-      maxX,
-      minY,
-      maxY
+      minX: 0,
+      maxX: Math.max(0, layout.width - PAGE_ELEMENT_MIN_VISIBLE_PX),
+      minY: 0,
+      maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
     isGridEnabled() && snapToGridEnabled
+  );
+}
+
+export function remapPageElementPosition(
+  position: { x: number; y: number },
+  role: PageElementRole,
+  from: Pick<PageLayout, 'width' | 'height'>,
+  to: Pick<PageLayout, 'width' | 'height'>
+): { x: number; y: number } {
+  return remapPointToResizedArea(
+    position,
+    { width: PAGE_ELEMENT_WIDTHS[role], height: PAGE_ELEMENT_HEIGHTS[role] },
+    from,
+    to
   );
 }
 

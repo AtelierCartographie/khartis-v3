@@ -25,13 +25,18 @@
   import {
     PAGE_GRID_SIZE_PX,
     getDragBounds,
+    remapPointToResizedArea,
     snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     geoIndicationsActions,
     geoIndicationsState
   } from '$lib/features/step-toolbar/tools/geo-indications';
-  import { getFormatState } from '$lib/features/step-toolbar/tools/format';
+  import {
+    getFormatState,
+    getLastPageResize,
+    type PageResize
+  } from '$lib/features/step-toolbar/tools/format';
   import {
     clampScaleDistance,
     formatScaleDistance,
@@ -880,11 +885,12 @@
       return null;
     }
 
-    // Convert screen-pixel dimensions to logical page units for drag bounds.
-    const scale = getPageScale();
+    // The overlay sits on the map area. Its DOM size follows a resize
+    // observer, so it lags one layout behind a page format change.
+    const { margins } = formatState;
     return {
-      width: overlayElement.offsetWidth / scale,
-      height: overlayElement.offsetHeight / scale
+      width: Math.max(0, formatState.width - margins.left - margins.right),
+      height: Math.max(0, formatState.height - margins.top - margins.bottom)
     };
   }
 
@@ -1020,6 +1026,48 @@
       setDragPosition(target, normalizedPosition);
     }
   }
+
+  let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
+
+  // A page resize keeps the margins, so the map stage changes by the same
+  // amount as the page; a dragged indication keeps its distance to the
+  // nearest edge. Declared before the re-clamping effects so they clamp the
+  // remapped position.
+  function remapStoredDragPositions(pageResize: PageResize): void {
+    const { margins } = formatState;
+    const toStageSize = (page: { width: number; height: number }) => ({
+      width: page.width - margins.left - margins.right,
+      height: page.height - margins.top - margins.bottom
+    });
+
+    for (const target of ['scale', 'orientation', 'inset'] as const) {
+      const dragPosition = getDragPosition(target);
+      const element = getDragElement(target);
+      if (!dragPosition || !element || currentDrag === target) {
+        continue;
+      }
+
+      setDragPosition(
+        target,
+        remapPointToResizedArea(
+          dragPosition,
+          { width: element.offsetWidth, height: element.offsetHeight },
+          toStageSize(pageResize.from),
+          toStageSize(pageResize.to)
+        )
+      );
+    }
+  }
+
+  $effect(() => {
+    const pageResize = getLastPageResize();
+    if (!pageResize || pageResize.id === handledPageResizeId) {
+      return;
+    }
+
+    handledPageResizeId = pageResize.id;
+    untrack(() => remapStoredDragPositions(pageResize));
+  });
 
   $effect(() => {
     void formatState.width;

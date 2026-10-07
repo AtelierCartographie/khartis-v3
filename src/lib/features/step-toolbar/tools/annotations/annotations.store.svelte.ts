@@ -44,6 +44,7 @@ import {
   isGridEnabled,
   isPageElementRole,
   reconcileAutoPageElementStyle,
+  remapPageElementPosition,
   resolvePageLayout,
   shouldSnapAutoPageElement,
   type PageLayout
@@ -119,16 +120,20 @@ type AnnotationsActions = {
   }) => void;
   refreshPageElementPlaceholders: () => void;
   setPageElementsVisibility: (visible: boolean) => void;
-  redistributePageElements: (layout?: {
-    width?: number;
-    height?: number;
-    margins?: {
-      top: number;
-      bottom: number;
-      left: number;
-      right: number;
-    };
-  }) => void;
+  pinPageElements: () => void;
+  redistributePageElements: (
+    layout?: {
+      width?: number;
+      height?: number;
+      margins?: {
+        top: number;
+        bottom: number;
+        left: number;
+        right: number;
+      };
+    },
+    previousPage?: { width: number; height: number }
+  ) => void;
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
@@ -927,7 +932,22 @@ const { actions, getState } = createToolStore<
         isPageElementRole(item.role) ? { ...item, visible } : item
       );
     },
-    redistributePageElements: (layoutOverrides) => {
+    pinPageElements: () => {
+      if (
+        !s.items.some(
+          (item) =>
+            isPageElementRole(item.role) && item.positionMode !== 'manual'
+        )
+      ) {
+        return;
+      }
+      s.items = s.items.map((item) =>
+        isPageElementRole(item.role) && item.positionMode !== 'manual'
+          ? { ...item, positionMode: 'manual' }
+          : item
+      );
+    },
+    redistributePageElements: (layoutOverrides, previousPage) => {
       const layout = resolvePageLayout(layoutOverrides);
       s.items = s.items.map((item) => {
         if (!isPageElementRole(item.role)) {
@@ -944,7 +964,18 @@ const { actions, getState } = createToolStore<
           return {
             ...item,
             style,
-            position: clampPageElementPosition(item.position, item.role, layout)
+            position: clampPageElementPosition(
+              previousPage
+                ? remapPageElementPosition(
+                    item.position,
+                    item.role,
+                    previousPage,
+                    layout
+                  )
+                : item.position,
+              item.role,
+              layout
+            )
           };
         }
 

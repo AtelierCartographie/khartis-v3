@@ -497,25 +497,34 @@ function buildSyntheticBasemapEntries(
         ])
   ];
 
-  return synthetics.flatMap(({ layerId, key }): BasemapDisplayEntry[] => {
-    const config = basemapLayersStore.getLayer(layerId);
-    if (!config) return [];
+  const isRowVisible = (layerId: BasemapLayerId, key?: string): boolean => {
     // The graticule row reads the mode that is actually drawing.
     const visibilityConfig =
       layerId === BASEMAP_LAYER_ID.MERIDIENS
         ? basemapLayersStore.getLayer(resolveActiveGraticuleLayerId())
-        : config;
+        : basemapLayersStore.getLayer(layerId);
     const auxVisible =
       basemapFile && key
         ? basemapAuxLayersStore.isVisible(basemapFile, key, true)
         : true;
+    return (visibilityConfig?.visible ?? false) && auxVisible;
+  };
+
+  return synthetics.flatMap(({ layerId, key }): BasemapDisplayEntry[] => {
+    const config = basemapLayersStore.getLayer(layerId);
+    if (!config) return [];
+    // The sea contour is only drawn while the sea itself is shown.
+    const visible =
+      isRowVisible(layerId, key) &&
+      (layerId !== BASEMAP_LAYER_ID.SPHERE ||
+        isRowVisible(BASEMAP_LAYER_ID.MERS, SYNTHETIC_AUX_LAYER_KEY.MERS));
     return [
       {
         layerId,
         file: basemapFile ?? undefined,
         key: basemapFile ? key : undefined,
         name: getBasemapLayerName(layerId, isCustom),
-        visible: (visibilityConfig?.visible ?? false) && auxVisible,
+        visible,
         color: getBasemapLayerColor(config),
         opacity: getBasemapLayerOpacity(config),
         renderGroup: `geographic-${getBasemapRenderGroup(layerId)}`,

@@ -14,6 +14,7 @@
   import { PAGE_GRID_SIZE_PX } from '../commons/utils/page-grid.utils';
   import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
@@ -361,6 +362,9 @@
     pageW: number,
     pageH: number
   ): void {
+    // Resizing the frame is composing the page by hand: page elements stay
+    // where they are instead of following the frame into the map.
+    annotationsActions.pinPageElements();
     let { top, right, bottom, left } = startMargins;
 
     if (edge.includes('e')) right = startMargins.right - dx;

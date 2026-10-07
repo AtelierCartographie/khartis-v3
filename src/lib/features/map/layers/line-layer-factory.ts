@@ -58,7 +58,8 @@ import { resolveEffectiveCategoryColorMap } from './layer-color.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
   OUT_OF_SCOPE_COLOR,
-  OUT_OF_SCOPE_SIZE
+  OUT_OF_SCOPE_SIZE,
+  resolveScopedRowIds
 } from './split-rendering-accessors';
 
 export function createLineLayerStack(
@@ -254,7 +255,15 @@ export function createLineLayerStack(
                   number,
                   number
                 ])
-        : null;
+        : resolveScopedRowIds(ctx)
+          ? () =>
+              withOpacity(resolvedLineColor, normalizedLineOpacity) as [
+                number,
+                number,
+                number,
+                number
+              ]
+          : null;
 
     const lineColorFn =
       hasLineHighlights && lineHighlightedRowIds

@@ -194,12 +194,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    const ext = file.name.toLowerCase().split('.').pop();
-
-    if (!['csv', 'tsv', 'txt'].includes(ext || '')) {
-      uploadError = m.error_upload_unsupported_format();
-      return;
-    }
 
     isUploading = true;
     uploadError = null;

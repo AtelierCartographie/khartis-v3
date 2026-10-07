@@ -354,9 +354,14 @@ export function useEnrichmentJoin(
     isFinalizingJoin = true;
 
     try {
+      // A geographic enrichment file brings its attributes, not a second
+      // geometry for the target dataset.
       const enrichmentColumns = enrichmentDataset.columns
         .filter(
-          (col) => col.name !== enrichCol.columnName && col.name !== '__id'
+          (col) =>
+            col.name !== enrichCol.columnName &&
+            col.name !== '__id' &&
+            col.name !== enrichmentDataset.geometry?.columnName
         )
         .map((col) => col.name);
 

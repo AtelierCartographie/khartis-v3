@@ -209,7 +209,8 @@ export async function saveCurrentProject(
     container._state.currentProject.manifest.updatedAt = new Date();
 
     const thumbnail =
-      captureMapThumbnailThrottled()?.dataUrl ?? options.fallbackThumbnail;
+      captureMapThumbnailThrottled(container._state.currentProject.id)
+        ?.dataUrl ?? options.fallbackThumbnail;
 
     await projectRepository.save(
       container._state.currentProject,

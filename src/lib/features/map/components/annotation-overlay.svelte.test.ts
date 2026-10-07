@@ -528,7 +528,7 @@ describe('annotation overlay drawing interactions', () => {
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
   });
 
-  it('drags page text annotations to the right edge of the map frame', async () => {
+  it('drags page text annotations to the right edge of the page, past the map frame', async () => {
     formatActions.toggleGrid();
     formatActions.setMargins({
       top: 40,
@@ -594,7 +594,7 @@ describe('annotation overlay drawing interactions', () => {
       pointerId: 1
     });
 
-    expect(getAnnotationsState().items[0]?.position.x).toBe(144);
+    expect(getAnnotationsState().items[0]?.position.x).toBe(184);
 
     await fireEvent.pointerUp(window, { pointerId: 1 });
 
