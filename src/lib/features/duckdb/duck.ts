@@ -20,6 +20,7 @@ import { density_macros } from './macros/density';
 import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
 import { simplification_macros } from './macros/simplification';
+import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 
 import type {
@@ -170,18 +171,29 @@ export const Duck = {
     markTableMutated(ctx, table);
   },
 
-  /** Drop a tracked table and invalidate its metadata cache atomically. */
+  /**
+   * Drop a tracked table with its derived geometry tables and invalidate their
+   * metadata caches atomically.
+   */
   async dropTable(table: string): Promise<void> {
     const ctx = getContext();
+    const derivedTables = Object.values(DERIVED_GEOMETRY_TABLE_SUFFIX).map(
+      (suffix) => `${table}${suffix}`
+    );
     await executeQuery(
       ctx.connection,
-      `DROP TABLE IF EXISTS "${escapeIdentifier(table)}"`
+      [table, ...derivedTables]
+        .map((name) => `DROP TABLE IF EXISTS "${escapeIdentifier(name)}";`)
+        .join('\n')
     );
     await executeQuery(
       ctx.connection,
       `DROP SEQUENCE IF EXISTS "${rowIdSequenceName(table)}"`
     );
     markTableMutated(ctx, table);
+    for (const derivedTable of derivedTables) {
+      markTableMutated(ctx, derivedTable);
+    }
   },
 
   get_table_metadata(table: string): TableMetadata {
