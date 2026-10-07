@@ -18,17 +18,6 @@ const HTTP_PROTOCOL = 'http:';
 const HTTPS_PROTOCOL = 'https:';
 const DEFAULT_FILENAME = 'download';
 
-export type ColumnStatSummary = {
-  type: string;
-  count: number;
-  nullCount: number;
-  unique: number;
-  min?: number;
-  max?: number;
-  mean?: number;
-  value_sample?: number[];
-};
-
 export { DataSourceType, FileType } from '../types/create-project.types';
 export { detectFileType } from './file-type-detection.utils';
 
