@@ -41,10 +41,15 @@
 
   interface Props {
     isModal?: boolean;
+    showTitle?: boolean;
     resetToken?: number;
   }
 
-  const { isModal = false, resetToken = 0 }: Props = $props();
+  const {
+    isModal = false,
+    showTitle = false,
+    resetToken = 0
+  }: Props = $props();
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
@@ -285,13 +290,14 @@
   class={clsx('grid grid-cols-1 gap-3', isModal && 'is-modal-create-project')}
 >
   <header class="mb-4">
-    {#if !isModal}
+    {#if showTitle}
       <h6 class="mb-3">{m.create_project_import_data()}</h6>
     {/if}
 
-    <span class="text-grey">
-      {m.create_project_import_data_description()}
-    </span>
+    <ul class="import-formats text-grey">
+      <li>{m.create_project_import_data_tabular()}</li>
+      <li>{m.create_project_import_data_geographic()}</li>
+    </ul>
   </header>
 
   <div class="import-grid">
@@ -368,14 +374,31 @@
           description={m.create_project_loading_status()}
         />
       {:else}
-        <Link
-          href={DOC_LINK.IMPORT_DATA}
-          target="_blank"
-          size="sm"
-          icon={Launch}
-        >
-          {m.basemap_import_learn_more()}
-        </Link>
+        <div class="learn-more">
+          <span>{m.create_project_learn_more_title()}</span>
+          <ul>
+            <li>
+              <Link
+                href={DOC_LINK.IMPORT_DATA}
+                target="_blank"
+                size="sm"
+                icon={Launch}
+              >
+                {m.create_project_learn_more_data()}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={DOC_LINK.JOIN_BASEMAP}
+                target="_blank"
+                size="sm"
+                icon={Launch}
+              >
+                {m.create_project_learn_more_basemaps()}
+              </Link>
+            </li>
+          </ul>
+        </div>
       {/if}
     </div>
 
@@ -654,6 +677,18 @@
 
   .paste-container {
     position: relative;
+  }
+
+  .import-formats,
+  .learn-more ul {
+    list-style: disc;
+    padding-left: var(--cds-spacing-06);
+  }
+
+  .learn-more {
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    color: var(--cds-text-secondary);
   }
 
   .paste-actions {

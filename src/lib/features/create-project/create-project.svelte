@@ -188,7 +188,7 @@
           aria-labelledby={activeProjectTabId}
         >
           {#if createProjectState.selectedTab === 1}
-            <CreateNewProject isModal resetToken={resetToken} />
+            <CreateNewProject isModal showTitle resetToken={resetToken} />
           {:else if createProjectState.selectedTab === 2}
             <OpenProject onClose={handleClose} />
           {:else if createProjectState.selectedTab === 3}
