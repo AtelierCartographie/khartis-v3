@@ -486,6 +486,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.POLYGON}
   visualization={visualization}
   classification={activeDiscretizationClassification}
   valueColumn={activeDiscretizationValueColumn}

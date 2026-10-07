@@ -15,6 +15,10 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
   generateColorsForBreaks: vi.fn(() => [])
 }));
 
+vi.mock('$lib/features/commons/services/row-scope.service', () => ({
+  resolveValueScopeClause: () => null
+}));
+
 vi.mock('$lib/features/step-toolbar/tools/color-blindness', () => ({
   getColorBlindnessState: () => ({ enabled: false, simulationType: 'none' }),
   isColorBlindnessActive: () => false
@@ -38,6 +42,7 @@ import DiscretizationModal from './discretization-modal.svelte';
 import DiscretizationPanel from './discretization-panel.svelte';
 import {
   ClassificationMethod,
+  PrimitiveFilterType,
   VisualizationType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -75,6 +80,7 @@ describe('DiscretizationModal', () => {
     render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       classification: undefined,
       valueColumn: 'stroke_value',
       role: 'stroke'
@@ -106,6 +112,7 @@ describe('DiscretizationModal', () => {
     render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       onchange
     });
 
@@ -139,6 +146,7 @@ describe('DiscretizationModal', () => {
     const { rerender } = render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       classification: initialClassification,
       onchange
     });
@@ -278,6 +286,7 @@ describe('DiscretizationModal', () => {
     render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       classification: visualization.classification,
       valueColumn: 'births'
     });
@@ -313,6 +322,7 @@ describe('DiscretizationModal', () => {
     render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       classification: visualization.classification,
       valueColumn: 'births'
     });
@@ -346,6 +356,7 @@ describe('DiscretizationModal', () => {
     render(DiscretizationModal, {
       open: true,
       visualization,
+      primitive: PrimitiveFilterType.POLYGON,
       classification: visualization.classification,
       valueColumn: 'births'
     });

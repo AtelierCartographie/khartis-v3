@@ -13,8 +13,10 @@
   import {
     ClassificationMethod,
     type ClassificationConfig,
+    type PrimitiveFilter,
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
   import {
     DEFAULT_CLASSIFICATION_CLASS_COUNT,
     SLIDER_DEBOUNCE_MS,
@@ -70,6 +72,7 @@
   interface Props {
     open?: boolean;
     visualization?: VisualizationConfig;
+    primitive: PrimitiveFilter;
     classification?: ClassificationConfig;
     valueColumn?: string;
     showBreakpointControls?: boolean;
@@ -83,6 +86,7 @@
   let {
     open = $bindable(false),
     visualization,
+    primitive,
     classification: classificationOverride,
     valueColumn,
     showBreakpointControls = true,
@@ -480,6 +484,11 @@
       const computation = await computeClassificationBreaks({
         datasetSourceFileId: dataset.sourceFileId,
         valueColumn: activeValueColumn,
+        rowScopeClause: resolveValueScopeClause({
+          datasetId: dataset.sourceFileId,
+          vizFilters: visualization.dataFilters,
+          primitive
+        }),
         classification: activeClassification,
         method: storeMethod,
         numClasses: currentNumClasses,

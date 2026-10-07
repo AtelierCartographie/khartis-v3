@@ -383,6 +383,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={activeDiscretizationVisualization}
   classification={activeDiscretizationClassification}
   valueColumn={activeDiscretizationValueColumn}
