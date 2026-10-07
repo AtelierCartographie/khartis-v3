@@ -1,4 +1,5 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import type {
   BasemapLayer,
   BasemapMetadata
@@ -73,17 +74,15 @@ export interface BasemapBounds {
 }
 
 const CUSTOM_BASEMAP_TABLE_PREFIX = 'custom_basemap_';
-const RAW_TABLE_SUFFIX = '__raw';
-const CENTROIDS_TABLE_SUFFIX = '__centroids';
 const BASEMAP_URL_LOAD_ERROR_CODE = 'BASEMAP_URL_LOAD_ERROR';
 const SHAPEFILE_FILE_TYPE = 'shapefile';
 
 export function getBasemapRawTableName(tableName: string): string {
-  return `${tableName}${RAW_TABLE_SUFFIX}`;
+  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.RAW}`;
 }
 
 export function getBasemapCentroidsTableName(tableName: string): string {
-  return `${tableName}${CENTROIDS_TABLE_SUFFIX}`;
+  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.CENTROIDS}`;
 }
 
 interface BasemapImportOptions {

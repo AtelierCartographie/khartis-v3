@@ -160,32 +160,6 @@ export async function removeFileFromProject(
   await markDirtyAndSave(container);
 }
 
-export async function clearSourceFiles(
-  container: ProjectStateContainer
-): Promise<void> {
-  const project = container._state.currentProject;
-  const sourceFiles = project?.data?.sourceFiles;
-  if (!project?.data || !sourceFiles?.length) {
-    return;
-  }
-
-  const fileIds = sourceFiles.map((file) => file.id);
-
-  container._state.currentProject = {
-    ...project,
-    data: {
-      ...project.data,
-      sourceFiles: []
-    }
-  };
-
-  for (const fileId of fileIds) {
-    await dataOrchestratorService.onFileRemoved(fileId);
-  }
-
-  await markDirtyAndSave(container);
-}
-
 export async function renameFile(
   container: ProjectStateContainer,
   fileId: string,

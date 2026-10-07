@@ -30,6 +30,7 @@ import {
   perfMeasure
 } from '$lib/features/commons/utils/perf-marks.utils';
 import {
+  buildStatisticsFromColumns,
   dataPipeline,
   isZipDatasetResult,
   type DatasetResult
@@ -37,10 +38,8 @@ import {
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import {
-  buildColumnStatistics,
   convertRowsToTabular,
-  createDataMatrix,
-  type ColumnInfo
+  createDataMatrix
 } from '../utils/file-processor.utils';
 
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
@@ -200,7 +199,7 @@ async function updateFileFromDuckDBDataset(
 
   callbacks.onProgress(uploadedFile.id, 50);
 
-  const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
+  const statistics = buildStatisticsFromColumns(columns);
 
   const sampleData = (await duck.query(
     `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
@@ -387,7 +386,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       return;
     }
 
-    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
+    const statistics = buildStatisticsFromColumns(columns);
 
     const sampleData = (await Duck.query(
       `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
@@ -511,10 +510,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       const detectedFileType = resolveArchiveDatasetFileType(dataset);
       const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
 
-      const statistics = buildColumnStatistics(
-        columns as ColumnInfo[],
-        rowCount
-      );
+      const statistics = buildStatisticsFromColumns(columns);
 
       let previewData: Array<Record<string, unknown>> = [];
       try {

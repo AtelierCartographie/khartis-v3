@@ -479,6 +479,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.LINE}
   visualization={visualization}
   classification={discretizationTarget === 'thickness'
     ? lineThicknessClassification

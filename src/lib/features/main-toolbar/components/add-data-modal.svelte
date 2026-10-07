@@ -44,7 +44,7 @@
     }
     open = false;
     importError = false;
-    createProjectActions.clearUploadState();
+    createProjectActions.clearAllFiles();
     uploaderResetKey++;
   };
 
@@ -68,6 +68,7 @@
         isImporting = true;
 
         await projectStore.addFilesToProject(filesToImport);
+        createProjectActions.handOverUploadedFiles(filesToImport);
         const firstFile = filesToImport[0];
         if (firstFile?.id) {
           dataTabStore.reset();
