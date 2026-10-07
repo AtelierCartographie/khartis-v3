@@ -527,6 +527,8 @@
   "create_project_learn_more_basemaps": "the basemap catalog included in the tool",
   "create_project_drag_drop_file": "Drag and drop a file or click to import",
   "create_project_paste_data": "Paste a data table",
+  "create_project_paste_added": "Table added",
+  "create_project_paste_another": "Paste another data table",
   "create_project_online_file_link": "Link to a file stored online",
   "create_project_load": "Load",
   "create_project_file_imported": "File imported",

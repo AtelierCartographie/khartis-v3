@@ -527,6 +527,8 @@
   "create_project_learn_more_basemaps": "le catalogue de fonds de carte inclus dans l'outil",
   "create_project_drag_drop_file": "Glisser-déposer un fichier ou cliquer pour importer",
   "create_project_paste_data": "Coller un tableau de données",
+  "create_project_paste_added": "Tableau ajouté",
+  "create_project_paste_another": "Coller un autre tableau de données",
   "create_project_online_file_link": "Lien vers un fichier stocké en ligne",
   "create_project_load": "Charger",
   "create_project_file_imported": "Fichier importé",
