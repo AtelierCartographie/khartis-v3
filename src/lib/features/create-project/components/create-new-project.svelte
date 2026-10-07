@@ -6,6 +6,7 @@
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import {
+    DataSourceType,
     FileType,
     type UploadedFile
   } from '$lib/features/commons/types/create-project.types';
@@ -32,7 +33,7 @@
     TextInput,
     Tile
   } from 'carbon-components-svelte';
-  import { Launch, TrashCan } from 'carbon-icons-svelte';
+  import { CheckmarkFilled, Launch, TrashCan } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
   import { CreateProjectValidationService } from '../services/validation.service';
@@ -56,8 +57,27 @@
   let internalResetKey = $state(0);
   let pasteContainer = $state<HTMLElement | undefined>(undefined);
   let urlImportBlock = $state<HTMLElement | undefined>(undefined);
+  let filesSection = $state<HTMLElement | undefined>(undefined);
 
   const uploaderKey = $derived(resetToken + internalResetKey);
+
+  const IMPORT_FEEDBACK_DURATION_MS = 3000;
+
+  type ImportSource = 'file' | 'paste' | 'url';
+
+  let isImportingPaste = $state(false);
+  let confirmedSource = $state<ImportSource | null>(null);
+  let pastedFile = $state<UploadedFile | null>(null);
+  let highlightedFileIds = $state<string[]>([]);
+  let importFeedbackTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const hasPastedFile = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.sourceType === DataSourceType.PASTE
+    )
+  );
+
+  $effect(() => () => clearTimeout(importFeedbackTimeout));
 
   const globalValidationErrors = $derived(
     createProjectState.newProject.validationErrors
@@ -94,7 +114,9 @@
       newFiles.forEach((f) =>
         lastProcessedFiles.add(`${f.name}-${f.size}-${f.lastModified}`)
       );
-      await createProjectActions.processFiles(newFiles);
+      await withImportFeedback('file', () =>
+        createProjectActions.processFiles(newFiles)
+      );
     }
   }
 
@@ -120,8 +142,63 @@
     if (!pastedDataValue.trim()) return;
     if (pastedDataValidation && !pastedDataValidation.isValid) return;
 
-    await createProjectActions.processPastedData(pastedDataValue);
-    pastedDataValue = '';
+    isImportingPaste = true;
+    try {
+      await withImportFeedback('paste', () =>
+        createProjectActions.processPastedData(pastedDataValue)
+      );
+    } finally {
+      pastedDataValue = '';
+      isImportingPaste = false;
+    }
+  }
+
+  async function withImportFeedback(
+    source: ImportSource,
+    runImport: () => Promise<void>
+  ) {
+    const previousStatus = new Map(
+      createProjectState.newProject.uploadedFiles.map((f) => [f.id, f.status])
+    );
+    await runImport();
+
+    const completedFiles = createProjectState.newProject.uploadedFiles.filter(
+      (f) =>
+        f.status === FileStatus.COMPLETE &&
+        previousStatus.get(f.id) !== FileStatus.COMPLETE
+    );
+    if (completedFiles.length > 0) {
+      showImportFeedback(source, completedFiles);
+    }
+  }
+
+  function showImportFeedback(source: ImportSource, files: UploadedFile[]) {
+    clearTimeout(importFeedbackTimeout);
+    confirmedSource = source;
+    pastedFile = source === 'paste' ? files[0] : null;
+    highlightedFileIds = files.map((f) => f.id);
+    importFeedbackTimeout = setTimeout(() => {
+      confirmedSource = null;
+      pastedFile = null;
+      highlightedFileIds = [];
+    }, IMPORT_FEEDBACK_DURATION_MS);
+
+    const lastFileId = files[files.length - 1].id;
+    requestAnimationFrame(() => {
+      filesSection
+        ?.querySelector(`[data-file-id="${CSS.escape(lastFileId)}"]`)
+        ?.scrollIntoView({
+          block: 'nearest',
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+            .matches
+            ? 'auto'
+            : 'smooth'
+        });
+    });
+  }
+
+  function dismissPasteFeedback() {
+    pastedFile = null;
   }
 
   async function handleLoadOnlineFile() {
@@ -139,13 +216,16 @@
     }
 
     createProjectActions.setOnlineFileUrl(trimmedUrl);
-    await createProjectActions.loadOnlineFile();
+    await withImportFeedback('url', () =>
+      createProjectActions.loadOnlineFile()
+    );
     if (!createProjectState.newProject.error) {
       onlineUrlValue = '';
     }
   }
 
   function handlePastedDataInput(event: CarbonValueEvent) {
+    dismissPasteFeedback();
     pastedDataValue = readCarbonStringValue(event, pastedDataValue);
     if (isAutoImportInput(event)) {
       void handlePasteData();
@@ -301,7 +381,7 @@
   </header>
 
   <div class="import-grid">
-    <div>
+    <div class:is-confirmed={confirmedSource === 'file'}>
       {#key uploaderKey}
         <FileUploaderDropContainer
           data-testid="file-upload-container"
@@ -325,18 +405,35 @@
     <div class="paste-container" bind:this={pasteContainer}>
       <TextArea
         value={pastedDataValue}
-        placeholder={m.create_project_paste_data()}
+        placeholder={hasPastedFile
+          ? m.create_project_paste_another()
+          : m.create_project_paste_data()}
         rows={4}
         on:input={handlePastedDataInput}
         on:blur={handlePastedDataBlur}
         invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
         invalidText={pastedDataValidation?.errors[0] || ''}
-        warn={!!(
-          pastedDataValidation && pastedDataValidation.warnings.length > 0
-        )}
+        warn={!isImportingPaste &&
+          !!pastedDataValidation &&
+          pastedDataValidation.warnings.length > 0}
         warnText={pastedDataValidation?.warnings[0] || ''}
       />
-      {#if pastedDataValue.trim()}
+      {#if pastedFile}
+        <div class="paste-feedback" role="status" data-testid="paste-feedback">
+          <CheckmarkFilled size={20} class="paste-feedback-icon" />
+          <span class="paste-feedback-title">
+            {m.create_project_paste_added()}
+          </span>
+          <span class="paste-feedback-metrics">
+            {formatValue(pastedFile.rowCount ?? 0)}
+            {m.rows()}
+            {m.separator_middle_dot_space()}
+            {formatValue(pastedFile.columnCount ?? 0)}
+            {m.columns()}
+          </span>
+        </div>
+      {/if}
+      {#if pastedDataValue.trim() && !isImportingPaste}
         <div class="paste-actions">
           <Button
             size="field"
@@ -351,7 +448,11 @@
   </div>
 
   <div class="grid grid-cols-1 gap-7">
-    <div class="url-import-block" bind:this={urlImportBlock}>
+    <div
+      class="url-import-block"
+      class:is-confirmed={confirmedSource === 'url'}
+      bind:this={urlImportBlock}
+    >
       <TextInput
         size="sm"
         value={onlineUrlValue}
@@ -430,7 +531,7 @@
       {/each}
     </div>
 
-    <div class="files-section">
+    <div class="files-section" bind:this={filesSection}>
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
@@ -479,7 +580,11 @@
       {/if}
 
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
-        <div class="file-item-wrapper">
+        <div
+          class="file-item-wrapper"
+          class:is-just-added={highlightedFileIds.includes(file.id)}
+          data-file-id={file.id}
+        >
           {#if file.status === FileStatus.UPLOADING || file.status === FileStatus.PROCESSING}
             <div class="file-processing-row" data-testid="file-processing">
               <div class="file-processing-content">
@@ -691,11 +796,83 @@
     color: var(--cds-text-secondary);
   }
 
+  .paste-feedback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kh-gap-label);
+    padding: var(--cds-spacing-04);
+    background: var(--cds-layer-01);
+    border: 2px solid var(--cds-support-success);
+    pointer-events: none;
+    text-align: center;
+    animation: kh-fade-in 150ms ease-out;
+  }
+
+  .paste-feedback :global(.paste-feedback-icon) {
+    fill: var(--cds-support-success);
+  }
+
+  .paste-feedback-title {
+    font-weight: 600;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
+    color: var(--cds-text-primary);
+  }
+
+  .paste-feedback-metrics {
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    color: var(--cds-text-secondary);
+  }
+
+  .file-item-wrapper.is-just-added :global(.bx--tile),
+  .is-confirmed :global(.bx--file__drop-container),
+  .is-confirmed :global(.bx--text-input) {
+    animation: kh-just-added 3s ease-out;
+  }
+
+  @keyframes kh-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes kh-just-added {
+    0%,
+    40% {
+      box-shadow: inset 0 0 0 2px var(--cds-support-success);
+    }
+    100% {
+      box-shadow: inset 0 0 0 2px transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .paste-feedback {
+      animation: none;
+    }
+
+    .file-item-wrapper.is-just-added :global(.bx--tile),
+    .is-confirmed :global(.bx--file__drop-container),
+    .is-confirmed :global(.bx--text-input) {
+      animation: none;
+      box-shadow: inset 0 0 0 2px var(--cds-support-success);
+    }
+  }
+
   .paste-actions {
     display: flex;
     gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-03);
     justify-content: flex-end;
+  }
+
+  .is-modal-create-project .files-section {
+    min-height: 7.125rem;
   }
 
   .files-section {
