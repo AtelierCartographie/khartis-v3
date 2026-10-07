@@ -386,6 +386,7 @@
       createProjectActions.setProjectName(example.title);
 
       await projectStore.createProject(example.title, [processedExampleFile]);
+      createProjectActions.handOverUploadedFiles([processedExampleFile]);
       await applyExamplePreset(example, processedExampleFile);
       if (!example.baseMapId) {
         await applyExampleGPSPreset(processedExampleFile);

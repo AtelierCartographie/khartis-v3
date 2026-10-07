@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -301,6 +302,7 @@
 
 <DiscretizationModal
   bind:open={strokeDiscretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}

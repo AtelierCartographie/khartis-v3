@@ -64,6 +64,7 @@
       createProjectActions.setProjectName(safeName);
 
       await projectStore.createProject(safeName, validFiles);
+      createProjectActions.handOverUploadedFiles(validFiles);
 
       await projectsStore.refresh();
 

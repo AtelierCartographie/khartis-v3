@@ -47,7 +47,6 @@ import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
 import { globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
-import { visualizationStore } from './visualization.store.svelte';
 
 const REMOTE_FILE_OFFLINE_ERROR_CODE = 'REMOTE_FILE_OFFLINE';
 const REMOTE_FILE_FETCH_FAILED_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
@@ -88,6 +87,25 @@ function hasDuplicateFileName(fileName: string): boolean {
   return createProjectInternalState.newProject.uploadedFiles.some(
     (file) => file.name === fileName && file.status !== FileStatus.ERROR
   );
+}
+
+// A pending file owns its DuckDB table until handOverUploadedFiles() gives it
+// to a project; every other way out of the pending list drops the table.
+function discardUploadedFiles(files: readonly UploadedFile[]): void {
+  for (const file of files) {
+    file.originalFile = undefined;
+    file.relatedFileObjects = undefined;
+    file.content = undefined;
+    file.relatedFilesData = undefined;
+    if (file.duckdbTableName) {
+      dropPendingTable(file.duckdbTableName);
+    }
+  }
+}
+
+function dropPendingTable(tableName: string): void {
+  // dropTable logs its own failure; a leftover table only costs memory.
+  duckDBOrchestrator.dropTable(tableName).catch(() => undefined);
 }
 
 function nameKey(name: string): string {
@@ -415,8 +433,17 @@ export const createProjectActions = {
         status: UploadedFile['status'],
         errorMessage?: string
       ) => this.updateFileStatus(fileId, status, errorMessage),
-      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
-        this.updateFileData(fileId, data),
+      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) => {
+        const isStillPending =
+          createProjectInternalState.newProject.uploadedFiles.some(
+            (pendingFile) => pendingFile.id === fileId
+          );
+        if (!isStillPending && data.duckdbTableName) {
+          dropPendingTable(data.duckdbTableName);
+          return;
+        }
+        this.updateFileData(fileId, data);
+      },
       onAdditionalFile: (file: UploadedFile) => this.addUploadedFile(file)
     };
 
@@ -542,15 +569,9 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      const fileToRemove =
-        createProjectInternalState.newProject.uploadedFiles[index];
-      if (fileToRemove) {
-        fileToRemove.originalFile = undefined;
-        fileToRemove.relatedFileObjects = undefined;
-        fileToRemove.content = undefined;
-        fileToRemove.relatedFilesData = undefined;
-      }
-      createProjectInternalState.newProject.uploadedFiles.splice(index, 1);
+      const [fileToRemove] =
+        createProjectInternalState.newProject.uploadedFiles.splice(index, 1);
+      discardUploadedFiles([fileToRemove]);
       this.recomputeGlobalValidationErrors();
     }
   },
@@ -771,30 +792,19 @@ export const createProjectActions = {
     }
   },
 
-  async clearAllFiles(saveProject: boolean = false): Promise<void> {
-    for (const file of createProjectInternalState.newProject.uploadedFiles) {
-      file.originalFile = undefined;
-      file.relatedFileObjects = undefined;
-      file.content = undefined;
-      file.relatedFilesData = undefined;
-    }
+  clearAllFiles(): void {
+    discardUploadedFiles(createProjectInternalState.newProject.uploadedFiles);
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.validationErrors = [];
-
-    datasetsStore.clear();
-    visualizationStore.clear();
-    await duckDBOrchestrator.clear();
-
-    if (
-      saveProject &&
-      projectStore.currentProject?.id &&
-      projectStore.currentProject.data
-    ) {
-      await projectStore.clearSourceFiles();
-    }
   },
 
-  clearUploadState(): void {
+  handOverUploadedFiles(projectFiles: readonly UploadedFile[]): void {
+    const handedOverIds = new Set(projectFiles.map((file) => file.id));
+    discardUploadedFiles(
+      createProjectInternalState.newProject.uploadedFiles.filter(
+        (file) => !handedOverIds.has(file.id)
+      )
+    );
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.validationErrors = [];
   },
@@ -857,6 +867,7 @@ export const createProjectActions = {
   },
 
   resetNewProject(): void {
+    discardUploadedFiles(createProjectInternalState.newProject.uploadedFiles);
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.pastedData = '';
     createProjectInternalState.newProject.onlineFileUrl = '';

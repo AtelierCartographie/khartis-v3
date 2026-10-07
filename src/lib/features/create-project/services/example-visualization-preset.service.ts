@@ -36,6 +36,7 @@ import {
   resolveBlankVisualizationPreset
 } from '$lib/features/visualization-tab/services/suggestion.service';
 import { getSuggestionSignature } from '$lib/features/visualization-tab/utils/suggestion-selection.utils';
+import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
 import { computeClassificationBreaks } from '$lib/features/visualization-tab/hooks/use-classification-breaks.svelte';
 
 type ExampleSuggestionId =
@@ -452,6 +453,7 @@ async function computeExampleClassification(
   const target =
     preset.type === 'choropleth'
       ? {
+          primitive: PrimitiveFilterType.POLYGON,
           classification: getPrimitiveClassification(
             visualization,
             PrimitiveFilterType.POLYGON
@@ -463,6 +465,7 @@ async function computeExampleClassification(
         }
       : preset.type === 'bivariate'
         ? {
+            primitive: PrimitiveFilterType.POINT,
             classification: getSymbolFillClassification(visualization),
             valueColumn: getSymbolFillValueColumn(visualization)
           }
@@ -475,6 +478,11 @@ async function computeExampleClassification(
   const computation = await computeClassificationBreaks({
     datasetSourceFileId: dataset.sourceFileId,
     valueColumn: target.valueColumn,
+    rowScopeClause: resolveValueScopeClause({
+      datasetId: dataset.sourceFileId,
+      vizFilters: visualization.dataFilters,
+      primitive: target.primitive
+    }),
     classification: target.classification
   });
   if (!computation) {

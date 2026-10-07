@@ -22,7 +22,6 @@ import {
   addFilesToProject as addFilesToProjectFn,
   addVirtualSourceFile as addVirtualSourceFileFn,
   removeFileFromProject as removeFileFromProjectFn,
-  clearSourceFiles as clearSourceFilesFn,
   renameFile as renameFileFn,
   saveCurrentProject as saveCurrentProjectFn,
   exportProject as exportProjectFn,
@@ -84,10 +83,6 @@ function createProjectStore() {
 
   async function removeFileFromProject(fileId: string): Promise<void> {
     return removeFileFromProjectFn(container, fileId);
-  }
-
-  async function clearSourceFiles(): Promise<void> {
-    return clearSourceFilesFn(container);
   }
 
   async function renameFile(fileId: string, newName: string): Promise<void> {
@@ -224,7 +219,6 @@ function createProjectStore() {
     addFilesToProject,
     addVirtualSourceFile,
     removeFileFromProject,
-    clearSourceFiles,
     renameFile,
     addColumnTransformation,
     clearColumnTransformations,
