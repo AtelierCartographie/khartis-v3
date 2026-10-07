@@ -90,6 +90,28 @@ function hasDuplicateFileName(fileName: string): boolean {
   );
 }
 
+function nameKey(name: string): string {
+  return name.replace(/\.[^.]+$/, '').toLowerCase();
+}
+
+function nextPastedDataName(): string {
+  const takenNames = new Set(
+    [
+      ...createProjectInternalState.newProject.uploadedFiles
+        .filter((file) => file.status !== FileStatus.ERROR)
+        .map((file) => file.name),
+      ...datasetsStore.getAllDatasets().map((dataset) => dataset.name)
+    ].map(nameKey)
+  );
+
+  const baseName = m.dataset_pasted_name();
+  let counter = 1;
+  while (takenNames.has(nameKey(`${baseName} ${counter}`))) {
+    counter++;
+  }
+  return `${baseName} ${counter}`;
+}
+
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
     createProjectInternalState.selectedTab = tab;
@@ -504,16 +526,8 @@ export const createProjectActions = {
     }
 
     const { fileType, content } = result;
-    const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
-    const timestamp = Date.now();
-    let fileName = `${baseName}-${timestamp}.${extension}`;
-
-    let counter = 1;
-    while (hasDuplicateFileName(fileName)) {
-      fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
-      counter++;
-    }
+    const fileName = `${nextPastedDataName()}.${extension}`;
 
     const mimeType =
       fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
