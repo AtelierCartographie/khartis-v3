@@ -251,6 +251,8 @@
   }
 
   function handleOnlineUrlBlur(event: CarbonValueEvent) {
+    // Disabling the focused input during a load fires blur, which would start the same download again.
+    if (createProjectState.newProject.isLoading) return;
     if (staysInside(urlImportBlock, event)) return;
     void handleLoadOnlineFile();
   }
