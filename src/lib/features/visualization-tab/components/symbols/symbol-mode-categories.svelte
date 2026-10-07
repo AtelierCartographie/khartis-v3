@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { Dropdown } from 'carbon-components-svelte';
@@ -608,6 +609,7 @@
 
 <DiscretizationModal
   bind:open={strokeDiscretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}
