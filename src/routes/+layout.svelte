@@ -345,8 +345,7 @@
   });
 
   function handleCloseModal() {
-    globalState.isCreateProjectModalOpen = false;
-    createProjectActions.resetAllTabs();
+    createProjectActions.dismissModal();
   }
 
   const colorBlindnessState = $derived(getColorBlindnessState());
