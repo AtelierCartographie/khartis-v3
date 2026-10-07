@@ -45,6 +45,7 @@ import type {
 } from '../types/create-project.types';
 import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
+import { globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 
@@ -87,6 +88,28 @@ function hasDuplicateFileName(fileName: string): boolean {
   return createProjectInternalState.newProject.uploadedFiles.some(
     (file) => file.name === fileName && file.status !== FileStatus.ERROR
   );
+}
+
+function nameKey(name: string): string {
+  return name.replace(/\.[^.]+$/, '').toLowerCase();
+}
+
+function nextPastedDataName(): string {
+  const takenNames = new Set(
+    [
+      ...createProjectInternalState.newProject.uploadedFiles
+        .filter((file) => file.status !== FileStatus.ERROR)
+        .map((file) => file.name),
+      ...datasetsStore.getAllDatasets().map((dataset) => dataset.name)
+    ].map(nameKey)
+  );
+
+  const baseName = m.dataset_pasted_name();
+  let counter = 1;
+  while (takenNames.has(nameKey(`${baseName} ${counter}`))) {
+    counter++;
+  }
+  return `${baseName} ${counter}`;
 }
 
 export const createProjectActions = {
@@ -503,16 +526,8 @@ export const createProjectActions = {
     }
 
     const { fileType, content } = result;
-    const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
-    const timestamp = Date.now();
-    let fileName = `${baseName}-${timestamp}.${extension}`;
-
-    let counter = 1;
-    while (hasDuplicateFileName(fileName)) {
-      fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
-      counter++;
-    }
+    const fileName = `${nextPastedDataName()}.${extension}`;
 
     const mimeType =
       fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
@@ -868,6 +883,14 @@ export const createProjectActions = {
     this.resetNewProject();
     this.resetTryExample();
     createProjectInternalState.selectedTab = 1;
+  },
+
+  dismissModal(): void {
+    globalState.isCreateProjectModalOpen = false;
+    this.resetAllTabs();
+    if (!projectStore.currentProject) {
+      globalState.isSideNavOpen = true;
+    }
   },
 
   reset(): void {
