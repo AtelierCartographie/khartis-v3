@@ -33,10 +33,7 @@ import {
   ensureDatasetGeometryBasemap,
   forgetDatasetGeometryBasemap
 } from '$lib/features/map/services/dataset-geometry-basemap.service';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
@@ -80,10 +77,12 @@ const { actions, getState } = createToolStore<
       const metadata = currentBasemap.metadata;
       const basemapTableName = metadata.file;
       const rawBasemapTableName = getBasemapRawTableName(basemapTableName);
-      const rawTableExists = (await Duck.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(rawBasemapTableName)}'`,
-        { format: 'array' }
-      )) as Array<{ table_name: string }>;
+      // The import keeps no copy of the source geometry: the first
+      // simplification saves it, so every later rate and the undo start from
+      // the imported geometry.
+      await Duck.query(
+        `CREATE TABLE IF NOT EXISTS "${escapeIdentifier(rawBasemapTableName)}" AS SELECT * FROM "${escapeIdentifier(basemapTableName)}"`
+      );
 
       const tolerance = calculateToleranceFromRate(s.rate);
 
@@ -92,7 +91,7 @@ const { actions, getState } = createToolStore<
         basemapTableName,
         tolerance,
         {
-          inputTableName: rawTableExists[0]?.table_name ?? basemapTableName,
+          inputTableName: rawBasemapTableName,
           targetTableName: basemapTableName
         }
       );

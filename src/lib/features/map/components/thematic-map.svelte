@@ -57,7 +57,9 @@
   import {
     DEFAULT_PAGE_COLOR,
     getFormatLayoutSizingContext,
-    getFormatState
+    getFormatState,
+    getLastPageResize,
+    getMarginsEditId
   } from '$lib/features/step-toolbar/tools/format';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
@@ -260,10 +262,27 @@
   } | null>(null);
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
+  let handledMarginsEditId = untrack(() => getMarginsEditId());
+  // A manual view inherited from another renderer (the facet collection) was
+  // framed on its fit; the first reference refresh refits it to this canvas.
+  let inheritedFramingScale = untrack(() =>
+    mapInstanceStore.isViewportAutoFitManaged
+      ? null
+      : mapInstanceStore.measureFramingScale()
+  );
+  let lastFrameLayout: {
+    pageWidth: number;
+    pageHeight: number;
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  } | null = null;
   let pendingMapLibreManualInteraction = false;
   let pendingMapLibreSyncFrameId: number | null = null;
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastLayoutSnapshot: string | null = null;
+  let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
   let lastSelectedBasemapZone = getBasemapZone(basemapStyleStore.selectedStyle);
 
   let isApplyingMapLibreSync = false;
@@ -691,10 +710,51 @@
   }
 
   function getProjectionViewportSize(): { width: number; height: number } {
-    return {
-      width: Math.max(1, logicalMapCanvasWidth),
-      height: Math.max(1, logicalMapCanvasHeight)
+    return projectionStore.fitSize;
+  }
+
+  // An automatic fit fills the current frame, so the projection is refitted
+  // to it first, with the reference it pairs with; a manual view keeps the
+  // fit it was framed on, so cropping the frame or changing the page leaves
+  // the map's scale alone.
+  function refitProjectionToCanvas(): void {
+    const canvasSize = {
+      width: Math.max(1, Math.round(logicalMapCanvasWidth)),
+      height: Math.max(1, Math.round(logicalMapCanvasHeight))
     };
+    const previousFitSize = projectionStore.fitSize;
+    if (
+      canvasSize.width === previousFitSize.width &&
+      canvasSize.height === previousFitSize.height
+    ) {
+      return;
+    }
+
+    projectionStore.setFitSize(canvasSize);
+    if (
+      !refreshOrthographicReferenceForFirstTable(
+        getProjectionMetadataForDataset(firstDatasetId)
+      )
+    ) {
+      projectionStore.setFitSize(previousFitSize);
+      return;
+    }
+    scheduleLayerUpdate('refitProjectionToCanvas');
+  }
+
+  function refitInheritedManualView(): void {
+    const framingScale = inheritedFramingScale;
+    inheritedFramingScale = null;
+    if (
+      framingScale === null ||
+      mapInstanceStore.isViewportAutoFitManaged ||
+      mapInstanceStore.hasPendingOrthographicRestore
+    ) {
+      return;
+    }
+
+    refitProjectionToCanvas();
+    mapInstanceStore.rescaleTargetFrom(framingScale);
   }
 
   function applyMapLibreInteractionMode(): void {
@@ -730,12 +790,25 @@
     }
 
     if (mapInit.isMapLoaded) {
+      refitProjectionToCanvas();
       mapInstanceStore.fitToOrthographicBounds(reason);
     } else {
       pendingOrthographicFit = true;
       pendingOrthographicFitReason = reason;
     }
   }
+
+  $effect(() => {
+    if (mapInstanceStore.orthographicResetRevision === 0) {
+      return;
+    }
+
+    untrack(() => {
+      if (mapInit.isMapLoaded && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+        refitProjectionToCanvas();
+      }
+    });
+  });
 
   function queueSuggestedPreviewViewportSettled(): void {
     requestAnimationFrame(() => {
@@ -1207,6 +1280,33 @@
     const margins = pageMargins;
     const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
 
+    const pageResize = getLastPageResize();
+    const previousPageSize =
+      pageResize && pageResize.id !== handledPageResizeId
+        ? pageResize.from
+        : undefined;
+    handledPageResizeId = pageResize?.id ?? handledPageResizeId;
+
+    const frameLayout = {
+      pageWidth: fmtState.width,
+      pageHeight: fmtState.height,
+      ...margins
+    };
+    const previousFrameLayout = lastFrameLayout;
+    lastFrameLayout = frameLayout;
+    const marginsEditId = getMarginsEditId();
+    const isMarginsEdit = marginsEditId !== handledMarginsEditId;
+    handledMarginsEditId = marginsEditId;
+    // Moving the frame edges on an unchanged page crops the map instead of
+    // refitting it.
+    const frameCrop =
+      isMarginsEdit &&
+      previousFrameLayout !== null &&
+      previousFrameLayout.pageWidth === frameLayout.pageWidth &&
+      previousFrameLayout.pageHeight === frameLayout.pageHeight
+        ? previousFrameLayout
+        : null;
+
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
       return;
@@ -1220,6 +1320,26 @@
 
     untrack(() => {
       if (
+        frameCrop &&
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.ORTHOGRAPHIC
+      ) {
+        mapInstanceStore.panForResizedFrame({
+          x:
+            (pageDisplayScale *
+              (frameLayout.left -
+                frameCrop.left -
+                (frameLayout.right - frameCrop.right))) /
+            2,
+          y:
+            (pageDisplayScale *
+              (frameLayout.top -
+                frameCrop.top -
+                (frameLayout.bottom - frameCrop.bottom))) /
+            2
+        });
+      } else if (
         mapInit.isMapLoaded &&
         !isSwitchingViewMode &&
         mapInstanceStore.isViewportAutoFitManaged &&
@@ -1229,11 +1349,14 @@
       }
 
       if (!globalState.isResizingMapFrame) {
-        annotationsActions.redistributePageElements({
-          width: fmtState.width,
-          height: fmtState.height,
-          margins
-        });
+        annotationsActions.redistributePageElements(
+          {
+            width: fmtState.width,
+            height: fmtState.height,
+            margins
+          },
+          previousPageSize
+        );
       }
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
@@ -1256,9 +1379,17 @@
     lastMapViewportSnapshot = viewportSnapshot;
 
     untrack(() => {
+      const previousFramingScale = mapInstanceStore.measureFramingScale();
       projectionStore.setRenderScale(pageDisplayScale);
       projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
       updateCanvasSize();
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.ORTHOGRAPHIC
+      ) {
+        mapInstanceStore.rescaleTargetFrom(previousFramingScale);
+      }
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         if (mapInit.viewMode === ViewMode.MAPLIBRE) {
           mapInit.map?.resize();
@@ -1443,6 +1574,7 @@
           untrack(() => {
             scheduleLayerUpdate('effect:firstTable-bounds');
             if (shouldFitViewport) fitOrthographicViewport('dataset');
+            refitInheritedManualView();
           });
           triggerOnReady();
         } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {

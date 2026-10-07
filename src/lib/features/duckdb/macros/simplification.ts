@@ -54,29 +54,40 @@ const simplify_topology_normalized_macro = `CREATE OR REPLACE MACRO simplify_top
         FROM source_data
         SELECT COALESCE(AVG(ST_Perimeter(geom)), 0.0) * normalized_factor * max_scale_ref AS computed_tolerance
     ),
+    -- ST_Dump numbers each part by its position in geom_list. Joining that
+    -- position back to its _gid keeps memory linear: a _gid list repeated on
+    -- every dumped part costs n² and exhausts WASM memory on 35k communes.
+    positions AS (
+        FROM source_data
+        SELECT _gid, row_number() OVER (ORDER BY _gid) as pos
+    ),
     ordered_data AS (
         FROM source_data
-        SELECT
-            list(_gid ORDER BY _gid) as gid_list,
-            list(geom ORDER BY _gid) as geom_list
+        SELECT list(geom ORDER BY _gid) as geom_list
     ),
     dumped_data AS (
         FROM ordered_data, calc_metric
-        SELECT
-            gid_list,
-            UNNEST(ST_Dump(ST_CoverageSimplify(geom_list, computed_tolerance))) as d
+        SELECT UNNEST(ST_Dump(ST_CoverageSimplify(geom_list, computed_tolerance))) as d
     ),
     final_reconstruction AS (
         FROM dumped_data
         SELECT
-            (any_value(gid_list))[d.path[1]] as _gid,
+            d.path[1] as pos,
             CASE
                 WHEN max(len(d.path)) = 1 THEN first(d.geom)
                 ELSE ST_Collect(list(d.geom))
             END as geom
         GROUP BY d.path[1]
     )
-    FROM final_reconstruction
+    -- A zero tolerance leaves the coverage untouched: skip collecting it.
+    FROM final_reconstruction r
+    JOIN positions p ON p.pos = r.pos
+    SELECT p._gid, r.geom
+    WHERE normalized_factor > 0
+    UNION ALL
+    FROM source_data
+    SELECT _gid, geom
+    WHERE normalized_factor <= 0
     ORDER BY _gid
 );`;
 

@@ -234,6 +234,9 @@ describe('legend overlay visibility', () => {
     mockRowScopeStore.hasMissingData.mockReturnValue(true);
     legendActions.reset();
     formatActions.reset();
+    // The page legend is bounded by the map area: without margins it matches
+    // the overlay boxes the tests bind.
+    formatActions.setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
     globalActions.resetNavigationState();
     globalActions.setPageZoomScale(1);
     globalState.selectedStep = ToolbarStep.Styling;
@@ -790,7 +793,8 @@ describe('legend overlay visibility', () => {
     expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
   });
 
-  it('reclamps a dragged legend after the page size shrinks', async () => {
+  it('keeps a dragged legend at its distance to the nearest edges when the page shrinks', async () => {
+    formatActions.setSize(300, 200);
     const { container } = render(LegendOverlay);
     const overlay = container.querySelector('.legend-overlay');
     const legend = container.querySelector('.legend-container');
@@ -820,7 +824,7 @@ describe('legend overlay visibility', () => {
     formatActions.setSize(180, 120);
 
     await waitFor(() => {
-      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 72 });
+      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 60 });
     });
   });
 

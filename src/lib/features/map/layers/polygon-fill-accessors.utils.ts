@@ -8,7 +8,8 @@ import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.
 import {
   createSplitAwareNullableRowAccessor,
   createSplitAwareRowAccessor,
-  hasSplitRenderingContext
+  hasSplitRenderingContext,
+  resolveScopedRowIds
 } from './split-rendering-accessors';
 
 function isMissingPolygonFillDatum(
@@ -87,7 +88,8 @@ export function createSplitUniqueBinaryColorAccessor(
   geometryTable: ArrowTable,
   color: RGBColor
 ): ((featureId: number) => [number, number, number, number]) | null {
-  if (!hasSplitRenderingContext(ctx)) {
+  // A uniform style needs per-row colors only to hide unmatched or filtered rows.
+  if (!hasSplitRenderingContext(ctx) && !resolveScopedRowIds(ctx)) {
     return null;
   }
 

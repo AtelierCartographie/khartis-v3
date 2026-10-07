@@ -46,6 +46,8 @@ const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
 export interface ProjectionContext {
   referenceBbox: [number, number, number, number] | null;
   canvasSize: { width: number; height: number };
+  /** Size the projection is fitted to; the canvas may differ after a crop. */
+  fitSize?: { width: number; height: number };
   fitPaddingPx: number;
   renderScale?: number;
   isProjectedCoordinates: boolean;
@@ -80,8 +82,11 @@ function worldToData(target: number[]): [number, number, number] {
   if (!ctx.referenceBbox) return t;
   const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale =
-    get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
-    (ctx.renderScale ?? 1);
+    get_max_scale(
+      ctx.fitSize ?? ctx.canvasSize,
+      ctx.referenceBbox,
+      ctx.fitPaddingPx
+    ) * (ctx.renderScale ?? 1);
   if (scale === 0) return t;
   const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
@@ -93,8 +98,11 @@ function dataToWorld(target: number[]): [number, number, number] {
   if (!ctx.referenceBbox) return t;
   const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale =
-    get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
-    (ctx.renderScale ?? 1);
+    get_max_scale(
+      ctx.fitSize ?? ctx.canvasSize,
+      ctx.referenceBbox,
+      ctx.fitPaddingPx
+    ) * (ctx.renderScale ?? 1);
   const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
@@ -172,6 +180,9 @@ function createMapInstanceStore() {
   });
 
   let pendingOrthographicRestore: PendingViewState | null = null;
+  // The base view frames the reference at its fit size: a reset asks the map
+  // to refit that size to the current frame.
+  let orthographicResetRevision = $state(0);
   let pendingMapLibreRestore: PendingMapLibreViewState | null = null;
   let lastSerializedViewState: SerializedViewState | null = null;
   let synchronizedViewportController: SynchronizedViewportController | null =
@@ -200,7 +211,7 @@ function createMapInstanceStore() {
     }
 
     const scale = get_max_scale(
-      ctx.canvasSize,
+      ctx.fitSize ?? ctx.canvasSize,
       ctx.referenceBbox,
       ctx.fitPaddingPx
     );
@@ -390,6 +401,71 @@ function createMapInstanceStore() {
     if (!Number.isFinite(data[0]) || !Number.isFinite(data[1])) return null;
 
     return { x: data[0], y: data[1] };
+  }
+
+  /**
+   * Resizing the map frame crops the map: the render model matrix keeps the
+   * scale it was fitted with, so only the canvas centre moves. Shifting the
+   * target by that move, in canvas pixels, keeps the map still on the page.
+   */
+  function panForResizedFrame(centerShiftPx: { x: number; y: number }): void {
+    if (centerShiftPx.x === 0 && centerShiftPx.y === 0) return;
+
+    const zoomScale = Math.pow(2, state.deckViewState.zoom);
+    if (!Number.isFinite(zoomScale) || zoomScale <= 0) return;
+
+    const [targetX, targetY] = normalizeTarget(state.deckViewState.target);
+    updateDeckViewState(
+      {
+        target: [
+          targetX + centerShiftPx.x / zoomScale,
+          targetY - centerShiftPx.y / zoomScale,
+          0
+        ]
+      },
+      true
+    );
+  }
+
+  /**
+   * World units spanned by the reference extent: the fit size, the fit
+   * padding and the render scale all change it, and the target lives in
+   * those units, so a manual view keeps its framing when the target is
+   * scaled by the ratio of two measures taken around such a change.
+   */
+  function measureFramingScale(): number | null {
+    const ctx = projectionContextGetter();
+    if (!ctx.referenceBbox) return null;
+
+    const span =
+      (ctx.referenceBbox[2] - ctx.referenceBbox[0]) *
+      get_max_scale(
+        ctx.fitSize ?? ctx.canvasSize,
+        ctx.referenceBbox,
+        ctx.fitPaddingPx
+      ) *
+      (ctx.renderScale ?? 1);
+    return Number.isFinite(span) && span > 0 ? span : null;
+  }
+
+  function rescaleTarget(ratio: number): void {
+    if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return;
+
+    const [targetX, targetY] = normalizeTarget(state.deckViewState.target);
+    if (targetX === 0 && targetY === 0) return;
+
+    state.deckViewState = resolveDeckViewState({
+      target: [targetX * ratio, targetY * ratio, 0]
+    });
+    applyDeckViewState();
+  }
+
+  /** Keeps a manual view's framing across a change of fit or render scale. */
+  function rescaleTargetFrom(previousFramingScale: number | null): void {
+    const framingScale = measureFramingScale();
+    if (previousFramingScale === null || framingScale === null) return;
+
+    rescaleTarget(framingScale / previousFramingScale);
   }
 
   function getMapZoom(): number {
@@ -668,6 +744,7 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
+      orthographicResetRevision += 1;
       state.deckViewState = resolveDeckViewState({
         zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
         target: [0, 0, 0]
@@ -710,8 +787,11 @@ function createMapInstanceStore() {
         lastSerializedViewState = null;
       } else {
         const scale =
-          get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
-          (ctx.renderScale ?? 1);
+          get_max_scale(
+            ctx.fitSize ?? ctx.canvasSize,
+            ctx.referenceBbox,
+            ctx.fitPaddingPx
+          ) * (ctx.renderScale ?? 1);
         if (scale === 0) {
           return;
         }
@@ -826,6 +906,9 @@ function createMapInstanceStore() {
   }
 
   return {
+    get orthographicResetRevision(): number {
+      return orthographicResetRevision;
+    },
     get map() {
       return state.map;
     },
@@ -888,6 +971,9 @@ function createMapInstanceStore() {
     getMapBounds,
     projectDataToViewportPx,
     unprojectViewportPxToData,
+    panForResizedFrame,
+    measureFramingScale,
+    rescaleTargetFrom,
     getMapZoom,
     getMapCenter,
     setBaseZoomLevel,

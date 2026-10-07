@@ -88,7 +88,6 @@
     layout: FacetsLayout;
     containerWidth: number;
     containerHeight: number;
-    pageAspectRatio: number;
     onReady?: () => void;
   }
 
@@ -100,7 +99,6 @@
     layout,
     containerWidth,
     containerHeight,
-    pageAspectRatio,
     onReady
   }: Props = $props();
 
@@ -115,13 +113,19 @@
   let worldBaseTable = $state.raw<ArrowTable | null>(null);
 
   const FACET_VIEWPORT_FIT_PADDING_PX = 16;
+  // A manual view from the single map keeps its framing once the projection
+  // is refitted to the facet cell.
+  let inheritedFramingScale = untrack(() =>
+    mapInstanceStore.isViewportAutoFitManaged
+      ? null
+      : mapInstanceStore.measureFramingScale()
+  );
   const descriptors = $derived(
     buildFacetRenderDescriptors({
       visualizations,
       layout,
       containerWidth,
       containerHeight,
-      pageAspectRatio,
       primarySlotPath: facetsStore.primarySlotPath
     })
   );
@@ -660,7 +664,17 @@
             mapInstanceStore.setMapLoaded(true);
             updateDeckProps();
             refreshReferenceBbox();
-            mapInstanceStore.fitToOrthographicBounds('dataset');
+            const framingScale = inheritedFramingScale;
+            inheritedFramingScale = null;
+            if (
+              framingScale === null ||
+              mapInstanceStore.isViewportAutoFitManaged ||
+              mapInstanceStore.hasPendingOrthographicRestore
+            ) {
+              mapInstanceStore.fitToOrthographicBounds('dataset');
+            } else {
+              mapInstanceStore.rescaleTargetFrom(framingScale);
+            }
             triggerOnReady();
           },
           onError: (error, layer) => {
@@ -723,7 +737,11 @@
     void mapViewportFitPaddingPx;
 
     untrack(() => {
+      const previousFramingScale = mapInstanceStore.measureFramingScale();
+      // Facet views draw the model matrix unscaled, unlike the single map.
+      projectionStore.setRenderScale(1);
       projectionStore.updateCanvasSize(facetCanvasSize);
+      projectionStore.setFitSize(facetCanvasSize);
       projectionStore.setFitPadding(mapViewportFitPaddingPx);
       if (isRendererLoaded) {
         updateDeckProps();
@@ -734,6 +752,8 @@
           mapInstanceStore.fitToOrthographicBounds(
             mapInstanceStore.viewportFitReason ?? 'dataset'
           );
+        } else {
+          mapInstanceStore.rescaleTargetFrom(previousFramingScale);
         }
       }
     });

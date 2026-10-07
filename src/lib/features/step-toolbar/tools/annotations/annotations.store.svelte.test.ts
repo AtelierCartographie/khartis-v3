@@ -225,7 +225,7 @@ describe('annotations store', () => {
     expect(note?.positionMode).toBe('manual');
   });
 
-  it('clamps manually moved page elements inside the map frame', () => {
+  it('lets manually moved page elements sit in the page margins', () => {
     formatActions.toggleGrid();
     annotationsActions.initPageElements({ withPlaceholders: true });
 
@@ -244,7 +244,36 @@ describe('annotations store', () => {
       (item) => item.id === title.id
     );
 
-    expect(movedTitle?.position).toEqual({ x: 32, y: 32 });
+    expect(movedTitle?.position).toEqual({ x: 0, y: 0 });
+
+    annotationsActions.moveAnnotation(title.id, { x: 5000, y: 5000 });
+    expect(
+      getAnnotationsState().items.find((item) => item.id === title.id)?.position
+    ).toEqual({ x: 818, y: 571 });
+  });
+
+  it('keeps a moved page element anchored to its nearest page edges when the format changes', () => {
+    formatActions.toggleGrid();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const credit = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.CREDIT
+    );
+    expect(credit).toBeDefined();
+    if (!credit) {
+      return;
+    }
+
+    annotationsActions.moveAnnotation(credit.id, { x: 600, y: 560 });
+    annotationsActions.redistributePageElements(
+      { width: 1191, height: 842 },
+      { width: 842, height: 595 }
+    );
+
+    expect(
+      getAnnotationsState().items.find((item) => item.id === credit.id)
+        ?.position
+    ).toEqual({ x: 949, y: 807 });
   });
 
   it('uses the custom page sizing profile when page elements are initialized', () => {

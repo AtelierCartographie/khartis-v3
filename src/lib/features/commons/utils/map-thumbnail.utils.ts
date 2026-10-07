@@ -64,6 +64,7 @@ function isBlankFrame(
 }
 
 let lastCaptureAt = Number.NEGATIVE_INFINITY;
+let lastCapturedProjectId: string | null = null;
 let forceNextCapture = false;
 
 /** Bypass the capture throttle on the next save (page close/blur). */
@@ -71,11 +72,18 @@ export function forceNextMapThumbnailCapture(): void {
   forceNextCapture = true;
 }
 
-/** Throttled GPU readback; a null return keeps the previous thumbnail in metadata. */
-export function captureMapThumbnailThrottled(): MapThumbnail | null {
+/**
+ * Throttled GPU readback; a null return keeps the previous thumbnail in metadata.
+ * The throttle is per project: a project opened right after another one
+ * otherwise saves only inside the window and never gets a thumbnail.
+ */
+export function captureMapThumbnailThrottled(
+  projectId: string
+): MapThumbnail | null {
   const now = Date.now();
   if (
     !forceNextCapture &&
+    projectId === lastCapturedProjectId &&
     now - lastCaptureAt < THUMBNAIL_CAPTURE_INTERVAL_MS
   ) {
     return null;
@@ -84,6 +92,7 @@ export function captureMapThumbnailThrottled(): MapThumbnail | null {
   const thumbnail = captureMapThumbnail();
   if (thumbnail) {
     lastCaptureAt = now;
+    lastCapturedProjectId = projectId;
     forceNextCapture = false;
   }
   return thumbnail;

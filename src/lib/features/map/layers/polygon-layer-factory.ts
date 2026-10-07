@@ -387,14 +387,23 @@ export function createPolygonLayerStack(
               polygonClassification?.disabledLabels ?? []
             )
           : null;
+      const singleMotifFillColor: [number, number, number, number] =
+        patternProps && !classPatternPalette
+          ? [255, 255, 255, 255]
+          : [
+              polygonFillColor[0],
+              polygonFillColor[1],
+              polygonFillColor[2],
+              255
+            ];
+
       const splitUniqueFillAccessor =
         polygonFillMode === FillMode.UNIQUE && !classPatternPalette
-          ? createSplitUniqueBinaryColorAccessor(
-              ctx,
-              jsTable,
-              jsTable,
-              polygonFillColor
-            )
+          ? createSplitUniqueBinaryColorAccessor(ctx, jsTable, jsTable, [
+              singleMotifFillColor[0],
+              singleMotifFillColor[1],
+              singleMotifFillColor[2]
+            ])
           : null;
 
       const uniquePatternBaseFillAccessor =
@@ -560,16 +569,6 @@ export function createPolygonLayerStack(
       if (fillColorBinaryAttr) {
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
-
-      const singleMotifFillColor: [number, number, number, number] =
-        patternProps && !classPatternPalette
-          ? [255, 255, 255, 255]
-          : [
-              polygonFillColor[0],
-              polygonFillColor[1],
-              polygonFillColor[2],
-              255
-            ];
 
       const fillLayer = new SolidPolygonLayer({
         id: layerId,

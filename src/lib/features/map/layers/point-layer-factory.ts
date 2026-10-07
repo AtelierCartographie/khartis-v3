@@ -78,7 +78,8 @@ import {
   createSplitAwareRowAccessor as ctxRowAccessor,
   hasSplitRenderingContext,
   OUT_OF_SCOPE_COLOR,
-  OUT_OF_SCOPE_SIZE
+  OUT_OF_SCOPE_SIZE,
+  resolveScopedRowIds
 } from './split-rendering-accessors';
 import {
   buildShapeAttribute,
@@ -1450,6 +1451,10 @@ export function createPointLayerStack(
     pointCategoryColumn !== undefined &&
     disabledPointCategoryLabels.size > 0;
 
+  // Filtered rows are hidden through the per-row attributes, so a filter
+  // needs them even when the style itself is uniform.
+  const isRowScoped = resolveScopedRowIds(ctx) !== undefined;
+
   const fillColorAccessor =
     pointMissingColumn || hasHighlights
       ? (row: DeckDataRow): [number, number, number, number] => {
@@ -1483,7 +1488,10 @@ export function createPointLayerStack(
 
           return toMutableRgba(withOpacity(fillColor, rowOpacity));
         }
-      : baseFillAccessor;
+      : (baseFillAccessor ??
+        (isRowScoped
+          ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
+          : null));
 
   const fillColorBinAttr = fillColorAccessor
     ? pointColorAttr(
@@ -1557,7 +1565,12 @@ export function createPointLayerStack(
             )
           );
         }
-      : null;
+      : isRowScoped
+        ? (): [number, number, number, number] =>
+            showPointStroke
+              ? toMutableRgba(withOpacity(pointStrokeColor, pointStrokeOpacity))
+              : [0, 0, 0, 0]
+        : null;
 
   const lineColorBinAttr = lineColorAccessor
     ? pointColorAttr(
@@ -1585,7 +1598,10 @@ export function createPointLayerStack(
         : null;
 
   const radiusAccessor =
-    pointMissingColumn || baseRadiusAccessor || hasDisabledPointCategories
+    pointMissingColumn ||
+    baseRadiusAccessor ||
+    hasDisabledPointCategories ||
+    isRowScoped
       ? (row: DeckDataRow): number => {
           if (isDisabledPointCategoryRow(row)) {
             return 0;

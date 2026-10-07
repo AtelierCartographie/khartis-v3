@@ -42,5 +42,10 @@ export {
   extractZip,
   getShapefileFilesFromArchive
 } from './utils/zip-handler';
-export { getProcessor, registerAllProcessors } from './processors';
+export {
+  getProcessor,
+  readFileIntoTable,
+  registerAllProcessors
+} from './processors';
+export type { FileTableRead } from './processors';
 export type { ProcessContext } from './processors';

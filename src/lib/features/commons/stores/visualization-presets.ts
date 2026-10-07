@@ -79,7 +79,7 @@ function getDefaultStyle(
     case VisualizationType.CHOROPLETH:
       return {
         ...textOverlayDefaults,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_OPAQUE,
         strokeColor: DEFAULT_STROKE_COLOR,
         strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
         strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
@@ -98,7 +98,7 @@ function getDefaultStyle(
     case VisualizationType.CATEGORICAL:
       return {
         ...textOverlayDefaults,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_OPAQUE,
         strokeColor: DEFAULT_STROKE_COLOR,
         strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
         strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
