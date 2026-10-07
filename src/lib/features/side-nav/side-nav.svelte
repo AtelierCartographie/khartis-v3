@@ -360,7 +360,7 @@
   }
 </script>
 
-<div id="khartis-side-nav">
+<div id="khartis-side-nav" class:no-project={!projectStore.currentProject}>
   <SideNav class="app-shadow bg-white" bind:isOpen={globalState.isSideNavOpen}>
     <SideNavItems>
       <Grid fullWidth noGutter>
@@ -719,6 +719,13 @@
   #khartis-side-nav :global(.bx--side-nav__overlay-active) {
     height: calc(100dvh - var(--khartis-side-nav-top));
     block-size: calc(100dvh - var(--khartis-side-nav-top));
+  }
+
+  #khartis-side-nav.no-project :global(.bx--side-nav__overlay-active) {
+    z-index: 7999;
+    width: 100vw;
+    opacity: 1;
+    background-color: var(--cds-overlay);
   }
 
   #khartis-side-nav :global(.bx--side-nav__navigation) {

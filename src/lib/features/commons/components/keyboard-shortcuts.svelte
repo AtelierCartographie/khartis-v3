@@ -94,8 +94,7 @@
 
     function handleEscapeKey(): boolean {
       if (globalState.isCreateProjectModalOpen) {
-        globalState.isCreateProjectModalOpen = false;
-        createProjectActions.resetAllTabs();
+        createProjectActions.dismissModal();
         return true;
       }
 

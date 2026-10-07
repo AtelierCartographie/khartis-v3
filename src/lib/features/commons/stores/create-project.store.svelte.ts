@@ -45,6 +45,7 @@ import type {
 } from '../types/create-project.types';
 import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
+import { globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 
@@ -868,6 +869,14 @@ export const createProjectActions = {
     this.resetNewProject();
     this.resetTryExample();
     createProjectInternalState.selectedTab = 1;
+  },
+
+  dismissModal(): void {
+    globalState.isCreateProjectModalOpen = false;
+    this.resetAllTabs();
+    if (!projectStore.currentProject) {
+      globalState.isSideNavOpen = true;
+    }
   },
 
   reset(): void {
