@@ -264,7 +264,6 @@
   }
 
   let deletingFileIds = $state<SvelteSet<string>>(new SvelteSet());
-  let isDeletingAll = $state(false);
 
   async function handleRemoveFile(fileId: string) {
     deletingFileIds.add(fileId);
@@ -277,15 +276,10 @@
     }
   }
 
-  async function handleClearAllFiles() {
-    isDeletingAll = true;
-    try {
-      await createProjectActions.clearAllFiles(true);
-      lastProcessedFiles = new SvelteSet();
-      internalResetKey++;
-    } finally {
-      isDeletingAll = false;
-    }
+  function handleClearAllFiles() {
+    createProjectActions.clearAllFiles();
+    lastProcessedFiles = new SvelteSet();
+    internalResetKey++;
   }
 
   type TagColor = 'blue' | 'green' | 'purple' | 'teal' | 'magenta' | 'gray';
@@ -559,18 +553,10 @@
             <Button
               size="field"
               kind="ghost"
-              icon={isDeletingAll ? undefined : TrashCan}
-              disabled={isDeletingAll}
+              icon={TrashCan}
               onclick={handleClearAllFiles}
             >
-              {#if isDeletingAll}
-                <div class="button-with-loader">
-                  <Loading small withOverlay={false} />
-                  <span>{m.create_project_processing_status()}</span>
-                </div>
-              {:else}
-                {m.create_project_clear_all_button()}
-              {/if}
+              {m.create_project_clear_all_button()}
             </Button>
           {/if}
         </div>
@@ -1001,22 +987,6 @@
   .file-error-row :global(.bx--btn) {
     flex-shrink: 0;
     min-width: auto;
-  }
-
-  .button-with-loader {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .button-with-loader :global(.bx--loading) {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .button-with-loader :global(.bx--loading__svg) {
-    width: 1rem;
-    height: 1rem;
   }
 
   .sr-only {
