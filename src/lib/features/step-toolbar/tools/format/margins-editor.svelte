@@ -3,6 +3,7 @@
   import { Position } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import { formatActions, getFormatState } from './format.store.svelte';
+  import { MIN_MAP_FRAME_SIZE } from './page-margins.utils';
 
   const formatState = $derived(getFormatState());
 
@@ -10,6 +11,13 @@
   let bottom = $state(0);
   let left = $state(0);
   let right = $state(0);
+
+  const availableHeight = $derived(
+    Math.max(0, formatState.height - MIN_MAP_FRAME_SIZE)
+  );
+  const availableWidth = $derived(
+    Math.max(0, formatState.width - MIN_MAP_FRAME_SIZE)
+  );
 
   $effect(() => {
     top = formatState.margins.top;
@@ -45,7 +53,7 @@
         id="margin-top"
         bind:value={top}
         min={0}
-        max={Number.MAX_SAFE_INTEGER}
+        max={Math.max(0, availableHeight - formatState.margins.bottom)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Top, value)}
@@ -60,7 +68,7 @@
         id="margin-bottom"
         bind:value={bottom}
         min={0}
-        max={Number.MAX_SAFE_INTEGER}
+        max={Math.max(0, availableHeight - formatState.margins.top)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Bottom, value)}
@@ -75,7 +83,7 @@
         id="margin-left"
         bind:value={left}
         min={0}
-        max={Number.MAX_SAFE_INTEGER}
+        max={Math.max(0, availableWidth - formatState.margins.right)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Left, value)}
@@ -90,7 +98,7 @@
         id="margin-right"
         bind:value={right}
         min={0}
-        max={Number.MAX_SAFE_INTEGER}
+        max={Math.max(0, availableWidth - formatState.margins.left)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Right, value)}
