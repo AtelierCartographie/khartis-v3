@@ -5,6 +5,7 @@ import {
   realpathSync,
   statSync
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { extname, resolve, sep } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -159,6 +160,14 @@ const dropCarbonCdnFonts = (): Plugin => ({
   }
 });
 
+const BASEMAP_ATTRIBUTES_PATH = 'basemaps/all-basemaps-attributes.parquet';
+
+const contentRevision = (staticPath: string): string =>
+  createHash('sha256')
+    .update(readFileSync(resolve(process.cwd(), 'static', staticPath)))
+    .digest('hex')
+    .slice(0, 16);
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -174,7 +183,8 @@ const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
         navigationFallbackUrl,
         `${basePath}/basemaps/all-basemaps-metadata.json`,
         `${basePath}/basemaps/projection-presets.json`,
-        `${basePath}/basemaps/style-presets.json`
+        `${basePath}/basemaps/style-presets.json`,
+        `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`
       ];
       const candidates = [
         resolve(process.cwd(), '.svelte-kit/output/client/sw.js'),
@@ -303,6 +313,10 @@ export default defineConfig(({ mode }) => {
             {
               url: `${basePath}/basemaps/style-presets.json`,
               revision: `${Date.now()}`
+            },
+            {
+              url: `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`,
+              revision: contentRevision(BASEMAP_ATTRIBUTES_PATH)
             }
           ],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024
