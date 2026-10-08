@@ -887,7 +887,7 @@
   "warning_zip_files_skipped_title": "Some files were ignored",
   "warning_zip_files_skipped_message": "The following files from the archive could not be processed: {files}",
   "warning_no_geo_column_title": "No geographic column detected",
-  "warning_no_geo_column_message": "The file does not contain an identifiable geographic column. You can join it manually to a basemap.",
+  "warning_no_geo_column_message": "No column matches a catalog basemap or looks like a geographic code or coordinates. Check the linked variable, or enter geographic coordinates.",
   "warning_kml_extended_data_title": "KML attributes not imported",
   "warning_kml_extended_data_message": "This KML file's extended attributes (ExtendedData) could not be read; only the name and description are available. Convert the file to GeoJSON or GeoPackage to keep all attributes.",
   "error_invalid_content_type": "Unsupported content type: {type}",
