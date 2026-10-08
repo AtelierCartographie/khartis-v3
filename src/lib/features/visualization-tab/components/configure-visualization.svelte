@@ -188,10 +188,7 @@
     usesSymbolFillCategoricalClassification
   } = primitivePanelController;
 
-  const categoryLabelsFetcher = createCategoryLabelsFetcher(
-    (datasetId, columnName) =>
-      datasetsStore.getUniqueValues(datasetId, columnName)
-  );
+  const categoryLabelsFetcher = createCategoryLabelsFetcher();
 
   type CategoryLabelsDataset = Parameters<
     typeof categoryLabelsFetcher.fetchClassificationLabels

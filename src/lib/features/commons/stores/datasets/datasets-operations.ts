@@ -14,7 +14,6 @@ import {
   disableFacets,
   getFacetsBaseVisualizationId
 } from '$lib/features/step-toolbar/tools/facets';
-import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
@@ -71,20 +70,6 @@ function cloneRelatedFilesData(
       name,
       buffer.slice(0)
     ])
-  );
-}
-
-function cloneDatasetParsedData(
-  data: DatasetResult['data']
-): UploadedFile['parsedData'] | undefined {
-  if (!data) {
-    return undefined;
-  }
-
-  return data.map((row) =>
-    Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
-    )
   );
 }
 
@@ -263,7 +248,7 @@ export async function duplicateDataset(
     const virtualFileId = crypto.randomUUID();
     const parsedData = Array.isArray(originalFile?.parsedData)
       ? clonePlainValue(originalFile.parsedData)
-      : cloneDatasetParsedData(dataset.data);
+      : undefined;
     const virtualFile: UploadedFile = {
       id: virtualFileId,
       name: copyName,

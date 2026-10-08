@@ -109,14 +109,7 @@ async function buildCategoricalFacetClassification(
   const dataset = datasetsStore.datasets.find(
     (candidate) => candidate.id === baseViz.datasetId
   );
-  const queriedLabels = await loadDistinctCategoryLabels(dataset, variable);
-  const labels = (
-    queriedLabels.length > 0
-      ? queriedLabels
-      : datasetsStore.getUniqueValues(baseViz.datasetId, variable)
-  )
-    .map((value) => (value == null ? null : String(value)))
-    .filter((value): value is string => Boolean(value));
+  const labels = await loadDistinctCategoryLabels(dataset, variable);
 
   const palette = resolveQualitativePalette(baseClassification);
   const colors =

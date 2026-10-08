@@ -1,5 +1,4 @@
 import {
-  collectDistinctCategoryLabels,
   loadDistinctCategoryLabels,
   resolveCategoryPreviewCount
 } from '../components/shared/categorical-preview.utils';
@@ -15,7 +14,6 @@ type CategoryClassificationLike = Partial<
 export interface ResolveCategoryLabelsOptions {
   dataset: CategoryDatasetLike | undefined;
   columnName: string | undefined;
-  getFallbackValues?: (columnName: string) => unknown[];
 }
 
 export function haveCategoryLabelsChanged(
@@ -32,17 +30,11 @@ export function haveCategoryLabelsChanged(
   );
 }
 
-export async function resolveCategoryLabels({
+export function resolveCategoryLabels({
   dataset,
-  columnName,
-  getFallbackValues
+  columnName
 }: ResolveCategoryLabelsOptions): Promise<string[]> {
-  const labels = await loadDistinctCategoryLabels(dataset, columnName);
-  if (labels.length > 0 || !columnName || !getFallbackValues) {
-    return labels;
-  }
-
-  return collectDistinctCategoryLabels(getFallbackValues(columnName));
+  return loadDistinctCategoryLabels(dataset, columnName);
 }
 
 interface UseCategoryLabelsOptions {

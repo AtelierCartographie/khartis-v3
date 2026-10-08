@@ -14,17 +14,7 @@ export async function detectFontsInDataset(
 ): Promise<Set<RequiredFallbackFont>> {
   let text = '';
 
-  if (dataset.data) {
-    for (const row of dataset.data.slice(0, SAMPLE_SIZE)) {
-      for (const value of Object.values(row)) {
-        if (typeof value === 'string') {
-          text += value;
-        }
-      }
-    }
-  }
-
-  if (!text && dataset.tableName && dataset.rowCount > 0) {
+  if (dataset.tableName && dataset.rowCount > 0) {
     try {
       const textColumns = dataset.columns
         .filter((c) => c.type === ColumnType.TEXT)

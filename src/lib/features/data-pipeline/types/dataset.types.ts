@@ -17,7 +17,6 @@ export interface DatasetResult {
   rowCount: number;
   geometry?: GeometryInfo;
   metadata: DatasetMetadata;
-  data?: Record<string, unknown>[];
   fileSize?: number;
   format?: FileFormat;
   analysis?: AnalysisResult;
