@@ -154,3 +154,33 @@ export function getGeoColumnDescription(column: GeoColumnResult): string {
         : m.geo_detector_identifier();
   }
 }
+
+export interface LinkedVariableColumn {
+  name: string;
+  typeSimple?: string;
+  shareUniques?: number;
+}
+
+/**
+ * The detected geographic identifier, otherwise a text column that identifies
+ * every row (names for a basemap of one's own). A measure is never proposed.
+ */
+export function pickLinkedVariable(
+  geoDetection: GeoDetectionResult | undefined,
+  columns: LinkedVariableColumn[]
+): string | undefined {
+  const primary = geoDetection?.suggestedPrimaryGeoColumn?.columnName;
+  if (primary && columns.some((column) => column.name === primary)) {
+    return primary;
+  }
+
+  return columns
+    .filter(
+      (column) =>
+        column.typeSimple === 'string' &&
+        (column.shareUniques ?? 0) >= UNIQUE_SHARE
+    )
+    .sort(
+      (left, right) => (right.shareUniques ?? 0) - (left.shareUniques ?? 0)
+    )[0]?.name;
+}

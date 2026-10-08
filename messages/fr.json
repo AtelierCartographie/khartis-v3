@@ -887,7 +887,7 @@
   "warning_zip_files_skipped_title": "Certains fichiers ont été ignorés",
   "warning_zip_files_skipped_message": "Les fichiers suivants de l'archive n'ont pas pu être traités : {files}",
   "warning_no_geo_column_title": "Aucune colonne géographique détectée",
-  "warning_no_geo_column_message": "Le fichier ne contient pas de colonne géographique identifiable. Vous pourrez le joindre manuellement à un fond de carte.",
+  "warning_no_geo_column_message": "Aucune colonne ne correspond à un fond du catalogue ni ne ressemble à un code géographique ou à des coordonnées. Vérifiez la variable liée, ou indiquez des coordonnées géographiques.",
   "warning_kml_extended_data_title": "Attributs KML non importés",
   "warning_kml_extended_data_message": "Les attributs étendus (ExtendedData) de ce fichier KML n'ont pas pu être lus ; seuls le nom et la description sont disponibles. Convertissez le fichier en GeoJSON ou GeoPackage pour conserver tous les attributs.",
   "error_invalid_content_type": "Type de contenu non supporté : {type}",

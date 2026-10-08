@@ -23,6 +23,7 @@ vi.mock('$lib/features/duckdb', () => ({
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
   buildGeoDetection,
+  pickLinkedVariable,
   type GeoDetectionColumn,
   type GeoDetectionResult
 } from '$lib/features/commons/utils/geo-detection.utils';
@@ -130,6 +131,44 @@ describe('buildGeoDetection', () => {
     expect(
       buildGeoDetection(columns, [], { hasGeometry: true }).hasGeoColumns
     ).toBe(false);
+  });
+});
+
+describe('pickLinkedVariable', () => {
+  const longFormat = [
+    { name: 'pays', typeSimple: 'string', shareUniques: 0.002 },
+    { name: 'valeur', typeSimple: 'numeric', shareUniques: 1 },
+    { name: 'annee', typeSimple: 'numeric', shareUniques: 0.17 }
+  ];
+
+  it('should take the detected geographic identifier first', () => {
+    const detection = buildGeoDetection(
+      [
+        {
+          name: 'pays',
+          semioType: 'label',
+          semioScore: 0.8,
+          shareUniques: 0.002
+        }
+      ],
+      [{ column: 'pays', distinctValues: 6, matchedValues: 6, basemaps: [] }]
+    );
+
+    expect(pickLinkedVariable(detection, longFormat)).toBe('pays');
+  });
+
+  it('should never propose a unique measure when nothing geographic is detected', () => {
+    expect(pickLinkedVariable(undefined, longFormat)).toBeUndefined();
+  });
+
+  it('should fall back to a text column that identifies every row', () => {
+    expect(
+      pickLinkedVariable(undefined, [
+        { name: 'category', typeSimple: 'string', shareUniques: 0.1 },
+        { name: 'site', typeSimple: 'string', shareUniques: 1 },
+        { name: 'value', typeSimple: 'numeric', shareUniques: 1 }
+      ])
+    ).toBe('site');
   });
 });
 
