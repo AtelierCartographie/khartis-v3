@@ -1,16 +1,7 @@
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import {
-  generateTableName,
-  getProcessor,
-  registerAllProcessors,
-  type ProcessContext
-} from '$lib/features/data-pipeline';
 import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
-import * as datasetState from './dataset-state';
-import type { DuckDBClientForFileProcessing } from './file-processors';
 import {
   bumpDatasetsVersion,
   findDatasetByIdOrSourceFile,
@@ -125,83 +116,6 @@ export async function registerExistingTable(
     );
     return null;
   }
-}
-
-export async function processFile(
-  file: UploadedFile,
-  Duck: DuckDBClientForDataset & DuckDBClientForFileProcessing,
-  callbacks: DatasetCallbacks
-): Promise<DuckDBDataset | null> {
-  const startTime = performance.now();
-
-  if (!file.parsedData || file.status !== 'complete') {
-    return null;
-  }
-
-  registerAllProcessors();
-
-  try {
-    const tableName = generateTableName(file.name, file.id);
-
-    const processor = getProcessor(file);
-    if (!processor) {
-      return null;
-    }
-
-    const ctx: ProcessContext = {
-      Duck,
-      callbacks: {
-        getRowCount: callbacks.getRowCount
-      },
-      tableName
-    };
-
-    const processorResult = await processor.process(ctx, file);
-
-    const result: DuckDBDataset = {
-      id: processorResult.id,
-      tableName: processorResult.tableName,
-      sourceFileId: processorResult.sourceFileId,
-      name: processorResult.name,
-      columns: processorResult.columns,
-      rowCount: processorResult.rowCount,
-      metadata: processorResult.metadata,
-      geoDetection:
-        processorResult.geoDetection as DuckDBDataset['geoDetection']
-    };
-
-    updateDatasets((datasets) => {
-      datasets.set(result.id, result);
-    });
-    scheduleArrowMetadataPrefetch(result, callbacks);
-    bumpDatasetsVersion();
-    setCurrentTableName(result.tableName);
-
-    restoreJoinState(result, file);
-
-    return result;
-  } catch (error) {
-    const errorDuration = performance.now() - startTime;
-    logger.error(
-      `[DuckDB:processFile] ERROR After ${errorDuration.toFixed(2)}ms`,
-      LogCategory.DUCKDB,
-      error
-    );
-    throw error;
-  }
-}
-
-function restoreJoinState(dataset: DuckDBDataset, file: UploadedFile): void {
-  const updates = datasetState.restoreJoinStateFromFile(dataset, file);
-  if (!updates) return;
-
-  updateDatasets((datasets) => {
-    const ds = datasets.get(dataset.id);
-    if (ds) {
-      Object.assign(ds, updates);
-    }
-  });
-  bumpDatasetsVersion();
 }
 
 export async function dropTable(

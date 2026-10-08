@@ -3,7 +3,6 @@ import {
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
 import type { GeometryInfo } from '$lib/features/data-pipeline';
-import type { ParsedData } from '$lib/types/data';
 
 export type ProjectTab = 1 | 2 | 3;
 
@@ -73,7 +72,6 @@ export interface UploadedFile {
   content?: string | ArrayBuffer;
   originalFile?: File;
   relatedFileObjects?: File[];
-  parsedData?: ParsedData;
 
   archiveLayerSnapshot?: Uint8Array;
   geometry?: GeometryInfo;

@@ -38,7 +38,6 @@ function makeModalGeoFile(): UploadedFile {
     status: FileStatus.COMPLETE,
     sourceType: DataSourceType.URL,
     content: new ArrayBuffer(8),
-    parsedData: [{ codgeo: '01001', libgeo: "L'Abergement-Clémenciat" }],
     statistics: {
       codgeo: { type: 'text', count: 34879, nullCount: 0, unique: 34877 }
     },
