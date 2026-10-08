@@ -12,7 +12,7 @@ Contrat de compatibilité des projets Khartis. Il porte sur deux versions qui
 | Archive exportée | v2       | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`    |
 | Archives lues    | v2       | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` |
 | Schéma baseline  | `3.9.0`  | `PROJECT_CONST.SCHEMA_BASELINE_VERSION`    |
-| Schéma courant   | `3.11.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
+| Schéma courant   | `3.12.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
 
 Les archives v1 et les schémas antérieurs à `3.9.0` datent du développement et
 ne sont pas supportés.
@@ -21,6 +21,7 @@ ne sont pas supportés.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `3.9.0` → `3.10.0`  | Aucune transformation. Le projet possède désormais l'asset source de ses fonds importés (`customBasemaps.metadata[].sourceAsset`). Le changement de version empêche un build antérieur (onglet PWA en cache) de réenregistrer le projet sans ces références et de supprimer l'asset. |
 | `3.10.0` → `3.11.0` | Aucune transformation. Chaque couche tabulaire d'une archive ZIP a désormais un asset Parquet écrit par DuckDB, comme les couches géographiques. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces assets.                                     |
+| `3.11.0` → `3.12.0` | Aucune transformation. Une couche enrichie par un tableau a désormais un instantané Parquet de sa table (`enrichmentSnapshot`), relu au rechargement à la place de la source. Le changement de version empêche un build antérieur de réenregistrer le projet sans cet asset.         |
 
 Avant toute restauration d'asset, l'import rejette explicitement une version
 absente, inconnue, future, ou ancienne sans migration. Une version inconnue
@@ -69,12 +70,13 @@ Champs que Khartis n'écrit plus dans `sourceFiles[]` de `project.json`. Un
 projet plus ancien qui les contient s'ouvre normalement : ils sont ignorés à la
 lecture, sans migration.
 
-| Champ                               | Abandonné depuis | Remplacé par                                                                                                               |
-| ----------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `duplicates`                        | `3.11.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id`                                                           |
-| `deepAnalysis`                      | `3.11.0`         | détection géographique DuckDB recalculée sur toute la table à chaque ouverture                                             |
-| `geoMatchResult`                    | `3.11.0`         | aucun : le champ n'était plus écrit                                                                                        |
-| `parsedData` (aperçu de 100 lignes) | `3.11.0`         | la table DuckDB, rejouée depuis l'asset source. `parsedData` reste écrit, complet, après une jointure ou un enrichissement |
+| Champ                                        | Abandonné depuis | Remplacé par                                                                                                                       |
+| -------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `duplicates`                                 | `3.11.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id`                                                                   |
+| `deepAnalysis`                               | `3.11.0`         | détection géographique DuckDB recalculée sur toute la table à chaque ouverture                                                     |
+| `geoMatchResult`                             | `3.11.0`         | aucun : le champ n'était plus écrit                                                                                                |
+| `parsedData` (aperçu de 100 lignes)          | `3.11.0`         | la table DuckDB, rejouée depuis l'asset source                                                                                     |
+| `parsedData` (copie complète après jointure) | `3.12.0`         | la jointure et les transformations, rejouées sur la source réimportée ; l'instantané `enrichmentSnapshot` pour une couche enrichie |
 
 ## Checklist de revue
 

@@ -96,8 +96,8 @@ vi.mock('../services/join-stats.service', () => ({
     mocks.computeDatasetJoinStatsMock(...args)
 }));
 
-vi.mock('../services/tabular-source-snapshot.service', () => ({
-  persistTabularSourceSnapshot: vi.fn()
+vi.mock('../services/source-file-state.service', () => ({
+  persistEnrichedSourceFile: vi.fn()
 }));
 
 describe('useEnrichmentJoin', () => {

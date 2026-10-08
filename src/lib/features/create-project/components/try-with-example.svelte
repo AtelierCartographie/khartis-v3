@@ -37,7 +37,7 @@
   import {
     dataTabStore,
     PERSISTED_BASEMAP_TYPE,
-    persistTabularSourceSnapshot
+    persistSourceFileState
   } from '$lib/features/data-tab';
   import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
   import { projectRepository } from '$lib/features/project-management';
@@ -160,7 +160,7 @@
         dataset.tableName,
         true
       );
-      await persistTabularSourceSnapshot({
+      await persistSourceFileState({
         sourceFileId: file.id,
         tableName: dataset.tableName,
         duckColumns,
@@ -276,7 +276,7 @@
       dataset.tableName,
       true
     );
-    await persistTabularSourceSnapshot({
+    await persistSourceFileState({
       sourceFileId: file.id,
       tableName: dataset.tableName,
       duckColumns,

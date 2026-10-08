@@ -12,6 +12,8 @@ export { projectRepository } from './services/persistence.service';
 
 export { projectStorage } from './services/storage.service';
 
+export { persistTableSnapshot } from './services/asset-store.service';
+
 export { persistCustomBasemapSource } from './services/custom-basemap-source.service';
 export { restoreCustomBasemapTables } from './services/custom-basemap-restore.service';
 

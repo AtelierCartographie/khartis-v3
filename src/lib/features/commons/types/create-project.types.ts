@@ -3,7 +3,6 @@ import {
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
 import type { GeometryInfo } from '$lib/features/data-pipeline';
-import type { ParsedData } from '$lib/types/data';
 
 export type ProjectTab = 1 | 2 | 3;
 
@@ -73,7 +72,6 @@ export interface UploadedFile {
   content?: string | ArrayBuffer;
   originalFile?: File;
   relatedFileObjects?: File[];
-  parsedData?: ParsedData;
 
   archiveLayerSnapshot?: Uint8Array;
   geometry?: GeometryInfo;
@@ -85,6 +83,9 @@ export interface UploadedFile {
   relatedFilesData?: Record<string, ArrayBuffer>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  // Parquet copy of the table after an enrichment join: the enrichment file
+  // itself is not kept, so reloads read this instead of assetRef.
+  enrichmentSnapshot?: AssetRef;
   uploadProgress?: number;
   rowCount?: number;
   columnCount?: number;
