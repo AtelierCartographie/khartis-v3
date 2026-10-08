@@ -1598,7 +1598,7 @@
   "validation_csv_large_slow": "Large CSV/TSV file, parsing may be slow",
   "validation_shp_too_small": "Suspiciously small SHP file",
   "validation_gpkg_too_small": "GeoPackage file too small to be valid",
-  "validation_geoparquet_too_small": "GeoParquet file too small to be valid",
+  "validation_geoparquet_too_small": "Parquet file too small to be valid",
   "validation_geojson_large": "Large GeoJSON, consider a more efficient format like GeoPackage",
   "validation_type_unrecognized": "Unrecognized file type",
   "validation_csv_no_separator": "No separator detected, the file may not be a valid CSV",

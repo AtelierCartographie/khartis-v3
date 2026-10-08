@@ -309,7 +309,7 @@ export const FileValidator = {
         break;
 
       case FileType.GEOPARQUET:
-        if (file.size < FILE_VALIDATION_INSPECTION.GEOPARQUET_MIN_SIZE_BYTES) {
+        if (file.size < FILE_VALIDATION_INSPECTION.PARQUET_MIN_SIZE_BYTES) {
           result.errors.push(m.validation_geoparquet_too_small());
         }
         break;
