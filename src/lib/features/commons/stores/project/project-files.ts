@@ -29,7 +29,6 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     uploadProgress: file.uploadProgress,
     errorMessage: file.errorMessage,
     validation: file.validation,
-    parsedData: file.parsedData,
     content: file.content,
     archiveLayerSnapshot: file.archiveLayerSnapshot,
     geometry: file.geometry,
