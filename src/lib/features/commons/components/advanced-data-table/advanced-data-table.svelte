@@ -899,6 +899,7 @@
 
   {#if typeChangeError}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind="error"
       lowContrast
       title={typeChangeError}
@@ -908,6 +909,7 @@
 </div>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={renameModalOpen}
   modalHeading={m.column_rename_title()}
   primaryButtonText={m.column_rename_confirm()}
@@ -940,6 +942,7 @@
 </Modal>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={deleteConfirmOpen}
   modalHeading={m.delete_column_title()}
   primaryButtonText={m.delete_column_confirm()}

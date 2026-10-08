@@ -1,6 +1,7 @@
 <script lang="ts">
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     formatValue,
     isSingularCount
@@ -876,6 +877,8 @@
                           )}
                           {#key joinedValueSignature}
                             <ComboBox
+                              translateWithId={translateCarbonId}
+                              translateWithIdSelection={translateCarbonId}
                               portalMenu
                               autoHighlight="first-match"
                               id={`join-joined-${joinedIndex}`}
@@ -1068,6 +1071,8 @@
                         )}
                         {#key basemapComboBoxItems}
                           <ComboBox
+                            translateWithId={translateCarbonId}
+                            translateWithIdSelection={translateCarbonId}
                             portalMenu
                             autoHighlight="first-match"
                             id={`join-${i}`}
@@ -1243,6 +1248,8 @@
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
                           {#key basemapComboBoxItems}
                             <ComboBox
+                              translateWithId={translateCarbonId}
+                              translateWithIdSelection={translateCarbonId}
                               portalMenu
                               autoHighlight="first-match"
                               id={`join-unrecognized-${unknownIndex}`}
@@ -1505,6 +1512,7 @@
         </div>
       {:else if showAttentionFooter}
         <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
           title={m.join_error_detected_title()}
           subtitle={m.join_error_detected_subtitle()}
           kind="warning"

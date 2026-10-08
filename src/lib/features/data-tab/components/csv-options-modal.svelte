@@ -127,6 +127,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.csv_options_title()}
   primaryButtonText={m.csv_options_apply()}

@@ -11,6 +11,7 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { ComboBox } from 'carbon-components-svelte';
   import { Edit, MagicWandFilled, Pin } from 'carbon-icons-svelte';
   import VisualizationSuggestionCard from './suggestion/visualization-suggestion-card.svelte';
@@ -470,6 +471,8 @@
         <InfoPopover text={m.data_visualized_info()} />
       </div>
       <ComboBox
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         items={datasetItems}
         selectedId={datasetItems.find(
           (item) => item.datasetId === selectedDatasetId

@@ -36,7 +36,10 @@
 </Button>
 
 <ComposedModal bind:open={isOpen} size="sm" on:close={closeModal}>
-  <ModalHeader title={m.sidenav_data_privacy()} />
+  <ModalHeader
+    iconDescription={m.a11y_close_dialog()}
+    title={m.sidenav_data_privacy()}
+  />
   <ModalBody class="data-privacy-body">
     <p class="data-privacy-intro">{m.data_privacy_modal_intro()}</p>
 

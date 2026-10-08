@@ -15,6 +15,7 @@
 </script>
 
 <InlineNotification
+  closeButtonDescription={m.a11y_close_notification()}
   kind="info"
   lowContrast
   title={m.colorblind_notification_title()}

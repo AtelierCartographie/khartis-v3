@@ -7,6 +7,7 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
@@ -72,6 +73,7 @@
 
 <div id="khartis-search-tool">
   <Search
+    closeButtonLabelText={m.a11y_clear_search()}
     value={searchState.searchValue}
     on:input={handleSearchInput}
     on:clear={searchActions.clearSearch}
@@ -80,6 +82,8 @@
   />
 
   <Dropdown
+    translateWithId={translateCarbonId}
+    translateWithIdSelection={translateCarbonId}
     size="sm"
     titleText={m.search_source()}
     selectedId={searchState.selectedSource}

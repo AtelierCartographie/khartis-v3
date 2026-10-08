@@ -105,9 +105,17 @@
             isSelected={globalState.selectedTool ===
               VisualizationTools.Projection}
             onclick={handleProjectionClick}
+            aria-describedby={showProjectionBadge
+              ? 'projection-tool-badge'
+              : undefined}
           />
           {#if showProjectionBadge}
-            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
+            <span
+              id="projection-tool-badge"
+              class={CSS_CLASSES.NOTIFICATION_BADGE}
+              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+              ></span
+            >
           {/if}
         </div>
       </Column>
@@ -139,9 +147,13 @@
             size="small"
             isSelected={globalState.selectedTool === VisualizationTools.Facets}
             onclick={handleFacetsClick}
+            aria-describedby={showFacetsBadge ? 'facets-tool-badge' : undefined}
           />
           {#if showFacetsBadge}
-            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
+            <span id="facets-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
+              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+              ></span
+            >
           {/if}
         </div>
       </Column>

@@ -13,6 +13,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   danger
   bind:open={open}
   modalHeading={m.sidenav_delete_confirm_title()}

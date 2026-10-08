@@ -10,6 +10,7 @@
   import { osmBasemapStore } from '$lib/features/map';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     Column,
     Grid,
@@ -177,6 +178,7 @@
       <Row>
         <Column>
           <NumberInput
+            translateWithId={translateCarbonId}
             id="distance-input"
             labelText={m.geo_distance()}
             value={geoState.scale.distance}

@@ -367,6 +367,7 @@
   {:else}
     <div class="field-group">
       <Search
+        closeButtonLabelText={m.a11y_clear_search()}
         size="sm"
         placeholder={m.search_placeholder()}
         value={searchQuery}

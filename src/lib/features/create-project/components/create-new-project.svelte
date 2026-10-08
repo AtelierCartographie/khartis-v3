@@ -520,6 +520,7 @@
 
     {#if createProjectState.newProject.error}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="error"
         title={m.create_project_error_label()}
@@ -530,6 +531,7 @@
 
     {#if createProjectState.newProject.warning}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="warning"
         title={m.warning_files_duplicate_title()}
@@ -598,6 +600,7 @@
             <div class="file-processing-row" data-testid="file-processing">
               <div class="file-processing-content">
                 <FileUploaderItem
+                  iconDescription={m.loading_indicator_label()}
                   class="w-full"
                   name={file.name}
                   status="uploading"
@@ -620,13 +623,18 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
           {:else if file.status === FileStatus.ERROR}
             <div class="file-error-row" data-testid="file-error">
               <FileUploaderItem
+                iconDescription={m.remove_file_action()}
                 invalid
                 class="w-full"
                 name={file.name}
@@ -643,7 +651,11 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
@@ -670,7 +682,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>
@@ -717,7 +733,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>

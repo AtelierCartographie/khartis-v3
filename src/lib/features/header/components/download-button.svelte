@@ -229,6 +229,7 @@
 </div>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   primaryButtonDisabled={modal.isExporting}
   secondaryButtonDisabled={modal.isExporting}
   open={modal.isOpen}
