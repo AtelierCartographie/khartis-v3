@@ -5,7 +5,7 @@ import type {
   ProcessedDatasetAnalysisResult
 } from './geometry.types';
 import type { DatasetMetadata, FileFormat } from './import.types';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import type { GeometryTypeEnum } from '../types';
 
 export interface DatasetResult {

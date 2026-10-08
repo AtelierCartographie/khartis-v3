@@ -15,7 +15,7 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import { getGeoColumnDescription } from '$lib/features/commons/utils/geo-detection.utils';
   import {
     PERF_PHASE,
     perfMark,
@@ -92,7 +92,7 @@
 
       let displayText = columnName;
       if (geoCol) {
-        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        const description = getGeoColumnDescription(geoCol);
         displayText = `${columnName} ${m.separator_en_dash()} ${description}`;
       }
 

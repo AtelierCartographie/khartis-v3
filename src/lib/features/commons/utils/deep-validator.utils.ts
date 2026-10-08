@@ -1,9 +1,5 @@
 import * as m from '$lib/paraglide/messages';
 import { DATA_VALIDATION } from '../constants/detection.constants';
-import {
-  GeoColumnDetector,
-  type GeoDetectionResult
-} from './geo-detector.utils';
 import { isConfiguredNullValue } from './null-values.utils';
 
 export interface ColumnStatistics {
@@ -35,7 +31,6 @@ export interface DataAnalysisResult {
   rowCount: number;
   columnCount: number;
   columns: ColumnStatistics[];
-  geoDetection: GeoDetectionResult;
   qualityIssues: DataQualityIssue[];
   performanceWarnings: string[];
   suggestions: string[];
@@ -78,7 +73,6 @@ export const DeepDataValidator = {
     headers: string[],
     data: unknown[][],
     options: {
-      skipGeoDetection?: boolean;
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
@@ -93,12 +87,6 @@ export const DeepDataValidator = {
       previewRows
     );
 
-    const geoDetection = options.skipGeoDetection
-      ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
-      : await GeoColumnDetector.detectGeoColumns(headers, previewRows, {
-          sampleSize: rowCount
-        });
-
     const qualityIssues = await DeepDataValidator.detectQualityIssues(
       columns,
       previewRows
@@ -108,7 +96,6 @@ export const DeepDataValidator = {
 
     const suggestions = DeepDataValidator.generateSuggestions(
       columns,
-      geoDetection,
       qualityIssues,
       performanceWarnings
     );
@@ -117,7 +104,6 @@ export const DeepDataValidator = {
       rowCount,
       columnCount,
       columns,
-      geoDetection,
       qualityIssues,
       performanceWarnings,
       suggestions
@@ -483,24 +469,10 @@ export const DeepDataValidator = {
 
   generateSuggestions(
     columns: ColumnStatistics[],
-    geoDetection: GeoDetectionResult,
     qualityIssues: DataQualityIssue[],
     performanceWarnings: string[]
   ): string[] {
     const suggestions: string[] = [];
-
-    if (!geoDetection.hasGeoColumns) {
-      suggestions.push(m.data_quality_suggest_no_geo_column());
-    } else if (geoDetection.suggestedPrimaryGeoColumn) {
-      const geoCol = geoDetection.suggestedPrimaryGeoColumn;
-      suggestions.push(
-        m.data_quality_suggest_primary_geo_column({
-          columnName: geoCol.columnName,
-          type: geoCol.type,
-          confidence: (geoCol.confidence * 100).toFixed(0)
-        })
-      );
-    }
 
     const numericColumns = columns.filter((c) => c.type === 'numeric');
     if (numericColumns.length === 0) {

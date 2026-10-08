@@ -120,6 +120,30 @@ qu'une table de points représentatifs.
   disparaît sans casser le fond. `ST_MakeValid` ne corrige pas ce cas, qui est
   un problème de nodage.
 
+## Colonnes géographiques
+
+Une seule détection, `detectGeoColumns()` (`commons/services/geo-detection.service.ts`),
+produit `dataset.geoDetection`. Elle tourne sur toute la table, après « Créer »,
+au rechargement, à la réinitialisation et pour un fichier d'enrichissement :
+création et rechargement donnent donc le même résultat.
+
+- **Proxys universels**, valables même sans fond du catalogue : le typage
+  sémiologique reconnaît les identifiants (`geoid` : valeurs uniques, mots `id`,
+  `code`, `iso`) et les coordonnées (`geolat`, `geolon` : nom et étendue).
+- **Garantie du catalogue** : les valeurs distinctes de chaque colonne texte, ou
+  identifiant numérique, sont cherchées dans `basemap_attributes` avec la
+  normalisation de la jointure. Au moins 5 valeurs distinctes et une
+  correspondance d'au moins 50 % confirment la colonne et donnent les fonds
+  concernés (`catalogBasemaps`). Sans l'index (premier usage hors ligne), seuls
+  les proxys universels s'appliquent.
+- **Colonne principale** (`suggestedPrimaryGeoColumn`) : d'abord une colonne
+  confirmée par le catalogue, puis unique, puis typée `geoid`, puis la plus
+  sûre.
+
+Les types se limitent à `identifier`, `latitude` et `longitude`. Le niveau
+administratif ne se devine pas à partir du nom de la colonne : il se lit dans
+les fonds qui partagent les valeurs.
+
 ## Jointures
 
 Lors d'une jointure, vérifier :

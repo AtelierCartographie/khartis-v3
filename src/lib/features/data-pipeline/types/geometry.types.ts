@@ -1,4 +1,4 @@
-import type { GeoLocationType } from '../types';
+import type { GeoColumnTypeValue } from '$lib/features/commons/constants/data.constants';
 import type { EnrichedColumn, ColumnInfo } from './column.types';
 
 export interface GeometryInfo {
@@ -13,7 +13,7 @@ export interface GeometryInfo {
 export interface GeoColumnInfo {
   index: number;
   columnName: string;
-  type: `${GeoLocationType}`;
+  type: GeoColumnTypeValue;
   confidence: number;
   isValid?: boolean;
 }

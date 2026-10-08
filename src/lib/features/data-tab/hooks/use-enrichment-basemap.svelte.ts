@@ -40,7 +40,6 @@ import {
 import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
 import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
 import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
-import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -56,39 +55,18 @@ export interface BasemapSuggestionItem {
   score: number;
 }
 
-const COORDINATE_GEO_TYPES = new Set<string>([
-  GEO_COLUMN_TYPE.LATITUDE,
-  GEO_COLUMN_TYPE.LONGITUDE,
-  GEO_COLUMN_TYPE.COORDINATES
-]);
-
 export function pickAutoLinkedGeoColumn(
   dataset: DatasetResult
 ): { columnName: string; index: number } | null {
-  const geoColumns = dataset.geoDetection?.geoColumns ?? [];
-  const candidates = geoColumns.filter(
-    (column) => !COORDINATE_GEO_TYPES.has(column.type as string)
-  );
-  if (candidates.length === 0) return null;
-
   const suggested = dataset.geoDetection?.suggestedPrimaryGeoColumn;
-  const suggestedMatch =
-    suggested && !COORDINATE_GEO_TYPES.has(suggested.type as string)
-      ? candidates.find((column) => column.columnName === suggested.columnName)
-      : undefined;
-
-  const best =
-    suggestedMatch ??
-    candidates.reduce((winner, current) =>
-      current.confidence > winner.confidence ? current : winner
-    );
+  if (!suggested) return null;
 
   const columnIndex = dataset.columns.findIndex(
-    (column) => column.name === best.columnName
+    (column) => column.name === suggested.columnName
   );
   if (columnIndex === -1) return null;
 
-  return { columnName: best.columnName, index: columnIndex };
+  return { columnName: suggested.columnName, index: columnIndex };
 }
 
 export interface UseEnrichmentBasemapReturn {

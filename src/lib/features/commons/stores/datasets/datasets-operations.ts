@@ -8,6 +8,7 @@ import {
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { withGeoDetection } from '../../services/geo-detection.service';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import {
   disableFacets,
@@ -142,9 +143,9 @@ export async function resetDataset(
       restoredSourceFile
     );
 
-    const newDataset: DatasetResult = isZipDatasetResult(result)
-      ? result.datasets[0]
-      : result;
+    const newDataset: DatasetResult = await withGeoDetection(
+      isZipDatasetResult(result) ? result.datasets[0] : result
+    );
 
     const resetDatasetResult: DatasetResult = {
       ...newDataset,

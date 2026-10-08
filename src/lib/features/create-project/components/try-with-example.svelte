@@ -106,19 +106,6 @@
     return CATEGORY_LABELS[label]?.() ?? label;
   }
 
-  function resolveExampleGeoColumn(file: UploadedFile): string | undefined {
-    const detection = file.deepAnalysis?.geoDetection;
-    const suggested = detection?.suggestedPrimaryGeoColumn?.columnName;
-    const detected = detection?.geoColumns;
-    if (!detected || detected.length === 0) {
-      return suggested;
-    }
-    const sorted = [...detected].sort(
-      (a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)
-    );
-    return sorted[0]?.columnName ?? suggested;
-  }
-
   function applyReferenceBasemapToProject(
     basemap: BasemapMetadata,
     options: { syncJoinState?: boolean } = {}
@@ -160,7 +147,8 @@
       return;
     }
 
-    const geoColumn = resolveExampleGeoColumn(file) ?? '';
+    const geoColumn =
+      dataset.geoDetection?.suggestedPrimaryGeoColumn?.columnName ?? '';
 
     try {
       await duckDBOrchestrator.finalizeJoin(dataset.id, basemap, geoColumn);

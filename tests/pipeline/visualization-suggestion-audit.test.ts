@@ -40,7 +40,9 @@ import {
   type GeometryType,
   type VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
-import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+import { buildGeoDetection } from '$lib/features/commons/utils/geo-detection.utils';
+import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
+import { summarizeColumn } from './semio-fixture-helper';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -544,30 +546,21 @@ async function analyzeTable(
 async function applyGeoDetection(
   dataset: DatasetResult
 ): Promise<DatasetResult['geoDetection']> {
-  const candidateColumns = dataset.columns.map((column) => column.name);
-  if (candidateColumns.length === 0) {
-    return undefined;
-  }
-
-  const escapedTable = escapeIdentifier(dataset.tableName);
-  const escapedColumns = candidateColumns
-    .map((column) => `"${escapeIdentifier(column)}"`)
-    .join(', ');
-
-  const rows = await queryRows<Record<string, unknown>>(
-    `SELECT ${escapedColumns} FROM "${escapedTable}" LIMIT 200`
+  const db = { instance: dbInstance, connection: dbConnection };
+  const columns = await Promise.all(
+    dataset.columns.map(async (column) => {
+      const summary = await summarizeColumn(db, dataset.tableName, column.name);
+      const semio = detectSemioType(summary as never);
+      return {
+        name: column.name,
+        semioType: semio.semioType,
+        semioScore: semio.semioScore,
+        shareUniques: summary.share_uniques
+      };
+    })
   );
-
-  if (rows.length === 0) {
-    return undefined;
-  }
-
-  const matrix = rows.map((row) =>
-    candidateColumns.map((column) => row[column] ?? null)
-  );
-
-  return GeoColumnDetector.detectGeoColumns(candidateColumns, matrix, {
-    sampleSize: Math.min(200, matrix.length)
+  return buildGeoDetection(columns, [], {
+    hasGeometry: Boolean(dataset.geometry)
   });
 }
 
@@ -599,19 +592,7 @@ function buildDatasetResult(params: {
     analysis: {
       columns,
       hasGeoData: Boolean(geometry || geoDetection?.hasGeoColumns),
-      geoColumns:
-        geoDetection?.geoColumns ??
-        (geometry
-          ? [
-              {
-                index: 0,
-                columnName: geometry.columnName ?? 'geom',
-                type: 'unknown',
-                confidence: 1,
-                isValid: true
-              }
-            ]
-          : []),
+      geoColumns: geoDetection?.geoColumns ?? [],
       rowCount,
       warnings: [...(geoDetection?.warnings ?? [])]
     },
