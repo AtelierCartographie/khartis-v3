@@ -42,14 +42,18 @@ describe('file-validator utils', () => {
   });
 
   it('marks a shapefile group invalid when required sidecars are missing', () => {
-    const result = FileValidator.validateMultiple([shapefilePart('roads.shp')]);
+    const result = FileValidator.validateMultiple([shapefilePart('Roads.shp')]);
     const message = m.shapefile_incomplete_message({
       missing: '.shx, .dbf'
     });
 
     expect(result.isValid).toBe(false);
     expect(result.globalErrors).toContain(message);
-    expect(result.results.get('roads.shp')?.errors).toContain(message);
+    expect(result.results.get('Roads.shp')?.errors).toContain(message);
+    expect(result.incompleteShapefiles.get('roads')).toEqual({
+      missing: ['.shx', '.dbf'],
+      message
+    });
   });
 
   it('accepts a shapefile group with .shp, .shx, and .dbf components', () => {
