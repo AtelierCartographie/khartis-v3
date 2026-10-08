@@ -8,6 +8,10 @@ export type {
 } from '../types/file-processing.service.types';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import {
+  DuckDBError,
+  isPipelineError
+} from '$lib/features/commons/pipeline.errors';
+import {
   EXCLUDED_COLUMNS,
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
@@ -99,7 +103,16 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-function getReadableErrorMessage(error: unknown): string {
+export function getReadableErrorMessage(error: unknown): string {
+  // A pipeline error already carries a localized message. A DuckDBError with a
+  // query wraps the raw engine text, which is mapped below like any raw error.
+  if (
+    isPipelineError(error) &&
+    !(error instanceof DuckDBError && error.query)
+  ) {
+    return error.message;
+  }
+
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   if (
