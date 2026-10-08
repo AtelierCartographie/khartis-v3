@@ -3,8 +3,6 @@ import type { JsonValue } from './utility';
 
 export type { JsonValue };
 
-export type TabularData = Record<string, JsonValue>[];
-
 export interface GeoJSONFeature {
   type: 'Feature';
   geometry?: Geometry | Record<string, unknown> | null;
@@ -20,6 +18,3 @@ export interface GeoJSONFeatureCollection {
     };
   };
 }
-
-export type ParsedData =
-  TabularData | GeoJSONFeature | GeoJSONFeatureCollection;

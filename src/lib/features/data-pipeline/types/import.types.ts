@@ -14,7 +14,6 @@ export interface DatasetMetadata {
   parserUsed: string;
   processingDuration?: number;
   transformations?: string[];
-  geoDuckTableReady?: boolean;
   csvOptions?: CsvImportOptions;
 }
 
@@ -27,7 +26,6 @@ export interface UploadedFilePayload {
   type: string;
   datasetId?: string;
   content?: string | ArrayBuffer;
-  parsedData?: unknown;
   fileType?: string;
   relatedFileObjects?: File[];
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;

@@ -3,7 +3,6 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -409,26 +408,6 @@ export const duckDBOrchestrator = {
       getRowCount: getRowCountInternal,
       prefetchArrowMetadata
     });
-  },
-
-  async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
-    await ensureInitialized();
-    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-
-    try {
-      const dataset = await datasetOps.processFile(file, Duck, {
-        getRowCount: getRowCountInternal,
-        prefetchArrowMetadata
-      });
-
-      return dataset;
-    } catch (error) {
-      showError(
-        m.error_process_file_title(),
-        error instanceof Error ? error.message : m.error_unknown()
-      );
-      return null;
-    }
   },
 
   getBasemapAttributesId: joinOps.getBasemapAttributesId,

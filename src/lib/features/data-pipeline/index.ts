@@ -15,8 +15,6 @@ export type {
 
 export { PIPELINE_CONST } from './constants';
 
-export { generateTableName } from './core/format-detector';
-
 export { extractGeoArrowMetadata } from './io/geoarrow-metadata';
 
 export {
@@ -43,10 +41,5 @@ export {
   extractZip,
   getShapefileFilesFromArchive
 } from './utils/zip-handler';
-export {
-  getProcessor,
-  readFileIntoTable,
-  registerAllProcessors
-} from './processors';
+export { readFileIntoTable } from './processors';
 export type { FileTableRead } from './processors';
-export type { ProcessContext } from './processors';

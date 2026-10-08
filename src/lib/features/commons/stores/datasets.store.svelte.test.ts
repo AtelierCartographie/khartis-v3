@@ -285,7 +285,6 @@ describe('datasetsStore persisted view state', () => {
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'legacy_data_csv_123',
-        parsedData: [{ country: 'France' }],
         statistics: {
           country: {
             type: 'text',
@@ -321,7 +320,6 @@ describe('datasetsStore persisted view state', () => {
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'joined_data_csv_123',
-        parsedData: [{ country: 'France' }],
         statistics: {
           country: {
             type: 'text',
@@ -355,7 +353,6 @@ describe('datasetsStore persisted view state', () => {
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'data_csv_123',
-        parsedData: [{ country: 'France' }],
         statistics: {
           country: {
             type: 'text',
@@ -381,7 +378,6 @@ describe('datasetsStore persisted view state', () => {
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'joined_data_csv_123',
-        parsedData: [{ country: 'France' }],
         statistics: {
           country: {
             type: 'text',
@@ -411,7 +407,6 @@ describe('datasetsStore persisted view state', () => {
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'fresh_data_csv_123',
-        parsedData: [{ country: 'France' }],
         statistics: {
           country: {
             type: 'text',
