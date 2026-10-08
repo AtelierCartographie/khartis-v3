@@ -119,7 +119,8 @@ describe('deserializeUploadedFile — abandoned fields', () => {
       ...serializeUploadedFile(minimalFile({ duckdbTableName: 't_data' })),
       deepAnalysis: { geoDetection: { hasGeoColumns: true, geoColumns: [] } },
       geoMatchResult: { matched: 3 },
-      duplicates: { hasDuplicates: true, duplicateCount: 2 }
+      duplicates: { hasDuplicates: true, duplicateCount: 2 },
+      parsedData: [{ code: '01001', naissances: 12 }]
     };
 
     const restored = deserializeUploadedFile(legacy as never);
@@ -128,5 +129,7 @@ describe('deserializeUploadedFile — abandoned fields', () => {
     expect(restored).not.toHaveProperty('deepAnalysis');
     expect(restored).not.toHaveProperty('geoMatchResult');
     expect(restored).not.toHaveProperty('duplicates');
+    expect(restored).not.toHaveProperty('parsedData');
+    expect(serializeUploadedFile(restored)).not.toHaveProperty('parsedData');
   });
 });

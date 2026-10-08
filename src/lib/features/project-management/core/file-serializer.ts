@@ -1,10 +1,6 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedUploadedFile } from '$lib/types/serialization.types';
 
-function shouldPersistParsedData(file: UploadedFile): boolean {
-  return Array.isArray(file.parsedData);
-}
-
 export function serializeUploadedFile(
   file: UploadedFile
 ): SerializedUploadedFile {
@@ -23,10 +19,6 @@ export function serializeUploadedFile(
     companionAssetRefs: file.companionAssetRefs,
     uploadProgress: file.uploadProgress
   } as SerializedUploadedFile;
-
-  if (shouldPersistParsedData(file)) {
-    serialized.parsedData = file.parsedData;
-  }
 
   if (file.statistics) {
     serialized.statistics = file.statistics;
@@ -73,10 +65,6 @@ export function deserializeUploadedFile(
     companionAssetRefs: data.companionAssetRefs,
     uploadProgress: data.uploadProgress
   } as UploadedFile;
-
-  if (data.parsedData) {
-    file.parsedData = data.parsedData as UploadedFile['parsedData'];
-  }
 
   if (data.statistics) {
     file.statistics = data.statistics as UploadedFile['statistics'];
