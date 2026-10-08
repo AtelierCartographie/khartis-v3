@@ -783,6 +783,8 @@
   "project_restore_classification_warning_message": "Les classes de « {visualizationName} » n'ont pas pu être recalculées. La visualisation devra peut-être être reconfigurée.",
   "project_restore_companion_files_warning_title": "Restauration partielle du Shapefile",
   "project_restore_companion_files_warning_message": "Les fichiers compagnons de « {fileName} » n'ont pas pu être restaurés. Réimportez le Shapefile et ses dépendances si la couche ne se charge pas.",
+  "project_restore_enrichment_warning_title": "Colonnes d'enrichissement non restaurées",
+  "project_restore_enrichment_warning_message": "Les colonnes ajoutées par enrichissement à « {fileName} » n'ont pas pu être relues. La couche est rouverte depuis son fichier source : refaites l'enrichissement pour les retrouver.",
   "project_restore_source_file_warning_title": "Échec de restauration du fichier source",
   "project_restore_source_file_warning_message": "« {fileName} » n'a pas pu être recréé depuis les données sauvegardées du projet. Réimportez le fichier pour restaurer cette couche.",
   "project_restore_join_warning_title": "Restauration partielle de la jointure",

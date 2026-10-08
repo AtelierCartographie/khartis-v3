@@ -4,7 +4,8 @@ import {
   buildStatisticsSnapshot,
   type GeometryInfo
 } from '$lib/features/data-pipeline';
-import type { AnalysisResult } from '$lib/features/duckdb';
+import { Duck, type AnalysisResult } from '$lib/features/duckdb';
+import { persistTableSnapshot } from '$lib/features/project-management';
 
 type JoinStateUpdates = Partial<
   Pick<
@@ -71,6 +72,47 @@ export async function persistSourceFileState(input: {
     tableName,
     buildStatisticsSnapshot(duckColumns),
     joinState,
+    geometry
+  );
+
+  await projectStore.saveCurrentProject();
+}
+
+export async function persistEnrichedSourceFile(input: {
+  sourceFileId: string;
+  tableName: string;
+  duckColumns: AnalysisResult[];
+  geometry?: GeometryInfo;
+}): Promise<void> {
+  const { sourceFileId, tableName, duckColumns, geometry } = input;
+  const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+    (file) => file.id === sourceFileId
+  );
+
+  if (!sourceFile) {
+    return;
+  }
+
+  const { name: columnNames } = await Duck.describe_table(tableName);
+  const snapshotBytes = await Duck.copy_to_parquet_bytes(
+    tableName,
+    columnNames
+  );
+  sourceFile.enrichmentSnapshot = await persistTableSnapshot(
+    snapshotBytes,
+    sourceFile.name,
+    Boolean(geometry ?? sourceFile.geometry)
+  );
+  // The snapshot already holds every earlier transformation and row deletion,
+  // with the original row ids, so only later ones are replayed on reload.
+  sourceFile.columnTransformations = [];
+  sourceFile.deletedRowIds = [];
+
+  applySourceFileState(
+    sourceFile,
+    tableName,
+    buildStatisticsSnapshot(duckColumns),
+    {},
     geometry
   );
 

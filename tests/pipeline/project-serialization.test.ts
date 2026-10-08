@@ -103,11 +103,19 @@ describe('deserializeUploadedFile — asset ref round-trip', () => {
             size: 7,
             kind: 'companion'
           }
-        ]
+        ],
+        enrichmentSnapshot: {
+          assetId: 'asset-enriched',
+          originalName: 'hello.parquet',
+          mimeType: 'application/vnd.apache.parquet',
+          size: 9,
+          kind: 'primary'
+        }
       })
     );
     const restored = deserializeUploadedFile(serialized);
     expect(restored.assetRef?.assetId).toBe('asset-1');
+    expect(restored.enrichmentSnapshot?.assetId).toBe('asset-enriched');
     expect(restored.companionAssetRefs?.[0]?.assetId).toBe('asset-2');
     expect(restored.content).toBeUndefined();
   });

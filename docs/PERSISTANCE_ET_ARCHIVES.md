@@ -52,6 +52,15 @@ comme un asset Parquet écrit par DuckDB depuis sa table (GeoParquet si elle a
 une géométrie) : types et CRS source sont conservés, et le rechargement relit
 cet asset plutôt que l'archive entière.
 
+Le fichier d'un enrichissement (tableau joint à une couche géographique) n'est
+pas conservé. À la validation de l'enrichissement, la table enrichie est donc
+écrite en Parquet par DuckDB, avec ses identifiants de ligne `__id`, dans un
+asset distinct de la source (`enrichmentSnapshot`). Les transformations et
+suppressions de lignes déjà appliquées y sont incluses et sortent de la liste à
+rejouer. Au rechargement, cet instantané remplace la source ; « Réinitialiser »
+revient à la source et l'efface. Un instantané illisible déclenche un
+avertissement et la couche est rouverte depuis sa source.
+
 Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
 les métadonnées de l'asset, le snapshot, les références et les métadonnées de
 projet sont écrits dans des transactions distinctes.
