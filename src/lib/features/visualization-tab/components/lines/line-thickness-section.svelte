@@ -89,11 +89,11 @@
     onOpenThicknessDiscretization
   }: Props = $props();
 
-  const thicknessModeItems = [
+  const thicknessModeItems = $derived([
     { icon: LineThin, label: m.thickness_mode_unique(), iconSize: 16 },
     { icon: LineThick, label: m.thickness_mode_proportional(), iconSize: 16 },
     { icon: Table, label: m.thickness_mode_classes(), iconSize: 16 }
-  ];
+  ]);
 
   const THICKNESS_MODE_ORDER = [
     ThicknessMode.UNIQUE,

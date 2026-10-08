@@ -56,13 +56,13 @@
   const numberLocale = $derived(resolveLocale());
   const isYear = $derived(isYearColumn(analysis));
 
-  const typeOptions: { value: ColumnType; label: string }[] = [
+  const typeOptions: { value: ColumnType; label: string }[] = $derived([
     { value: 'text', label: m.column_type_text() },
     { value: 'number', label: m.column_type_number() },
     { value: 'date', label: m.column_type_date() }
-  ];
+  ]);
 
-  const refineOptions: { value: RefineOperation; label: string }[] = [
+  const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
       value: RefineOperation.UPPERCASE,
       label: m.column_refine_uppercase()
@@ -76,7 +76,7 @@
       value: RefineOperation.TRIM_ALL,
       label: m.column_refine_trim_all()
     }
-  ];
+  ]);
 
   let activeSubmenu = $state<'type' | 'refine' | null>(null);
   let typeSubmenuTriggerRef = $state<HTMLElement | null>(null);
