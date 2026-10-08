@@ -351,23 +351,19 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     duck: typeof Duck,
     dataset: DatasetResult,
     headers: string[]
-  ): Promise<Uint8Array | undefined> {
-    if (!dataset.geometry) {
-      return undefined;
-    }
-
-    const geometryColumnName =
-      dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM;
-    return duck.copy_to_parquet_bytes(dataset.tableName, [
-      ...headers.filter(
-        (header) =>
-          header !== geometryColumnName &&
-          !EXCLUDED_COLUMNS.includes(
-            header as (typeof EXCLUDED_COLUMNS)[number]
-          )
-      ),
-      geometryColumnName
-    ]);
+  ): Promise<Uint8Array> {
+    const geometryColumnName = dataset.geometry
+      ? (dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM)
+      : undefined;
+    const userColumns = headers.filter(
+      (header) =>
+        header !== geometryColumnName &&
+        !EXCLUDED_COLUMNS.includes(header as (typeof EXCLUDED_COLUMNS)[number])
+    );
+    return duck.copy_to_parquet_bytes(
+      dataset.tableName,
+      geometryColumnName ? [...userColumns, geometryColumnName] : userColumns
+    );
   }
 
   async function processMultipleDatasets(
@@ -414,7 +410,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       );
       const geometryUpdates = {
         ...(geometry ? { geometry } : {}),
-        ...(archiveLayerSnapshot ? { archiveLayerSnapshot } : {})
+        archiveLayerSnapshot
       };
       if (i === 0) {
         callbacks.onDataUpdate(uploadedFile.id, {
