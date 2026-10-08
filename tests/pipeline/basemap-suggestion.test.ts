@@ -326,7 +326,6 @@ describe('[S02] rankBasemapsByGeoColumn — ISO country column planisphere fallb
       id: 'ds-iso',
       name: 'iso dataset',
       format: 'csv',
-      data: [],
       rowCount: 0,
       columns: [
         { name: columnName, type: 'string', nullable: false, unique: true }
