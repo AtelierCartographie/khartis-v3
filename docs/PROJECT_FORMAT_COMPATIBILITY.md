@@ -12,14 +12,15 @@ Contrat de compatibilité des projets Khartis. Il porte sur deux versions qui
 | Archive exportée | v2       | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`    |
 | Archives lues    | v2       | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` |
 | Schéma baseline  | `3.9.0`  | `PROJECT_CONST.SCHEMA_BASELINE_VERSION`    |
-| Schéma courant   | `3.10.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
+| Schéma courant   | `3.11.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
 
 Les archives v1 et les schémas antérieurs à `3.9.0` datent du développement et
 ne sont pas supportés.
 
-| Migration          | Contenu                                                                                                                                                                                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `3.9.0` → `3.10.0` | Aucune transformation. Le projet possède désormais l'asset source de ses fonds importés (`customBasemaps.metadata[].sourceAsset`). Le changement de version empêche un build antérieur (onglet PWA en cache) de réenregistrer le projet sans ces références et de supprimer l'asset. |
+| Migration           | Contenu                                                                                                                                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `3.9.0` → `3.10.0`  | Aucune transformation. Le projet possède désormais l'asset source de ses fonds importés (`customBasemaps.metadata[].sourceAsset`). Le changement de version empêche un build antérieur (onglet PWA en cache) de réenregistrer le projet sans ces références et de supprimer l'asset. |
+| `3.10.0` → `3.11.0` | Aucune transformation. Chaque couche tabulaire d'une archive ZIP a désormais un asset Parquet écrit par DuckDB, comme les couches géographiques. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces assets.                                     |
 
 Avant toute restauration d'asset, l'import rejette explicitement une version
 absente, inconnue, future, ou ancienne sans migration. Une version inconnue
@@ -70,9 +71,9 @@ lecture, sans migration.
 
 | Champ            | Abandonné depuis | Remplacé par                                                                   |
 | ---------------- | ---------------- | ------------------------------------------------------------------------------ |
-| `duplicates`     | `3.10.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id`               |
-| `deepAnalysis`   | `3.10.0`         | détection géographique DuckDB recalculée sur toute la table à chaque ouverture |
-| `geoMatchResult` | `3.10.0`         | aucun : le champ n'était plus écrit                                            |
+| `duplicates`     | `3.11.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id`               |
+| `deepAnalysis`   | `3.11.0`         | détection géographique DuckDB recalculée sur toute la table à chaque ouverture |
+| `geoMatchResult` | `3.11.0`         | aucun : le champ n'était plus écrit                                            |
 
 ## Checklist de revue
 

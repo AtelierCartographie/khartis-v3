@@ -250,7 +250,7 @@ export async function ensureUploadedFileAssets(
       preparedFile.assetRef = await persistAssetBytes(archiveLayerSnapshot, {
         assetId: crypto.randomUUID(),
         originalName: `${snapshotBaseName}${FILE_EXTENSION_GROUPS.PARQUET[0]}`,
-        mimeType: MIME.GEOPARQUET,
+        mimeType: preparedFile.geometry ? MIME.GEOPARQUET : MIME.PARQUET,
         size: archiveLayerSnapshot.byteLength,
         kind: 'primary'
       });
