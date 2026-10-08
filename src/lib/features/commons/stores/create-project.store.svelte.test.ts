@@ -33,7 +33,8 @@ vi.mock('../../create-project/services/validation.service', () => ({
     validateFiles: vi.fn(() => ({
       isValid: true,
       globalErrors: [],
-      results: new Map()
+      results: new Map(),
+      incompleteShapefiles: new Map()
     })),
     validateURL: vi.fn(() => ({
       isValid: true,

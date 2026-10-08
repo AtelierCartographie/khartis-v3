@@ -51,6 +51,19 @@ export interface DetailedValidationResult extends ValidationResult {
   };
 }
 
+/** Keyed by the lower-cased shapefile base name. */
+export interface IncompleteShapefileGroup {
+  missing: string[];
+  message: string;
+}
+
+export interface MultipleFileValidationResult {
+  results: Map<string, DetailedValidationResult>;
+  globalErrors: string[];
+  incompleteShapefiles: Map<string, IncompleteShapefileGroup>;
+  isValid: boolean;
+}
+
 export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
   maxFileSize: STORAGE_LIMITS.maxFileSize,
   maxTotalSize: STORAGE_LIMITS.maxTotalFileSize,
@@ -169,13 +182,10 @@ export const FileValidator = {
     return result;
   },
 
-  validateMultiple(files: File[]): {
-    results: Map<string, DetailedValidationResult>;
-    globalErrors: string[];
-    isValid: boolean;
-  } {
+  validateMultiple(files: File[]): MultipleFileValidationResult {
     const results = new Map<string, DetailedValidationResult>();
     const globalErrors: string[] = [];
+    const incompleteShapefiles = new Map<string, IncompleteShapefileGroup>();
     let totalSize = 0;
 
     if (files.length > config.maxFileCount) {
@@ -198,11 +208,17 @@ export const FileValidator = {
       );
     }
 
-    FileValidator.validateShapefileGroup(files, results, globalErrors);
+    FileValidator.validateShapefileGroup(
+      files,
+      results,
+      globalErrors,
+      incompleteShapefiles
+    );
 
     return {
       results,
       globalErrors,
+      incompleteShapefiles,
       isValid:
         globalErrors.length === 0 &&
         Array.from(results.values()).every((r) => r.isValid)
@@ -495,7 +511,8 @@ export const FileValidator = {
   validateShapefileGroup(
     files: File[],
     results: Map<string, DetailedValidationResult>,
-    globalErrors: string[]
+    globalErrors: string[],
+    incompleteShapefiles: Map<string, IncompleteShapefileGroup>
   ): void {
     const groups = new Map<string, Map<string, File[]>>();
 
@@ -515,18 +532,19 @@ export const FileValidator = {
       groups.set(baseName, group);
     }
 
-    for (const group of groups.values()) {
+    for (const [baseName, group] of groups) {
       const missing = REQUIRED_SHAPEFILE_EXTENSIONS.filter(
         (extension) => !group.has(extension)
-      );
+      ).map((extension) => `.${extension}`);
       if (missing.length === 0) {
         continue;
       }
 
       const message = m.shapefile_incomplete_message({
-        missing: missing.map((extension) => `.${extension}`).join(', ')
+        missing: missing.join(', ')
       });
       globalErrors.push(message);
+      incompleteShapefiles.set(baseName, { missing, message });
 
       for (const groupFiles of group.values()) {
         for (const file of groupFiles) {
