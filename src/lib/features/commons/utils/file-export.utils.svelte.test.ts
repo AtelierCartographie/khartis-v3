@@ -1,27 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { exportProcessedDatasets, exportToGeoJson } from './file-export.utils';
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import {
+  exportProcessedDatasets,
+  exportToGeoJson,
+  type GeoJsonExportDataset
+} from './file-export.utils';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 function createGeometryDataset(
-  geometryValue: Record<string, unknown> | string,
-  options: { includeGeometryMeta?: boolean; includeGeoDetection?: boolean } = {}
-): ProcessedDataset {
-  const geoColumns = options.includeGeoDetection
-    ? [
-        {
-          index: 4,
-          columnName: 'geom',
-          type: 'coordinates' as const,
-          confidence: 1
-        }
-      ]
-    : [];
+  geometryValue: Record<string, unknown> | string
+): GeoJsonExportDataset & { rows: Record<string, unknown>[] } {
   return {
     id: 'dataset-1',
     name: 'Tiny geo',
     format: 'geojson',
-    data: [
+    rows: [
       {
         OGC_FID: 1,
         id: 'A',
@@ -42,13 +34,12 @@ function createGeometryDataset(
     ],
     analysis: {
       columns: [],
-      geoColumns,
+      geoColumns: [],
       hasGeoData: true,
-      suggestedGeoColumn: options.includeGeoDetection ? 'geom' : undefined,
       rowCount: 1,
       warnings: []
     },
-    geometry: options.includeGeometryMeta === false ? undefined : 'Polygon',
+    geometry: 'Polygon',
     duckdbTableName: undefined,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     fileSize: 123,
@@ -60,28 +51,6 @@ function createGeometryDataset(
 }
 
 describe('file export utils', () => {
-  it('excludes recognized geometry columns from plain csv exports', async () => {
-    const dataset = createGeometryDataset({
-      type: 'Polygon',
-      coordinates: [
-        [
-          [0, 0],
-          [1, 0],
-          [1, 1],
-          [0, 1],
-          [0, 0]
-        ]
-      ]
-    });
-
-    const blob = await exportProcessedDatasets([dataset], 'csv');
-    const text = await blob.text();
-
-    expect(text).toContain('OGC_FID,id,name,value,__id');
-    expect(text).not.toContain('geom');
-    expect(text).not.toContain('geometry_wkt');
-  });
-
   it('keeps similarly named properties when a canonical geometry column exists', async () => {
     const dataset = createGeometryDataset({
       type: 'MultiLineString',
@@ -98,19 +67,8 @@ describe('file export utils', () => {
       nullable: true,
       unique: false
     });
-    dataset.data[0].geo_point_2d = 'source property';
-    dataset.analysis.geoColumns = [
-      {
-        index: dataset.columns.findIndex((column) => column.name === 'geom'),
-        columnName: 'geom',
-        type: 'unknown',
-        confidence: 1
-      }
-    ];
+    dataset.rows[0].geo_point_2d = 'source property';
 
-    const csvText = await (
-      await exportProcessedDatasets([dataset], 'csv')
-    ).text();
     const geojson = JSON.parse(
       await (await exportProcessedDatasets([dataset], 'geojson')).text()
     ) as {
@@ -120,36 +78,9 @@ describe('file export utils', () => {
       }>;
     };
 
-    expect(csvText).toContain('geo_point_2d');
-    expect(csvText).not.toContain(',geom,');
     expect(geojson.features[0].geometry.type).toBe('MultiLineString');
     expect(geojson.features[0].properties.geo_point_2d).toBe('source property');
     expect(geojson.features[0].properties).not.toHaveProperty('geom');
-  });
-
-  it('fails csv exports with a clear error when no tabular column remains', async () => {
-    const dataset = createGeometryDataset({
-      type: 'Point',
-      coordinates: [2.3522, 48.8566]
-    });
-    dataset.columns = dataset.columns.filter(
-      (column) => column.name === 'geom'
-    );
-    dataset.data = dataset.data.map((row) => ({ geom: row.geom }));
-
-    const request = exportProcessedDatasets([dataset], 'csv');
-
-    await expect(request).rejects.toMatchObject({
-      name: 'DataValidationError',
-      code: 'DATA_VALIDATION_ERROR',
-      field: 'columns',
-      details: {
-        datasetId: 'dataset-1',
-        field: 'columns',
-        format: 'csv'
-      }
-    });
-    await expect(request).rejects.toBeInstanceOf(DataValidationError);
   });
 
   it('fails exports with a typed error when there are no datasets', async () => {
@@ -192,46 +123,12 @@ describe('file export utils', () => {
     );
   });
 
-  it('builds valid geojson exports from recognized geometry columns', async () => {
-    const dataset = createGeometryDataset(
-      JSON.stringify({
-        type: 'Polygon',
-        coordinates: [
-          [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-            [0, 0]
-          ]
-        ]
-      }),
-      { includeGeometryMeta: false, includeGeoDetection: true }
-    );
-
-    const blob = await exportProcessedDatasets([dataset], 'geojson');
-    const text = await blob.text();
-    const geojson = JSON.parse(text) as {
-      type: string;
-      features: Array<{
-        geometry: { type: string; coordinates: unknown[] };
-        properties: Record<string, unknown>;
-      }>;
-    };
-
-    expect(geojson.type).toBe('FeatureCollection');
-    expect(geojson.features).toHaveLength(1);
-    expect(geojson.features[0].geometry.type).toBe('Polygon');
-    expect(geojson.features[0].properties).not.toHaveProperty('geom');
-    expect(geojson.features[0].properties.name).toBe('Alpha');
-  });
-
   it('does not overwrite an existing _source_dataset property in geojson exports', async () => {
     const dataset = createGeometryDataset({
       type: 'Point',
       coordinates: [2.3522, 48.8566]
     });
-    dataset.data[0]._source_dataset = 'user value';
+    dataset.rows[0]._source_dataset = 'user value';
     dataset.columns.push({
       name: '_source_dataset',
       type: 'string',
@@ -246,61 +143,5 @@ describe('file export utils', () => {
 
     expect(geojson.features[0].properties._source_dataset).toBe('user value');
     expect(geojson.features[0].properties._source_dataset_2).toBe('Tiny geo');
-  });
-
-  it('keeps text columns named location when GPS columns provide geometry', async () => {
-    const dataset: ProcessedDataset = {
-      id: 'dataset-gps',
-      name: 'GPS places',
-      format: 'csv',
-      data: [
-        {
-          location: 'Central office',
-          lat: 48.8566,
-          lon: 2.3522
-        }
-      ],
-      rowCount: 1,
-      columns: [
-        { name: 'location', type: 'string', nullable: false, unique: true },
-        { name: 'lat', type: 'number', nullable: false, unique: true },
-        { name: 'lon', type: 'number', nullable: false, unique: true }
-      ],
-      analysis: {
-        columns: [],
-        geoColumns: [
-          {
-            index: 1,
-            columnName: 'lat',
-            type: 'latitude',
-            confidence: 1
-          },
-          {
-            index: 2,
-            columnName: 'lon',
-            type: 'longitude',
-            confidence: 1
-          }
-        ],
-        hasGeoData: true,
-        suggestedGeoColumn: 'lat',
-        rowCount: 1,
-        warnings: []
-      },
-      geometry: undefined,
-      duckdbTableName: undefined,
-      createdAt: new Date('2026-01-01T00:00:00Z'),
-      fileSize: 123,
-      metadata: {
-        processedAt: new Date('2026-01-01T00:00:00Z'),
-        transformations: []
-      }
-    };
-
-    const blob = await exportProcessedDatasets([dataset], 'csv');
-    const text = await blob.text();
-
-    expect(text).toContain('location,lat,lon');
-    expect(text).toContain('Central office,48.8566,2.3522');
   });
 });

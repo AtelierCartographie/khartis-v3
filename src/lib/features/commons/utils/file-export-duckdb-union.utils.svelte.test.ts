@@ -29,7 +29,6 @@ function dataset(
     id,
     name,
     format: 'csv',
-    data: [],
     rowCount: 0,
     columns,
     analysis: {

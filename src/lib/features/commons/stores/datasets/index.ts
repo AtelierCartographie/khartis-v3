@@ -30,7 +30,7 @@ export {
   renameDatasetColumn
 } from './datasets-columns';
 
-export { getUniqueValues, getColumnStatistics } from './datasets-statistics';
+export { getColumnStatistics } from './datasets-statistics';
 
 export {
   createVisualizationsForGeoDatasets,

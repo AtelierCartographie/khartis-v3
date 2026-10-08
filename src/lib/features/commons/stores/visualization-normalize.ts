@@ -720,10 +720,6 @@ function datasetHasGpsPointColumns(
   }
 
   const detectedTypes = new Set(columns.map((column) => column.type));
-  if (detectedTypes.has(GEO_COLUMN_TYPE.COORDINATES)) {
-    return true;
-  }
-
   return (
     detectedTypes.has(GEO_COLUMN_TYPE.LATITUDE) &&
     detectedTypes.has(GEO_COLUMN_TYPE.LONGITUDE)

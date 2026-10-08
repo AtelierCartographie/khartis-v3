@@ -1,5 +1,5 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detection.utils';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline';
 import type { AnalysisResult, DuckDBDataset } from '../types';
 import { detectGPSColumns } from './gps-ops';

@@ -47,6 +47,11 @@ les assets. Il utilise une révision optimiste : si deux onglets écrivent le m�
 projet, le second reçoit une `ProjectSaveConflictError` au lieu d'écraser la
 révision la plus récente.
 
+Chaque couche d'une archive ZIP à plusieurs jeux de données est sauvegardée
+comme un asset Parquet écrit par DuckDB depuis sa table (GeoParquet si elle a
+une géométrie) : types et CRS source sont conservés, et le rechargement relit
+cet asset plutôt que l'archive entière.
+
 Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
 les métadonnées de l'asset, le snapshot, les références et les métadonnées de
 projet sont écrits dans des transactions distinctes.

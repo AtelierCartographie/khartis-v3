@@ -32,7 +32,6 @@ export interface FetchCategoryLabelsOptions {
   useUntrack?: boolean;
   errorMessage: CategoryLabelFetchError;
   signal?: AbortSignal;
-  getFallbackValues: (datasetId: string, columnName: string) => unknown[];
 }
 
 export async function fetchClassificationLabels(
@@ -41,11 +40,7 @@ export async function fetchClassificationLabels(
   try {
     const labels = await resolveCategoryLabels({
       dataset: options.dataset,
-      columnName: options.column,
-      getFallbackValues: (columnName) =>
-        options.dataset?.id
-          ? options.getFallbackValues(options.dataset.id, columnName)
-          : []
+      columnName: options.column
     });
 
     if (options.signal?.aborted) {
@@ -82,13 +77,11 @@ export interface CategoryLabelsFetcher {
   controller: AbortController;
   abort: () => void;
   fetchClassificationLabels: (
-    options: Omit<FetchCategoryLabelsOptions, 'getFallbackValues' | 'signal'>
+    options: Omit<FetchCategoryLabelsOptions, 'signal'>
   ) => Promise<void>;
 }
 
-export function createCategoryLabelsFetcher(
-  getFallbackValues: (datasetId: string, columnName: string) => unknown[]
-): CategoryLabelsFetcher {
+export function createCategoryLabelsFetcher(): CategoryLabelsFetcher {
   let controller = new AbortController();
 
   return {
@@ -100,11 +93,10 @@ export function createCategoryLabelsFetcher(
       controller = new AbortController();
     },
     fetchClassificationLabels(
-      options: Omit<FetchCategoryLabelsOptions, 'getFallbackValues' | 'signal'>
+      options: Omit<FetchCategoryLabelsOptions, 'signal'>
     ) {
       return fetchClassificationLabels({
         ...options,
-        getFallbackValues,
         signal: controller.signal
       });
     }

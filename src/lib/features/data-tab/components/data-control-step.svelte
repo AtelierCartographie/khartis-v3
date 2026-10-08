@@ -26,6 +26,8 @@
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -98,6 +100,8 @@
   let deleteFilteredModalOpen = $state(false);
   let filteredRowsToDelete = $state(0);
   let variableTypesNotificationDismissed = $state(false);
+  let duplicateRowCount = $state(0);
+  let duplicateRowsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let isDeleteMode = $state(false);
   let selectedRowIds = $state<number[]>([]);
@@ -107,6 +111,31 @@
     selectedRowIds = [];
     isDeleteMode = false;
     variableTypesNotificationDismissed = false;
+    duplicateRowsNotificationDismissed = false;
+  });
+
+  $effect(() => {
+    const tableName = currentDuckTable;
+    void duckDBDatasetsVersion;
+    duplicateRowCount = 0;
+    if (!tableName) return;
+
+    let cancelled = false;
+    duckDBOrchestrator
+      .countDuplicateRows(tableName)
+      .then((count) => {
+        if (!cancelled) duplicateRowCount = count;
+      })
+      .catch((error: unknown) => {
+        logger.warn('Failed to count duplicate rows', LogCategory.DATA, {
+          tableName,
+          error
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   let csvOptionsModalOpen = $state(false);
@@ -857,6 +886,21 @@
       lowContrast
       hideCloseButton={false}
       on:close={() => (variableTypesNotificationDismissed = true)}
+    />
+  {/if}
+
+  {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
+    <InlineNotification
+      title={m.data_control_duplicate_rows_title()}
+      subtitle={duplicateRowCount === 1
+        ? m.data_control_duplicate_rows_subtitle_one()
+        : m.data_control_duplicate_rows_subtitle({
+            count: formatValue(duplicateRowCount)
+          })}
+      kind="warning"
+      lowContrast
+      hideCloseButton={false}
+      on:close={() => (duplicateRowsNotificationDismissed = true)}
     />
   {/if}
 

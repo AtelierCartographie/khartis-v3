@@ -241,17 +241,7 @@ function buildDatasetResult(params: {
     analysis: {
       columns: enrichedColumns,
       hasGeoData: Boolean(geometryInfo || isGeoFile),
-      geoColumns: geometryInfo
-        ? [
-            {
-              columnName: geometryInfo.columnName ?? 'geom',
-              type: 'unknown' as const,
-              confidence: 1,
-              index: 0,
-              isValid: true
-            }
-          ]
-        : [],
+      geoColumns: [],
       rowCount,
       warnings: []
     },

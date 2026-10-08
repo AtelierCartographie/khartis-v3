@@ -1,8 +1,8 @@
 import {
-  GeoColumnDetector,
+  getGeoColumnDescription,
   type GeoColumnResult,
   type GeoDetectionResult
-} from '$lib/features/commons/utils/geo-detector.utils';
+} from '$lib/features/commons/utils/geo-detection.utils';
 import {
   GEO_COLUMN_TYPE,
   INTERNAL_COLUMN
@@ -39,7 +39,7 @@ export function buildEnrichDataFieldItems(
 
       let displayText = col.name;
       if (geoCol) {
-        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        const description = getGeoColumnDescription(geoCol);
         displayText = `${col.name} ${m.separator_en_dash()} ${description}`;
       }
 
@@ -87,15 +87,8 @@ export function hasOnlyCoordinates(
   const geoColumns = geoDetection.geoColumns || [];
   if (geoColumns.length === 0) return false;
 
-  const entityTypes: ReadonlyArray<GeoColumnResult['type']> = [
-    GEO_COLUMN_TYPE.COUNTRY_NAME,
-    GEO_COLUMN_TYPE.ISO2,
-    GEO_COLUMN_TYPE.ISO3,
-    GEO_COLUMN_TYPE.REGION,
-    GEO_COLUMN_TYPE.CITY
-  ];
-  const hasEntityColumn = geoColumns.some((gc: GeoColumnResult) =>
-    entityTypes.includes(gc.type)
+  const hasEntityColumn = geoColumns.some(
+    (gc: GeoColumnResult) => gc.type === GEO_COLUMN_TYPE.IDENTIFIER
   );
 
   const hasCoordinates = geoColumns.some(

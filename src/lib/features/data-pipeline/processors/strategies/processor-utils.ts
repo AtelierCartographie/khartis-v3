@@ -23,8 +23,7 @@ export async function buildProcessorDataset(
     name: file.name,
     columns,
     rowCount,
-    metadata: { processedAt: new Date(), fileType: file.fileType },
-    geoDetection: file.deepAnalysis?.geoDetection
+    metadata: { processedAt: new Date(), fileType: file.fileType }
   };
 }
 

@@ -15,7 +15,10 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import {
+    getGeoColumnDescription,
+    pickLinkedVariable
+  } from '$lib/features/commons/utils/geo-detection.utils';
   import {
     PERF_PHASE,
     perfMark,
@@ -43,7 +46,6 @@
 
   let columnAnalysis = $state<AnalysisResult[]>([]);
   let columnAnalysisLoaded = $state(false);
-  let previousAutoSelectedColumn: string | null = null;
   let columnAnalysisAbort: AbortController | null = null;
 
   async function loadColumnAnalysis() {
@@ -92,7 +94,7 @@
 
       let displayText = columnName;
       if (geoCol) {
-        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        const description = getGeoColumnDescription(geoCol);
         displayText = `${columnName} ${m.separator_en_dash()} ${description}`;
       }
 
@@ -111,78 +113,40 @@
   );
 
   const linkedVariableItems = $derived(() => {
-    const geoidScores = new SvelteMap<string, number>();
-    for (const col of columnAnalysis) {
-      if (col.semioType === 'geoid') {
-        geoidScores.set(col.name, col.semioScore ?? 0);
-      }
-    }
-    const geoidScore = (item: { columnName: string }): number =>
-      geoidScores.get(item.columnName) ?? -1;
+    const geoRank = new SvelteMap<string, number>();
+    geoDetection?.geoColumns.forEach((column, rank) =>
+      geoRank.set(column.columnName, rank)
+    );
+    const rankOf = (item: { columnName: string }): number =>
+      geoRank.get(item.columnName) ?? Number.POSITIVE_INFINITY;
     return [...dataFieldItems()].sort(
-      (a, b) =>
-        geoidScore(b) - geoidScore(a) ||
-        (b.confidence ?? 0) - (a.confidence ?? 0) ||
-        a.id - b.id
+      (a, b) => rankOf(a) - rankOf(b) || a.id - b.id
     );
   });
 
-  const bestGeoidColumn = $derived(() => {
-    const geoidColumns = columnAnalysis
-      .filter(
-        (col) =>
-          col.semioType === 'geoid' &&
-          (col.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD
-      )
-      .sort((a, b) => (b.semioScore ?? 0) - (a.semioScore ?? 0));
-
-    if (geoidColumns.length > 0) {
-      return dataFieldItems().find(
-        (item) => item.columnName === geoidColumns[0].name
-      );
-    }
-    return undefined;
-  });
-
-  const bestIdentifierFallback = $derived(() => {
-    if (columnAnalysis.length === 0) return undefined;
-
-    const items = dataFieldItems();
-    const candidates = columnAnalysis
-      .filter(
-        (col) =>
-          col.name !== INTERNAL_COLUMN.GEOMETRY &&
-          col.name !== INTERNAL_COLUMN.ID
-      )
-      .map((col) => {
-        const shareUniques = (col.share_uniques as number) ?? 0;
-        const shareNulls = (col.share_nulls as number) ?? 0;
-        const isString = col.type_simple === 'string';
-        const hasIdKeyword =
-          col.id_words !== undefined
-            ? Boolean(col.id_words)
-            : /\b(id|fid|gid|code|iso|pk)\b/i.test(col.name ?? '');
-        const score =
-          shareUniques * 0.6 +
-          (1 - shareNulls) * 0.2 +
-          (isString ? 0.1 : 0) +
-          (hasIdKeyword ? 0.1 : 0);
-        return { name: col.name, score };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    if (candidates.length === 0) return undefined;
-    return items.find((item) => item.columnName === candidates[0].name);
-  });
-
   const suggestedColumn = $derived(() => {
-    const geoid = bestGeoidColumn();
-    if (geoid) return geoid;
-
-    if (columnAnalysisLoaded) return bestIdentifierFallback();
-
-    return undefined;
+    if (!columnAnalysisLoaded && !geoDetection?.suggestedPrimaryGeoColumn) {
+      return undefined;
+    }
+    const columnName = pickLinkedVariable(
+      geoDetection,
+      columnAnalysis.map((column) => ({
+        name: column.name,
+        typeSimple: column.type_simple,
+        shareUniques:
+          typeof column.share_uniques === 'number'
+            ? column.share_uniques
+            : undefined
+      }))
+    );
+    return dataFieldItems().find((item) => item.columnName === columnName);
   });
+
+  const hasNoGeographicColumn = $derived(
+    Boolean(
+      geoDetection && !geoDetection.hasGeoColumns && !selectedDataset?.geometry
+    )
+  );
 
   const hasCategorizedOrNonUnique = $derived.by(() => {
     const selected = suggestedColumn();
@@ -315,7 +279,6 @@
       latitudeFieldId = undefined;
       longitudeFieldId = undefined;
       columnAnalysisLoaded = false;
-      previousAutoSelectedColumn = null;
       hasAutoGeoreferenceInitialization = false;
 
       if (
@@ -408,7 +371,6 @@
     ) {
       geolocationUpdates.linkedVariable = null;
       geolocationUpdates.linkedVariableName = '';
-      previousAutoSelectedColumn = null;
       hasUpdates = true;
     }
 
@@ -442,7 +404,6 @@
     const linkedVar = dataTabState.geolocation.linkedVariable;
     const linkedName = dataTabState.geolocation.linkedVariableName;
     const suggested = suggestedColumn();
-    const geoid = bestGeoidColumn();
 
     if (isCoordinatesMode) {
       return;
@@ -463,7 +424,6 @@
           (item) => item.columnName === duckDataset.geoColumn
         );
         if (existingJoinColumn) {
-          previousAutoSelectedColumn = existingJoinColumn.columnName;
           dataTabActions.setGeolocationState({
             linkedVariable: existingJoinColumn.id,
             linkedVariableName: existingJoinColumn.columnName
@@ -474,30 +434,9 @@
     }
 
     if (linkedVar === null && !linkedName && suggested) {
-      if (
-        !columnAnalysisLoaded ||
-        !geoid ||
-        geoid.columnName === suggested.columnName
-      ) {
-        previousAutoSelectedColumn = suggested.columnName;
-        dataTabActions.setGeolocationState({
-          linkedVariable: suggested.id,
-          linkedVariableName: suggested.columnName
-        });
-      }
-    }
-
-    if (
-      columnAnalysisLoaded &&
-      geoid &&
-      previousAutoSelectedColumn &&
-      linkedName === previousAutoSelectedColumn &&
-      geoid.columnName !== previousAutoSelectedColumn
-    ) {
-      previousAutoSelectedColumn = geoid.columnName;
       dataTabActions.setGeolocationState({
-        linkedVariable: geoid.id,
-        linkedVariableName: geoid.columnName
+        linkedVariable: suggested.id,
+        linkedVariableName: suggested.columnName
       });
     }
   });
@@ -610,11 +549,21 @@
       }}
     />
 
-    {#if !isCoordinatesMode && suggestedColumn()}
+    {#if !isCoordinatesMode && suggestedColumn() && !hasNoGeographicColumn}
       <InlineNotification
         title={m.geo_notification_title()}
         subtitle={m.geo_notification_subtitle()}
         kind="info"
+        lowContrast
+        hideCloseButton={false}
+      />
+    {/if}
+
+    {#if !isCoordinatesMode && hasNoGeographicColumn}
+      <InlineNotification
+        title={m.warning_no_geo_column_title()}
+        subtitle={m.warning_no_geo_column_message()}
+        kind="warning"
         lowContrast
         hideCloseButton={false}
       />

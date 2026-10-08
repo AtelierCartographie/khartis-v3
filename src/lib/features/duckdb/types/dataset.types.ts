@@ -1,6 +1,6 @@
 import type { Table } from 'apache-arrow/Arrow';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import type { FileType } from '$lib/features/commons/types/create-project.types';
 import type { AnalysisResult } from './analysis.types';
 

@@ -1,4 +1,4 @@
-import { isLikelyCoordinateColumn } from './geo-detector.utils';
+import { isLikelyCoordinateColumn } from './gps-columns.utils';
 import {
   COLUMN_TYPE_GEOMETRY,
   EXCLUDED_COLUMNS,
