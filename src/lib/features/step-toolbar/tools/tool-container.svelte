@@ -60,6 +60,30 @@
     titles[globalState.selectedTool as StylingTools & VisualizationTools] || ''
   );
 
+  const NOTIFICATION_SELECTOR = '.bx--inline-notification';
+
+  let toolBody = $state<HTMLDivElement | null>(null);
+
+  // Panels scroll with a hidden scrollbar, so a notification added below the
+  // fold looks clipped. Bring each new one fully into view.
+  $effect(() => {
+    if (!toolBody) return;
+
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue;
+          const notification = node.matches(NOTIFICATION_SELECTOR)
+            ? node
+            : node.querySelector(NOTIFICATION_SELECTOR);
+          notification?.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    });
+    observer.observe(toolBody, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  });
+
   function handleClose(): void {
     if (
       shouldBlockToolClose(
@@ -87,7 +111,7 @@
     />
   </header>
 
-  <div class="tool-body">
+  <div class="tool-body" bind:this={toolBody}>
     {#if SelectedComponent}
       <SelectedComponent />
     {/if}
@@ -142,6 +166,13 @@
   .tool-body {
     background-color: inherit;
     padding: var(--cds-spacing-05);
+  }
+
+  /* Carbon gives inline notifications an 18rem minimum width, wider than a
+     panel section once its padding is taken off. */
+  .tool-body :global(.bx--inline-notification) {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .tool-body :global(.expandable-stack) {
