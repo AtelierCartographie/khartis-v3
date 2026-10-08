@@ -888,6 +888,8 @@
   "warning_files_duplicate_message": "The following files already exist: {files}",
   "warning_zip_files_skipped_title": "Some files were ignored",
   "warning_zip_files_skipped_message": "The following files from the archive could not be processed: {files}",
+  "warning_gpkg_layers_skipped_title": "Some layers were ignored",
+  "warning_gpkg_layers_skipped_message": "The following GeoPackage layers could not be read: {layers}",
   "warning_no_geo_column_title": "No geographic column detected",
   "warning_no_geo_column_message": "No column matches a catalog basemap or looks like a geographic code or coordinates. Check the linked variable, or enter geographic coordinates.",
   "warning_kml_extended_data_title": "KML attributes not imported",

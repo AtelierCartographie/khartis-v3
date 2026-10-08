@@ -11,3 +11,5 @@ export type { FileTableRead } from './file-processor';
 export { processRemoteFile, processRemoteZipFile } from './remote-processor';
 
 export { processZipFile } from './zip-processor';
+
+export { processGeoPackageLayers } from './geopackage-processor';
