@@ -191,6 +191,16 @@ function isPolygonGeometry(geometryInfo: GeometryInfo): boolean {
   return geometryInfo.type.toUpperCase().includes('POLYGON');
 }
 
+// `isNativeGeoArrow` is also true for `geoarrow.wkb`, so the encoding alone
+// lets a point or line table through; a dataset with its own geometry fills
+// the reference basemap slot whatever its geometry type.
+function isBinaryPolygonSource(geometryInfo: GeometryInfo): boolean {
+  return (
+    isPolygonGeometry(geometryInfo) &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+  );
+}
+
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
@@ -261,10 +271,7 @@ export function createTerreLayers(
     : [0, 0];
 
   const layers: Layer<DeckDataRow>[] = [];
-  if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
-  ) {
+  if (isBinaryPolygonSource(geometryInfo)) {
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
@@ -508,10 +515,7 @@ export function createFrontieresLayer(
     });
   }
 
-  if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
-  ) {
+  if (isBinaryPolygonSource(geometryInfo)) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
       : parsePaths(frontieresTable);
@@ -708,10 +712,7 @@ function createMetadataLacsLayers(
       `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-${i}`
     );
 
-    if (
-      isPolygonGeometry(geometryInfo) &&
-      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
-    ) {
+    if (isBinaryPolygonSource(geometryInfo)) {
       layers.push(...createBinaryLacsLayers(entry.table, config, ctx, layerId));
     }
   }
@@ -837,10 +838,7 @@ export function createReliefLayers(
   );
   const baseProps = getBaseLayerProps(ctx);
 
-  if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
-  ) {
+  if (isBinaryPolygonSource(geometryInfo)) {
     const result: Layer<DeckDataRow>[] = [];
     const outlineData = ctx.projection
       ? parsePathsWithProjection(worldBaseTable, ctx.projection)
