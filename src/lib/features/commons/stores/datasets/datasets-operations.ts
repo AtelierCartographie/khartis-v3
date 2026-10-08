@@ -246,9 +246,6 @@ export async function duplicateDataset(
     );
 
     const virtualFileId = crypto.randomUUID();
-    const parsedData = Array.isArray(originalFile?.parsedData)
-      ? clonePlainValue(originalFile.parsedData)
-      : undefined;
     const virtualFile: UploadedFile = {
       id: virtualFileId,
       name: copyName,
@@ -273,8 +270,8 @@ export async function duplicateDataset(
         ? [...originalFile.relatedFiles]
         : undefined,
       relatedFilesData: cloneRelatedFilesData(originalFile?.relatedFilesData),
-      parsedData,
       archiveLayerSnapshot: originalFile?.archiveLayerSnapshot,
+      enrichmentSnapshot: originalFile?.enrichmentSnapshot,
       geometry: originalFile?.geometry
         ? clonePlainValue(originalFile.geometry)
         : undefined,

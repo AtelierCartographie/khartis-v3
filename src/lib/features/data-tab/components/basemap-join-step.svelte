@@ -58,7 +58,7 @@
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
   import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
-  import { persistTabularSourceSnapshot } from '../services/tabular-source-snapshot.service';
+  import { persistSourceFileState } from '../services/source-file-state.service';
   import {
     SavePriority,
     persistenceRegistry
@@ -572,7 +572,7 @@
       (column) => !JOINED_BASEMAP_COLUMNS.includes(column.name)
     );
 
-    await persistTabularSourceSnapshot({
+    await persistSourceFileState({
       sourceFileId,
       tableName,
       duckColumns,

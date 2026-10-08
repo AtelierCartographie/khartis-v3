@@ -125,27 +125,6 @@ function createDataOrchestratorService() {
     }
   }
 
-  async function prepareFileForDuckDB(
-    file: UploadedFile,
-    dataset: DatasetResult | undefined
-  ): Promise<UploadedFile | null> {
-    const requiresGeoProcessing =
-      !!dataset?.geometry ||
-      file.fileType === FileType.GEOJSON ||
-      file.fileType === FileType.SHAPEFILE ||
-      file.fileType === FileType.GEOPACKAGE ||
-      file.fileType === FileType.GEOPARQUET ||
-      file.fileType === FileType.KML ||
-      file.fileType === FileType.KMZ ||
-      file.fileType === FileType.GPX;
-
-    if (!requiresGeoProcessing) return null;
-    if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
-    if (dataset?.tableName) return null;
-
-    return file;
-  }
-
   const restoreFinalizedJoins = new Set<string>();
 
   function joinRestoreKey(
@@ -248,37 +227,6 @@ function createDataOrchestratorService() {
       return;
     }
 
-    const duckDBFile = await prepareFileForDuckDB(file, dataset);
-
-    if (duckDBFile) {
-      try {
-        const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
-        if (duckResult && dataset) {
-          datasetsStore.updateDatasetTableName(
-            dataset.id,
-            duckResult.tableName
-          );
-
-          datasetsStore.updateDataset(dataset.id, {
-            metadata: {
-              ...dataset.metadata,
-              geoDuckTableReady: true
-            }
-          });
-
-          geometryDatasetsVersion++;
-        }
-      } catch (error) {
-        logger.error(m.error_process_geo_file(), LogCategory.DUCKDB, error, {
-          feature: 'data',
-          flow: 'process_geo_file',
-          extra: buildFileErrorContext(file)
-        });
-        throw error;
-      }
-      return;
-    }
-
     if (dataset.tableName) {
       try {
         const registered = await duckDBOrchestrator.registerExistingTable(
@@ -295,36 +243,8 @@ function createDataOrchestratorService() {
         }
 
         if (registered === null) {
-          const strippedDataset: DatasetResult = {
-            ...dataset,
-            tableName: undefined as unknown as string,
-            metadata: { ...dataset.metadata, geoDuckTableReady: false }
-          };
-          const fileForDuckDB = await prepareFileForDuckDB(
-            file,
-            strippedDataset
-          );
           let restoredDuckDatasetId: string | null = null;
-          if (fileForDuckDB) {
-            const duckResult =
-              await duckDBOrchestrator.processFile(fileForDuckDB);
-            if (duckResult && dataset) {
-              restoredDuckDatasetId = duckResult.id;
-              datasetsStore.updateDatasetTableName(
-                dataset.id,
-                duckResult.tableName
-              );
-
-              datasetsStore.updateDataset(dataset.id, {
-                metadata: {
-                  ...dataset.metadata,
-                  geoDuckTableReady: true
-                }
-              });
-
-              geometryDatasetsVersion++;
-            }
-          } else if (file.content || file.originalFile) {
+          if (file.content || file.originalFile) {
             const restoredSourceFile =
               file.originalFile ?? (await createFileFromUpload(file));
             const processedResult = await dataPipeline.processUploadedFile(

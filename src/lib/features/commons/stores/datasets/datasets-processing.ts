@@ -8,7 +8,7 @@ import {
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
-import type { UploadedFile } from '../../types/create-project.types';
+import type { AssetRef, UploadedFile } from '../../types/create-project.types';
 import { FileType } from '../../types/create-project.types';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
@@ -265,10 +265,11 @@ async function loadUploadedDatasetFile(
     file.content ||
     file.originalFile ||
     file.assetRef ||
-    file.companionAssetRefs?.length
+    file.companionAssetRefs?.length ||
+    file.enrichmentSnapshot
   );
   const hasPersistedAssetSource = Boolean(
-    file.assetRef || file.companionAssetRefs?.length
+    file.assetRef || file.companionAssetRefs?.length || file.enrichmentSnapshot
   );
   const hasInlineReplaySource = Boolean(
     file.content || file.originalFile || file.archiveLayerSnapshot
@@ -294,7 +295,43 @@ async function loadUploadedDatasetFile(
     );
   }
 
+  if (file.enrichmentSnapshot) {
+    const restored = await loadEnrichmentSnapshot(
+      file,
+      file.enrichmentSnapshot
+    );
+    if (restored) {
+      return restored;
+    }
+  }
+
   return dataPipeline.processUploadedFile(file, file.originalFile);
+}
+
+async function loadEnrichmentSnapshot(
+  file: UploadedFile,
+  snapshot: AssetRef
+): Promise<DatasetResult | ZipDatasetResult | null> {
+  try {
+    return await dataPipeline.processUploadedFile({
+      ...file,
+      assetRef: snapshot,
+      companionAssetRefs: undefined,
+      relatedFileObjects: undefined,
+      relatedFilesData: undefined
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to restore the enrichment snapshot, falling back to the source',
+      LogCategory.DATA,
+      error
+    );
+    showWarning(
+      m.project_restore_enrichment_warning_title(),
+      m.project_restore_enrichment_warning_message({ fileName: file.name })
+    );
+    return null;
+  }
 }
 
 export async function processFiles(

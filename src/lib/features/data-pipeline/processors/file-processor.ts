@@ -1,8 +1,4 @@
-import {
-  createUploadedFile,
-  DataSourceType,
-  FileType
-} from '$lib/features/commons/utils/file-import.utils';
+import { FileType } from '$lib/features/commons/utils/file-import.utils';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
@@ -16,7 +12,7 @@ import { FileFormatEnum } from '../enums';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
-import { gpxProcessor } from './strategies';
+import { isGpxFile, readGpxIntoTable } from './gpx-processor';
 import type {
   CsvImportOptions,
   DatasetResult,
@@ -30,7 +26,6 @@ import {
   readFileHead
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { FileWithId } from '$lib/features/duckdb';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
@@ -45,26 +40,6 @@ export interface ProcessFileOptions {
   originalName?: string;
   companionFiles?: File[];
   sourceFileId?: string;
-}
-
-function createProcessorFilePayload(
-  file: File,
-  fileInfo: FileInfo,
-  companionFiles?: File[]
-): UploadedFile {
-  const uploadedFile = createUploadedFile(file, DataSourceType.FILE_UPLOAD);
-
-  uploadedFile.name = fileInfo.name;
-  uploadedFile.originalFile = file;
-
-  if (companionFiles?.length) {
-    uploadedFile.relatedFileObjects = companionFiles;
-    uploadedFile.relatedFiles = companionFiles.map(
-      (companion) => companion.name
-    );
-  }
-
-  return uploadedFile;
 }
 
 export interface ReadFileIntoTableOptions {
@@ -109,25 +84,9 @@ export async function readFileIntoTable(
     );
   }
 
-  const uploadedFile = createProcessorFilePayload(
-    file,
-    fileInfo,
-    companionFiles
-  );
-
-  if (isGeoFile && gpxProcessor.canHandle(uploadedFile)) {
-    const processorDataset = await gpxProcessor.process(
-      {
-        Duck,
-        callbacks: {
-          getRowCount: (name: string) => Duck.get_row_count(name)
-        },
-        tableName
-      },
-      uploadedFile
-    );
+  if (isGeoFile && isGpxFile(fileInfo.name)) {
     return {
-      tableName: processorDataset.tableName,
+      tableName: await readGpxIntoTable(file, tableName, fileInfo.name),
       fileInfo,
       isGeoFile: true,
       format

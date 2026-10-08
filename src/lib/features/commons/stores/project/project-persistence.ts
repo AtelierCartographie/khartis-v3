@@ -86,15 +86,6 @@ function hasStoredStatistics(file: UploadedFile | undefined): boolean {
   return Boolean(file?.statistics && Object.keys(file.statistics).length > 0);
 }
 
-function hasStoredParsedRows(file: UploadedFile | undefined): boolean {
-  return Boolean(
-    Array.isArray(file?.parsedData) &&
-    file.parsedData.some(
-      (row) => row && typeof row === 'object' && Object.keys(row).length > 0
-    )
-  );
-}
-
 function mergePersistedSourceFile(
   currentFile: UploadedFile,
   persistedFile?: UploadedFile
@@ -114,10 +105,7 @@ function mergePersistedSourceFile(
       currentFile.duckdbTableName ?? persistedFile.duckdbTableName,
     statistics: hasStoredStatistics(currentFile)
       ? currentFile.statistics
-      : persistedFile.statistics,
-    parsedData: hasStoredParsedRows(currentFile)
-      ? currentFile.parsedData
-      : persistedFile.parsedData
+      : persistedFile.statistics
   };
 }
 
