@@ -14,15 +14,10 @@ import {
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import {
-  DeepDataValidator,
-  type DataAnalysisResult
-} from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   PERF_PHASE,
@@ -37,15 +32,10 @@ import {
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import {
-  convertRowsToTabular,
-  createDataMatrix
-} from '../utils/file-processor.utils';
 
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
 const TABULAR_TEXT_EXTENSION = 'txt';
-const DUPLICATE_SCAN_ROW_LIMIT = 10_000;
 
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
@@ -109,11 +99,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
-const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
-const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
-const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
-
 function getReadableErrorMessage(error: unknown): string {
   const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -162,56 +147,19 @@ function countUserColumns(
   return columns.filter((column) => !hiddenColumns.has(column.name)).length;
 }
 
-function withGeometryDetection(
-  deepAnalysis: DataAnalysisResult,
-  geometry: DatasetResult['geometry']
-): DataAnalysisResult {
-  if (!geometry) {
-    return deepAnalysis;
-  }
-
-  return {
-    ...deepAnalysis,
-    geoDetection: {
-      hasGeoColumns: true,
-      geoColumns: [
-        {
-          columnName: geometry.columnName ?? INTERNAL_COLUMN.GEOM,
-          type: 'unknown',
-          confidence: 1,
-          index: 0
-        }
-      ],
-      warnings: []
-    }
-  };
-}
-
 async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
   dataset: DatasetResult,
-  fileContent: UploadedFile['content'],
-  duck: typeof Duck
+  fileContent: UploadedFile['content']
 ): Promise<void> {
   const { tableName, columns, rowCount, geometry } = dataset;
-  const headers = columns.map((col) => col.name);
 
   callbacks.onProgress(uploadedFile.id, 50);
 
   const statistics = buildStatisticsFromColumns(columns);
 
-  const sampleData = (await duck.query(
-    `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
-
-  const tabularData = convertRowsToTabular(sampleData);
-
-  callbacks.onProgress(uploadedFile.id, 80);
-
   callbacks.onDataUpdate(uploadedFile.id, {
-    parsedData: tabularData,
     rowCount,
     columnCount: countUserColumns(columns, geometry),
     statistics,
@@ -220,16 +168,6 @@ async function updateFileFromDuckDBDataset(
     ...(geometry ? { geometry } : {})
   });
 
-  const dataMatrix = createDataMatrix(sampleData, headers);
-
-  const deepAnalysis = withGeometryDetection(
-    await DeepDataValidator.analyzeDataContent(headers, dataMatrix, {
-      sampleSize: Math.min(100, dataMatrix.length)
-    }),
-    geometry
-  );
-
-  callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
   callbacks.onProgress(uploadedFile.id, 100);
   callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
 
@@ -295,69 +233,6 @@ async function validateAsync(
 }
 
 function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  async function computeDuplicatesAsync(
-    fileId: string,
-    tableName: string,
-    duck: typeof Duck
-  ): Promise<void> {
-    try {
-      const duplicateResult = (await duck.query(
-        `SELECT (SELECT COUNT(*) FROM "${escapeIdentifier(tableName)}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${escapeIdentifier(tableName)}")) as duplicate_count`,
-        { format: 'array' }
-      )) as Array<{ duplicate_count: bigint | number }>;
-      const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
-
-      callbacks.onDataUpdate(fileId, {
-        duplicates: {
-          hasDuplicates: duplicateCount > 0,
-          duplicateCount
-        }
-      });
-
-      if (duplicateCount > 0) {
-        showWarning(
-          WARNING_DUPLICATE_ROWS_TITLE(),
-          m.warning_duplicate_rows_message({ count: String(duplicateCount) })
-        );
-      }
-    } catch (error) {
-      logger.warn('Failed to compute duplicate row count', LogCategory.FILE, {
-        fileId,
-        tableName,
-        error
-      });
-    }
-  }
-
-  async function performDeepAnalysis(
-    uploadedFile: UploadedFile,
-    sampleData: Array<Record<string, unknown>>,
-    headers: string[]
-  ): Promise<void> {
-    const dataMatrix = createDataMatrix(sampleData, headers);
-
-    const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-      headers,
-      dataMatrix,
-      { sampleSize: Math.min(100, dataMatrix.length) }
-    );
-
-    if (!deepAnalysis.geoDetection.hasGeoColumns) {
-      showWarning(
-        WARNING_NO_GEO_COLUMN_TITLE(),
-        WARNING_NO_GEO_COLUMN_MESSAGE()
-      );
-    }
-
-    if (deepAnalysis.performanceWarnings.length > 0) {
-      deepAnalysis.performanceWarnings.forEach((warning) =>
-        showWarning(WARNING_PERFORMANCE_TITLE(), warning)
-      );
-    }
-
-    callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-  }
-
   async function process(
     uploadedFile: UploadedFile,
     file: File
@@ -374,7 +249,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       sourceFileId: uploadedFile.id
     })) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
-    const headers = columns.map((col) => col.name);
 
     if (rowCount === 0) {
       callbacks.onStatusChange(
@@ -388,15 +262,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildStatisticsFromColumns(columns);
 
-    const sampleData = (await Duck.query(
-      `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const tabularData = convertRowsToTabular(sampleData);
-
     callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: tabularData,
       content: originalContent,
       duckdbTableName: tableName,
       rowCount,
@@ -404,13 +270,8 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       statistics
     });
 
-    await performDeepAnalysis(uploadedFile, sampleData, headers);
-
     perfMeasure(PERF_PHASE.FILE_IMPORT);
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {
-      void computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
-    }
   }
 
   return { process };
@@ -437,8 +298,7 @@ function createDuckDBGeofileProcessor(
       callbacks,
       uploadedFile,
       result as DatasetResult,
-      content,
-      Duck
+      content
     );
   }
 
@@ -469,23 +329,19 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     duck: typeof Duck,
     dataset: DatasetResult,
     headers: string[]
-  ): Promise<Uint8Array | undefined> {
-    if (!dataset.geometry) {
-      return undefined;
-    }
-
-    const geometryColumnName =
-      dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM;
-    return duck.copy_to_parquet_bytes(dataset.tableName, [
-      ...headers.filter(
-        (header) =>
-          header !== geometryColumnName &&
-          !EXCLUDED_COLUMNS.includes(
-            header as (typeof EXCLUDED_COLUMNS)[number]
-          )
-      ),
-      geometryColumnName
-    ]);
+  ): Promise<Uint8Array> {
+    const geometryColumnName = dataset.geometry
+      ? (dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM)
+      : undefined;
+    const userColumns = headers.filter(
+      (header) =>
+        header !== geometryColumnName &&
+        !EXCLUDED_COLUMNS.includes(header as (typeof EXCLUDED_COLUMNS)[number])
+    );
+    return duck.copy_to_parquet_bytes(
+      dataset.tableName,
+      geometryColumnName ? [...userColumns, geometryColumnName] : userColumns
+    );
   }
 
   async function processMultipleDatasets(
@@ -512,19 +368,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
       const statistics = buildStatisticsFromColumns(columns);
 
-      let previewData: Array<Record<string, unknown>> = [];
-      try {
-        previewData = (await duck.query(
-          `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-          {
-            format: 'array'
-          }
-        )) as Array<Record<string, unknown>>;
-      } catch {
-        // Ignore errors - fallback to empty data
-      }
-
-      const tabularData = convertRowsToTabular(previewData);
       const archiveLayerSnapshot = await buildArchiveLayerSnapshot(
         duck,
         dataset,
@@ -532,42 +375,16 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       );
       const geometryUpdates = {
         ...(geometry ? { geometry } : {}),
-        ...(archiveLayerSnapshot ? { archiveLayerSnapshot } : {})
+        archiveLayerSnapshot
       };
-      const sampleForAnalysis = previewData;
-      const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
-
-      const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-        headers,
-        dataMatrix,
-        { sampleSize: Math.min(100, dataMatrix.length) }
-      );
-
-      if (geometry) {
-        deepAnalysis.geoDetection = {
-          hasGeoColumns: true,
-          geoColumns: [
-            {
-              columnName: INTERNAL_COLUMN.GEOM,
-              type: 'unknown',
-              confidence: 1,
-              index: 0
-            }
-          ],
-          warnings: []
-        };
-      }
-
       if (i === 0) {
         callbacks.onDataUpdate(uploadedFile.id, {
           name,
           fileType: detectedFileType,
-          parsedData: tabularData,
           rowCount,
           columnCount: countUserColumns(columns, geometry),
           statistics,
           content: undefined,
-          deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
           ...geometryUpdates
@@ -583,11 +400,9 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           fileType: detectedFileType,
           status: FileStatus.COMPLETE,
           sourceType: uploadedFile.sourceType,
-          parsedData: tabularData,
           rowCount,
           columnCount: countUserColumns(columns, geometry),
           statistics,
-          deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
           ...geometryUpdates
@@ -620,8 +435,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       callbacks,
       uploadedFile,
       result,
-      fileContent,
-      Duck
+      fileContent
     );
   }
 

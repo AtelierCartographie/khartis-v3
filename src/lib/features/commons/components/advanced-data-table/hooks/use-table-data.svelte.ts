@@ -3,10 +3,6 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type AnalysisResult } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import {
-  isTextLikeColumnType,
-  projectHtmlLikeText
-} from '../../../utils/html-like-text.utils';
 import { LogCategory, logger } from '../../../utils/logger';
 import {
   EXCLUDED_COLUMNS,
@@ -66,32 +62,6 @@ function normalizeRowId(value: unknown): number | undefined {
   }
 
   return undefined;
-}
-
-function compareValues(
-  aVal: unknown,
-  bVal: unknown,
-  sortOrder: SortOrder,
-  columnType: string | null | undefined
-): number {
-  if (aVal == null && bVal == null) return 0;
-  if (aVal == null) return sortOrder === 'ASC' ? 1 : -1;
-  if (bVal == null) return sortOrder === 'ASC' ? -1 : 1;
-
-  if (isTextLikeColumnType(columnType)) {
-    const aText =
-      typeof aVal === 'string' ? projectHtmlLikeText(aVal) : String(aVal);
-    const bText =
-      typeof bVal === 'string' ? projectHtmlLikeText(bVal) : String(bVal);
-
-    if (aText < bText) return sortOrder === 'ASC' ? -1 : 1;
-    if (aText > bText) return sortOrder === 'ASC' ? 1 : -1;
-    return 0;
-  }
-
-  if (aVal < bVal) return sortOrder === 'ASC' ? -1 : 1;
-  if (aVal > bVal) return sortOrder === 'ASC' ? 1 : -1;
-  return 0;
 }
 
 export function useTableData(props: UseTableDataProps): UseTableDataReturn {
@@ -179,13 +149,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           return;
         }
         numRows = count;
-      } else if (dataset) {
-        columns = dataset.columns.filter(
-          (c) => !TABLE_HIDDEN_COLUMN_NAMES.has(c.name)
-        );
-
-        numRows = dataset.data.length;
-        columnAnalysis = new SvelteMap();
       } else {
         columns = [];
         columnAnalysis = new SvelteMap();
@@ -287,25 +250,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         } else {
           tableData = [];
         }
-      } else if (dataset) {
-        let sourceData = dataset.data;
-        if (sortColumn && sortOrder) {
-          sourceData = [...dataset.data].sort((a, b) => {
-            const datasetColumnType =
-              dataset.columns.find((column) => column.name === sortColumn)
-                ?.type ?? sortColumnType;
-
-            return compareValues(
-              a[sortColumn],
-              b[sortColumn],
-              sortOrder,
-              datasetColumnType
-            );
-          });
-        }
-        const startIdx = rowIndices[0];
-        const endIdx = startIdx + rowIndices.length;
-        tableData = sourceData.slice(startIdx, endIdx);
       }
     } catch (err) {
       if (

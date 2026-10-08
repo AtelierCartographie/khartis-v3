@@ -32,18 +32,6 @@ export function serializeUploadedFile(
     serialized.statistics = file.statistics;
   }
 
-  if (file.duplicates) {
-    serialized.duplicates = file.duplicates;
-  }
-
-  if (file.deepAnalysis) {
-    serialized.deepAnalysis = file.deepAnalysis;
-  }
-
-  if (file.geoMatchResult) {
-    serialized.geoMatchResult = file.geoMatchResult;
-  }
-
   if (file.columnTransformations && file.columnTransformations.length > 0) {
     serialized.columnTransformations = file.columnTransformations;
   }
@@ -92,18 +80,6 @@ export function deserializeUploadedFile(
 
   if (data.statistics) {
     file.statistics = data.statistics as UploadedFile['statistics'];
-  }
-
-  if (data.duplicates) {
-    file.duplicates = data.duplicates;
-  }
-
-  if (data.deepAnalysis) {
-    file.deepAnalysis = data.deepAnalysis;
-  }
-
-  if (data.geoMatchResult) {
-    file.geoMatchResult = data.geoMatchResult;
   }
 
   if (data.columnTransformations) {

@@ -11,7 +11,6 @@ import {
 } from '$lib/features/duckdb';
 import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
 import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
-import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { restoreCustomBasemapTables } from '$lib/features/project-management';
@@ -20,7 +19,7 @@ import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
-import { DuckDBError, formatError, isFatalError } from '../pipeline.errors';
+import { formatError, isFatalError } from '../pipeline.errors';
 import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,
@@ -49,7 +48,6 @@ import {
   showWarning
 } from '../utils/notification.utils.svelte';
 import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
-import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import {
   ensureDatasetGeometryBasemap,
@@ -108,20 +106,6 @@ function createDataOrchestratorService() {
   const processedFileIds = new Set<string>();
   const processingFiles = new Set<string>();
 
-  function toParsedTabularData(
-    rows: DatasetResult['data']
-  ): UploadedFile['parsedData'] | undefined {
-    if (!rows) {
-      return undefined;
-    }
-
-    return rows.map((row) =>
-      Object.fromEntries(
-        Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
-      )
-    );
-  }
-
   function cleanupOrphanedDatasets(): void {
     const currentProject = projectStore.currentProject;
     if (!currentProject?.data?.sourceFiles) return;
@@ -160,53 +144,6 @@ function createDataOrchestratorService() {
     if (dataset?.tableName) return null;
 
     return file;
-  }
-
-  async function recreateTableFromParsedData(
-    file: UploadedFile,
-    tableName: string,
-    dataset: DatasetResult
-  ): Promise<void> {
-    try {
-      if (!Duck.db) {
-        throw new DuckDBError(m.error_duckdb_not_initialized(), undefined, {
-          datasetId: dataset.id,
-          fileId: file.id,
-          tableName
-        });
-      }
-
-      const jsonData = JSON.stringify(file.parsedData);
-      const jsonBlob = new Blob([jsonData], { type: 'application/json' });
-      const jsonFile = new File([jsonBlob], `${tableName}.json`, {
-        type: 'application/json'
-      });
-
-      await Duck.register_files([jsonFile]);
-
-      const escapedTableName = escapeIdentifier(tableName);
-      const escapedJsonPath = escapeSqlString(`${tableName}.json`);
-      await Duck.query(
-        `CREATE TABLE "${escapedTableName}" AS SELECT * FROM read_json_auto('${escapedJsonPath}')`
-      );
-
-      await duckDBOrchestrator.registerExistingTable(
-        tableName,
-        dataset.sourceFileId || file.id,
-        file.name,
-        {
-          geoDetection: dataset.geoDetection,
-          preferredDatasetId: dataset.id
-        }
-      );
-    } catch (error) {
-      logger.error(
-        'Failed to recreate table from parsed data',
-        LogCategory.DUCKDB,
-        error
-      );
-      throw error;
-    }
   }
 
   const restoreFinalizedJoins = new Set<string>();
@@ -397,28 +334,23 @@ function createDataOrchestratorService() {
             const rebuiltDataset = isZipDatasetResult(processedResult)
               ? processedResult.datasets[0]
               : processedResult;
-            const duckRestoreFile: UploadedFile = {
-              ...file,
-              originalFile: restoredSourceFile,
-              parsedData: toParsedTabularData(rebuiltDataset.data)
-            };
-
-            const duckResult =
-              await duckDBOrchestrator.processFile(duckRestoreFile);
-            if (duckResult && dataset) {
-              restoredDuckDatasetId = duckResult.id;
+            const rebuiltRegistration =
+              await duckDBOrchestrator.registerExistingTable(
+                rebuiltDataset.tableName,
+                dataset.sourceFileId || file.id,
+                file.name,
+                {
+                  geoDetection: dataset.geoDetection,
+                  preferredDatasetId: dataset.id
+                }
+              );
+            if (rebuiltRegistration) {
+              restoredDuckDatasetId = rebuiltRegistration.id;
               datasetsStore.updateDatasetTableName(
                 dataset.id,
-                duckResult.tableName
+                rebuiltDataset.tableName
               );
             }
-          } else if (file.parsedData && Array.isArray(file.parsedData)) {
-            await recreateTableFromParsedData(file, dataset.tableName, dataset);
-            restoredDuckDatasetId =
-              duckDBOrchestrator
-                .getAllDatasets()
-                .find((item) => item.sourceFileId === dataset.sourceFileId)
-                ?.id ?? null;
           }
 
           if (restoredDuckDatasetId) {

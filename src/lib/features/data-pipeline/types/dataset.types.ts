@@ -5,7 +5,7 @@ import type {
   ProcessedDatasetAnalysisResult
 } from './geometry.types';
 import type { DatasetMetadata, FileFormat } from './import.types';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import type { GeometryTypeEnum } from '../types';
 
 export interface DatasetResult {
@@ -17,7 +17,6 @@ export interface DatasetResult {
   rowCount: number;
   geometry?: GeometryInfo;
   metadata: DatasetMetadata;
-  data?: Record<string, unknown>[];
   fileSize?: number;
   format?: FileFormat;
   analysis?: AnalysisResult;
@@ -41,7 +40,6 @@ export interface ProcessedDataset {
   name: string;
   sourceFileId?: string;
   format: FileFormat;
-  data: Record<string, unknown>[];
   rowCount: number;
   columns: ColumnInfo[];
   analysis: ProcessedDatasetAnalysisResult;

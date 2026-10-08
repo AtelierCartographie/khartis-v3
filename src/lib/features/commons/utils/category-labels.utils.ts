@@ -4,7 +4,6 @@ import { escapeIdentifier } from './sanitize.utils';
 
 type CategoryDatasetLike = {
   tableName?: string;
-  data?: Array<Record<string, unknown>> | null;
 };
 
 type CategoryClassificationLike = Partial<
@@ -48,16 +47,8 @@ export async function loadDistinctCategoryLabels(
   dataset: CategoryDatasetLike | undefined,
   columnName: string | undefined
 ): Promise<string[]> {
-  if (!dataset || !columnName) {
+  if (!dataset?.tableName || !columnName) {
     return [];
-  }
-
-  const localRows = dataset.data ?? [];
-
-  if (!dataset.tableName) {
-    return collectDistinctCategoryLabels(
-      localRows.map((row) => row?.[columnName])
-    );
   }
 
   try {
@@ -71,20 +62,8 @@ export async function loadDistinctCategoryLabels(
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const queriedLabels = collectDistinctCategoryLabels(
-      rows.map((row) => row.category_value)
-    );
-
-    if (queriedLabels.length > 0) {
-      return queriedLabels;
-    }
+    return collectDistinctCategoryLabels(rows.map((row) => row.category_value));
   } catch {
-    return collectDistinctCategoryLabels(
-      localRows.map((row) => row?.[columnName])
-    );
+    return [];
   }
-
-  return collectDistinctCategoryLabels(
-    localRows.map((row) => row?.[columnName])
-  );
 }

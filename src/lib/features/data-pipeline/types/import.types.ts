@@ -1,5 +1,4 @@
 import type { AssetRef } from '$lib/features/commons/types/create-project.types';
-import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
 import type { FileFormatEnum } from '../types';
 
 export interface CsvImportOptions {
@@ -30,7 +29,6 @@ export interface UploadedFilePayload {
   content?: string | ArrayBuffer;
   parsedData?: unknown;
   fileType?: string;
-  deepAnalysis?: DataAnalysisResult;
   relatedFileObjects?: File[];
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;
   assetRef?: AssetRef;

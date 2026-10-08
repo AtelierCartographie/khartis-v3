@@ -77,7 +77,7 @@
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
-  import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
+  import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
   function handleBasemapSourceChange(source: BasemapSource): void {

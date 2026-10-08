@@ -1,7 +1,7 @@
 import type {
   GeoColumnResult,
   GeoDetectionResult
-} from '$lib/features/commons/utils/geo-detector.utils';
+} from '$lib/features/commons/utils/geo-detection.utils';
 import type {
   ColumnInfo,
   ColumnStats,
@@ -209,7 +209,7 @@ export function normalizeToProcessedDataset(
     name: dataset.name,
     sourceFileId: dataset.sourceFileId,
     format: mapFormat(dataset.format ?? dataset.metadata?.fileType),
-    data: dataset.data ?? [],
+
     rowCount: dataset.rowCount,
     columns,
     analysis,

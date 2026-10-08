@@ -8,12 +8,12 @@ import {
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { withGeoDetection } from '../../services/geo-detection.service';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import {
   disableFacets,
   getFacetsBaseVisualizationId
 } from '$lib/features/step-toolbar/tools/facets';
-import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
@@ -73,20 +73,6 @@ function cloneRelatedFilesData(
   );
 }
 
-function cloneDatasetParsedData(
-  data: DatasetResult['data']
-): UploadedFile['parsedData'] | undefined {
-  if (!data) {
-    return undefined;
-  }
-
-  return data.map((row) =>
-    Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
-    )
-  );
-}
-
 function buildStatisticsFromDataset(
   dataset: DatasetResult
 ): UploadedFile['statistics'] | undefined {
@@ -142,9 +128,9 @@ export async function resetDataset(
       restoredSourceFile
     );
 
-    const newDataset: DatasetResult = isZipDatasetResult(result)
-      ? result.datasets[0]
-      : result;
+    const newDataset: DatasetResult = await withGeoDetection(
+      isZipDatasetResult(result) ? result.datasets[0] : result
+    );
 
     const resetDatasetResult: DatasetResult = {
       ...newDataset,
@@ -262,7 +248,7 @@ export async function duplicateDataset(
     const virtualFileId = crypto.randomUUID();
     const parsedData = Array.isArray(originalFile?.parsedData)
       ? clonePlainValue(originalFile.parsedData)
-      : cloneDatasetParsedData(dataset.data);
+      : undefined;
     const virtualFile: UploadedFile = {
       id: virtualFileId,
       name: copyName,
@@ -296,15 +282,6 @@ export async function duplicateDataset(
         originalFile?.statistics ??
         buildStatisticsFromDataset(dataset) ??
         undefined,
-      duplicates: originalFile?.duplicates
-        ? clonePlainValue(originalFile.duplicates)
-        : undefined,
-      deepAnalysis: originalFile?.deepAnalysis
-        ? clonePlainValue(originalFile.deepAnalysis)
-        : undefined,
-      geoMatchResult: originalFile?.geoMatchResult
-        ? clonePlainValue(originalFile.geoMatchResult)
-        : undefined,
       columnTransformations: originalFile?.columnTransformations
         ? [...originalFile.columnTransformations]
         : undefined,

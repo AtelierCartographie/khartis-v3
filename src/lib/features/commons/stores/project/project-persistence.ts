@@ -108,7 +108,6 @@ function mergePersistedSourceFile(
     assetRef: currentFile.assetRef ?? persistedFile.assetRef,
     companionAssetRefs:
       currentFile.companionAssetRefs ?? persistedFile.companionAssetRefs,
-    deepAnalysis: currentFile.deepAnalysis ?? persistedFile.deepAnalysis,
     sourceArchive: currentFile.sourceArchive ?? persistedFile.sourceArchive,
     datasetId: currentFile.datasetId ?? persistedFile.datasetId,
     duckdbTableName:

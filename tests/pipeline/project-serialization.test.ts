@@ -112,3 +112,21 @@ describe('deserializeUploadedFile — asset ref round-trip', () => {
     expect(restored.content).toBeUndefined();
   });
 });
+
+describe('deserializeUploadedFile — abandoned fields', () => {
+  it('should ignore the fields written by older versions', () => {
+    const legacy = {
+      ...serializeUploadedFile(minimalFile({ duckdbTableName: 't_data' })),
+      deepAnalysis: { geoDetection: { hasGeoColumns: true, geoColumns: [] } },
+      geoMatchResult: { matched: 3 },
+      duplicates: { hasDuplicates: true, duplicateCount: 2 }
+    };
+
+    const restored = deserializeUploadedFile(legacy as never);
+
+    expect(restored.duckdbTableName).toBe('t_data');
+    expect(restored).not.toHaveProperty('deepAnalysis');
+    expect(restored).not.toHaveProperty('geoMatchResult');
+    expect(restored).not.toHaveProperty('duplicates');
+  });
+});

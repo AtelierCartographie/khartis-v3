@@ -22,8 +22,11 @@ avec la persistance ([Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)).
 ## Stratégies de cache
 
 Le précache contient le shell produit par le build (JS, CSS, HTML, manifeste)
-ainsi que les métadonnées du catalogue de fonds et les préréglages de
-projections et de styles. Le reste est mis en cache à l'usage :
+ainsi que les métadonnées du catalogue de fonds, l'index des attributs du
+catalogue (`all-basemaps-attributes.parquet`, qui sert à reconnaître les colonnes
+géographiques dès la création du projet) et les préréglages de projections et de
+styles. L'index a une révision calculée sur son contenu : il n'est retéléchargé
+que s'il change. Le reste est mis en cache à l'usage :
 
 | Ressources                                                | Stratégie                                                           |
 | --------------------------------------------------------- | ------------------------------------------------------------------- |
