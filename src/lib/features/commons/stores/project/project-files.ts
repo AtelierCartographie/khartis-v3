@@ -35,8 +35,6 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     geometry: file.geometry,
     statistics: file.statistics,
     sourceType: file.sourceType,
-    deepAnalysis: file.deepAnalysis,
-    geoMatchResult: file.geoMatchResult,
     relatedFiles: file.relatedFiles,
     assetRef: file.assetRef,
     companionAssetRefs: file.companionAssetRefs,

@@ -14,7 +14,6 @@ import {
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
@@ -34,10 +33,7 @@ import {
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import {
-  convertRowsToTabular,
-  createDataMatrix
-} from '../utils/file-processor.utils';
+import { convertRowsToTabular } from '../utils/file-processor.utils';
 
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
@@ -105,8 +101,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
-
 function getReadableErrorMessage(error: unknown): string {
   const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -163,7 +157,6 @@ async function updateFileFromDuckDBDataset(
   duck: typeof Duck
 ): Promise<void> {
   const { tableName, columns, rowCount, geometry } = dataset;
-  const headers = columns.map((col) => col.name);
 
   callbacks.onProgress(uploadedFile.id, 50);
 
@@ -188,15 +181,6 @@ async function updateFileFromDuckDBDataset(
     ...(geometry ? { geometry } : {})
   });
 
-  const dataMatrix = createDataMatrix(sampleData, headers);
-
-  const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-    headers,
-    dataMatrix,
-    { sampleSize: Math.min(100, dataMatrix.length) }
-  );
-
-  callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
   callbacks.onProgress(uploadedFile.id, 100);
   callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
 
@@ -262,28 +246,6 @@ async function validateAsync(
 }
 
 function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  async function performDeepAnalysis(
-    uploadedFile: UploadedFile,
-    sampleData: Array<Record<string, unknown>>,
-    headers: string[]
-  ): Promise<void> {
-    const dataMatrix = createDataMatrix(sampleData, headers);
-
-    const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-      headers,
-      dataMatrix,
-      { sampleSize: Math.min(100, dataMatrix.length) }
-    );
-
-    if (deepAnalysis.performanceWarnings.length > 0) {
-      deepAnalysis.performanceWarnings.forEach((warning) =>
-        showWarning(WARNING_PERFORMANCE_TITLE(), warning)
-      );
-    }
-
-    callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-  }
-
   async function process(
     uploadedFile: UploadedFile,
     file: File
@@ -300,7 +262,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       sourceFileId: uploadedFile.id
     })) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
-    const headers = columns.map((col) => col.name);
 
     if (rowCount === 0) {
       callbacks.onStatusChange(
@@ -329,8 +290,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       columnCount: countUserColumns(columns),
       statistics
     });
-
-    await performDeepAnalysis(uploadedFile, sampleData, headers);
 
     perfMeasure(PERF_PHASE.FILE_IMPORT);
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
@@ -457,15 +416,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         ...(geometry ? { geometry } : {}),
         ...(archiveLayerSnapshot ? { archiveLayerSnapshot } : {})
       };
-      const sampleForAnalysis = previewData;
-      const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
-
-      const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-        headers,
-        dataMatrix,
-        { sampleSize: Math.min(100, dataMatrix.length) }
-      );
-
       if (i === 0) {
         callbacks.onDataUpdate(uploadedFile.id, {
           name,
@@ -475,7 +425,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           columnCount: countUserColumns(columns, geometry),
           statistics,
           content: undefined,
-          deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
           ...geometryUpdates
@@ -495,7 +444,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           rowCount,
           columnCount: countUserColumns(columns, geometry),
           statistics,
-          deepAnalysis,
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName,
           ...geometryUpdates

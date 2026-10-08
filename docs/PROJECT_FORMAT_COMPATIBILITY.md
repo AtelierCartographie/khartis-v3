@@ -68,9 +68,11 @@ Champs que Khartis n'écrit plus dans `sourceFiles[]` de `project.json`. Un
 projet plus ancien qui les contient s'ouvre normalement : ils sont ignorés à la
 lecture, sans migration.
 
-| Champ        | Abandonné depuis | Remplacé par                                                     |
-| ------------ | ---------------- | ---------------------------------------------------------------- |
-| `duplicates` | `3.10.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id` |
+| Champ            | Abandonné depuis | Remplacé par                                                                   |
+| ---------------- | ---------------- | ------------------------------------------------------------------------------ |
+| `duplicates`     | `3.10.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id`               |
+| `deepAnalysis`   | `3.10.0`         | détection géographique DuckDB recalculée sur toute la table à chaque ouverture |
+| `geoMatchResult` | `3.10.0`         | aucun : le champ n'était plus écrit                                            |
 
 ## Checklist de revue
 
