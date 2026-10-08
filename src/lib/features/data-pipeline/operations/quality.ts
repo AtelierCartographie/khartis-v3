@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { PIPELINE_CONST } from '../constants';
 import type { EnrichedColumn } from '../types';
 
@@ -46,8 +47,8 @@ export function computeQualityWarnings(
         warnings.push(
           m.pipeline_warning_low_cardinality({
             column: column.name,
-            uniques: String(column.stats?.uniques ?? 0),
-            total: String(nonNullCount)
+            uniques: formatValue(column.stats?.uniques ?? 0),
+            total: formatValue(nonNullCount)
           })
         );
       }

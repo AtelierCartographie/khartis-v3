@@ -13,6 +13,7 @@
   import { type SearchStats } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
     readCarbonStringValue,
@@ -332,18 +333,24 @@
 
     const parts: string[] = [];
     if (searchStats.exactCount > 0) {
-      parts.push(m.search_exact_results({ count: searchStats.exactCount }));
+      parts.push(
+        m.search_exact_results({
+          count: formatValue(searchStats.exactCount)
+        })
+      );
     }
     const partialCount = searchStats.containsCount + searchStats.fuzzyCount;
     if (partialCount > 0) {
-      parts.push(m.search_partial_results({ count: partialCount }));
+      parts.push(
+        m.search_partial_results({ count: formatValue(partialCount) })
+      );
     }
     return parts.join(m.separator_comma_space());
   });
 
   const navigationText = $derived(
     hasResults
-      ? `${currentResultIndex + 1}${m.search_navigation_separator()}${searchStats.totalCount}`
+      ? `${formatValue(currentResultIndex + 1)}${m.search_navigation_separator()}${formatValue(searchStats.totalCount)}`
       : ''
   );
 </script>

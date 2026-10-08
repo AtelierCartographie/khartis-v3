@@ -3,7 +3,10 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
-  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    resolveLocale
+  } from '$lib/features/commons/utils/format.utils';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
@@ -230,7 +233,7 @@
         type: 'nulls',
         message: m.column_warning_nulls_detailed({
           percent: Math.round(shareNulls * 100),
-          count: nulls ?? 0
+          count: formatValue(nulls ?? 0)
         }),
         severity: 'warning'
       });
@@ -981,7 +984,9 @@
             </div>
           {:else}
             <div class="hist-empty">
-              {m.column_unique_count({ count: toNum(analysis.uniques ?? 0) })}
+              {m.column_unique_count({
+                count: formatValue(toNum(analysis.uniques ?? 0))
+              })}
             </div>
           {/if}
         </div>
