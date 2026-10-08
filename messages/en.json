@@ -783,6 +783,8 @@
   "project_restore_classification_warning_message": "Classes for \"{visualizationName}\" could not be recomputed. The visualization may need to be configured again.",
   "project_restore_companion_files_warning_title": "Partial Shapefile restore",
   "project_restore_companion_files_warning_message": "Companion files for \"{fileName}\" could not be restored. Reimport the Shapefile and its dependencies if the layer does not load.",
+  "project_restore_enrichment_warning_title": "Enrichment columns not restored",
+  "project_restore_enrichment_warning_message": "The columns added to \"{fileName}\" by an enrichment could not be read back. The layer was reopened from its source file: redo the enrichment to get them back.",
   "project_restore_source_file_warning_title": "Source file restore failed",
   "project_restore_source_file_warning_message": "\"{fileName}\" could not be recreated from the saved project data. Reimport the file to restore this layer.",
   "project_restore_join_warning_title": "Partial join restore",

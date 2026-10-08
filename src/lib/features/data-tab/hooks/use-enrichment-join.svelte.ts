@@ -6,7 +6,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import type { JoinStats } from '../components/index';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
 import { computeDatasetJoinStats } from '../services/join-stats.service';
-import { persistSourceFileState } from '../services/source-file-state.service';
+import { persistEnrichedSourceFile } from '../services/source-file-state.service';
 import { canFinalizeJoin } from '../utils/join-validation.utils';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
@@ -435,7 +435,7 @@ export function useEnrichmentJoin(
         { force: true }
       );
       if (selectedDataset.sourceFileId) {
-        await persistSourceFileState({
+        await persistEnrichedSourceFile({
           sourceFileId: selectedDataset.sourceFileId,
           tableName: enrichedTableName,
           duckColumns: snapshot.duckColumns,

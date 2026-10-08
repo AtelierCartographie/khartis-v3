@@ -4,6 +4,7 @@ import type {
   UploadedFile
 } from '$lib/features/commons/types/create-project.types';
 import { PROJECT_CONST } from '../constants';
+import { collectFileAssetRefs } from '../core/file-asset-refs';
 import {
   ensureUploadedFileAssets,
   readAssetBytes
@@ -42,14 +43,8 @@ function collectUniqueAssetRefs(
     uniqueAssetRefs.set(assetRef.assetId, assetRef);
   });
 
-  files.forEach((file) => {
-    if (file.assetRef) {
-      uniqueAssetRefs.set(file.assetRef.assetId, file.assetRef);
-    }
-
-    file.companionAssetRefs?.forEach((assetRef) => {
-      uniqueAssetRefs.set(assetRef.assetId, assetRef);
-    });
+  files.flatMap(collectFileAssetRefs).forEach((assetRef) => {
+    uniqueAssetRefs.set(assetRef.assetId, assetRef);
   });
 
   return [...uniqueAssetRefs.values()];

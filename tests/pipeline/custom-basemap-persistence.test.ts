@@ -421,19 +421,22 @@ describe('project schema migrations', () => {
     expect(legacy.manifest.version).toBe('3.9.0');
   });
 
-  it('should open a 3.10.0 project as 3.11.0 unchanged', () => {
-    const previous = {
-      id: 'previous',
-      manifest: { version: '3.10.0', name: 'Previous project' },
-      data: { sourceFiles: [{ id: 'f1', sourceArchive: 'layers.zip' }] }
-    };
+  it.each(['3.10.0', '3.11.0'])(
+    'should open a %s project as the current schema unchanged',
+    (version) => {
+      const previous = {
+        id: 'previous',
+        manifest: { version, name: 'Previous project' },
+        data: { sourceFiles: [{ id: 'f1', sourceArchive: 'layers.zip' }] }
+      };
 
-    const migrated = migrateIfNeeded(previous);
+      const migrated = migrateIfNeeded(previous);
 
-    expect(migrated.manifest).toEqual({
-      version: '3.11.0',
-      name: 'Previous project'
-    });
-    expect(migrated.data).toEqual(previous.data);
-  });
+      expect(migrated.manifest).toEqual({
+        version: '3.12.0',
+        name: 'Previous project'
+      });
+      expect(migrated.data).toEqual(previous.data);
+    }
+  );
 });

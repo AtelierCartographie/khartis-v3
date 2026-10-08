@@ -37,6 +37,7 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     relatedFiles: file.relatedFiles,
     assetRef: file.assetRef,
     companionAssetRefs: file.companionAssetRefs,
+    enrichmentSnapshot: file.enrichmentSnapshot,
     relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
     deletedRowIds: file.deletedRowIds,

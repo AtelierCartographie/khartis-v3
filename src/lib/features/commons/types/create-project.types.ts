@@ -85,6 +85,9 @@ export interface UploadedFile {
   relatedFilesData?: Record<string, ArrayBuffer>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  // Parquet copy of the table after an enrichment join: the enrichment file
+  // itself is not kept, so reloads read this instead of assetRef.
+  enrichmentSnapshot?: AssetRef;
   uploadProgress?: number;
   rowCount?: number;
   columnCount?: number;

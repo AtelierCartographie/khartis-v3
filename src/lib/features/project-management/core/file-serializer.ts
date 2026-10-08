@@ -20,6 +20,10 @@ export function serializeUploadedFile(
     uploadProgress: file.uploadProgress
   } as SerializedUploadedFile;
 
+  if (file.enrichmentSnapshot) {
+    serialized.enrichmentSnapshot = file.enrichmentSnapshot;
+  }
+
   if (file.statistics) {
     serialized.statistics = file.statistics;
   }
@@ -65,6 +69,10 @@ export function deserializeUploadedFile(
     companionAssetRefs: data.companionAssetRefs,
     uploadProgress: data.uploadProgress
   } as UploadedFile;
+
+  if (data.enrichmentSnapshot) {
+    file.enrichmentSnapshot = data.enrichmentSnapshot;
+  }
 
   if (data.statistics) {
     file.statistics = data.statistics as UploadedFile['statistics'];

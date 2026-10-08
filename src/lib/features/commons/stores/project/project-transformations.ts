@@ -50,6 +50,7 @@ export async function clearColumnTransformations(
     ...updatedFiles[fileIndex],
     columnTransformations: [],
     deletedRowIds: [],
+    enrichmentSnapshot: undefined,
     ...(options?.duckdbTableName
       ? { duckdbTableName: options.duckdbTableName }
       : {}),

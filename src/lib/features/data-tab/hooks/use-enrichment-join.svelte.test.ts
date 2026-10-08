@@ -97,7 +97,7 @@ vi.mock('../services/join-stats.service', () => ({
 }));
 
 vi.mock('../services/source-file-state.service', () => ({
-  persistSourceFileState: vi.fn()
+  persistEnrichedSourceFile: vi.fn()
 }));
 
 describe('useEnrichmentJoin', () => {
