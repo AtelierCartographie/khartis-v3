@@ -460,10 +460,10 @@
     });
   }
 
-  const positionModeItems = [
+  const positionModeItems = $derived([
     { id: SymbolDoublePosition.OVERLAY, text: m.symbol_position_overlay() },
     { id: SymbolDoublePosition.DIVISION, text: m.symbol_position_division() }
-  ];
+  ]);
 </script>
 
 {#if symbolMode === SymbolMode.PROPORTIONAL}

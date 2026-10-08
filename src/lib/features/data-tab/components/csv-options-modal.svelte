@@ -75,28 +75,28 @@
     }
   }
 
-  const delimiterOptions = [
+  const delimiterOptions = $derived([
     { value: 'auto', label: m.csv_options_delimiter_auto() },
     { value: ',', label: m.csv_options_delimiter_comma() },
     { value: ';', label: m.csv_options_delimiter_semicolon() },
     { value: '\t', label: m.csv_options_delimiter_tab() },
     { value: '|', label: m.csv_options_delimiter_pipe() }
-  ];
+  ]);
 
-  const decimalOptions = [
+  const decimalOptions = $derived([
     { value: '.', label: m.csv_options_decimal_period() },
     { value: ',', label: m.csv_options_decimal_comma() }
-  ];
+  ]);
 
   const thousandsOptions: Array<{
     value: ThousandsSeparatorSelectValue;
     label: string;
-  }> = [
+  }> = $derived([
     { value: 'none', label: m.csv_options_thousands_none() },
     { value: 'space', label: m.csv_options_thousands_space() },
     { value: ',', label: m.csv_options_thousands_comma() },
     { value: '.', label: m.csv_options_thousands_period() }
-  ];
+  ]);
 
   const filteredThousandsOptions = $derived(
     thousandsOptions.filter((opt) =>

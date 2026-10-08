@@ -116,11 +116,11 @@
     onInvertPalette
   }: Props = $props();
 
-  const colorModeItems = [
+  const colorModeItems = $derived([
     { icon: LineThin, label: m.color_mode_unique(), iconSize: 16 },
     { icon: Table, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
+  ]);
 
   const COLOR_MODE_ORDER = [
     ColorMode.UNIQUE,
