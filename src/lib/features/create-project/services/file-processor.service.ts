@@ -14,10 +14,7 @@ import {
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import {
-  DeepDataValidator,
-  type DataAnalysisResult
-} from '$lib/features/commons/utils/deep-validator.utils';
+import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
@@ -108,8 +105,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
-const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
 function getReadableErrorMessage(error: unknown): string {
@@ -160,31 +155,6 @@ function countUserColumns(
   return columns.filter((column) => !hiddenColumns.has(column.name)).length;
 }
 
-function withGeometryDetection(
-  deepAnalysis: DataAnalysisResult,
-  geometry: DatasetResult['geometry']
-): DataAnalysisResult {
-  if (!geometry) {
-    return deepAnalysis;
-  }
-
-  return {
-    ...deepAnalysis,
-    geoDetection: {
-      hasGeoColumns: true,
-      geoColumns: [
-        {
-          columnName: geometry.columnName ?? INTERNAL_COLUMN.GEOM,
-          type: 'unknown',
-          confidence: 1,
-          index: 0
-        }
-      ],
-      warnings: []
-    }
-  };
-}
-
 async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
@@ -220,11 +190,10 @@ async function updateFileFromDuckDBDataset(
 
   const dataMatrix = createDataMatrix(sampleData, headers);
 
-  const deepAnalysis = withGeometryDetection(
-    await DeepDataValidator.analyzeDataContent(headers, dataMatrix, {
-      sampleSize: Math.min(100, dataMatrix.length)
-    }),
-    geometry
+  const deepAnalysis = await DeepDataValidator.analyzeDataContent(
+    headers,
+    dataMatrix,
+    { sampleSize: Math.min(100, dataMatrix.length) }
   );
 
   callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
@@ -305,13 +274,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       dataMatrix,
       { sampleSize: Math.min(100, dataMatrix.length) }
     );
-
-    if (!deepAnalysis.geoDetection.hasGeoColumns) {
-      showWarning(
-        WARNING_NO_GEO_COLUMN_TITLE(),
-        WARNING_NO_GEO_COLUMN_MESSAGE()
-      );
-    }
 
     if (deepAnalysis.performanceWarnings.length > 0) {
       deepAnalysis.performanceWarnings.forEach((warning) =>
@@ -503,21 +465,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         dataMatrix,
         { sampleSize: Math.min(100, dataMatrix.length) }
       );
-
-      if (geometry) {
-        deepAnalysis.geoDetection = {
-          hasGeoColumns: true,
-          geoColumns: [
-            {
-              columnName: INTERNAL_COLUMN.GEOM,
-              type: 'unknown',
-              confidence: 1,
-              index: 0
-            }
-          ],
-          warnings: []
-        };
-      }
 
       if (i === 0) {
         callbacks.onDataUpdate(uploadedFile.id, {

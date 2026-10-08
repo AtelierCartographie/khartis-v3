@@ -4,19 +4,8 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 function createGeometryDataset(
-  geometryValue: Record<string, unknown> | string,
-  options: { includeGeometryMeta?: boolean; includeGeoDetection?: boolean } = {}
+  geometryValue: Record<string, unknown> | string
 ): ProcessedDataset {
-  const geoColumns = options.includeGeoDetection
-    ? [
-        {
-          index: 4,
-          columnName: 'geom',
-          type: 'coordinates' as const,
-          confidence: 1
-        }
-      ]
-    : [];
   return {
     id: 'dataset-1',
     name: 'Tiny geo',
@@ -42,13 +31,12 @@ function createGeometryDataset(
     ],
     analysis: {
       columns: [],
-      geoColumns,
+      geoColumns: [],
       hasGeoData: true,
-      suggestedGeoColumn: options.includeGeoDetection ? 'geom' : undefined,
       rowCount: 1,
       warnings: []
     },
-    geometry: options.includeGeometryMeta === false ? undefined : 'Polygon',
+    geometry: 'Polygon',
     duckdbTableName: undefined,
     createdAt: new Date('2026-01-01T00:00:00Z'),
     fileSize: 123,
@@ -99,14 +87,6 @@ describe('file export utils', () => {
       unique: false
     });
     dataset.data[0].geo_point_2d = 'source property';
-    dataset.analysis.geoColumns = [
-      {
-        index: dataset.columns.findIndex((column) => column.name === 'geom'),
-        columnName: 'geom',
-        type: 'unknown',
-        confidence: 1
-      }
-    ];
 
     const csvText = await (
       await exportProcessedDatasets([dataset], 'csv')
@@ -190,40 +170,6 @@ describe('file export utils', () => {
     expect(() => exportToGeoJson({ type: 'Table' })).toThrow(
       DataValidationError
     );
-  });
-
-  it('builds valid geojson exports from recognized geometry columns', async () => {
-    const dataset = createGeometryDataset(
-      JSON.stringify({
-        type: 'Polygon',
-        coordinates: [
-          [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-            [0, 0]
-          ]
-        ]
-      }),
-      { includeGeometryMeta: false, includeGeoDetection: true }
-    );
-
-    const blob = await exportProcessedDatasets([dataset], 'geojson');
-    const text = await blob.text();
-    const geojson = JSON.parse(text) as {
-      type: string;
-      features: Array<{
-        geometry: { type: string; coordinates: unknown[] };
-        properties: Record<string, unknown>;
-      }>;
-    };
-
-    expect(geojson.type).toBe('FeatureCollection');
-    expect(geojson.features).toHaveLength(1);
-    expect(geojson.features[0].geometry.type).toBe('Polygon');
-    expect(geojson.features[0].properties).not.toHaveProperty('geom');
-    expect(geojson.features[0].properties.name).toBe('Alpha');
   });
 
   it('does not overwrite an existing _source_dataset property in geojson exports', async () => {

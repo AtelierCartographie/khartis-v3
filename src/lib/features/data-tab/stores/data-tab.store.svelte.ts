@@ -1,6 +1,6 @@
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { persistenceRegistry } from '$lib/features/project-management/core';
-import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
+import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
 
 export type DataTabStep =
   'control' | 'geolocate' | 'join' | 'basemap' | 'enrich';

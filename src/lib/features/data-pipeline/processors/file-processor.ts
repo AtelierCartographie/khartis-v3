@@ -17,7 +17,6 @@ import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
 import { gpxProcessor } from './strategies';
-import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type {
   CsvImportOptions,
   DatasetResult,
@@ -206,8 +205,6 @@ export async function processFileInternal(
   if (read.csvOptions) {
     dataset.metadata.csvOptions = read.csvOptions;
   }
-
-  await applyTabularGeoDetection(dataset);
 
   return dataset;
 }

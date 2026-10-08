@@ -9,7 +9,7 @@ import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck, duckDBOrchestrator, initDuckDB } from '$lib/features/duckdb';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
-import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
+import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
 import type {
   DatasetResult,
   ProcessedDataset

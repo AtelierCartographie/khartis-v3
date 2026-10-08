@@ -1,7 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import type { GeoColumnInfo } from '$lib/features/data-pipeline';
 import type { GPSBounds } from '$lib/features/duckdb';
-import { GEO_COLUMN_TYPE } from '../../commons/constants/data.constants';
 import { PipelineError } from '../../commons/pipeline.errors';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
@@ -370,21 +368,20 @@ function getSearchableText(basemap: BasemapMetadata): string {
     .toLowerCase();
 }
 
+function basemapFamily(file: string): string {
+  return file.replace(/-(low|medium|high)$/, '');
+}
+
 export function calculateGeoColumnBasemapMatchScore(
   geoColumnName: string,
   basemap: BasemapMetadata,
-  geoColumnType?: GeoColumnInfo['type']
+  catalogBasemaps: readonly string[] = []
 ): { score: number; reason: string } {
   let score = 0;
   const reasons: string[] = [];
 
   const columnNameLower = geoColumnName.toLowerCase();
   const searchText = getSearchableText(basemap);
-
-  const isCountryType =
-    geoColumnType === GEO_COLUMN_TYPE.COUNTRY_NAME ||
-    geoColumnType === GEO_COLUMN_TYPE.ISO2 ||
-    geoColumnType === GEO_COLUMN_TYPE.ISO3;
 
   const isWorldBasemap =
     basemap.file.includes('monde') ||
@@ -394,9 +391,10 @@ export function calculateGeoColumnBasemapMatchScore(
     searchText.includes('monde') ||
     searchText.includes('pays');
 
-  if (isCountryType && isWorldBasemap) {
+  const family = basemapFamily(basemap.file);
+  if (catalogBasemaps.some((file) => basemapFamily(file) === family)) {
     score += 60;
-    reasons.push('Country type match');
+    reasons.push('Catalog values match');
   }
 
   if (
@@ -413,11 +411,6 @@ export function calculateGeoColumnBasemapMatchScore(
   ) {
     score += 50;
     reasons.push('Department match');
-  }
-
-  if (geoColumnType === GEO_COLUMN_TYPE.NUTS && searchText.includes('nuts')) {
-    score += 60;
-    reasons.push('NUTS type match');
   }
 
   if (
@@ -484,17 +477,17 @@ export function rankBasemapsByGeoColumn(
     return [];
   }
 
-  const geoColumnInfo = dataset.geoDetection?.geoColumns?.find(
-    (candidate) => candidate.columnName === geoColumn!.name
-  );
-  const geoColumnType = geoColumnInfo?.type;
+  const catalogBasemaps =
+    dataset.geoDetection?.geoColumns?.find(
+      (candidate) => candidate.columnName === geoColumn!.name
+    )?.catalogBasemaps ?? [];
 
   return basemaps
     .map((basemap) => {
       const { score, reason } = calculateGeoColumnBasemapMatchScore(
         geoColumn!.name,
         basemap,
-        geoColumnType
+        catalogBasemaps
       );
 
       return {

@@ -17,20 +17,6 @@ export enum GeometryTypeEnum {
   MULTIPOLYGON = 'MultiPolygon'
 }
 
-export enum GeoLocationType {
-  LATITUDE = 'latitude',
-  LONGITUDE = 'longitude',
-  COUNTRY_NAME = 'country_name',
-  ISO2 = 'iso2',
-  ISO3 = 'iso3',
-  NUTS = 'nuts',
-  REGION = 'region',
-  CITY = 'city',
-  COORDINATES = 'coordinates',
-  LOCATION_NAME = 'location_name',
-  UNKNOWN = 'unknown'
-}
-
 export enum FileFormatEnum {
   CSV = 'csv',
   JSON = 'json',

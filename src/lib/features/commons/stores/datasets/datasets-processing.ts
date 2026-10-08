@@ -18,6 +18,7 @@ import { showWarning } from '../../utils/notification.utils.svelte';
 import { DataValidationError } from '../../pipeline.errors';
 import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
+import { withGeoDetection } from '../../services/geo-detection.service';
 import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
 
 interface VisualizationConfig {
@@ -175,26 +176,15 @@ export function createDatasetFromPreprocessedFile(
     },
     data,
     fileSize: file.size,
-    geoDetection: file.deepAnalysis?.geoDetection,
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
     analysis: {
       columns,
-      geoColumns: geometryInfo
-        ? [
-            {
-              columnName: geometryInfo.columnName ?? 'geom',
-              type: 'unknown' as const,
-              confidence: 1,
-              index: 0,
-              isValid: true
-            }
-          ]
-        : [],
+      geoColumns: [],
       hasGeoData: isGeoDataset,
       suggestedGeoColumn: geometryInfo?.columnName,
       rowCount: actualRowCount,
-      warnings: file.deepAnalysis?.geoDetection?.warnings ?? []
+      warnings: []
     },
     bounds: geometryInfo?.bounds
       ? {
@@ -268,6 +258,20 @@ function notifySkippedFiles(
 }
 
 async function processUploadedDatasetFile(
+  file: UploadedFile,
+  options: { useDuckDbSnapshotWhenAvailable: boolean }
+): Promise<DatasetResult | ZipDatasetResult> {
+  const result = await loadUploadedDatasetFile(file, options);
+  if (isZipDatasetResult(result)) {
+    return {
+      ...result,
+      datasets: await Promise.all(result.datasets.map(withGeoDetection))
+    };
+  }
+  return withGeoDetection(result);
+}
+
+async function loadUploadedDatasetFile(
   file: UploadedFile,
   options: { useDuckDbSnapshotWhenAvailable: boolean }
 ): Promise<DatasetResult | ZipDatasetResult> {

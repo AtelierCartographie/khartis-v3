@@ -18,7 +18,7 @@ vi.mock('$lib/features/project-management/core', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/utils/geo-detector.utils', () => ({
+vi.mock('$lib/features/commons/utils/gps-columns.utils', () => ({
   hasGPSCoordinateColumns: (
     _columns: unknown,
     geoDetection: { gpsCoordinates?: unknown } | undefined

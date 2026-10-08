@@ -6,7 +6,7 @@ describe('DeepDataValidator', () => {
     const result = await DeepDataValidator.analyzeDataContent(
       ['value'],
       [[1], [99], [100]],
-      { sampleSize: 1, skipGeoDetection: true }
+      { sampleSize: 1 }
     );
 
     expect(result.rowCount).toBe(1);
