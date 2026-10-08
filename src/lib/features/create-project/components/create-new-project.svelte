@@ -335,12 +335,23 @@
       : null
   );
 
-  const getFileTypeTag = (file: Pick<UploadedFile, 'fileType' | 'name'>) => {
+  const getFileTypeTag = (
+    file: Pick<UploadedFile, 'fileType' | 'name' | 'geometry'>
+  ) => {
     if (
       file.fileType === FileType.GEOPARQUET &&
       getFileExtension(file.name) === '.parquet'
     ) {
       return { label: 'Parquet', color: 'teal' as const };
+    }
+
+    // A .json without geometry was read as plain records by the tabular fallback.
+    if (
+      file.fileType === FileType.GEOJSON &&
+      getFileExtension(file.name) === '.json' &&
+      !file.geometry
+    ) {
+      return { label: 'JSON', color: 'blue' as const };
     }
 
     return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
