@@ -1229,14 +1229,35 @@ function getQuantitativeColorLegendDraft(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
           classPatternFills,
-          nodata: context.includeMissingDataFooter
-            ? isLegendMissingDataShown(viz, 'area')
-            : false,
-          nodataLabel: context.includeMissingDataFooter
-            ? m.missing_data_text()
-            : undefined
+          ...getQuantiColorMissingDataOptions(
+            viz,
+            context.includeMissingDataFooter
+          )
         })
       )
+  };
+}
+
+// The no-data box mirrors the map: missing-data color with its hatch.
+function getQuantiColorMissingDataOptions(
+  viz: VisualizationConfig,
+  includeFooter: boolean
+): {
+  nodata: boolean;
+  nodataLabel?: string;
+  nodataFill?: string;
+  nodataPatternFill?: LegendPatternFill | null;
+} {
+  if (!includeFooter || !isLegendMissingDataShown(viz, 'area')) {
+    return { nodata: false };
+  }
+
+  const item = getMissingDataLegendItem(viz, 'area');
+  return {
+    nodata: true,
+    nodataLabel: item.label,
+    nodataFill: item.fill,
+    nodataPatternFill: item.patternFill
   };
 }
 
@@ -2038,7 +2059,7 @@ function getMissingDataLegendItem(
   primitive: LegendSwatchPrimitive
 ): KhartisLegendSwatchItem {
   const missingData = getLegendMissingDataConfig(viz, primitive);
-  const color = missingData?.color ?? '#d9d9d9';
+  const color = missingData?.color ?? DEFAULT_COLORS.missingData;
 
   if (primitive === 'point') {
     return {
@@ -2051,7 +2072,9 @@ function getMissingDataLegendItem(
     };
   }
 
-  const missingDataPattern = resolveMissingDataClassPattern(missingData);
+  // Only polygon fills draw the missing-data pattern on the map.
+  const missingDataPattern =
+    primitive === 'area' ? resolveMissingDataClassPattern(missingData) : null;
 
   return {
     label: m.missing_data_text(),
