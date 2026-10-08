@@ -102,7 +102,7 @@ describe('DuckDB-backed CSV union exports', () => {
     expect(createViewQuery).toContain(' UNION ALL ');
   });
 
-  it('exports live calculated columns without joined basemap or geometry internals', async () => {
+  it('should export live calculated columns when the table holds joined basemap, geometry and row-id internals', async () => {
     mocks.describeTable.mockResolvedValue({
       name: [
         'name',
@@ -140,12 +140,13 @@ describe('DuckDB-backed CSV union exports', () => {
     const createViewQuery = String(mocks.query.mock.calls[0][0]);
 
     expect(createViewQuery).toContain(
-      'SELECT "name", "value", "calculated_value", "__id" FROM "table_a"'
+      'SELECT "name", "value", "calculated_value" FROM "table_a"'
     );
     expect(createViewQuery).not.toContain('basemap_id');
     expect(createViewQuery).not.toContain('basemap_label');
     expect(createViewQuery).not.toContain('typo_match');
     expect(createViewQuery).not.toContain('"geom"');
+    expect(createViewQuery).not.toContain('__id');
   });
 
   it('aligns calculated columns from the live schemas of multiple datasets', async () => {

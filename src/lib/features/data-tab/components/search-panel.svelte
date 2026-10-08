@@ -25,6 +25,11 @@
     SearchSource
   } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import {
+    COLUMN_TYPE_GEOMETRY,
+    EXCLUDED_COLUMNS,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
 
   export type CellHighlightType = 'exact' | 'contains' | 'partial';
 
@@ -53,7 +58,14 @@
   let { tableName, onSearchResults, onReplace }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
-  const columns = $derived(selectedDataset?.columns ?? []);
+  const columns = $derived(
+    selectedDataset?.columns.filter(
+      (c) =>
+        c.type !== COLUMN_TYPE_GEOMETRY &&
+        !(EXCLUDED_COLUMNS as readonly string[]).includes(c.name) &&
+        !JOINED_BASEMAP_COLUMNS.includes(c.name)
+    ) ?? []
+  );
 
   let searchQuery = $state(dataToolsStore.searchQuery);
   let searchSource = $state<SearchSource | string>(dataToolsStore.searchSource);
