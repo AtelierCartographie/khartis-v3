@@ -162,11 +162,16 @@ const dropCarbonCdnFonts = (): Plugin => ({
 
 const BASEMAP_ATTRIBUTES_PATH = 'basemaps/all-basemaps-attributes.parquet';
 
-const contentRevision = (staticPath: string): string =>
-  createHash('sha256')
-    .update(readFileSync(resolve(process.cwd(), 'static', staticPath)))
+// CI checks run on a sparse checkout without the basemap parquets; their build
+// is never deployed, so a time-based revision is enough there.
+const contentRevision = (staticPath: string): string => {
+  const filePath = resolve(process.cwd(), 'static', staticPath);
+  if (!existsSync(filePath)) return `${Date.now()}`;
+  return createHash('sha256')
+    .update(readFileSync(filePath))
     .digest('hex')
     .slice(0, 16);
+};
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
