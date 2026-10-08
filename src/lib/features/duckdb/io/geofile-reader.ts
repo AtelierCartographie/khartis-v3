@@ -24,7 +24,7 @@ import {
   generateUniqueTableName,
   registerFiles
 } from './file-registry';
-import { addRowId } from './reader-utils';
+import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
 
 interface GeofileMetadata {
   crs: string | null;
@@ -420,6 +420,7 @@ export async function readGeofile(
   }
 
   if (!usedGeoPackageBrowserFallback) {
+    await dropSyntheticFeatureIdColumn(ctx.connection, finalTablename);
     await addRowId(ctx.connection, finalTablename);
   }
 

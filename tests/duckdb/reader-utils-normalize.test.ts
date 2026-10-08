@@ -29,7 +29,10 @@ vi.mock('$lib/features/duckdb/core/query', () => ({
   }
 }));
 
-import { restoreNormalizedColumnNames } from '$lib/features/duckdb/io/reader-utils';
+import {
+  dropSyntheticFeatureIdColumn,
+  restoreNormalizedColumnNames
+} from '$lib/features/duckdb/io/reader-utils';
 
 let db: TestDuckDB;
 
@@ -87,5 +90,40 @@ describe('restoreNormalizedColumnNames', () => {
     // "name" already exists → "_name" must NOT be renamed (collision)
     expect(cols).toContain('name');
     expect(cols).toContain('_name');
+  });
+});
+
+describe('dropSyntheticFeatureIdColumn', () => {
+  beforeAll(async () => {
+    db = await createTestInstance();
+    hoisted.connection = db.connection;
+    await db.connection.run('LOAD spatial');
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  it('should drop OGC_FID when GDAL numbered the features itself', async () => {
+    await db.connection.run(
+      `CREATE OR REPLACE TABLE geo AS
+       FROM ST_Read('tests-datasets/geojson/tiny-geo-3features.geojson')`
+    );
+    expect(await columnsOf('geo')).toContain('OGC_FID');
+
+    await dropSyntheticFeatureIdColumn(db.connection as never, 'geo');
+
+    expect(await columnsOf('geo')).toEqual(['id', 'name', 'value', 'geom']);
+  });
+
+  it('should keep OGC_FID when it holds the feature ids of the file', async () => {
+    await db.connection.run(
+      `CREATE OR REPLACE TABLE ids AS
+       SELECT * FROM (VALUES (75056, 'Paris'), (69123, 'Lyon')) t("OGC_FID", name)`
+    );
+
+    await dropSyntheticFeatureIdColumn(db.connection as never, 'ids');
+
+    expect(await columnsOf('ids')).toContain('OGC_FID');
   });
 });
