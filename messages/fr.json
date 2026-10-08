@@ -1878,5 +1878,17 @@
   "pwa_update_check_error_subtitle": "Khartis n’a pas pu vérifier ou préparer la nouvelle version. Vous pouvez réessayer.",
   "pwa_update_activation_error_subtitle": "La nouvelle version n’a pas pu être activée dans le délai prévu. Le projet reste conservé.",
   "pwa_update_close_aria": "Fermer la notification de mise à jour",
-  "pwa_update_status_icon_aria": "Information"
+  "pwa_update_status_icon_aria": "Information",
+  "a11y_close_dialog": "Fermer la fenêtre",
+  "a11y_close_notification": "Fermer la notification",
+  "a11y_open_menu": "Ouvrir le menu",
+  "a11y_close_menu": "Fermer le menu",
+  "a11y_clear_selection": "Effacer la sélection",
+  "a11y_clear_all_selections": "Effacer toutes les sélections",
+  "a11y_increment_number": "Augmenter la valeur",
+  "a11y_decrement_number": "Diminuer la valeur",
+  "a11y_clear_search": "Effacer la recherche",
+  "a11y_open_options": "Afficher les options",
+  "a11y_tool_badge_new": "Nouveauté à découvrir",
+  "a11y_tool_badge_active": "Filtre actif"
 }

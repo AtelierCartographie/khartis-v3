@@ -7,6 +7,7 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     formatValue,
     isSingularCount
@@ -830,6 +831,8 @@
           <div class="field-stack">
             <span class="field-label">{m.palette_categories_sort()}</span>
             <Dropdown
+              translateWithId={translateCarbonId}
+              translateWithIdSelection={translateCarbonId}
               size="sm"
               items={sortItems}
               selectedId={sortMode}

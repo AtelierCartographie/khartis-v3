@@ -8,6 +8,7 @@
     SelectItem
   } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     DEFAULT_COLORS,
     BasemapDottedPattern,
@@ -208,6 +209,8 @@
           <Row>
             <Column>
               <Dropdown
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
                 size="sm"
                 titleText={m.stroke_dashed_pattern()}
                 items={dashedPatternItems}

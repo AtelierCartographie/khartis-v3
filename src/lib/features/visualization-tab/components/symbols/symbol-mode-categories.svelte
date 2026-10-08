@@ -6,6 +6,7 @@
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     formatValue,
     isSingularCount
@@ -508,6 +509,8 @@
       <InfoPopover text={m.shape_info()} />
     </span>
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       items={shapeDropdownItems}
       selectedId={shapeType}

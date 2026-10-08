@@ -37,6 +37,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.delete_rows_modal_title()}
   primaryButtonText={isDeleting ? m.deleting() : m.delete_confirm_button()}

@@ -390,6 +390,7 @@
 
     {#if filterError}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         kind="error"
         lowContrast
         subtitle={filterError}
@@ -416,6 +417,7 @@
                 size="sm"
                 type="gray"
                 filter
+                title={m.filter_remove()}
                 on:close={() => removeFilter(filter.id)}
               >
                 {filter.label}

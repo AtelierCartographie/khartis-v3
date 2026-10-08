@@ -833,6 +833,7 @@
       />
 
       <Modal
+        iconDescription={m.a11y_close_dialog()}
         bind:open={confirmReimportOpen}
         modalHeading={m.csv_confirm_reimport_title()}
         primaryButtonText={m.csv_options_apply()}
@@ -916,6 +917,7 @@
 
   {#if processedDataset && !variableTypesNotificationDismissed}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       title={m.data_control_variable_types_title()}
       subtitle={m.data_control_variable_types_subtitle()}
       kind="info"
@@ -927,6 +929,7 @@
 
   {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       title={m.data_control_duplicate_rows_title()}
       subtitle={duplicateRowCount === 1
         ? m.data_control_duplicate_rows_subtitle_one()

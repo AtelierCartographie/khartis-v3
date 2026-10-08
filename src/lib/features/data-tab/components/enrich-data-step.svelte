@@ -292,6 +292,7 @@
 
         {#if fileHook.uploadError}
           <InlineNotification
+            closeButtonDescription={m.a11y_close_notification()}
             kind="error"
             title={m.error_title()}
             subtitle={fileHook.uploadError}

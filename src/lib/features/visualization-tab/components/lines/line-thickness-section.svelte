@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import { LineThick, LineThin, Table } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
@@ -135,6 +136,8 @@
   />
   {#if dashed}
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       titleText={m.stroke_dashed_pattern()}
       items={dashedPatternItems}

@@ -37,3 +37,15 @@ diff --git a/src/ComboBox/ComboBox.svelte b/src/ComboBox/ComboBox.svelte
      aria-disabled={readonly || undefined}
      {disabled}
      invalid={showInvalid}
+diff --git a/src/Slider/Slider.svelte b/src/Slider/Slider.svelte
+--- a/src/Slider/Slider.svelte
++++ b/src/Slider/Slider.svelte
+@@ -225,7 +225,7 @@
+ >
+   <label
+-    for={inputId}
++    for={hideTextInput ? undefined : inputId}
+     id={labelId}
+     class:bx--label={true}
+     class:bx--label--disabled={disabled}
+     class:bx--visually-hidden={hideLabel}
