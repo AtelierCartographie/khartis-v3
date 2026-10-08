@@ -28,7 +28,10 @@
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -569,7 +572,9 @@
       if (totalReplaced > 0) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          m.history_replaced_values({
+          (isSingularCount(totalReplaced)
+            ? m.history_replaced_values_one
+            : m.history_replaced_values)({
             searchValue,
             replaceValue,
             totalReplaced: formatValue(totalReplaced)
@@ -650,7 +655,9 @@
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
-        m.history_deleted_rows({
+        (isSingularCount(count)
+          ? m.history_deleted_rows_one
+          : m.history_deleted_rows)({
           count: formatValue(count),
           newRowCount: formatValue(newRowCount)
         })
@@ -696,7 +703,9 @@
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          m.history_deleted_filtered_rows({
+          (isSingularCount(count)
+            ? m.history_deleted_filtered_rows_one
+            : m.history_deleted_filtered_rows)({
             count: formatValue(count),
             newRowCount: formatValue(newRowCount)
           })

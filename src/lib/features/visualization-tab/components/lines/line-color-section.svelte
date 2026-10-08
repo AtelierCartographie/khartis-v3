@@ -1,5 +1,9 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import { LineThin, Table, Tag } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
@@ -269,7 +273,9 @@
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
+    value={(isSingularCount(categoryCount)
+      ? m.categories_count_one
+      : m.categories_count)({ count: formatValue(categoryCount) })}
     settingsIconDescription={m.palette_categories_aspect_title()}
     onsettings={() => {
       categoriesPopoverOpen = true;

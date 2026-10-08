@@ -7,6 +7,10 @@
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
+  import {
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
   } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -516,7 +520,11 @@
 <div class="categories-aspect-row">
   <span class="field-label">{m.category_aspect()}</span>
   <div class="categories-aspect-value">
-    <span>{m.categories_count({ count: categoryCount })}</span>
+    <span
+      >{(isSingularCount(categoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(categoryCount) })}</span
+    >
     <Button
       class="categories-aspect-settings"
       kind="ghost"

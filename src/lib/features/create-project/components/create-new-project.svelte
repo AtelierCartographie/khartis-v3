@@ -11,7 +11,10 @@
     type UploadedFile
   } from '$lib/features/commons/types/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import {
     readCarbonStringValue,
@@ -357,9 +360,10 @@
     return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
   };
 
-  const rowsLabel = (count: number) => (count <= 1 ? m.rows_one() : m.rows());
+  const rowsLabel = (count: number) =>
+    isSingularCount(count) ? m.rows_one() : m.rows();
   const columnsLabel = (count: number) =>
-    count <= 1 ? m.columns_one() : m.columns();
+    isSingularCount(count) ? m.columns_one() : m.columns();
 
   function getFileExtension(fileName: string): string {
     const extensionStart = fileName.lastIndexOf('.');
