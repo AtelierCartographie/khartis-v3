@@ -296,9 +296,6 @@ export async function duplicateDataset(
         originalFile?.statistics ??
         buildStatisticsFromDataset(dataset) ??
         undefined,
-      duplicates: originalFile?.duplicates
-        ? clonePlainValue(originalFile.duplicates)
-        : undefined,
       deepAnalysis: originalFile?.deepAnalysis
         ? clonePlainValue(originalFile.deepAnalysis)
         : undefined,

@@ -1066,6 +1066,13 @@ export const duckDBOrchestrator = {
     return tableDataOps.getRowPosition(tableName, rowId, Duck, options);
   },
 
+  async countDuplicateRows(tableName: string): Promise<number> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.countDuplicateRows(tableName, Duck);
+  },
+
   async getRowStats(tableName: string): Promise<FilterStats> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());

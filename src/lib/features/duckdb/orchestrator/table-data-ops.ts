@@ -262,6 +262,21 @@ export async function getRowStats(
   return { total, filtered: total };
 }
 
+const ROW_IDENTITY_COLUMNS = [INTERNAL_COLUMN.ID, INTERNAL_COLUMN.FEATURE_ID];
+
+export async function countDuplicateRows(
+  tableName: string,
+  Duck: DuckDBClientForTableData
+): Promise<number> {
+  const escapedTable = escapeIdentifier(tableName);
+  const identityList = ROW_IDENTITY_COLUMNS.map((c) => `'${c}'`).join(', ');
+  const result = (await Duck.query(
+    `SELECT (SELECT COUNT(*) FROM "${escapedTable}") - (SELECT COUNT(*) FROM (SELECT DISTINCT COLUMNS(c -> c NOT IN (${identityList})) FROM "${escapedTable}")) AS duplicates`
+  )) as ArrowTableLike;
+  const row = result.get(0) as Record<string, unknown>;
+  return Number(row?.duplicates) || 0;
+}
+
 export interface ColumnDomain {
   min: number;
   max: number;
