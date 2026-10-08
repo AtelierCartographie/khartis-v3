@@ -40,7 +40,6 @@ export interface ProcessedDataset {
   name: string;
   sourceFileId?: string;
   format: FileFormat;
-  data: Record<string, unknown>[];
   rowCount: number;
   columns: ColumnInfo[];
   analysis: ProcessedDatasetAnalysisResult;
