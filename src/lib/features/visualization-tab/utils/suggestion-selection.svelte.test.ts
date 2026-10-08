@@ -3,6 +3,7 @@ import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester
 import {
   getSuggestionSignature,
   includePersistedSuggestion,
+  keepClearedSuggestion,
   parseSuggestionSignature,
   resolveDisplayedSuggestionKey,
   resolveSuggestionCardAction,
@@ -327,5 +328,50 @@ describe('resolveDisplayedSuggestionKey', () => {
         originMode: 'custom'
       })
     ).toBeUndefined();
+  });
+});
+
+describe('keepClearedSuggestion', () => {
+  const generated = [
+    createSuggestion({ id: 'choropleth', columns: ['population'] }),
+    createSuggestion({ id: 'symbols_proportional', columns: ['population'] })
+  ];
+  const persistedOnly = createSuggestion({
+    id: 'choropleth',
+    columns: ['density']
+  });
+
+  it('should keep a cleared card at its place when only its origin key listed it', () => {
+    const result = keepClearedSuggestion(
+      generated,
+      { visualizationId: 'viz-1', suggestion: persistedOnly, index: 1 },
+      'viz-1'
+    );
+
+    expect(result.map(getSuggestionSignature)).toEqual([
+      getSuggestionSignature(generated[0]),
+      getSuggestionSignature(persistedOnly),
+      getSuggestionSignature(generated[1])
+    ]);
+  });
+
+  it('should not duplicate a cleared card when the list still holds it', () => {
+    const result = keepClearedSuggestion(
+      generated,
+      { visualizationId: 'viz-1', suggestion: generated[1], index: 1 },
+      'viz-1'
+    );
+
+    expect(result).toBe(generated);
+  });
+
+  it('should ignore a cleared card when another visualization is targeted', () => {
+    const result = keepClearedSuggestion(
+      generated,
+      { visualizationId: 'viz-1', suggestion: persistedOnly, index: 0 },
+      'viz-2'
+    );
+
+    expect(result).toBe(generated);
   });
 });

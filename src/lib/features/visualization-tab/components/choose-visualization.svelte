@@ -29,6 +29,8 @@
   import {
     getSuggestionSignature,
     includePersistedSuggestion,
+    keepClearedSuggestion,
+    type ClearedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion,
@@ -52,6 +54,7 @@
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let selectedSuggestionKey = $state<string | undefined>(undefined);
+  let clearedSuggestion = $state<ClearedSuggestion | undefined>(undefined);
 
   const datasetItems = $derived.by(() =>
     datasetsStore.datasets.map((ds, id) => ({
@@ -133,6 +136,14 @@
     );
 
     if (action === 'clear') {
+      clearedSuggestion = {
+        visualizationId: targetViz.id,
+        suggestion,
+        index: displayedSuggestions.findIndex(
+          (item) =>
+            getSuggestionSignature(item) === getSuggestionSignature(suggestion)
+        )
+      };
       if (!restoreVisualizationFromSuggestion(targetViz.id)) {
         applyBlankVisualizationPreset(targetViz.id, dataset, {
           mode: 'manual-blank'
@@ -229,21 +240,22 @@
 
   const displayedSuggestions = $derived.by(() => {
     const origin = targetVisualization?.origin;
+    const listed = shouldIncludePersistedSuggestion({
+      hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
+      hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
+      originMode: targetVisualizationOriginMode
+    })
+      ? includePersistedSuggestion(
+          suggestions,
+          origin?.suggestionKey,
+          suggestions[0]?.dataGeometry
+        )
+      : suggestions;
 
-    if (
-      !shouldIncludePersistedSuggestion({
-        hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
-        hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
-        originMode: targetVisualizationOriginMode
-      })
-    ) {
-      return suggestions;
-    }
-
-    return includePersistedSuggestion(
-      suggestions,
-      origin?.suggestionKey,
-      suggestions[0]?.dataGeometry
+    return keepClearedSuggestion(
+      listed,
+      clearedSuggestion,
+      targetVisualization?.id
     );
   });
 
@@ -355,6 +367,7 @@
     }
 
     previousSuggestionDatasetId = dataset.id;
+    clearedSuggestion = undefined;
     visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     suggestionsExpanded = true;
     autoAppliedSuggestionKey = undefined;
