@@ -90,10 +90,6 @@ export interface UploadedFile {
   rowCount?: number;
   columnCount?: number;
   statistics?: Record<string, unknown>;
-  duplicates?: {
-    hasDuplicates: boolean;
-    duplicateCount: number;
-  };
   deepAnalysis?: DataAnalysisResult;
   geoMatchResult?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];

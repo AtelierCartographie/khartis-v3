@@ -45,7 +45,6 @@ import {
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
 const TABULAR_TEXT_EXTENSION = 'txt';
-const DUPLICATE_SCAN_ROW_LIMIT = 10_000;
 
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
@@ -111,7 +110,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
 
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
 const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
-const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
 function getReadableErrorMessage(error: unknown): string {
@@ -295,40 +293,6 @@ async function validateAsync(
 }
 
 function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  async function computeDuplicatesAsync(
-    fileId: string,
-    tableName: string,
-    duck: typeof Duck
-  ): Promise<void> {
-    try {
-      const duplicateResult = (await duck.query(
-        `SELECT (SELECT COUNT(*) FROM "${escapeIdentifier(tableName)}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${escapeIdentifier(tableName)}")) as duplicate_count`,
-        { format: 'array' }
-      )) as Array<{ duplicate_count: bigint | number }>;
-      const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
-
-      callbacks.onDataUpdate(fileId, {
-        duplicates: {
-          hasDuplicates: duplicateCount > 0,
-          duplicateCount
-        }
-      });
-
-      if (duplicateCount > 0) {
-        showWarning(
-          WARNING_DUPLICATE_ROWS_TITLE(),
-          m.warning_duplicate_rows_message({ count: String(duplicateCount) })
-        );
-      }
-    } catch (error) {
-      logger.warn('Failed to compute duplicate row count', LogCategory.FILE, {
-        fileId,
-        tableName,
-        error
-      });
-    }
-  }
-
   async function performDeepAnalysis(
     uploadedFile: UploadedFile,
     sampleData: Array<Record<string, unknown>>,
@@ -408,9 +372,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     perfMeasure(PERF_PHASE.FILE_IMPORT);
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {
-      void computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
-    }
   }
 
   return { process };

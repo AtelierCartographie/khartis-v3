@@ -33,7 +33,6 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     content: file.content,
     archiveLayerSnapshot: file.archiveLayerSnapshot,
     geometry: file.geometry,
-    duplicates: file.duplicates,
     statistics: file.statistics,
     sourceType: file.sourceType,
     deepAnalysis: file.deepAnalysis,

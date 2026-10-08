@@ -32,10 +32,6 @@ export function serializeUploadedFile(
     serialized.statistics = file.statistics;
   }
 
-  if (file.duplicates) {
-    serialized.duplicates = file.duplicates;
-  }
-
   if (file.deepAnalysis) {
     serialized.deepAnalysis = file.deepAnalysis;
   }
@@ -92,10 +88,6 @@ export function deserializeUploadedFile(
 
   if (data.statistics) {
     file.statistics = data.statistics as UploadedFile['statistics'];
-  }
-
-  if (data.duplicates) {
-    file.duplicates = data.duplicates;
   }
 
   if (data.deepAnalysis) {

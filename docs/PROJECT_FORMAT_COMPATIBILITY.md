@@ -62,6 +62,16 @@ L'import n'est pas atomique : une évolution de format ne promet pas une
 restauration tout-ou-rien sans ajouter le mécanisme et les tests qui
 l'établissent.
 
+## Champs abandonnés
+
+Champs que Khartis n'écrit plus dans `sourceFiles[]` de `project.json`. Un
+projet plus ancien qui les contient s'ouvre normalement : ils sont ignorés à la
+lecture, sans migration.
+
+| Champ        | Abandonné depuis | Remplacé par                                                     |
+| ------------ | ---------------- | ---------------------------------------------------------------- |
+| `duplicates` | `3.10.0`         | compte recalculé en SQL à l'étape Contrôler, sans colonne `__id` |
+
 ## Checklist de revue
 
 - Le changement touche-t-il le conteneur, `project.json`, les assets, ou

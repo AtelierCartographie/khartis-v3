@@ -195,7 +195,6 @@ export interface SerializedUploadedFile {
   uploadProgress?: number;
   parsedData?: unknown;
   statistics?: unknown;
-  duplicates?: UploadedFile['duplicates'];
   deepAnalysis?: UploadedFile['deepAnalysis'];
   geoMatchResult?: UploadedFile['geoMatchResult'];
   columnTransformations?: ColumnTransformation[];
