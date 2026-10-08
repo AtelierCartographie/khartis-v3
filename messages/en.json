@@ -380,7 +380,7 @@
   "osm_basemap_description": "This basemap can be customized in the Visualizations step, under Customize the basemap. Choose from several preset styles and pick which information layers to display.",
   "osm_basemap_source": "OpenStreetMap contributors",
   "osm_description": "This detailed basemap combines the precision of IGN and the collaborative richness of OpenStreetMap.",
-  "osm_customization_note": "Reference basemap added — This basemap can be customized in the next step:",
+  "osm_customization_note": "Customize it in the next step:",
   "step_visualize": "Visualize",
   "toolbar_nav_aria": "Map creation steps",
   "toolbar_step_selection_aria": "Step selection",

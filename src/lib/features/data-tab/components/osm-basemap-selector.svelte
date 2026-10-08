@@ -39,20 +39,19 @@
       hideCloseButton={true}
       lowContrast
     />
+    {#if onGoToVisualize}
+      <p class="osm-note">
+        {m.osm_customization_note()}
+        <a href={resolve('/')} class="bx--link" onclick={handleLinkClick}>
+          {m.step_visualize()}
+        </a>.
+      </p>
+    {/if}
   {:else}
     <Button size="field" kind="primary" on:click={onSelectOSM}>
       {m.osm_modal_button_add()}
     </Button>
   {/if}
-
-  <p class="osm-note">
-    {m.osm_customization_note()}
-    {#if onGoToVisualize}
-      <a href={resolve('/')} class="bx--link" onclick={handleLinkClick}>
-        {m.step_visualize()}
-      </a>.
-    {/if}
-  </p>
 </div>
 
 <style>

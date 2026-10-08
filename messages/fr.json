@@ -380,7 +380,7 @@
   "osm_basemap_description": "Ce fond est personnalisable à l'étape Visualisations : Personnaliser le fond de carte. Retrouvez différents styles prédéfinis et choisissez l'affichage de différents calques d'information.",
   "osm_basemap_source": "Contributeurs OpenStreetMap",
   "osm_description": "Ce fond de carte détaillé combine la précision de l'IGN et la richesse collaborative d'OpenStreetMap.",
-  "osm_customization_note": "Fond de référence ajouté — Ce fond est personnalisable à l'étape suivante :",
+  "osm_customization_note": "Personnalisez-le à l'étape suivante :",
   "step_visualize": "Visualiser",
   "toolbar_nav_aria": "Étapes de création de carte",
   "toolbar_step_selection_aria": "Sélection d'étape",
