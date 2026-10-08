@@ -572,7 +572,7 @@
           m.history_replaced_values({
             searchValue,
             replaceValue,
-            totalReplaced
+            totalReplaced: formatValue(totalReplaced)
           })
         );
 
@@ -650,7 +650,10 @@
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
-        m.history_deleted_rows({ count, newRowCount })
+        m.history_deleted_rows({
+          count: formatValue(count),
+          newRowCount: formatValue(newRowCount)
+        })
       );
 
       await projectStore.addDeletedRows(
@@ -663,7 +666,7 @@
       refreshTable();
       showSuccess(
         m.rows_deleted_success_title(),
-        m.rows_deleted_success_message({ count })
+        m.rows_deleted_success_message({ count: formatValue(count) })
       );
     } catch (error) {
       showError(
@@ -693,14 +696,17 @@
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          m.history_deleted_filtered_rows({ count, newRowCount })
+          m.history_deleted_filtered_rows({
+            count: formatValue(count),
+            newRowCount: formatValue(newRowCount)
+          })
         );
         await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 
         refreshTable();
         showSuccess(
           m.rows_deleted_success_title(),
-          m.rows_deleted_success_message({ count })
+          m.rows_deleted_success_message({ count: formatValue(count) })
         );
       }
     } catch (error) {

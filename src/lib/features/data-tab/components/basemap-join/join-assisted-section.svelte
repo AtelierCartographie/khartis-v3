@@ -1,6 +1,7 @@
 <script lang="ts">
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import {
     Button,
     ComboBox,
@@ -745,7 +746,7 @@
         ? m.join_announce_ignored_one({ entity: dataValue })
         : m.join_announce_ignored({
             entity: dataValue,
-            count: nextIgnoredCount
+            count: formatValue(nextIgnoredCount)
           })
     );
   }
@@ -816,7 +817,9 @@
           <span class="category-icon icon-success">
             <CheckmarkFilled size={20} />
           </span>
-          <div class="category-count count-success">{joinedCount}</div>
+          <div class="category-count count-success">
+            {formatValue(joinedCount)}
+          </div>
           <span class="category-label label-success"
             >{joinedCount <= 1
               ? m.join_entities_joined_one()
@@ -964,9 +967,15 @@
                     forwardText={m.join_pagination_next()}
                     backwardText={m.join_pagination_previous()}
                     itemRangeText={(min, max, total) =>
-                      m.join_pagination_item_range({ min, max, total })}
+                      m.join_pagination_item_range({
+                        min: formatValue(min),
+                        max: formatValue(max),
+                        total: formatValue(total)
+                      })}
                     pageRangeText={(_current, total) =>
-                      m.join_pagination_page_range({ total })}
+                      m.join_pagination_page_range({
+                        total: formatValue(total)
+                      })}
                     on:update={(event) => {
                       if (event.detail.page !== joinedPage) {
                         onJoinedPageChange?.(event.detail.page);
@@ -994,7 +1003,9 @@
           <span class="category-icon icon-warning">
             <WarningFilled size={20} />
           </span>
-          <div class="category-count count-warning">{toVerifyCount}</div>
+          <div class="category-count count-warning">
+            {formatValue(toVerifyCount)}
+          </div>
           <span class="category-label label-warning"
             >{toVerifyCount <= 1
               ? m.join_entities_to_verify_one()
@@ -1152,7 +1163,9 @@
           <span class="category-icon icon-error">
             <ErrorFilled size={20} />
           </span>
-          <div class="category-count count-error">{unrecognizedCount}</div>
+          <div class="category-count count-error">
+            {formatValue(unrecognizedCount)}
+          </div>
           <span class="category-label label-error"
             >{unrecognizedCount <= 1
               ? m.join_entities_unrecognized_one()
@@ -1174,7 +1187,7 @@
               hideCloseButton
               title={m.join_fuzzy_pass_title()}
               subtitle={m.join_fuzzy_pass_subtitle({
-                count: fuzzyPassEstimate?.candidates ?? 0,
+                count: formatValue(fuzzyPassEstimate?.candidates ?? 0),
                 seconds: fuzzyPassSeconds
               })}
             />
@@ -1327,7 +1340,9 @@
             <span class="category-icon icon-warning-alt">
               <WarningAltFilled size={20} />
             </span>
-            <div class="category-count count-warning-alt">{duplicateCount}</div>
+            <div class="category-count count-warning-alt">
+              {formatValue(duplicateCount)}
+            </div>
             <span class="category-label label-warning-alt"
               >{duplicateCount <= 1
                 ? m.join_entities_duplicate_one()
@@ -1394,7 +1409,9 @@
             <span class="category-icon icon-ignored">
               <Misuse size={20} />
             </span>
-            <div class="category-count count-ignored">{ignoredCount}</div>
+            <div class="category-count count-ignored">
+              {formatValue(ignoredCount)}
+            </div>
             <span class="category-label label-ignored"
               >{ignoredCount <= 1
                 ? m.join_entities_ignored_one()

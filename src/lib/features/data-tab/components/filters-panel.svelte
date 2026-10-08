@@ -17,6 +17,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import Button from '$lib/features/commons/components/button-native.svelte';
   import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -292,7 +293,7 @@
   {:else}
     <div class="filter-stats">
       <span class="stats-text">
-        {filterStats.filtered.toLocaleString()} / {filterStats.total.toLocaleString()}
+        {formatValue(filterStats.filtered)} / {formatValue(filterStats.total)}
         {m.filter_rows_visible()}
       </span>
       <span class="stats-percentage">{filterPercentage}%</span>
@@ -437,7 +438,7 @@
               icon={TrashCan}
               onclick={() => onDeleteFilteredRows(rowsToDelete)}
             >
-              {m.delete_filtered_rows({ count: rowsToDelete })}
+              {m.delete_filtered_rows({ count: formatValue(rowsToDelete) })}
             </Button>
           </div>
         {/if}

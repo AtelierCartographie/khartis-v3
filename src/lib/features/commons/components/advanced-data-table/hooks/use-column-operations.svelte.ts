@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   visualizationStore,
@@ -117,7 +118,7 @@ export function useColumnOperations(
       showWarning(
         m.warning_column_type_invalidated_title({ columnName }),
         m.warning_column_type_invalidated_subtitle({
-          count: invalidatedCount,
+          count: formatValue(invalidatedCount),
           newType
         })
       );

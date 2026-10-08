@@ -7,6 +7,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import {
     DataTableSkeleton,
     InlineNotification,
@@ -825,7 +826,7 @@
                     {#if effectiveShowSummaryPlots}
                       <div class="row-index-stats">
                         <span class="row-index-count"
-                          >{filters.filterStats.total}</span
+                          >{formatValue(filters.filterStats.total)}</span
                         >
                         <span class="row-index-label">{m.rows()}</span>
                       </div>
