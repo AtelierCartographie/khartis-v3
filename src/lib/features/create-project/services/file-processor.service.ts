@@ -17,6 +17,7 @@ import { FileType } from '$lib/features/commons/types/create-project.types';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
@@ -123,9 +124,14 @@ function getReadableErrorMessage(error: unknown): string {
     errorMessage.includes('delimiter') ||
     errorMessage.includes('column count')
   ) {
-    return m.pipeline_error_csv_read_failed({
-      detail: errorMessage.slice(0, 200)
-    });
+    // The raw DuckDB message is English, names the temporary file and quotes
+    // the offending row ("Original Line"), so only the line number is kept.
+    const line = /CSV Error on Line: (\d+)/.exec(errorMessage)?.[1];
+    return line
+      ? m.pipeline_error_csv_read_failed_at_line({
+          line: formatValue(Number(line))
+        })
+      : m.pipeline_error_csv_read_failed();
   }
 
   return m.pipeline_error_generic();
