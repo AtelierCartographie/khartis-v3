@@ -209,7 +209,7 @@ export function normalizeToProcessedDataset(
     name: dataset.name,
     sourceFileId: dataset.sourceFileId,
     format: mapFormat(dataset.format ?? dataset.metadata?.fileType),
-    data: dataset.data ?? [],
+    data: [],
     rowCount: dataset.rowCount,
     columns,
     analysis,

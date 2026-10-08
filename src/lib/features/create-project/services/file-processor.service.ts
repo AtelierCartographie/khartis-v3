@@ -18,7 +18,6 @@ import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   PERF_PHASE,
@@ -33,7 +32,6 @@ import {
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { convertRowsToTabular } from '../utils/file-processor.utils';
 
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
@@ -153,8 +151,7 @@ async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
   dataset: DatasetResult,
-  fileContent: UploadedFile['content'],
-  duck: typeof Duck
+  fileContent: UploadedFile['content']
 ): Promise<void> {
   const { tableName, columns, rowCount, geometry } = dataset;
 
@@ -162,17 +159,7 @@ async function updateFileFromDuckDBDataset(
 
   const statistics = buildStatisticsFromColumns(columns);
 
-  const sampleData = (await duck.query(
-    `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
-
-  const tabularData = convertRowsToTabular(sampleData);
-
-  callbacks.onProgress(uploadedFile.id, 80);
-
   callbacks.onDataUpdate(uploadedFile.id, {
-    parsedData: tabularData,
     rowCount,
     columnCount: countUserColumns(columns, geometry),
     statistics,
@@ -275,15 +262,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildStatisticsFromColumns(columns);
 
-    const sampleData = (await Duck.query(
-      `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const tabularData = convertRowsToTabular(sampleData);
-
     callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: tabularData,
       content: originalContent,
       duckdbTableName: tableName,
       rowCount,
@@ -319,8 +298,7 @@ function createDuckDBGeofileProcessor(
       callbacks,
       uploadedFile,
       result as DatasetResult,
-      content,
-      Duck
+      content
     );
   }
 
@@ -390,19 +368,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
       const statistics = buildStatisticsFromColumns(columns);
 
-      let previewData: Array<Record<string, unknown>> = [];
-      try {
-        previewData = (await duck.query(
-          `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
-          {
-            format: 'array'
-          }
-        )) as Array<Record<string, unknown>>;
-      } catch {
-        // Ignore errors - fallback to empty data
-      }
-
-      const tabularData = convertRowsToTabular(previewData);
       const archiveLayerSnapshot = await buildArchiveLayerSnapshot(
         duck,
         dataset,
@@ -416,7 +381,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         callbacks.onDataUpdate(uploadedFile.id, {
           name,
           fileType: detectedFileType,
-          parsedData: tabularData,
           rowCount,
           columnCount: countUserColumns(columns, geometry),
           statistics,
@@ -436,7 +400,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           fileType: detectedFileType,
           status: FileStatus.COMPLETE,
           sourceType: uploadedFile.sourceType,
-          parsedData: tabularData,
           rowCount,
           columnCount: countUserColumns(columns, geometry),
           statistics,
@@ -472,8 +435,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       callbacks,
       uploadedFile,
       result,
-      fileContent,
-      Duck
+      fileContent
     );
   }
 

@@ -48,12 +48,6 @@ function loadFallbackFontsForDataset(dataset: DatasetResult): void {
     });
 }
 
-function isNonEmptyRow(
-  row: Record<string, unknown> | null | undefined
-): row is Record<string, unknown> {
-  return !!row && Object.keys(row).length > 0;
-}
-
 function toOptionalNumber(value: unknown): number | undefined {
   return value != null && value !== '' ? Number(value) : undefined;
 }
@@ -135,17 +129,10 @@ export function createDatasetFromPreprocessedFile(
     })
   );
 
-  const parsedRows = Array.isArray(file.parsedData)
-    ? (file.parsedData as Record<string, unknown>[])
-    : undefined;
-  const data =
-    parsedRows && parsedRows.some((row) => isNonEmptyRow(row))
-      ? parsedRows
-      : undefined;
   const firstColStats = Object.values(statistics)[0];
   const geometryInfo = file.geometry;
   const actualRowCount =
-    firstColStats?.count ?? geometryInfo?.featureCount ?? data?.length ?? 0;
+    firstColStats?.count ?? geometryInfo?.featureCount ?? 0;
 
   const tableName =
     file.duckdbTableName ??
@@ -174,7 +161,6 @@ export function createDatasetFromPreprocessedFile(
       fileType: file.fileType,
       parserUsed: file.duckdbTableName ? 'zip-preprocessed' : 'legacy-parsed'
     },
-    data,
     fileSize: file.size,
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
@@ -294,10 +280,6 @@ async function loadUploadedDatasetFile(
       !hasPersistedAssetSource ||
       hasInlineReplaySource)
   ) {
-    return createDatasetFromPreprocessedFile(file);
-  }
-
-  if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
     return createDatasetFromPreprocessedFile(file);
   }
 
