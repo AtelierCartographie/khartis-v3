@@ -1,7 +1,6 @@
 import type {
   AssetRef,
-  ColumnTransformation,
-  UploadedFile
+  ColumnTransformation
 } from '$lib/features/commons/types/create-project.types';
 import type { SerializedDataTabState } from '$lib/features/commons/types/data-tab.types';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -195,8 +194,6 @@ export interface SerializedUploadedFile {
   uploadProgress?: number;
   parsedData?: unknown;
   statistics?: unknown;
-  deepAnalysis?: UploadedFile['deepAnalysis'];
-  geoMatchResult?: UploadedFile['geoMatchResult'];
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
   // Join state persistence

@@ -4,7 +4,6 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import type { GeometryInfo } from '$lib/features/data-pipeline';
 import type { ParsedData } from '$lib/types/data';
-import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
 export type ProjectTab = 1 | 2 | 3;
 
@@ -90,8 +89,6 @@ export interface UploadedFile {
   rowCount?: number;
   columnCount?: number;
   statistics?: Record<string, unknown>;
-  deepAnalysis?: DataAnalysisResult;
-  geoMatchResult?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
   joinedBasemap?: string;

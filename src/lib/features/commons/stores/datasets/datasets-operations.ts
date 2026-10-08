@@ -297,12 +297,6 @@ export async function duplicateDataset(
         originalFile?.statistics ??
         buildStatisticsFromDataset(dataset) ??
         undefined,
-      deepAnalysis: originalFile?.deepAnalysis
-        ? clonePlainValue(originalFile.deepAnalysis)
-        : undefined,
-      geoMatchResult: originalFile?.geoMatchResult
-        ? clonePlainValue(originalFile.geoMatchResult)
-        : undefined,
       columnTransformations: originalFile?.columnTransformations
         ? [...originalFile.columnTransformations]
         : undefined,
