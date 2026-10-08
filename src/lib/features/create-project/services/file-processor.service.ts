@@ -216,20 +216,21 @@ async function validateAsync(
   file: File
 ): Promise<boolean> {
   const validation = FileValidator.validate(file);
+  // Content checks only run on a file that passed the basic ones: an empty
+  // CSV would otherwise report "file is empty" from both.
+  const result =
+    validation.isValid && validation.requiresAsyncValidation
+      ? await FileValidator.validateAsync(file, validation)
+      : validation;
 
-  if (validation.requiresAsyncValidation) {
-    const asyncValidation = await FileValidator.validateAsync(file, validation);
-    if (!asyncValidation.isValid) {
-      callbacks.onDataUpdate(uploadedFile.id, {
-        status: FileStatus.ERROR,
-        errorMessage: asyncValidation.errors.join(', '),
-        validation: asyncValidation
-      });
-      return false;
-    }
-  }
+  if (result.isValid) return true;
 
-  return true;
+  callbacks.onDataUpdate(uploadedFile.id, {
+    status: FileStatus.ERROR,
+    errorMessage: result.errors.join(m.separator_comma_space()),
+    validation: result
+  });
+  return false;
 }
 
 function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
