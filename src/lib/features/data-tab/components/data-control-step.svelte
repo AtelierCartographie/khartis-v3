@@ -19,7 +19,9 @@
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import {
+    createFileFromUpload,
     normalizeFormattedNumericColumns,
     normalizeToProcessedDataset
   } from '$lib/features/data-pipeline';
@@ -179,6 +181,21 @@
       ) || null
     );
   });
+
+  // An archive layer's asset is a Parquet snapshot, not the CSV it came from.
+  function hasReimportableSourceAsset(file: UploadedFile): boolean {
+    return Boolean(file.assetRef && !file.sourceArchive);
+  }
+
+  const canReimportCsv = $derived(
+    isCsvFile &&
+      !!sourceFile &&
+      Boolean(
+        sourceFile.originalFile ||
+        sourceFile.content ||
+        hasReimportableSourceAsset(sourceFile)
+      )
+  );
 
   let forceRefreshKey = $state(0);
 
@@ -378,6 +395,11 @@
       file = new File([content], sourceFile.name, {
         type: sourceFile.type || 'text/csv'
       });
+    }
+
+    // A restored project keeps the source bytes in IndexedDB only.
+    if (!file && hasReimportableSourceAsset(sourceFile)) {
+      file = await createFileFromUpload(sourceFile);
     }
 
     if (!file) {
@@ -830,8 +852,7 @@
       deleteActive={isDeleteMode}
       deleteDisabled={false}
       resetDisabled={!hasDataModifications}
-      showCsvOptions={isCsvFile &&
-        !!(sourceFile?.originalFile || sourceFile?.content)}
+      showCsvOptions={canReimportCsv}
       showHiddenColumns={hiddenColumnsCount > 0}
       showSummaryPlots={showSummaryPlots}
     />
