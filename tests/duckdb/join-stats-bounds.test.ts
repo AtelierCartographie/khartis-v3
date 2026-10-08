@@ -189,8 +189,27 @@ describe('enrichment join bounds', () => {
 
     const reader = await db.connection.runAndReadAll(
       `SELECT table_name FROM information_schema.tables
-       WHERE table_name IN ('__join_stats_candidates__', '__join_stats_target__')`
+       WHERE table_name LIKE '\\_\\_join\\_stats\\_%' ESCAPE '\\'`
     );
     expect(reader.getRowObjectsJson()).toEqual([]);
+  });
+
+  it('keeps overlapping runs from dropping each other temp tables', async () => {
+    // The enrich step recomputes on every column or dataset change without
+    // waiting for the previous run, and statements interleave between awaits.
+    // The duplicate lookup gives the first run more statements than the
+    // second, so the second cleans up while the first still reads.
+    await seedTarget(['Paris', 'Lyon']);
+    await seedSource(['Paris', 'Lyon', 'Lyon', 'Berlin']);
+    await run(db, 'CREATE OR REPLACE TABLE other_src (city VARCHAR)');
+    await run(db, `INSERT INTO other_src VALUES ('Paris'), ('Lyonn')`);
+
+    const [withDuplicates, withTypo] = await Promise.all([
+      computeDatasetJoinStats(OPTIONS),
+      computeDatasetJoinStats({ ...OPTIONS, sourceTableName: 'other_src' })
+    ]);
+
+    expect(withDuplicates.duplicateLines).toHaveLength(1);
+    expect(withTypo.toVerifyCount).toBe(1);
   });
 });
