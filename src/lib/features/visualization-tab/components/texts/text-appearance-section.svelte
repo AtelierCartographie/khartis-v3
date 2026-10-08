@@ -4,6 +4,10 @@
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { Table, Tag, TextColor } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -212,7 +216,9 @@
     </div>
     <DiscretizationRow
       label={m.category_aspect()}
-      value={m.categories_count({ count: categoryCount })}
+      value={(isSingularCount(categoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(categoryCount) })}
       settingsIconDescription={m.palette_categories_aspect_title()}
       onsettings={() => {
         categoriesPopoverOpen = true;

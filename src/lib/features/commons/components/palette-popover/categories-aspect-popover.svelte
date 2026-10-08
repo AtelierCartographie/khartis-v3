@@ -7,6 +7,10 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { ArrowRight, Close, ChevronDown } from 'carbon-icons-svelte';
   import {
     CATEGORY_SHAPE_CYCLE,
@@ -1028,7 +1032,11 @@
             </ul>
             {#if hiddenCategoryCount > 0}
               <p class="hidden-count-note">
-                {m.categories_hidden_count({ count: hiddenCategoryCount })}
+                {(isSingularCount(hiddenCategoryCount)
+                  ? m.categories_hidden_count_one
+                  : m.categories_hidden_count)({
+                  count: formatValue(hiddenCategoryCount)
+                })}
               </p>
             {/if}
           </div>

@@ -10,6 +10,21 @@ export function resolveLocale(): string {
   return LOCALE_MAP[getLocale()] ?? 'en-US';
 }
 
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+/** Singular form of a count in the locale: 0 and 1 in French, 1 alone in English. */
+export function isSingularCount(
+  count: number | bigint,
+  locale: string = resolveLocale()
+): boolean {
+  let rules = pluralRules.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRules.set(locale, rules);
+  }
+  return rules.select(Number(count)) === 'one';
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return m.file_size_zero();
 

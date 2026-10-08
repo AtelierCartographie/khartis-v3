@@ -1,7 +1,10 @@
 <script lang="ts">
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import {
     Button,
     ComboBox,
@@ -821,7 +824,7 @@
             {formatValue(joinedCount)}
           </div>
           <span class="category-label label-success"
-            >{joinedCount <= 1
+            >{isSingularCount(joinedCount)
               ? m.join_entities_joined_one()
               : m.join_entities_joined()}</span
           >
@@ -1007,7 +1010,7 @@
             {formatValue(toVerifyCount)}
           </div>
           <span class="category-label label-warning"
-            >{toVerifyCount <= 1
+            >{isSingularCount(toVerifyCount)
               ? m.join_entities_to_verify_one()
               : m.join_entities_to_verify()}</span
           >
@@ -1167,7 +1170,7 @@
             {formatValue(unrecognizedCount)}
           </div>
           <span class="category-label label-error"
-            >{unrecognizedCount <= 1
+            >{isSingularCount(unrecognizedCount)
               ? m.join_entities_unrecognized_one()
               : m.join_entities_unrecognized()}</span
           >
@@ -1186,7 +1189,9 @@
               lowContrast
               hideCloseButton
               title={m.join_fuzzy_pass_title()}
-              subtitle={m.join_fuzzy_pass_subtitle({
+              subtitle={(isSingularCount(fuzzyPassEstimate?.candidates ?? 0)
+                ? m.join_fuzzy_pass_subtitle_one
+                : m.join_fuzzy_pass_subtitle)({
                 count: formatValue(fuzzyPassEstimate?.candidates ?? 0),
                 seconds: fuzzyPassSeconds
               })}
@@ -1344,7 +1349,7 @@
               {formatValue(duplicateCount)}
             </div>
             <span class="category-label label-warning-alt"
-              >{duplicateCount <= 1
+              >{isSingularCount(duplicateCount)
                 ? m.join_entities_duplicate_one()
                 : m.join_entities_duplicate()}</span
             >
@@ -1413,7 +1418,7 @@
               {formatValue(ignoredCount)}
             </div>
             <span class="category-label label-ignored"
-              >{ignoredCount <= 1
+              >{isSingularCount(ignoredCount)
                 ? m.join_entities_ignored_one()
                 : m.join_entities_ignored()}</span
             >

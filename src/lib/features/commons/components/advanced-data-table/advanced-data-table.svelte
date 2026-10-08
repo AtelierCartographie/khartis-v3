@@ -7,7 +7,10 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import {
     DataTableSkeleton,
     InlineNotification,
@@ -828,7 +831,11 @@
                         <span class="row-index-count"
                           >{formatValue(filters.filterStats.total)}</span
                         >
-                        <span class="row-index-label">{m.rows()}</span>
+                        <span class="row-index-label"
+                          >{isSingularCount(filters.filterStats.total)
+                            ? m.rows_one()
+                            : m.rows()}</span
+                        >
                       </div>
                     {/if}
                   </div>

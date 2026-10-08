@@ -1,5 +1,9 @@
 import { m } from '$lib/paraglide/messages';
 import {
+  formatValue,
+  isSingularCount
+} from '$lib/features/commons/utils/format.utils';
+import {
   clampFontSize,
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
@@ -77,8 +81,10 @@ export function splitLegendOverflow<T>(items: T[]): {
 
   return {
     items: items.slice(0, MAX_LEGEND_CATEGORIES),
-    overflowLabel: m.categories_hidden_count({
-      count: items.length - MAX_LEGEND_CATEGORIES
+    overflowLabel: (isSingularCount(items.length - MAX_LEGEND_CATEGORIES)
+      ? m.categories_hidden_count_one
+      : m.categories_hidden_count)({
+      count: formatValue(items.length - MAX_LEGEND_CATEGORIES)
     })
   };
 }

@@ -47,7 +47,7 @@ describe('computeQualityWarnings', () => {
     const warnings = computeQualityWarnings([], 1);
     expect(warnings).toContain(m.pipeline_warning_single_row());
     expect(warnings).toContain(
-      m.pipeline_warning_small_dataset({ count: '1' })
+      m.pipeline_warning_small_dataset_one({ count: '1' })
     );
   });
 

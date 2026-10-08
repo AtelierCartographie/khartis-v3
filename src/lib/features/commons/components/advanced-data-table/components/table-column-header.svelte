@@ -5,6 +5,7 @@
   import * as m from '$lib/paraglide/messages';
   import {
     formatValue,
+    isSingularCount,
     resolveLocale
   } from '$lib/features/commons/utils/format.utils';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
@@ -325,20 +326,22 @@
     return '#9f1853';
   }
 
+  function uniqueValuesLabel(count: number): string {
+    return (
+      isSingularCount(count)
+        ? m.summary_plot_unique_values_one
+        : m.summary_plot_unique_values
+    )({ count: formatValue(count) });
+  }
+
   function catLabel(item: CategoryItem): string {
     if (item.category === null) return '⌀';
-    if (item.category === 'unique')
-      return m.summary_plot_unique_values({
-        count: item.count.toLocaleString(numberLocale)
-      });
+    if (item.category === 'unique') return uniqueValuesLabel(item.count);
     return item.category;
   }
 
   function catTooltipText(item: CategoryItem): string {
-    if (item.category === 'unique')
-      return m.summary_plot_unique_values({
-        count: item.count.toLocaleString(numberLocale)
-      });
+    if (item.category === 'unique') return uniqueValuesLabel(item.count);
     const name = item.category ?? m.column_null_label();
     return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
@@ -852,8 +855,10 @@
                       ><WarningAlt size={16} /></span
                     >
                     <span
-                      >{m.column_warning_nulls({
-                        count: histogramData.nulls.toLocaleString(numberLocale)
+                      >{(isSingularCount(histogramData.nulls)
+                        ? m.column_warning_nulls_one
+                        : m.column_warning_nulls)({
+                        count: formatValue(histogramData.nulls)
                       })}</span
                     >
                   </div>
@@ -861,9 +866,10 @@
                 {#if histogramData.duplicates > 0}
                   <div class="hist-warning-line hist-warning-line-plain">
                     <span
-                      >{m.column_warning_duplicates({
-                        count:
-                          histogramData.duplicates.toLocaleString(numberLocale)
+                      >{(isSingularCount(histogramData.duplicates)
+                        ? m.column_warning_duplicates_one
+                        : m.column_warning_duplicates)({
+                        count: formatValue(histogramData.duplicates)
                       })}</span
                     >
                   </div>
@@ -873,9 +879,7 @@
               <div class="hist-unique-area">
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
-                    {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString(numberLocale)
-                    })}
+                    {uniqueValuesLabel(histogramData.uniques)}
                   </span>
                 </div>
               </div>
@@ -896,9 +900,7 @@
               <div class="hist-unique-area">
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
-                    {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString(numberLocale)
-                    })}
+                    {uniqueValuesLabel(histogramData.uniques)}
                   </span>
                 </div>
               </div>
@@ -924,8 +926,10 @@
                 {/each}
               </div>
               <div class="hist-footer">
-                {m.summary_plot_categories({
-                  count: histogramData.uniques.toLocaleString(numberLocale)
+                {(isSingularCount(histogramData.uniques)
+                  ? m.summary_plot_categories_one
+                  : m.summary_plot_categories)({
+                  count: formatValue(histogramData.uniques)
                 })}
               </div>
             {/if}
@@ -984,7 +988,9 @@
             </div>
           {:else}
             <div class="hist-empty">
-              {m.column_unique_count({
+              {(isSingularCount(toNum(analysis.uniques ?? 0))
+                ? m.column_unique_count_one
+                : m.column_unique_count)({
                 count: formatValue(toNum(analysis.uniques ?? 0))
               })}
             </div>
