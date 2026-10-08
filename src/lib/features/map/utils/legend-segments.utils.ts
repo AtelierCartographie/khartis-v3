@@ -47,6 +47,7 @@ import {
   SLIDER_LIMITS,
   StrokeMode,
   SymbolMode,
+  ThicknessMode,
   VISUALIZATION_DEFAULTS
 } from '$lib/features/commons/constants/visualization.constants';
 import * as m from '$lib/paraglide/messages';
@@ -775,6 +776,21 @@ function getLegendSegmentDrafts(
     ...getPointSizeLegendDrafts(viz),
     getLineWidthLegendDraft(viz)
   ].filter((draft): draft is LegendSegmentDraft => draft !== null);
+
+  if (viz) {
+    const uniqueDrafts = [
+      getUniquePolygonLegendDraft(viz),
+      getUniqueLineLegendDraft(viz)
+    ];
+    for (const uniqueDraft of uniqueDrafts) {
+      if (
+        uniqueDraft &&
+        !drafts.some((draft) => draft.primitive === uniqueDraft.primitive)
+      ) {
+        drafts.push(uniqueDraft);
+      }
+    }
+  }
 
   if (
     viz &&
@@ -1574,6 +1590,119 @@ function getUniquePointSymbolLegendDraft(
             viz,
             context.includeMissingDataFooter,
             'point'
+          )
+        })
+      )
+  };
+}
+
+// A polygon fill with no variable still needs naming (see
+// getEnabledLegendPrimitives): like unique symbols, it gets one entry in its
+// map style instead of a frame holding only a title.
+function getUniquePolygonLegendDraft(
+  viz: VisualizationConfig
+): LegendSegmentDraft | null {
+  const polygon = getPolygonPrimitive(viz);
+  if (!polygon?.enabled) {
+    return null;
+  }
+
+  const fillNone = polygon.fillMode === FillMode.NONE;
+  const strokeNone = polygon.strokeMode === StrokeMode.NONE;
+  if (
+    (polygon.fillMode !== FillMode.UNIQUE && !fillNone) ||
+    (polygon.strokeMode !== StrokeMode.UNIQUE && !strokeNone) ||
+    (fillNone && strokeNone)
+  ) {
+    return null;
+  }
+
+  const fill = resolveLegendColor(polygon.fillColor, DEFAULT_COLORS.fill);
+  const classification =
+    getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+    viz.classification;
+  const classPatternPalette = fillNone
+    ? null
+    : resolveClassPatternPalette(classification, FillMode.UNIQUE);
+  const patternItem =
+    !fillNone && !classPatternPalette && classification?.patternId
+      ? getPatternLegendItem(m.polygons_title(), fill, classification)
+      : null;
+  const patternFill = classPatternPalette
+    ? (getClassPatternLegendFills(classPatternPalette)[0] ?? null)
+    : (patternItem?.patternFill ?? null);
+
+  const item: KhartisLegendSwatchItem = {
+    label: m.polygons_title(),
+    fill: fillNone ? 'none' : classPatternPalette ? '#ffffff' : fill,
+    stroke: strokeNone
+      ? 'none'
+      : resolveLegendColor(polygon.strokeColor, DEFAULT_COLORS.stroke),
+    strokeWidth: strokeNone
+      ? 0
+      : Math.max(
+          0.5,
+          Math.min(3, polygon.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth)
+        ),
+    opacity: normalizeLegendOpacity(polygon.fillOpacity, 1),
+    patternFill,
+    patternOpacity: patternFill ? 1 : undefined,
+    dashed: !strokeNone && polygon.strokeDashed
+  };
+
+  return {
+    key: 'unique-polygon',
+    primitive: 'area',
+    className: 'legend-svg--unique',
+    consumesMissingData: isLegendMissingDataShown(viz, 'area'),
+    create: (options, context) =>
+      toLegendSvg(
+        draw_khartis_swatch_legend([item], {
+          ...options,
+          type: patternFill ? 'pattern' : 'box',
+          ...getMissingDataFooterOptions(
+            viz,
+            context.includeMissingDataFooter,
+            'area'
+          )
+        })
+      )
+  };
+}
+
+function getUniqueLineLegendDraft(
+  viz: VisualizationConfig
+): LegendSegmentDraft | null {
+  const line = getLinePrimitive(viz);
+  if (
+    !line?.enabled ||
+    line.colorMode !== ColorMode.UNIQUE ||
+    line.thicknessMode !== ThicknessMode.UNIQUE
+  ) {
+    return null;
+  }
+
+  const step: KhartisLineWidthLegendStep = {
+    label: m.lines_title(),
+    width: Math.max(1, Math.min(8, line.width ?? 2)),
+    color: resolveLegendColor(line.color, DEFAULT_COLORS.line),
+    opacity: normalizeLegendOpacity(line.opacity, 1),
+    dashed: line.dashed ?? false
+  };
+
+  return {
+    key: 'unique-line',
+    primitive: 'line',
+    className: 'legend-svg--unique',
+    consumesMissingData: isLegendMissingDataShown(viz, 'line'),
+    create: (options, context) =>
+      toLegendSvg(
+        draw_khartis_line_width_legend([step], {
+          ...options,
+          ...getMissingDataFooterOptions(
+            viz,
+            context.includeMissingDataFooter,
+            'line'
           )
         })
       )
