@@ -69,10 +69,12 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
+    ColorBlindnessFilterDefs,
+    getColorBlindnessMatrix,
     getColorBlindnessState,
-    isColorBlindnessActive
+    isColorBlindnessActive,
+    resolveColorBlindnessPageFilter
   } from '$lib/features/step-toolbar/tools/color-blindness';
-  import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness';
   import {
     resolveOrthographicProjectionFitBbox,
     shouldUseBasemapReferenceInOrthographicView
@@ -230,6 +232,12 @@
     isColorBlindnessActive(colorBlindnessState)
       ? getColorBlindnessMatrix(colorBlindnessState.simulationType)
       : null
+  );
+  const colorBlindnessFilterStyle = $derived(
+    resolveColorBlindnessPageFilter(
+      colorBlindnessMatrix,
+      globalState.isMapExporting
+    )
   );
   const visibleVisualizations = $derived.by(() => {
     void visualizationStore.version;
@@ -2027,24 +2035,12 @@
   });
 </script>
 
-<svg aria-hidden="true" class="color-blindness-svg-defs">
-  <defs>
-    <filter id="color-blindness-filter" color-interpolation-filters="sRGB">
-      <feColorMatrix
-        type="matrix"
-        values={colorBlindnessMatrix ??
-          '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0'}
-      />
-    </filter>
-  </defs>
-</svg>
+<ColorBlindnessFilterDefs matrix={colorBlindnessMatrix} />
 
 {#if isFacetCell}
   <div
     class="map-stage facet-cell-stage"
-    style="width: {width}px; height: {height}px;{colorBlindnessMatrix
-      ? ' filter: url(#color-blindness-filter);'
-      : ''}"
+    style="width: {width}px; height: {height}px;{colorBlindnessFilterStyle}"
   >
     <div
       bind:this={mapContainer}
@@ -2059,7 +2055,7 @@
     {/if}
   </div>
 {:else}
-  <div class="page-container" style={pageStyle}>
+  <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
       <PageGridOverlay displayScale={pageDisplayScale} />
     {/if}
@@ -2067,9 +2063,7 @@
     <div
       class="map-stage"
       class:is-empty={isBlankCanvas}
-      style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
-        ? ' filter: url(#color-blindness-filter);'
-        : ''}"
+      style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
     >
       <div
         bind:this={mapContainer}
@@ -2105,14 +2099,6 @@
 {/if}
 
 <style>
-  .color-blindness-svg-defs {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-
   .page-container {
     position: relative;
     flex-shrink: 0;

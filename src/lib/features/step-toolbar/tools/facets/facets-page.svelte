@@ -13,6 +13,12 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    ColorBlindnessFilterDefs,
+    getColorBlindnessMatrix,
+    getColorBlindnessState,
+    resolveColorBlindnessPageFilter
+  } from '../color-blindness';
   import FacetsGrid from './facets-grid.svelte';
   import {
     facetsStore,
@@ -105,9 +111,20 @@
     facetsStore.scaleMode === SCALE_MODE.INDEPENDENT
   );
   const showPageGrid = $derived(fmtState.gridEnabled && isStylingMode);
+  const colorBlindnessMatrix = $derived(
+    getColorBlindnessMatrix(getColorBlindnessState().simulationType)
+  );
+  const colorBlindnessFilterStyle = $derived(
+    resolveColorBlindnessPageFilter(
+      colorBlindnessMatrix,
+      globalState.isMapExporting
+    )
+  );
 </script>
 
-<div class="facets-page" style={pageStyle}>
+<ColorBlindnessFilterDefs matrix={colorBlindnessMatrix} />
+
+<div class="facets-page" style="{pageStyle}{colorBlindnessFilterStyle}">
   {#if showPageGrid}
     <PageGridOverlay displayScale={pageDisplayScale} />
   {/if}
