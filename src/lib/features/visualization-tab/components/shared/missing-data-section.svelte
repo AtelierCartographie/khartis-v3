@@ -24,19 +24,15 @@
     COLOR_ROLE,
     getColorSuggestions
   } from '$lib/features/commons/services/color-suggestion.service';
-  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
+  import {
+    DEFAULT_MISSING_DATA_PATTERN_CONFIG,
+    type PatternPaletteConfig
+  } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
     coerceDashedPattern
   } from './dashed-pattern.utils';
   import { getMissingDataAvailability } from './missing-data-availability';
-
-  const DEFAULT_PATTERN_CONFIG: PatternPaletteConfig = {
-    shape: 'line',
-    angle: 45,
-    scale: 0.7,
-    color: '#000000'
-  };
 
   interface Props {
     show: boolean;
@@ -81,7 +77,7 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
-    patternConfig = DEFAULT_PATTERN_CONFIG,
+    patternConfig = DEFAULT_MISSING_DATA_PATTERN_CONFIG,
     onshowchange,
     oncolorchange,
     onshapechange,
