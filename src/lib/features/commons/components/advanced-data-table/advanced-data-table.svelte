@@ -30,6 +30,7 @@
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
   import { uiDensityStore } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
+  import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import {
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
@@ -464,6 +465,15 @@
     return set;
   });
 
+  const yearColumns = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Recreated wholesale in a derived value; mutation tracking is unnecessary.
+    const set = new Set<string>();
+    for (const [name, a] of tableData.columnAnalysis) {
+      if (isYearColumn(a)) set.add(name);
+    }
+    return set;
+  });
+
   function getRowHighlightType(
     rowIndex: number,
     row: Record<string, unknown>
@@ -857,6 +867,7 @@
                 isSelected={rowSelection.isRowSelected(rowId)}
                 showRowNumbers={!isSelectionMode}
                 geoidColumns={geoidColumns}
+                yearColumns={yearColumns}
                 onToggleSelection={rowSelection.toggleRowSelection}
               />
             {/each}

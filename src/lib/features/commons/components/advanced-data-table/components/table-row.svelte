@@ -19,6 +19,7 @@
     isSelected?: boolean;
     showRowNumbers?: boolean;
     geoidColumns?: Set<string>;
+    yearColumns?: Set<string>;
     onToggleSelection?: (rowId: number) => void;
   }
 
@@ -32,6 +33,7 @@
     isSelected = false,
     showRowNumbers = true,
     geoidColumns = new Set<string>(),
+    yearColumns = new Set<string>(),
     onToggleSelection
   }: Props = $props();
 
@@ -39,7 +41,9 @@
   const NO_BREAK_SPACE = '\u00A0';
 
   function formatCellValue(value: unknown, column: ColumnInfo): string {
-    const formatted = formatValueByType(value, column.type);
+    const formatted = formatValueByType(value, column.type, {
+      useGrouping: !yearColumns.has(column.name)
+    });
     return isNumericType(column.type)
       ? formatted.replace(NARROW_NO_BREAK_SPACE, NO_BREAK_SPACE)
       : formatted;

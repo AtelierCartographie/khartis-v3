@@ -9,6 +9,7 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
+  import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { ColumnInfo, ColumnType } from '../types';
@@ -49,6 +50,7 @@
 
   // Summary plots use the app locale, not the browser default.
   const numberLocale = $derived(resolveLocale());
+  const isYear = $derived(isYearColumn(analysis));
 
   const typeOptions: { value: ColumnType; label: string }[] = [
     { value: 'text', label: m.column_type_text() },
@@ -958,7 +960,8 @@
                         numberLocale
                       ) ?? '')
                     : ((histogramData.min as number)?.toLocaleString(
-                        numberLocale
+                        numberLocale,
+                        { useGrouping: !isYear }
                       ) ?? '')}
                 </span>
                 <span class="hist-num-label">
@@ -967,7 +970,8 @@
                         numberLocale
                       ) ?? '')
                     : ((histogramData.max as number)?.toLocaleString(
-                        numberLocale
+                        numberLocale,
+                        { useGrouping: !isYear }
                       ) ?? '')}
                 </span>
               </div>
