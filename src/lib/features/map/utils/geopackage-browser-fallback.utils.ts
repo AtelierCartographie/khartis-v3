@@ -4,6 +4,7 @@ import { reprojectPoint } from '$lib/features/duckdb/io/reprojection';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { parseWkbToGeoJson } from '$lib/features/map/io/geometry-parser';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
@@ -38,16 +39,6 @@ type SqliteRow = Record<string, unknown>;
 type GeoPackageLayerRecord = SqliteRow & GeoPackageLayerRow;
 
 let sqliteModulePromise: Promise<SqliteModule> | null = null;
-
-function getGeometryPriority(geometryType: string | null): number {
-  const normalized = geometryType?.toLowerCase() ?? '';
-
-  if (normalized.includes('polygon')) return 0;
-  if (normalized.includes('line')) return 1;
-  if (normalized.includes('point')) return 2;
-
-  return 3;
-}
 
 function quoteIdentifier(identifier: string): string {
   return `"${escapeIdentifier(identifier)}"`;
@@ -234,10 +225,9 @@ async function getSqliteModule(): Promise<SqliteModule> {
   return sqliteModulePromise;
 }
 
-async function selectPreferredLayer(
-  db: InstanceType<SqliteModule['oo1']['DB']>,
-  preferredLayer?: string
-): Promise<GeoPackageLayerCandidate> {
+function readLayerCandidates(
+  db: InstanceType<SqliteModule['oo1']['DB']>
+): GeoPackageLayerCandidate[] {
   const layerRows = db.selectObjects(`
     SELECT
       gc.table_name AS layer_name,
@@ -255,7 +245,7 @@ async function selectPreferredLayer(
     WHERE contents.data_type = 'features'
   `) as unknown as GeoPackageLayerRecord[];
 
-  const candidates = layerRows.map((row) => {
+  return layerRows.map((row) => {
     const layerName = row.layer_name;
     const featureCount = Number(
       db.selectValue(`SELECT COUNT(*) FROM ${quoteIdentifier(layerName)}`) ?? 0
@@ -274,6 +264,13 @@ async function selectPreferredLayer(
       definition: row.definition
     } satisfies GeoPackageLayerCandidate;
   });
+}
+
+function selectPreferredLayer(
+  db: InstanceType<SqliteModule['oo1']['DB']>,
+  preferredLayer?: string
+): GeoPackageLayerCandidate {
+  const candidates = readLayerCandidates(db);
 
   if (preferredLayer) {
     const requestedLayer = candidates.find(
@@ -284,20 +281,7 @@ async function selectPreferredLayer(
     }
   }
 
-  const selectedLayer = [...candidates].sort((left, right) => {
-    const priorityDiff =
-      getGeometryPriority(left.geometryType) -
-      getGeometryPriority(right.geometryType);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
-
-    if (left.featureCount !== right.featureCount) {
-      return right.featureCount - left.featureCount;
-    }
-
-    return left.layerName.localeCompare(right.layerName);
-  })[0];
+  const selectedLayer = rankGeoLayers(candidates)[0];
 
   if (!selectedLayer) {
     throw new DataValidationError(
@@ -310,10 +294,10 @@ async function selectPreferredLayer(
   return selectedLayer;
 }
 
-export async function convertGeoPackageToGeoJsonFile(
+async function withGeoPackageDatabase<T>(
   file: File,
-  options: GeoPackageBrowserFallbackOptions = {}
-): Promise<File> {
+  read: (db: InstanceType<SqliteModule['oo1']['DB']>) => T | Promise<T>
+): Promise<T> {
   const sqlite3 = await getSqliteModule();
   const fileBytes = new Uint8Array(await file.arrayBuffer());
   const tempPath = `/tmp/${crypto.randomUUID()}-${file.name}`;
@@ -321,12 +305,26 @@ export async function convertGeoPackageToGeoJsonFile(
   sqlite3.capi.sqlite3_js_posix_create_file(tempPath, fileBytes);
 
   const db = new sqlite3.oo1.DB(tempPath, 'r');
-
   try {
-    const selectedLayer = await selectPreferredLayer(
-      db,
-      options.preferredLayer
-    );
+    return await read(db);
+  } finally {
+    db.close();
+  }
+}
+
+/** Feature layers of a GeoPackage, the one a single-layer read picks first. */
+export async function listGeoPackageLayers(file: File): Promise<string[]> {
+  return withGeoPackageDatabase(file, (db) =>
+    rankGeoLayers(readLayerCandidates(db)).map((layer) => layer.layerName)
+  );
+}
+
+export async function convertGeoPackageToGeoJsonFile(
+  file: File,
+  options: GeoPackageBrowserFallbackOptions = {}
+): Promise<File> {
+  return withGeoPackageDatabase(file, (db) => {
+    const selectedLayer = selectPreferredLayer(db, options.preferredLayer);
 
     ensureProjectionDefinition(
       selectedLayer.sourceCrs,
@@ -407,7 +405,5 @@ export async function convertGeoPackageToGeoJsonFile(
       file.name.replace(/\.gpkg$/i, '.geojson'),
       { type: 'application/geo+json' }
     );
-  } finally {
-    db.close();
-  }
+  });
 }

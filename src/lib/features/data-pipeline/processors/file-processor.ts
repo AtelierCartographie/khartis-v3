@@ -40,12 +40,15 @@ export interface ProcessFileOptions {
   originalName?: string;
   companionFiles?: File[];
   sourceFileId?: string;
+  /** Layer of a multi-layer source; the preferred spatial layer otherwise. */
+  layer?: string;
 }
 
 export interface ReadFileIntoTableOptions {
   tableName: string;
   originalName?: string;
   companionFiles?: File[];
+  layer?: string;
 }
 
 export interface FileTableRead {
@@ -99,7 +102,8 @@ export async function readFileIntoTable(
     try {
       await Duck.read_geofile(file, {
         tablename: tableName,
-        shapefile: isShapefile
+        shapefile: isShapefile,
+        ...(options.layer ? { layer: options.layer } : {})
       });
       return { tableName, fileInfo, isGeoFile, format };
     } catch (geoReadError) {
@@ -142,13 +146,15 @@ export async function processFileInternal(
   file: File,
   options: ProcessFileOptions = {}
 ): Promise<DatasetResult> {
+  const sourceName = options.originalName ?? file.name;
   const read = await readFileIntoTable(file, {
     tableName: generateTableName(
-      options.originalName ?? file.name,
+      options.layer ?? sourceName,
       options.sourceFileId
     ),
     originalName: options.originalName,
-    companionFiles: options.companionFiles
+    companionFiles: options.companionFiles,
+    layer: options.layer
   });
 
   const dataset = await buildDatasetFromDuckTable({
