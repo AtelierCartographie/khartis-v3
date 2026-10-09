@@ -174,32 +174,33 @@ export const monochromePalettes: Palette[] = [
   }
 ];
 
-// ok-palette keeps only the hue and a fraction of the chroma of the start
-// color, so a near-white start renders as grey: starts are tinted mid-tones.
+// Two-hue ramps: ok-palette keeps the hue of each end and mixes them in OKLCH
+// along the short arc, so the start hue has to differ from the end hue. The
+// ids predate the second hue and stay for saved projects.
 const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    colors: ['#6baed6', DEFAULT_VISUALIZATION_COLOR],
+    colors: ['#9ccc3c', DEFAULT_VISUALIZATION_COLOR],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'greens',
-    colors: ['#74c476', '#006d2c'],
+    colors: ['#d4d40a', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'oranges',
-    colors: ['#fd8d3c', '#a63603'],
+    colors: ['#ffcc00', '#b10026'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'purples',
-    colors: ['#9e9ac8', '#54278f'],
+    colors: ['#2fa4e0', '#6a1b9a'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'reds',
-    colors: ['#fb6a4a', '#a50f15'],
+    colors: ['#f08c00', '#7a0177'],
     type: PALETTE_TYPE.SEQUENTIAL
   }
 ];

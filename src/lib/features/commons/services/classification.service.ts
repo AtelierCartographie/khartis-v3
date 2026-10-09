@@ -14,7 +14,7 @@ import {
 import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
 
-const SEQUENTIAL_COLOR_START = '#6baed6';
+const SEQUENTIAL_COLOR_START = '#9ccc3c';
 const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
 const DIVERGING_COLOR_A = '#b2182b';
 const DIVERGING_COLOR_B = '#2166ac';
