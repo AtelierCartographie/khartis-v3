@@ -56,7 +56,9 @@ const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = DEFAULT_COLORS.missingData;
 
-const DEFAULT_CHOROPLETH_COLORS = ['#e0e2e4', '#a1bed9', '#5e9acb', '#0076ba'];
+// Four-class render of the default 'blues' palette, regenerated from its id.
+const DEFAULT_CHOROPLETH_PALETTE_ID = 'blues';
+const DEFAULT_CHOROPLETH_COLORS = ['#d6ebb9', '#7dceab', '#00a8b5', '#0076ba'];
 
 export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
@@ -171,7 +173,8 @@ function getDefaultClassification(
     return {
       method: ClassificationMethod.KMEANS,
       classes: DEFAULT_DISCRETIZATION_CLASS_COUNT,
-      colors: [...DEFAULT_CHOROPLETH_COLORS]
+      colors: [...DEFAULT_CHOROPLETH_COLORS],
+      paletteId: DEFAULT_CHOROPLETH_PALETTE_ID
     };
   }
 
