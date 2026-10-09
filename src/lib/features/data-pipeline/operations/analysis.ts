@@ -123,6 +123,34 @@ export function buildStatisticsSnapshot(
   );
 }
 
+export function buildStatisticsFromColumns(
+  columns: EnrichedColumn[]
+): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    columns.map(({ name, type, stats }) => [
+      name,
+      {
+        type,
+        count: stats.count,
+        nullCount: stats.nulls,
+        unique: stats.uniques,
+        min: stats.min,
+        max: stats.max,
+        mean: stats.mean,
+        median: stats.median,
+        stdDev: stats.stdDev,
+        share_integers: stats.share_integers,
+        share_floats: stats.share_floats,
+        share_rank_interval: stats.share_rank_interval,
+        extent_magnitude: stats.extent_magnitude,
+        skewness: stats.skewness,
+        value_sample: stats.value_sample,
+        categories: stats.categories
+      }
+    ])
+  );
+}
+
 export async function readDatasetTableSnapshot(
   tableName: string,
   options: { force?: boolean } = {}
@@ -213,17 +241,7 @@ function buildDatasetResult(params: {
     analysis: {
       columns: enrichedColumns,
       hasGeoData: Boolean(geometryInfo || isGeoFile),
-      geoColumns: geometryInfo
-        ? [
-            {
-              columnName: geometryInfo.columnName ?? 'geom',
-              type: 'unknown' as const,
-              confidence: 1,
-              index: 0,
-              isValid: true
-            }
-          ]
-        : [],
+      geoColumns: [],
       rowCount,
       warnings: []
     },

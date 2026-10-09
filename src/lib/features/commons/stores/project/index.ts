@@ -17,7 +17,6 @@ export {
   addFilesToProject,
   addVirtualSourceFile,
   removeFileFromProject,
-  clearSourceFiles,
   renameFile
 } from './project-files';
 
@@ -33,5 +32,6 @@ export {
   addColumnTransformation,
   clearColumnTransformations,
   updateFileJoinedBasemap,
+  updateFileCsvOptions,
   addDeletedRows
 } from './project-transformations';

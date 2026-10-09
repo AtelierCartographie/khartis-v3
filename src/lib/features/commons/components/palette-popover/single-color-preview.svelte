@@ -4,13 +4,20 @@
   import SingleColorDropdown from './single-color-dropdown.svelte';
   import PalettePopover from './palette-popover.svelte';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
-  import { PALETTE_TYPE, type Palette } from './palette.constants';
+  import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
+  import {
+    buildClassPatternSvgBackground,
+    PALETTE_TYPE,
+    type Palette
+  } from './palette.constants';
 
   interface Props {
     label?: string;
     color: string;
     presets?: readonly string[];
     patternPaletteConfig?: PatternPaletteConfig;
+    /** What the pattern is drawn over: white for a pattern fill, the color for a hatch. */
+    patternBackground?: string;
     exclusive?: boolean;
     allowPattern?: boolean;
     onchange?: (hex: string) => void;
@@ -22,11 +29,28 @@
     color,
     presets,
     patternPaletteConfig,
+    patternBackground = '#ffffff',
     exclusive = false,
     allowPattern = true,
     onchange,
     onpatternchange
   }: Props = $props();
+
+  // Same single-class resolution as the map and the legend, so the swatch
+  // shows the pattern the user will get.
+  const patternSwatchBackground = $derived.by(() => {
+    if (!patternPaletteConfig) return null;
+    const pattern = resolveClassPatterns(
+      1,
+      patternPaletteConfig,
+      'sequential',
+      patternPaletteConfig.contrast,
+      false
+    )[0];
+    return pattern
+      ? buildClassPatternSvgBackground(pattern, patternBackground)
+      : null;
+  });
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
@@ -79,7 +103,11 @@
       aria-label={m.color()}
       aria-expanded={dropdownOpen}
     >
-      <div class="color-swatch" style="background-color: {color}"></div>
+      <div
+        class="color-swatch"
+        style:background-color={color}
+        style:background-image={patternSwatchBackground}
+      ></div>
       <ChevronDown size={16} />
     </button>
   </div>

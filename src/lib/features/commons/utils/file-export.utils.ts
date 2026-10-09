@@ -5,7 +5,10 @@ import { bigIntReplacer } from './clone.utils';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
-import { JOINED_BASEMAP_COLUMNS } from '../constants/data.constants';
+import {
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMNS
+} from '../constants/data.constants';
 import { isDatasetGeometryColumn } from './geometry-column.utils';
 import { isGeometryColumnType } from '$lib/features/duckdb/utils/geometry-column.utils';
 import {
@@ -13,10 +16,15 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 
+// Deliberate: without the BOM, Excel reads UTF-8 CSV as ANSI and garbles accents.
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
 const DOWNLOAD_URL_REVOKE_DELAY_MS = 30000;
 const SOURCE_DATASET_COLUMN = '_source_dataset';
+const INTERNAL_ROW_COLUMNS = new Set<string>([
+  INTERNAL_COLUMN.ID,
+  INTERNAL_COLUMN.FEATURE_ID
+]);
 
 export const generateExportFilename = generateFilename;
 
@@ -119,30 +127,19 @@ export async function exportDatasetToCsv(
     }
   }
 
-  const headers = dataset.columns
-    .filter((col) => !isDatasetGeometryColumn(dataset, col))
-    .map((col) => col.name);
-  if (headers.length === 0) {
-    throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
-      datasetId: dataset.id,
-      format: 'csv'
-    });
-  }
-
-  const data = dataset.data.map((row) => {
-    const cleanRow: Record<string, unknown> = {};
-    headers.forEach((header) => {
-      cleanRow[header] = row[header];
-    });
-    return cleanRow;
+  throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
+    datasetId: dataset.id,
+    format: 'csv'
   });
-
-  return exportToCsv(data, headers);
 }
 
 function getExportableColumnNames(dataset: ProcessedDataset): string[] {
   return dataset.columns
-    .filter((col) => !isDatasetGeometryColumn(dataset, col))
+    .filter(
+      (col) =>
+        !INTERNAL_ROW_COLUMNS.has(col.name) &&
+        !isDatasetGeometryColumn(dataset, col)
+    )
     .map((col) => col.name);
 }
 
@@ -160,7 +157,10 @@ async function getDuckDbExportableColumnNames(
   const joinedBasemapColumns = new Set<string>(JOINED_BASEMAP_COLUMNS);
 
   return tableInfo.name.filter((columnName, index) => {
-    if (joinedBasemapColumns.has(columnName)) {
+    if (
+      joinedBasemapColumns.has(columnName) ||
+      INTERNAL_ROW_COLUMNS.has(columnName)
+    ) {
       return false;
     }
 
@@ -251,14 +251,14 @@ export function exportToGeoJson(data: unknown): Blob {
   return new Blob([jsonString], { type: MIME.GEOJSON });
 }
 
-export function exportToJson(data: unknown): Blob {
-  const jsonString = JSON.stringify(data, bigIntReplacer, 2);
-  return new Blob([jsonString], { type: MIME.JSON });
-}
+/** A dataset with its rows read from DuckDB, geometry parsed as GeoJSON. */
+export type GeoJsonExportDataset = ProcessedDataset & {
+  rows?: Record<string, unknown>[];
+};
 
 export async function exportProcessedDatasets(
-  datasets: ProcessedDataset[],
-  format: 'csv' | 'geojson' | 'json' = 'json'
+  datasets: GeoJsonExportDataset[],
+  format: 'csv' | 'geojson'
 ): Promise<Blob> {
   if (datasets.length === 0) {
     throw new DataValidationError(m.error_no_datasets_to_export(), 'datasets', {
@@ -318,97 +318,55 @@ export async function exportProcessedDatasets(
       }
     }
 
-    const allData: Record<string, unknown>[] = [];
-    const allHeaders = Array.from(
-      new Set(
-        datasets.flatMap((d) =>
-          d.columns
-            .filter((col) => !isDatasetGeometryColumn(d, col))
-            .map((col) => col.name)
-        )
-      )
-    );
-    const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
-    for (const dataset of datasets) {
-      const dataWithSource = dataset.data.map((row) => ({
-        ...row,
-        [sourceDatasetColumn]: dataset.name
-      }));
-      allData.push(...dataWithSource);
-    }
-
-    allHeaders.push(sourceDatasetColumn);
-
-    return exportToCsv(allData, allHeaders);
-  }
-
-  if (format === 'geojson') {
-    const allFeatures: unknown[] = [];
-    const allPropertyColumns = Array.from(
-      new Set(datasets.flatMap(getExportableColumnNames))
-    );
-    const sourceDatasetColumn =
-      resolveSourceDatasetColumnName(allPropertyColumns);
-
-    for (const dataset of datasets) {
-      if (!dataset.geometry && !dataset.analysis.hasGeoData) {
-        continue;
-      }
-
-      const geometryColumn = dataset.columns.find((col) =>
-        isDatasetGeometryColumn(dataset, col)
-      );
-      dataset.data.forEach((row) => {
-        const properties: Record<string, unknown> = {};
-        dataset.columns
-          .filter((col) => !isDatasetGeometryColumn(dataset, col))
-          .forEach((col) => {
-            properties[col.name] = row[col.name];
-          });
-        properties[sourceDatasetColumn] = dataset.name;
-
-        allFeatures.push({
-          type: 'Feature' as const,
-          geometry: geometryColumn
-            ? normalizeGeoJsonGeometry(row[geometryColumn.name])
-            : null,
-          properties
-        });
-      });
-    }
-
-    if (allFeatures.length === 0) {
-      throw new DataValidationError(
-        m.error_no_geometric_data_export(),
-        'geometry',
-        { format: 'geojson' }
-      );
-    }
-
-    return exportToGeoJson({
-      type: 'FeatureCollection',
-      features: allFeatures
+    throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
+      format
     });
   }
 
-  const exportData = {
-    exportDate: new Date().toISOString(),
-    datasets: datasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      rowCount: d.rowCount,
-      columns: d.columns.map((col) => ({
-        name: col.name,
-        type: col.type,
-        nullable: col.nullable
-      })),
-      data: d.data,
-      geometry: d.geometry,
-      metadata: d.metadata
-    }))
-  };
+  const allFeatures: unknown[] = [];
+  const allPropertyColumns = Array.from(
+    new Set(datasets.flatMap(getExportableColumnNames))
+  );
+  const sourceDatasetColumn =
+    resolveSourceDatasetColumnName(allPropertyColumns);
 
-  return exportToJson(exportData);
+  for (const dataset of datasets) {
+    if (!dataset.geometry && !dataset.analysis.hasGeoData) {
+      continue;
+    }
+
+    const geometryColumn = dataset.columns.find((col) =>
+      isDatasetGeometryColumn(dataset, col)
+    );
+    (dataset.rows ?? []).forEach((row) => {
+      const properties: Record<string, unknown> = {};
+      for (const columnName of getExportableColumnNames(dataset)) {
+        properties[columnName] = row[columnName];
+      }
+      properties[sourceDatasetColumn] = dataset.name;
+
+      allFeatures.push({
+        type: 'Feature' as const,
+        geometry: geometryColumn
+          ? normalizeGeoJsonGeometry(row[geometryColumn.name])
+          : null,
+        properties
+      });
+    });
+  }
+
+  if (allFeatures.length === 0) {
+    throw new DataValidationError(
+      m.error_no_geometric_data_export(),
+      'geometry',
+      { format: 'geojson' }
+    );
+  }
+
+  return exportToGeoJson({
+    type: 'FeatureCollection',
+    features: allFeatures
+  });
 }
 
 function isGeoJsonGeometryValue(value: unknown): boolean {

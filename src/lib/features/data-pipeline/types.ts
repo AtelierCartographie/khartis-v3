@@ -8,7 +8,6 @@ export {
   computeCentroid,
   FileFormatEnum,
   fromDuckDBType,
-  GeoLocationType,
   GeometryTypeEnum,
   isNumericType,
   isZipDatasetResult

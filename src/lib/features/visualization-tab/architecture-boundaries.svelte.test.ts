@@ -203,7 +203,7 @@ describe('visualization architecture boundaries', () => {
           '$lib/features/duckdb/orchestrator/orchestrator.svelte',
           '$lib/features/data-tab/stores/data-tab.store.svelte',
           '$lib/features/data-tab/services/persisted-basemap.service',
-          '$lib/features/data-tab/services/tabular-source-snapshot.service',
+          '$lib/features/data-tab/services/source-file-state.service',
           '$lib/features/step-toolbar/tool-popover.svelte',
           '$lib/features/step-toolbar/tools/tool-container.svelte',
           '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte',

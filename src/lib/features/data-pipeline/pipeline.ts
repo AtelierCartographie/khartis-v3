@@ -6,6 +6,7 @@ import {
   createFileFromUpload,
   createFileFromUploadContent,
   processFileInternal,
+  processGeoPackageLayers,
   processRemoteFile,
   processRemoteZipFile,
   processZipFile
@@ -18,31 +19,11 @@ import type {
 import { isZipFile } from './utils/zip-handler';
 import { MIME } from '$lib/features/commons/constants';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 
 export { createFileFromUpload };
 
 let initialized = false;
-
-function applyGeoDetection(
-  dataset: DatasetResult,
-  geoDetection?: GeoDetectionResult
-): void {
-  if (!geoDetection) return;
-  // The DuckDB-table detection (applyTabularGeoDetection) wins; the sample-based
-  // deepAnalysis only fills in when the table detection produced nothing.
-  if (dataset.geoDetection) return;
-  dataset.geoDetection = geoDetection;
-  dataset.analysis = {
-    columns: dataset.analysis?.columns ?? dataset.columns,
-    hasGeoData:
-      geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
-    geoColumns: geoDetection.geoColumns,
-    rowCount: dataset.rowCount,
-    warnings: [...(dataset.analysis?.warnings ?? []), ...geoDetection.warnings]
-  };
-}
 
 const Pipeline = {
   get initialized() {
@@ -87,7 +68,8 @@ const Pipeline = {
       );
       result = await processFileInternal(originalFile, {
         companionFiles,
-        sourceFileId: uploadedFile.id
+        sourceFileId: uploadedFile.id,
+        csvOptions: uploadedFile.csvOptions
       });
     } else {
       const fallback = await createFileFromUpload(uploadedFile);
@@ -98,7 +80,8 @@ const Pipeline = {
           await createCompanionFilesFromUpload(uploadedFile);
         result = await processFileInternal(fallback, {
           companionFiles,
-          sourceFileId: uploadedFile.id
+          sourceFileId: uploadedFile.id,
+          csvOptions: uploadedFile.csvOptions
         });
       }
     }
@@ -106,16 +89,31 @@ const Pipeline = {
     if ('datasets' in result) {
       for (const dataset of result.datasets) {
         dataset.sourceFileId = uploadedFile.id;
-        applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
       }
     } else {
       result.id = uploadedFile.datasetId ?? uploadedFile.id;
       result.sourceFileId = uploadedFile.id;
       result.name = uploadedFile.name;
-      applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);
     }
 
     return result;
+  },
+
+  /**
+   * Import path of the welcome modal: a GeoPackage with several spatial layers
+   * comes back as one dataset per layer. Restores keep processUploadedFile,
+   * which reads one layer, since a layer imported this way is persisted as its
+   * own snapshot.
+   */
+  async processGeoPackageFile(
+    uploadedFile: UploadedFilePayload,
+    originalFile: File
+  ): Promise<DatasetResult | ZipDatasetResult> {
+    await this.initialize();
+    const layered = await processGeoPackageLayers(originalFile, {
+      sourceFileId: uploadedFile.id
+    });
+    return layered ?? this.processUploadedFile(uploadedFile, originalFile);
   },
 
   async processRemoteFile(

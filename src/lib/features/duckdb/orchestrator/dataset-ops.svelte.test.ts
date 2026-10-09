@@ -1,11 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { FileType, type DuckDBDataset } from '../types';
-
-vi.mock('$lib/features/data-pipeline', () => ({
-  generateTableName: vi.fn(),
-  getProcessor: vi.fn(),
-  registerAllProcessors: vi.fn()
-}));
 
 const { updateDatasetJoinInfo } = await import('./dataset-ops');
 const { clearState, getDatasetsVersion, getState } =

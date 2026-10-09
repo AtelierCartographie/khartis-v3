@@ -3,8 +3,6 @@ import {
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
 import type { GeometryInfo } from '$lib/features/data-pipeline';
-import type { ParsedData } from '$lib/types/data';
-import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
 export type ProjectTab = 1 | 2 | 3;
 
@@ -65,6 +63,13 @@ export interface AssetRef {
   kind: AssetKind;
 }
 
+export interface SourceCsvOptions {
+  header: boolean;
+  decimalSeparator: string;
+  thousandsSeparator?: string;
+  delimiter?: string;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -74,7 +79,6 @@ export interface UploadedFile {
   content?: string | ArrayBuffer;
   originalFile?: File;
   relatedFileObjects?: File[];
-  parsedData?: ParsedData;
 
   archiveLayerSnapshot?: Uint8Array;
   geometry?: GeometryInfo;
@@ -86,18 +90,17 @@ export interface UploadedFile {
   relatedFilesData?: Record<string, ArrayBuffer>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  // Parquet copy of the table after an enrichment join: the enrichment file
+  // itself is not kept, so reloads read this instead of assetRef.
+  enrichmentSnapshot?: AssetRef;
   uploadProgress?: number;
   rowCount?: number;
   columnCount?: number;
   statistics?: Record<string, unknown>;
-  duplicates?: {
-    hasDuplicates: boolean;
-    duplicateCount: number;
-  };
-  deepAnalysis?: DataAnalysisResult;
-  geoMatchResult?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
+  // Read options chosen in the CSV options modal, replayed on reload.
+  csvOptions?: SourceCsvOptions;
   joinedBasemap?: string;
   geoColumn?: string;
   gpsMode?: boolean;

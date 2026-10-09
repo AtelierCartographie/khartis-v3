@@ -12,6 +12,7 @@
     supportsCustomProjectionCode
   } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     Button,
     ComboBox,
@@ -305,6 +306,8 @@
         {#if items.length > 0}
           {#key catalogueItemsSignature}
             <ComboBox
+              translateWithId={translateCarbonId}
+              translateWithIdSelection={translateCarbonId}
               size="sm"
               items={catalogueComboItems}
               selectedId={activeCatalogueSelectionId}

@@ -191,6 +191,13 @@ la légende et la section correspondante des panneaux de primitive (contexte
 `missing-data-availability.ts`), désactivée avec un message quand rien ne
 manque.
 
+Sur les polygones, une nouvelle visualisation hachure l'absence de données en
+gris (`DEFAULT_MISSING_DATA_PATTERN_CONFIG`, sur la couleur d'absence de
+données) pour qu'elle reste distincte de toute classe, quelle que soit la
+palette. La légende reprend la même couleur et la même trame
+(`getMissingDataLegendItem`), y compris dans le dégradé des classes. Un projet
+enregistré garde le rendu qu'il avait choisi (`pattern: false` explicite).
+
 ## Filtres et interaction
 
 Les filtres sont évalués par DuckDB : `rowScopeStore` obtient les identifiants

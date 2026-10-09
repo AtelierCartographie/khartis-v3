@@ -52,11 +52,11 @@
     onOpenDiscretization
   }: Props = $props();
 
-  const sizeModeItems = [
+  const sizeModeItems = $derived([
     { icon: TextScale, label: m.size_mode_fixed(), iconSize: 16 },
     { icon: TextAllCaps, label: m.size_mode_proportional(), iconSize: 16 },
     { icon: Table, label: m.size_mode_classes(), iconSize: 16 }
-  ];
+  ]);
 
   const SIZE_MODE_ORDER = [
     SizeMode.FIXED,

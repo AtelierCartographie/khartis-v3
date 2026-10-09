@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import { SectionHeading, SliderWithInput } from '../shared';
@@ -139,6 +140,8 @@
   <div class="control-group">
     <span class="field-label">{m.basemap_config_symbol()}</span>
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       selectedId={symbol}
       items={getSymbolOptions()}
@@ -182,6 +185,8 @@
   <div class="label-style-row">
     <div class="label-font-control">
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         titleText={m.basemap_config_label_font()}
         selectedId={normalizeFontFamily(labelFontFamily) ??
@@ -193,6 +198,8 @@
 
     <div class="label-size-control">
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         titleText={m.basemap_config_label_size()}
         selectedId={String(clampFontSize(labelSize, DEFAULT_LABEL_SIZE))}

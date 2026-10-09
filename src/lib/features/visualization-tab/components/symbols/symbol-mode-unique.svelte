@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     FillMode,
     ShapeType,
@@ -230,6 +232,8 @@
     <InfoPopover text={m.shape_info()} />
   </span>
   <Dropdown
+    translateWithId={translateCarbonId}
+    translateWithIdSelection={translateCarbonId}
     size="sm"
     items={shapeDropdownItems}
     selectedId={shapeType}
@@ -301,6 +305,7 @@
 
 <DiscretizationModal
   bind:open={strokeDiscretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}

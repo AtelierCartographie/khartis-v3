@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover, SliderWithInput } from '../../shared';
@@ -155,6 +156,8 @@
     <InfoPopover text={m.shape_info()} />
   </span>
   <Dropdown
+    translateWithId={translateCarbonId}
+    translateWithIdSelection={translateCarbonId}
     size="sm"
     items={shapeDropdownItems}
     selectedId={shapeType}
@@ -169,6 +172,8 @@
     <InfoPopover text={m.position_mode_info()} />
   </span>
   <Dropdown
+    translateWithId={translateCarbonId}
+    translateWithIdSelection={translateCarbonId}
     size="sm"
     items={positionModeItems}
     selectedId={positionMode}

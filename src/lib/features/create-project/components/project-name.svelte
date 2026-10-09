@@ -64,6 +64,7 @@
       createProjectActions.setProjectName(safeName);
 
       await projectStore.createProject(safeName, validFiles);
+      createProjectActions.handOverUploadedFiles(validFiles);
 
       await projectsStore.refresh();
 
@@ -99,7 +100,11 @@
   >
     {#if isCreating}
       <div class="button-with-loader">
-        <Loading small withOverlay={false} />
+        <Loading
+          description={m.loading_indicator_label()}
+          small
+          withOverlay={false}
+        />
         <span>{creationStep || m.create_project_creating_status()}</span>
       </div>
     {:else}

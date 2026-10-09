@@ -326,7 +326,6 @@
     'se',
     'sw'
   ];
-  const MIN_MAP_SIZE = 100;
 
   const showResizeHandles = $derived(
     globalState.selectedStep === ToolbarStep.Styling && isMapReady
@@ -338,13 +337,7 @@
     startX: number;
     startY: number;
     startMargins: { top: number; right: number; bottom: number; left: number };
-    pageW: number;
-    pageH: number;
   } | null>(null);
-
-  function clampMargin(value: number, max: number): number {
-    return Math.min(Math.max(value, 0), Math.max(0, max));
-  }
 
   function getKeyboardResizeStep(): number {
     return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
@@ -358,9 +351,7 @@
     edge: ResizeEdge,
     dx: number,
     dy: number,
-    startMargins: { top: number; right: number; bottom: number; left: number },
-    pageW: number,
-    pageH: number
+    startMargins: { top: number; right: number; bottom: number; left: number }
   ): void {
     // Resizing the frame is composing the page by hand: page elements stay
     // where they are instead of following the frame into the map.
@@ -371,11 +362,6 @@
     if (edge.includes('w')) left = startMargins.left + dx;
     if (edge.includes('s')) bottom = startMargins.bottom - dy;
     if (edge.includes('n')) top = startMargins.top + dy;
-
-    left = clampMargin(left, pageW - startMargins.right - MIN_MAP_SIZE);
-    right = clampMargin(right, pageW - startMargins.left - MIN_MAP_SIZE);
-    top = clampMargin(top, pageH - startMargins.bottom - MIN_MAP_SIZE);
-    bottom = clampMargin(bottom, pageH - startMargins.top - MIN_MAP_SIZE);
 
     formatActions.setMargins({
       top: Math.round(top),
@@ -396,9 +382,7 @@
       edge,
       startX: event.clientX,
       startY: event.clientY,
-      startMargins: { ...formatState.margins },
-      pageW: formatState.width,
-      pageH: formatState.height
+      startMargins: { ...formatState.margins }
     };
     window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.addEventListener(EVENT.POINTERUP, handleResizeUp);
@@ -407,12 +391,12 @@
   // Edge drag adjusts margins, not page format.
   function handleResizeMove(event: PointerEvent): void {
     if (!resizeState) return;
-    const { edge, startX, startY, startMargins, pageW, pageH } = resizeState;
+    const { edge, startX, startY, startMargins } = resizeState;
     const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startMargins, pageW, pageH);
+    resizeMapFrame(edge, dx, dy, startMargins);
   }
 
   function handleResizeUp(): void {
@@ -441,14 +425,7 @@
 
     event.preventDefault();
     event.stopPropagation();
-    resizeMapFrame(
-      edge,
-      dx,
-      dy,
-      { ...formatState.margins },
-      formatState.width,
-      formatState.height
-    );
+    resizeMapFrame(edge, dx, dy, { ...formatState.margins });
   }
 </script>
 

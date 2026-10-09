@@ -7,7 +7,11 @@ import {
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
-import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
+import {
+  convertGeoPackageToGeoJsonFile,
+  listGeoPackageLayers
+} from '$lib/features/map/utils/geopackage-browser-fallback.utils';
+import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
@@ -24,7 +28,7 @@ import {
   generateUniqueTableName,
   registerFiles
 } from './file-registry';
-import { addRowId } from './reader-utils';
+import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
 
 interface GeofileMetadata {
   crs: string | null;
@@ -109,41 +113,96 @@ interface GeofileLayerMetadata {
   crs: string | null;
 }
 
-function getGeometryPriority(geometryType: string | null): number {
-  const normalized = geometryType?.toLowerCase() ?? '';
-
-  if (normalized.includes('polygon')) return 0;
-  if (normalized.includes('line')) return 1;
-  if (normalized.includes('point')) return 2;
-
-  return 3;
+/** Spatial layers, the one a single-layer read would pick first. */
+function rankSpatialLayers(
+  layers: GeofileLayerMetadata[]
+): GeofileLayerMetadata[] {
+  return rankGeoLayers(
+    layers.filter(
+      (layer) => layer.layerName && layer.geometryColumn && layer.geometryType
+    )
+  );
 }
 
-function selectPreferredGeofileLayer(
-  layers: GeofileLayerMetadata[]
-): GeofileLayerMetadata | null {
-  const spatialLayers = layers.filter(
-    (layer) => layer.layerName && layer.geometryColumn && layer.geometryType
-  );
+function parseCrsCode(crsCode: unknown): string | null {
+  if (!crsCode) return null;
+  if (typeof crsCode === 'number' || typeof crsCode === 'bigint') {
+    return `EPSG:${crsCode}`;
+  }
+  if (typeof crsCode === 'string') {
+    return crsCode.includes('EPSG') ? crsCode : `EPSG:${crsCode}`;
+  }
+  return null;
+}
 
-  if (spatialLayers.length === 0) {
-    return null;
+async function queryGeofileLayers(
+  ctx: DuckDBContext,
+  fileId: string
+): Promise<GeofileLayerMetadata[]> {
+  const layers = (await executeQuery(
+    ctx.connection,
+    `SELECT
+       row_number() OVER () AS layer_index,
+       layer.name AS layer_name,
+       layer.feature_count AS feature_count,
+       layer.geometry_fields[1].crs.auth_code AS crs_code,
+       layer.geometry_fields[1].name AS geom_name,
+       layer.geometry_fields[1].type AS geom_type
+     FROM (
+       SELECT unnest(layers) AS layer
+       FROM ST_Read_Meta('${escapeSqlString(fileId)}')
+     )`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{
+    layer_index?: number | bigint;
+    layer_name?: string | null;
+    feature_count?: number | bigint | null;
+    crs_code?: number | bigint | string | null;
+    geom_name?: string | null;
+    geom_type?: string | null;
+  }>;
+
+  return layers.map((layer) => ({
+    layerIndex: Number(layer.layer_index ?? 0),
+    layerName: layer.layer_name ?? null,
+    featureCount: Number(layer.feature_count ?? 0),
+    geometryType: layer.geom_type ?? null,
+    geometryColumn: layer.geom_name ?? null,
+    crs: parseCrsCode(layer.crs_code)
+  }));
+}
+
+/**
+ * Names of the spatial layers of a multi-layer source (GeoPackage), in the
+ * order a single-layer read would prefer them. Empty when the layers cannot be
+ * listed, so the caller falls back to that single-layer read.
+ */
+export async function listGeofileSpatialLayers(
+  ctx: DuckDBContext,
+  geofile: File
+): Promise<string[]> {
+  // Without threads ST_Read cannot open a GeoPackage in the browser: its
+  // layers are listed by the same sqlite fallback that later reads each one.
+  if (typeof window !== 'undefined' && !ctx.threadsSupported) {
+    return isGeoPackageFile(geofile.name) ? listGeoPackageLayers(geofile) : [];
   }
 
-  return [...spatialLayers].sort((left, right) => {
-    const priorityDiff =
-      getGeometryPriority(left.geometryType) -
-      getGeometryPriority(right.geometryType);
-    if (priorityDiff !== 0) {
-      return priorityDiff;
-    }
-
-    if (left.featureCount !== right.featureCount) {
-      return right.featureCount - left.featureCount;
-    }
-
-    return left.layerIndex - right.layerIndex;
-  })[0];
+  await registerFiles(ctx.db, ctx.registered_files, [geofile]);
+  const fileId = (geofile as FileWithId).id;
+  try {
+    await ensureSpatialExtension(ctx);
+    return rankSpatialLayers(await queryGeofileLayers(ctx, fileId)).map(
+      (layer) => layer.layerName!
+    );
+  } catch (error) {
+    logger.warn('Failed to list geofile layers', LogCategory.DUCKDB, {
+      fileId,
+      error
+    });
+    return [];
+  } finally {
+    await dropRegisteredFile(ctx.db, ctx.registered_files, fileId);
+  }
 }
 
 async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
@@ -195,66 +254,16 @@ async function detectGeofileMetadata(
   try {
     await ensureSpatialExtension(ctx);
 
-    const escapedFileId = escapeSqlString(fileId);
-    const layers = (await executeQuery(
-      ctx.connection,
-      `SELECT
-         row_number() OVER () AS layer_index,
-         layer.name AS layer_name,
-         layer.feature_count AS feature_count,
-         layer.geometry_fields[1].crs.auth_code AS crs_code,
-         layer.geometry_fields[1].name AS geom_name,
-         layer.geometry_fields[1].type AS geom_type
-       FROM (
-         SELECT unnest(layers) AS layer
-         FROM ST_Read_Meta('${escapedFileId}')
-       )`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{
-      layer_index?: number | bigint;
-      layer_name?: string | null;
-      feature_count?: number | bigint | null;
-      crs_code?: number | bigint | string | null;
-      geom_name?: string | null;
-      geom_type?: string | null;
-    }>;
+    const parsedLayers = await queryGeofileLayers(ctx, fileId);
 
-    if (layers.length > 0) {
-      const parsedLayers = layers.map((layer) => {
-        const crsCode = layer.crs_code;
-        let crs: string | null = null;
-        if (crsCode) {
-          if (typeof crsCode === 'number') {
-            crs = `EPSG:${crsCode}`;
-          } else if (typeof crsCode === 'string') {
-            crs = crsCode.includes('EPSG') ? crsCode : `EPSG:${crsCode}`;
-          } else if (typeof crsCode === 'bigint') {
-            crs = `EPSG:${crsCode}`;
-          }
-        }
-
-        return {
-          layerIndex:
-            typeof layer.layer_index === 'bigint'
-              ? Number(layer.layer_index)
-              : Number(layer.layer_index ?? 0),
-          layerName: layer.layer_name ?? null,
-          featureCount:
-            typeof layer.feature_count === 'bigint'
-              ? Number(layer.feature_count)
-              : Number(layer.feature_count ?? 0),
-          geometryType: layer.geom_type ?? null,
-          geometryColumn: layer.geom_name ?? null,
-          crs
-        } satisfies GeofileLayerMetadata;
-      });
+    if (parsedLayers.length > 0) {
       const matchingRequestedLayer =
         requestedLayer == null
           ? null
           : (parsedLayers.find((layer) => layer.layerName === requestedLayer) ??
             null);
       const selectedLayer =
-        matchingRequestedLayer ?? selectPreferredGeofileLayer(parsedLayers);
+        matchingRequestedLayer ?? rankSpatialLayers(parsedLayers)[0] ?? null;
 
       if (selectedLayer) {
         return {
@@ -274,25 +283,15 @@ async function detectGeofileMetadata(
          layers[1].geometry_fields[1].crs.auth_code AS crs_code,
          layers[1].geometry_fields[1].name AS geom_name,
          len(layers) AS layer_count
-       FROM ST_Read_Meta('${escapedFileId}')`,
+       FROM ST_Read_Meta('${escapeSqlString(fileId)}')`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
     )) as ArrowTable;
     if (result && result.numRows > 0) {
       const crsCode = result.getChild('crs_code')?.get(0);
       const geomName = result.getChild('geom_name')?.get(0);
       const layerCount = Number(result.getChild('layer_count')?.get(0) ?? 1);
-      let crs: string | null = null;
-      if (crsCode) {
-        if (typeof crsCode === 'number') {
-          crs = `EPSG:${crsCode}`;
-        } else if (typeof crsCode === 'string') {
-          crs = crsCode.includes('EPSG') ? crsCode : `EPSG:${crsCode}`;
-        } else if (typeof crsCode === 'bigint') {
-          crs = `EPSG:${crsCode}`;
-        }
-      }
       return {
-        crs,
+        crs: parseCrsCode(crsCode),
         geometryColumn:
           geomName && typeof geomName === 'string'
             ? geomName
@@ -420,6 +419,7 @@ export async function readGeofile(
   }
 
   if (!usedGeoPackageBrowserFallback) {
+    await dropSyntheticFeatureIdColumn(ctx.connection, finalTablename);
     await addRowId(ctx.connection, finalTablename);
   }
 

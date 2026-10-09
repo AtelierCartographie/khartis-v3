@@ -314,6 +314,7 @@ describe('asset store errors', () => {
       status: FileStatus.COMPLETE,
       sourceType: DataSourceType.FILE_UPLOAD,
       sourceArchive: 'two-shapefiles.zip',
+      geometry: { type: 'Point', columnName: 'geom' },
       archiveLayerSnapshot,
       originalFile: new File([new Uint8Array([1, 2, 3])], 'archive.zip', {
         type: 'application/zip'

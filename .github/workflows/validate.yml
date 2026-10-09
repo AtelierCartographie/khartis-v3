@@ -26,6 +26,7 @@ env:
   SPARSE_WITH_FIXTURES: |
     /*
     !/static/basemaps/**/*.parquet
+    /static/basemaps/all-basemaps-attributes.parquet
 
 jobs:
   tree:

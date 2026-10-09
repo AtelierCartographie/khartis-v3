@@ -188,3 +188,40 @@ export function resolveDisplayedSuggestionKey({
   if (persistedSuggestionKey) return persistedSuggestionKey;
   return matchedSuggestionKey;
 }
+
+export interface ClearedSuggestion {
+  visualizationId: string;
+  suggestion: VizSuggestion;
+  index: number;
+}
+
+/**
+ * Keeps a just-cleared suggestion card at its place in the list. Clearing
+ * drops the suggestion key from the visualization origin, so a card that was
+ * listed only from that key would otherwise vanish.
+ */
+export function keepClearedSuggestion(
+  suggestions: VizSuggestion[],
+  cleared: ClearedSuggestion | undefined,
+  visualizationId: string | undefined
+): VizSuggestion[] {
+  if (!cleared || cleared.visualizationId !== visualizationId) {
+    return suggestions;
+  }
+
+  const clearedKey = getSuggestionSignature(cleared.suggestion);
+  if (
+    suggestions.some(
+      (suggestion) => getSuggestionSignature(suggestion) === clearedKey
+    )
+  ) {
+    return suggestions;
+  }
+
+  const index = Math.min(Math.max(cleared.index, 0), suggestions.length);
+  return [
+    ...suggestions.slice(0, index),
+    cleared.suggestion,
+    ...suggestions.slice(index)
+  ];
+}

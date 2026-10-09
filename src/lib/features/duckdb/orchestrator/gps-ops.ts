@@ -1,6 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
+import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';

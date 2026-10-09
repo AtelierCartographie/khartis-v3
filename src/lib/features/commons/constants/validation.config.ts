@@ -49,7 +49,9 @@ export const FILE_VALIDATION_INSPECTION = {
   SHAPEFILE_MIN_SIZE_BYTES: 100,
   GEOPACKAGE_MIN_SIZE_BYTES: 1024,
   GEOPACKAGE_SUSPICIOUS_SMALL_SIZE_BYTES: 10 * 1024,
-  GEOPARQUET_MIN_SIZE_BYTES: 1024,
+  // Leading "PAR1", 4-byte footer length, trailing "PAR1": the smallest
+  // structurally possible Parquet file. A one-row tabular Parquet is ~300 B.
+  PARQUET_MIN_SIZE_BYTES: 12,
   HEADER_READ_BYTES: 512,
   MAGIC_NUMBER_BYTES: 8,
   SHP_MAGIC_NUMBER: 0x0000270a,

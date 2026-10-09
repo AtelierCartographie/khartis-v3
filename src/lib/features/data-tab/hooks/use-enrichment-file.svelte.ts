@@ -17,6 +17,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
 import * as m from '$lib/paraglide/messages';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { withGeoDetection } from '$lib/features/commons/services/geo-detection.service';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 
 export interface UseEnrichmentFileReturn {
@@ -172,10 +173,11 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   }
 
   async function replaceEnrichmentDataset(
-    dataset: DatasetResult,
+    loadedDataset: DatasetResult,
     file: File | null
   ): Promise<void> {
     const previousDataset = enrichmentDataset;
+    const dataset = await withGeoDetection(loadedDataset);
 
     enrichmentDataset = dataset;
     enrichmentFile = file;

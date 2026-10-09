@@ -17,6 +17,7 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+import { DEFAULT_MISSING_DATA_PATTERN_CONFIG } from '../constants/pattern.constants';
 import {
   DEFAULT_STROKE_COLOR,
   DEFAULT_VISUALIZATION_COLOR,
@@ -55,7 +56,9 @@ const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = DEFAULT_COLORS.missingData;
 
-const DEFAULT_CHOROPLETH_COLORS = ['#e0e2e4', '#a1bed9', '#5e9acb', '#0076ba'];
+// Four-class render of the default 'blues' palette, regenerated from its id.
+const DEFAULT_CHOROPLETH_PALETTE_ID = 'blues';
+const DEFAULT_CHOROPLETH_COLORS = ['#c0eedc', '#76cbca', '#21a4c2', '#0076ba'];
 
 export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
@@ -170,7 +173,8 @@ function getDefaultClassification(
     return {
       method: ClassificationMethod.KMEANS,
       classes: DEFAULT_DISCRETIZATION_CLASS_COUNT,
-      colors: [...DEFAULT_CHOROPLETH_COLORS]
+      colors: [...DEFAULT_CHOROPLETH_COLORS],
+      paletteId: DEFAULT_CHOROPLETH_PALETTE_ID
     };
   }
 
@@ -327,7 +331,8 @@ export function getDefaultMissingData(): MissingDataConfig {
     shape: MissingDataShape.CIRCLE,
     size: 2,
     color: DEFAULT_MISSING_DATA_COLOR,
-    pattern: false,
+    pattern: true,
+    patternConfig: { ...DEFAULT_MISSING_DATA_PATTERN_CONFIG },
     dashed: false,
     dashedPattern: BasemapDottedPattern.DOTS
   };

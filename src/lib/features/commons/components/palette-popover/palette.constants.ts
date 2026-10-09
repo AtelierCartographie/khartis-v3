@@ -163,41 +163,39 @@ export const monochromePalettes: Palette[] = [
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
-    id: 'mono-indigo',
-    colors: ['#1565c0'],
-    type: PALETTE_TYPE.SEQUENTIAL
-  },
-  {
     id: 'mono-vermilion',
     colors: ['#d84315'],
     type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
 
+// Two-hue ramps: ok-palette keeps the hue of each end and mixes them in OKLCH
+// along the short arc, so the start hue has to differ from the end hue. The
+// ids predate the second hue and stay for saved projects.
 const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    colors: ['#f7fbff', DEFAULT_VISUALIZATION_COLOR],
+    colors: ['#3cc8a0', DEFAULT_VISUALIZATION_COLOR],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'greens',
-    colors: ['#f7fcf5', '#006d2c'],
+    colors: ['#d4d40a', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'oranges',
-    colors: ['#fff5eb', '#a63603'],
+    colors: ['#ffcc00', '#b10026'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'purples',
-    colors: ['#fcfbfd', '#54278f'],
+    colors: ['#2fa4e0', '#6a1b9a'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'reds',
-    colors: ['#fff5f0', '#a50f15'],
+    colors: ['#f08c00', '#7a0177'],
     type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
@@ -784,8 +782,19 @@ export function getPalettesForType(type: PaletteType): Palette[] {
 // Every palette a suggestion or a dropdown can hand out must be findable here:
 // a palette id that does not resolve makes the classification fall back to the
 // default ramp, silently discarding the user's choice.
+// Removed from the picker (duplicate of the Khartis blue) but still resolved
+// for projects saved with it.
+const RETIRED_PALETTES: Palette[] = [
+  {
+    id: 'mono-indigo',
+    colors: ['#1565c0'],
+    type: PALETTE_TYPE.SEQUENTIAL
+  }
+];
+
 const ADDRESSABLE_PALETTES: Palette[] = [
   ...monochromePalettes,
+  ...RETIRED_PALETTES,
   ...sequentialPalettes,
   ...sepiaPalettes,
   ...colorblindSequentialPalettes,

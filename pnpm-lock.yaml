@@ -20,7 +20,7 @@ patchedDependencies:
     hash: 2410fb5323834d093bb98c2bc816984ffac5400d5d0fcd214ba66e752ab2e635
     path: patches/@deck.gl__mapbox@9.4.0.patch
   carbon-components-svelte:
-    hash: 72326c098d7c06bb466871f6c466ed4b093b6d0621c792925e858d812ed762ce
+    hash: c80ae251c0bdc6f5bb929418de3c3ed6aaf95454ebc6bec113140d3d46c06185
     path: patches/carbon-components-svelte.patch
   vite-plugin-pwa@1.3.0:
     hash: 80aac6addfd1e6b7c7587cb531e6abca9c90ff789c4cfa31b06086a1368eedeb
@@ -107,7 +107,7 @@ importers:
         version: 21.2.0
       carbon-components-svelte:
         specifier: ^0.112.1
-        version: 0.112.1(patch_hash=72326c098d7c06bb466871f6c466ed4b093b6d0621c792925e858d812ed762ce)
+        version: 0.112.1(patch_hash=c80ae251c0bdc6f5bb929418de3c3ed6aaf95454ebc6bec113140d3d46c06185)
       carbon-icons-svelte:
         specifier: ^13.16.0
         version: 13.16.0
@@ -9233,7 +9233,7 @@ snapshots:
 
   caniuse-lite@1.0.30001814: {}
 
-  carbon-components-svelte@0.112.1(patch_hash=72326c098d7c06bb466871f6c466ed4b093b6d0621c792925e858d812ed762ce):
+  carbon-components-svelte@0.112.1(patch_hash=c80ae251c0bdc6f5bb929418de3c3ed6aaf95454ebc6bec113140d3d46c06185):
     dependencies:
       '@ibm/telemetry-js': 1.11.0
       flatpickr: 4.6.9

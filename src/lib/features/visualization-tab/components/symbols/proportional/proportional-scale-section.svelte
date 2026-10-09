@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import { InfoPopover, SliderWithInput } from '../../shared';
   import FacetsVariablePicker from '../../shared/facets-variable-picker.svelte';
@@ -99,6 +100,8 @@
     <InfoPopover text={m.shape_info()} />
   </span>
   <Dropdown
+    translateWithId={translateCarbonId}
+    translateWithIdSelection={translateCarbonId}
     size="sm"
     items={shapeDropdownItems}
     selectedId={shapeType}

@@ -13,7 +13,7 @@
 
   let { value, onselect }: Props = $props();
 
-  const shapeLabels: Record<PatternShape, string> = {
+  const shapeLabels: Record<PatternShape, string> = $derived({
     line: m.pattern_shape_line(),
     circle: m.pattern_shape_circle(),
     plaid: m.pattern_shape_plaid(),
@@ -22,7 +22,7 @@
     diamond: m.pattern_shape_diamond(),
     plus: m.pattern_shape_plus(),
     cross: m.pattern_shape_cross()
-  };
+  });
 </script>
 
 <div class="shape-chips">

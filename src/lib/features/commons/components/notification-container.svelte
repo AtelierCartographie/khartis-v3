@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ToastNotification } from 'carbon-components-svelte';
+  import * as m from '$lib/paraglide/messages';
   import {
     notificationManager,
     NotificationType
@@ -28,6 +29,7 @@
 <div class="notification-container">
   {#each notificationManager.notifications as notification (notification.id)}
     <ToastNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind={getKind(notification.type)}
       title={notification.title}
       subtitle={notification.subtitle}

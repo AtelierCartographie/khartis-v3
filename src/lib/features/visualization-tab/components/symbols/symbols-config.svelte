@@ -136,12 +136,12 @@
     }
   });
 
-  const symbolModeItems = [
+  const symbolModeItems = $derived([
     { icon: CircleFilled, label: m.symbol_mode_unique(), iconSize: 16 },
     { icon: ChartBubble, label: m.symbol_mode_proportional(), iconSize: 16 },
     { icon: Table, label: m.symbol_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 }
-  ];
+  ]);
 
   function handleSymbolModeChange(index: number) {
     const modes = [
@@ -383,6 +383,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={activeDiscretizationVisualization}
   classification={activeDiscretizationClassification}
   valueColumn={activeDiscretizationValueColumn}

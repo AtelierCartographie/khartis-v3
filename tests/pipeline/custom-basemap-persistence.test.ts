@@ -398,8 +398,8 @@ describe('imported custom basemap persistence', () => {
   });
 });
 
-describe('project schema 3.10.0 migration', () => {
-  it('opens a 3.9.0 project as 3.10.0 without mutating the stored snapshot', () => {
+describe('project schema migrations', () => {
+  it('should open a 3.9.0 project as the current version without mutating the stored snapshot', () => {
     const legacy = {
       id: 'legacy',
       manifest: { version: '3.9.0', name: 'Legacy project' },
@@ -414,10 +414,29 @@ describe('project schema 3.10.0 migration', () => {
     const migrated = migrateIfNeeded(legacy);
 
     expect(migrated.manifest).toEqual({
-      version: '3.10.0',
+      version: PROJECT_CONST.SCHEMA_VERSION,
       name: 'Legacy project'
     });
     expect(migrated.data).toEqual(legacy.data);
     expect(legacy.manifest.version).toBe('3.9.0');
   });
+
+  it.each(['3.10.0', '3.11.0'])(
+    'should open a %s project as the current schema unchanged',
+    (version) => {
+      const previous = {
+        id: 'previous',
+        manifest: { version, name: 'Previous project' },
+        data: { sourceFiles: [{ id: 'f1', sourceArchive: 'layers.zip' }] }
+      };
+
+      const migrated = migrateIfNeeded(previous);
+
+      expect(migrated.manifest).toEqual({
+        version: '3.12.0',
+        name: 'Previous project'
+      });
+      expect(migrated.data).toEqual(previous.data);
+    }
+  );
 });

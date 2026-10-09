@@ -1,7 +1,6 @@
 import type {
   AssetRef,
-  ColumnTransformation,
-  UploadedFile
+  ColumnTransformation
 } from '$lib/features/commons/types/create-project.types';
 import type { SerializedDataTabState } from '$lib/features/commons/types/data-tab.types';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -192,14 +191,17 @@ export interface SerializedUploadedFile {
   relatedFiles?: string[];
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  enrichmentSnapshot?: AssetRef;
   uploadProgress?: number;
-  parsedData?: unknown;
   statistics?: unknown;
-  duplicates?: UploadedFile['duplicates'];
-  deepAnalysis?: UploadedFile['deepAnalysis'];
-  geoMatchResult?: UploadedFile['geoMatchResult'];
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
+  csvOptions?: {
+    header: boolean;
+    decimalSeparator: string;
+    thousandsSeparator?: string;
+    delimiter?: string;
+  };
   // Join state persistence
   joinedBasemap?: string;
   geoColumn?: string;

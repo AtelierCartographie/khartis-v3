@@ -48,32 +48,6 @@ function parseNumericValue(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function calculateMedian(numbers: number[]): number {
-  const sorted = [...numbers].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-export function getColumnValues(
-  state: DatasetsState,
-  datasetId: string,
-  columnName: string
-): unknown[] {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
-  if (!dataset || !dataset.data) return [];
-
-  return dataset.data.map((row) => row[columnName]);
-}
-
-export function getUniqueValues(
-  state: DatasetsState,
-  datasetId: string,
-  columnName: string
-): unknown[] {
-  const values = getColumnValues(state, datasetId, columnName);
-  return Array.from(new Set(values));
-}
-
 export function getColumnStatistics(
   state: DatasetsState,
   datasetId: string,
@@ -110,31 +84,5 @@ export function getColumnStatistics(
     }
   }
 
-  const values = getColumnValues(state, datasetId, columnName);
-  const nonNullValues = values.filter((v) => !isConfiguredNullValue(v));
-
-  if (column.type === 'number') {
-    const numbers = nonNullValues
-      .map(parseNumericValue)
-      .filter((value): value is number => value !== null);
-
-    if (numbers.length === 0) {
-      return null;
-    }
-
-    return {
-      min: Math.min(...numbers),
-      max: Math.max(...numbers),
-      mean: numbers.reduce((a, b) => a + b, 0) / numbers.length,
-      median: calculateMedian(numbers),
-      count: numbers.length,
-      nullCount: values.length - numbers.length
-    };
-  }
-
-  return {
-    uniqueCount: new Set(nonNullValues).size,
-    count: nonNullValues.length,
-    nullCount: values.length - nonNullValues.length
-  };
+  return null;
 }

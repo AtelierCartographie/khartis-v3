@@ -222,13 +222,14 @@
     iconDescription={m.download_tooltip()}
     kind="primary"
     icon={Download}
-    on:click={modal.open}
+    on:click={() => modal.open()}
   >
     {m.download_button()}
   </Button>
 </div>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   primaryButtonDisabled={modal.isExporting}
   secondaryButtonDisabled={modal.isExporting}
   open={modal.isOpen}

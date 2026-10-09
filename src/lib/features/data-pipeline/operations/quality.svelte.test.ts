@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ColumnType, type EnrichedColumn } from '../types';
 import { computeQualityWarnings } from './quality';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 
 vi.mock('$lib/paraglide/messages', () => ({
   pipeline_warning_no_data_rows: () => 'no rows',
@@ -73,6 +74,6 @@ describe('computeQualityWarnings', () => {
       1_020
     );
 
-    expect(warnings).toContain('cardinality:category:5:1000');
+    expect(warnings).toContain(`cardinality:category:5:${formatValue(1_000)}`);
   });
 });

@@ -11,7 +11,12 @@ vi.mock('$lib/features/duckdb', () => ({
   }
 }));
 
-import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
+import {
+  detectSemioType,
+  isYearColumn,
+  isYearValue
+} from '$lib/features/commons/utils/semio-detector.utils';
+import { formatValueByType } from '$lib/features/commons/utils/format.utils';
 
 const NUMERIC = 'numeric';
 const STRING = 'string';
@@ -455,5 +460,46 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(withKeyword.semioScore).toBeGreaterThan(withoutKeyword.semioScore);
+  });
+});
+
+describe('isYearColumn — display without thousands separator', () => {
+  it('should treat an integer column named after a year within range as a year', () => {
+    const column = analysis('Année', NUMERIC, {
+      min: 1990n,
+      max: 2023n,
+      share_integers: 1
+    }) as never;
+    expect(isYearColumn(column)).toBe(true);
+    expect(
+      formatValueByType(2023, 'number', {
+        locale: 'fr-FR',
+        useGrouping: !isYearColumn(column)
+      })
+    ).toBe('2023');
+  });
+
+  it('should keep the separator when the column has no year keyword', () => {
+    const column = analysis('population', NUMERIC, {
+      min: 1990,
+      max: 2023,
+      share_integers: 1
+    }) as never;
+    expect(isYearColumn(column)).toBe(false);
+  });
+
+  it('should keep the separator when values fall outside the year range', () => {
+    const column = analysis('year_total', NUMERIC, {
+      min: 0,
+      max: 34953,
+      share_integers: 1
+    }) as never;
+    expect(isYearColumn(column)).toBe(false);
+  });
+
+  it('should judge a single tooltip value by its column name and range', () => {
+    expect(isYearValue('year', 2023)).toBe(true);
+    expect(isYearValue('year', 2023.5)).toBe(false);
+    expect(isYearValue('pop', 2023)).toBe(false);
   });
 });

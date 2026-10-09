@@ -10,6 +10,7 @@ import {
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState } from '../../types/format.types';
+import { clampPageMargins } from './page-margins.utils';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
@@ -136,6 +137,7 @@ const { state, actions, getState } = createToolStore<
         );
         s.width = preset.width;
         s.height = preset.height;
+        s.margins = clampPageMargins(s.margins, s.margins, preset);
       }
     },
     setSize: (width: number, height: number) => {
@@ -143,12 +145,13 @@ const { state, actions, getState } = createToolStore<
       recordPageResize({ width: s.width, height: s.height }, next);
       s.width = next.width;
       s.height = next.height;
+      s.margins = clampPageMargins(s.margins, s.margins, next);
     },
     setColor: (color) => {
       s.color = normalizePageColor(color);
     },
     setMargins: (margins) => {
-      s.margins = margins;
+      s.margins = clampPageMargins(margins, s.margins, s);
       marginsEditId += 1;
     },
     toggleGrid: () => {

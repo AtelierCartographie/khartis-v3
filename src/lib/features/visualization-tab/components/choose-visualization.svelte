@@ -11,6 +11,7 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { ComboBox } from 'carbon-components-svelte';
   import { Edit, MagicWandFilled, Pin } from 'carbon-icons-svelte';
   import VisualizationSuggestionCard from './suggestion/visualization-suggestion-card.svelte';
@@ -29,6 +30,8 @@
   import {
     getSuggestionSignature,
     includePersistedSuggestion,
+    keepClearedSuggestion,
+    type ClearedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion,
@@ -52,6 +55,7 @@
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let selectedSuggestionKey = $state<string | undefined>(undefined);
+  let clearedSuggestion = $state<ClearedSuggestion | undefined>(undefined);
 
   const datasetItems = $derived.by(() =>
     datasetsStore.datasets.map((ds, id) => ({
@@ -133,6 +137,14 @@
     );
 
     if (action === 'clear') {
+      clearedSuggestion = {
+        visualizationId: targetViz.id,
+        suggestion,
+        index: displayedSuggestions.findIndex(
+          (item) =>
+            getSuggestionSignature(item) === getSuggestionSignature(suggestion)
+        )
+      };
       if (!restoreVisualizationFromSuggestion(targetViz.id)) {
         applyBlankVisualizationPreset(targetViz.id, dataset, {
           mode: 'manual-blank'
@@ -229,21 +241,22 @@
 
   const displayedSuggestions = $derived.by(() => {
     const origin = targetVisualization?.origin;
+    const listed = shouldIncludePersistedSuggestion({
+      hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
+      hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
+      originMode: targetVisualizationOriginMode
+    })
+      ? includePersistedSuggestion(
+          suggestions,
+          origin?.suggestionKey,
+          suggestions[0]?.dataGeometry
+        )
+      : suggestions;
 
-    if (
-      !shouldIncludePersistedSuggestion({
-        hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
-        hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
-        originMode: targetVisualizationOriginMode
-      })
-    ) {
-      return suggestions;
-    }
-
-    return includePersistedSuggestion(
-      suggestions,
-      origin?.suggestionKey,
-      suggestions[0]?.dataGeometry
+    return keepClearedSuggestion(
+      listed,
+      clearedSuggestion,
+      targetVisualization?.id
     );
   });
 
@@ -355,6 +368,7 @@
     }
 
     previousSuggestionDatasetId = dataset.id;
+    clearedSuggestion = undefined;
     visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     suggestionsExpanded = true;
     autoAppliedSuggestionKey = undefined;
@@ -457,6 +471,8 @@
         <InfoPopover text={m.data_visualized_info()} />
       </div>
       <ComboBox
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         items={datasetItems}
         selectedId={datasetItems.find(
           (item) => item.datasetId === selectedDatasetId

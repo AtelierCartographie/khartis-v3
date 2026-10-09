@@ -184,4 +184,12 @@ describe('normalizeFormattedNumericColumns', () => {
     );
     expect(converted).toHaveLength(0);
   });
+
+  it('promotes percent-suffixed values to DOUBLE without rescaling them', async () => {
+    await createTable('tbl_percent', ['14%', '-5%', '12,5 %']);
+    await normalizeFormattedNumericColumns('tbl_percent', wrapDuckDB(db));
+    expect(await getColumnType('tbl_percent', 'value')).toMatch(/double/i);
+    const rows = await query(db, 'SELECT value FROM tbl_percent ORDER BY 1');
+    expect(rows.map((row) => Number(row.value))).toEqual([-5, 12.5, 14]);
+  });
 });

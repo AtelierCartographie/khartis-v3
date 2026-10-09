@@ -11,6 +11,7 @@ export const DOC_LINK = {
   IMPORT_DATA: `${USER_GUIDE_URL}#importer-des-données`,
   CONTROL_DATA: `${USER_GUIDE_URL}#contrôler-les-données`,
   GEOLOCATE_DATA: `${USER_GUIDE_URL}#géolocaliser-les-données`,
+  JOIN_BASEMAP: `${USER_GUIDE_URL}#joindre-les-données-à-un-fond-de-carte`,
   IMPORT_BASEMAP: `${USER_GUIDE_URL}#importer-un-fond-de-carte`,
   REFERENCE_BASEMAP: `${USER_GUIDE_URL}#fond-de-référence-ign--osm`,
   DISCRETIZATION: `${USER_GUIDE_URL}#discrétisation`,
