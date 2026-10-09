@@ -29,21 +29,19 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     uploadProgress: file.uploadProgress,
     errorMessage: file.errorMessage,
     validation: file.validation,
-    parsedData: file.parsedData,
     content: file.content,
     archiveLayerSnapshot: file.archiveLayerSnapshot,
     geometry: file.geometry,
-    duplicates: file.duplicates,
     statistics: file.statistics,
     sourceType: file.sourceType,
-    deepAnalysis: file.deepAnalysis,
-    geoMatchResult: file.geoMatchResult,
     relatedFiles: file.relatedFiles,
     assetRef: file.assetRef,
     companionAssetRefs: file.companionAssetRefs,
+    enrichmentSnapshot: file.enrichmentSnapshot,
     relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
     deletedRowIds: file.deletedRowIds,
+    csvOptions: file.csvOptions,
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
     gpsMode: file.gpsMode,
@@ -156,32 +154,6 @@ export async function removeFileFromProject(
   };
 
   await dataOrchestratorService.onFileRemoved(fileId);
-
-  await markDirtyAndSave(container);
-}
-
-export async function clearSourceFiles(
-  container: ProjectStateContainer
-): Promise<void> {
-  const project = container._state.currentProject;
-  const sourceFiles = project?.data?.sourceFiles;
-  if (!project?.data || !sourceFiles?.length) {
-    return;
-  }
-
-  const fileIds = sourceFiles.map((file) => file.id);
-
-  container._state.currentProject = {
-    ...project,
-    data: {
-      ...project.data,
-      sourceFiles: []
-    }
-  };
-
-  for (const fileId of fileIds) {
-    await dataOrchestratorService.onFileRemoved(fileId);
-  }
 
   await markDirtyAndSave(container);
 }

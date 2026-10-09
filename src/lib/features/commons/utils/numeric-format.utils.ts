@@ -12,8 +12,13 @@ const SQL_PATTERN = {
   integer: '^[-+]?[0-9]+$'
 } as const;
 
-/** Build SQL that rewrites locale-formatted numbers into dot-decimal text. */
-export function buildNormalizedNumericTextSql(valueExpr: string): string {
+function stripPercentSql(valueExpr: string): string {
+  return `regexp_replace(${valueExpr}, '\\s*%$', '')`;
+}
+
+/** Build SQL that rewrites locale-formatted numbers (optionally suffixed by `%`) into dot-decimal text. */
+export function buildNormalizedNumericTextSql(rawValueExpr: string): string {
+  const valueExpr = stripPercentSql(rawValueExpr);
   return `CASE
     WHEN ${valueExpr} IS NULL OR ${valueExpr} = '' THEN NULL
     WHEN regexp_matches(${valueExpr}, '${SQL_PATTERN.euThousandsCommaDecimal}') THEN replace(regexp_replace(${valueExpr}, '\\.', '', 'g'), ',', '.')
@@ -30,7 +35,8 @@ export function buildNormalizedNumericTextSql(valueExpr: string): string {
 }
 
 /** Build SQL that detects decimal-like locale formats. */
-export function buildDecimalLikeConditionSql(valueExpr: string): string {
+export function buildDecimalLikeConditionSql(rawValueExpr: string): string {
+  const valueExpr = stripPercentSql(rawValueExpr);
   return [
     SQL_PATTERN.euThousandsCommaDecimal,
     SQL_PATTERN.spaceThousandsCommaDecimal,

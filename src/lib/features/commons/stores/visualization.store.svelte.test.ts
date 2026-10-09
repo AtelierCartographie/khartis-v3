@@ -1470,31 +1470,6 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     ]);
   });
 
-  it('returns POINT and TEXT for a CSV with a single coordinates column', () => {
-    const result = resolveAllowedPrimitiveFilters(
-      VisualizationType.PROPORTIONAL,
-      makeDataset({
-        format: FileFormatEnum.CSV,
-        geoDetection: {
-          hasGeoColumns: true,
-          geoColumns: [
-            {
-              index: 0,
-              columnName: 'gps',
-              type: GEO_COLUMN_TYPE.COORDINATES,
-              confidence: 1
-            }
-          ],
-          warnings: []
-        }
-      })
-    );
-    expect(result).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.TEXT
-    ]);
-  });
-
   it('does not infer POINT when only latitude is detected without longitude', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.PROPORTIONAL,

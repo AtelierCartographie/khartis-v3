@@ -5,6 +5,7 @@
   import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Button,
@@ -222,6 +223,8 @@
 
       <div class="catalogue-filters">
         <ComboBox
+          translateWithId={translateCarbonId}
+          translateWithIdSelection={translateCarbonId}
           size="sm"
           items={searchComboBoxItems}
           selectedId={searchSelectedId}

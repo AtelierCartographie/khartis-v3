@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setLocale } from '$lib/paraglide/runtime.js';
-import { formatFileSize } from '$lib/features/commons/utils/format.utils';
+import {
+  formatFileSize,
+  isSingularCount
+} from '$lib/features/commons/utils/format.utils';
 import {
   hexToHsl,
   hexToRgb,
@@ -47,6 +50,21 @@ describe('formatFileSize', () => {
   it('formats gigabytes', async () => {
     await setTestLocale('en');
     expect(formatFileSize(1024 ** 3)).toMatch(/^1\.00 (GB|Go)$/);
+  });
+});
+
+describe('isSingularCount', () => {
+  it('should treat 0 and 1 as singular in French', () => {
+    expect(isSingularCount(0, 'fr-FR')).toBe(true);
+    expect(isSingularCount(1, 'fr-FR')).toBe(true);
+    expect(isSingularCount(2, 'fr-FR')).toBe(false);
+  });
+
+  it('should treat only 1 as singular in English', () => {
+    expect(isSingularCount(0, 'en-US')).toBe(false);
+    expect(isSingularCount(1, 'en-US')).toBe(true);
+    expect(isSingularCount(1n, 'en-US')).toBe(true);
+    expect(isSingularCount(34953, 'en-US')).toBe(false);
   });
 });
 

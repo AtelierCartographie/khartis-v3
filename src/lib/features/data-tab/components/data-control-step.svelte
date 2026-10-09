@@ -19,13 +19,20 @@
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import {
+    createFileFromUpload,
     normalizeFormattedNumericColumns,
     normalizeToProcessedDataset
   } from '$lib/features/data-pipeline';
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -98,6 +105,8 @@
   let deleteFilteredModalOpen = $state(false);
   let filteredRowsToDelete = $state(0);
   let variableTypesNotificationDismissed = $state(false);
+  let duplicateRowCount = $state(0);
+  let duplicateRowsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let isDeleteMode = $state(false);
   let selectedRowIds = $state<number[]>([]);
@@ -107,6 +116,31 @@
     selectedRowIds = [];
     isDeleteMode = false;
     variableTypesNotificationDismissed = false;
+    duplicateRowsNotificationDismissed = false;
+  });
+
+  $effect(() => {
+    const tableName = currentDuckTable;
+    void duckDBDatasetsVersion;
+    duplicateRowCount = 0;
+    if (!tableName) return;
+
+    let cancelled = false;
+    duckDBOrchestrator
+      .countDuplicateRows(tableName)
+      .then((count) => {
+        if (!cancelled) duplicateRowCount = count;
+      })
+      .catch((error: unknown) => {
+        logger.warn('Failed to count duplicate rows', LogCategory.DATA, {
+          tableName,
+          error
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   });
 
   let csvOptionsModalOpen = $state(false);
@@ -150,6 +184,21 @@
       ) || null
     );
   });
+
+  // An archive layer's asset is a Parquet snapshot, not the CSV it came from.
+  function hasReimportableSourceAsset(file: UploadedFile): boolean {
+    return Boolean(file.assetRef && !file.sourceArchive);
+  }
+
+  const canReimportCsv = $derived(
+    isCsvFile &&
+      !!sourceFile &&
+      Boolean(
+        sourceFile.originalFile ||
+        sourceFile.content ||
+        hasReimportableSourceAsset(sourceFile)
+      )
+  );
 
   let forceRefreshKey = $state(0);
 
@@ -351,6 +400,11 @@
       });
     }
 
+    // A restored project keeps the source bytes in IndexedDB only.
+    if (!file && hasReimportableSourceAsset(sourceFile)) {
+      file = await createFileFromUpload(sourceFile);
+    }
+
     if (!file) {
       throw new DataValidationError(
         m.csv_error_file_not_available(),
@@ -429,12 +483,17 @@
         dataTabActions.clearJoinStats();
       }
 
-      datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
+      const chosenCsvOptions = {
         header: options.header,
         decimalSeparator: options.decimalSeparator,
         thousandsSeparator: options.thousandsSeparator,
         delimiter: options.delimiter
-      });
+      };
+      datasetsStore.updateDatasetCsvOptions(
+        selectedDataset.id,
+        chosenCsvOptions
+      );
+      await projectStore.updateFileCsvOptions(sourceFile.id, chosenCsvOptions);
       datasetsStore.recordTransformation(
         selectedDataset.id,
         m.csv_options_reimport_success()
@@ -518,10 +577,12 @@
       if (totalReplaced > 0) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          m.history_replaced_values({
+          (isSingularCount(totalReplaced)
+            ? m.history_replaced_values_one
+            : m.history_replaced_values)({
             searchValue,
             replaceValue,
-            totalReplaced
+            totalReplaced: formatValue(totalReplaced)
           })
         );
 
@@ -599,7 +660,12 @@
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
-        m.history_deleted_rows({ count, newRowCount })
+        (isSingularCount(count)
+          ? m.history_deleted_rows_one
+          : m.history_deleted_rows)({
+          count: formatValue(count),
+          newRowCount: formatValue(newRowCount)
+        })
       );
 
       await projectStore.addDeletedRows(
@@ -612,7 +678,7 @@
       refreshTable();
       showSuccess(
         m.rows_deleted_success_title(),
-        m.rows_deleted_success_message({ count })
+        m.rows_deleted_success_message({ count: formatValue(count) })
       );
     } catch (error) {
       showError(
@@ -642,14 +708,19 @@
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          m.history_deleted_filtered_rows({ count, newRowCount })
+          (isSingularCount(count)
+            ? m.history_deleted_filtered_rows_one
+            : m.history_deleted_filtered_rows)({
+            count: formatValue(count),
+            newRowCount: formatValue(newRowCount)
+          })
         );
         await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 
         refreshTable();
         showSuccess(
           m.rows_deleted_success_title(),
-          m.rows_deleted_success_message({ count })
+          m.rows_deleted_success_message({ count: formatValue(count) })
         );
       }
     } catch (error) {
@@ -767,6 +838,7 @@
       />
 
       <Modal
+        iconDescription={m.a11y_close_dialog()}
         bind:open={confirmReimportOpen}
         modalHeading={m.csv_confirm_reimport_title()}
         primaryButtonText={m.csv_options_apply()}
@@ -801,8 +873,7 @@
       deleteActive={isDeleteMode}
       deleteDisabled={false}
       resetDisabled={!hasDataModifications}
-      showCsvOptions={isCsvFile &&
-        !!(sourceFile?.originalFile || sourceFile?.content)}
+      showCsvOptions={canReimportCsv}
       showHiddenColumns={hiddenColumnsCount > 0}
       showSummaryPlots={showSummaryPlots}
     />
@@ -851,12 +922,29 @@
 
   {#if processedDataset && !variableTypesNotificationDismissed}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       title={m.data_control_variable_types_title()}
       subtitle={m.data_control_variable_types_subtitle()}
       kind="info"
       lowContrast
       hideCloseButton={false}
       on:close={() => (variableTypesNotificationDismissed = true)}
+    />
+  {/if}
+
+  {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
+    <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
+      title={m.data_control_duplicate_rows_title()}
+      subtitle={duplicateRowCount === 1
+        ? m.data_control_duplicate_rows_subtitle_one()
+        : m.data_control_duplicate_rows_subtitle({
+            count: formatValue(duplicateRowCount)
+          })}
+      kind="warning"
+      lowContrast
+      hideCloseButton={false}
+      on:close={() => (duplicateRowsNotificationDismissed = true)}
     />
   {/if}
 

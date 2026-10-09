@@ -1,6 +1,7 @@
 <script lang="ts">
   import { InlineNotification, Modal } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
 
   let {
     open = $bindable(false),
@@ -36,6 +37,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.delete_rows_modal_title()}
   primaryButtonText={isDeleting ? m.deleting() : m.delete_confirm_button()}
@@ -48,7 +50,7 @@
   size="sm"
 >
   <p>
-    {m.delete_rows_confirm_message({ count: rowCount })}
+    {m.delete_rows_confirm_message({ count: formatValue(rowCount) })}
   </p>
   {#if affectedVisualizationCount > 0}
     <InlineNotification

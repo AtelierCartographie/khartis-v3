@@ -1,4 +1,8 @@
 import * as m from '$lib/paraglide/messages';
+import {
+  formatValue,
+  isSingularCount
+} from '$lib/features/commons/utils/format.utils';
 import { PIPELINE_CONST } from '../constants';
 import type { EnrichedColumn } from '../types';
 
@@ -21,7 +25,9 @@ export function computeQualityWarnings(
 
   if (rowCount < 5) {
     warnings.push(
-      m.pipeline_warning_small_dataset({ count: String(rowCount) })
+      (isSingularCount(rowCount)
+        ? m.pipeline_warning_small_dataset_one
+        : m.pipeline_warning_small_dataset)({ count: formatValue(rowCount) })
     );
   }
 
@@ -46,8 +52,8 @@ export function computeQualityWarnings(
         warnings.push(
           m.pipeline_warning_low_cardinality({
             column: column.name,
-            uniques: String(column.stats?.uniques ?? 0),
-            total: String(nonNullCount)
+            uniques: formatValue(column.stats?.uniques ?? 0),
+            total: formatValue(nonNullCount)
           })
         );
       }

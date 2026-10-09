@@ -10,6 +10,8 @@ import {
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 
+const WORLD_CATALOG_MATCH = ['monde-countries-2024-high'];
+
 function basemap(
   partial: Pick<
     BasemapMetadata,
@@ -264,14 +266,14 @@ describe('[S02] rankBasemapsByGPSBbox — GEO-01 NUTS2 Europe extent (nuts2_data
 });
 
 describe('[S02] calculateGeoColumnBasemapMatchScore', () => {
-  it('awards a high score to ISO codes paired with the world basemap', () => {
+  it('should award a high score when the column values were found in that basemap', () => {
     const result = calculateGeoColumnBasemapMatchScore(
       'code',
       WORLD_BASEMAP,
-      GEO_COLUMN_TYPE.ISO3
+      WORLD_CATALOG_MATCH
     );
     expect(result.score).toBeGreaterThanOrEqual(60);
-    expect(result.reason).toContain('Country');
+    expect(result.reason).toContain('Catalog values match');
   });
 
   it('awards a region bonus when a "region" column meets a France basemap that mentions regions', () => {
@@ -287,7 +289,7 @@ describe('[S02] calculateGeoColumnBasemapMatchScore', () => {
     const result = calculateGeoColumnBasemapMatchScore(
       'code_country_iso',
       WORLD_BASEMAP,
-      GEO_COLUMN_TYPE.ISO3
+      WORLD_CATALOG_MATCH
     );
     expect(result.score).toBeLessThanOrEqual(100);
   });
@@ -324,7 +326,6 @@ describe('[S02] rankBasemapsByGeoColumn — ISO country column planisphere fallb
       id: 'ds-iso',
       name: 'iso dataset',
       format: 'csv',
-      data: [],
       rowCount: 0,
       columns: [
         { name: columnName, type: 'string', nullable: false, unique: true }
@@ -334,7 +335,13 @@ describe('[S02] rankBasemapsByGeoColumn — ISO country column planisphere fallb
       fileSize: 0,
       metadata: { processedAt: new Date(), transformations: [] },
       geoDetection: {
-        geoColumns: [{ columnName, type: GEO_COLUMN_TYPE.ISO3 }]
+        geoColumns: [
+          {
+            columnName,
+            type: GEO_COLUMN_TYPE.IDENTIFIER,
+            catalogBasemaps: WORLD_CATALOG_MATCH
+          }
+        ]
       } as ProcessedDataset['geoDetection']
     };
   }

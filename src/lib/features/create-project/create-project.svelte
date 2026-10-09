@@ -3,7 +3,6 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
@@ -41,8 +40,6 @@
 
   const { open = false, onClose }: Props = $props();
 
-  const canDismiss = $derived(!!projectStore.currentProject);
-
   const TAB_COUNT = 3;
   const CREATE_PROJECT_TABPANEL_ID = 'create-project-tabpanel';
   const CREATE_PROJECT_TAB_IDS = {
@@ -66,12 +63,7 @@
     wasOpen = open;
   });
 
-  function handleClose(event?: CustomEvent): void {
-    if (!canDismiss) {
-      event?.preventDefault();
-      return;
-    }
-
+  function handleClose(): void {
     onClose?.();
   }
 
@@ -110,10 +102,7 @@
   use:linkDialogToTitle
 >
   <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
-    <ModalHeader
-      title={m.create_project_welcome()}
-      class={canDismiss ? '' : 'no-close-button'}
-    >
+    <ModalHeader title={m.create_project_welcome()} iconDescription={m.close()}>
       <div class="mb-3"></div>
       <div class="welcome-description">
         <span class="text-grey">
@@ -199,7 +188,7 @@
           aria-labelledby={activeProjectTabId}
         >
           {#if createProjectState.selectedTab === 1}
-            <CreateNewProject isModal resetToken={resetToken} />
+            <CreateNewProject isModal showTitle resetToken={resetToken} />
           {:else if createProjectState.selectedTab === 2}
             <OpenProject onClose={handleClose} />
           {:else if createProjectState.selectedTab === 3}
@@ -261,10 +250,6 @@
 
   #khartis-create-project :global(.fixed-modal-body) {
     margin-bottom: 0;
-  }
-
-  #khartis-create-project :global(.no-close-button .bx--modal-close) {
-    display: none;
   }
 
   .project-selector-wrapper {

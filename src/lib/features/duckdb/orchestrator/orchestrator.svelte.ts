@@ -3,8 +3,7 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
@@ -57,6 +56,7 @@ import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
+import * as geoDetectionOps from './geo-detection-ops';
 
 export {
   RefineOperation,
@@ -408,26 +408,6 @@ export const duckDBOrchestrator = {
       getRowCount: getRowCountInternal,
       prefetchArrowMetadata
     });
-  },
-
-  async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
-    await ensureInitialized();
-    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-
-    try {
-      const dataset = await datasetOps.processFile(file, Duck, {
-        getRowCount: getRowCountInternal,
-        prefetchArrowMetadata
-      });
-
-      return dataset;
-    } catch (error) {
-      showError(
-        m.error_process_file_title(),
-        error instanceof Error ? error.message : m.error_unknown()
-      );
-      return null;
-    }
   },
 
   getBasemapAttributesId: joinOps.getBasemapAttributesId,
@@ -1066,6 +1046,23 @@ export const duckDBOrchestrator = {
     return tableDataOps.getRowPosition(tableName, rowId, Duck, options);
   },
 
+  async matchColumnsAgainstCatalog(
+    tableName: string,
+    columns: string[]
+  ): Promise<geoDetectionOps.CatalogColumnMatch[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return geoDetectionOps.matchColumnsAgainstCatalog(tableName, columns, Duck);
+  },
+
+  async countDuplicateRows(tableName: string): Promise<number> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.countDuplicateRows(tableName, Duck);
+  },
+
   async getRowStats(tableName: string): Promise<FilterStats> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -1442,6 +1439,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await datasetOps.dropTable(tableName, Duck);
+    joinOps.invalidateSimilarityCache(tableName, Duck);
     state.clearFiltersForTable(tableName);
   },
 

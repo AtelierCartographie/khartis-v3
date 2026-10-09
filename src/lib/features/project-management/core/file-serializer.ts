@@ -1,10 +1,6 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedUploadedFile } from '$lib/types/serialization.types';
 
-function shouldPersistParsedData(file: UploadedFile): boolean {
-  return Array.isArray(file.parsedData);
-}
-
 export function serializeUploadedFile(
   file: UploadedFile
 ): SerializedUploadedFile {
@@ -24,24 +20,12 @@ export function serializeUploadedFile(
     uploadProgress: file.uploadProgress
   } as SerializedUploadedFile;
 
-  if (shouldPersistParsedData(file)) {
-    serialized.parsedData = file.parsedData;
+  if (file.enrichmentSnapshot) {
+    serialized.enrichmentSnapshot = file.enrichmentSnapshot;
   }
 
   if (file.statistics) {
     serialized.statistics = file.statistics;
-  }
-
-  if (file.duplicates) {
-    serialized.duplicates = file.duplicates;
-  }
-
-  if (file.deepAnalysis) {
-    serialized.deepAnalysis = file.deepAnalysis;
-  }
-
-  if (file.geoMatchResult) {
-    serialized.geoMatchResult = file.geoMatchResult;
   }
 
   if (file.columnTransformations && file.columnTransformations.length > 0) {
@@ -50,6 +34,10 @@ export function serializeUploadedFile(
 
   if (file.deletedRowIds && file.deletedRowIds.length > 0) {
     serialized.deletedRowIds = file.deletedRowIds;
+  }
+
+  if (file.csvOptions) {
+    serialized.csvOptions = file.csvOptions;
   }
 
   if (file.sourceArchive) {
@@ -86,24 +74,12 @@ export function deserializeUploadedFile(
     uploadProgress: data.uploadProgress
   } as UploadedFile;
 
-  if (data.parsedData) {
-    file.parsedData = data.parsedData as UploadedFile['parsedData'];
+  if (data.enrichmentSnapshot) {
+    file.enrichmentSnapshot = data.enrichmentSnapshot;
   }
 
   if (data.statistics) {
     file.statistics = data.statistics as UploadedFile['statistics'];
-  }
-
-  if (data.duplicates) {
-    file.duplicates = data.duplicates;
-  }
-
-  if (data.deepAnalysis) {
-    file.deepAnalysis = data.deepAnalysis;
-  }
-
-  if (data.geoMatchResult) {
-    file.geoMatchResult = data.geoMatchResult;
   }
 
   if (data.columnTransformations) {
@@ -112,6 +88,11 @@ export function deserializeUploadedFile(
 
   if (data.deletedRowIds) {
     file.deletedRowIds = data.deletedRowIds;
+  }
+
+  const csvOptions = parseCsvOptions(data.csvOptions);
+  if (csvOptions) {
+    file.csvOptions = csvOptions;
   }
 
   if (data.joinedBasemap) {
@@ -140,4 +121,20 @@ export function deserializeUploadedFile(
   }
 
   return file as UploadedFile;
+}
+
+function parseCsvOptions(value: unknown): UploadedFile['csvOptions'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const { header, decimalSeparator, thousandsSeparator, delimiter } =
+    value as Record<string, unknown>;
+  if (typeof header !== 'boolean' || typeof decimalSeparator !== 'string') {
+    return undefined;
+  }
+  return {
+    header,
+    decimalSeparator,
+    thousandsSeparator:
+      typeof thousandsSeparator === 'string' ? thousandsSeparator : undefined,
+    delimiter: typeof delimiter === 'string' ? delimiter : undefined
+  };
 }

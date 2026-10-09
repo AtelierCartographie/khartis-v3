@@ -6,6 +6,7 @@
     normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { TextBold, TextItalic } from 'carbon-icons-svelte';
   import {
     nextAlignment,
@@ -71,6 +72,8 @@
       <span class="compact-field__label">{m.annotations_font()}</span>
       <div class="compact-field__control" aria-disabled={!enabled}>
         <Dropdown
+          translateWithId={translateCarbonId}
+          translateWithIdSelection={translateCarbonId}
           class="compact-dropdown"
           hideLabel
           labelText={m.annotations_font()}

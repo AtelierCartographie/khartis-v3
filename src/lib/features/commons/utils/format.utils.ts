@@ -10,6 +10,21 @@ export function resolveLocale(): string {
   return LOCALE_MAP[getLocale()] ?? 'en-US';
 }
 
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+/** Singular form of a count in the locale: 0 and 1 in French, 1 alone in English. */
+export function isSingularCount(
+  count: number | bigint,
+  locale: string = resolveLocale()
+): boolean {
+  let rules = pluralRules.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRules.set(locale, rules);
+  }
+  return rules.select(Number(count)) === 'one';
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return m.file_size_zero();
 
@@ -49,6 +64,8 @@ export interface FormatValueOptions {
   maxFractionDigits?: number;
   maxStringLength?: number;
   nullPlaceholder?: string;
+  /** False for years, which never take a thousands separator. */
+  useGrouping?: boolean;
 }
 
 const DEFAULT_FORMAT_OPTIONS = {
@@ -68,21 +85,23 @@ export function formatValue(
     options?.maxStringLength ?? DEFAULT_FORMAT_OPTIONS.maxStringLength;
   const nullPlaceholder =
     options?.nullPlaceholder ?? DEFAULT_FORMAT_OPTIONS.nullPlaceholder;
+  const useGrouping = options?.useGrouping ?? true;
 
   if (value === null || value === undefined) {
     return nullPlaceholder;
   }
 
   if (typeof value === 'bigint') {
-    return Number(value).toLocaleString(locale);
+    return Number(value).toLocaleString(locale, { useGrouping });
   }
 
   if (typeof value === 'number') {
     if (Number.isInteger(value)) {
-      return value.toLocaleString(locale);
+      return value.toLocaleString(locale, { useGrouping });
     }
     return value.toLocaleString(locale, {
-      maximumFractionDigits: maxFractionDigits
+      maximumFractionDigits: maxFractionDigits,
+      useGrouping
     });
   }
 
@@ -122,7 +141,9 @@ export function formatValueByType(
   }
 
   if (isNumericType(columnType)) {
-    return Number(value).toLocaleString(locale);
+    return Number(value).toLocaleString(locale, {
+      useGrouping: options?.useGrouping ?? true
+    });
   }
 
   return String(value);

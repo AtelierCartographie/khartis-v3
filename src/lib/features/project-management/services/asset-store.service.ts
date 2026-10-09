@@ -11,6 +11,7 @@ import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
 import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
+import { collectFileAssetRefs } from '../core/file-asset-refs';
 import { getProjectDatabase } from './database-access.service';
 
 // Legacy archive layers were persisted as GeoJSON snapshots and stay readable.
@@ -222,6 +223,21 @@ function buildCompanionContentEntries(
   );
 }
 
+export async function persistTableSnapshot(
+  bytes: Uint8Array,
+  fileName: string,
+  hasGeometry: boolean
+): Promise<AssetRef> {
+  const baseName = fileName.replace(/\.[^.]+$/u, '');
+  return persistAssetBytes(bytes, {
+    assetId: crypto.randomUUID(),
+    originalName: `${baseName}${FILE_EXTENSION_GROUPS.PARQUET[0]}`,
+    mimeType: hasGeometry ? MIME.GEOPARQUET : MIME.PARQUET,
+    size: bytes.byteLength,
+    kind: 'primary'
+  });
+}
+
 export async function ensureUploadedFileAssets(
   file: UploadedFile
 ): Promise<UploadedFile> {
@@ -246,14 +262,11 @@ export async function ensureUploadedFileAssets(
     (archiveLayerSnapshot && !hasArchiveSnapshotAsset)
   ) {
     if (archiveLayerSnapshot) {
-      const snapshotBaseName = preparedFile.name.replace(/\.[^.]+$/u, '');
-      preparedFile.assetRef = await persistAssetBytes(archiveLayerSnapshot, {
-        assetId: crypto.randomUUID(),
-        originalName: `${snapshotBaseName}${FILE_EXTENSION_GROUPS.PARQUET[0]}`,
-        mimeType: MIME.GEOPARQUET,
-        size: archiveLayerSnapshot.byteLength,
-        kind: 'primary'
-      });
+      preparedFile.assetRef = await persistTableSnapshot(
+        archiveLayerSnapshot,
+        preparedFile.name,
+        Boolean(preparedFile.geometry)
+      );
     } else if (preparedFile.originalFile) {
       preparedFile.assetRef = await createAssetRefFromFile(
         preparedFile.originalFile,
@@ -402,10 +415,9 @@ export async function createCompanionFilesFromAssetRefs(
 }
 
 export function extractAssetIdsFromFiles(files: UploadedFile[]): string[] {
-  return files.flatMap((file) => [
-    ...(file.assetRef ? [file.assetRef.assetId] : []),
-    ...(file.companionAssetRefs?.map((assetRef) => assetRef.assetId) ?? [])
-  ]);
+  return files.flatMap((file) =>
+    collectFileAssetRefs(file).map((assetRef) => assetRef.assetId)
+  );
 }
 
 async function loadProjectAssetIds(projectId: string): Promise<string[]> {

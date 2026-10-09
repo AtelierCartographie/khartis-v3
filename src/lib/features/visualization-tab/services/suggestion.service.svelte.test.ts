@@ -57,6 +57,10 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
+vi.mock('$lib/features/commons/services/row-scope.service', () => ({
+  resolveValueScopeClause: () => null
+}));
+
 vi.mock('$lib/features/step-toolbar/tools/legend/legend.store.svelte', () => ({
   getLegendState: () => ({ items: [] }),
   legendActions: {

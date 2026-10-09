@@ -8,7 +8,7 @@ import {
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
-import type { UploadedFile } from '../../types/create-project.types';
+import type { AssetRef, UploadedFile } from '../../types/create-project.types';
 import { FileType } from '../../types/create-project.types';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
@@ -18,6 +18,7 @@ import { showWarning } from '../../utils/notification.utils.svelte';
 import { DataValidationError } from '../../pipeline.errors';
 import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
+import { withGeoDetection } from '../../services/geo-detection.service';
 import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
 
 interface VisualizationConfig {
@@ -45,12 +46,6 @@ function loadFallbackFontsForDataset(dataset: DatasetResult): void {
     .catch(() => {
       // Font detection is best-effort and must not block dataset processing.
     });
-}
-
-function isNonEmptyRow(
-  row: Record<string, unknown> | null | undefined
-): row is Record<string, unknown> {
-  return !!row && Object.keys(row).length > 0;
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -134,17 +129,10 @@ export function createDatasetFromPreprocessedFile(
     })
   );
 
-  const parsedRows = Array.isArray(file.parsedData)
-    ? (file.parsedData as Record<string, unknown>[])
-    : undefined;
-  const data =
-    parsedRows && parsedRows.some((row) => isNonEmptyRow(row))
-      ? parsedRows
-      : undefined;
   const firstColStats = Object.values(statistics)[0];
   const geometryInfo = file.geometry;
   const actualRowCount =
-    firstColStats?.count ?? geometryInfo?.featureCount ?? data?.length ?? 0;
+    firstColStats?.count ?? geometryInfo?.featureCount ?? 0;
 
   const tableName =
     file.duckdbTableName ??
@@ -173,28 +161,16 @@ export function createDatasetFromPreprocessedFile(
       fileType: file.fileType,
       parserUsed: file.duckdbTableName ? 'zip-preprocessed' : 'legacy-parsed'
     },
-    data,
     fileSize: file.size,
-    geoDetection: file.deepAnalysis?.geoDetection,
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
     analysis: {
       columns,
-      geoColumns: geometryInfo
-        ? [
-            {
-              columnName: geometryInfo.columnName ?? 'geom',
-              type: 'unknown' as const,
-              confidence: 1,
-              index: 0,
-              isValid: true
-            }
-          ]
-        : [],
+      geoColumns: [],
       hasGeoData: isGeoDataset,
       suggestedGeoColumn: geometryInfo?.columnName,
       rowCount: actualRowCount,
-      warnings: file.deepAnalysis?.geoDetection?.warnings ?? []
+      warnings: []
     },
     bounds: geometryInfo?.bounds
       ? {
@@ -271,14 +247,29 @@ async function processUploadedDatasetFile(
   file: UploadedFile,
   options: { useDuckDbSnapshotWhenAvailable: boolean }
 ): Promise<DatasetResult | ZipDatasetResult> {
+  const result = await loadUploadedDatasetFile(file, options);
+  if (isZipDatasetResult(result)) {
+    return {
+      ...result,
+      datasets: await Promise.all(result.datasets.map(withGeoDetection))
+    };
+  }
+  return withGeoDetection(result);
+}
+
+async function loadUploadedDatasetFile(
+  file: UploadedFile,
+  options: { useDuckDbSnapshotWhenAvailable: boolean }
+): Promise<DatasetResult | ZipDatasetResult> {
   const hasRestorableBinarySource = Boolean(
     file.content ||
     file.originalFile ||
     file.assetRef ||
-    file.companionAssetRefs?.length
+    file.companionAssetRefs?.length ||
+    file.enrichmentSnapshot
   );
   const hasPersistedAssetSource = Boolean(
-    file.assetRef || file.companionAssetRefs?.length
+    file.assetRef || file.companionAssetRefs?.length || file.enrichmentSnapshot
   );
   const hasInlineReplaySource = Boolean(
     file.content || file.originalFile || file.archiveLayerSnapshot
@@ -293,10 +284,6 @@ async function processUploadedDatasetFile(
     return createDatasetFromPreprocessedFile(file);
   }
 
-  if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
-    return createDatasetFromPreprocessedFile(file);
-  }
-
   if (!hasRestorableBinarySource) {
     throw new DataValidationError(
       m.error_file_no_content({ fileName: file.name }),
@@ -308,7 +295,43 @@ async function processUploadedDatasetFile(
     );
   }
 
+  if (file.enrichmentSnapshot) {
+    const restored = await loadEnrichmentSnapshot(
+      file,
+      file.enrichmentSnapshot
+    );
+    if (restored) {
+      return restored;
+    }
+  }
+
   return dataPipeline.processUploadedFile(file, file.originalFile);
+}
+
+async function loadEnrichmentSnapshot(
+  file: UploadedFile,
+  snapshot: AssetRef
+): Promise<DatasetResult | ZipDatasetResult | null> {
+  try {
+    return await dataPipeline.processUploadedFile({
+      ...file,
+      assetRef: snapshot,
+      companionAssetRefs: undefined,
+      relatedFileObjects: undefined,
+      relatedFilesData: undefined
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to restore the enrichment snapshot, falling back to the source',
+      LogCategory.DATA,
+      error
+    );
+    showWarning(
+      m.project_restore_enrichment_warning_title(),
+      m.project_restore_enrichment_warning_message({ fileName: file.name })
+    );
+    return null;
+  }
 }
 
 export async function processFiles(

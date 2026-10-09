@@ -348,12 +348,6 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
     placeholder.style.display = 'none';
   });
 
-  const mapStage = pageContainer.querySelector(
-    EXPORT_MAP_STAGE_SELECTOR
-  ) as HTMLElement | null;
-  const savedFilter = mapStage?.style.filter ?? '';
-  if (mapStage) mapStage.style.filter = 'none';
-
   return () => {
     pageContainer.classList.remove('is-exporting-map');
     pageGrids.forEach((grid, index) => {
@@ -362,7 +356,6 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
     exportPlaceholders.forEach((placeholder, index) => {
       placeholder.style.display = exportPlaceholderDisplays[index] ?? '';
     });
-    if (mapStage) mapStage.style.filter = savedFilter;
   };
 }
 

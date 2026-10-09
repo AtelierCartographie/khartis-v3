@@ -125,6 +125,39 @@ describe('project archive format', () => {
     );
   });
 
+  it('should export the enrichment snapshot asset when a layer was enriched', async () => {
+    const { createArchive } =
+      await import('$lib/features/project-management/io/exporter');
+    const project = createProjectFixture();
+    Object.assign(project.data.sourceFiles[0], {
+      enrichmentSnapshot: {
+        assetId: 'asset-enriched',
+        originalName: 'data.parquet',
+        mimeType: 'application/vnd.apache.parquet',
+        size: 4,
+        kind: 'primary' as const
+      }
+    });
+
+    const blob = await createArchive(project as never);
+    const archive = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+    const manifest = JSON.parse(
+      new TextDecoder().decode(archive['manifest.json'])
+    ) as { assetCount: number; assets: Array<{ assetId: string }> };
+    const projectJson = JSON.parse(
+      new TextDecoder().decode(archive['project.json'])
+    ) as { data: { sourceFiles: Array<{ enrichmentSnapshot?: unknown }> } };
+
+    expect(manifest.assets.map((asset) => asset.assetId)).toEqual([
+      'asset-1',
+      'asset-enriched'
+    ]);
+    expect(archive['assets/asset-enriched']).toBeDefined();
+    expect(projectJson.data.sourceFiles[0].enrichmentSnapshot).toEqual(
+      expect.objectContaining({ assetId: 'asset-enriched' })
+    );
+  });
+
   it('exports from an asset-prepared copy without mutating the project', async () => {
     const { createArchive } =
       await import('$lib/features/project-management/io/exporter');

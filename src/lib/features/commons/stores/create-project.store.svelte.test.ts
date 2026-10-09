@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
-    clear: vi.fn()
+    dropTable: vi.fn(async () => undefined)
   }
 }));
 
@@ -33,7 +33,8 @@ vi.mock('../../create-project/services/validation.service', () => ({
     validateFiles: vi.fn(() => ({
       isValid: true,
       globalErrors: [],
-      results: new Map()
+      results: new Map(),
+      incompleteShapefiles: new Map()
     })),
     validateURL: vi.fn(() => ({
       isValid: true,
@@ -82,22 +83,15 @@ vi.mock('../utils/notification.utils.svelte', () => ({
 
 vi.mock('./datasets.store.svelte', () => ({
   datasetsStore: {
-    clear: vi.fn()
+    getAllDatasets: vi.fn(() => [])
   }
 }));
 
 vi.mock('./project.store.svelte', () => ({
   projectStore: {
-    clearSourceFiles: vi.fn(async () => undefined),
     currentProject: undefined,
     markAsDirty: vi.fn(),
     saveCurrentProject: vi.fn()
-  }
-}));
-
-vi.mock('./visualization.store.svelte', () => ({
-  visualizationStore: {
-    clear: vi.fn()
   }
 }));
 

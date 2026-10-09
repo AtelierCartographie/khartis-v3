@@ -204,6 +204,7 @@
 
   {#if error}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       lowContrast
       kind="error"
       title={m.create_project_error_label()}
@@ -253,7 +254,11 @@
                   onclick={(e: MouseEvent) => e.stopPropagation()}
                   onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
                 >
-                  <OverflowMenu size="sm" flipped>
+                  <OverflowMenu
+                    iconDescription={m.a11y_open_options()}
+                    size="sm"
+                    flipped
+                  >
                     <OverflowMenuItem
                       text={m.open_project_duplicate()}
                       disabled={isDuplicating}
@@ -297,6 +302,7 @@
   {#if showDeleteConfirm}
     <div use:portal>
       <Modal
+        iconDescription={m.a11y_close_dialog()}
         danger
         bind:open={showDeleteConfirm}
         modalHeading={m.open_project_delete_confirm_title()}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import DoubleModeControls from './proportional/double-mode-controls.svelte';
   import ProportionalScaleSection from './proportional/proportional-scale-section.svelte';
@@ -459,10 +460,10 @@
     });
   }
 
-  const positionModeItems = [
+  const positionModeItems = $derived([
     { id: SymbolDoublePosition.OVERLAY, text: m.symbol_position_overlay() },
     { id: SymbolDoublePosition.DIVISION, text: m.symbol_position_division() }
-  ];
+  ]);
 </script>
 
 {#if symbolMode === SymbolMode.PROPORTIONAL}
@@ -680,6 +681,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}

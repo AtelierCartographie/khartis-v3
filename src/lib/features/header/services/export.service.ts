@@ -1,5 +1,6 @@
 import {
   exportProcessedDatasets,
+  type GeoJsonExportDataset,
   downloadFile,
   generateExportFilename
 } from '$lib/features/commons/utils/file-export.utils';
@@ -9,7 +10,7 @@ import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck, duckDBOrchestrator, initDuckDB } from '$lib/features/duckdb';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
-import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
+import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
 import type {
   DatasetResult,
   ProcessedDataset
@@ -558,7 +559,7 @@ async function fetchJoinedDatasetWithGeometry(
   dataset: ProcessedDataset,
   joinedBasemapId: string,
   sourceTableName?: string
-): Promise<ProcessedDataset> {
+): Promise<GeoJsonExportDataset> {
   const viewName = createTempName(
     'export_joined',
     sourceTableName ?? dataset.duckdbTableName ?? dataset.id
@@ -613,7 +614,7 @@ async function fetchJoinedDatasetWithGeometry(
   return {
     ...dataset,
     geometry: 'Polygon',
-    data: dataWithParsedGeometry,
+    rows: dataWithParsedGeometry,
     columns: [
       ...dataset.columns,
       ...(basemapIdentityColumn ? [basemapIdentityColumn] : []),
@@ -632,7 +633,7 @@ async function fetchJoinedDatasetWithGeometry(
 async function fetchGpsDatasetWithGeometry(
   dataset: ProcessedDataset,
   gpsColumns: { lat: string; lon: string }
-): Promise<ProcessedDataset> {
+): Promise<GeoJsonExportDataset> {
   if (!dataset.duckdbTableName) {
     throw new DataValidationError(
       'Missing DuckDB source table for GPS export',
@@ -667,7 +668,7 @@ async function fetchGpsDatasetWithGeometry(
   return {
     ...dataset,
     geometry: 'Point',
-    data: dataWithParsedGeometry,
+    rows: dataWithParsedGeometry,
     columns: [
       ...dataset.columns,
       {
@@ -898,8 +899,8 @@ async function exportDatasetsToGeoPackage(
 
 async function fetchDatasetsWithGeometry(
   datasets: ProcessedDataset[]
-): Promise<ProcessedDataset[]> {
-  const results: ProcessedDataset[] = [];
+): Promise<GeoJsonExportDataset[]> {
+  const results: GeoJsonExportDataset[] = [];
 
   for (const dataset of datasets) {
     const geomColumn = resolveDatasetGeometryColumn(dataset);
@@ -1019,7 +1020,7 @@ async function fetchDatasetsWithGeometry(
             ? { ...column, type: COLUMN_TYPE_GEOMETRY }
             : column
         ),
-        data: dataWithParsedGeometry
+        rows: dataWithParsedGeometry
       });
     } catch (error) {
       logger.error(

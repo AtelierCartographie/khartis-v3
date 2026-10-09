@@ -13,6 +13,7 @@
   } from 'carbon-icons-svelte';
   import Button from '$lib/features/commons/components/button-native.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import {
     dataToolsStore,
     DataToolType
@@ -120,7 +121,7 @@
     />
     {#if hasSelection}
       <span class="selection-count">
-        {m.selection_count({ count: selectionCount })}
+        {m.selection_count({ count: formatValue(selectionCount) })}
       </span>
     {/if}
     {#if showHiddenColumns}

@@ -50,6 +50,7 @@ export async function clearColumnTransformations(
     ...updatedFiles[fileIndex],
     columnTransformations: [],
     deletedRowIds: [],
+    enrichmentSnapshot: undefined,
     ...(options?.duckdbTableName
       ? { duckdbTableName: options.duckdbTableName }
       : {}),
@@ -87,6 +88,26 @@ export async function updateFileJoinedBasemap(
     ...updatedFiles[fileIndex],
     joinedBasemap
   };
+
+  container._state.currentProject = {
+    ...project,
+    data: { ...project.data, sourceFiles: updatedFiles }
+  };
+
+  await markDirtyAndSave(container);
+}
+
+export async function updateFileCsvOptions(
+  container: ProjectStateContainer,
+  fileId: string,
+  csvOptions: UploadedFile['csvOptions']
+): Promise<void> {
+  const fileIndex = getSourceFileIndex(container, fileId);
+  if (fileIndex === -1) return;
+
+  const project = container._state.currentProject!;
+  const updatedFiles = [...project.data.sourceFiles];
+  updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], csvOptions };
 
   container._state.currentProject = {
     ...project,

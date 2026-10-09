@@ -19,6 +19,8 @@ export type PerfPhase = (typeof PERF_PHASE)[keyof typeof PERF_PHASE];
 
 const MARK_PREFIX = 'khartis:';
 const SUMMARY_QUIET_DELAY_MS = 2000;
+const SLOW_PHASE_MS = 1000;
+const FULL_SUMMARY_STORAGE_KEY = 'khartis:perf-summary';
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -87,29 +89,59 @@ function scheduleSummaryLog(): void {
   summaryTimer = setTimeout(logPerfSummary, SUMMARY_QUIET_DELAY_MS);
 }
 
-function logPerfSummary(): void {
-  summaryTimer = null;
-  if (completedEntries.length === 0) {
-    return;
+function isFullSummaryRequested(): boolean {
+  try {
+    return localStorage.getItem(FULL_SUMMARY_STORAGE_KEY) !== null;
+  } catch {
+    return false;
   }
-  const originMs = completedEntries.reduce(
-    (min, entry) => Math.min(min, entry.startMs),
-    Number.POSITIVE_INFINITY
-  );
-  const rows = [...completedEntries]
+}
+
+function toSummaryRows(entries: PerfEntry[], originMs: number) {
+  return [...entries]
     .sort((a, b) => a.startMs - b.startMs)
     .map((entry) => ({
       phase: entry.phase,
       start: `+${(entry.startMs - originMs).toFixed(0)}ms`,
       duration: `${entry.durationMs.toFixed(1)}ms`
     }));
-  const totalMs = completedEntries.reduce(
-    (sum, entry) => sum + entry.durationMs,
-    0
+}
+
+/**
+ * Reports one burst of measures, then forgets it. A burst is quiet unless a
+ * phase is slow; the full table is opt-in through localStorage. The User
+ * Timing measures stay in the browser Performance panel either way.
+ */
+function logPerfSummary(): void {
+  summaryTimer = null;
+  const entries = completedEntries.splice(0);
+  if (entries.length === 0) {
+    return;
+  }
+  const originMs = entries.reduce(
+    (min, entry) => Math.min(min, entry.startMs),
+    Number.POSITIVE_INFINITY
   );
+
+  if (isFullSummaryRequested()) {
+    const totalMs = entries.reduce((sum, entry) => sum + entry.durationMs, 0);
+    logger.warn(
+      `[perf] ${entries.length} phase measures, ${totalMs.toFixed(0)}ms measured`,
+      LogCategory.SYSTEM,
+      toSummaryRows(entries, originMs)
+    );
+    return;
+  }
+
+  const slowEntries = entries.filter(
+    (entry) => entry.durationMs >= SLOW_PHASE_MS
+  );
+  if (slowEntries.length === 0) {
+    return;
+  }
   logger.warn(
-    `[perf] ${rows.length} phase measures, ${totalMs.toFixed(0)}ms measured`,
+    `[perf] ${slowEntries.length} phase measures over ${SLOW_PHASE_MS}ms`,
     LogCategory.SYSTEM,
-    rows
+    toSummaryRows(slowEntries, originMs)
   );
 }

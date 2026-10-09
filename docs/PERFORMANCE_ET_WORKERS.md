@@ -93,7 +93,10 @@ Comparer avant et après, en changeant une seule variable à la fois :
 Outils disponibles :
 
 - le panneau Performance du navigateur ;
-- les marques de performance (`commons/utils/perf-marks.utils.ts`) ;
+- les marques de performance (`commons/utils/perf-marks.utils.ts`), visibles
+  dans le panneau Performance ; la console ne signale qu'une phase de plus
+  d'une seconde, et la clé `localStorage` `khartis:perf-summary` y affiche le
+  tableau complet de chaque rafale de mesures ;
 - en développement et en préproduction, le débogage Deck.gl
   (`map/stores/deck-debug.store.svelte.ts`), qui expose `window.__deck` et
   `window.__maplibreMap`.

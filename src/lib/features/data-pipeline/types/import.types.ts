@@ -1,5 +1,4 @@
 import type { AssetRef } from '$lib/features/commons/types/create-project.types';
-import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
 import type { FileFormatEnum } from '../types';
 
 export interface CsvImportOptions {
@@ -15,7 +14,6 @@ export interface DatasetMetadata {
   parserUsed: string;
   processingDuration?: number;
   transformations?: string[];
-  geoDuckTableReady?: boolean;
   csvOptions?: CsvImportOptions;
 }
 
@@ -28,13 +26,12 @@ export interface UploadedFilePayload {
   type: string;
   datasetId?: string;
   content?: string | ArrayBuffer;
-  parsedData?: unknown;
   fileType?: string;
-  deepAnalysis?: DataAnalysisResult;
   relatedFileObjects?: File[];
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  csvOptions?: CsvImportOptions;
 }
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;

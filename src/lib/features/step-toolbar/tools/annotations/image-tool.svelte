@@ -116,6 +116,7 @@
       </div>
       <div class="visually-hidden" bind:this={hiddenUploader}>
         <FileUploader
+          iconDescription={m.remove_file_action()}
           labelTitle=""
           buttonLabel=""
           status="edit"

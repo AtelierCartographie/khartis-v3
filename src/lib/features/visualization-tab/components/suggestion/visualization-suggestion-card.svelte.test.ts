@@ -78,7 +78,7 @@ describe('VisualizationSuggestionCard', () => {
       badges: ['pop', 'city']
     },
     {
-      name: 'Symboles · proportionnels + fond en catégories (polygon data)',
+      name: 'Symboles · proportionnels + en catégories (polygon data)',
       suggestion: {
         id: 'symbols_proportional_colorful_QL',
         nbColumns: 2,
@@ -90,12 +90,12 @@ describe('VisualizationSuggestionCard', () => {
       primitive: m.viz_suggestion_primitive_symbols(),
       types: [
         m.viz_suggestion_mode_proportional(),
-        m.viz_suggestion_mode_fond_categories()
+        m.viz_suggestion_mode_categories()
       ],
       badges: ['pop', 'zone']
     },
     {
-      name: 'Symboles · proportionnels + fond en classes (polygon data)',
+      name: 'Symboles · proportionnels + en classes (polygon data)',
       suggestion: {
         id: 'symbols_proportional_colorful_QTR',
         nbColumns: 2,
@@ -107,12 +107,12 @@ describe('VisualizationSuggestionCard', () => {
       primitive: m.viz_suggestion_primitive_symbols(),
       types: [
         m.viz_suggestion_mode_proportional(),
-        m.viz_suggestion_mode_fond_classes()
+        m.viz_suggestion_mode_classes()
       ],
       badges: ['pop', 'density']
     },
     {
-      name: 'Symboles · uniques + fond en catégories (polygon, no size variable)',
+      name: 'Symboles · uniques + en catégories (polygon, no size variable)',
       suggestion: {
         id: 'symbols_uniques_colorful_QL',
         nbColumns: 1,
@@ -124,7 +124,7 @@ describe('VisualizationSuggestionCard', () => {
       primitive: m.viz_suggestion_primitive_symbols(),
       types: [
         m.viz_suggestion_mode_unique(),
-        m.viz_suggestion_mode_fond_categories()
+        m.viz_suggestion_mode_categories()
       ],
       badges: ['zone']
     },

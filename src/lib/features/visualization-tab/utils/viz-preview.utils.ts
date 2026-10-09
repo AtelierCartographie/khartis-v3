@@ -82,7 +82,6 @@ type Channel = (typeof CHANNEL)[keyof typeof CHANNEL];
 
 interface PreviewComposition {
   primitive: 'symbols' | 'polygons' | 'lines' | 'texts';
-  onPolygons: boolean;
   sized: boolean;
   doubleSized: boolean;
   colour: Channel;
@@ -120,7 +119,6 @@ export function readComposition(suggestion: VizSuggestion): PreviewComposition {
 
   return {
     primitive,
-    onPolygons: suggestion.dataGeometry === 'polygon',
     sized: encoding.includes('QTA'),
     doubleSized: encoding.filter((type) => type === 'QTA').length === 2,
     colour: usesShape ? CHANNEL.NONE : colour,
@@ -468,10 +466,7 @@ interface Mark {
   innerRadius: number;
 }
 
-function symbolMarks(
-  composition: PreviewComposition,
-  backdropCarriesColour: boolean
-): Mark[] {
+function symbolMarks(composition: PreviewComposition): Mark[] {
   if (composition.shaped !== CHANNEL.NONE) {
     const ordered = composition.shaped === CHANNEL.ORDERED;
     // Nominal (CategoryShapeMode.DIFFERENT) : formes du cycle, avec une forme
@@ -491,9 +486,7 @@ function symbolMarks(
   }
 
   if (composition.sized) {
-    const colours = backdropCarriesColour
-      ? null
-      : markColours(composition, GRADUATED_RADII.length);
+    const colours = markColours(composition, GRADUATED_RADII.length);
     return GRADUATED_SLOTS.map((slot, i) => ({
       x: CLOUD[slot][0],
       y: CLOUD[slot][1],
@@ -506,9 +499,7 @@ function symbolMarks(
     }));
   }
 
-  const colours = backdropCarriesColour
-    ? null
-    : markColours(composition, UNIFORM_SLOTS.length);
+  const colours = markColours(composition, UNIFORM_SLOTS.length);
   return UNIFORM_SLOTS.map((slot, i) => ({
     x: CLOUD[slot][0],
     y: CLOUD[slot][1],
@@ -520,15 +511,9 @@ function symbolMarks(
 }
 
 function drawSymbols(composition: PreviewComposition): VizPreviewShape[] {
-  // Sur une donnée polygonale, ce sont les mailles qui portent la couleur
-  // (« fond en classes » du libellé) et le symbole ne garde que la taille.
-  const backdropCarriesColour =
-    composition.onPolygons && composition.colour !== CHANNEL.NONE;
-  const shapes: VizPreviewShape[] = backdropCarriesColour
-    ? lattice(cellFills(composition))
-    : lattice(LATTICE.map(() => TOKEN.neutral));
+  const shapes: VizPreviewShape[] = lattice(LATTICE.map(() => TOKEN.neutral));
 
-  const marks = symbolMarks(composition, backdropCarriesColour);
+  const marks = symbolMarks(composition);
   marks.forEach((mark) => {
     shapes.push({
       kind: 'path',

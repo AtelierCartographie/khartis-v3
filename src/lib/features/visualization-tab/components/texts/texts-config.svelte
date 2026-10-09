@@ -687,6 +687,7 @@
 
   <DiscretizationModal
     bind:open={discretizationModalOpen}
+    primitive={PrimitiveFilterType.TEXT}
     visualization={activeDiscretizationVisualization}
     classification={activeDiscretizationClassification}
     valueColumn={activeDiscretizationValueColumn}

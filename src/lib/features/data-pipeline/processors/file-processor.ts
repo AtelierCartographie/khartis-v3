@@ -1,8 +1,4 @@
-import {
-  createUploadedFile,
-  DataSourceType,
-  FileType
-} from '$lib/features/commons/utils/file-import.utils';
+import { FileType } from '$lib/features/commons/utils/file-import.utils';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
@@ -16,8 +12,7 @@ import { FileFormatEnum } from '../enums';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
-import { gpxProcessor } from './strategies';
-import { applyTabularGeoDetection } from './tabular-geo-detection';
+import { isGpxFile, readGpxIntoTable } from './gpx-processor';
 import type {
   CsvImportOptions,
   DatasetResult,
@@ -31,7 +26,6 @@ import {
   readFileHead
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { FileWithId } from '$lib/features/duckdb';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
@@ -46,32 +40,17 @@ export interface ProcessFileOptions {
   originalName?: string;
   companionFiles?: File[];
   sourceFileId?: string;
-}
-
-function createProcessorFilePayload(
-  file: File,
-  fileInfo: FileInfo,
-  companionFiles?: File[]
-): UploadedFile {
-  const uploadedFile = createUploadedFile(file, DataSourceType.FILE_UPLOAD);
-
-  uploadedFile.name = fileInfo.name;
-  uploadedFile.originalFile = file;
-
-  if (companionFiles?.length) {
-    uploadedFile.relatedFileObjects = companionFiles;
-    uploadedFile.relatedFiles = companionFiles.map(
-      (companion) => companion.name
-    );
-  }
-
-  return uploadedFile;
+  /** Layer of a multi-layer source; the preferred spatial layer otherwise. */
+  layer?: string;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface ReadFileIntoTableOptions {
   tableName: string;
   originalName?: string;
   companionFiles?: File[];
+  layer?: string;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface FileTableRead {
@@ -110,25 +89,9 @@ export async function readFileIntoTable(
     );
   }
 
-  const uploadedFile = createProcessorFilePayload(
-    file,
-    fileInfo,
-    companionFiles
-  );
-
-  if (isGeoFile && gpxProcessor.canHandle(uploadedFile)) {
-    const processorDataset = await gpxProcessor.process(
-      {
-        Duck,
-        callbacks: {
-          getRowCount: (name: string) => Duck.get_row_count(name)
-        },
-        tableName
-      },
-      uploadedFile
-    );
+  if (isGeoFile && isGpxFile(fileInfo.name)) {
     return {
-      tableName: processorDataset.tableName,
+      tableName: await readGpxIntoTable(file, tableName, fileInfo.name),
       fileInfo,
       isGeoFile: true,
       format
@@ -141,7 +104,8 @@ export async function readFileIntoTable(
     try {
       await Duck.read_geofile(file, {
         tablename: tableName,
-        shapefile: isShapefile
+        shapefile: isShapefile,
+        ...(options.layer ? { layer: options.layer } : {})
       });
       return { tableName, fileInfo, isGeoFile, format };
     } catch (geoReadError) {
@@ -173,7 +137,12 @@ export async function readFileIntoTable(
     fileInfo,
     file
   );
-  const csvOptions = await readTabularFile(file, tableName, fileInfo.name);
+  const csvOptions = await readTabularFile(
+    file,
+    tableName,
+    fileInfo.name,
+    options.csvOptions
+  );
   if (geoParquetMetadata) {
     await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
   }
@@ -184,13 +153,16 @@ export async function processFileInternal(
   file: File,
   options: ProcessFileOptions = {}
 ): Promise<DatasetResult> {
+  const sourceName = options.originalName ?? file.name;
   const read = await readFileIntoTable(file, {
     tableName: generateTableName(
-      options.originalName ?? file.name,
+      options.layer ?? sourceName,
       options.sourceFileId
     ),
     originalName: options.originalName,
-    companionFiles: options.companionFiles
+    companionFiles: options.companionFiles,
+    layer: options.layer,
+    csvOptions: options.csvOptions
   });
 
   const dataset = await buildDatasetFromDuckTable({
@@ -206,8 +178,6 @@ export async function processFileInternal(
   if (read.csvOptions) {
     dataset.metadata.csvOptions = read.csvOptions;
   }
-
-  await applyTabularGeoDetection(dataset);
 
   return dataset;
 }
@@ -277,7 +247,8 @@ async function registerFilesForDuckDB(
 async function readTabularFile(
   file: File,
   tableName: string,
-  fileName: string
+  fileName: string,
+  chosenOptions?: CsvImportOptions
 ): Promise<CsvImportOptions | undefined> {
   if (isParquetFileName(fileName)) {
     await Duck.read_tabular(file, {
@@ -285,6 +256,17 @@ async function readTabularFile(
       format: 'parquet'
     });
     return undefined;
+  }
+
+  if (chosenOptions) {
+    await Duck.read_tabular(file, {
+      tablename: tableName,
+      header: chosenOptions.header,
+      decimal_separator: chosenOptions.decimalSeparator,
+      thousands_separator: chosenOptions.thousandsSeparator,
+      delimiter: chosenOptions.delimiter
+    });
+    return chosenOptions;
   }
 
   // Read file head once, share between decimal and header detection (avoids double file.slice + decode)

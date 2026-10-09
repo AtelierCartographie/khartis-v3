@@ -62,7 +62,7 @@ function buildConvertibilityCountersSql(
     ) AS convertible_${index},
     COUNT(*) FILTER (
       WHERE ${rawValueExpr} <> ''
-        AND regexp_matches(${rawValueExpr}, '[,. ]')
+        AND regexp_matches(${rawValueExpr}, '[,. %]')
     ) AS formatted_${index},
     COUNT(*) FILTER (
       WHERE ${rawValueExpr} <> ''

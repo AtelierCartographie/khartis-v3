@@ -90,3 +90,43 @@ export async function addRowId(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }
+
+const GDAL_FID_COLUMN = 'OGC_FID';
+
+/**
+ * GDAL adds an `OGC_FID` column for drivers without a native feature id
+ * (GeoJSON, KML). When it is only the 0..n-1 row sequence it carries nothing
+ * `__id` does not, so it is dropped. Any other value set comes from the file
+ * (a GeoJSON integer `Feature.id`) and is kept as data.
+ */
+export async function dropSyntheticFeatureIdColumn(
+  connection: AsyncDuckDBConnection,
+  table: string
+): Promise<void> {
+  const columns = (await executeQuery(
+    connection,
+    `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(table)}' AND column_name = '${GDAL_FID_COLUMN}';`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{ column_name: string }>;
+  if (columns.length === 0) return;
+
+  const escapedTable = escapeIdentifier(table);
+  const fid = `TRY_CAST("${GDAL_FID_COLUMN}" AS BIGINT)`;
+  const [result] = (await executeQuery(
+    connection,
+    `SELECT (count(*) = 0 OR (
+         min(${fid}) = 0
+         AND max(${fid}) = count(*) - 1
+         AND count(DISTINCT ${fid}) = count(*)
+       )) AS synthetic
+     FROM "${escapedTable}";`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{ synthetic: boolean | null }>;
+  if (result?.synthetic !== true) return;
+
+  await executeQuery(
+    connection,
+    `ALTER TABLE "${escapedTable}" DROP COLUMN "${GDAL_FID_COLUMN}";`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  );
+}

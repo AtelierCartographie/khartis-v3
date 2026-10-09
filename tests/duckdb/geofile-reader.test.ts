@@ -39,7 +39,8 @@ vi.mock('$lib/features/duckdb/io/file-registry', () => ({
 }));
 
 vi.mock('$lib/features/duckdb/io/reader-utils', () => ({
-  addRowId: addRowIdMock
+  addRowId: addRowIdMock,
+  dropSyntheticFeatureIdColumn: vi.fn()
 }));
 
 vi.mock('$lib/features/map/utils/geopackage-browser-fallback.utils', () => ({

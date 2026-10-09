@@ -7,6 +7,7 @@
     VizFilterOperator
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown, TextInput } from 'carbon-components-svelte';
   import { TrashCan } from 'carbon-icons-svelte';
   import {
@@ -128,6 +129,8 @@
 
   <div class="filter-field">
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       titleText={m.filter_variable()}
       items={dataFieldsDropdownItems}
@@ -146,6 +149,8 @@
 
   <div class="filter-field">
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       titleText={m.filter_operator()}
       items={availOps.map((op) => ({ id: op.value, text: op.label }))}

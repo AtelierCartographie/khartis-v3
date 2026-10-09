@@ -22,7 +22,6 @@ import {
   addFilesToProject as addFilesToProjectFn,
   addVirtualSourceFile as addVirtualSourceFileFn,
   removeFileFromProject as removeFileFromProjectFn,
-  clearSourceFiles as clearSourceFilesFn,
   renameFile as renameFileFn,
   saveCurrentProject as saveCurrentProjectFn,
   exportProject as exportProjectFn,
@@ -31,6 +30,7 @@ import {
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
   updateFileJoinedBasemap as updateFileJoinedBasemapFn,
+  updateFileCsvOptions as updateFileCsvOptionsFn,
   addDeletedRows as addDeletedRowsFn,
   type SaveCurrentProjectOptions
 } from './project';
@@ -86,10 +86,6 @@ function createProjectStore() {
     return removeFileFromProjectFn(container, fileId);
   }
 
-  async function clearSourceFiles(): Promise<void> {
-    return clearSourceFilesFn(container);
-  }
-
   async function renameFile(fileId: string, newName: string): Promise<void> {
     return renameFileFn(container, fileId, newName);
   }
@@ -120,6 +116,13 @@ function createProjectStore() {
     joinedBasemap: string
   ): Promise<void> {
     return updateFileJoinedBasemapFn(container, fileId, joinedBasemap);
+  }
+
+  async function updateFileCsvOptions(
+    fileId: string,
+    csvOptions: UploadedFile['csvOptions']
+  ): Promise<void> {
+    return updateFileCsvOptionsFn(container, fileId, csvOptions);
   }
 
   async function addDeletedRows(
@@ -224,11 +227,11 @@ function createProjectStore() {
     addFilesToProject,
     addVirtualSourceFile,
     removeFileFromProject,
-    clearSourceFiles,
     renameFile,
     addColumnTransformation,
     clearColumnTransformations,
     updateFileJoinedBasemap,
+    updateFileCsvOptions,
     addDeletedRows,
     createProject,
     loadProject,

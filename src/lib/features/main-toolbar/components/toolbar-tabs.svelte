@@ -856,6 +856,7 @@
 <AddDataModal bind:open={isAddDataModalOpen} />
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   danger
   open={isVizDeleteConfirmOpen}
   modalHeading={m.viz_list_delete_title()}
@@ -872,6 +873,7 @@
 </Modal>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   danger
   open={isDeleteConfirmOpen}
   modalHeading={m.file_delete_title()}
@@ -888,6 +890,7 @@
 </Modal>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   danger
   open={isDeleteDatasetConfirmOpen}
   modalHeading={m.dataset_delete_title()}

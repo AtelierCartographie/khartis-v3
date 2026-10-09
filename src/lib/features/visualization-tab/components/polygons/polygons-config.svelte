@@ -39,14 +39,10 @@
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
   import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
   import { patternPaletteFromLegacy } from '$lib/features/commons/services/pattern-palette.service';
-  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
-
-  const DEFAULT_MISSING_DATA_PATTERN_CONFIG: PatternPaletteConfig = {
-    shape: 'line',
-    angle: 45,
-    scale: 0.7,
-    color: '#000000'
-  };
+  import {
+    DEFAULT_MISSING_DATA_PATTERN_CONFIG,
+    type PatternPaletteConfig
+  } from '$lib/features/commons/constants/pattern.constants';
 
   interface Props {
     open?: boolean;
@@ -486,6 +482,7 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
+  primitive={PrimitiveFilterType.POLYGON}
   visualization={visualization}
   classification={activeDiscretizationClassification}
   valueColumn={activeDiscretizationValueColumn}

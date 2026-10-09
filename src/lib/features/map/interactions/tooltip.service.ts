@@ -1,5 +1,6 @@
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
+import { isYearValue } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMNS
@@ -13,12 +14,14 @@ import { MAP_TIMING } from '../constants/timing.constants';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 
-export function formatTooltipValue(value: unknown): string {
+export function formatTooltipValue(value: unknown, columnName = ''): string {
   if (typeof value === 'string') {
     return formatValue(projectHtmlLikeText(value));
   }
 
-  return formatValue(value);
+  return formatValue(value, {
+    useGrouping: !isYearValue(columnName, value)
+  });
 }
 
 function isReservedColumn(columnName: string): boolean {
@@ -50,7 +53,7 @@ function extractEntriesFromArrowTable(
               field.type.typeId === Type.Timestamp) &&
             (typeof val === 'number' || typeof val === 'bigint')
               ? formatTooltipValue(new Date(Number(val)))
-              : formatTooltipValue(val)
+              : formatTooltipValue(val, colName)
         });
       }
     }

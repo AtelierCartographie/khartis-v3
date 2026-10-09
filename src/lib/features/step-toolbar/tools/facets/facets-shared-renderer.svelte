@@ -79,6 +79,8 @@
   } from './facets.store.svelte';
   import { resolveSharedFacetScaleStats } from './facets-shared-scale';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
+  import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { getLegendState } from '../legend';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -148,6 +150,12 @@
     !globalState.isMapExporting &&
       (globalState.selectedStep === ToolbarStep.Visualizations || isStylingMode)
   );
+  // Titles are printed on the page, which keeps its own colors in dark mode:
+  // they share the page text color with the legend, not a UI theme token.
+  const facetTitleColor = $derived.by(() => {
+    const { hue, saturation, lightness } = getLegendState().style.textColor;
+    return hslToHex(hue, saturation, lightness);
+  });
   // Independent-scale facets use per-cell legends; shared scale uses the global legend.
   const showAnchoredLegends = $derived(
     (globalState.selectedStep === ToolbarStep.Visualizations ||
@@ -879,7 +887,11 @@
           style:top="{descriptor.frame.y - FACET_TITLE_HEIGHT}px"
           style:width="{descriptor.frame.width}px"
         >
-          <h4 class="facet-title" style:height="{FACET_TITLE_HEIGHT}px">
+          <h4
+            class="facet-title"
+            style:height="{FACET_TITLE_HEIGHT}px"
+            style:color={facetTitleColor}
+          >
             {#if isTitleEditable}
               <span
                 class="facet-title-button"
@@ -954,7 +966,6 @@
     font-size: 13px;
     font-weight: 500;
     text-align: center;
-    color: var(--cds-text-primary, #161616);
     margin: 0;
     padding: 2px 8px;
     line-height: 20px;
@@ -996,6 +1007,5 @@
   .facet-title-button:focus-visible {
     outline: 2px solid var(--cds-focus, #0f62fe);
     outline-offset: -2px;
-    background: var(--cds-field-01, #f4f4f4);
   }
 </style>

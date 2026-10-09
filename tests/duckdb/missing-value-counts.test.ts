@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  countDuplicateRows,
   getMissingValueCountsInScope,
   type DuckDBClientForTableData
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
@@ -83,5 +84,31 @@ describe('getMissingValueCountsInScope', () => {
     );
 
     expect(counts).toEqual([2, 1]);
+  });
+});
+
+describe('countDuplicateRows', () => {
+  beforeAll(async () => {
+    await run(
+      db,
+      `CREATE SEQUENCE id_dups START 1;
+       CREATE TABLE dups AS SELECT * FROM (VALUES
+         ('Paris', 1, NULL),
+         ('Paris', 1, NULL),
+         ('Paris', 1, NULL),
+         ('Lyon', 2, 'x'),
+         ('Lyon', 3, 'x')
+       ) AS t(city, value, note);
+       ALTER TABLE dups ADD COLUMN __id INTEGER DEFAULT nextval('id_dups');
+       ALTER TABLE dups ADD COLUMN __feature_id__ INTEGER DEFAULT nextval('id_dups');`
+    );
+  });
+
+  it('should count repeated rows when only the internal ids differ', async () => {
+    expect(await countDuplicateRows('dups', duck)).toBe(2);
+  });
+
+  it('should count no duplicate when every row differs', async () => {
+    expect(await countDuplicateRows('communes', duck)).toBe(0);
   });
 });

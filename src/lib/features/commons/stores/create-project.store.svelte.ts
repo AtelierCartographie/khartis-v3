@@ -23,7 +23,6 @@ import {
   extractUrlsFromInput,
   FileType,
   getFilenameFromUrl,
-  getShapefileBaseName,
   groupShapefiles,
   isShapefileComponent,
   isValidUrl
@@ -45,8 +44,8 @@ import type {
 } from '../types/create-project.types';
 import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
+import { globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
-import { visualizationStore } from './visualization.store.svelte';
 
 const REMOTE_FILE_OFFLINE_ERROR_CODE = 'REMOTE_FILE_OFFLINE';
 const REMOTE_FILE_FETCH_FAILED_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
@@ -87,6 +86,47 @@ function hasDuplicateFileName(fileName: string): boolean {
   return createProjectInternalState.newProject.uploadedFiles.some(
     (file) => file.name === fileName && file.status !== FileStatus.ERROR
   );
+}
+
+// A pending file owns its DuckDB table until handOverUploadedFiles() gives it
+// to a project; every other way out of the pending list drops the table.
+function discardUploadedFiles(files: readonly UploadedFile[]): void {
+  for (const file of files) {
+    file.originalFile = undefined;
+    file.relatedFileObjects = undefined;
+    file.content = undefined;
+    file.relatedFilesData = undefined;
+    if (file.duckdbTableName) {
+      dropPendingTable(file.duckdbTableName);
+    }
+  }
+}
+
+function dropPendingTable(tableName: string): void {
+  // dropTable logs its own failure; a leftover table only costs memory.
+  duckDBOrchestrator.dropTable(tableName).catch(() => undefined);
+}
+
+function nameKey(name: string): string {
+  return name.replace(/\.[^.]+$/, '').toLowerCase();
+}
+
+function nextPastedDataName(): string {
+  const takenNames = new Set(
+    [
+      ...createProjectInternalState.newProject.uploadedFiles
+        .filter((file) => file.status !== FileStatus.ERROR)
+        .map((file) => file.name),
+      ...datasetsStore.getAllDatasets().map((dataset) => dataset.name)
+    ].map(nameKey)
+  );
+
+  const baseName = m.dataset_pasted_name();
+  let counter = 1;
+  while (takenNames.has(nameKey(`${baseName} ${counter}`))) {
+    counter++;
+  }
+  return `${baseName} ${counter}`;
 }
 
 export const createProjectActions = {
@@ -244,8 +284,13 @@ export const createProjectActions = {
       const validationResult =
         CreateProjectValidationService.validateFiles(remainingFiles);
 
+      const shapefileMessages = new Set(
+        Array.from(validationResult.incompleteShapefiles.values()).map(
+          (group) => group.message
+        )
+      );
       const nonShapefileErrors = validationResult.globalErrors.filter(
-        (err) => !err.includes('Incomplete shapefile')
+        (err) => !shapefileMessages.has(err)
       );
       createProjectInternalState.newProject.validationErrors =
         nonShapefileErrors;
@@ -270,20 +315,16 @@ export const createProjectActions = {
         const mainFileName = mainFile.name;
         const fileValidation = validationResult.results.get(mainFileName);
 
-        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
-          err.includes(`Incomplete shapefile "${baseName}"`)
+        const incompleteShapefile = validationResult.incompleteShapefiles.get(
+          baseName.toLowerCase()
         );
+        const otherErrors = (fileValidation?.errors ?? []).filter(
+          (error) => !shapefileMessages.has(error)
+        );
+        const hasOtherErrors = otherErrors.length > 0;
 
-        const hasShapefileError = !!shapefileGlobalError;
-        const hasOtherErrors =
-          fileValidation && fileValidation.errors.length > 0;
-
-        if (hasShapefileError && !hasOtherErrors) {
-          const missingMatch =
-            shapefileGlobalError.match(/Missing files: (.*)/);
-          const missingComponents = missingMatch
-            ? missingMatch[1].split(', ').map((s) => s.trim())
-            : [];
+        if (incompleteShapefile && !hasOtherErrors) {
+          const missingComponents = incompleteShapefile.missing;
 
           const incompleteFile: UploadedFile = {
             id: crypto.randomUUID(),
@@ -303,17 +344,13 @@ export const createProjectActions = {
             validation: {
               isValid: false,
               errors: [],
-              warnings: [
-                m.shapefile_incomplete_message({
-                  missing: missingComponents.join(', ')
-                })
-              ]
+              warnings: [incompleteShapefile.message]
             }
           };
           this.addUploadedFile(incompleteFile);
           toProcess.delete(baseName);
         } else if (hasOtherErrors) {
-          const validationErrors = fileValidation?.errors ?? [];
+          const validationErrors = otherErrors;
           const validationWarnings = fileValidation?.warnings ?? [];
           const errorFile: UploadedFile = {
             id: crypto.randomUUID(),
@@ -392,8 +429,17 @@ export const createProjectActions = {
         status: UploadedFile['status'],
         errorMessage?: string
       ) => this.updateFileStatus(fileId, status, errorMessage),
-      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
-        this.updateFileData(fileId, data),
+      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) => {
+        const isStillPending =
+          createProjectInternalState.newProject.uploadedFiles.some(
+            (pendingFile) => pendingFile.id === fileId
+          );
+        if (!isStillPending && data.duckdbTableName) {
+          dropPendingTable(data.duckdbTableName);
+          return;
+        }
+        this.updateFileData(fileId, data);
+      },
       onAdditionalFile: (file: UploadedFile) => this.addUploadedFile(file)
     };
 
@@ -503,16 +549,8 @@ export const createProjectActions = {
     }
 
     const { fileType, content } = result;
-    const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
-    const timestamp = Date.now();
-    let fileName = `${baseName}-${timestamp}.${extension}`;
-
-    let counter = 1;
-    while (hasDuplicateFileName(fileName)) {
-      fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
-      counter++;
-    }
+    const fileName = `${nextPastedDataName()}.${extension}`;
 
     const mimeType =
       fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
@@ -527,15 +565,9 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      const fileToRemove =
-        createProjectInternalState.newProject.uploadedFiles[index];
-      if (fileToRemove) {
-        fileToRemove.originalFile = undefined;
-        fileToRemove.relatedFileObjects = undefined;
-        fileToRemove.content = undefined;
-        fileToRemove.relatedFilesData = undefined;
-      }
-      createProjectInternalState.newProject.uploadedFiles.splice(index, 1);
+      const [fileToRemove] =
+        createProjectInternalState.newProject.uploadedFiles.splice(index, 1);
+      discardUploadedFiles([fileToRemove]);
       this.recomputeGlobalValidationErrors();
     }
   },
@@ -631,21 +663,7 @@ export const createProjectActions = {
         downloadedFiles.push(remoteFile);
       }
 
-      if (downloadedFiles.length === 1) {
-        const [downloadedFile] = downloadedFiles;
-
-        if (isShapefileComponent(downloadedFile.name)) {
-          await this.processShapefileGroup(
-            getShapefileBaseName(downloadedFile.name),
-            [downloadedFile],
-            DataSourceType.URL
-          );
-        } else {
-          await this.processSingleFile(downloadedFile, DataSourceType.URL);
-        }
-      } else {
-        await this.processFiles(downloadedFiles, DataSourceType.URL);
-      }
+      await this.processFiles(downloadedFiles, DataSourceType.URL);
 
       this.setOnlineFileUrl('');
     } catch (error) {
@@ -756,30 +774,19 @@ export const createProjectActions = {
     }
   },
 
-  async clearAllFiles(saveProject: boolean = false): Promise<void> {
-    for (const file of createProjectInternalState.newProject.uploadedFiles) {
-      file.originalFile = undefined;
-      file.relatedFileObjects = undefined;
-      file.content = undefined;
-      file.relatedFilesData = undefined;
-    }
+  clearAllFiles(): void {
+    discardUploadedFiles(createProjectInternalState.newProject.uploadedFiles);
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.validationErrors = [];
-
-    datasetsStore.clear();
-    visualizationStore.clear();
-    await duckDBOrchestrator.clear();
-
-    if (
-      saveProject &&
-      projectStore.currentProject?.id &&
-      projectStore.currentProject.data
-    ) {
-      await projectStore.clearSourceFiles();
-    }
   },
 
-  clearUploadState(): void {
+  handOverUploadedFiles(projectFiles: readonly UploadedFile[]): void {
+    const handedOverIds = new Set(projectFiles.map((file) => file.id));
+    discardUploadedFiles(
+      createProjectInternalState.newProject.uploadedFiles.filter(
+        (file) => !handedOverIds.has(file.id)
+      )
+    );
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.validationErrors = [];
   },
@@ -842,6 +849,7 @@ export const createProjectActions = {
   },
 
   resetNewProject(): void {
+    discardUploadedFiles(createProjectInternalState.newProject.uploadedFiles);
     createProjectInternalState.newProject.uploadedFiles = [];
     createProjectInternalState.newProject.pastedData = '';
     createProjectInternalState.newProject.onlineFileUrl = '';
@@ -868,6 +876,14 @@ export const createProjectActions = {
     this.resetNewProject();
     this.resetTryExample();
     createProjectInternalState.selectedTab = 1;
+  },
+
+  dismissModal(): void {
+    globalState.isCreateProjectModalOpen = false;
+    this.resetAllTabs();
+    if (!projectStore.currentProject) {
+      globalState.isSideNavOpen = true;
+    }
   },
 
   reset(): void {

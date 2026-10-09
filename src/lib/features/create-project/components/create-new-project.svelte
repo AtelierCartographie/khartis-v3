@@ -6,11 +6,15 @@
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import {
+    DataSourceType,
     FileType,
     type UploadedFile
   } from '$lib/features/commons/types/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import {
     readCarbonStringValue,
@@ -32,7 +36,7 @@
     TextInput,
     Tile
   } from 'carbon-components-svelte';
-  import { Launch, TrashCan } from 'carbon-icons-svelte';
+  import { CheckmarkFilled, Launch, TrashCan } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
   import { CreateProjectValidationService } from '../services/validation.service';
@@ -41,18 +45,42 @@
 
   interface Props {
     isModal?: boolean;
+    showTitle?: boolean;
     resetToken?: number;
   }
 
-  const { isModal = false, resetToken = 0 }: Props = $props();
+  const {
+    isModal = false,
+    showTitle = false,
+    resetToken = 0
+  }: Props = $props();
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
   let internalResetKey = $state(0);
   let pasteContainer = $state<HTMLElement | undefined>(undefined);
   let urlImportBlock = $state<HTMLElement | undefined>(undefined);
+  let filesSection = $state<HTMLElement | undefined>(undefined);
 
   const uploaderKey = $derived(resetToken + internalResetKey);
+
+  const IMPORT_FEEDBACK_DURATION_MS = 3000;
+
+  type ImportSource = 'file' | 'paste' | 'url';
+
+  let isImportingPaste = $state(false);
+  let confirmedSource = $state<ImportSource | null>(null);
+  let pastedFile = $state<UploadedFile | null>(null);
+  let highlightedFileIds = $state<string[]>([]);
+  let importFeedbackTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const hasPastedFile = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.sourceType === DataSourceType.PASTE
+    )
+  );
+
+  $effect(() => () => clearTimeout(importFeedbackTimeout));
 
   const globalValidationErrors = $derived(
     createProjectState.newProject.validationErrors
@@ -89,7 +117,9 @@
       newFiles.forEach((f) =>
         lastProcessedFiles.add(`${f.name}-${f.size}-${f.lastModified}`)
       );
-      await createProjectActions.processFiles(newFiles);
+      await withImportFeedback('file', () =>
+        createProjectActions.processFiles(newFiles)
+      );
     }
   }
 
@@ -115,8 +145,63 @@
     if (!pastedDataValue.trim()) return;
     if (pastedDataValidation && !pastedDataValidation.isValid) return;
 
-    await createProjectActions.processPastedData(pastedDataValue);
-    pastedDataValue = '';
+    isImportingPaste = true;
+    try {
+      await withImportFeedback('paste', () =>
+        createProjectActions.processPastedData(pastedDataValue)
+      );
+    } finally {
+      pastedDataValue = '';
+      isImportingPaste = false;
+    }
+  }
+
+  async function withImportFeedback(
+    source: ImportSource,
+    runImport: () => Promise<void>
+  ) {
+    const previousStatus = new Map(
+      createProjectState.newProject.uploadedFiles.map((f) => [f.id, f.status])
+    );
+    await runImport();
+
+    const completedFiles = createProjectState.newProject.uploadedFiles.filter(
+      (f) =>
+        f.status === FileStatus.COMPLETE &&
+        previousStatus.get(f.id) !== FileStatus.COMPLETE
+    );
+    if (completedFiles.length > 0) {
+      showImportFeedback(source, completedFiles);
+    }
+  }
+
+  function showImportFeedback(source: ImportSource, files: UploadedFile[]) {
+    clearTimeout(importFeedbackTimeout);
+    confirmedSource = source;
+    pastedFile = source === 'paste' ? files[0] : null;
+    highlightedFileIds = files.map((f) => f.id);
+    importFeedbackTimeout = setTimeout(() => {
+      confirmedSource = null;
+      pastedFile = null;
+      highlightedFileIds = [];
+    }, IMPORT_FEEDBACK_DURATION_MS);
+
+    const lastFileId = files[files.length - 1].id;
+    requestAnimationFrame(() => {
+      filesSection
+        ?.querySelector(`[data-file-id="${CSS.escape(lastFileId)}"]`)
+        ?.scrollIntoView({
+          block: 'nearest',
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+            .matches
+            ? 'auto'
+            : 'smooth'
+        });
+    });
+  }
+
+  function dismissPasteFeedback() {
+    pastedFile = null;
   }
 
   async function handleLoadOnlineFile() {
@@ -134,13 +219,16 @@
     }
 
     createProjectActions.setOnlineFileUrl(trimmedUrl);
-    await createProjectActions.loadOnlineFile();
+    await withImportFeedback('url', () =>
+      createProjectActions.loadOnlineFile()
+    );
     if (!createProjectState.newProject.error) {
       onlineUrlValue = '';
     }
   }
 
   function handlePastedDataInput(event: CarbonValueEvent) {
+    dismissPasteFeedback();
     pastedDataValue = readCarbonStringValue(event, pastedDataValue);
     if (isAutoImportInput(event)) {
       void handlePasteData();
@@ -166,6 +254,8 @@
   }
 
   function handleOnlineUrlBlur(event: CarbonValueEvent) {
+    // Disabling the focused input during a load fires blur, which would start the same download again.
+    if (createProjectState.newProject.isLoading) return;
     if (staysInside(urlImportBlock, event)) return;
     void handleLoadOnlineFile();
   }
@@ -177,7 +267,6 @@
   }
 
   let deletingFileIds = $state<SvelteSet<string>>(new SvelteSet());
-  let isDeletingAll = $state(false);
 
   async function handleRemoveFile(fileId: string) {
     deletingFileIds.add(fileId);
@@ -190,15 +279,10 @@
     }
   }
 
-  async function handleClearAllFiles() {
-    isDeletingAll = true;
-    try {
-      await createProjectActions.clearAllFiles(true);
-      lastProcessedFiles = new SvelteSet();
-      internalResetKey++;
-    } finally {
-      isDeletingAll = false;
-    }
+  function handleClearAllFiles() {
+    createProjectActions.clearAllFiles();
+    lastProcessedFiles = new SvelteSet();
+    internalResetKey++;
   }
 
   type TagColor = 'blue' | 'green' | 'purple' | 'teal' | 'magenta' | 'gray';
@@ -254,7 +338,9 @@
       : null
   );
 
-  const getFileTypeTag = (file: Pick<UploadedFile, 'fileType' | 'name'>) => {
+  const getFileTypeTag = (
+    file: Pick<UploadedFile, 'fileType' | 'name' | 'geometry'>
+  ) => {
     if (
       file.fileType === FileType.GEOPARQUET &&
       getFileExtension(file.name) === '.parquet'
@@ -262,8 +348,22 @@
       return { label: 'Parquet', color: 'teal' as const };
     }
 
+    // A .json without geometry was read as plain records by the tabular fallback.
+    if (
+      file.fileType === FileType.GEOJSON &&
+      getFileExtension(file.name) === '.json' &&
+      !file.geometry
+    ) {
+      return { label: 'JSON', color: 'blue' as const };
+    }
+
     return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
   };
+
+  const rowsLabel = (count: number) =>
+    isSingularCount(count) ? m.rows_one() : m.rows();
+  const columnsLabel = (count: number) =>
+    isSingularCount(count) ? m.columns_one() : m.columns();
 
   function getFileExtension(fileName: string): string {
     const extensionStart = fileName.lastIndexOf('.');
@@ -285,17 +385,18 @@
   class={clsx('grid grid-cols-1 gap-3', isModal && 'is-modal-create-project')}
 >
   <header class="mb-4">
-    {#if !isModal}
+    {#if showTitle}
       <h6 class="mb-3">{m.create_project_import_data()}</h6>
     {/if}
 
-    <span class="text-grey">
-      {m.create_project_import_data_description()}
-    </span>
+    <ul class="import-formats text-grey">
+      <li>{m.create_project_import_data_tabular()}</li>
+      <li>{m.create_project_import_data_geographic()}</li>
+    </ul>
   </header>
 
   <div class="import-grid">
-    <div>
+    <div class:is-confirmed={confirmedSource === 'file'}>
       {#key uploaderKey}
         <FileUploaderDropContainer
           data-testid="file-upload-container"
@@ -319,18 +420,35 @@
     <div class="paste-container" bind:this={pasteContainer}>
       <TextArea
         value={pastedDataValue}
-        placeholder={m.create_project_paste_data()}
+        placeholder={hasPastedFile
+          ? m.create_project_paste_another()
+          : m.create_project_paste_data()}
         rows={4}
         on:input={handlePastedDataInput}
         on:blur={handlePastedDataBlur}
         invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
         invalidText={pastedDataValidation?.errors[0] || ''}
-        warn={!!(
-          pastedDataValidation && pastedDataValidation.warnings.length > 0
-        )}
+        warn={!isImportingPaste &&
+          !!pastedDataValidation &&
+          pastedDataValidation.warnings.length > 0}
         warnText={pastedDataValidation?.warnings[0] || ''}
       />
-      {#if pastedDataValue.trim()}
+      {#if pastedFile}
+        <div class="paste-feedback" role="status" data-testid="paste-feedback">
+          <CheckmarkFilled size={20} class="paste-feedback-icon" />
+          <span class="paste-feedback-title">
+            {m.create_project_paste_added()}
+          </span>
+          <span class="paste-feedback-metrics">
+            {formatValue(pastedFile.rowCount ?? 0)}
+            {rowsLabel(pastedFile.rowCount ?? 0)}
+            {m.separator_middle_dot_space()}
+            {formatValue(pastedFile.columnCount ?? 0)}
+            {columnsLabel(pastedFile.columnCount ?? 0)}
+          </span>
+        </div>
+      {/if}
+      {#if pastedDataValue.trim() && !isImportingPaste}
         <div class="paste-actions">
           <Button
             size="field"
@@ -345,7 +463,11 @@
   </div>
 
   <div class="grid grid-cols-1 gap-7">
-    <div class="url-import-block" bind:this={urlImportBlock}>
+    <div
+      class="url-import-block"
+      class:is-confirmed={confirmedSource === 'url'}
+      bind:this={urlImportBlock}
+    >
       <TextInput
         size="sm"
         value={onlineUrlValue}
@@ -368,19 +490,37 @@
           description={m.create_project_loading_status()}
         />
       {:else}
-        <Link
-          href={DOC_LINK.IMPORT_DATA}
-          target="_blank"
-          size="sm"
-          icon={Launch}
-        >
-          {m.basemap_import_learn_more()}
-        </Link>
+        <div class="learn-more">
+          <span>{m.create_project_learn_more_title()}</span>
+          <ul>
+            <li>
+              <Link
+                href={DOC_LINK.IMPORT_DATA}
+                target="_blank"
+                size="sm"
+                icon={Launch}
+              >
+                {m.create_project_learn_more_data()}
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={DOC_LINK.JOIN_BASEMAP}
+                target="_blank"
+                size="sm"
+                icon={Launch}
+              >
+                {m.create_project_learn_more_basemaps()}
+              </Link>
+            </li>
+          </ul>
+        </div>
       {/if}
     </div>
 
     {#if createProjectState.newProject.error}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="error"
         title={m.create_project_error_label()}
@@ -391,6 +531,7 @@
 
     {#if createProjectState.newProject.warning}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="warning"
         title={m.warning_files_duplicate_title()}
@@ -407,7 +548,7 @@
       {/each}
     </div>
 
-    <div class="files-section">
+    <div class="files-section" bind:this={filesSection}>
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
@@ -421,24 +562,18 @@
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
           <span class="files-imported-label">
-            {m.create_project_file_imported()}
+            {createProjectState.newProject.uploadedFiles.length > 1
+              ? m.create_project_files_imported()
+              : m.create_project_file_imported()}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
             <Button
               size="field"
               kind="ghost"
-              icon={isDeletingAll ? undefined : TrashCan}
-              disabled={isDeletingAll}
+              icon={TrashCan}
               onclick={handleClearAllFiles}
             >
-              {#if isDeletingAll}
-                <div class="button-with-loader">
-                  <Loading small withOverlay={false} />
-                  <span>{m.create_project_processing_status()}</span>
-                </div>
-              {:else}
-                {m.create_project_clear_all_button()}
-              {/if}
+              {m.create_project_clear_all_button()}
             </Button>
           {/if}
         </div>
@@ -456,11 +591,16 @@
       {/if}
 
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
-        <div class="file-item-wrapper">
+        <div
+          class="file-item-wrapper"
+          class:is-just-added={highlightedFileIds.includes(file.id)}
+          data-file-id={file.id}
+        >
           {#if file.status === FileStatus.UPLOADING || file.status === FileStatus.PROCESSING}
             <div class="file-processing-row" data-testid="file-processing">
               <div class="file-processing-content">
                 <FileUploaderItem
+                  iconDescription={m.loading_indicator_label()}
                   class="w-full"
                   name={file.name}
                   status="uploading"
@@ -483,13 +623,18 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
           {:else if file.status === FileStatus.ERROR}
             <div class="file-error-row" data-testid="file-error">
               <FileUploaderItem
+                iconDescription={m.remove_file_action()}
                 invalid
                 class="w-full"
                 name={file.name}
@@ -506,7 +651,11 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
@@ -533,7 +682,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>
@@ -562,12 +715,12 @@
                         <span data-testid="file-row-count"
                           >{formatValue(rowCount)}</span
                         >
-                        {m.rows()}
+                        {rowsLabel(rowCount)}
                         {m.separator_middle_dot_space()}
                         <span data-testid="file-column-count"
                           >{formatValue(columnCount)}</span
                         >
-                        {m.columns()}
+                        {columnsLabel(columnCount)}
                       </div>
                     {/if}
                   </div>
@@ -580,7 +733,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>
@@ -656,11 +813,95 @@
     position: relative;
   }
 
+  .import-formats,
+  .learn-more ul {
+    list-style: disc;
+    padding-left: var(--cds-spacing-06);
+  }
+
+  .learn-more {
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    color: var(--cds-text-secondary);
+  }
+
+  .paste-feedback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kh-gap-label);
+    padding: var(--cds-spacing-04);
+    background: var(--cds-layer-01);
+    border: 2px solid var(--cds-support-success);
+    pointer-events: none;
+    text-align: center;
+    animation: kh-fade-in 150ms ease-out;
+  }
+
+  .paste-feedback :global(.paste-feedback-icon) {
+    fill: var(--cds-support-success);
+  }
+
+  .paste-feedback-title {
+    font-weight: 600;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
+    color: var(--cds-text-primary);
+  }
+
+  .paste-feedback-metrics {
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    color: var(--cds-text-secondary);
+  }
+
+  .file-item-wrapper.is-just-added :global(.bx--tile),
+  .is-confirmed :global(.bx--file__drop-container),
+  .is-confirmed :global(.bx--text-input) {
+    animation: kh-just-added 3s ease-out;
+  }
+
+  @keyframes kh-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes kh-just-added {
+    0%,
+    40% {
+      box-shadow: inset 0 0 0 2px var(--cds-support-success);
+    }
+    100% {
+      box-shadow: inset 0 0 0 2px transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .paste-feedback {
+      animation: none;
+    }
+
+    .file-item-wrapper.is-just-added :global(.bx--tile),
+    .is-confirmed :global(.bx--file__drop-container),
+    .is-confirmed :global(.bx--text-input) {
+      animation: none;
+      box-shadow: inset 0 0 0 2px var(--cds-support-success);
+    }
+  }
+
   .paste-actions {
     display: flex;
     gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-03);
     justify-content: flex-end;
+  }
+
+  .is-modal-create-project .files-section {
+    min-height: 7.125rem;
   }
 
   .files-section {
@@ -781,22 +1022,6 @@
   .file-error-row :global(.bx--btn) {
     flex-shrink: 0;
     min-width: auto;
-  }
-
-  .button-with-loader {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .button-with-loader :global(.bx--loading) {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .button-with-loader :global(.bx--loading__svg) {
-    width: 1rem;
-    height: 1rem;
   }
 
   .sr-only {

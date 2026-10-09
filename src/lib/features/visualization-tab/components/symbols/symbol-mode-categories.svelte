@@ -1,10 +1,16 @@
 <script lang="ts">
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
@@ -503,6 +509,8 @@
       <InfoPopover text={m.shape_info()} />
     </span>
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       items={shapeDropdownItems}
       selectedId={shapeType}
@@ -515,7 +523,11 @@
 <div class="categories-aspect-row">
   <span class="field-label">{m.category_aspect()}</span>
   <div class="categories-aspect-value">
-    <span>{m.categories_count({ count: categoryCount })}</span>
+    <span
+      >{(isSingularCount(categoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(categoryCount) })}</span
+    >
     <Button
       class="categories-aspect-settings"
       kind="ghost"
@@ -608,6 +620,7 @@
 
 <DiscretizationModal
   bind:open={strokeDiscretizationModalOpen}
+  primitive={PrimitiveFilterType.POINT}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}
