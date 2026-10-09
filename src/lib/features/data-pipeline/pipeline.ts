@@ -68,7 +68,8 @@ const Pipeline = {
       );
       result = await processFileInternal(originalFile, {
         companionFiles,
-        sourceFileId: uploadedFile.id
+        sourceFileId: uploadedFile.id,
+        csvOptions: uploadedFile.csvOptions
       });
     } else {
       const fallback = await createFileFromUpload(uploadedFile);
@@ -79,7 +80,8 @@ const Pipeline = {
           await createCompanionFilesFromUpload(uploadedFile);
         result = await processFileInternal(fallback, {
           companionFiles,
-          sourceFileId: uploadedFile.id
+          sourceFileId: uploadedFile.id,
+          csvOptions: uploadedFile.csvOptions
         });
       }
     }

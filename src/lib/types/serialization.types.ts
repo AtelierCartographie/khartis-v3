@@ -196,6 +196,12 @@ export interface SerializedUploadedFile {
   statistics?: unknown;
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
+  csvOptions?: {
+    header: boolean;
+    decimalSeparator: string;
+    thousandsSeparator?: string;
+    delimiter?: string;
+  };
   // Join state persistence
   joinedBasemap?: string;
   geoColumn?: string;

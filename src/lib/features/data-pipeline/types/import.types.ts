@@ -31,6 +31,7 @@ export interface UploadedFilePayload {
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
+  csvOptions?: CsvImportOptions;
 }
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;

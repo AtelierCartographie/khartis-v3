@@ -5,7 +5,7 @@
   import { zoomModeStore } from '../stores/zoom-mode.store.svelte';
   import { createProjectActions } from '../stores/create-project.store.svelte';
   import { projectStore } from '../stores/project.store.svelte';
-  import { useExportModal } from '$lib/features/header';
+  import { ExportTab, useExportModal } from '$lib/features/header';
   import {
     StylingTools,
     ToolbarState,
@@ -205,7 +205,7 @@
       try {
         await projectStore.saveCurrentProject();
       } finally {
-        useExportModal().open();
+        useExportModal().open(ExportTab.PROJECT);
       }
     }
 
