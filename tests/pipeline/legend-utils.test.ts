@@ -94,6 +94,7 @@ import {
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  getClassedColorLegendPrimitives,
   getLineWidthLegendScale,
   getPointSizeLegendScale,
   type PointSizeLegendScale
@@ -258,5 +259,35 @@ describe('getLineWidthLegendScale', () => {
         size: 0
       }
     ]);
+  });
+});
+
+describe('getClassedColorLegendPrimitives', () => {
+  it('should give each classed primitive its own legend block when polygons and symbols are both classed', () => {
+    const classification = {
+      colors: ['#eff3ff', '#6baed6', '#08519c'],
+      breaks: [10, 20]
+    };
+    const viz = {
+      ...createProportionalSymbolViz(ShapeType.CIRCLE),
+      primitiveFilters: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.POLYGON
+      ],
+      classification,
+      polygon: {
+        enabled: true,
+        fillMode: FillMode.CLASSES,
+        valueColumn: 'military_expenditure_per_capita'
+      },
+      symbol: {
+        ...createProportionalSymbolViz(ShapeType.CIRCLE).symbol,
+        fillMode: FillMode.CLASSES,
+        fillValueColumn: 'military_expenditure_of_gdp',
+        fillClassification: classification
+      }
+    } as unknown as VisualizationConfig;
+
+    expect(getClassedColorLegendPrimitives(viz)).toEqual(['point', 'area']);
   });
 });
