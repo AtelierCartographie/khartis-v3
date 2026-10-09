@@ -58,7 +58,7 @@ const DEFAULT_MISSING_DATA_COLOR = DEFAULT_COLORS.missingData;
 
 // Four-class render of the default 'blues' palette, regenerated from its id.
 const DEFAULT_CHOROPLETH_PALETTE_ID = 'blues';
-const DEFAULT_CHOROPLETH_COLORS = ['#d6ebb9', '#7dceab', '#00a8b5', '#0076ba'];
+const DEFAULT_CHOROPLETH_COLORS = ['#c0eedc', '#76cbca', '#21a4c2', '#0076ba'];
 
 export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
