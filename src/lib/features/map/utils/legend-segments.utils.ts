@@ -74,8 +74,8 @@ import {
   getLineWidthLegendScale,
   getPointSizeLegendScale,
   getDensityLegendScale,
-  hasCategoricalColorLegend,
-  hasClassedColorLegend,
+  getCategoricalColorLegendPrimitives,
+  getClassedColorLegendPrimitives,
   resolveLegendColorSwatchPrimitive,
   resolveMissingDataLegendPrimitive,
   resolveMissingDataPointShape,
@@ -184,14 +184,14 @@ export type LegendSegment = {
 };
 
 function getLegendCategoricalClassification(
-  viz: VisualizationConfig | undefined
+  viz: VisualizationConfig | undefined,
+  primitive: LegendSwatchPrimitive
 ): ClassificationConfig | undefined {
   if (!viz) {
     return undefined;
   }
 
-  const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
-  switch (swatchPrimitive) {
+  switch (primitive) {
     case 'point': {
       const symbol = getSymbolPrimitive(viz);
       if (
@@ -222,14 +222,14 @@ function getLegendCategoricalClassification(
 }
 
 function getLegendClassedColorClassification(
-  viz: VisualizationConfig | undefined
+  viz: VisualizationConfig | undefined,
+  primitive: LegendSwatchPrimitive
 ): ClassificationConfig | undefined {
   if (!viz) {
     return undefined;
   }
 
-  const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
-  switch (swatchPrimitive) {
+  switch (primitive) {
     case 'point': {
       const symbol = getSymbolPrimitive(viz);
       if (
@@ -253,9 +253,10 @@ function getLegendClassedColorClassification(
 }
 
 function getLegendCategoricalEntries(
-  viz: VisualizationConfig | undefined
+  viz: VisualizationConfig | undefined,
+  primitive: LegendSwatchPrimitive
 ): LegendCategoricalEntry[] {
-  const classification = getLegendCategoricalClassification(viz);
+  const classification = getLegendCategoricalClassification(viz, primitive);
   const colors = classification?.colors ?? [];
   if (colors.length === 0) {
     return [];
@@ -768,8 +769,12 @@ function getLegendSegmentDrafts(
 ): LegendSegmentDraft[] {
   const drafts = [
     getDensityLegendDraft(viz),
-    getClassedColorLegendDraft(viz),
-    getCategoricalLegendDraft(viz),
+    ...getClassedColorLegendPrimitives(viz).map((primitive) =>
+      getClassedColorLegendDraft(viz, primitive)
+    ),
+    ...getCategoricalColorLegendPrimitives(viz).map((primitive) =>
+      getCategoricalLegendDraft(viz, primitive)
+    ),
     getTextColorLegendDraft(viz),
     getTextSizeLegendDraft(viz),
     getUniquePointSymbolLegendDraft(viz),
@@ -862,31 +867,14 @@ function toLegendSvg(
 }
 
 function getClassedColorLegendDraft(
-  viz: VisualizationConfig | undefined
+  viz: VisualizationConfig | undefined,
+  primitive: LegendSwatchPrimitive
 ): LegendSegmentDraft | null {
-  if (!viz || !hasClassedColorLegend(viz)) {
+  if (!viz) {
     return null;
   }
 
-  let primitive = resolveLegendColorSwatchPrimitive(viz);
-  let classification = getLegendClassedColorClassification(viz);
-
-  if (!classification?.colors?.length && primitive !== 'area') {
-    const polygon = getPolygonPrimitive(viz);
-    const polygonClassification = getPrimitiveClassification(
-      viz,
-      PrimitiveFilterType.POLYGON
-    );
-    if (
-      polygon?.enabled &&
-      polygon.fillMode === FillMode.CLASSES &&
-      polygonClassification?.colors?.length
-    ) {
-      primitive = 'area';
-      classification = polygonClassification;
-    }
-  }
-
+  const classification = getLegendClassedColorClassification(viz, primitive);
   const colors = classification?.colors ?? [];
 
   if (!classification || colors.length === 0) {
@@ -921,7 +909,7 @@ function getClassedColorLegendDraft(
     primitive === 'area' && Boolean(classification.patternId)
   );
   return {
-    key: 'classed-color',
+    key: `classed-color-${primitive}`,
     primitive,
     className:
       type === 'pattern' ? 'legend-svg--patterns' : 'legend-svg--categorical',
@@ -1262,15 +1250,15 @@ function getQuantiColorMissingDataOptions(
 }
 
 function getCategoricalLegendDraft(
-  viz: VisualizationConfig | undefined
+  viz: VisualizationConfig | undefined,
+  primitive: LegendSwatchPrimitive
 ): LegendSegmentDraft | null {
-  if (!viz || !hasCategoricalColorLegend(viz)) {
+  if (!viz) {
     return null;
   }
 
-  const primitive = resolveLegendColorSwatchPrimitive(viz);
-  const classification = getLegendCategoricalClassification(viz);
-  const entries = getLegendCategoricalEntries(viz);
+  const classification = getLegendCategoricalClassification(viz, primitive);
+  const entries = getLegendCategoricalEntries(viz, primitive);
 
   if (!classification || entries.length === 0) {
     return null;
@@ -1343,7 +1331,7 @@ function getCategoricalLegendDraft(
   );
 
   return {
-    key: 'categorical-color',
+    key: `categorical-color-${primitive}`,
     primitive,
     className: 'legend-svg--categorical',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
