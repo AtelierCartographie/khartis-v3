@@ -320,7 +320,7 @@
   .palette-list {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-inline);
+    gap: var(--kh-gap-param);
     width: 100%;
   }
 
@@ -332,7 +332,7 @@
 
   .palette-label {
     margin: 0;
-    padding: 0 0 var(--kh-gap-inline) 0;
+    padding: 0 0 var(--kh-gap-label) 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 400;
     font-size: var(--kh-font-label);
