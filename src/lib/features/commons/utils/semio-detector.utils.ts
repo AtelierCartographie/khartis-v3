@@ -423,6 +423,48 @@ function detectKeywordsFromName(columnName: string): NameKeywords {
   };
 }
 
+function isYearLikely(
+  yearWords: boolean,
+  shareIntegers: number,
+  min: number,
+  max: number
+): boolean {
+  return (
+    yearWords &&
+    shareIntegers >= 0.9 &&
+    min >= YEAR_RANGE.MIN &&
+    max <= YEAR_RANGE.MAX
+  );
+}
+
+/** A year column is displayed without a thousands separator. */
+export function isYearColumn(analysis: AnalysisResult | undefined): boolean {
+  if (!analysis) return false;
+  const min = toStatNumber(analysis.min);
+  const max = toStatNumber(analysis.max);
+  if (min === undefined || max === undefined) return false;
+  return isYearLikely(
+    detectKeywordsFromName(analysis.name ?? '').yearWords,
+    toStatNumber(analysis.share_integers) ?? 0,
+    min,
+    max
+  );
+}
+
+/** Year rule for a single value when no column statistics are at hand. */
+export function isYearValue(columnName: string, value: unknown): boolean {
+  const n = toStatNumber(value);
+  return (
+    n !== undefined &&
+    isYearLikely(
+      detectKeywordsFromName(columnName).yearWords,
+      Number.isInteger(n) ? 1 : 0,
+      n,
+      n
+    )
+  );
+}
+
 export function detectSemioType(
   analysis: AnalysisResult
 ): SemioDetectionResult {
@@ -459,11 +501,7 @@ export function detectSemioType(
     ? (analysis.categories as string[])
     : undefined;
 
-  const yearLikely =
-    keywords.yearWords &&
-    shareIntegers >= 0.9 &&
-    min >= YEAR_RANGE.MIN &&
-    max <= YEAR_RANGE.MAX;
+  const yearLikely = isYearLikely(keywords.yearWords, shareIntegers, min, max);
 
   const likertLikely =
     shareIntegers >= 0.9 &&

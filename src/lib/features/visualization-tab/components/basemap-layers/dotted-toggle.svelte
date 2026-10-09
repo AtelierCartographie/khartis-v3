@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import { ToggleWithLabel } from '../shared';
   import { BasemapDottedPattern } from '$lib/features/commons/constants/visualization.constants';
@@ -69,6 +70,8 @@
   {#if showPattern && enabled}
     <div class="pattern-selector">
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         selectedId={pattern}
         items={getPatternOptions()}

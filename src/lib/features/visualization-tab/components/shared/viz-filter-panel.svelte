@@ -2,7 +2,10 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
-  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
+  import {
+    isSingularCount,
+    resolveLocale
+  } from '$lib/features/commons/utils/format.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
     MAIN_TOOLBAR_ID,
@@ -162,7 +165,9 @@
     {#if hasFilters && stats && stats.total > 0}
       <div class="stats-block">
         <span class="stats-primary">
-          {m.filter_stats_filtered({
+          {(isSingularCount(stats.filtered)
+            ? m.filter_stats_filtered_one
+            : m.filter_stats_filtered)({
             count: formatFilteredCount(stats.filtered)
           })}
         </span>

@@ -7,6 +7,11 @@
     Tag
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
@@ -267,12 +272,12 @@
     }
   });
 
-  const strokeModeItems = [
+  const strokeModeItems = $derived([
     { icon: MisuseOutline, label: m.stroke_mode_none(), iconSize: 16 },
     { icon: SquareOutline, label: m.stroke_mode_unique(), iconSize: 16 },
     { icon: Table, label: m.stroke_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.stroke_mode_categories(), iconSize: 16 }
-  ];
+  ]);
 
   const STROKE_MODES = [
     StrokeMode.NONE,
@@ -469,7 +474,9 @@
     </div>
     <DiscretizationRow
       label={m.category_aspect()}
-      value={m.categories_count({ count: resolvedCategoryCount })}
+      value={(isSingularCount(resolvedCategoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
       settingsIconDescription={m.palette_categories_aspect_title()}
       onsettings={() => {
         categoriesPopoverOpen = true;
@@ -519,6 +526,8 @@
     />
     {#if strokeDashed}
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         titleText={m.stroke_dashed_pattern()}
         items={dashedPatternItems}

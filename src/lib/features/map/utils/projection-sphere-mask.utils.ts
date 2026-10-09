@@ -24,6 +24,11 @@ import { getBasemapFrameExtent } from './basemap-frame.utils';
 
 export const PROJECTION_SPHERE_MASK_LAYER_ID = 'projection-sphere-mask';
 export const PROJECTION_SPHERE_OUTLINE_LAYER_ID = 'projection-sphere-outline';
+// Deck matches layers across renders by id without checking the class, so the
+// frame variant (GeoJsonLayer) and the sphere variant (SolidPolygonLayer or
+// PathLayer) need distinct ids: a projection change can swap one for the other.
+const PROJECTION_SPHERE_MASK_FRAME_LAYER_ID = `${PROJECTION_SPHERE_MASK_LAYER_ID}-frame`;
+const PROJECTION_SPHERE_OUTLINE_FRAME_LAYER_ID = `${PROJECTION_SPHERE_OUTLINE_LAYER_ID}-frame`;
 
 const DEFAULT_SPHERE_FILL_COLOR: [number, number, number, number] = [
   ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.sphereFill
@@ -138,7 +143,7 @@ export function createProjectionSphereMaskLayer({
     if (!frameData) return null;
 
     return new GeoJsonLayer({
-      id: PROJECTION_SPHERE_MASK_LAYER_ID,
+      id: PROJECTION_SPHERE_MASK_FRAME_LAYER_ID,
       data: frameData,
       filled: true,
       stroked: false,
@@ -206,7 +211,7 @@ function createFrameOutlineLayer(
   width: number
 ): Layer<DeckDataRow> {
   return new GeoJsonLayer({
-    id: PROJECTION_SPHERE_OUTLINE_LAYER_ID,
+    id: PROJECTION_SPHERE_OUTLINE_FRAME_LAYER_ID,
     data: frameData,
     filled: false,
     stroked: true,

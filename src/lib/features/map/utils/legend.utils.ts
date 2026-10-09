@@ -352,9 +352,10 @@ export function resolveMissingDataLegendPrimitive(
   return shouldUsePointSwatches(viz) ? 'point' : 'area';
 }
 
-export function hasClassedColorLegend(
+/** Primitives whose color is classed, each one with its own legend block. */
+export function getClassedColorLegendPrimitives(
   viz: VisualizationConfig | undefined
-): boolean {
+): LegendSwatchPrimitive[] {
   const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
@@ -363,6 +364,7 @@ export function hasClassedColorLegend(
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+  const primitives: LegendSwatchPrimitive[] = [];
 
   if (
     symbol?.enabled &&
@@ -371,7 +373,7 @@ export function hasClassedColorLegend(
     !!pointClassification?.colors?.length &&
     !!pointClassification?.breaks?.length
   ) {
-    return true;
+    primitives.push('point');
   }
 
   if (
@@ -381,21 +383,26 @@ export function hasClassedColorLegend(
     !!lineClassification?.colors?.length &&
     !!lineClassification?.breaks?.length
   ) {
-    return true;
+    primitives.push('line');
   }
 
-  return Boolean(
+  if (
     polygon?.enabled &&
     polygon.fillMode === FillMode.CLASSES &&
     !!getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON) &&
     !!polygonClassification?.colors?.length &&
     !!polygonClassification?.breaks?.length
-  );
+  ) {
+    primitives.push('area');
+  }
+
+  return primitives;
 }
 
-export function hasCategoricalColorLegend(
+/** Primitives whose color follows categories, each one with its own legend block. */
+export function getCategoricalColorLegendPrimitives(
   viz: VisualizationConfig | undefined
-): boolean {
+): LegendSwatchPrimitive[] {
   const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
@@ -411,6 +418,7 @@ export function hasCategoricalColorLegend(
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+  const primitives: LegendSwatchPrimitive[] = [];
 
   if (
     symbol?.enabled &&
@@ -419,7 +427,7 @@ export function hasCategoricalColorLegend(
     !!pointCategoryColumn &&
     !!pointClassification?.colors?.length
   ) {
-    return true;
+    primitives.push('point');
   }
 
   if (
@@ -428,15 +436,19 @@ export function hasCategoricalColorLegend(
     !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.LINE) &&
     !!lineClassification?.colors?.length
   ) {
-    return true;
+    primitives.push('line');
   }
 
-  return Boolean(
+  if (
     polygon?.enabled &&
     polygon.fillMode === FillMode.CATEGORIES &&
     !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POLYGON) &&
     !!polygonClassification?.colors?.length
-  );
+  ) {
+    primitives.push('area');
+  }
+
+  return primitives;
 }
 
 export function getDensityLegendScale(

@@ -4,6 +4,10 @@
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { Table, Tag, TextColor } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -103,11 +107,11 @@
     onHaloWidthChange
   }: Props = $props();
 
-  const colorModeItems = [
+  const colorModeItems = $derived([
     { icon: TextColor, label: m.color_mode_unique(), iconSize: 16 },
     { icon: Table, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
+  ]);
 
   const COLOR_MODE_ORDER = [
     ColorMode.UNIQUE,
@@ -212,7 +216,9 @@
     </div>
     <DiscretizationRow
       label={m.category_aspect()}
-      value={m.categories_count({ count: categoryCount })}
+      value={(isSingularCount(categoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(categoryCount) })}
       settingsIconDescription={m.palette_categories_aspect_title()}
       onsettings={() => {
         categoriesPopoverOpen = true;

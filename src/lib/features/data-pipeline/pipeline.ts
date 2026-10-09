@@ -6,6 +6,7 @@ import {
   createFileFromUpload,
   createFileFromUploadContent,
   processFileInternal,
+  processGeoPackageLayers,
   processRemoteFile,
   processRemoteZipFile,
   processZipFile
@@ -94,6 +95,23 @@ const Pipeline = {
     }
 
     return result;
+  },
+
+  /**
+   * Import path of the welcome modal: a GeoPackage with several spatial layers
+   * comes back as one dataset per layer. Restores keep processUploadedFile,
+   * which reads one layer, since a layer imported this way is persisted as its
+   * own snapshot.
+   */
+  async processGeoPackageFile(
+    uploadedFile: UploadedFilePayload,
+    originalFile: File
+  ): Promise<DatasetResult | ZipDatasetResult> {
+    await this.initialize();
+    const layered = await processGeoPackageLayers(originalFile, {
+      sourceFileId: uploadedFile.id
+    });
+    return layered ?? this.processUploadedFile(uploadedFile, originalFile);
   },
 
   async processRemoteFile(

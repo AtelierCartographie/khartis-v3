@@ -19,6 +19,19 @@ const MATRICES: Partial<Record<ColorBlindnessType, string>> = {
     '0.618 0.320 0.062 0 0 0.163 0.775 0.062 0 0 0.163 0.320 0.516 0 0 0 0 0 1 0'
 };
 
+export const COLOR_BLINDNESS_FILTER_ID = 'color-blindness-filter';
+
+// The simulation covers the whole page (map, legend, annotations) and is
+// dropped during export: exported colors are never altered.
+export function resolveColorBlindnessPageFilter(
+  matrix: string | null,
+  isExporting: boolean
+): string {
+  return matrix && !isExporting
+    ? ` filter: url(#${COLOR_BLINDNESS_FILTER_ID});`
+    : '';
+}
+
 export function getColorBlindnessMatrix(
   type: ColorBlindnessType
 ): string | null {

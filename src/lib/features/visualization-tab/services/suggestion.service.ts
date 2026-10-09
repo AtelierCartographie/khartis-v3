@@ -418,8 +418,7 @@ function buildDisabledMissingData(
   return {
     ...baseMissingData,
     show: false,
-    enabled: false,
-    pattern: false
+    enabled: false
   };
 }
 
@@ -1103,8 +1102,7 @@ export function resolveBlankVisualizationPreset(
     ? {
         ...preset.missingData,
         show: false,
-        enabled: false,
-        pattern: false
+        enabled: false
       }
     : undefined;
 

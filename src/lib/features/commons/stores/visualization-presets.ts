@@ -17,6 +17,7 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+import { DEFAULT_MISSING_DATA_PATTERN_CONFIG } from '../constants/pattern.constants';
 import {
   DEFAULT_STROKE_COLOR,
   DEFAULT_VISUALIZATION_COLOR,
@@ -327,7 +328,8 @@ export function getDefaultMissingData(): MissingDataConfig {
     shape: MissingDataShape.CIRCLE,
     size: 2,
     color: DEFAULT_MISSING_DATA_COLOR,
-    pattern: false,
+    pattern: true,
+    patternConfig: { ...DEFAULT_MISSING_DATA_PATTERN_CONFIG },
     dashed: false,
     dashedPattern: BasemapDottedPattern.DOTS
   };

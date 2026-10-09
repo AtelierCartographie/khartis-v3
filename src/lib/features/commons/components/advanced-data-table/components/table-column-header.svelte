@@ -3,12 +3,17 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
-  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount,
+    resolveLocale
+  } from '$lib/features/commons/utils/format.utils';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
+  import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { ColumnInfo, ColumnType } from '../types';
@@ -49,14 +54,15 @@
 
   // Summary plots use the app locale, not the browser default.
   const numberLocale = $derived(resolveLocale());
+  const isYear = $derived(isYearColumn(analysis));
 
-  const typeOptions: { value: ColumnType; label: string }[] = [
+  const typeOptions: { value: ColumnType; label: string }[] = $derived([
     { value: 'text', label: m.column_type_text() },
     { value: 'number', label: m.column_type_number() },
     { value: 'date', label: m.column_type_date() }
-  ];
+  ]);
 
-  const refineOptions: { value: RefineOperation; label: string }[] = [
+  const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
       value: RefineOperation.UPPERCASE,
       label: m.column_refine_uppercase()
@@ -70,7 +76,7 @@
       value: RefineOperation.TRIM_ALL,
       label: m.column_refine_trim_all()
     }
-  ];
+  ]);
 
   let activeSubmenu = $state<'type' | 'refine' | null>(null);
   let typeSubmenuTriggerRef = $state<HTMLElement | null>(null);
@@ -228,7 +234,7 @@
         type: 'nulls',
         message: m.column_warning_nulls_detailed({
           percent: Math.round(shareNulls * 100),
-          count: nulls ?? 0
+          count: formatValue(nulls ?? 0)
         }),
         severity: 'warning'
       });
@@ -320,20 +326,22 @@
     return '#9f1853';
   }
 
+  function uniqueValuesLabel(count: number): string {
+    return (
+      isSingularCount(count)
+        ? m.summary_plot_unique_values_one
+        : m.summary_plot_unique_values
+    )({ count: formatValue(count) });
+  }
+
   function catLabel(item: CategoryItem): string {
     if (item.category === null) return '⌀';
-    if (item.category === 'unique')
-      return m.summary_plot_unique_values({
-        count: item.count.toLocaleString(numberLocale)
-      });
+    if (item.category === 'unique') return uniqueValuesLabel(item.count);
     return item.category;
   }
 
   function catTooltipText(item: CategoryItem): string {
-    if (item.category === 'unique')
-      return m.summary_plot_unique_values({
-        count: item.count.toLocaleString(numberLocale)
-      });
+    if (item.category === 'unique') return uniqueValuesLabel(item.count);
     const name = item.category ?? m.column_null_label();
     return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
@@ -847,8 +855,10 @@
                       ><WarningAlt size={16} /></span
                     >
                     <span
-                      >{m.column_warning_nulls({
-                        count: histogramData.nulls.toLocaleString(numberLocale)
+                      >{(isSingularCount(histogramData.nulls)
+                        ? m.column_warning_nulls_one
+                        : m.column_warning_nulls)({
+                        count: formatValue(histogramData.nulls)
                       })}</span
                     >
                   </div>
@@ -856,9 +866,10 @@
                 {#if histogramData.duplicates > 0}
                   <div class="hist-warning-line hist-warning-line-plain">
                     <span
-                      >{m.column_warning_duplicates({
-                        count:
-                          histogramData.duplicates.toLocaleString(numberLocale)
+                      >{(isSingularCount(histogramData.duplicates)
+                        ? m.column_warning_duplicates_one
+                        : m.column_warning_duplicates)({
+                        count: formatValue(histogramData.duplicates)
                       })}</span
                     >
                   </div>
@@ -868,9 +879,7 @@
               <div class="hist-unique-area">
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
-                    {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString(numberLocale)
-                    })}
+                    {uniqueValuesLabel(histogramData.uniques)}
                   </span>
                 </div>
               </div>
@@ -891,9 +900,7 @@
               <div class="hist-unique-area">
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
-                    {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString(numberLocale)
-                    })}
+                    {uniqueValuesLabel(histogramData.uniques)}
                   </span>
                 </div>
               </div>
@@ -919,8 +926,10 @@
                 {/each}
               </div>
               <div class="hist-footer">
-                {m.summary_plot_categories({
-                  count: histogramData.uniques.toLocaleString(numberLocale)
+                {(isSingularCount(histogramData.uniques)
+                  ? m.summary_plot_categories_one
+                  : m.summary_plot_categories)({
+                  count: formatValue(histogramData.uniques)
                 })}
               </div>
             {/if}
@@ -958,7 +967,8 @@
                         numberLocale
                       ) ?? '')
                     : ((histogramData.min as number)?.toLocaleString(
-                        numberLocale
+                        numberLocale,
+                        { useGrouping: !isYear }
                       ) ?? '')}
                 </span>
                 <span class="hist-num-label">
@@ -967,7 +977,8 @@
                         numberLocale
                       ) ?? '')
                     : ((histogramData.max as number)?.toLocaleString(
-                        numberLocale
+                        numberLocale,
+                        { useGrouping: !isYear }
                       ) ?? '')}
                 </span>
               </div>
@@ -977,7 +988,11 @@
             </div>
           {:else}
             <div class="hist-empty">
-              {m.column_unique_count({ count: toNum(analysis.uniques ?? 0) })}
+              {(isSingularCount(toNum(analysis.uniques ?? 0))
+                ? m.column_unique_count_one
+                : m.column_unique_count)({
+                count: formatValue(toNum(analysis.uniques ?? 0))
+              })}
             </div>
           {/if}
         </div>

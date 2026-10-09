@@ -8,6 +8,10 @@
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
   import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
+  import {
     DataTableSkeleton,
     InlineNotification,
     Modal,
@@ -30,6 +34,7 @@
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
   import { uiDensityStore } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
+  import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import {
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
@@ -464,6 +469,15 @@
     return set;
   });
 
+  const yearColumns = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Recreated wholesale in a derived value; mutation tracking is unnecessary.
+    const set = new Set<string>();
+    for (const [name, a] of tableData.columnAnalysis) {
+      if (isYearColumn(a)) set.add(name);
+    }
+    return set;
+  });
+
   function getRowHighlightType(
     rowIndex: number,
     row: Record<string, unknown>
@@ -815,9 +829,13 @@
                     {#if effectiveShowSummaryPlots}
                       <div class="row-index-stats">
                         <span class="row-index-count"
-                          >{filters.filterStats.total}</span
+                          >{formatValue(filters.filterStats.total)}</span
                         >
-                        <span class="row-index-label">{m.rows()}</span>
+                        <span class="row-index-label"
+                          >{isSingularCount(filters.filterStats.total)
+                            ? m.rows_one()
+                            : m.rows()}</span
+                        >
                       </div>
                     {/if}
                   </div>
@@ -857,6 +875,7 @@
                 isSelected={rowSelection.isRowSelected(rowId)}
                 showRowNumbers={!isSelectionMode}
                 geoidColumns={geoidColumns}
+                yearColumns={yearColumns}
                 onToggleSelection={rowSelection.toggleRowSelection}
               />
             {/each}
@@ -880,6 +899,7 @@
 
   {#if typeChangeError}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind="error"
       lowContrast
       title={typeChangeError}
@@ -889,6 +909,7 @@
 </div>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={renameModalOpen}
   modalHeading={m.column_rename_title()}
   primaryButtonText={m.column_rename_confirm()}
@@ -921,6 +942,7 @@
 </Modal>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={deleteConfirmOpen}
   modalHeading={m.delete_column_title()}
   primaryButtonText={m.delete_column_confirm()}

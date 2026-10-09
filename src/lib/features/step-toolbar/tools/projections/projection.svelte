@@ -77,6 +77,7 @@
       />
       {#if crsError}
         <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
           kind="error"
           lowContrast
           title={m.projection_code_helper()}

@@ -11,7 +11,10 @@
     type UploadedFile
   } from '$lib/features/commons/types/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { formatValue } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import {
     readCarbonStringValue,
@@ -335,7 +338,9 @@
       : null
   );
 
-  const getFileTypeTag = (file: Pick<UploadedFile, 'fileType' | 'name'>) => {
+  const getFileTypeTag = (
+    file: Pick<UploadedFile, 'fileType' | 'name' | 'geometry'>
+  ) => {
     if (
       file.fileType === FileType.GEOPARQUET &&
       getFileExtension(file.name) === '.parquet'
@@ -343,12 +348,22 @@
       return { label: 'Parquet', color: 'teal' as const };
     }
 
+    // A .json without geometry was read as plain records by the tabular fallback.
+    if (
+      file.fileType === FileType.GEOJSON &&
+      getFileExtension(file.name) === '.json' &&
+      !file.geometry
+    ) {
+      return { label: 'JSON', color: 'blue' as const };
+    }
+
     return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
   };
 
-  const rowsLabel = (count: number) => (count <= 1 ? m.rows_one() : m.rows());
+  const rowsLabel = (count: number) =>
+    isSingularCount(count) ? m.rows_one() : m.rows();
   const columnsLabel = (count: number) =>
-    count <= 1 ? m.columns_one() : m.columns();
+    isSingularCount(count) ? m.columns_one() : m.columns();
 
   function getFileExtension(fileName: string): string {
     const extensionStart = fileName.lastIndexOf('.');
@@ -505,6 +520,7 @@
 
     {#if createProjectState.newProject.error}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="error"
         title={m.create_project_error_label()}
@@ -515,6 +531,7 @@
 
     {#if createProjectState.newProject.warning}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="warning"
         title={m.warning_files_duplicate_title()}
@@ -583,6 +600,7 @@
             <div class="file-processing-row" data-testid="file-processing">
               <div class="file-processing-content">
                 <FileUploaderItem
+                  iconDescription={m.loading_indicator_label()}
                   class="w-full"
                   name={file.name}
                   status="uploading"
@@ -605,13 +623,18 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
           {:else if file.status === FileStatus.ERROR}
             <div class="file-error-row" data-testid="file-error">
               <FileUploaderItem
+                iconDescription={m.remove_file_action()}
                 invalid
                 class="w-full"
                 name={file.name}
@@ -628,7 +651,11 @@
                 onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
-                  <Loading small withOverlay={false} />
+                  <Loading
+                    description={m.loading_indicator_label()}
+                    small
+                    withOverlay={false}
+                  />
                 {/if}
               </Button>
             </div>
@@ -655,7 +682,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>
@@ -702,7 +733,11 @@
                     onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
-                      <Loading small withOverlay={false} />
+                      <Loading
+                        description={m.loading_indicator_label()}
+                        small
+                        withOverlay={false}
+                      />
                     {/if}
                   </Button>
                 </div>

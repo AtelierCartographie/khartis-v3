@@ -436,6 +436,7 @@
     {/if}
 
     <Modal
+      iconDescription={m.a11y_close_dialog()}
       open={pendingKhImport !== null}
       modalHeading={m.project_import_url_confirm_title()}
       primaryButtonText={m.project_import_url_confirm_replace()}

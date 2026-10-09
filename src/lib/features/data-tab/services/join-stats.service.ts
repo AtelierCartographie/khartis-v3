@@ -32,8 +32,10 @@ interface FuzzyMatchRow {
   raw: string;
 }
 
-const CANDIDATES_TABLE = '__join_stats_candidates__';
-const TARGET_TABLE = '__join_stats_target__';
+// The enrich step can start a run before the previous one ends, and statements
+// interleave between awaits: each run owns its temp tables, or one run's
+// cleanup drops or replaces the tables another one is still reading.
+let joinStatsRunCount = 0;
 
 export async function computeDatasetJoinStats(
   options: ComputeJoinStatsOptions
@@ -45,8 +47,13 @@ export async function computeDatasetJoinStats(
   const escapedTargetCol = escapeIdentifier(targetColumn);
   const escapedSourceTable = escapeIdentifier(sourceTableName);
   const escapedTargetTable = escapeIdentifier(targetTableName);
-  const escapedCandidatesTable = escapeIdentifier(CANDIDATES_TABLE);
-  const escapedTargetCacheTable = escapeIdentifier(TARGET_TABLE);
+  const runId = ++joinStatsRunCount;
+  const escapedCandidatesTable = escapeIdentifier(
+    `__join_stats_candidates_${runId}__`
+  );
+  const escapedTargetCacheTable = escapeIdentifier(
+    `__join_stats_target_${runId}__`
+  );
 
   const sourceFilters = getFilters(sourceTableName);
   const sourceFilterClause = buildFilterWhereClause(sourceFilters);

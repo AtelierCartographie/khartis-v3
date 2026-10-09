@@ -153,6 +153,7 @@
 
   {#if error}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind="error"
       title={m.basemap_custom_error()}
       subtitle={error}

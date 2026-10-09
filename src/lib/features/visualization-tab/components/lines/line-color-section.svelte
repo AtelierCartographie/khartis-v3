@@ -1,5 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import { Dropdown } from 'carbon-components-svelte';
   import { LineThin, Table, Tag } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
@@ -112,11 +117,11 @@
     onInvertPalette
   }: Props = $props();
 
-  const colorModeItems = [
+  const colorModeItems = $derived([
     { icon: LineThin, label: m.color_mode_unique(), iconSize: 16 },
     { icon: Table, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
+  ]);
 
   const COLOR_MODE_ORDER = [
     ColorMode.UNIQUE,
@@ -156,6 +161,8 @@
   />
   {#if dashed}
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       titleText={m.stroke_dashed_pattern()}
       items={dashedPatternItems}
@@ -269,7 +276,9 @@
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
+    value={(isSingularCount(categoryCount)
+      ? m.categories_count_one
+      : m.categories_count)({ count: formatValue(categoryCount) })}
     settingsIconDescription={m.palette_categories_aspect_title()}
     onsettings={() => {
       categoriesPopoverOpen = true;

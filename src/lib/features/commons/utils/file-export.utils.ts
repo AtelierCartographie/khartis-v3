@@ -5,7 +5,10 @@ import { bigIntReplacer } from './clone.utils';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
-import { JOINED_BASEMAP_COLUMNS } from '../constants/data.constants';
+import {
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMNS
+} from '../constants/data.constants';
 import { isDatasetGeometryColumn } from './geometry-column.utils';
 import { isGeometryColumnType } from '$lib/features/duckdb/utils/geometry-column.utils';
 import {
@@ -13,10 +16,15 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 
+// Deliberate: without the BOM, Excel reads UTF-8 CSV as ANSI and garbles accents.
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
 const DOWNLOAD_URL_REVOKE_DELAY_MS = 30000;
 const SOURCE_DATASET_COLUMN = '_source_dataset';
+const INTERNAL_ROW_COLUMNS = new Set<string>([
+  INTERNAL_COLUMN.ID,
+  INTERNAL_COLUMN.FEATURE_ID
+]);
 
 export const generateExportFilename = generateFilename;
 
@@ -127,7 +135,11 @@ export async function exportDatasetToCsv(
 
 function getExportableColumnNames(dataset: ProcessedDataset): string[] {
   return dataset.columns
-    .filter((col) => !isDatasetGeometryColumn(dataset, col))
+    .filter(
+      (col) =>
+        !INTERNAL_ROW_COLUMNS.has(col.name) &&
+        !isDatasetGeometryColumn(dataset, col)
+    )
     .map((col) => col.name);
 }
 
@@ -145,7 +157,10 @@ async function getDuckDbExportableColumnNames(
   const joinedBasemapColumns = new Set<string>(JOINED_BASEMAP_COLUMNS);
 
   return tableInfo.name.filter((columnName, index) => {
-    if (joinedBasemapColumns.has(columnName)) {
+    if (
+      joinedBasemapColumns.has(columnName) ||
+      INTERNAL_ROW_COLUMNS.has(columnName)
+    ) {
       return false;
     }
 
@@ -325,11 +340,9 @@ export async function exportProcessedDatasets(
     );
     (dataset.rows ?? []).forEach((row) => {
       const properties: Record<string, unknown> = {};
-      dataset.columns
-        .filter((col) => !isDatasetGeometryColumn(dataset, col))
-        .forEach((col) => {
-          properties[col.name] = row[col.name];
-        });
+      for (const columnName of getExportableColumnNames(dataset)) {
+        properties[columnName] = row[columnName];
+      }
       properties[sourceDatasetColumn] = dataset.name;
 
       allFeatures.push({
