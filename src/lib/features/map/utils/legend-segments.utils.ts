@@ -954,6 +954,10 @@ function getStrokeColorLegendDraft(
     return null;
   }
 
+  if (primitive === 'area' && config.strokeMode === StrokeMode.CLASSES) {
+    return getPolygonStrokeClassesLegendDraft(viz, classification);
+  }
+
   let entries: { label: string; color: string }[];
   if (config.strokeMode === StrokeMode.CLASSES) {
     const breaks = (classification.breaks ?? []).filter(Number.isFinite);
@@ -999,6 +1003,38 @@ function getStrokeColorLegendDraft(
         draw_khartis_swatch_legend(items, {
           ...options,
           type: getSwatchType(primitive, false)
+        })
+      )
+  };
+}
+
+function getPolygonStrokeClassesLegendDraft(
+  viz: VisualizationConfig,
+  classification: ClassificationConfig
+): LegendSegmentDraft | null {
+  const polygon = getPolygonPrimitive(viz);
+  const valueColumn =
+    polygon?.strokeValueColumn ??
+    getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
+  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
+  const thresholds = buildQuantiColorThresholds({
+    breaks: classification.breaks,
+    colors: classification.colors,
+    min: classification.roundedMin ?? domain?.min,
+    max: classification.roundedMax ?? domain?.max
+  });
+  if (!thresholds) return null;
+
+  return {
+    key: 'stroke-color-area',
+    primitive: 'area',
+    className: 'legend-svg--quantitative',
+    consumesMissingData: false,
+    create: (options) =>
+      toLegendSvg(
+        draw_quanti_color_legend(thresholds, classification.colors ?? [], {
+          ...options,
+          outlineWidth: 2
         })
       )
   };

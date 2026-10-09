@@ -25,6 +25,8 @@ export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
   nodataFill?: string;
   nodataPatternFill?: LegendPatternFill | null;
   classPatternFills?: (LegendPatternFill | null)[];
+  /** Draws each class as a colored outline, as for a classed stroke. */
+  outlineWidth?: number;
 }
 
 const DEFAULT_NODATA_FILL = NEUTRAL_CARTOGRAPHY_COLORS.missingData;
@@ -175,6 +177,19 @@ export function draw_quanti_color_legend(
       );
     }
 
+    if (options.outlineWidth) {
+      return {
+        markup: outline_box(
+          x[i],
+          actual_box_top,
+          x[i + 1] - x[i],
+          box_height,
+          colors[d],
+          options.outlineWidth
+        )
+      };
+    }
+
     return {
       markup: box(x[i], actual_box_top, x[i + 1] - x[i], box_height, colors[d])
     };
@@ -264,6 +279,19 @@ function box(
   fill: string
 ): string {
   return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(fill)}"/>`;
+}
+
+// Inset so that neighbouring outlines stay apart instead of merging.
+function outline_box(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stroke: string,
+  strokeWidth: number
+): string {
+  const inset = strokeWidth / 2 + 1;
+  return `<rect x="${x + inset}" y="${y + strokeWidth / 2}" width="${Math.max(0, width - 2 * inset)}" height="${height - strokeWidth}" fill="none" stroke="${escapeSvgAttribute(stroke)}" stroke-width="${strokeWidth}"/>`;
 }
 
 function pattern_box(

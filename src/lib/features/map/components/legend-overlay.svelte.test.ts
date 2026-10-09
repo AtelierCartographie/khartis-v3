@@ -442,6 +442,29 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('≥ 980')).toBeInTheDocument();
   });
 
+  it('draws classed polygon strokes as outlined horizontal class boxes', () => {
+    const viz = buildClassedPolygonViz();
+    viz.polygon = {
+      ...viz.polygon!,
+      fillMode: FillMode.UNIQUE,
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'population',
+      strokeClassification: viz.polygon!.classification
+    };
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const outlines = container.querySelectorAll(
+      '.quantitative_legend .box rect[fill="none"]'
+    );
+    expect(outlines).toHaveLength(4);
+    expect(outlines[3].getAttribute('stroke')).toBe('#2171b5');
+  });
+
   it('keeps narrow decimal class labels distinct', () => {
     const viz = buildPointClassedFillViz();
     if (viz.symbol?.fillClassification) {
