@@ -12,10 +12,6 @@ import { FileFormatEnum } from '../enums';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
-import {
-  detectEurostatTsvLayout,
-  restructureEurostatTable
-} from '../operations/eurostat-tsv';
 import { isGpxFile, readGpxIntoTable } from './gpx-processor';
 import type {
   CsvImportOptions,
@@ -275,20 +271,6 @@ async function readTabularFile(
 
   // Read file head once, share between decimal and header detection (avoids double file.slice + decode)
   const cachedHead = await readFileHead(file, 20);
-  const eurostatLayout = detectEurostatTsvLayout(
-    cachedHead.split(/\r?\n/, 1)[0] ?? ''
-  );
-  if (eurostatLayout) {
-    await Duck.read_tabular(file, {
-      tablename: tableName,
-      header: true,
-      delimiter: '\t',
-      all_varchar: true
-    });
-    await restructureEurostatTable(tableName, eurostatLayout, Duck);
-    return { header: true, decimalSeparator: '.', delimiter: '\t' };
-  }
-
   const detection = await detectDecimalSeparator(file, { cachedHead });
   const headerDetection = await detectCsvHeader(file, detection.delimiter, {
     cachedHead
