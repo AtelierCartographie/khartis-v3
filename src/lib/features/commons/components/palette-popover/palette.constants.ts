@@ -174,30 +174,32 @@ export const monochromePalettes: Palette[] = [
   }
 ];
 
+// ok-palette keeps only the hue and a fraction of the chroma of the start
+// color, so a near-white start renders as grey: starts are tinted mid-tones.
 const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    colors: ['#f7fbff', DEFAULT_VISUALIZATION_COLOR],
+    colors: ['#6baed6', DEFAULT_VISUALIZATION_COLOR],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'greens',
-    colors: ['#f7fcf5', '#006d2c'],
+    colors: ['#74c476', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'oranges',
-    colors: ['#fff5eb', '#a63603'],
+    colors: ['#fd8d3c', '#a63603'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'purples',
-    colors: ['#fcfbfd', '#54278f'],
+    colors: ['#9e9ac8', '#54278f'],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'reds',
-    colors: ['#fff5f0', '#a50f15'],
+    colors: ['#fb6a4a', '#a50f15'],
     type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
