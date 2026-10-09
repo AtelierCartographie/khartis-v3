@@ -32,5 +32,6 @@ export {
   addColumnTransformation,
   clearColumnTransformations,
   updateFileJoinedBasemap,
+  updateFileCsvOptions,
   addDeletedRows
 } from './project-transformations';

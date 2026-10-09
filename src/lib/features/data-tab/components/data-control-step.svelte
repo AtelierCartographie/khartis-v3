@@ -483,12 +483,17 @@
         dataTabActions.clearJoinStats();
       }
 
-      datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
+      const chosenCsvOptions = {
         header: options.header,
         decimalSeparator: options.decimalSeparator,
         thousandsSeparator: options.thousandsSeparator,
         delimiter: options.delimiter
-      });
+      };
+      datasetsStore.updateDatasetCsvOptions(
+        selectedDataset.id,
+        chosenCsvOptions
+      );
+      await projectStore.updateFileCsvOptions(sourceFile.id, chosenCsvOptions);
       datasetsStore.recordTransformation(
         selectedDataset.id,
         m.csv_options_reimport_success()
