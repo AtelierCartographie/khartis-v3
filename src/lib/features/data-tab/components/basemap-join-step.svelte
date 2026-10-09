@@ -680,16 +680,6 @@
           return false;
         }
 
-        const currentDuckDataset =
-          duckDBOrchestrator.getDataset(resolvedDatasetId);
-        if (
-          currentDuckDataset?.joinedBasemap === basemap.file &&
-          currentDuckDataset.geoColumn &&
-          currentDuckDataset.geoColumn !== linkedVariableName
-        ) {
-          return false;
-        }
-
         try {
           const preFinalizeColumns =
             await capturePreFinalizeAnalysis(sourceSnapshot);
