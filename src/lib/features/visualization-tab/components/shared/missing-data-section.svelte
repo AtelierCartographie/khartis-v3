@@ -170,6 +170,7 @@
             presets={getColorSuggestions(COLOR_ROLE.MISSING_DATA)}
             allowPattern={showPatternToggle}
             patternPaletteConfig={pattern ? patternConfig : undefined}
+            patternBackground={color}
             onchange={oncolorchange}
             onpatternchange={handlePatternChange}
           />
