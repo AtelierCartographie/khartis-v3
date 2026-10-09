@@ -60,10 +60,18 @@
 
   const availablePresets = $derived(getSuggestionPresetsForType(paletteType));
 
+  const presetOfSelectedPalette = $derived(
+    availablePresets.find((preset) =>
+      getSuggestionPalettes(paletteType, preset).some(
+        (palette) => palette.id === selectedPaletteId
+      )
+    )
+  );
+
   const activePreset = $derived(
     requestedPreset && availablePresets.includes(requestedPreset)
       ? requestedPreset
-      : availablePresets[0]
+      : (presetOfSelectedPalette ?? availablePresets[0])
   );
 
   const suggestedPalettes = $derived(
