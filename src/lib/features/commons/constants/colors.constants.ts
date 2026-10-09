@@ -4,7 +4,7 @@ export type RgbaColor = readonly [number, number, number, number];
 export const NEUTRAL_CARTOGRAPHY_COLORS = {
   dataFill: '#8d8d8d',
   dataStroke: '#595959',
-  missingData: '#b0b0b0',
+  missingData: '#d9d9d9',
   missingDataHatch: '#595959',
   land: '#ced6d9',
   nutsLand: '#bdc8cc',
