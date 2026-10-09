@@ -163,11 +163,6 @@ export const monochromePalettes: Palette[] = [
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
-    id: 'mono-indigo',
-    colors: ['#1565c0'],
-    type: PALETTE_TYPE.SEQUENTIAL
-  },
-  {
     id: 'mono-vermilion',
     colors: ['#d84315'],
     type: PALETTE_TYPE.SEQUENTIAL
@@ -787,8 +782,19 @@ export function getPalettesForType(type: PaletteType): Palette[] {
 // Every palette a suggestion or a dropdown can hand out must be findable here:
 // a palette id that does not resolve makes the classification fall back to the
 // default ramp, silently discarding the user's choice.
+// Removed from the picker (duplicate of the Khartis blue) but still resolved
+// for projects saved with it.
+const RETIRED_PALETTES: Palette[] = [
+  {
+    id: 'mono-indigo',
+    colors: ['#1565c0'],
+    type: PALETTE_TYPE.SEQUENTIAL
+  }
+];
+
 const ADDRESSABLE_PALETTES: Palette[] = [
   ...monochromePalettes,
+  ...RETIRED_PALETTES,
   ...sequentialPalettes,
   ...sepiaPalettes,
   ...colorblindSequentialPalettes,
