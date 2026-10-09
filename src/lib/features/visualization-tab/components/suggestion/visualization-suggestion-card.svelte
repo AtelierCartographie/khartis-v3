@@ -60,16 +60,6 @@
     return m.viz_suggestion_primitive_polygons();
   }
 
-  function getFondLabel(semioType: string): string {
-    if (semioType === 'QTR') {
-      return m.viz_suggestion_mode_fond_classes();
-    }
-    if (semioType === 'QL' || semioType === 'QLO') {
-      return m.viz_suggestion_mode_fond_categories();
-    }
-    return getModeLabel(semioType);
-  }
-
   interface DisplayRow {
     typeLabel: string | null;
     variable: string | null;
@@ -93,7 +83,6 @@
     }
 
     if (geometries.includes('point')) {
-      const isPolygonData = suggestion.dataGeometry === 'polygon';
       if (!semioTypes.includes('QTA')) {
         rows.push({
           typeLabel: m.viz_suggestion_mode_unique(),
@@ -109,9 +98,7 @@
           });
         } else {
           rows.push({
-            typeLabel: isPolygonData
-              ? getFondLabel(semioType)
-              : getModeLabel(semioType),
+            typeLabel: getModeLabel(semioType),
             variable: columnName
           });
         }

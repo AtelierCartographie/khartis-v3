@@ -1567,8 +1567,6 @@
   "viz_suggestion_mode_classes": "en classes",
   "viz_suggestion_mode_categories": "en catégories",
   "viz_suggestion_mode_labels": "avec libellés",
-  "viz_suggestion_mode_fond_classes": "fond en classes",
-  "viz_suggestion_mode_fond_categories": "fond en catégories",
   "map_resize_handle": "Redimensionner le cadre de la carte",
   "annotationImageAlt": "Annotation",
   "data_tab_enrich": "Enrichir",

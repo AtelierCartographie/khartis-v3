@@ -1567,8 +1567,6 @@
   "viz_suggestion_mode_classes": "classified",
   "viz_suggestion_mode_categories": "categorical",
   "viz_suggestion_mode_labels": "with labels",
-  "viz_suggestion_mode_fond_classes": "classified fill",
-  "viz_suggestion_mode_fond_categories": "categorical fill",
   "map_resize_handle": "Resize map frame",
   "annotationImageAlt": "Annotation",
   "data_tab_enrich": "Enrich",
