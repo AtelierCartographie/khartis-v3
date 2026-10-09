@@ -54,7 +54,7 @@
   };
 
   const CUSTOM_PALETTE_ID = '__custom__';
-  const FALLBACK_START_COLOR = '#9ccc3c';
+  const FALLBACK_START_COLOR = '#3cc8a0';
   const FALLBACK_END_COLOR = '#08519c';
 
   let activeTab = $state(0);

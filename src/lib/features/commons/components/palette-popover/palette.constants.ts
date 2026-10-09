@@ -175,7 +175,7 @@ export const monochromePalettes: Palette[] = [
 const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    colors: ['#9ccc3c', DEFAULT_VISUALIZATION_COLOR],
+    colors: ['#3cc8a0', DEFAULT_VISUALIZATION_COLOR],
     type: PALETTE_TYPE.SEQUENTIAL
   },
   {
