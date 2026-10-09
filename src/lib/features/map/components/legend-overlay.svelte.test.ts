@@ -417,6 +417,54 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('≥ 1 200')).toBeInTheDocument();
   });
 
+  it('renders a legend for classed symbol strokes on a unique fill', () => {
+    const viz = buildUniquePointViz();
+    viz.symbol = {
+      ...viz.symbol!,
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'capacity',
+      strokeClassification: {
+        method: ClassificationMethod.QUANTILES,
+        classes: 3,
+        breaks: [610, 980],
+        colors: ['#d0e2ff', '#4589ff', '#0043ce']
+      }
+    };
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(screen.getByText('capacity')).toBeInTheDocument();
+    expect(screen.getByText('< 610')).toBeInTheDocument();
+    expect(screen.getByText('≥ 980')).toBeInTheDocument();
+  });
+
+  it('draws classed polygon strokes as outlined horizontal class boxes', () => {
+    const viz = buildClassedPolygonViz();
+    viz.polygon = {
+      ...viz.polygon!,
+      fillMode: FillMode.UNIQUE,
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'population',
+      strokeClassification: viz.polygon!.classification
+    };
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const outlines = container.querySelectorAll(
+      '.quantitative_legend .box rect[fill="none"]'
+    );
+    expect(outlines).toHaveLength(4);
+    expect(outlines[3].getAttribute('stroke')).toBe('#2171b5');
+  });
+
   it('keeps narrow decimal class labels distinct', () => {
     const viz = buildPointClassedFillViz();
     if (viz.symbol?.fillClassification) {

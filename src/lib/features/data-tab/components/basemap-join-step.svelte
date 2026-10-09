@@ -522,6 +522,36 @@
     );
   }
 
+  async function refreshFinalizedJoinStats(
+    basemap: BasemapMetadata,
+    datasetId: string,
+    linkedVariableName: string,
+    abortSignal: AbortSignal,
+    stepIndex: number
+  ): Promise<void> {
+    const loadingRequestId = beginJoinLoading();
+    try {
+      const stats = await duckDBOrchestrator.computeJoinStats(
+        datasetId,
+        basemap,
+        linkedVariableName,
+        { excludedValues: getIgnoredJoinValues() }
+      );
+      if (abortSignal.aborted) return;
+      dataTabActions.setJoinStats(stats);
+      void refreshFuzzyPassEstimate(datasetId, linkedVariableName);
+      resetJoinedEntitiesView();
+      if (stats.joinedCount === 0) {
+        dataTabStore.resetStepCompletion(stepIndex);
+      }
+    } catch (error) {
+      if (abortSignal.aborted) return;
+      logger.error('Failed to restore join stats', LogCategory.MAP, error);
+    } finally {
+      endJoinLoading(loadingRequestId);
+    }
+  }
+
   function hasCurrentJoinStats(): boolean {
     return (
       joinedCount > 0 ||
@@ -646,16 +676,6 @@
 
         if (
           dataTabState.geolocation.linkedVariableName !== linkedVariableName
-        ) {
-          return false;
-        }
-
-        const currentDuckDataset =
-          duckDBOrchestrator.getDataset(resolvedDatasetId);
-        if (
-          currentDuckDataset?.joinedBasemap === basemap.file &&
-          currentDuckDataset.geoColumn &&
-          currentDuckDataset.geoColumn !== linkedVariableName
         ) {
           return false;
         }
@@ -1613,34 +1633,13 @@
               return;
             }
 
-            const loadingRequestId = beginJoinLoading();
-            try {
-              const stats = await duckDBOrchestrator.computeJoinStats(
-                resolvedDatasetId,
-                basemap,
-                linkedVariableName,
-                { excludedValues: getIgnoredJoinValues() }
-              );
-              if (controller.signal.aborted) return;
-              dataTabActions.setJoinStats(stats);
-              void refreshFuzzyPassEstimate(
-                resolvedDatasetId,
-                linkedVariableName
-              );
-              resetJoinedEntitiesView();
-              if (stats.joinedCount === 0) {
-                dataTabStore.resetStepCompletion(stepIndex);
-              }
-            } catch (error) {
-              if (controller.signal.aborted) return;
-              logger.error(
-                'Failed to restore join stats',
-                LogCategory.MAP,
-                error
-              );
-            } finally {
-              endJoinLoading(loadingRequestId);
-            }
+            await refreshFinalizedJoinStats(
+              basemap,
+              resolvedDatasetId,
+              linkedVariableName,
+              controller.signal,
+              stepIndex
+            );
             return;
           }
 
@@ -1805,6 +1804,11 @@
     );
     if (!basemap) return;
 
+    abortCurrentJoin();
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
+    // The stats on screen may belong to the variable picked before this one.
     if (
       isCatalogJoinFinalizedForBasemap(
         selectedBasemapId,
@@ -1813,12 +1817,15 @@
       )
     ) {
       dataTabStore.markStepComplete(basemapStepIndex);
+      void refreshFinalizedJoinStats(
+        basemap,
+        resolvedDatasetId,
+        linkedVariableName,
+        abortSignal,
+        basemapStepIndex
+      );
       return;
     }
-
-    abortCurrentJoin();
-    currentJoinAbortController = new AbortController();
-    const abortSignal = currentJoinAbortController.signal;
 
     dataTabActions.clearJoinStats();
     dataTabStore.resetStepCompletion(basemapStepIndex);

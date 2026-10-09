@@ -30,6 +30,7 @@ import {
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
   updateFileJoinedBasemap as updateFileJoinedBasemapFn,
+  updateFileCsvOptions as updateFileCsvOptionsFn,
   addDeletedRows as addDeletedRowsFn,
   type SaveCurrentProjectOptions
 } from './project';
@@ -115,6 +116,13 @@ function createProjectStore() {
     joinedBasemap: string
   ): Promise<void> {
     return updateFileJoinedBasemapFn(container, fileId, joinedBasemap);
+  }
+
+  async function updateFileCsvOptions(
+    fileId: string,
+    csvOptions: UploadedFile['csvOptions']
+  ): Promise<void> {
+    return updateFileCsvOptionsFn(container, fileId, csvOptions);
   }
 
   async function addDeletedRows(
@@ -223,6 +231,7 @@ function createProjectStore() {
     addColumnTransformation,
     clearColumnTransformations,
     updateFileJoinedBasemap,
+    updateFileCsvOptions,
     addDeletedRows,
     createProject,
     loadProject,

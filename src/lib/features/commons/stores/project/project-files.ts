@@ -41,6 +41,7 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
     deletedRowIds: file.deletedRowIds,
+    csvOptions: file.csvOptions,
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
     gpsMode: file.gpsMode,

@@ -36,6 +36,10 @@ export function serializeUploadedFile(
     serialized.deletedRowIds = file.deletedRowIds;
   }
 
+  if (file.csvOptions) {
+    serialized.csvOptions = file.csvOptions;
+  }
+
   if (file.sourceArchive) {
     serialized.sourceArchive = file.sourceArchive;
   }
@@ -86,6 +90,11 @@ export function deserializeUploadedFile(
     file.deletedRowIds = data.deletedRowIds;
   }
 
+  const csvOptions = parseCsvOptions(data.csvOptions);
+  if (csvOptions) {
+    file.csvOptions = csvOptions;
+  }
+
   if (data.joinedBasemap) {
     file.joinedBasemap = data.joinedBasemap;
   }
@@ -112,4 +121,20 @@ export function deserializeUploadedFile(
   }
 
   return file as UploadedFile;
+}
+
+function parseCsvOptions(value: unknown): UploadedFile['csvOptions'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const { header, decimalSeparator, thousandsSeparator, delimiter } =
+    value as Record<string, unknown>;
+  if (typeof header !== 'boolean' || typeof decimalSeparator !== 'string') {
+    return undefined;
+  }
+  return {
+    header,
+    decimalSeparator,
+    thousandsSeparator:
+      typeof thousandsSeparator === 'string' ? thousandsSeparator : undefined,
+    delimiter: typeof delimiter === 'string' ? delimiter : undefined
+  };
 }

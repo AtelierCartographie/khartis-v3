@@ -42,6 +42,7 @@ export interface ProcessFileOptions {
   sourceFileId?: string;
   /** Layer of a multi-layer source; the preferred spatial layer otherwise. */
   layer?: string;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface ReadFileIntoTableOptions {
@@ -49,6 +50,7 @@ export interface ReadFileIntoTableOptions {
   originalName?: string;
   companionFiles?: File[];
   layer?: string;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface FileTableRead {
@@ -135,7 +137,12 @@ export async function readFileIntoTable(
     fileInfo,
     file
   );
-  const csvOptions = await readTabularFile(file, tableName, fileInfo.name);
+  const csvOptions = await readTabularFile(
+    file,
+    tableName,
+    fileInfo.name,
+    options.csvOptions
+  );
   if (geoParquetMetadata) {
     await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
   }
@@ -154,7 +161,8 @@ export async function processFileInternal(
     ),
     originalName: options.originalName,
     companionFiles: options.companionFiles,
-    layer: options.layer
+    layer: options.layer,
+    csvOptions: options.csvOptions
   });
 
   const dataset = await buildDatasetFromDuckTable({
@@ -239,7 +247,8 @@ async function registerFilesForDuckDB(
 async function readTabularFile(
   file: File,
   tableName: string,
-  fileName: string
+  fileName: string,
+  chosenOptions?: CsvImportOptions
 ): Promise<CsvImportOptions | undefined> {
   if (isParquetFileName(fileName)) {
     await Duck.read_tabular(file, {
@@ -247,6 +256,17 @@ async function readTabularFile(
       format: 'parquet'
     });
     return undefined;
+  }
+
+  if (chosenOptions) {
+    await Duck.read_tabular(file, {
+      tablename: tableName,
+      header: chosenOptions.header,
+      decimal_separator: chosenOptions.decimalSeparator,
+      thousands_separator: chosenOptions.thousandsSeparator,
+      delimiter: chosenOptions.delimiter
+    });
+    return chosenOptions;
   }
 
   // Read file head once, share between decimal and header detection (avoids double file.slice + decode)
