@@ -2,6 +2,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { analyse as analyseMacros } from '$lib/features/duckdb/macros/analyse';
 import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/operations/tabular-numeric-normalization';
 import {
+  detectEurostatTsvLayout,
+  restructureEurostatTable
+} from '$lib/features/data-pipeline/operations/eurostat-tsv';
+import {
   createTestInstance,
   destroyTestInstance,
   query,
@@ -183,5 +187,50 @@ describe('normalizeFormattedNumericColumns', () => {
       wrapDuckDB(db)
     );
     expect(converted).toHaveLength(0);
+  });
+
+  it('promotes percent-suffixed values to DOUBLE without rescaling them', async () => {
+    await createTable('tbl_percent', ['14%', '-5%', '12,5 %']);
+    await normalizeFormattedNumericColumns('tbl_percent', wrapDuckDB(db));
+    expect(await getColumnType('tbl_percent', 'value')).toMatch(/double/i);
+    const rows = await query(db, 'SELECT value FROM tbl_percent ORDER BY 1');
+    expect(rows.map((row) => Number(row.value))).toEqual([-5, 12.5, 14]);
+  });
+});
+
+describe('Eurostat TSV layout', () => {
+  const header = 'freq,unit,geo\\TIME_PERIOD\t2024 \t2025 ';
+
+  it('is detected only when the first field packs comma-separated dimensions', () => {
+    expect(detectEurostatTsvLayout(header)).toEqual({
+      dimensions: ['freq', 'unit', 'geo'],
+      periods: ['2024', '2025']
+    });
+    expect(detectEurostatTsvLayout('name\tvalue')).toBeNull();
+    expect(detectEurostatTsvLayout('a,b,c')).toBeNull();
+  });
+
+  it('splits the dimensions and strips status flags from the values', async () => {
+    await run(db, 'DROP TABLE IF EXISTS tbl_eurostat');
+    await run(
+      db,
+      `CREATE TABLE tbl_eurostat AS SELECT * FROM (VALUES
+        ('A,PC,AT11', '34.2 ', '33.0 '),
+        ('A,PC,FI20', '32.9 u', ':'),
+        ('A,PC,FRM0', '31.7 u', '30 ')
+      ) AS t("freq,unit,geo\\TIME_PERIOD", "2024 ", "2025 ")`
+    );
+    const layout = detectEurostatTsvLayout(header)!;
+    await restructureEurostatTable('tbl_eurostat', layout, wrapDuckDB(db));
+
+    const rows = await query(
+      db,
+      'SELECT geo, freq, "2024", "2025" FROM tbl_eurostat ORDER BY geo'
+    );
+    expect(rows).toEqual([
+      { geo: 'AT11', freq: 'A', '2024': 34.2, '2025': 33 },
+      { geo: 'FI20', freq: 'A', '2024': 32.9, '2025': null },
+      { geo: 'FRM0', freq: 'A', '2024': 31.7, '2025': 30 }
+    ]);
   });
 });
