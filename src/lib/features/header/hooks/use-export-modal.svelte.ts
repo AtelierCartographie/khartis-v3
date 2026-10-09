@@ -38,9 +38,9 @@ function createExportModal(): UseExportModalReturn {
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
   let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
 
-  function open(): void {
+  function open(tab: ExportTabType = ExportTab.MAP): void {
     fileName = projectStore.projectName || getDefaultFileName();
-    selectedTab = ExportTab.MAP;
+    selectedTab = tab;
     isOpen = true;
   }
 

@@ -222,7 +222,7 @@
     iconDescription={m.download_tooltip()}
     kind="primary"
     icon={Download}
-    on:click={modal.open}
+    on:click={() => modal.open()}
   >
     {m.download_button()}
   </Button>

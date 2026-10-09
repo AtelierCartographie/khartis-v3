@@ -48,7 +48,7 @@ export interface UseExportModalReturn {
   readonly dataFormat: DataExportFormat;
   readonly resolution: ExportResolution;
 
-  open: () => void;
+  open: (tab?: ExportTabType) => void;
   close: () => void;
   setTab: (tab: ExportTabType) => void;
   setFileName: (name: string) => void;
