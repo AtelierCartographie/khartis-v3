@@ -97,6 +97,26 @@ export async function updateFileJoinedBasemap(
   await markDirtyAndSave(container);
 }
 
+export async function updateFileCsvOptions(
+  container: ProjectStateContainer,
+  fileId: string,
+  csvOptions: UploadedFile['csvOptions']
+): Promise<void> {
+  const fileIndex = getSourceFileIndex(container, fileId);
+  if (fileIndex === -1) return;
+
+  const project = container._state.currentProject!;
+  const updatedFiles = [...project.data.sourceFiles];
+  updatedFiles[fileIndex] = { ...updatedFiles[fileIndex], csvOptions };
+
+  container._state.currentProject = {
+    ...project,
+    data: { ...project.data, sourceFiles: updatedFiles }
+  };
+
+  await markDirtyAndSave(container);
+}
+
 export async function addDeletedRows(
   container: ProjectStateContainer,
   fileId: string,

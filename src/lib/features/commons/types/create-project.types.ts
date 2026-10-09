@@ -63,6 +63,13 @@ export interface AssetRef {
   kind: AssetKind;
 }
 
+export interface SourceCsvOptions {
+  header: boolean;
+  decimalSeparator: string;
+  thousandsSeparator?: string;
+  delimiter?: string;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -92,6 +99,8 @@ export interface UploadedFile {
   statistics?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
+  // Read options chosen in the CSV options modal, replayed on reload.
+  csvOptions?: SourceCsvOptions;
   joinedBasemap?: string;
   geoColumn?: string;
   gpsMode?: boolean;
