@@ -13,6 +13,7 @@
   import { type SearchStats } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
     readCarbonStringValue,
@@ -25,6 +26,11 @@
     SearchSource
   } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import {
+    COLUMN_TYPE_GEOMETRY,
+    EXCLUDED_COLUMNS,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
 
   export type CellHighlightType = 'exact' | 'contains' | 'partial';
 
@@ -53,7 +59,14 @@
   let { tableName, onSearchResults, onReplace }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
-  const columns = $derived(selectedDataset?.columns ?? []);
+  const columns = $derived(
+    selectedDataset?.columns.filter(
+      (c) =>
+        c.type !== COLUMN_TYPE_GEOMETRY &&
+        !(EXCLUDED_COLUMNS as readonly string[]).includes(c.name) &&
+        !JOINED_BASEMAP_COLUMNS.includes(c.name)
+    ) ?? []
+  );
 
   let searchQuery = $state(dataToolsStore.searchQuery);
   let searchSource = $state<SearchSource | string>(dataToolsStore.searchSource);
@@ -320,18 +333,24 @@
 
     const parts: string[] = [];
     if (searchStats.exactCount > 0) {
-      parts.push(m.search_exact_results({ count: searchStats.exactCount }));
+      parts.push(
+        m.search_exact_results({
+          count: formatValue(searchStats.exactCount)
+        })
+      );
     }
     const partialCount = searchStats.containsCount + searchStats.fuzzyCount;
     if (partialCount > 0) {
-      parts.push(m.search_partial_results({ count: partialCount }));
+      parts.push(
+        m.search_partial_results({ count: formatValue(partialCount) })
+      );
     }
     return parts.join(m.separator_comma_space());
   });
 
   const navigationText = $derived(
     hasResults
-      ? `${currentResultIndex + 1}${m.search_navigation_separator()}${searchStats.totalCount}`
+      ? `${formatValue(currentResultIndex + 1)}${m.search_navigation_separator()}${formatValue(searchStats.totalCount)}`
       : ''
   );
 </script>
@@ -348,6 +367,7 @@
   {:else}
     <div class="field-group">
       <Search
+        closeButtonLabelText={m.a11y_clear_search()}
         size="sm"
         placeholder={m.search_placeholder()}
         value={searchQuery}

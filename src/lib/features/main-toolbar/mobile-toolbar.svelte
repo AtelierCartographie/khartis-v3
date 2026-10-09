@@ -383,6 +383,9 @@
         class="mobile-tool-btn"
         class:active={isActive}
         aria-label={config.label()}
+        aria-describedby={showLegendBadge
+          ? 'mobile-legend-tool-badge'
+          : undefined}
         aria-pressed={isActive}
         onclick={onSelect}
       >
@@ -392,7 +395,10 @@
         <Icon size={20} />
       </button>
       {#if showLegendBadge}
-        <span class="notification-badge"></span>
+        <span id="mobile-legend-tool-badge" class="notification-badge"
+          ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+          ></span
+        >
       {/if}
     </div>
   {:else}

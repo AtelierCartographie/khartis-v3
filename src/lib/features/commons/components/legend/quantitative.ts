@@ -2,6 +2,7 @@ import { m } from '$lib/paraglide/messages';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import Textbox from '@borgar/textbox';
 import type { LegendPatternFill } from './khartis-extensions';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   createLegendCanvasRect,
   createLegendFont,
@@ -21,8 +22,12 @@ export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
   variable_width?: boolean;
   nodata?: boolean;
   nodataLabel?: string;
+  nodataFill?: string;
+  nodataPatternFill?: LegendPatternFill | null;
   classPatternFills?: (LegendPatternFill | null)[];
 }
+
+const DEFAULT_NODATA_FILL = NEUTRAL_CARTOGRAPHY_COLORS.missingData;
 
 export function draw_quanti_color_legend(
   thresholds: number[],
@@ -197,11 +202,32 @@ export function draw_quanti_color_legend(
     const safeFontFamily = escapeSvgAttribute(resolvedFontFamily);
 
     let nodata_markup = '';
+    let nodata_defs = '';
     if (nodata) {
       const nodata_y = actual_labels_bottom + section_gap;
       const nodata_label_x = margin_left + nodata_box_w + label_gap;
-      nodata_markup = `<g class="nodata">
-        <rect x="${margin_left}" y="${nodata_y}" width="${nodata_box_w}" height="${nodata_box_h}" fill="#d9d9d9" stroke="none"/>
+      const nodata_fill = options.nodataFill ?? DEFAULT_NODATA_FILL;
+      const nodata_box = options.nodataPatternFill
+        ? pattern_box(
+            margin_left,
+            nodata_y,
+            nodata_box_w,
+            nodata_box_h,
+            options.nodataPatternFill,
+            nodata_fill
+          )
+        : {
+            markup: box(
+              margin_left,
+              nodata_y,
+              nodata_box_w,
+              nodata_box_h,
+              nodata_fill
+            )
+          };
+      nodata_defs = nodata_box.defs ?? '';
+      nodata_markup = `<g class="nodata" stroke="none">
+        ${nodata_box.markup}
         <text x="${nodata_label_x}" y="${nodata_y + nodata_box_h / 2}" dominant-baseline="central" font-size="${fontSize}">${escapeSvgText(nodata_label)}</text>
       </g>`;
     }
@@ -209,7 +235,7 @@ export function draw_quanti_color_legend(
     return {
       markup: `<g class="quantitative_legend" font-family="${safeFontFamily}">
       ${createLegendCanvasRect(width, height)}
-      ${boxesDefs ? `<defs>${boxesDefs}</defs>` : ''}
+      ${boxesDefs || nodata_defs ? `<defs>${boxesDefs}${nodata_defs}</defs>` : ''}
       <g class="box" stroke="none">
         ${boxesMarkup.join('')}
       </g>
@@ -245,9 +271,10 @@ function pattern_box(
   y: number,
   width: number,
   height: number,
-  patternFill: LegendPatternFill
+  patternFill: LegendPatternFill,
+  background = '#ffffff'
 ): { markup: string; defs?: string } {
-  const backgroundRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#ffffff"/>`;
+  const backgroundRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(background)}"/>`;
   const patternRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="1"/>`;
 
   return {

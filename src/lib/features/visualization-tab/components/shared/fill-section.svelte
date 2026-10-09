@@ -11,6 +11,10 @@
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import * as m from '$lib/paraglide/messages';
+  import {
+    formatValue,
+    isSingularCount
+  } from '$lib/features/commons/utils/format.utils';
   import type {
     ClassificationConfig,
     VisualizationConfig
@@ -307,7 +311,9 @@
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: resolvedCategoryCount })}
+    value={(isSingularCount(resolvedCategoryCount)
+      ? m.categories_count_one
+      : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
     settingsIconDescription={m.palette_categories_aspect_title()}
     onsettings={() => {
       categoriesPopoverOpen = true;

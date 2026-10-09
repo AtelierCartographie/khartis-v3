@@ -7,6 +7,7 @@
     SimplificationSource
   } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     Button,
     Dropdown,
@@ -267,6 +268,7 @@
   {#if simplState.source === SimplificationSource.Basemap}
     {#if usesMapLibreInterleaved}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         kind="warning"
         lowContrast
         title={m.simplification_osm_not_available()}
@@ -274,6 +276,7 @@
       />
     {:else if !isImportedBasemap && !hasBasemapVariants}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         kind="info"
         lowContrast
         title={m.simplification_no_variants()}
@@ -283,6 +286,7 @@
 
     {#if isImportedBasemap && !usesMapLibreInterleaved}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         kind="warning"
         lowContrast
         title={m.simplification_warning_title()}
@@ -330,6 +334,7 @@
 
   {#if simplState.source === SimplificationSource.Geo}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind="warning"
       lowContrast
       title={m.simplification_warning_title()}
@@ -338,6 +343,8 @@
 
     {#if geoDropdownItems.length > 1}
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         titleText={m.simplification_geo_dataset_label()}
         selectedId={resolvedGeoDatasetId}
@@ -378,6 +385,7 @@
 
   {#if !simplState.isProcessing && lastResult?.simplified && lastResult.vertexReduction > 0}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       kind="success"
       lowContrast
       title={m.simplification_success({

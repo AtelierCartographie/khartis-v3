@@ -64,6 +64,8 @@ export function useEnrichmentJoin(
   let joinMappings = new SvelteMap<number, string>();
   let ignoredDataValues = $state(new Set<string>());
   let manualCorrections = new SvelteMap<string, string>();
+  // Only the latest run may publish: an earlier one can finish last.
+  let latestJoinStatsRun = 0;
 
   function applyIgnoredEntities(stats: JoinStats): JoinStats {
     if (ignoredDataValues.size === 0) {
@@ -147,6 +149,8 @@ export function useEnrichmentJoin(
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
+    const run = ++latestJoinStatsRun;
+    isComputingJoin = false;
     if (isJoinBlocked()) {
       joinStats = null;
       targetOptions = [];
@@ -183,6 +187,7 @@ export function useEnrichmentJoin(
         targetTableName: geoTableName,
         targetColumn: geoCol.columnName
       });
+      if (run !== latestJoinStatsRun) return;
 
       const targetValues = (await Duck.query(
         `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
@@ -191,6 +196,7 @@ export function useEnrichmentJoin(
          ORDER BY val`,
         { format: 'array' }
       )) as Array<{ val: string }>;
+      if (run !== latestJoinStatsRun) return;
 
       const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
       targetOptions = allTargetOptions;
@@ -210,6 +216,7 @@ export function useEnrichmentJoin(
 
       joinStats = applyIgnoredEntities(stats);
     } catch (error) {
+      if (run !== latestJoinStatsRun) return;
       logger.error(
         'Failed to compute enrichment join stats',
         LogCategory.DATA,
@@ -219,7 +226,9 @@ export function useEnrichmentJoin(
       targetOptions = [];
       showError(m.join_error_title(), m.join_error_message());
     } finally {
-      isComputingJoin = false;
+      if (run === latestJoinStatsRun) {
+        isComputingJoin = false;
+      }
     }
   }
 
@@ -486,6 +495,8 @@ export function useEnrichmentJoin(
   }
 
   function resetJoinState(): void {
+    latestJoinStatsRun += 1;
+    isComputingJoin = false;
     joinStats = null;
     targetOptions = [];
     joinMappings = new SvelteMap<number, string>();

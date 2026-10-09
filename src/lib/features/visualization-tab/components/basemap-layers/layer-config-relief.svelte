@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import { SliderWithInput } from '../shared';
@@ -70,6 +71,8 @@
   <div class="control-group">
     <span class="field-label">{m.basemap_config_representation()}</span>
     <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
       size="sm"
       selectedId={representation}
       items={getRepresentationOptions()}

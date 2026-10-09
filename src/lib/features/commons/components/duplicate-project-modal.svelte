@@ -98,6 +98,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.duplicate_project_modal_title()}
   primaryButtonText={isLoading ? '' : m.duplicate_project_modal_confirm()}

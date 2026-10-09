@@ -56,6 +56,7 @@
 </script>
 
 <Modal
+  iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.reset_data_modal_title()}
   primaryButtonText={isResetting

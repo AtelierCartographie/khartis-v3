@@ -184,6 +184,7 @@
 
   {#if hasOnlyCoordinates}
     <InlineNotification
+      closeButtonDescription={m.a11y_close_notification()}
       title={m.enrich_coordinates_only_title()}
       subtitle={m.enrich_coordinates_only_subtitle()}
       kind="error"
@@ -199,6 +200,7 @@
 
     {#if enrichSuggestedColumn}
       <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
         title={m.geo_column_detected_title()}
         subtitle={m.geo_column_detected_subtitle({
           column: enrichSuggestedColumn.columnName,

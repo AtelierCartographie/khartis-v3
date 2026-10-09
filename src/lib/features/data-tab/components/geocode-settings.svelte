@@ -4,6 +4,7 @@
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { ComboBox } from 'carbon-components-svelte';
   import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
   import { List } from 'carbon-icons-svelte';
@@ -76,6 +77,8 @@
     </span>
     <div class="combobox-with-badge">
       <ComboBox
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         portalMenu
         items={field.items}
         selectedId={field.selectedId}

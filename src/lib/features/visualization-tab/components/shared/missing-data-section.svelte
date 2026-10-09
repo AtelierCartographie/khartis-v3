@@ -8,6 +8,7 @@
     SelectItem
   } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
     DEFAULT_COLORS,
     BasemapDottedPattern,
@@ -24,19 +25,15 @@
     COLOR_ROLE,
     getColorSuggestions
   } from '$lib/features/commons/services/color-suggestion.service';
-  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
+  import {
+    DEFAULT_MISSING_DATA_PATTERN_CONFIG,
+    type PatternPaletteConfig
+  } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
     coerceDashedPattern
   } from './dashed-pattern.utils';
   import { getMissingDataAvailability } from './missing-data-availability';
-
-  const DEFAULT_PATTERN_CONFIG: PatternPaletteConfig = {
-    shape: 'line',
-    angle: 45,
-    scale: 0.7,
-    color: '#000000'
-  };
 
   interface Props {
     show: boolean;
@@ -81,7 +78,7 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
-    patternConfig = DEFAULT_PATTERN_CONFIG,
+    patternConfig = DEFAULT_MISSING_DATA_PATTERN_CONFIG,
     onshowchange,
     oncolorchange,
     onshapechange,
@@ -173,6 +170,7 @@
             presets={getColorSuggestions(COLOR_ROLE.MISSING_DATA)}
             allowPattern={showPatternToggle}
             patternPaletteConfig={pattern ? patternConfig : undefined}
+            patternBackground={color}
             onchange={oncolorchange}
             onpatternchange={handlePatternChange}
           />
@@ -212,6 +210,8 @@
           <Row>
             <Column>
               <Dropdown
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
                 size="sm"
                 titleText={m.stroke_dashed_pattern()}
                 items={dashedPatternItems}

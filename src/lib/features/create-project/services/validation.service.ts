@@ -1,19 +1,14 @@
 import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
-import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import {
+  FileValidator,
+  type MultipleFileValidationResult
+} from '$lib/features/commons/utils/file-validator.utils';
 import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 import * as m from '$lib/paraglide/messages';
 
-interface MultiFileValidationResult {
-  isValid: boolean;
-  globalErrors: string[];
-  results: Map<string, ValidationResult>;
-}
-
-function validateFiles(files: File[]): MultiFileValidationResult {
-  const result = FileValidator.validateMultiple(files);
-
-  return result;
+function validateFiles(files: File[]): MultipleFileValidationResult {
+  return FileValidator.validateMultiple(files);
 }
 
 function validateURL(urlInput: string): ValidationResult {

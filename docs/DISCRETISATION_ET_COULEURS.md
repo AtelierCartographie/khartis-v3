@@ -146,7 +146,9 @@ aperçus et la légende, par des `defs` SVG.
 `color-blindness.filter.ts` fournit des matrices `feColorMatrix` pour huit
 profils : protanopie, deutéranopie, tritanopie et leurs formes atténuées,
 achromatopsie et achromatomalie. C'est un filtre d'affichage pour relire une
-carte avant publication : il ne change ni la classification ni l'export. Le
+carte avant publication : il s'applique à toute la page (carte, légende,
+annotations, collection de cartes) et ne change ni la classification ni
+l'export, qui retire le filtre le temps de la capture. Le
 profil choisi est enregistré dans les réglages d'interface du projet.
 
 ## Persistance

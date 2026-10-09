@@ -24,15 +24,36 @@ describe('file-validator utils', () => {
     expect(result.warnings).toContain(m.validation_csv_no_separator());
   });
 
+  it('should accept a tabular parquet when it is smaller than 1 KB', () => {
+    const file = new File([new Uint8Array(400)], 'regions.parquet');
+
+    const result = FileValidator.validate(file);
+
+    expect(result.errors).not.toContain(m.validation_geoparquet_too_small());
+    expect(result.isValid).toBe(true);
+  });
+
+  it('should reject a parquet when it cannot hold the magic bytes and footer', () => {
+    const file = new File([new Uint8Array(8)], 'broken.parquet');
+
+    expect(FileValidator.validate(file).errors).toContain(
+      m.validation_geoparquet_too_small()
+    );
+  });
+
   it('marks a shapefile group invalid when required sidecars are missing', () => {
-    const result = FileValidator.validateMultiple([shapefilePart('roads.shp')]);
+    const result = FileValidator.validateMultiple([shapefilePart('Roads.shp')]);
     const message = m.shapefile_incomplete_message({
       missing: '.shx, .dbf'
     });
 
     expect(result.isValid).toBe(false);
     expect(result.globalErrors).toContain(message);
-    expect(result.results.get('roads.shp')?.errors).toContain(message);
+    expect(result.results.get('Roads.shp')?.errors).toContain(message);
+    expect(result.incompleteShapefiles.get('roads')).toEqual({
+      missing: ['.shx', '.dbf'],
+      message
+    });
   });
 
   it('accepts a shapefile group with .shp, .shx, and .dbf components', () => {

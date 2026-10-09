@@ -54,7 +54,11 @@
 >
   {#if isBusy}
     <span class="update-button-loading">
-      <Loading small withOverlay={false} />
+      <Loading
+        description={m.loading_indicator_label()}
+        small
+        withOverlay={false}
+      />
       <span>{buttonLabel}</span>
     </span>
   {:else}

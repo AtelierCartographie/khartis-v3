@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button, Dropdown } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { SectionHeading } from '../shared';
 
   type StyleSection = 'primary' | 'secondary';
@@ -52,6 +53,8 @@
   <div class="field-row">
     <div class="field-row-dropdown field-picker">
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         labelText={m.text_according()}
         items={selectableDataFields}
@@ -77,6 +80,8 @@
   <div class="field-row">
     <div class="field-row-dropdown field-picker">
       <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
         size="sm"
         labelText={m.secondary_text()}
         items={secondaryFieldItems}

@@ -23,7 +23,6 @@ import {
   extractUrlsFromInput,
   FileType,
   getFilenameFromUrl,
-  getShapefileBaseName,
   groupShapefiles,
   isShapefileComponent,
   isValidUrl
@@ -285,8 +284,13 @@ export const createProjectActions = {
       const validationResult =
         CreateProjectValidationService.validateFiles(remainingFiles);
 
+      const shapefileMessages = new Set(
+        Array.from(validationResult.incompleteShapefiles.values()).map(
+          (group) => group.message
+        )
+      );
       const nonShapefileErrors = validationResult.globalErrors.filter(
-        (err) => !err.includes('Incomplete shapefile')
+        (err) => !shapefileMessages.has(err)
       );
       createProjectInternalState.newProject.validationErrors =
         nonShapefileErrors;
@@ -311,20 +315,16 @@ export const createProjectActions = {
         const mainFileName = mainFile.name;
         const fileValidation = validationResult.results.get(mainFileName);
 
-        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
-          err.includes(`Incomplete shapefile "${baseName}"`)
+        const incompleteShapefile = validationResult.incompleteShapefiles.get(
+          baseName.toLowerCase()
         );
+        const otherErrors = (fileValidation?.errors ?? []).filter(
+          (error) => !shapefileMessages.has(error)
+        );
+        const hasOtherErrors = otherErrors.length > 0;
 
-        const hasShapefileError = !!shapefileGlobalError;
-        const hasOtherErrors =
-          fileValidation && fileValidation.errors.length > 0;
-
-        if (hasShapefileError && !hasOtherErrors) {
-          const missingMatch =
-            shapefileGlobalError.match(/Missing files: (.*)/);
-          const missingComponents = missingMatch
-            ? missingMatch[1].split(', ').map((s) => s.trim())
-            : [];
+        if (incompleteShapefile && !hasOtherErrors) {
+          const missingComponents = incompleteShapefile.missing;
 
           const incompleteFile: UploadedFile = {
             id: crypto.randomUUID(),
@@ -344,17 +344,13 @@ export const createProjectActions = {
             validation: {
               isValid: false,
               errors: [],
-              warnings: [
-                m.shapefile_incomplete_message({
-                  missing: missingComponents.join(', ')
-                })
-              ]
+              warnings: [incompleteShapefile.message]
             }
           };
           this.addUploadedFile(incompleteFile);
           toProcess.delete(baseName);
         } else if (hasOtherErrors) {
-          const validationErrors = fileValidation?.errors ?? [];
+          const validationErrors = otherErrors;
           const validationWarnings = fileValidation?.warnings ?? [];
           const errorFile: UploadedFile = {
             id: crypto.randomUUID(),
@@ -667,21 +663,7 @@ export const createProjectActions = {
         downloadedFiles.push(remoteFile);
       }
 
-      if (downloadedFiles.length === 1) {
-        const [downloadedFile] = downloadedFiles;
-
-        if (isShapefileComponent(downloadedFile.name)) {
-          await this.processShapefileGroup(
-            getShapefileBaseName(downloadedFile.name),
-            [downloadedFile],
-            DataSourceType.URL
-          );
-        } else {
-          await this.processSingleFile(downloadedFile, DataSourceType.URL);
-        }
-      } else {
-        await this.processFiles(downloadedFiles, DataSourceType.URL);
-      }
+      await this.processFiles(downloadedFiles, DataSourceType.URL);
 
       this.setOnlineFileUrl('');
     } catch (error) {

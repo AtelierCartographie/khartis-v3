@@ -646,7 +646,10 @@
     containerClass="install-help-modal"
     on:close={closeInstallDialog}
   >
-    <ModalHeader title={m.sidenav_install_help_title()} />
+    <ModalHeader
+      iconDescription={m.a11y_close_dialog()}
+      title={m.sidenav_install_help_title()}
+    />
 
     <ModalBody class="install-help-body">
       <div class="install-help-notification" role="alert">

@@ -8,6 +8,10 @@ export type {
 } from '../types/file-processing.service.types';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import {
+  DuckDBError,
+  isPipelineError
+} from '$lib/features/commons/pipeline.errors';
+import {
   EXCLUDED_COLUMNS,
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
@@ -17,6 +21,7 @@ import { FileType } from '$lib/features/commons/types/create-project.types';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
@@ -28,12 +33,11 @@ import {
   buildStatisticsFromColumns,
   dataPipeline,
   isZipDatasetResult,
-  type DatasetResult
+  type DatasetResult,
+  type ZipDatasetResult
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-
-type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
 const TABULAR_TEXT_EXTENSION = 'txt';
 
@@ -99,7 +103,16 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-function getReadableErrorMessage(error: unknown): string {
+export function getReadableErrorMessage(error: unknown): string {
+  // A pipeline error already carries a localized message. A DuckDBError with a
+  // query wraps the raw engine text, which is mapped below like any raw error.
+  if (
+    isPipelineError(error) &&
+    !(error instanceof DuckDBError && error.query)
+  ) {
+    return error.message;
+  }
+
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   if (
@@ -123,9 +136,14 @@ function getReadableErrorMessage(error: unknown): string {
     errorMessage.includes('delimiter') ||
     errorMessage.includes('column count')
   ) {
-    return m.pipeline_error_csv_read_failed({
-      detail: errorMessage.slice(0, 200)
-    });
+    // The raw DuckDB message is English, names the temporary file and quotes
+    // the offending row ("Original Line"), so only the line number is kept.
+    const line = /CSV Error on Line: (\d+)/.exec(errorMessage)?.[1];
+    return line
+      ? m.pipeline_error_csv_read_failed_at_line({
+          line: formatValue(Number(line))
+        })
+      : m.pipeline_error_csv_read_failed();
   }
 
   return m.pipeline_error_generic();
@@ -216,20 +234,21 @@ async function validateAsync(
   file: File
 ): Promise<boolean> {
   const validation = FileValidator.validate(file);
+  // Content checks only run on a file that passed the basic ones: an empty
+  // CSV would otherwise report "file is empty" from both.
+  const result =
+    validation.isValid && validation.requiresAsyncValidation
+      ? await FileValidator.validateAsync(file, validation)
+      : validation;
 
-  if (validation.requiresAsyncValidation) {
-    const asyncValidation = await FileValidator.validateAsync(file, validation);
-    if (!asyncValidation.isValid) {
-      callbacks.onDataUpdate(uploadedFile.id, {
-        status: FileStatus.ERROR,
-        errorMessage: asyncValidation.errors.join(', '),
-        validation: asyncValidation
-      });
-      return false;
-    }
-  }
+  if (result.isValid) return true;
 
-  return true;
+  callbacks.onDataUpdate(uploadedFile.id, {
+    status: FileStatus.ERROR,
+    errorMessage: result.errors.join(m.separator_comma_space()),
+    validation: result
+  });
+  return false;
 }
 
 function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
@@ -308,112 +327,140 @@ function createDuckDBGeofileProcessor(
 function createGeoPackageProcessor(
   callbacks: ProcessingCallbacks
 ): FileProcessor {
-  return createDuckDBGeofileProcessor(callbacks);
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
+
+    const content = await readDuckDBGeofileContent(
+      callbacks,
+      uploadedFile,
+      file
+    );
+
+    const result = await dataPipeline.processGeoPackageFile(uploadedFile, file);
+
+    if (isZipDatasetResult(result)) {
+      await processMultipleDatasets(callbacks, uploadedFile, result);
+      if (result.skippedFiles.length > 0) {
+        showWarning(
+          m.warning_gpkg_layers_skipped_title(),
+          m.warning_gpkg_layers_skipped_message({
+            layers: result.skippedFiles.join(m.separator_comma_space())
+          })
+        );
+      }
+      return;
+    }
+
+    await updateFileFromDuckDBDataset(callbacks, uploadedFile, result, content);
+  }
+
+  return { process };
+}
+
+function resolveArchiveDatasetFileType(dataset: DatasetResult): FileType {
+  const detectedFileType = detectFileTypeFromName(dataset.name);
+  if (detectedFileType !== FileType.UNKNOWN) {
+    return detectedFileType;
+  }
+
+  return (
+    Object.values(FileType).find(
+      (fileType) => fileType === dataset.metadata.fileType
+    ) ?? FileType.UNKNOWN
+  );
+}
+
+async function buildArchiveLayerSnapshot(
+  duck: typeof Duck,
+  dataset: DatasetResult,
+  headers: string[]
+): Promise<Uint8Array> {
+  const geometryColumnName = dataset.geometry
+    ? (dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM)
+    : undefined;
+  const userColumns = headers.filter(
+    (header) =>
+      header !== geometryColumnName &&
+      !EXCLUDED_COLUMNS.includes(header as (typeof EXCLUDED_COLUMNS)[number])
+  );
+  return duck.copy_to_parquet_bytes(
+    dataset.tableName,
+    geometryColumnName ? [...userColumns, geometryColumnName] : userColumns
+  );
+}
+
+// Every dataset of a multi-dataset source (ZIP, multi-layer GeoPackage)
+// becomes its own pending card owning its own table; the first one takes over
+// the card of the source file.
+async function processMultipleDatasets(
+  callbacks: ProcessingCallbacks,
+  uploadedFile: UploadedFile,
+  result: ZipDatasetResult
+): Promise<void> {
+  const datasets = result.datasets;
+  const totalDatasets = datasets.length;
+
+  for (let i = 0; i < datasets.length; i++) {
+    const dataset = datasets[i];
+    const { tableName, columns, rowCount, name, fileSize, geometry } = dataset;
+    const headers = columns.map((col) => col.name);
+    const progressBase = (i / totalDatasets) * 100;
+
+    const detectedFileType = resolveArchiveDatasetFileType(dataset);
+    const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
+
+    const statistics = buildStatisticsFromColumns(columns);
+
+    const archiveLayerSnapshot = await buildArchiveLayerSnapshot(
+      Duck,
+      dataset,
+      headers
+    );
+    const geometryUpdates = {
+      ...(geometry ? { geometry } : {}),
+      archiveLayerSnapshot
+    };
+    if (i === 0) {
+      callbacks.onDataUpdate(uploadedFile.id, {
+        name,
+        fileType: detectedFileType,
+        rowCount,
+        columnCount: countUserColumns(columns, geometry),
+        statistics,
+        content: undefined,
+        sourceArchive: result.sourceZipName,
+        duckdbTableName: tableName,
+        ...geometryUpdates
+      });
+      callbacks.onProgress(uploadedFile.id, progressBase + 50);
+      callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+    } else if (callbacks.onAdditionalFile) {
+      const additionalFile: UploadedFile = {
+        id: dataset.id,
+        name,
+        size: fileSize ?? 0,
+        type: detectedMimeType,
+        fileType: detectedFileType,
+        status: FileStatus.COMPLETE,
+        sourceType: uploadedFile.sourceType,
+        rowCount,
+        columnCount: countUserColumns(columns, geometry),
+        statistics,
+        sourceArchive: result.sourceZipName,
+        duckdbTableName: tableName,
+        ...geometryUpdates
+      };
+      callbacks.onAdditionalFile(additionalFile);
+    }
+  }
+
+  callbacks.onProgress(uploadedFile.id, 100);
 }
 
 function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  function resolveArchiveDatasetFileType(dataset: DatasetResult): FileType {
-    const detectedFileType = detectFileTypeFromName(dataset.name);
-    if (detectedFileType !== FileType.UNKNOWN) {
-      return detectedFileType;
-    }
-
-    return (
-      Object.values(FileType).find(
-        (fileType) => fileType === dataset.metadata.fileType
-      ) ?? FileType.UNKNOWN
-    );
-  }
-
-  async function buildArchiveLayerSnapshot(
-    duck: typeof Duck,
-    dataset: DatasetResult,
-    headers: string[]
-  ): Promise<Uint8Array> {
-    const geometryColumnName = dataset.geometry
-      ? (dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM)
-      : undefined;
-    const userColumns = headers.filter(
-      (header) =>
-        header !== geometryColumnName &&
-        !EXCLUDED_COLUMNS.includes(header as (typeof EXCLUDED_COLUMNS)[number])
-    );
-    return duck.copy_to_parquet_bytes(
-      dataset.tableName,
-      geometryColumnName ? [...userColumns, geometryColumnName] : userColumns
-    );
-  }
-
-  async function processMultipleDatasets(
-    uploadedFile: UploadedFile,
-    zipResult: ProcessFileResult,
-    duck: typeof Duck
-  ): Promise<void> {
-    const result = zipResult as {
-      datasets: DatasetResult[];
-      sourceZipName: string;
-    };
-    const datasets = result.datasets;
-    const totalDatasets = datasets.length;
-
-    for (let i = 0; i < datasets.length; i++) {
-      const dataset = datasets[i];
-      const { tableName, columns, rowCount, name, fileSize, geometry } =
-        dataset;
-      const headers = columns.map((col) => col.name);
-      const progressBase = (i / totalDatasets) * 100;
-
-      const detectedFileType = resolveArchiveDatasetFileType(dataset);
-      const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
-
-      const statistics = buildStatisticsFromColumns(columns);
-
-      const archiveLayerSnapshot = await buildArchiveLayerSnapshot(
-        duck,
-        dataset,
-        headers
-      );
-      const geometryUpdates = {
-        ...(geometry ? { geometry } : {}),
-        archiveLayerSnapshot
-      };
-      if (i === 0) {
-        callbacks.onDataUpdate(uploadedFile.id, {
-          name,
-          fileType: detectedFileType,
-          rowCount,
-          columnCount: countUserColumns(columns, geometry),
-          statistics,
-          content: undefined,
-          sourceArchive: result.sourceZipName,
-          duckdbTableName: tableName,
-          ...geometryUpdates
-        });
-        callbacks.onProgress(uploadedFile.id, progressBase + 50);
-        callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-      } else if (callbacks.onAdditionalFile) {
-        const additionalFile: UploadedFile = {
-          id: crypto.randomUUID(),
-          name,
-          size: fileSize ?? 0,
-          type: detectedMimeType,
-          fileType: detectedFileType,
-          status: FileStatus.COMPLETE,
-          sourceType: uploadedFile.sourceType,
-          rowCount,
-          columnCount: countUserColumns(columns, geometry),
-          statistics,
-          sourceArchive: result.sourceZipName,
-          duckdbTableName: tableName,
-          ...geometryUpdates
-        };
-        callbacks.onAdditionalFile(additionalFile);
-      }
-    }
-
-    callbacks.onProgress(uploadedFile.id, 100);
-  }
-
   async function process(
     uploadedFile: UploadedFile,
     file: File
@@ -427,7 +474,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     const result = await dataPipeline.processFile(file);
 
     if (isZipDatasetResult(result)) {
-      await processMultipleDatasets(uploadedFile, result, Duck);
+      await processMultipleDatasets(callbacks, uploadedFile, result);
       return;
     }
 

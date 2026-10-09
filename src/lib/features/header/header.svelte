@@ -18,6 +18,9 @@
   <CbsHeader
     href={resolve('/')}
     persistentHamburgerMenu={true}
+    ariaLabelMenu={globalState.isSideNavOpen
+      ? m.a11y_close_menu()
+      : m.a11y_open_menu()}
     bind:isSideNavOpen={globalState.isSideNavOpen}
   >
     <svelte:fragment slot="company">

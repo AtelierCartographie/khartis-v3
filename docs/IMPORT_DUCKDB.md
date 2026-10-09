@@ -49,13 +49,14 @@ terminé pour qu'une nouvelle tentative reparte de zéro.
 
 ## Points d'entrée
 
-| API                                                        | Usage                                              |
-| ---------------------------------------------------------- | -------------------------------------------------- |
-| `dataPipeline.processUploadedFile()`                       | parcours principal : création de projet et reprise |
-| `dataPipeline.processFile()`                               | lecture DuckDB directe d'un fichier local          |
-| `dataPipeline.processPastedData()`                         | texte tabulaire collé                              |
-| `dataPipeline.processZipFile()` / `processRemoteZipFile()` | archives ZIP, locales ou distantes                 |
-| `dataPipeline.processRemoteFile(url)`                      | téléchargement d'une URL puis pipeline générique   |
+| API                                                        | Usage                                               |
+| ---------------------------------------------------------- | --------------------------------------------------- |
+| `dataPipeline.processUploadedFile()`                       | parcours principal : création de projet et reprise  |
+| `dataPipeline.processFile()`                               | lecture DuckDB directe d'un fichier local           |
+| `dataPipeline.processPastedData()`                         | texte tabulaire collé                               |
+| `dataPipeline.processZipFile()` / `processRemoteZipFile()` | archives ZIP, locales ou distantes                  |
+| `dataPipeline.processRemoteFile(url)`                      | téléchargement d'une URL puis pipeline générique    |
+| `dataPipeline.processGeoPackageFile()`                     | GeoPackage déposé à la création : un jeu par couche |
 
 `duckDBOrchestrator` est le point d'entrée des opérations de données.
 `Duck.query()` est la façade SQL bas niveau : une mutation faite par ce biais
@@ -68,16 +69,16 @@ doit invalider elle-même les caches concernés (voir plus bas).
 `ST_Read` pour les autres formats géographiques. GPX passe par son lecteur
 JavaScript dédié (`gpx-processor.ts`).
 
-| Format                | Comportement                                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------- |
-| CSV, TSV, texte collé | détection du séparateur, de l'en-tête et du format numérique avant `read_csv`                         |
-| GeoJSON               | lecture géospatiale ; un `.json` qui n'est pas du GeoJSON est lu comme tableau                        |
-| Shapefile             | `.shx` et `.dbf` obligatoires, en pratique transportés dans un ZIP                                    |
-| GeoPackage            | lecture DuckDB, avec un repli navigateur (SQLite WASM) pour les fichiers que le build WASM ne lit pas |
-| Parquet, GeoParquet   | `read_parquet`, normalisation spatiale si les métadonnées `geo` sont présentes                        |
-| GPX                   | lecteur JavaScript dédié                                                                              |
-| KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                             |
-| ZIP                   | un ou plusieurs jeux de données par archive                                                           |
+| Format                | Comportement                                                                                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV, TSV, texte collé | détection du séparateur, de l'en-tête et du format numérique avant `read_csv`                                                                                                                                        |
+| GeoJSON               | lecture géospatiale ; un `.json` qui n'est pas du GeoJSON est lu comme tableau                                                                                                                                       |
+| Shapefile             | `.shx` et `.dbf` obligatoires, en pratique transportés dans un ZIP                                                                                                                                                   |
+| GeoPackage            | dans le navigateur, lecture par SQLite WASM (sans threads, `ST_Read` n'ouvre pas un GeoPackage) ; `ST_Read` sous Node ; à la création, chaque couche spatiale devient un jeu de données, comme les fichiers d'un ZIP |
+| Parquet, GeoParquet   | `read_parquet`, normalisation spatiale si les métadonnées `geo` sont présentes                                                                                                                                       |
+| GPX                   | lecteur JavaScript dédié                                                                                                                                                                                             |
+| KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                                                                                                                                            |
+| ZIP                   | un ou plusieurs jeux de données par archive                                                                                                                                                                          |
 
 Le validateur de l'interface contrôle extensions, tailles, groupes Shapefile et
 schéma d'URL (`http`/`https`). Appelé directement, le processeur distant

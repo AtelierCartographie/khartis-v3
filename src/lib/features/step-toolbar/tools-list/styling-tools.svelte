@@ -78,9 +78,13 @@
             size="small"
             isSelected={globalState.selectedTool === StylingTools.Legend}
             onclick={handleLegendClick}
+            aria-describedby={showLegendBadge ? 'legend-tool-badge' : undefined}
           />
           {#if showLegendBadge}
-            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
+            <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
+              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+              ></span
+            >
           {/if}
         </div>
       </Column>
@@ -126,9 +130,18 @@
             isSelected={globalState.selectedTool ===
               StylingTools.ColorBlindness}
             onclick={() => selectTool(StylingTools.ColorBlindness)}
+            aria-describedby={showColorBlindnessBadge
+              ? 'color-blindness-tool-badge'
+              : undefined}
           />
           {#if showColorBlindnessBadge}
-            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
+            <span
+              id="color-blindness-tool-badge"
+              class={CSS_CLASSES.NOTIFICATION_BADGE}
+              ><span class="bx--visually-hidden"
+                >{m.a11y_tool_badge_active()}</span
+              ></span
+            >
           {/if}
         </div>
       </Column>
