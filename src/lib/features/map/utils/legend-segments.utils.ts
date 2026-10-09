@@ -779,7 +779,9 @@ function getLegendSegmentDrafts(
     getTextSizeLegendDraft(viz),
     getUniquePointSymbolLegendDraft(viz),
     ...getPointSizeLegendDrafts(viz),
-    getLineWidthLegendDraft(viz)
+    getLineWidthLegendDraft(viz),
+    getStrokeColorLegendDraft(viz, 'area'),
+    getStrokeColorLegendDraft(viz, 'point')
   ].filter((draft): draft is LegendSegmentDraft => draft !== null);
 
   if (viz) {
@@ -927,6 +929,105 @@ function getClassedColorLegendDraft(
         })
       )
   };
+}
+
+function getStrokeColorLegendDraft(
+  viz: VisualizationConfig | undefined,
+  primitive: 'area' | 'point'
+): LegendSegmentDraft | null {
+  const config =
+    primitive === 'point' ? getSymbolPrimitive(viz) : getPolygonPrimitive(viz);
+  const classification = config?.strokeClassification;
+  const colors = classification?.colors ?? [];
+  if (
+    !viz ||
+    !config?.enabled ||
+    !classification ||
+    colors.length === 0 ||
+    (config.strokeMode !== StrokeMode.CLASSES &&
+      config.strokeMode !== StrokeMode.CATEGORIES)
+  ) {
+    return null;
+  }
+
+  if (repeatsFillLegend(viz, primitive, config.strokeMode, classification)) {
+    return null;
+  }
+
+  let entries: { label: string; color: string }[];
+  if (config.strokeMode === StrokeMode.CLASSES) {
+    const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+    if (breaks.length === 0) return null;
+    const classColors = getEffectiveClassedColors(colors, breaks);
+    entries = classColors.map((color, index) => ({
+      label: getColorScaleLabel(breaks, classColors.length, index),
+      color
+    }));
+  } else {
+    const labels = classification.labels ?? [];
+    const disabled = new Set((classification.disabledLabels ?? []).map(String));
+    entries = colors
+      .map((color, index) => ({
+        label:
+          labels[index] ??
+          m.palette_category_default_label({ index: index + 1 }),
+        color
+      }))
+      .filter((entry) => !disabled.has(entry.label));
+  }
+
+  const symbol =
+    primitive === 'point'
+      ? getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE)
+      : null;
+  const items: KhartisLegendSwatchItem[] = entries.map(({ label, color }) => ({
+    label,
+    fill: 'none',
+    stroke: color,
+    strokeWidth: 2,
+    ...(symbol ? { symbol, size: 8 } : {})
+  }));
+  if (items.length === 0) return null;
+
+  return {
+    key: `stroke-color-${primitive}`,
+    primitive,
+    className: 'legend-svg--categorical',
+    consumesMissingData: false,
+    create: (options) =>
+      toLegendSvg(
+        draw_khartis_swatch_legend(items, {
+          ...options,
+          type: getSwatchType(primitive, false)
+        })
+      )
+  };
+}
+
+function repeatsFillLegend(
+  viz: VisualizationConfig,
+  primitive: 'area' | 'point',
+  strokeMode: StrokeMode,
+  stroke: ClassificationConfig
+): boolean {
+  const classed = strokeMode === StrokeMode.CLASSES;
+  const fillPrimitives = classed
+    ? getClassedColorLegendPrimitives(viz)
+    : getCategoricalColorLegendPrimitives(viz);
+  if (!fillPrimitives.includes(primitive)) return false;
+
+  const fill = classed
+    ? getLegendClassedColorClassification(viz, primitive)
+    : getLegendCategoricalClassification(viz, primitive);
+  const sameList = (a: unknown[] = [], b: unknown[] = []) =>
+    a.length === b.length && a.every((value, index) => value === b[index]);
+  return (
+    !!fill &&
+    sameList(fill.colors, stroke.colors) &&
+    (classed
+      ? sameList(fill.breaks, stroke.breaks)
+      : sameList(fill.labels, stroke.labels))
+  );
 }
 
 function getTextColorLegendDraft(

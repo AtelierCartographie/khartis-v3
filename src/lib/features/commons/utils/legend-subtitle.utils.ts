@@ -4,6 +4,7 @@ import {
   FillMode,
   ProportionalType,
   SizeMode,
+  StrokeMode,
   SymbolMode,
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
@@ -74,18 +75,44 @@ function getPolygonLegendSubtitleParts(
     visualization.polygon?.categoryColumn ??
     visualization.mapping.categoryColumn;
 
+  const strokeColumn = getStrokeColumn(visualization.polygon);
+
   if (polygonFillMode === FillMode.CATEGORIES) {
-    return [polygonCategoryColumn, polygonValueColumn];
+    return [polygonCategoryColumn, polygonValueColumn, strokeColumn];
   }
 
   if (
     polygonFillMode === FillMode.CLASSES ||
     polygonFillMode === FillMode.DENSITY
   ) {
-    return [polygonValueColumn];
+    return [polygonValueColumn, strokeColumn];
+  }
+
+  if (strokeColumn) {
+    return [strokeColumn];
   }
 
   return [polygonValueColumn, polygonCategoryColumn];
+}
+
+function getStrokeColumn(
+  primitive:
+    | {
+        strokeMode?: StrokeMode;
+        strokeValueColumn?: string;
+        strokeCategoryColumn?: string;
+        valueColumn?: string;
+        categoryColumn?: string;
+      }
+    | undefined
+): string | undefined {
+  if (primitive?.strokeMode === StrokeMode.CLASSES) {
+    return primitive.strokeValueColumn ?? primitive.valueColumn;
+  }
+  if (primitive?.strokeMode === StrokeMode.CATEGORIES) {
+    return primitive.strokeCategoryColumn ?? primitive.categoryColumn;
+  }
+  return undefined;
 }
 
 function getTextLegendSubtitleParts(
@@ -218,6 +245,8 @@ function getPointLegendSubtitleParts(
         visualization.mapping.valueColumn
     );
   }
+
+  parts.push(getStrokeColumn(symbol));
 
   return parts;
 }
