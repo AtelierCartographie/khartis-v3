@@ -288,6 +288,32 @@ describe('geo indications overlay dragging', () => {
     ).toBe(false);
   });
 
+  it('should let a dragged scale reach the page margins when the map area is cropped', async () => {
+    formatActions.toggleGrid();
+    formatActions.setMargins({ top: 20, right: 20, bottom: 20, left: 30 });
+    geoIndicationsActions.toggleScale();
+
+    const { container } = render(GeoIndicationsOverlay);
+    const overlay = container.querySelector('.geo-indications-overlay');
+    const scale = container.querySelector('.scale-bar');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(scale instanceof HTMLDivElement)
+    ) {
+      throw new Error('Scale indication was not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 250, height: 160 });
+    bindElementBox(scale, { left: 14, top: 100, width: 60, height: 26 });
+
+    await fireEvent.pointerDown(scale, { clientX: 18, clientY: 110 });
+    await fireEvent.pointerMove(window, { clientX: -300, clientY: 600 });
+
+    // Page left and bottom edges, in map-area coordinates.
+    expect(geoIndicationsState.scale.dragPosition).toEqual({ x: -30, y: 154 });
+  });
+
   it('suppresses the click that follows a dragged scale indication', async () => {
     geoIndicationsActions.toggleScale();
 
