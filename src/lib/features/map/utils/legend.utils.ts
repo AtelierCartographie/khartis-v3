@@ -34,6 +34,11 @@ import {
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 import { toFiniteNumber } from './finite-number.utils';
+import { ticks as d3_ticks } from 'd3-array';
+import {
+  round,
+  round_extreme
+} from '$lib/features/commons/components/legend/utils';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 
 export type LegendSwatchPrimitive = 'area' | 'point' | 'line';
@@ -208,39 +213,47 @@ function getStatisticsValue(
   return (statistics as Record<'min' | 'max', unknown>)[key];
 }
 
-function buildProportionalLineLegendSteps(
+// The widest line is labelled with its value rounded as far as the data
+// allows, the way the symbol legend rounds its extremes; the thinner ones take
+// round values below it.
+export function getProportionalLineLegendValues(
   maxValue: number,
-  maxWidth: number
-): LegendContinuousStep[] {
-  if (maxValue <= 0) {
-    return [
-      {
-        kind: 'continuous',
-        value: 0,
-        size: 0
-      }
-    ];
+  valueSample: number[] = []
+): number[] {
+  if (!(maxValue > 0)) {
+    return [0];
   }
 
-  const midValue = maxValue / 2;
+  const sortedSample = valueSample
+    .map(Math.abs)
+    .filter((value) => Number.isFinite(value) && value <= maxValue)
+    .sort((a, b) => a - b);
+  const roundedMax =
+    sortedSample.length > 1
+      ? round_extreme(sortedSample, maxValue, 'max')
+      : round(maxValue, 2);
+  const lower = d3_ticks(0, roundedMax, 3)
+    .filter((value) => value > 0 && value < roundedMax * 0.9)
+    .slice(-2);
 
-  return [
-    {
+  return [roundedMax, ...lower.reverse()];
+}
+
+function buildProportionalLineLegendSteps(
+  maxValue: number,
+  maxWidth: number,
+  valueSample?: number[]
+): LegendContinuousStep[] {
+  return getProportionalLineLegendValues(maxValue, valueSample).map(
+    (value) => ({
       kind: 'continuous',
-      value: maxValue,
-      size: getProportionalLineWidthForValue(maxValue, maxValue, maxWidth)
-    },
-    {
-      kind: 'continuous',
-      value: midValue,
-      size: getProportionalLineWidthForValue(midValue, maxValue, maxWidth)
-    },
-    {
-      kind: 'continuous',
-      value: 0,
-      size: getProportionalLineWidthForValue(0, maxValue, maxWidth)
-    }
-  ];
+      value,
+      size:
+        maxValue > 0
+          ? getProportionalLineWidthForValue(value, maxValue, maxWidth)
+          : 0
+    })
+  );
 }
 
 function buildProportionalSymbolLegendSteps(
@@ -563,7 +576,8 @@ export function getPointSizeLegendScale(
 
 export function getLineWidthLegendScale(
   viz: VisualizationConfig | undefined,
-  statistics?: ColumnStatisticsLike
+  statistics?: ColumnStatisticsLike,
+  valueSample?: number[]
 ): LineWidthLegendScale | null {
   const line = getLinePrimitive(viz);
   const classification = viz && getLineThicknessClassification(viz);
@@ -594,7 +608,8 @@ export function getLineWidthLegendScale(
       kind: 'proportional',
       steps: buildProportionalLineLegendSteps(
         proportionalDomainMax,
-        maxLineWidth
+        maxLineWidth,
+        valueSample
       ),
       color,
       opacity,
