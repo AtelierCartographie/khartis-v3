@@ -318,5 +318,50 @@
         "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
       }
     ]
+  },
+  "ESPAGNE_LAMBERT": {
+    "description_fr": "Espagne dans les coniques conformes de Lambert de l'Atlas nacional de España (IGN, ETRS89) : cadre RECTANGULAIRE qui sert de masque pour la Péninsule, les Baléares, Ceuta et Melilla (centré, marge de 10 %), et encart des Canaries à la même échelle, à gauche, aligné en bas, dans sa propre Lambert",
+    "description_en": "Spain in the Lambert conformal conic projections of the Atlas Nacional de España (IGN, ETRS89): RECTANGULAR frame used as a mask for the Peninsula, the Balearic Islands, Ceuta and Melilla (centred, 10% margin), and a Canary Islands inset at the same scale, on the left, bottom-aligned, in its own Lambert",
+    "name_fr": "ETRS89 / Lambert conique conforme de l'ANE (Péninsule et Baléares ; Canaries)",
+    "name_en": "ETRS89 / ANE Lambert conformal conic (Peninsula and Balearic Islands; Canary Islands)",
+    "layoutAspect": 1.6565,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=lcc +lat_0=40 +lon_0=-3 +lat_1=42.8333333333333 +lat_2=37.1166666666667 +x_0=600000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-9.7765, 34.0336],
+          [4.9842, 44.6472]
+        ],
+        "layout": { "x": 0.3028, "y": 0, "width": 0.6972, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=lcc +lat_0=40 +lon_0=-3 +lat_1=42.8333333333333 +lat_2=37.1166666666667 +x_0=600000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-10.2961, 39.72],
+          [-10.2039, 39.78]
+        ],
+        "layout": { "x": 0.3028, "y": 0, "width": 0.6972, "height": 1 }
+      },
+      {
+        "id": "canarias",
+        "proj4": "+proj=lcc +lat_0=28.5 +lon_0=-16 +lat_1=28.5 +x_0=300000 +y_0=300000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-18.6267, 27.2008],
+          [-12.9109, 29.8298]
+        ],
+        "layout": { "x": 0, "y": 0.753, "width": 0.2889, "height": 0.247 }
+      },
+      {
+        "id": "cadre_canarias",
+        "proj4": "+proj=lcc +lat_0=28.5 +lon_0=-16 +lat_1=28.5 +x_0=300000 +y_0=300000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-17.3173, 29.22],
+          [-17.1827, 29.28]
+        ],
+        "layout": { "x": 0, "y": 0.753, "width": 0.2889, "height": 0.247 }
+      }
+    ]
   }
 }
