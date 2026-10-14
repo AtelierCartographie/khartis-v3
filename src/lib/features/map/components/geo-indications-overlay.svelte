@@ -84,6 +84,10 @@
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';
 
+  // In the 40 × 50 viewBox of the indicator, so the letter keeps its
+  // proportion to the arrow or the rose whatever their size.
+  const NORTH_LETTER_SIZE = 15;
+
   let {
     interactive = true,
     hidden = false
@@ -1536,9 +1540,9 @@
             />
             <text
               x="20"
-              y="11"
+              y="14"
               text-anchor="middle"
-              font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
+              font-size={NORTH_LETTER_SIZE}
               font-weight="bold"
               fill={orientationColor}
               font-family={orientationFontFamily}
@@ -1571,9 +1575,9 @@
             />
             <text
               x="20"
-              y="11"
+              y="14"
               text-anchor="middle"
-              font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
+              font-size={NORTH_LETTER_SIZE}
               font-weight="bold"
               fill={orientationColor}
               font-family={orientationFontFamily}
