@@ -2,7 +2,6 @@ export { legendActions, getLegendState } from './legend.store.svelte';
 export {
   resolveLegendEntryLabel,
   resolveLegendItemLayout,
-  resolveLegendSegmentTitle,
   selectRenderedLegendItems,
   type ResolvedLegendItemLayout
 } from './legend-items.utils';

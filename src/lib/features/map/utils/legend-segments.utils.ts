@@ -88,7 +88,6 @@ import {
 import {
   resolveLegendEntryLabel,
   resolveLegendItemLayout,
-  resolveLegendSegmentTitle,
   type LegendItem,
   type RenderedLegendSegmentKind,
   type ResolvedLegendItemLayout
@@ -98,7 +97,11 @@ import {
   resolveSharedFacetScaleColumns,
   type SharedFacetScaleColumn
 } from '$lib/features/step-toolbar/tools/facets';
-import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+import {
+  getLegendComponents,
+  type LegendComponent,
+  type LegendSubtitlePrimitive
+} from '$lib/features/commons/utils/legend-subtitle.utils';
 import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
 import { POLYGON_STROKE_WIDTH_DIVISOR } from '../layers/stroke-width.constants';
 
@@ -186,8 +189,6 @@ type LegendSegmentDraft = {
   className: string;
   primitive: LegendSubtitlePrimitive;
   consumesMissingData?: boolean;
-  /** The column this block encodes, when it has one. */
-  variable?: string;
   create: (
     options: LegendDraftOptions,
     context: LegendSegmentContext
@@ -198,7 +199,6 @@ export type LegendSegment = {
   key: string;
   className: string;
   kind: RenderedLegendSegmentKind;
-  variable?: string;
   svg: LegendSvgDefinition;
 };
 
@@ -863,13 +863,18 @@ export function getLegendSegments(
   viz: VisualizationConfig | undefined,
   legendTextStyle: LegendTextStyle
 ): LegendSegment[] {
-  const drafts = getLegendSegmentDrafts(viz).filter(
+  const primitiveDrafts = getLegendSegmentDrafts(viz).filter(
     (draft) => !item.primitive || draft.primitive === item.primitive
   );
-
-  const lastMissingDataDraftIndex = drafts.findLastIndex(
+  // The missing-data entry is shared by the primitive's channels, so it is
+  // placed across all of them before the frame keeps its own channel.
+  const missingDataDraft = primitiveDrafts.findLast(
     (draft) => draft.consumesMissingData
   );
+  const drafts = filterDraftsByComponent(primitiveDrafts, item, viz);
+  const lastMissingDataDraftIndex = missingDataDraft
+    ? drafts.indexOf(missingDataDraft)
+    : -1;
   const layout = resolveLegendItemLayout(item);
   const entryLabel = resolveLegendEntryLabel(item);
 
@@ -877,13 +882,7 @@ export function getLegendSegments(
     .map((draft, index): LegendSegment | null => {
       const svg = draft.create(
         {
-          ...getLegendTextOptions(
-            item,
-            index,
-            drafts.length,
-            legendTextStyle,
-            draft.key
-          ),
+          ...getLegendTextOptions(item, index, drafts.length, legendTextStyle),
           entrySpacing: layout.entrySpacing
         },
         {
@@ -898,7 +897,6 @@ export function getLegendSegments(
             key: draft.key,
             className: draft.className,
             kind: getLegendSegmentKind(draft),
-            variable: draft.variable,
             svg
           }
         : null;
@@ -906,18 +904,57 @@ export function getLegendSegments(
     .filter((segment): segment is LegendSegment => segment !== null);
 }
 
+// Blocks without a channel of their own (a lone missing-data entry) go with
+// the first channel.
+function getDraftComponent(draft: LegendSegmentDraft): LegendComponent | null {
+  if (draft.key === 'missing-data') {
+    return null;
+  }
+  if (draft.key.startsWith('stroke-color')) {
+    return 'stroke';
+  }
+  if (
+    draft.key.includes('size') ||
+    draft.key.includes('line-width') ||
+    draft.key === 'unique-point-symbol'
+  ) {
+    return 'size';
+  }
+  return 'color';
+}
+
+function filterDraftsByComponent(
+  drafts: LegendSegmentDraft[],
+  item: LegendItem,
+  viz: VisualizationConfig | undefined
+): LegendSegmentDraft[] {
+  if (!item.component || !item.primitive || !viz) {
+    return drafts;
+  }
+
+  // A primitive's single legend records its channel but keeps every block.
+  const components = getLegendComponents(viz, item.primitive);
+  if (components.length < 2) {
+    return drafts;
+  }
+
+  const isFirstComponent = components[0] === item.component;
+  return drafts.filter((draft) => {
+    const component = getDraftComponent(draft);
+    return component === null ? isFirstComponent : component === item.component;
+  });
+}
+
 function getLegendTextOptions(
   item: LegendItem,
   index: number,
   count: number,
-  legendTextStyle: LegendTextStyle,
-  segmentKey: string
+  legendTextStyle: LegendTextStyle
 ): CommonLegendTextOptions {
   return {
     fontFamily: legendTextStyle.fontFamily,
     fontSize: legendTextStyle.fontSize,
-    title:
-      index === 0 ? item.title : resolveLegendSegmentTitle(item, segmentKey),
+    title: index === 0 ? item.title : null,
     subtitle: index === 0 ? item.subtitle : null,
     note: index === count - 1 ? item.note : null
   };
@@ -1118,7 +1155,6 @@ function getStrokeClassesLegendDraft(
     primitive,
     className: 'legend-svg--quantitative',
     consumesMissingData: false,
-    variable: valueColumn,
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
@@ -1492,7 +1528,6 @@ function getQuantitativeColorLegendDraft(
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
-    variable: valueColumn,
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
@@ -2035,7 +2070,6 @@ function getLineWidthLegendDraft(
     return {
       key: 'proportional-line-width',
       primitive: 'line',
-      variable: sizeColumn,
       className: 'legend-svg--line-width',
       consumesMissingData: isLegendMissingDataShown(viz, 'line'),
       create: (options, context) =>
@@ -2067,7 +2101,6 @@ function getLineWidthLegendDraft(
   return {
     key: 'line-width',
     primitive: 'line',
-    variable: sizeColumn,
     className: 'legend-svg--line-width',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>

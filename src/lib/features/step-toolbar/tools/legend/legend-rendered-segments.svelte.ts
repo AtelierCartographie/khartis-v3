@@ -9,8 +9,6 @@ export type RenderedLegendSegmentKind =
 export interface RenderedLegendSegment {
   key: string;
   kind: RenderedLegendSegmentKind;
-  /** The column the block encodes, when it has one. */
-  variable?: string;
 }
 
 let segmentsByItemId = $state<Record<string, RenderedLegendSegment[]>>({});
@@ -24,9 +22,7 @@ function areSegmentsEqual(
     left.length === right.length &&
     left.every(
       (segment, index) =>
-        segment.key === right[index].key &&
-        segment.kind === right[index].kind &&
-        segment.variable === right[index].variable
+        segment.key === right[index].key && segment.kind === right[index].kind
     )
   );
 }
@@ -35,6 +31,11 @@ export function getRenderedLegendSegments(
   itemId: string
 ): RenderedLegendSegment[] {
   return segmentsByItemId[itemId] ?? [];
+}
+
+/** The overlay drew this legend and found no block to show. */
+export function hasNothingToDraw(itemId: string): boolean {
+  return segmentsByItemId[itemId]?.length === 0;
 }
 
 export function setRenderedLegendSegments(
