@@ -469,6 +469,21 @@ function draw_vertical_quanti_color_legend(
     if (patternFill) {
       return pattern_box(margin, top, cell_width, height, patternFill);
     }
+    if (swatch.type === 'line') {
+      // The classes read as one graduated line running down the bar.
+      return {
+        markup: swatch_cell(
+          swatch,
+          margin,
+          top,
+          cell_width,
+          height,
+          colors[i],
+          options.opacity,
+          'vertical'
+        )
+      };
+    }
     if (swatch.type !== 'box') {
       const mark_height = Math.min(height, scaleLegendMetric(15, fontSize));
       return {
@@ -600,7 +615,8 @@ function swatch_cell(
   width: number,
   height: number,
   color: string,
-  opacity?: number
+  opacity?: number,
+  direction: 'horizontal' | 'vertical' = 'horizontal'
 ): string {
   const safeColor = escapeSvgAttribute(color);
   const paintOpacity =
@@ -609,8 +625,12 @@ function swatch_cell(
       : '';
 
   if (swatch.type === 'line') {
-    const mid = y + height / 2;
     const dash = swatch.dashed ? ' stroke-dasharray="5,3"' : '';
+    if (direction === 'vertical') {
+      const center = x + width / 2;
+      return `<line x1="${center}" y1="${y}" x2="${center}" y2="${y + height}" stroke="${safeColor}" stroke-width="${Math.min(width, swatch.strokeWidth)}"${paintOpacity}${dash}/>`;
+    }
+    const mid = y + height / 2;
     return `<line x1="${x}" y1="${mid}" x2="${x + width}" y2="${mid}" stroke="${safeColor}" stroke-width="${Math.min(height, swatch.strokeWidth)}"${paintOpacity}${dash}/>`;
   }
 
