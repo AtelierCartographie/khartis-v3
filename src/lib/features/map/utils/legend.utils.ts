@@ -34,6 +34,7 @@ import {
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 import { toFiniteNumber } from './finite-number.utils';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 
 export type LegendSwatchPrimitive = 'area' | 'point' | 'line';
 
@@ -96,8 +97,18 @@ function resolveStyleColor(
   return typeof color === 'string' ? color : fallback;
 }
 
+// A size legend whose color is carried by classes or categories shows the
+// sizes alone: a neutral mark, so it does not read as one of those colors.
 function resolveSymbolFillColor(viz: VisualizationConfig): string {
-  const symbolFill = getSymbolPrimitive(viz)?.fillColor;
+  const symbol = getSymbolPrimitive(viz);
+  if (
+    symbol?.fillMode === FillMode.CLASSES ||
+    symbol?.fillMode === FillMode.CATEGORIES
+  ) {
+    return NEUTRAL_CARTOGRAPHY_COLORS.dataFill;
+  }
+
+  const symbolFill = symbol?.fillColor;
   if (symbolFill) {
     return resolveStyleColor(symbolFill, DEFAULT_COLORS.fill);
   }
@@ -562,6 +573,11 @@ export function getLineWidthLegendScale(
   }
 
   const maxLineWidth = Math.max(1, line.maxWidth ?? 1);
+  const color =
+    line.colorMode === ColorMode.CLASSES ||
+    line.colorMode === ColorMode.CATEGORIES
+      ? NEUTRAL_CARTOGRAPHY_COLORS.dataStroke
+      : resolveStyleColor(line.color, DEFAULT_COLORS.line);
   const opacity = normalizeOpacity(line.opacity, 1);
 
   if (line.thicknessMode === ThicknessMode.PROPORTIONAL && !!line.sizeColumn) {
@@ -580,7 +596,7 @@ export function getLineWidthLegendScale(
         proportionalDomainMax,
         maxLineWidth
       ),
-      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
+      color,
       opacity,
       dashed: line.dashed ?? false
     };
@@ -599,7 +615,7 @@ export function getLineWidthLegendScale(
     return {
       kind: 'classes',
       steps: buildClassedLegendSteps(classCount, 1, maxLineWidth),
-      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
+      color,
       opacity,
       dashed: line.dashed ?? false
     };
