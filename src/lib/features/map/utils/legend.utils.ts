@@ -34,7 +34,6 @@ import {
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 import { toFiniteNumber } from './finite-number.utils';
-import { ticks as d3_ticks } from 'd3-array';
 import {
   round,
   round_extreme
@@ -215,7 +214,7 @@ function getStatisticsValue(
 
 // The widest line is labelled with its value rounded as far as the data
 // allows, the way the symbol legend rounds its extremes; the thinner ones take
-// round values below it.
+// the round values (1, 2 or 5 × 10ⁿ) at most half and a quarter of it.
 export function getProportionalLineLegendValues(
   maxValue: number,
   valueSample: number[] = []
@@ -232,11 +231,17 @@ export function getProportionalLineLegendValues(
     sortedSample.length > 1
       ? round_extreme(sortedSample, maxValue, 'max')
       : round(maxValue, 2);
-  const lower = d3_ticks(0, roundedMax, 3)
-    .filter((value) => value > 0 && value < roundedMax * 0.9)
-    .slice(-2);
+  const lower = [roundedMax / 2, roundedMax / 4].map(floorToRoundValue);
 
-  return [roundedMax, ...lower.reverse()];
+  return Array.from(new Set([roundedMax, ...lower])).filter(
+    (value) => value > 0
+  );
+}
+
+function floorToRoundValue(value: number): number {
+  const order = 10 ** Math.floor(Math.log10(value));
+  const step = [5, 2, 1].find((factor) => factor * order <= value) ?? 1;
+  return step * order;
 }
 
 function buildProportionalLineLegendSteps(
