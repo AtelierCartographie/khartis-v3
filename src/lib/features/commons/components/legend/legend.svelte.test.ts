@@ -120,6 +120,40 @@ describe('common legend generators', () => {
     );
   });
 
+  it('should size proportional classes after their share of the value range when labels have room', () => {
+    const svg = draw_quanti_color_legend([0, 30, 100], ['#f7fbff', '#2171b5'], {
+      variable_width: true
+    });
+    const widths = [
+      ...svg.markup.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="([\d.]+)"/g)
+    ]
+      .map((match) => Number(match[1]))
+      .filter((width) => width < svg.width);
+
+    expect(widths).toHaveLength(2);
+    expect(widths[1] / widths[0]).toBeCloseTo(70 / 30, 1);
+  });
+
+  it('should put the lowest class at the bottom of a vertical bar when it reads like a thermometer', () => {
+    const labelY = (markup: string, label: string): number =>
+      Number(new RegExp(`y="([\\d.]+)">${label}<`).exec(markup)?.[1]);
+    const thermometer = draw_quanti_color_legend(
+      [0, 50, 100],
+      ['#f7fbff', '#2171b5'],
+      { orientation: 'vertical', lowAtBottom: true }
+    ).markup;
+    const topDown = draw_quanti_color_legend(
+      [0, 50, 100],
+      ['#f7fbff', '#2171b5'],
+      { orientation: 'vertical', lowAtBottom: false }
+    ).markup;
+
+    expect(labelY(thermometer, '0')).toBeGreaterThan(
+      labelY(thermometer, '100')
+    );
+    expect(labelY(topDown, '0')).toBeLessThan(labelY(topDown, '100'));
+  });
+
   it('draws categorical legends and escapes labels before raw SVG rendering', () => {
     const svg = createLegendSvg(
       draw_categorical_legend([

@@ -1,6 +1,7 @@
 import Textbox from '@borgar/textbox';
 import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import {
+  clampEntrySpacing,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
@@ -40,6 +41,7 @@ export interface KhartisLegendSwatchItem {
 
 export interface KhartisSwatchLegendOptions extends CommonLegendTextOptions {
   type?: KhartisLegendSwatchType;
+  entrySpacing?: number;
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
@@ -53,6 +55,7 @@ export interface KhartisLineWidthLegendStep {
 }
 
 export interface KhartisLineWidthLegendOptions extends CommonLegendTextOptions {
+  entrySpacing?: number;
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
@@ -85,6 +88,8 @@ interface RowLegendOptions<T> extends CommonLegendTextOptions {
   // row then grow with the item, so a legend meant to read at map scale is not
   // squeezed into a box derived from the font size.
   getShapeSize?: (item: T) => number | undefined;
+  /** Share of the default gap kept between two entries, from 0 to 1. */
+  entrySpacing?: number;
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
@@ -180,6 +185,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const noteFont = createLegendFont({ fontSize: noteSize, fontFamily });
   const margin = Math.max(10, Math.round(fontSize * 0.6));
   const gap = Math.max(8, Math.round(fontSize * 0.6));
+  const rowGap = gap * clampEntrySpacing(options.entrySpacing);
   const shapeSize = Math.round(fontSize * 1.25);
   const footerType = options.footerType ?? 'box';
   const { items, overflowLabel } = splitLegendOverflow(options.items);
@@ -253,7 +259,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     const x = margin;
     const rowBodyHeight = rowBodyHeights[index] ?? shapeSize;
     const rowTop = nextRowTop;
-    nextRowTop += rowBodyHeight + gap;
+    nextRowTop += rowBodyHeight + rowGap;
     const labelX = x + shapeWidth + gap;
     const shape = options.drawShape(
       item,
@@ -277,7 +283,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       defs: shape.defs
     };
   });
-  const mainBottom = items.length > 0 ? nextRowTop - gap : startY;
+  const mainBottom = items.length > 0 ? nextRowTop - rowGap : startY;
   const maxFooterLineCount = Math.max(
     1,
     ...footerLabelLines.map((lines) => lines.length)
@@ -296,7 +302,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     const x = margin;
     const footerBodyHeight = footerBodyHeights[index] ?? shapeSize;
     const rowTop = nextFooterTop;
-    nextFooterTop += footerBodyHeight + gap;
+    nextFooterTop += footerBodyHeight + rowGap;
     const labelX = x + shapeWidth + gap;
     const labelY = rowTop + footerBodyHeight / 2;
     const shape = draw_swatch_shape(
@@ -321,7 +327,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     };
   });
   const footerBottom =
-    footerItems.length > 0 ? nextFooterTop - gap : mainBottom;
+    footerItems.length > 0 ? nextFooterTop - rowGap : mainBottom;
   const bottom = footerItems.length > 0 ? footerBottom : mainBottom;
   const note = renderLegendNote({
     note: options.note,

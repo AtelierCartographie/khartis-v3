@@ -40,7 +40,8 @@
   import {
     getLegendState,
     legendActions,
-    selectRenderedLegendItems
+    selectRenderedLegendItems,
+    setRenderedLegendSegments
   } from '$lib/features/step-toolbar/tools/legend';
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
@@ -54,7 +55,10 @@
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { getLocale } from '$lib/paraglide/runtime.js';
-  import { getLegendSegments } from '../utils/legend-segments.utils';
+  import {
+    getLegendSegments,
+    type LegendSegment
+  } from '../utils/legend-segments.utils';
 
   // `scopeVizId`, `inline`, and `sizeScale` make legends facet-cell scoped.
   let {
@@ -107,6 +111,28 @@
     void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
+  });
+
+  const segmentsByItemId = $derived.by(() => {
+    void getLocale();
+    const segments: Record<string, LegendSegment[]> = {};
+    for (const item of visibleItems) {
+      segments[item.id] = getLegendSegments(
+        item,
+        vizByItemId.get(item.id),
+        legendState.style
+      );
+    }
+    return segments;
+  });
+
+  $effect(() => {
+    for (const [itemId, segments] of Object.entries(segmentsByItemId)) {
+      setRenderedLegendSegments(
+        itemId,
+        segments.map(({ key, kind, variable }) => ({ key, kind, variable }))
+      );
+    }
   });
 
   const bgColor = $derived(legendState.style.background.color);
@@ -801,8 +827,7 @@
     bind:this={overlayElement}
   >
     {#each visibleItems as item (item.id)}
-      {@const viz = vizByItemId.get(item.id)}
-      {@const legendSegments = getLegendSegments(item, viz, legendState.style)}
+      {@const legendSegments = segmentsByItemId[item.id] ?? []}
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"

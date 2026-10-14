@@ -25,6 +25,7 @@ import { facetsStore, SCALE_MODE } from '../facets';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendItem,
+  LegendItemLayout,
   LegendState,
   LegendStyle
 } from '../../types/legend.types';
@@ -62,6 +63,12 @@ type LegendActions = {
   addLegendItem: (item: Omit<LegendItem, 'id'>) => LegendItem;
   removeLegendItem: (id: string) => void;
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
+  updateLegendItemLayout: (id: string, updates: LegendItemLayout) => void;
+  setLegendSegmentTitle: (
+    id: string,
+    segmentKey: string,
+    title: string
+  ) => void;
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
   setActiveTab: (tab: LegendTab) => void;
@@ -309,6 +316,23 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     updateLegendItem: (id: string, updates: Partial<LegendItem>) => {
       s.items = s.items.map((item) =>
         item.id === id ? { ...item, ...updates } : item
+      );
+    },
+    updateLegendItemLayout: (id: string, updates: LegendItemLayout) => {
+      s.items = s.items.map((item) =>
+        item.id === id
+          ? { ...item, layout: { ...item.layout, ...updates } }
+          : item
+      );
+    },
+    setLegendSegmentTitle: (id: string, segmentKey: string, title: string) => {
+      s.items = s.items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              segmentTitles: { ...item.segmentTitles, [segmentKey]: title }
+            }
+          : item
       );
     },
     toggleLegendVisibility: () => {

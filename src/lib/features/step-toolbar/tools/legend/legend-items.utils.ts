@@ -1,5 +1,52 @@
 import { facetsStore, SCALE_MODE } from '../facets';
-import type { LegendItem } from '../../types/legend.types';
+import type {
+  LegendClassBarOrientation,
+  LegendItem
+} from '../../types/legend.types';
+
+export interface ResolvedLegendItemLayout {
+  proportionalClasses: boolean;
+  classBarOrientation: LegendClassBarOrientation;
+  lowAtBottom: boolean;
+  /** Share of the default gap, from 0 to 1. */
+  entrySpacing: number;
+}
+
+// A saved project is untrusted JSON: anything unexpected falls back to the
+// default drawing.
+export function resolveLegendItemLayout(
+  item: Pick<LegendItem, 'layout'>
+): ResolvedLegendItemLayout {
+  const layout = item.layout;
+  const spacing = layout?.entrySpacing;
+
+  return {
+    proportionalClasses: layout?.proportionalClasses === true,
+    classBarOrientation:
+      layout?.classBarOrientation === 'vertical' ? 'vertical' : 'horizontal',
+    lowAtBottom: layout?.lowAtBottom !== false,
+    entrySpacing:
+      typeof spacing === 'number' && Number.isFinite(spacing)
+        ? Math.max(0, Math.min(100, spacing)) / 100
+        : 1
+  };
+}
+
+export function resolveLegendEntryLabel(
+  item: Pick<LegendItem, 'entryLabel'>
+): string | null {
+  return typeof item.entryLabel === 'string' && item.entryLabel.trim()
+    ? item.entryLabel
+    : null;
+}
+
+export function resolveLegendSegmentTitle(
+  item: Pick<LegendItem, 'segmentTitles'>,
+  segmentKey: string
+): string | null {
+  const title = item.segmentTitles?.[segmentKey];
+  return typeof title === 'string' && title.trim() ? title : null;
+}
 
 /**
  * Returns the legend items that are actually rendered on the map for the
