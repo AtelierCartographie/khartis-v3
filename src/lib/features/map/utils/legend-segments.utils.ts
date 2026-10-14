@@ -68,6 +68,7 @@ import {
   type KhartisLineWidthLegendStep,
   type LegendPatternFill,
   type LegendSvgDefinition,
+  type QuantiColorSwatch,
   type SymbolType
 } from '$lib/features/commons/components/legend';
 import {
@@ -900,6 +901,16 @@ function getClassedColorLegendDraft(
     if (!classification.patternId) {
       return getQuantitativeColorLegendDraft(viz, classification);
     }
+  } else {
+    const barDraft = getQuantitativeColorLegendDraft(
+      viz,
+      classification,
+      undefined,
+      primitive
+    );
+    if (barDraft) {
+      return barDraft;
+    }
   }
 
   const items = getClassedColorLegendItems(viz, classification, primitive);
@@ -955,8 +966,13 @@ function getStrokeColorLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && config.strokeMode === StrokeMode.CLASSES) {
-    return getPolygonStrokeClassesLegendDraft(viz, classification);
+  if (config.strokeMode === StrokeMode.CLASSES) {
+    const barDraft = getStrokeClassesLegendDraft(
+      viz,
+      classification,
+      primitive
+    );
+    if (barDraft) return barDraft;
   }
 
   let entries: { label: string; color: string }[];
@@ -1011,15 +1027,17 @@ function getStrokeColorLegendDraft(
   };
 }
 
-function getPolygonStrokeClassesLegendDraft(
+function getStrokeClassesLegendDraft(
   viz: VisualizationConfig,
-  classification: ClassificationConfig
+  classification: ClassificationConfig,
+  primitive: 'area' | 'point'
 ): LegendSegmentDraft | null {
-  const polygon = getPolygonPrimitive(viz);
+  const config =
+    primitive === 'point' ? getSymbolPrimitive(viz) : getPolygonPrimitive(viz);
+  const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
   const valueColumn =
-    polygon?.strokeValueColumn ??
-    getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
-  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
+    config?.strokeValueColumn ?? getPrimitiveValueColumn(viz, filter);
+  const domain = getColumnDomain(viz, valueColumn, filter);
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
@@ -1029,8 +1047,8 @@ function getPolygonStrokeClassesLegendDraft(
   if (!thresholds) return null;
 
   return {
-    key: 'stroke-color-area',
-    primitive: 'area',
+    key: `stroke-color-${primitive}`,
+    primitive,
     className: 'legend-svg--quantitative',
     consumesMissingData: false,
     create: (options) =>
@@ -1038,7 +1056,8 @@ function getPolygonStrokeClassesLegendDraft(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
           outlineWidth: 2,
-          opacity: getPrimitivePaintOpacity(viz, 'area').stroke
+          swatch: getQuantiColorSwatch(viz, primitive, true),
+          opacity: getPrimitivePaintOpacity(viz, primitive).stroke
         })
       )
   };
@@ -1323,13 +1342,49 @@ function getTextSizeLegendDraft(
   };
 }
 
+// Classed colors read as one graduated bar whatever the primitive, like a
+// choropleth: each class cell holds the primitive's own mark.
+function getQuantiColorSwatch(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive,
+  outline = false
+): QuantiColorSwatch {
+  switch (primitive) {
+    case 'line':
+      return {
+        type: 'line',
+        strokeWidth: getLineLegendSwatchWidth(viz),
+        dashed: getLinePrimitive(viz)?.dashed ?? false
+      };
+    case 'point':
+      return {
+        type: 'symbol',
+        path: getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE),
+        outline,
+        nodataPath: getShapePath(
+          resolveMissingDataPointShape(
+            getLegendMissingDataConfig(viz, 'point')?.shape
+          )
+        )
+      };
+    case 'area':
+    default:
+      return { type: 'box' };
+  }
+}
+
 function getQuantitativeColorLegendDraft(
   viz: VisualizationConfig,
   classification: ClassificationConfig,
-  classPatternFills?: (LegendPatternFill | null)[]
+  classPatternFills?: (LegendPatternFill | null)[],
+  primitive: LegendSwatchPrimitive = 'area'
 ): LegendSegmentDraft | null {
-  const valueColumn = getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
-  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
+  const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
+  const valueColumn =
+    primitive === 'point'
+      ? getSymbolFillValueColumn(viz)
+      : getPrimitiveValueColumn(viz, filter);
+  const domain = getColumnDomain(viz, valueColumn, filter);
   // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
   const hasSharedScale =
     getSharedFacetScaleColumns(viz, valueColumn).length > 0;
@@ -1347,23 +1402,30 @@ function getQuantitativeColorLegendDraft(
   }
 
   return {
-    key: 'quantitative-color',
-    primitive: 'area',
+    key:
+      primitive === 'area'
+        ? 'quantitative-color'
+        : `quantitative-color-${primitive}`,
+    primitive,
     className: classPatternFills
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
-    consumesMissingData: isLegendMissingDataShown(viz, 'area'),
+    consumesMissingData: isLegendMissingDataShown(viz, primitive),
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
           classPatternFills,
+          swatch: getQuantiColorSwatch(viz, primitive),
           opacity: classPatternFills
             ? undefined
-            : getPrimitivePaintOpacity(viz, 'area').fill,
+            : primitive === 'line'
+              ? getPrimitivePaintOpacity(viz, primitive).stroke
+              : getPrimitivePaintOpacity(viz, primitive).fill,
           ...getQuantiColorMissingDataOptions(
             viz,
-            context.includeMissingDataFooter
+            context.includeMissingDataFooter,
+            primitive
           )
         })
       )
@@ -1373,18 +1435,19 @@ function getQuantitativeColorLegendDraft(
 // The no-data box mirrors the map: missing-data color with its hatch.
 function getQuantiColorMissingDataOptions(
   viz: VisualizationConfig,
-  includeFooter: boolean
+  includeFooter: boolean,
+  primitive: LegendSwatchPrimitive = 'area'
 ): {
   nodata: boolean;
   nodataLabel?: string;
   nodataFill?: string;
   nodataPatternFill?: LegendPatternFill | null;
 } {
-  if (!includeFooter || !isLegendMissingDataShown(viz, 'area')) {
+  if (!includeFooter || !isLegendMissingDataShown(viz, primitive)) {
     return { nodata: false };
   }
 
-  const item = getMissingDataLegendItem(viz, 'area');
+  const item = getMissingDataLegendItem(viz, primitive);
   return {
     nodata: true,
     nodataLabel: item.label,

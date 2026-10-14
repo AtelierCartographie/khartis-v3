@@ -18,7 +18,23 @@ import {
   type LegendSvgDefinition
 } from './utils';
 
+/**
+ * The mark drawn in each class cell. Polygons fill the cell; lines cross it
+ * with their stroke, so neighbouring classes read as one graduated line;
+ * symbols sit in the middle of it.
+ */
+export type QuantiColorSwatch =
+  | { type: 'box' }
+  | { type: 'line'; strokeWidth: number; dashed?: boolean }
+  | {
+      type: 'symbol';
+      path: string;
+      outline?: boolean;
+      nodataPath?: string;
+    };
+
 export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
+  swatch?: QuantiColorSwatch;
   variable_width?: boolean;
   nodata?: boolean;
   nodataLabel?: string;
@@ -40,6 +56,7 @@ export function draw_quanti_color_legend(
 ): LegendSvgDefinition {
   let { variable_width, title, subtitle, note, fontSize, nodata } = options;
   const classPatternFills = options.classPatternFills;
+  const swatch: QuantiColorSwatch = options.swatch ?? { type: 'box' };
   variable_width ??= false;
   title ??= null;
   subtitle ??= null;
@@ -179,6 +196,20 @@ export function draw_quanti_color_legend(
       );
     }
 
+    if (swatch.type !== 'box') {
+      return {
+        markup: swatch_cell(
+          swatch,
+          x[i],
+          actual_box_top,
+          x[i + 1] - x[i],
+          box_height,
+          colors[d],
+          options.opacity
+        )
+      };
+    }
+
     if (options.outlineWidth) {
       return {
         markup: outline_box(
@@ -232,24 +263,38 @@ export function draw_quanti_color_legend(
       const nodata_y = actual_labels_bottom + section_gap;
       const nodata_label_x = margin_left + nodata_box_w + label_gap;
       const nodata_fill = options.nodataFill ?? DEFAULT_NODATA_FILL;
-      const nodata_box = options.nodataPatternFill
-        ? pattern_box(
-            margin_left,
-            nodata_y,
-            nodata_box_w,
-            nodata_box_h,
-            options.nodataPatternFill,
-            nodata_fill
-          )
-        : {
-            markup: box(
-              margin_left,
-              nodata_y,
-              nodata_box_w,
-              nodata_box_h,
-              nodata_fill
-            )
-          };
+      const nodata_box =
+        swatch.type !== 'box'
+          ? {
+              markup: swatch_cell(
+                swatch.type === 'symbol' && swatch.nodataPath
+                  ? { ...swatch, path: swatch.nodataPath, outline: false }
+                  : swatch,
+                margin_left,
+                nodata_y,
+                nodata_box_w,
+                nodata_box_h,
+                nodata_fill
+              )
+            }
+          : options.nodataPatternFill
+            ? pattern_box(
+                margin_left,
+                nodata_y,
+                nodata_box_w,
+                nodata_box_h,
+                options.nodataPatternFill,
+                nodata_fill
+              )
+            : {
+                markup: box(
+                  margin_left,
+                  nodata_y,
+                  nodata_box_w,
+                  nodata_box_h,
+                  nodata_fill
+                )
+              };
       nodata_defs = nodata_box.defs ?? '';
       nodata_markup = `<g class="nodata" stroke="none">
         ${nodata_box.markup}
@@ -279,6 +324,36 @@ export function draw_quanti_color_legend(
       height
     };
   }
+}
+
+function swatch_cell(
+  swatch: Exclude<QuantiColorSwatch, { type: 'box' }>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+  opacity?: number
+): string {
+  const safeColor = escapeSvgAttribute(color);
+  const paintOpacity =
+    opacity !== undefined
+      ? ` ${swatch.type === 'line' || (swatch.type === 'symbol' && swatch.outline) ? 'stroke' : 'fill'}-opacity="${clamp_opacity(opacity)}"`
+      : '';
+
+  if (swatch.type === 'line') {
+    const mid = y + height / 2;
+    const dash = swatch.dashed ? ' stroke-dasharray="5,3"' : '';
+    return `<line x1="${x}" y1="${mid}" x2="${x + width}" y2="${mid}" stroke="${safeColor}" stroke-width="${Math.min(height, swatch.strokeWidth)}"${paintOpacity}${dash}/>`;
+  }
+
+  // Symbol paths span about 16 units around their origin.
+  const scale = height / 16;
+  const transform = `translate(${x + width / 2},${y + height / 2}) scale(${scale})`;
+  const paint = swatch.outline
+    ? `fill="none" stroke="${safeColor}" stroke-width="${2 / scale}"`
+    : `fill="${safeColor}" stroke="rgba(0, 0, 0, 0.25)" stroke-width="${0.75 / scale}"`;
+  return `<path d="${escapeSvgAttribute(swatch.path)}" transform="${transform}" ${paint}${paintOpacity}/>`;
 }
 
 function box(
