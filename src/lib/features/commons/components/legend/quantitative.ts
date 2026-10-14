@@ -25,7 +25,13 @@ import {
  */
 export type QuantiColorSwatch =
   | { type: 'box' }
-  | { type: 'line'; strokeWidth: number; dashed?: boolean }
+  | {
+      type: 'line';
+      strokeWidth: number;
+      /** One width per class, for lines whose thickness is classed. */
+      strokeWidths?: number[];
+      dashed?: boolean;
+    }
   | {
       type: 'symbol';
       path: string;
@@ -220,7 +226,7 @@ export function draw_quanti_color_legend(
     if (swatch.type !== 'box') {
       return {
         markup: swatch_cell(
-          swatch,
+          class_swatch(swatch, d),
           x[i],
           actual_box_top,
           x[i + 1] - x[i],
@@ -473,7 +479,7 @@ function draw_vertical_quanti_color_legend(
       // The classes read as one graduated line running down the bar.
       return {
         markup: swatch_cell(
-          swatch,
+          class_swatch(swatch, i),
           margin,
           top,
           cell_width,
@@ -606,6 +612,18 @@ function draw_vertical_quanti_color_legend(
     width: body_width,
     height
   };
+}
+
+function class_swatch(
+  swatch: Exclude<QuantiColorSwatch, { type: 'box' }>,
+  index: number
+): Exclude<QuantiColorSwatch, { type: 'box' }> {
+  return swatch.type === 'line' && swatch.strokeWidths
+    ? {
+        ...swatch,
+        strokeWidth: swatch.strokeWidths[index] ?? swatch.strokeWidth
+      }
+    : swatch;
 }
 
 function swatch_cell(

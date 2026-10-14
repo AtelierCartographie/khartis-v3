@@ -2087,27 +2087,45 @@ function getLineWidthLegendDraft(
     };
   }
 
+  // Classed thicknesses read like classed colors: one class bar, here with
+  // a line growing thicker from class to class.
   const classification = getLineThicknessClassification(viz);
-  const breaks = classification?.breaks ?? viz.classification?.breaks;
-  const classCount = getClassificationClassCount(classification);
-  const steps: KhartisLineWidthLegendStep[] = scale.steps.map((step) => ({
-    label: getLegendStepLabel(step, breaks, classCount),
-    width: getLineLegendDisplayWidth(scale, step.size),
-    color: scale.color,
-    opacity: scale.opacity,
-    dashed: scale.dashed
-  }));
+  const strokeWidths: number[] = [];
+  for (const step of scale.steps) {
+    if (step.kind === 'classes') {
+      strokeWidths[step.index] = getLineLegendDisplayWidth(scale, step.size);
+    }
+  }
+  const domain = getColumnDomain(viz, sizeColumn, PrimitiveFilterType.LINE);
+  const colors = strokeWidths.map(() => scale.color);
+  const thresholds = buildQuantiColorThresholds({
+    breaks: classification?.breaks,
+    colors,
+    min: classification?.roundedMin ?? domain?.min,
+    max: classification?.roundedMax ?? domain?.max
+  });
+  if (!thresholds) {
+    return null;
+  }
 
   return {
     key: 'line-width',
     primitive: 'line',
-    className: 'legend-svg--line-width',
+    className: 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_line_width_legend(steps, {
+        draw_quanti_color_legend(thresholds, colors, {
           ...options,
-          ...getMissingDataFooterOptions(
+          ...getClassBarLayoutOptions(context.layout),
+          swatch: {
+            type: 'line',
+            strokeWidth: Math.max(...strokeWidths),
+            strokeWidths,
+            dashed: scale.dashed
+          },
+          opacity: scale.opacity,
+          ...getQuantiColorMissingDataOptions(
             viz,
             context.includeMissingDataFooter,
             'line'
