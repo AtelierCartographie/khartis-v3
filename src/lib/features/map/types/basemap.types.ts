@@ -71,11 +71,22 @@ export type StylePreset = PathStylePreset | PolygonStylePreset;
 
 export type StylePresets = Record<string, StylePreset>;
 
+/**
+ * Geometry file shipped inside another one: `file` (without row_groups) is the
+ * whole parent file, otherwise only those row groups of it, read with HTTP Range
+ * requests. The basemap or layer keeps its own `file` as identifier.
+ */
+export interface BasemapGeometryPack {
+  file: string;
+  row_groups?: number[];
+}
+
 export interface BasemapLayer {
   title_fr?: string;
   title_en?: string;
   type: BasemapLayerType;
   file?: string;
+  pack?: BasemapGeometryPack;
   style?: string | null;
   step?: number;
 }
@@ -101,6 +112,7 @@ export interface BasemapMetadata {
   proj_to: ProjectionConfig;
   simplification_level?: string;
   entity_count?: number;
+  pack?: BasemapGeometryPack;
   layers: BasemapLayer[];
   isCustom?: boolean;
   // Built from a dataset's own geometry rather than picked as a reference
