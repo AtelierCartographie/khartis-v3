@@ -106,7 +106,6 @@
   );
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
-  const INSET_ZOOM_SCALE = 1.2;
   const INSET_EXTENT_POINT_RADIUS = 2.5;
   const INSET_EXTENT_MIN_SIZE = 8;
   const INSET_OUTLINE_MIN_POINTS = 4;
@@ -474,10 +473,6 @@
     };
   }
 
-  function getInsetZoomScale(): number {
-    return INSET_ZOOM_SCALE;
-  }
-
   function createInsetProjection(
     dimensions: InsetDimensions,
     bounds: MapBounds | null
@@ -498,8 +493,8 @@
       .rotate([-rotationLng, -rotationLat])
       .clipAngle(90);
 
+    // The whole sphere fits the frame, so its outline stays in view.
     projection.fitExtent(extent, WORLD_SPHERE);
-    projection.scale(projection.scale() * getInsetZoomScale());
 
     return projection;
   }
