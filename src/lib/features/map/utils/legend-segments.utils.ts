@@ -1869,13 +1869,11 @@ function getLineWidthLegendDraft(
   viz: VisualizationConfig | undefined
 ): LegendSegmentDraft | null {
   const line = getLinePrimitive(viz);
+  const sizeColumn = line?.sizeColumn ?? viz?.mapping.sizeColumn;
   const scale = getLineWidthLegendScale(
     viz,
-    getColumnDomain(
-      viz,
-      line?.sizeColumn ?? viz?.mapping.sizeColumn,
-      PrimitiveFilterType.LINE
-    )
+    getColumnDomain(viz, sizeColumn, PrimitiveFilterType.LINE),
+    getNumericColumnValues(viz, sizeColumn, PrimitiveFilterType.LINE)
   );
 
   if (!viz || !scale) {
