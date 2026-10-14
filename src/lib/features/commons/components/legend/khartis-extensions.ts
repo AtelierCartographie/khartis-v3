@@ -28,6 +28,9 @@ export interface KhartisLegendSwatchItem {
   stroke?: string;
   strokeWidth?: number;
   opacity?: number;
+  /** Fill and stroke fade separately, as the map draws them. */
+  fillOpacity?: number;
+  strokeOpacity?: number;
   symbol?: string | null;
   size?: number;
   patternFill?: LegendPatternFill | null;
@@ -382,7 +385,7 @@ function draw_swatch_shape(
   }
 
   return {
-    markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" opacity="${normalizeOpacity(item.opacity)}" />`
+    markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}"${draw_paint_opacity(item)}${item.dashed ? ' stroke-dasharray="4,2"' : ''} />`
   };
 }
 
@@ -407,10 +410,9 @@ function draw_symbol(
   const path = escapeSvgAttribute(item.symbol ?? '');
   const stroke = escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)');
   const strokeWidth = item.strokeWidth ?? 0.75;
-  const opacity = normalizeOpacity(item.opacity);
 
   return {
-    markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+    markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}"${draw_paint_opacity(item)} />`
   };
 }
 
@@ -423,7 +425,7 @@ function draw_pattern_box(
   const fill = escapeSvgAttribute(item.fill ?? '#ffffff');
   const stroke = escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)');
   const strokeWidth = item.strokeWidth ?? 1;
-  const baseRect = `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
+  const baseRect = `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"${draw_paint_opacity(item)} />`;
 
   if (!item.patternFill) {
     return { markup: baseRect };
@@ -454,6 +456,18 @@ function render_label(
       return `<tspan x="${x}" y="${lineY}">${escapeSvgText(line)}</tspan>`;
     })
     .join('')}</text>`;
+}
+
+function draw_paint_opacity(item: Partial<KhartisLegendSwatchItem>): string {
+  return (
+    ` opacity="${normalizeOpacity(item.opacity)}"` +
+    (item.fillOpacity !== undefined
+      ? ` fill-opacity="${normalizeOpacity(item.fillOpacity)}"`
+      : '') +
+    (item.strokeOpacity !== undefined
+      ? ` stroke-opacity="${normalizeOpacity(item.strokeOpacity)}"`
+      : '')
+  );
 }
 
 function normalizeOpacity(value: number | undefined): number {

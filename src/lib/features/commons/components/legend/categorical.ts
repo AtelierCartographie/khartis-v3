@@ -28,6 +28,8 @@ export interface CategoryItem {
   size?: number;
   patternFill?: LegendPatternFill | null;
   patternOpacity?: number;
+  fillOpacity?: number;
+  strokeOpacity?: number;
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
@@ -247,7 +249,8 @@ export function draw_categorical_legend(
       d.symbol,
       d.size,
       d.patternFill,
-      d.patternOpacity
+      d.patternOpacity,
+      d
     )
   );
   const labels = categories.map((d) =>
@@ -277,7 +280,8 @@ export function draw_categorical_legend(
       item.symbol,
       item.size,
       item.patternFill,
-      item.patternOpacity
+      item.patternOpacity,
+      item
     )
   );
   const footerLabels = footerItems.map((item, index) =>
@@ -445,19 +449,27 @@ function create_shape(
   symbol?: string | null,
   size?: number,
   patternFill?: LegendPatternFill | null,
-  patternOpacity?: number
+  patternOpacity?: number,
+  paint: Pick<CategoryItem, 'fillOpacity' | 'strokeOpacity'> = {}
 ): string {
   const safeFill = escapeSvgAttribute(fill ?? 'none');
   const safeStroke = escapeSvgAttribute(stroke ?? 'none');
   const safeStrokeWidth = Number.isFinite(strokeWidth) ? strokeWidth : 0;
+  const opacity =
+    (paint.fillOpacity !== undefined
+      ? ` fill-opacity="${clampOpacity(paint.fillOpacity)}"`
+      : '') +
+    (paint.strokeOpacity !== undefined
+      ? ` stroke-opacity="${clampOpacity(paint.strokeOpacity)}"`
+      : '');
 
   switch (type) {
     case 'box':
-      return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     case 'line': {
       const y1 = y + height / 2;
       const y2 = y1;
-      return `<line x1="${x}" y1="${y1}" x2="${x + width}" y2="${y2}" stroke="${safeStroke || safeFill}" stroke-width="${safeStrokeWidth}" />`;
+      return `<line x1="${x}" y1="${y1}" x2="${x + width}" y2="${y2}" stroke="${safeStroke || safeFill}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     }
     case 'symbol': {
       const [cx, cy] = [x + width / 2, y + height / 2];
@@ -465,10 +477,10 @@ function create_shape(
       const transform = `translate(${cx},${cy})${scale}`;
       const path = escapeSvgAttribute(symbol ?? '');
 
-      return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     }
     case 'pattern': {
-      const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
       if (!patternFill) {
         return baseRect;
       }
@@ -476,6 +488,10 @@ function create_shape(
       return `<defs>${patternFill.defs}</defs>${baseRect}<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="${patternOpacity ?? PATTERN_OVERLAY_OPACITY}" stroke="none" />`;
     }
   }
+}
+
+function clampOpacity(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
 }
 
 function create_label(
