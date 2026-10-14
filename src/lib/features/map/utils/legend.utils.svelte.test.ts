@@ -10,18 +10,18 @@ describe('getProportionalLineLegendValues', () => {
         12_873,
         [120, 2_400, 7_310, 9_050, 12_873]
       )
-    ).toEqual([13_000, 10_000, 5_000]);
+    ).toEqual([13_000, 5_000, 2_000]);
   });
 
   it('should stop rounding the maximum down before it reaches the next value', () => {
     expect(
       getProportionalLineLegendValues(1_234, [3, 640, 1_220, 1_234])
-    ).toEqual([1_230, 1_000, 500]);
+    ).toEqual([1_230, 500, 200]);
   });
 
   it('should round the maximum to two significant digits when no sample is known', () => {
     expect(getProportionalLineLegendValues(48_712)).toEqual([
-      49_000, 40_000, 20_000
+      49_000, 20_000, 10_000
     ]);
   });
 });
