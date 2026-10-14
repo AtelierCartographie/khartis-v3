@@ -30,6 +30,8 @@ export function getNationalRegionLabel(
       return m.projection_national_region_italy();
     case 'spain':
       return m.projection_national_region_spain();
+    case 'canary_islands':
+      return m.projection_national_region_canary_islands();
     case 'portugal':
       return m.projection_national_region_portugal();
     case 'usa':

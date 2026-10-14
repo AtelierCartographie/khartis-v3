@@ -40,8 +40,8 @@ importers:
         specifier: ^0.1.4
         version: 0.1.4
       '@ateliercartographie/proj-suggest':
-        specifier: ^0.0.1
-        version: 0.0.1
+        specifier: ^0.1.0
+        version: 0.1.0
       '@borgar/textbox':
         specifier: ^2.0.0
         version: 2.0.0
@@ -350,8 +350,8 @@ packages:
   '@ateliercartographie/ok-palette@0.1.4':
     resolution: {integrity: sha512-HSLgx0l1zAIKXkHdAM9/jujZZXe85FFHdspMwWD1GZY7W55zRR5zKxMblTf2ToXchtSMtegG1Fanqw645Zpr4w==}
 
-  '@ateliercartographie/proj-suggest@0.0.1':
-    resolution: {integrity: sha512-BkspNPBaEzUE48aU3q2EbL9EKLcBvp/wIQlR6vrTcyUuY3XIckzLhF5N6yiqIhc9mMPcdOqYnojJKJjsmALmFQ==}
+  '@ateliercartographie/proj-suggest@0.1.0':
+    resolution: {integrity: sha512-hP0v+RlkQ2boMimoQYOPVgDB3X8m8MvSK8ExIzvkMxy8FQjTh8R0dJicizTCHOgTycfkhNFO1FdsXBxEDclpgQ==}
     engines: {node: '>=18'}
 
   '@babel/code-frame@7.29.7':
@@ -6510,7 +6510,7 @@ snapshots:
 
   '@ateliercartographie/ok-palette@0.1.4': {}
 
-  '@ateliercartographie/proj-suggest@0.0.1': {}
+  '@ateliercartographie/proj-suggest@0.1.0': {}
 
   '@babel/code-frame@7.29.7':
     dependencies:
