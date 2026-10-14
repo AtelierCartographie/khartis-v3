@@ -9,7 +9,14 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
-  import { TableOfContents, TextFont } from 'carbon-icons-svelte';
+  import {
+    ArrowDown,
+    ArrowUp,
+    ArrowsHorizontal,
+    ArrowsVertical,
+    TableOfContents,
+    TextFont
+  } from 'carbon-icons-svelte';
   import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
@@ -21,8 +28,13 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
-  import { selectRenderedLegendItems } from './legend-items.utils';
-  import type { LegendItem } from '../../types/legend.types';
+  import {
+    resolveLegendItemLayout,
+    selectRenderedLegendItems
+  } from './legend-items.utils';
+  import { getRenderedLegendSegments } from './legend-rendered-segments.svelte';
+  import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+  import type { LegendItem, LegendItemLayout } from '../../types/legend.types';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
   type ColorPickerValidateEvent = {
@@ -241,6 +253,38 @@
     setItemExpanded(item.id, true);
   }
 
+  const ENTRY_LABEL_PLACEHOLDERS: Record<
+    LegendSubtitlePrimitive,
+    () => string
+  > = {
+    area: m.polygons_title,
+    point: m.symbols_title,
+    line: m.lines_title,
+    text: m.texts_title
+  };
+
+  function updateItemLayout(item: LegendItem, updates: LegendItemLayout): void {
+    legendActions.updateLegendItemLayout(item.id, updates);
+  }
+
+  function updateEntryLabel(item: LegendItem, value: string): void {
+    legendActions.updateLegendItem(item.id, {
+      entryLabel: sanitizeTextInput(value, { trim: false })
+    });
+  }
+
+  function updateSegmentTitle(
+    item: LegendItem,
+    segmentKey: string,
+    value: string
+  ): void {
+    legendActions.setLegendSegmentTitle(
+      item.id,
+      segmentKey,
+      sanitizeTextInput(value, { trim: false })
+    );
+  }
+
   function getItemHeaderTitle(item: LegendItem): string {
     if (item.primitive) {
       return item.name;
@@ -278,6 +322,8 @@
     <div id="legend-content-panel" class="legend-panel" role="tabpanel">
       <div class="expandable-stack">
         {#each items as item (item.id)}
+          {@const segments = getRenderedLegendSegments(item.id)}
+          {@const layout = resolveLegendItemLayout(item)}
           <ExpandableSection
             title={getItemHeaderTitle(item)}
             showToggle={true}
@@ -299,6 +345,125 @@
                     updateItemField(item.id, field.key, getTextAreaValue(e))}
                 />
               {/each}
+
+              {#each segments.slice(1) as segment, index (segment.key)}
+                <TextArea
+                  labelText={m.legend_segment_title({
+                    name:
+                      segment.variable ??
+                      m.legend_segment_fallback_name({
+                        index: String(index + 2)
+                      })
+                  })}
+                  placeholder={m.legend_no_title()}
+                  id={`${item.id}-segment-${segment.key}`}
+                  rows={Math.max(
+                    1,
+                    (item.segmentTitles?.[segment.key] ?? '').split('\n').length
+                  )}
+                  value={item.segmentTitles?.[segment.key] ?? ''}
+                  on:input={(e: Event) =>
+                    updateSegmentTitle(item, segment.key, getTextAreaValue(e))}
+                />
+              {/each}
+
+              {#if item.primitive && segments.some((segment) => segment.kind === 'unique')}
+                <TextArea
+                  labelText={m.legend_entry_label()}
+                  placeholder={ENTRY_LABEL_PLACEHOLDERS[item.primitive]()}
+                  id={`${item.id}-entry-label`}
+                  rows={1}
+                  value={item.entryLabel ?? ''}
+                  on:input={(e: Event) =>
+                    updateEntryLabel(item, getTextAreaValue(e))}
+                />
+              {/if}
+
+              {#if segments.some((segment) => segment.kind === 'class-bar')}
+                <div class="legend-layout-group">
+                  <span class="legend-field-label">{m.legend_class_bar()}</span>
+                  <ToggleTabs
+                    size="md"
+                    hideInactiveLabel={false}
+                    activeIndex={layout.classBarOrientation === 'vertical'
+                      ? 1
+                      : 0}
+                    items={[
+                      {
+                        icon: ArrowsHorizontal,
+                        label: m.legend_orientation_horizontal(),
+                        iconSize: 16
+                      },
+                      {
+                        icon: ArrowsVertical,
+                        label: m.legend_orientation_vertical(),
+                        iconSize: 16
+                      }
+                    ]}
+                    onchange={(tabIndex) =>
+                      updateItemLayout(item, {
+                        classBarOrientation:
+                          tabIndex === 1 ? 'vertical' : 'horizontal'
+                      })}
+                  />
+                  {#if layout.classBarOrientation === 'vertical'}
+                    <ToggleTabs
+                      size="md"
+                      hideInactiveLabel={false}
+                      activeIndex={layout.lowAtBottom ? 0 : 1}
+                      items={[
+                        {
+                          icon: ArrowUp,
+                          label: m.legend_low_at_bottom(),
+                          iconSize: 16
+                        },
+                        {
+                          icon: ArrowDown,
+                          label: m.legend_low_at_top(),
+                          iconSize: 16
+                        }
+                      ]}
+                      onchange={(tabIndex) =>
+                        updateItemLayout(item, { lowAtBottom: tabIndex === 0 })}
+                    />
+                  {/if}
+                  <div class="legend-switch-row">
+                    <span class="legend-field-label"
+                      >{m.legend_proportional_classes()}</span
+                    >
+                    <Switch
+                      labelText={m.legend_proportional_classes()}
+                      hideLabel
+                      size="sm"
+                      toggled={layout.proportionalClasses}
+                      labelA={m.no()}
+                      labelB={m.yes()}
+                      showStateLabel
+                      onchange={(toggled) =>
+                        updateItemLayout(item, {
+                          proportionalClasses: toggled
+                        })}
+                    />
+                  </div>
+                </div>
+              {/if}
+
+              {#if segments.some((segment) => segment.kind === 'entries')}
+                <SliderWithInput
+                  label={m.legend_entry_spacing()}
+                  value={Math.round(layout.entrySpacing * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  showMinMax
+                  minLabel="0"
+                  maxLabel="100"
+                  inputWidth="72px"
+                  showSteppers={false}
+                  onchange={(value) =>
+                    updateItemLayout(item, { entrySpacing: value })}
+                />
+              {/if}
             </div>
           </ExpandableSection>
         {/each}
@@ -480,6 +645,19 @@
     line-height: 1rem;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
+  }
+
+  .legend-layout-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .legend-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
   }
 
   .legend-divider {

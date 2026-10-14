@@ -2,6 +2,7 @@ import Textbox from '@borgar/textbox';
 import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import type { LegendPatternFill } from './khartis-extensions';
 import {
+  clampEntrySpacing,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
@@ -34,6 +35,8 @@ export interface CategoryItem {
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
   type?: CategoricalFooterShapeType;
+  /** Share of the default gap kept between two entries, from 0 to 1. */
+  entrySpacing?: number;
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 }
@@ -98,6 +101,7 @@ export function draw_categorical_legend(
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
   const gap = scaleLegendMetric(8, fontSize);
+  const row_gap = gap * clampEntrySpacing(options.entrySpacing);
   const gutter = scaleLegendMetric(16, fontSize);
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
@@ -168,7 +172,7 @@ export function draw_categorical_legend(
     ...categories.map((item) => item.nb_lines)
   );
   const row_body_height = Math.max(box.h, line_height * maxLabelLineCount);
-  const row_step = row_body_height + gap;
+  const row_step = row_body_height + row_gap;
   const maxFooterLineCount = Math.max(
     1,
     ...footer_lines.map((lineBreak) => lineBreak.length)
@@ -177,7 +181,7 @@ export function draw_categorical_legend(
     footerBox.h,
     line_height * maxFooterLineCount
   );
-  const footer_row_step = footer_body_height + gap;
+  const footer_row_step = footer_body_height + row_gap;
   const footer_label_width =
     footer_lines.length > 0
       ? Math.max(...footer_lines.map((lineBreak) => lineBreak.width))
@@ -260,7 +264,7 @@ export function draw_categorical_legend(
     categories.length > 0
       ? y_start +
         (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
-        gap
+        row_gap
       : y_start;
   const section_gap = scaleLegendMetric(10, fontSize);
   const footer_start =
@@ -306,7 +310,7 @@ export function draw_categorical_legend(
   );
   const footer_bottom =
     footerItems.length > 0
-      ? footer_start + footerItems.length * footer_row_step - gap
+      ? footer_start + footerItems.length * footer_row_step - row_gap
       : categories_bottom;
   const content_bottom =
     footerItems.length > 0 ? footer_bottom : categories_bottom;

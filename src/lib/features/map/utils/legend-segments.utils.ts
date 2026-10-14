@@ -84,7 +84,14 @@ import {
   type LineWidthLegendScale,
   type PointSizeLegendScale
 } from './legend.utils';
-import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
+import {
+  resolveLegendEntryLabel,
+  resolveLegendItemLayout,
+  resolveLegendSegmentTitle,
+  type LegendItem,
+  type RenderedLegendSegmentKind,
+  type ResolvedLegendItemLayout
+} from '$lib/features/step-toolbar/tools/legend';
 import {
   facetsStore,
   resolveSharedFacetScaleColumns,
@@ -166,15 +173,22 @@ type LegendCategoricalEntry = {
 
 type LegendSegmentContext = {
   includeMissingDataFooter: boolean;
+  layout: ResolvedLegendItemLayout;
+  entryLabel: string | null;
 };
+
+/** Text options plus the gap list legends keep between their entries. */
+type LegendDraftOptions = CommonLegendTextOptions & { entrySpacing: number };
 
 type LegendSegmentDraft = {
   key: string;
   className: string;
   primitive: LegendSubtitlePrimitive;
   consumesMissingData?: boolean;
+  /** The column this block encodes, when it has one. */
+  variable?: string;
   create: (
-    options: CommonLegendTextOptions,
+    options: LegendDraftOptions,
     context: LegendSegmentContext
   ) => LegendSvgDefinition | null;
 };
@@ -182,8 +196,35 @@ type LegendSegmentDraft = {
 export type LegendSegment = {
   key: string;
   className: string;
+  kind: RenderedLegendSegmentKind;
+  variable?: string;
   svg: LegendSvgDefinition;
 };
+
+const NON_LIST_SEGMENT_KEYS = new Set([
+  'point-size',
+  'double-point-size',
+  'double-point-size-primary',
+  'double-point-size-secondary',
+  'text-size',
+  'density',
+  'missing-data'
+]);
+
+function getLegendSegmentKind(
+  draft: LegendSegmentDraft
+): RenderedLegendSegmentKind {
+  if (
+    draft.key.startsWith('quantitative-color') ||
+    draft.className === 'legend-svg--quantitative'
+  ) {
+    return 'class-bar';
+  }
+  if (draft.key.startsWith('unique-')) {
+    return 'unique';
+  }
+  return NON_LIST_SEGMENT_KEYS.has(draft.key) ? 'other' : 'entries';
+}
 
 function getLegendCategoricalClassification(
   viz: VisualizationConfig | undefined,
@@ -827,13 +868,26 @@ export function getLegendSegments(
   const lastMissingDataDraftIndex = drafts.findLastIndex(
     (draft) => draft.consumesMissingData
   );
+  const layout = resolveLegendItemLayout(item);
+  const entryLabel = resolveLegendEntryLabel(item);
 
   return drafts
-    .map((draft, index) => {
+    .map((draft, index): LegendSegment | null => {
       const svg = draft.create(
-        getLegendTextOptions(item, index, drafts.length, legendTextStyle),
         {
-          includeMissingDataFooter: index === lastMissingDataDraftIndex
+          ...getLegendTextOptions(
+            item,
+            index,
+            drafts.length,
+            legendTextStyle,
+            draft.key
+          ),
+          entrySpacing: layout.entrySpacing
+        },
+        {
+          includeMissingDataFooter: index === lastMissingDataDraftIndex,
+          layout,
+          entryLabel
         }
       );
 
@@ -841,6 +895,8 @@ export function getLegendSegments(
         ? {
             key: draft.key,
             className: draft.className,
+            kind: getLegendSegmentKind(draft),
+            variable: draft.variable,
             svg
           }
         : null;
@@ -852,15 +908,24 @@ function getLegendTextOptions(
   item: LegendItem,
   index: number,
   count: number,
-  legendTextStyle: LegendTextStyle
+  legendTextStyle: LegendTextStyle,
+  segmentKey: string
 ): CommonLegendTextOptions {
   return {
     fontFamily: legendTextStyle.fontFamily,
     fontSize: legendTextStyle.fontSize,
-    title: index === 0 ? item.title : null,
+    title:
+      index === 0 ? item.title : resolveLegendSegmentTitle(item, segmentKey),
     subtitle: index === 0 ? item.subtitle : null,
     note: index === count - 1 ? item.note : null
   };
+}
+
+function withEntryLabel<T extends { label: string }>(
+  entry: T,
+  context: LegendSegmentContext
+): T {
+  return context.entryLabel ? { ...entry, label: context.entryLabel } : entry;
 }
 
 function toLegendSvg(
@@ -1051,10 +1116,12 @@ function getStrokeClassesLegendDraft(
     primitive,
     className: 'legend-svg--quantitative',
     consumesMissingData: false,
-    create: (options) =>
+    variable: valueColumn,
+    create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
+          ...getClassBarLayoutOptions(context.layout),
           outlineWidth: 2,
           swatch: getQuantiColorSwatch(viz, primitive, true),
           opacity: getPrimitivePaintOpacity(viz, primitive).stroke
@@ -1373,6 +1440,18 @@ function getQuantiColorSwatch(
   }
 }
 
+function getClassBarLayoutOptions(layout: ResolvedLegendItemLayout): {
+  variable_width: boolean;
+  orientation: 'horizontal' | 'vertical';
+  lowAtBottom: boolean;
+} {
+  return {
+    variable_width: layout.proportionalClasses,
+    orientation: layout.classBarOrientation,
+    lowAtBottom: layout.lowAtBottom
+  };
+}
+
 function getQuantitativeColorLegendDraft(
   viz: VisualizationConfig,
   classification: ClassificationConfig,
@@ -1411,10 +1490,12 @@ function getQuantitativeColorLegendDraft(
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
+    variable: valueColumn,
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
+          ...getClassBarLayoutOptions(context.layout),
           classPatternFills,
           swatch: getQuantiColorSwatch(viz, primitive),
           opacity: classPatternFills
@@ -1800,7 +1881,7 @@ function getUniquePointSymbolLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'point'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_swatch_legend([item], {
+        draw_khartis_swatch_legend([withEntryLabel(item, context)], {
           ...options,
           type: 'symbol',
           ...getMissingDataFooterOptions(
@@ -1876,7 +1957,7 @@ function getUniquePolygonLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'area'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_swatch_legend([item], {
+        draw_khartis_swatch_legend([withEntryLabel(item, context)], {
           ...options,
           type: patternFill ? 'pattern' : 'box',
           ...getMissingDataFooterOptions(
@@ -1916,7 +1997,7 @@ function getUniqueLineLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_line_width_legend([step], {
+        draw_khartis_line_width_legend([withEntryLabel(step, context)], {
           ...options,
           ...getMissingDataFooterOptions(
             viz,
@@ -1960,6 +2041,7 @@ function getLineWidthLegendDraft(
   return {
     key: 'line-width',
     primitive: 'line',
+    variable: sizeColumn,
     className: 'legend-svg--line-width',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>

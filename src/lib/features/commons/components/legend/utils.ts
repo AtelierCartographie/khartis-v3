@@ -89,6 +89,13 @@ export function splitLegendOverflow<T>(items: T[]): {
   };
 }
 
+/** Share of the default gap kept between two legend entries, from 0 to 1. */
+export function clampEntrySpacing(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : 1;
+}
+
 export function escapeSvgText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
