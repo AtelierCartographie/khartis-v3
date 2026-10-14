@@ -10,7 +10,7 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import { TableOfContents, TextFont } from 'carbon-icons-svelte';
-  import { Select, SelectItem, TextInput } from 'carbon-components-svelte';
+  import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
     AVAILABLE_FONTS,
@@ -33,6 +33,20 @@
   };
 
   type LegendItemTextField = 'title' | 'subtitle' | 'note';
+
+  const TEXT_FIELDS: {
+    key: LegendItemTextField;
+    label: () => string;
+    placeholder: () => string;
+  }[] = [
+    { key: 'title', label: m.legend_title, placeholder: m.legend_title },
+    {
+      key: 'subtitle',
+      label: m.legend_subtitle,
+      placeholder: m.legend_no_subtitle
+    },
+    { key: 'note', label: m.legend_note, placeholder: m.legend_no_note }
+  ];
   type LegendSyncInputs = readonly [
     locale: string,
     visualizationVersion: number
@@ -124,14 +138,9 @@
     });
   }
 
-  function getTextInputValue(
-    event: CustomEvent<string | number | null>
-  ): string {
-    return typeof event.detail === 'string'
-      ? event.detail
-      : event.detail == null
-        ? ''
-        : String(event.detail);
+  function getTextAreaValue(event: Event): string {
+    const target = event.target;
+    return target instanceof HTMLTextAreaElement ? target.value : '';
   }
 
   function handleTabChange(tab: LegendTab): void {
@@ -279,35 +288,17 @@
               handleItemVisibilityChange(item, checked)}
           >
             <div class="legend-fields">
-              <TextInput
-                labelText={m.legend_title()}
-                size="xl"
-                placeholder={m.legend_title()}
-                id={`${item.id}-title`}
-                value={item.title}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'title', getTextInputValue(e))}
-              />
-
-              <TextInput
-                labelText={m.legend_subtitle()}
-                size="sm"
-                placeholder={m.legend_no_subtitle()}
-                id={`${item.id}-subtitle`}
-                value={item.subtitle}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'subtitle', getTextInputValue(e))}
-              />
-
-              <TextInput
-                labelText={m.legend_note()}
-                size="sm"
-                placeholder={m.legend_no_note()}
-                id={`${item.id}-note`}
-                value={item.note}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'note', getTextInputValue(e))}
-              />
+              {#each TEXT_FIELDS as field (field.key)}
+                <TextArea
+                  labelText={field.label()}
+                  placeholder={field.placeholder()}
+                  id={`${item.id}-${field.key}`}
+                  rows={Math.max(1, item[field.key].split('\n').length)}
+                  value={item[field.key]}
+                  on:input={(e: Event) =>
+                    updateItemField(item.id, field.key, getTextAreaValue(e))}
+                />
+              {/each}
             </div>
           </ExpandableSection>
         {/each}
@@ -509,7 +500,13 @@
     min-height: var(--kh-size-sm);
   }
 
-  :global(#khartis-legend-tool .bx--text-input) {
+  :global(#khartis-legend-tool .bx--text-area) {
+    min-height: 0;
+    resize: vertical;
+  }
+
+  :global(#khartis-legend-tool .bx--text-input),
+  :global(#khartis-legend-tool .bx--text-area) {
     font-size: 0.875rem;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
