@@ -234,8 +234,7 @@ describe('legend overlay visibility', () => {
     mockRowScopeStore.hasMissingData.mockReturnValue(true);
     legendActions.reset();
     formatActions.reset();
-    // The page legend is bounded by the map area: without margins it matches
-    // the overlay boxes the tests bind.
+    // Without margins the page matches the overlay boxes the tests bind.
     formatActions.setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
     globalActions.resetNavigationState();
     globalActions.setPageZoomScale(1);
@@ -780,6 +779,33 @@ describe('legend overlay visibility', () => {
     });
 
     expect(getFirstLegendFramePosition()).toEqual({ x: 37, y: 35 });
+  });
+
+  it('should let a dragged legend reach the page margins when the map area is cropped', async () => {
+    globalState.selectedTool = StylingTools.Legend;
+    formatActions.toggleGrid();
+    formatActions.setSize(300, 200);
+    formatActions.setMargins({ top: 20, right: 20, bottom: 20, left: 30 });
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const legend = container.querySelector('.legend-container');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(legend instanceof HTMLDivElement)
+    ) {
+      throw new Error('Legend frame was not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 250, height: 160 });
+    bindElementBox(legend, { left: 10, top: 10, width: 50, height: 40 });
+
+    await fireEvent.pointerDown(legend, { clientX: 20, clientY: 20 });
+    await fireEvent.pointerMove(window, { clientX: -200, clientY: 500 });
+
+    // Page left edge and bottom edge, in map-area coordinates.
+    expect(getFirstLegendFramePosition()).toEqual({ x: -30, y: 140 });
   });
 
   it('moves the focused legend with arrow keys', async () => {

@@ -317,6 +317,13 @@
     };
   }
 
+  // A page frame may leave the map area for the margins: cropping the map is a
+  // way to free room for a legend. Positions stay relative to the map area,
+  // while bounds and grid snapping follow the page.
+  function getMapAreaOffset(): PageGridPoint {
+    return { x: formatState.margins.left, y: formatState.margins.top };
+  }
+
   function normalizeFramePosition(
     itemId: string,
     position: PageGridPoint,
@@ -329,11 +336,24 @@
       return position;
     }
 
-    return snapPointWithinBounds(
-      position,
-      getDragBounds(overlaySize, frameSize),
+    if (inline) {
+      return snapPointWithinBounds(
+        position,
+        getDragBounds(overlaySize, frameSize),
+        snapEnabled
+      );
+    }
+
+    const offset = getMapAreaOffset();
+    const pagePosition = snapPointWithinBounds(
+      { x: position.x + offset.x, y: position.y + offset.y },
+      getDragBounds(
+        { width: formatState.width, height: formatState.height },
+        frameSize
+      ),
       snapEnabled
     );
+    return { x: pagePosition.x - offset.x, y: pagePosition.y - offset.y };
   }
 
   function measureFrames(items: LegendItem[]): FrameMeasure[] | null {
@@ -440,14 +460,10 @@
 
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
-  // A page resize keeps the margins, so the legend stage changes by the same
-  // amount as the page; a dragged frame keeps its distance to the nearest edge.
+  // A page resize keeps the margins, so a dragged frame keeps its distance to
+  // the nearest page edge.
   function remapDraggedFrames(pageResize: PageResize): void {
-    const { margins } = formatState;
-    const toStageSize = (page: PageGridSize): PageGridSize => ({
-      width: page.width - margins.left - margins.right,
-      height: page.height - margins.top - margins.bottom
-    });
+    const offset = getMapAreaOffset();
 
     for (const item of visibleItems) {
       const frameSize = getFrameSize(item.id);
@@ -455,13 +471,20 @@
         continue;
       }
 
+      const pagePosition = remapPointToResizedArea(
+        {
+          x: item.dragPosition.x + offset.x,
+          y: item.dragPosition.y + offset.y
+        },
+        frameSize,
+        pageResize.from,
+        pageResize.to
+      );
       legendActions.updateLegendItem(item.id, {
-        dragPosition: remapPointToResizedArea(
-          item.dragPosition,
-          frameSize,
-          toStageSize(pageResize.from),
-          toStageSize(pageResize.to)
-        )
+        dragPosition: {
+          x: pagePosition.x - offset.x,
+          y: pagePosition.y - offset.y
+        }
       });
     }
   }
