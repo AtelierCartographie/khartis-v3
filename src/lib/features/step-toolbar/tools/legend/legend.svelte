@@ -31,7 +31,10 @@
     resolveLegendItemLayout,
     selectRenderedLegendItems
   } from './legend-items.utils';
-  import { getRenderedLegendSegments } from './legend-rendered-segments.svelte';
+  import {
+    getRenderedLegendSegments,
+    hasNothingToDraw
+  } from './legend-rendered-segments.svelte';
   import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
   import type { LegendItem, LegendItemLayout } from '../../types/legend.types';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -67,7 +70,11 @@
   // Only expose the legends that are actually drawn on the map. In a collection
   // the base visualization renders no legend, so listing it here would surface a
   // phantom "Visualisation" entry that edits nothing visible.
-  const items = $derived(selectRenderedLegendItems(legendState.items));
+  const items = $derived(
+    selectRenderedLegendItems(legendState.items).filter(
+      (item) => !item.primitive || !hasNothingToDraw(item.id)
+    )
+  );
   const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
@@ -272,18 +279,6 @@
     });
   }
 
-  function updateSegmentTitle(
-    item: LegendItem,
-    segmentKey: string,
-    value: string
-  ): void {
-    legendActions.setLegendSegmentTitle(
-      item.id,
-      segmentKey,
-      sanitizeTextInput(value, { trim: false })
-    );
-  }
-
   function getItemHeaderTitle(item: LegendItem): string {
     if (item.primitive) {
       return item.name;
@@ -342,27 +337,6 @@
                   value={item[field.key]}
                   on:input={(e: Event) =>
                     updateItemField(item.id, field.key, getTextAreaValue(e))}
-                />
-              {/each}
-
-              {#each segments.slice(1) as segment, index (segment.key)}
-                <TextArea
-                  labelText={m.legend_segment_title({
-                    name:
-                      segment.variable ??
-                      m.legend_segment_fallback_name({
-                        index: String(index + 2)
-                      })
-                  })}
-                  placeholder={m.legend_no_title()}
-                  id={`${item.id}-segment-${segment.key}`}
-                  rows={Math.max(
-                    1,
-                    (item.segmentTitles?.[segment.key] ?? '').split('\n').length
-                  )}
-                  value={item.segmentTitles?.[segment.key] ?? ''}
-                  on:input={(e: Event) =>
-                    updateSegmentTitle(item, segment.key, getTextAreaValue(e))}
                 />
               {/each}
 

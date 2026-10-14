@@ -86,7 +86,7 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived.by(() =>
+  const candidateItems = $derived.by(() =>
     selectRenderedLegendItems(
       legendState.items.filter((i) => i.visible),
       { scopeVizId }
@@ -117,7 +117,7 @@
   const segmentsByItemId = $derived.by(() => {
     void getLocale();
     const segments: Record<string, LegendSegment[]> = {};
-    for (const item of visibleItems) {
+    for (const item of candidateItems) {
       segments[item.id] = getLegendSegments(
         item,
         vizByItemId.get(item.id),
@@ -127,11 +127,19 @@
     return segments;
   });
 
+  // A primitive legend that draws nothing (an outline repeating its fill)
+  // gets no frame.
+  const visibleItems = $derived(
+    candidateItems.filter(
+      (item) => !item.primitive || (segmentsByItemId[item.id]?.length ?? 0) > 0
+    )
+  );
+
   $effect(() => {
     for (const [itemId, segments] of Object.entries(segmentsByItemId)) {
       setRenderedLegendSegments(
         itemId,
-        segments.map(({ key, kind, variable }) => ({ key, kind, variable }))
+        segments.map(({ key, kind }) => ({ key, kind }))
       );
     }
   });
