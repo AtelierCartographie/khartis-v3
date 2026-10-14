@@ -23,7 +23,8 @@
     PAGE_GRID_SIZE_PX,
     clampPointToBounds,
     getDragBounds,
-    remapPointToResizedArea,
+    remapAreaPointToResizedPage,
+    snapAreaPointWithinPage,
     snapPointWithinBounds,
     type PageGridPoint,
     type PageGridSize
@@ -343,9 +344,6 @@
     };
   }
 
-  // A page frame may leave the map area for the margins: cropping the map is a
-  // way to free room for a legend. Positions stay relative to the map area,
-  // while bounds and grid snapping follow the page.
   function getMapAreaOffset(): PageGridPoint {
     return { x: formatState.margins.left, y: formatState.margins.top };
   }
@@ -370,16 +368,13 @@
       );
     }
 
-    const offset = getMapAreaOffset();
-    const pagePosition = snapPointWithinBounds(
-      { x: position.x + offset.x, y: position.y + offset.y },
-      getDragBounds(
-        { width: formatState.width, height: formatState.height },
-        frameSize
-      ),
+    return snapAreaPointWithinPage(
+      position,
+      frameSize,
+      { width: formatState.width, height: formatState.height },
+      getMapAreaOffset(),
       snapEnabled
     );
-    return { x: pagePosition.x - offset.x, y: pagePosition.y - offset.y };
   }
 
   function measureFrames(items: LegendItem[]): FrameMeasure[] | null {
@@ -497,20 +492,14 @@
         continue;
       }
 
-      const pagePosition = remapPointToResizedArea(
-        {
-          x: item.dragPosition.x + offset.x,
-          y: item.dragPosition.y + offset.y
-        },
-        frameSize,
-        pageResize.from,
-        pageResize.to
-      );
       legendActions.updateLegendItem(item.id, {
-        dragPosition: {
-          x: pagePosition.x - offset.x,
-          y: pagePosition.y - offset.y
-        }
+        dragPosition: remapAreaPointToResizedPage(
+          item.dragPosition,
+          frameSize,
+          pageResize.from,
+          pageResize.to,
+          offset
+        )
       });
     }
   }

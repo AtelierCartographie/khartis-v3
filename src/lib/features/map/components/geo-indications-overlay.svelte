@@ -24,9 +24,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
-    getDragBounds,
-    remapPointToResizedArea,
-    snapPointWithinBounds
+    remapAreaPointToResizedPage,
+    snapAreaPointWithinPage
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     geoIndicationsActions,
@@ -993,12 +992,11 @@
       return position;
     }
 
-    return snapPointWithinBounds(
+    return snapAreaPointWithinPage(
       position,
-      getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth,
-        height: dragElement.offsetHeight
-      }),
+      { width: dragElement.offsetWidth, height: dragElement.offsetHeight },
+      { width: formatState.width, height: formatState.height },
+      { x: formatState.margins.left, y: formatState.margins.top },
       snapEnabled
     );
   }
@@ -1029,16 +1027,10 @@
 
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
-  // A page resize keeps the margins, so the map stage changes by the same
-  // amount as the page; a dragged indication keeps its distance to the
-  // nearest edge. Declared before the re-clamping effects so they clamp the
-  // remapped position.
+  // Declared before the re-clamping effects so they clamp the remapped
+  // position.
   function remapStoredDragPositions(pageResize: PageResize): void {
     const { margins } = formatState;
-    const toStageSize = (page: { width: number; height: number }) => ({
-      width: page.width - margins.left - margins.right,
-      height: page.height - margins.top - margins.bottom
-    });
 
     for (const target of ['scale', 'orientation', 'inset'] as const) {
       const dragPosition = getDragPosition(target);
@@ -1049,11 +1041,12 @@
 
       setDragPosition(
         target,
-        remapPointToResizedArea(
+        remapAreaPointToResizedPage(
           dragPosition,
           { width: element.offsetWidth, height: element.offsetHeight },
-          toStageSize(pageResize.from),
-          toStageSize(pageResize.to)
+          pageResize.from,
+          pageResize.to,
+          { x: margins.left, y: margins.top }
         )
       );
     }
