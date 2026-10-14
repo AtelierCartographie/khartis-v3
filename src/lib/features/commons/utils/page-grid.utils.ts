@@ -139,3 +139,40 @@ export function getDragBounds(
     maxY: Math.max(0, container.height - item.height)
   };
 }
+
+/**
+ * Layout items (legends, geo indications) are stored relative to the map area
+ * but may move over the page margins: cropping the map is a way to free room
+ * for them. Bounds and grid snapping therefore follow the page.
+ */
+export function snapAreaPointWithinPage(
+  point: PageGridPoint,
+  item: PageGridSize,
+  page: PageGridSize,
+  areaOffset: PageGridPoint,
+  snapEnabled = true
+): PageGridPoint {
+  const pagePoint = snapPointWithinBounds(
+    { x: point.x + areaOffset.x, y: point.y + areaOffset.y },
+    getDragBounds(page, item),
+    snapEnabled
+  );
+  return { x: pagePoint.x - areaOffset.x, y: pagePoint.y - areaOffset.y };
+}
+
+/** A page resize keeps the margins, so the item keeps its distance to the nearest page edge. */
+export function remapAreaPointToResizedPage(
+  point: PageGridPoint,
+  item: PageGridSize,
+  from: PageGridSize,
+  to: PageGridSize,
+  areaOffset: PageGridPoint
+): PageGridPoint {
+  const pagePoint = remapPointToResizedArea(
+    { x: point.x + areaOffset.x, y: point.y + areaOffset.y },
+    item,
+    from,
+    to
+  );
+  return { x: pagePoint.x - areaOffset.x, y: pagePoint.y - areaOffset.y };
+}

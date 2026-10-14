@@ -56,6 +56,7 @@ import {
   draw_categorical_legend,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
+  draw_khartis_proportional_line_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend,
@@ -68,6 +69,7 @@ import {
   type KhartisLineWidthLegendStep,
   type LegendPatternFill,
   type LegendSvgDefinition,
+  type QuantiColorSwatch,
   type SymbolType
 } from '$lib/features/commons/components/legend';
 import {
@@ -83,14 +85,25 @@ import {
   type LineWidthLegendScale,
   type PointSizeLegendScale
 } from './legend.utils';
-import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
+import {
+  resolveLegendEntryLabel,
+  resolveLegendItemLayout,
+  type LegendItem,
+  type RenderedLegendSegmentKind,
+  type ResolvedLegendItemLayout
+} from '$lib/features/step-toolbar/tools/legend';
 import {
   facetsStore,
   resolveSharedFacetScaleColumns,
   type SharedFacetScaleColumn
 } from '$lib/features/step-toolbar/tools/facets';
-import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+import {
+  getLegendComponents,
+  type LegendComponent,
+  type LegendSubtitlePrimitive
+} from '$lib/features/commons/utils/legend-subtitle.utils';
 import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
+import { POLYGON_STROKE_WIDTH_DIVISOR } from '../layers/stroke-width.constants';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -164,7 +177,12 @@ type LegendCategoricalEntry = {
 
 type LegendSegmentContext = {
   includeMissingDataFooter: boolean;
+  layout: ResolvedLegendItemLayout;
+  entryLabel: string | null;
 };
+
+/** Text options plus the gap list legends keep between their entries. */
+type LegendDraftOptions = CommonLegendTextOptions & { entrySpacing: number };
 
 type LegendSegmentDraft = {
   key: string;
@@ -172,7 +190,7 @@ type LegendSegmentDraft = {
   primitive: LegendSubtitlePrimitive;
   consumesMissingData?: boolean;
   create: (
-    options: CommonLegendTextOptions,
+    options: LegendDraftOptions,
     context: LegendSegmentContext
   ) => LegendSvgDefinition | null;
 };
@@ -180,8 +198,35 @@ type LegendSegmentDraft = {
 export type LegendSegment = {
   key: string;
   className: string;
+  kind: RenderedLegendSegmentKind;
   svg: LegendSvgDefinition;
 };
+
+const NON_LIST_SEGMENT_KEYS = new Set([
+  'proportional-line-width',
+  'point-size',
+  'double-point-size',
+  'double-point-size-primary',
+  'double-point-size-secondary',
+  'text-size',
+  'density',
+  'missing-data'
+]);
+
+function getLegendSegmentKind(
+  draft: LegendSegmentDraft
+): RenderedLegendSegmentKind {
+  if (
+    draft.key.startsWith('quantitative-color') ||
+    draft.className === 'legend-svg--quantitative'
+  ) {
+    return 'class-bar';
+  }
+  if (draft.key.startsWith('unique-')) {
+    return 'unique';
+  }
+  return NON_LIST_SEGMENT_KEYS.has(draft.key) ? 'other' : 'entries';
+}
 
 function getLegendCategoricalClassification(
   viz: VisualizationConfig | undefined,
@@ -818,20 +863,32 @@ export function getLegendSegments(
   viz: VisualizationConfig | undefined,
   legendTextStyle: LegendTextStyle
 ): LegendSegment[] {
-  const drafts = getLegendSegmentDrafts(viz).filter(
+  const primitiveDrafts = getLegendSegmentDrafts(viz).filter(
     (draft) => !item.primitive || draft.primitive === item.primitive
   );
-
-  const lastMissingDataDraftIndex = drafts.findLastIndex(
+  // The missing-data entry is shared by the primitive's channels, so it is
+  // placed across all of them before the frame keeps its own channel.
+  const missingDataDraft = primitiveDrafts.findLast(
     (draft) => draft.consumesMissingData
   );
+  const drafts = filterDraftsByComponent(primitiveDrafts, item, viz);
+  const lastMissingDataDraftIndex = missingDataDraft
+    ? drafts.indexOf(missingDataDraft)
+    : -1;
+  const layout = resolveLegendItemLayout(item);
+  const entryLabel = resolveLegendEntryLabel(item);
 
   return drafts
-    .map((draft, index) => {
+    .map((draft, index): LegendSegment | null => {
       const svg = draft.create(
-        getLegendTextOptions(item, index, drafts.length, legendTextStyle),
         {
-          includeMissingDataFooter: index === lastMissingDataDraftIndex
+          ...getLegendTextOptions(item, index, drafts.length, legendTextStyle),
+          entrySpacing: layout.entrySpacing
+        },
+        {
+          includeMissingDataFooter: index === lastMissingDataDraftIndex,
+          layout,
+          entryLabel
         }
       );
 
@@ -839,11 +896,53 @@ export function getLegendSegments(
         ? {
             key: draft.key,
             className: draft.className,
+            kind: getLegendSegmentKind(draft),
             svg
           }
         : null;
     })
     .filter((segment): segment is LegendSegment => segment !== null);
+}
+
+// Blocks without a channel of their own (a lone missing-data entry) go with
+// the first channel.
+function getDraftComponent(draft: LegendSegmentDraft): LegendComponent | null {
+  if (draft.key === 'missing-data') {
+    return null;
+  }
+  if (draft.key.startsWith('stroke-color')) {
+    return 'stroke';
+  }
+  if (
+    draft.key.includes('size') ||
+    draft.key.includes('line-width') ||
+    draft.key === 'unique-point-symbol'
+  ) {
+    return 'size';
+  }
+  return 'color';
+}
+
+function filterDraftsByComponent(
+  drafts: LegendSegmentDraft[],
+  item: LegendItem,
+  viz: VisualizationConfig | undefined
+): LegendSegmentDraft[] {
+  if (!item.component || !item.primitive || !viz) {
+    return drafts;
+  }
+
+  // A primitive's single legend records its channel but keeps every block.
+  const components = getLegendComponents(viz, item.primitive);
+  if (components.length < 2) {
+    return drafts;
+  }
+
+  const isFirstComponent = components[0] === item.component;
+  return drafts.filter((draft) => {
+    const component = getDraftComponent(draft);
+    return component === null ? isFirstComponent : component === item.component;
+  });
 }
 
 function getLegendTextOptions(
@@ -859,6 +958,13 @@ function getLegendTextOptions(
     subtitle: index === 0 ? item.subtitle : null,
     note: index === count - 1 ? item.note : null
   };
+}
+
+function withEntryLabel<T extends { label: string }>(
+  entry: T,
+  context: LegendSegmentContext
+): T {
+  return context.entryLabel ? { ...entry, label: context.entryLabel } : entry;
 }
 
 function toLegendSvg(
@@ -898,6 +1004,16 @@ function getClassedColorLegendDraft(
 
     if (!classification.patternId) {
       return getQuantitativeColorLegendDraft(viz, classification);
+    }
+  } else {
+    const barDraft = getQuantitativeColorLegendDraft(
+      viz,
+      classification,
+      undefined,
+      primitive
+    );
+    if (barDraft) {
+      return barDraft;
     }
   }
 
@@ -954,8 +1070,13 @@ function getStrokeColorLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && config.strokeMode === StrokeMode.CLASSES) {
-    return getPolygonStrokeClassesLegendDraft(viz, classification);
+  if (config.strokeMode === StrokeMode.CLASSES) {
+    const barDraft = getStrokeClassesLegendDraft(
+      viz,
+      classification,
+      primitive
+    );
+    if (barDraft) return barDraft;
   }
 
   let entries: { label: string; color: string }[];
@@ -984,11 +1105,13 @@ function getStrokeColorLegendDraft(
     primitive === 'point'
       ? getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE)
       : null;
+  const strokeOpacity = getPrimitivePaintOpacity(viz, primitive).stroke;
   const items: KhartisLegendSwatchItem[] = entries.map(({ label, color }) => ({
     label,
     fill: 'none',
     stroke: color,
     strokeWidth: 2,
+    strokeOpacity,
     ...(symbol ? { symbol, size: 8 } : {})
   }));
   if (items.length === 0) return null;
@@ -1008,15 +1131,17 @@ function getStrokeColorLegendDraft(
   };
 }
 
-function getPolygonStrokeClassesLegendDraft(
+function getStrokeClassesLegendDraft(
   viz: VisualizationConfig,
-  classification: ClassificationConfig
+  classification: ClassificationConfig,
+  primitive: 'area' | 'point'
 ): LegendSegmentDraft | null {
-  const polygon = getPolygonPrimitive(viz);
+  const config =
+    primitive === 'point' ? getSymbolPrimitive(viz) : getPolygonPrimitive(viz);
+  const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
   const valueColumn =
-    polygon?.strokeValueColumn ??
-    getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
-  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
+    config?.strokeValueColumn ?? getPrimitiveValueColumn(viz, filter);
+  const domain = getColumnDomain(viz, valueColumn, filter);
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
@@ -1026,15 +1151,18 @@ function getPolygonStrokeClassesLegendDraft(
   if (!thresholds) return null;
 
   return {
-    key: 'stroke-color-area',
-    primitive: 'area',
+    key: `stroke-color-${primitive}`,
+    primitive,
     className: 'legend-svg--quantitative',
     consumesMissingData: false,
-    create: (options) =>
+    create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
-          outlineWidth: 2
+          ...getClassBarLayoutOptions(context.layout),
+          outlineWidth: 2,
+          swatch: getQuantiColorSwatch(viz, primitive, true),
+          opacity: getPrimitivePaintOpacity(viz, primitive).stroke
         })
       )
   };
@@ -1319,13 +1447,61 @@ function getTextSizeLegendDraft(
   };
 }
 
+// Classed colors read as one graduated bar whatever the primitive, like a
+// choropleth: each class cell holds the primitive's own mark.
+function getQuantiColorSwatch(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive,
+  outline = false
+): QuantiColorSwatch {
+  switch (primitive) {
+    case 'line':
+      return {
+        type: 'line',
+        strokeWidth: getLineLegendSwatchWidth(viz),
+        dashed: getLinePrimitive(viz)?.dashed ?? false
+      };
+    case 'point':
+      return {
+        type: 'symbol',
+        path: getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE),
+        outline,
+        nodataPath: getShapePath(
+          resolveMissingDataPointShape(
+            getLegendMissingDataConfig(viz, 'point')?.shape
+          )
+        )
+      };
+    case 'area':
+    default:
+      return { type: 'box' };
+  }
+}
+
+function getClassBarLayoutOptions(layout: ResolvedLegendItemLayout): {
+  variable_width: boolean;
+  orientation: 'horizontal' | 'vertical';
+  lowAtBottom: boolean;
+} {
+  return {
+    variable_width: layout.proportionalClasses,
+    orientation: layout.classBarOrientation,
+    lowAtBottom: layout.lowAtBottom
+  };
+}
+
 function getQuantitativeColorLegendDraft(
   viz: VisualizationConfig,
   classification: ClassificationConfig,
-  classPatternFills?: (LegendPatternFill | null)[]
+  classPatternFills?: (LegendPatternFill | null)[],
+  primitive: LegendSwatchPrimitive = 'area'
 ): LegendSegmentDraft | null {
-  const valueColumn = getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
-  const domain = getColumnDomain(viz, valueColumn, PrimitiveFilterType.POLYGON);
+  const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
+  const valueColumn =
+    primitive === 'point'
+      ? getSymbolFillValueColumn(viz)
+      : getPrimitiveValueColumn(viz, filter);
+  const domain = getColumnDomain(viz, valueColumn, filter);
   // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
   const hasSharedScale =
     getSharedFacetScaleColumns(viz, valueColumn).length > 0;
@@ -1343,20 +1519,31 @@ function getQuantitativeColorLegendDraft(
   }
 
   return {
-    key: 'quantitative-color',
-    primitive: 'area',
+    key:
+      primitive === 'area'
+        ? 'quantitative-color'
+        : `quantitative-color-${primitive}`,
+    primitive,
     className: classPatternFills
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
-    consumesMissingData: isLegendMissingDataShown(viz, 'area'),
+    consumesMissingData: isLegendMissingDataShown(viz, primitive),
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
+          ...getClassBarLayoutOptions(context.layout),
           classPatternFills,
+          swatch: getQuantiColorSwatch(viz, primitive),
+          opacity: classPatternFills
+            ? undefined
+            : primitive === 'line'
+              ? getPrimitivePaintOpacity(viz, primitive).stroke
+              : getPrimitivePaintOpacity(viz, primitive).fill,
           ...getQuantiColorMissingDataOptions(
             viz,
-            context.includeMissingDataFooter
+            context.includeMissingDataFooter,
+            primitive
           )
         })
       )
@@ -1366,22 +1553,23 @@ function getQuantitativeColorLegendDraft(
 // The no-data box mirrors the map: missing-data color with its hatch.
 function getQuantiColorMissingDataOptions(
   viz: VisualizationConfig,
-  includeFooter: boolean
+  includeFooter: boolean,
+  primitive: LegendSwatchPrimitive = 'area'
 ): {
   nodata: boolean;
   nodataLabel?: string;
   nodataFill?: string;
   nodataPatternFill?: LegendPatternFill | null;
 } {
-  if (!includeFooter || !isLegendMissingDataShown(viz, 'area')) {
+  if (!includeFooter || !isLegendMissingDataShown(viz, primitive)) {
     return { nodata: false };
   }
 
-  const item = getMissingDataLegendItem(viz, 'area');
+  const item = getMissingDataLegendItem(viz, primitive);
   return {
     nodata: true,
     nodataLabel: item.label,
-    nodataFill: item.fill,
+    nodataFill: item.fill ?? item.stroke,
     nodataPatternFill: item.patternFill
   };
 }
@@ -1717,7 +1905,8 @@ function getUniquePointSymbolLegendDraft(
             0.5,
             symbol.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth
           ),
-    opacity: normalizeLegendOpacity(symbol.opacity, 1),
+    fillOpacity: normalizeLegendOpacity(symbol.opacity, 1),
+    strokeOpacity: normalizeLegendOpacity(symbol.strokeOpacity, 1),
     symbol: getShapePath(symbol.shape ?? ShapeType.CIRCLE),
     size: getUniquePointLegendDisplaySize(symbol.size)
   };
@@ -1729,7 +1918,7 @@ function getUniquePointSymbolLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'point'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_swatch_legend([item], {
+        draw_khartis_swatch_legend([withEntryLabel(item, context)], {
           ...options,
           type: 'symbol',
           ...getMissingDataFooterOptions(
@@ -1786,11 +1975,13 @@ function getUniquePolygonLegendDraft(
       : resolveLegendColor(polygon.strokeColor, DEFAULT_COLORS.stroke),
     strokeWidth: strokeNone
       ? 0
-      : Math.max(
-          0.5,
-          Math.min(3, polygon.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth)
+      : Math.min(
+          3,
+          (polygon.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth) /
+            POLYGON_STROKE_WIDTH_DIVISOR
         ),
-    opacity: normalizeLegendOpacity(polygon.fillOpacity, 1),
+    fillOpacity: normalizeLegendOpacity(polygon.fillOpacity, 1),
+    strokeOpacity: normalizeLegendOpacity(polygon.strokeOpacity, 1),
     patternFill,
     patternOpacity: patternFill ? 1 : undefined,
     dashed: !strokeNone && polygon.strokeDashed
@@ -1803,7 +1994,7 @@ function getUniquePolygonLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'area'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_swatch_legend([item], {
+        draw_khartis_swatch_legend([withEntryLabel(item, context)], {
           ...options,
           type: patternFill ? 'pattern' : 'box',
           ...getMissingDataFooterOptions(
@@ -1843,7 +2034,7 @@ function getUniqueLineLegendDraft(
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_line_width_legend([step], {
+        draw_khartis_line_width_legend([withEntryLabel(step, context)], {
           ...options,
           ...getMissingDataFooterOptions(
             viz,
@@ -1859,43 +2050,82 @@ function getLineWidthLegendDraft(
   viz: VisualizationConfig | undefined
 ): LegendSegmentDraft | null {
   const line = getLinePrimitive(viz);
+  const sizeColumn = line?.sizeColumn ?? viz?.mapping.sizeColumn;
   const scale = getLineWidthLegendScale(
     viz,
-    getColumnDomain(
-      viz,
-      line?.sizeColumn ?? viz?.mapping.sizeColumn,
-      PrimitiveFilterType.LINE
-    )
+    getColumnDomain(viz, sizeColumn, PrimitiveFilterType.LINE),
+    getNumericColumnValues(viz, sizeColumn, PrimitiveFilterType.LINE)
   );
 
   if (!viz || !scale) {
     return null;
   }
 
+  if (scale.kind === 'proportional') {
+    const proportionalSteps = scale.steps.map((step) => ({
+      label: getLegendStepLabel(step, undefined),
+      width: step.size
+    }));
+
+    return {
+      key: 'proportional-line-width',
+      primitive: 'line',
+      className: 'legend-svg--line-width',
+      consumesMissingData: isLegendMissingDataShown(viz, 'line'),
+      create: (options, context) =>
+        toLegendSvg(
+          draw_khartis_proportional_line_legend(proportionalSteps, {
+            ...options,
+            dashed: scale.dashed,
+            footerItems: getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter,
+              'line'
+            ).footerItems
+          })
+        )
+    };
+  }
+
+  // Classed thicknesses read like classed colors: one class bar, here with
+  // a line growing thicker from class to class.
   const classification = getLineThicknessClassification(viz);
-  const breaks = classification?.breaks ?? viz.classification?.breaks;
-  const classCount = getClassificationClassCount(classification);
-  const steps: KhartisLineWidthLegendStep[] = scale.steps.map((step) => ({
-    label: getLegendStepLabel(step, breaks, classCount),
-    width:
-      scale.kind === 'proportional'
-        ? step.size
-        : getLineLegendDisplayWidth(scale, step.size),
-    color: scale.color,
-    opacity: scale.opacity,
-    dashed: scale.dashed
-  }));
+  const strokeWidths: number[] = [];
+  for (const step of scale.steps) {
+    if (step.kind === 'classes') {
+      strokeWidths[step.index] = getLineLegendDisplayWidth(scale, step.size);
+    }
+  }
+  const domain = getColumnDomain(viz, sizeColumn, PrimitiveFilterType.LINE);
+  const colors = strokeWidths.map(() => scale.color);
+  const thresholds = buildQuantiColorThresholds({
+    breaks: classification?.breaks,
+    colors,
+    min: classification?.roundedMin ?? domain?.min,
+    max: classification?.roundedMax ?? domain?.max
+  });
+  if (!thresholds) {
+    return null;
+  }
 
   return {
     key: 'line-width',
     primitive: 'line',
-    className: 'legend-svg--line-width',
+    className: 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
       toLegendSvg(
-        draw_khartis_line_width_legend(steps, {
+        draw_quanti_color_legend(thresholds, colors, {
           ...options,
-          ...getMissingDataFooterOptions(
+          ...getClassBarLayoutOptions(context.layout),
+          swatch: {
+            type: 'line',
+            strokeWidth: Math.max(...strokeWidths),
+            strokeWidths,
+            dashed: scale.dashed
+          },
+          opacity: scale.opacity,
+          ...getQuantiColorMissingDataOptions(
             viz,
             context.includeMissingDataFooter,
             'line'
@@ -1967,18 +2197,21 @@ function getCategoricalLegendItems(
   primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>
 ): { type: CategoricalShapeType; categories: CategoryItem[] } {
   let type: CategoricalShapeType = 'box';
+  const opacity = getPrimitivePaintOpacity(viz, primitive);
   const categories: CategoryItem[] = entries.map((entry) => ({
     label: entry.label,
     fill: entry.color,
     stroke: 'none',
-    strokeWidth: 0
+    strokeWidth: 0,
+    fillOpacity: opacity.fill
   }));
 
   if (primitive === 'line') {
     type = 'line';
     categories.forEach((category) => {
       category.stroke = category.fill;
-      category.strokeWidth = Math.max(2, Math.min(6, viz.style.lineWidth ?? 3));
+      category.strokeWidth = getLineLegendSwatchWidth(viz);
+      category.strokeOpacity = opacity.stroke;
     });
   } else if (primitive === 'point') {
     type = 'symbol';
@@ -2007,6 +2240,7 @@ function getClassedColorLegendItems(
 ): KhartisLegendSwatchItem[] {
   const breaks = (classification.breaks ?? []).filter(Number.isFinite);
   const colors = getEffectiveClassedColors(classification.colors ?? [], breaks);
+  const opacity = getPrimitivePaintOpacity(viz, primitive);
 
   return colors.map((color, index) => {
     const label = getColorScaleLabel(breaks, colors.length, index);
@@ -2015,9 +2249,9 @@ function getClassedColorLegendItems(
       return {
         label,
         stroke: color,
-        strokeWidth: Math.max(2, Math.min(6, viz.style.lineWidth ?? 3)),
-        opacity: normalizeLegendOpacity(viz.style.lineOpacity, 1),
-        dashed: viz.style.lineDashed ?? false
+        strokeWidth: getLineLegendSwatchWidth(viz),
+        opacity: opacity.stroke,
+        dashed: getLinePrimitive(viz)?.dashed ?? false
       };
     }
 
@@ -2028,6 +2262,7 @@ function getClassedColorLegendItems(
         fill: color,
         stroke: 'rgba(0, 0, 0, 0.25)',
         strokeWidth: 0.75,
+        fillOpacity: opacity.fill,
         symbol: getShapePath(symbol?.shape ?? ShapeType.CIRCLE),
         size: 8
       };
@@ -2037,7 +2272,8 @@ function getClassedColorLegendItems(
       label,
       fill: color,
       stroke: 'rgba(0, 0, 0, 0.15)',
-      strokeWidth: 1
+      strokeWidth: 1,
+      fillOpacity: opacity.fill
     };
   });
 }
@@ -2058,7 +2294,7 @@ function getPointSizeLegendItems(
     fill: scale.fillColor,
     stroke: scale.strokeColor,
     strokeWidth: 0.75,
-    opacity: scale.fillOpacity,
+    fillOpacity: scale.fillOpacity,
     symbol: getShapePath(scale.shape),
     size: getPointLegendDisplaySize(step.size)
   }));
@@ -2197,6 +2433,14 @@ function getMissingDataLegendItem(
     };
   }
 
+  if (primitive === 'line') {
+    return {
+      label: m.missing_data_text(),
+      stroke: color,
+      strokeWidth: 2
+    };
+  }
+
   // Only polygon fills draw the missing-data pattern on the map.
   const missingDataPattern =
     primitive === 'area' ? resolveMissingDataClassPattern(missingData) : null;
@@ -2313,6 +2557,43 @@ function getSwatchType(
   }
 
   return 'box';
+}
+
+type PrimitivePaintOpacity = { fill: number; stroke: number };
+
+// The legend fades a mark the way the map does: fill and stroke apart.
+function getPrimitivePaintOpacity(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): PrimitivePaintOpacity {
+  switch (primitive) {
+    case 'point': {
+      const symbol = getSymbolPrimitive(viz);
+      return {
+        fill: normalizeLegendOpacity(symbol?.opacity, 1),
+        stroke: normalizeLegendOpacity(symbol?.strokeOpacity, 1)
+      };
+    }
+    case 'line': {
+      const opacity = normalizeLegendOpacity(getLinePrimitive(viz)?.opacity, 1);
+      return { fill: opacity, stroke: opacity };
+    }
+    case 'area':
+    default: {
+      const polygon = getPolygonPrimitive(viz);
+      return {
+        fill: normalizeLegendOpacity(polygon?.fillOpacity, 1),
+        stroke: normalizeLegendOpacity(polygon?.strokeOpacity, 1)
+      };
+    }
+  }
+}
+
+function getLineLegendSwatchWidth(viz: VisualizationConfig): number {
+  return Math.max(
+    2,
+    Math.min(6, getLinePrimitive(viz)?.width ?? viz.style.lineWidth ?? 3)
+  );
 }
 
 function normalizeLegendOpacity(

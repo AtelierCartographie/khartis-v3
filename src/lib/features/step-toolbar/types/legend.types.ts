@@ -2,7 +2,23 @@ import {
   LegendPosition,
   LegendTab
 } from '$lib/features/commons/constants/ui.constants';
-import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+import type {
+  LegendComponent,
+  LegendSubtitlePrimitive
+} from '$lib/features/commons/utils/legend-subtitle.utils';
+
+export type LegendClassBarOrientation = 'horizontal' | 'vertical';
+
+/** Drawing choices of one legend; every field is optional in a saved project. */
+export interface LegendItemLayout {
+  /** Class bars: each class as long as its share of the value range. */
+  proportionalClasses?: boolean;
+  classBarOrientation?: LegendClassBarOrientation;
+  /** Vertical class bars: the lowest class at the bottom, like a thermometer. */
+  lowAtBottom?: boolean;
+  /** Gap kept between two entries of a list legend, in percent of the default. */
+  entrySpacing?: number;
+}
 
 export interface LegendItem {
   id: string;
@@ -20,8 +36,16 @@ export interface LegendItem {
    * first primitive of their visualization.
    */
   primitive?: LegendSubtitlePrimitive;
+  /**
+   * Set when the primitive encodes several variables: each channel (color,
+   * outline, size) then has a legend of its own.
+   */
+  component?: LegendComponent;
   /** Page position of this legend's own frame, resolved from the anchor stack. */
   dragPosition?: LegendDragPosition | null;
+  layout?: LegendItemLayout;
+  /** Replaces the primitive name next to the single swatch of a unique legend. */
+  entryLabel?: string;
 }
 
 export interface LegendStyle {

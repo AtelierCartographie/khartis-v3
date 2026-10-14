@@ -91,6 +91,23 @@ export interface BasemapLayer {
   step?: number;
 }
 
+export type BasemapZone = 'world' | 'continent' | 'country';
+
+export type BasemapExtent =
+  'whole' | 'region' | 'department' | 'epci' | 'commune' | 'state';
+
+/**
+ * Facets of the catalog funnel filter, set by the khartis-basemaps export
+ * (`lib/catalog-facets.py`). Labels come from the title ("France" in
+ * "France — Ain") and subtitle ("par communes"); `level` is unique across areas.
+ */
+export interface BasemapCatalogFacets {
+  zone: BasemapZone;
+  area: string;
+  extent: BasemapExtent;
+  level: string;
+}
+
 export interface BasemapMetadata {
   file: string;
   title_fr: string;
@@ -112,6 +129,7 @@ export interface BasemapMetadata {
   proj_to: ProjectionConfig;
   simplification_level?: string;
   entity_count?: number;
+  catalog?: BasemapCatalogFacets;
   pack?: BasemapGeometryPack;
   layers: BasemapLayer[];
   isCustom?: boolean;

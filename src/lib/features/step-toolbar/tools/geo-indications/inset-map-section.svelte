@@ -41,6 +41,13 @@
       geoState.insetMap.seaColor.lightness
     )
   );
+  const insetMapSphereHex = $derived(
+    hslToHex(
+      geoState.insetMap.sphereColor.hue,
+      geoState.insetMap.sphereColor.saturation,
+      geoState.insetMap.sphereColor.lightness
+    )
+  );
   const insetMapAvailable = $derived.by(() => {
     void mapInstanceStore.zoomLevel;
     void mapInstanceStore.deckViewState;
@@ -147,6 +154,25 @@
               />
             </div>
           </div>
+        </Column>
+      </Row>
+
+      <Row>
+        <Column>
+          <ColorPicker
+            triggerLabel={m.geo_inset_map_sphere_color()}
+            hex={insetMapSphereHex}
+            hue={geoState.insetMap.sphereColor.hue}
+            saturation={geoState.insetMap.sphereColor.saturation}
+            lightness={geoState.insetMap.sphereColor.lightness}
+            onValidate={({
+              hue,
+              saturation,
+              lightness
+            }: ColorPickerValidateEvent) => {
+              store.setInsetMapSphereColor({ hue, saturation, lightness });
+            }}
+          />
         </Column>
       </Row>
     </Grid>

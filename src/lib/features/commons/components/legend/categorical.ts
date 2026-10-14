@@ -2,6 +2,7 @@ import Textbox from '@borgar/textbox';
 import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import type { LegendPatternFill } from './khartis-extensions';
 import {
+  clampEntrySpacing,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
@@ -28,10 +29,14 @@ export interface CategoryItem {
   size?: number;
   patternFill?: LegendPatternFill | null;
   patternOpacity?: number;
+  fillOpacity?: number;
+  strokeOpacity?: number;
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
   type?: CategoricalFooterShapeType;
+  /** Share of the default gap kept between two entries, from 0 to 1. */
+  entrySpacing?: number;
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 }
@@ -96,6 +101,7 @@ export function draw_categorical_legend(
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
   const gap = scaleLegendMetric(8, fontSize);
+  const row_gap = gap * clampEntrySpacing(options.entrySpacing);
   const gutter = scaleLegendMetric(16, fontSize);
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
@@ -166,7 +172,7 @@ export function draw_categorical_legend(
     ...categories.map((item) => item.nb_lines)
   );
   const row_body_height = Math.max(box.h, line_height * maxLabelLineCount);
-  const row_step = row_body_height + gap;
+  const row_step = row_body_height + row_gap;
   const maxFooterLineCount = Math.max(
     1,
     ...footer_lines.map((lineBreak) => lineBreak.length)
@@ -175,7 +181,7 @@ export function draw_categorical_legend(
     footerBox.h,
     line_height * maxFooterLineCount
   );
-  const footer_row_step = footer_body_height + gap;
+  const footer_row_step = footer_body_height + row_gap;
   const footer_label_width =
     footer_lines.length > 0
       ? Math.max(...footer_lines.map((lineBreak) => lineBreak.width))
@@ -247,7 +253,8 @@ export function draw_categorical_legend(
       d.symbol,
       d.size,
       d.patternFill,
-      d.patternOpacity
+      d.patternOpacity,
+      d
     )
   );
   const labels = categories.map((d) =>
@@ -257,7 +264,7 @@ export function draw_categorical_legend(
     categories.length > 0
       ? y_start +
         (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
-        gap
+        row_gap
       : y_start;
   const section_gap = scaleLegendMetric(10, fontSize);
   const footer_start =
@@ -277,7 +284,8 @@ export function draw_categorical_legend(
       item.symbol,
       item.size,
       item.patternFill,
-      item.patternOpacity
+      item.patternOpacity,
+      item
     )
   );
   const footerLabels = footerItems.map((item, index) =>
@@ -302,7 +310,7 @@ export function draw_categorical_legend(
   );
   const footer_bottom =
     footerItems.length > 0
-      ? footer_start + footerItems.length * footer_row_step - gap
+      ? footer_start + footerItems.length * footer_row_step - row_gap
       : categories_bottom;
   const content_bottom =
     footerItems.length > 0 ? footer_bottom : categories_bottom;
@@ -445,19 +453,27 @@ function create_shape(
   symbol?: string | null,
   size?: number,
   patternFill?: LegendPatternFill | null,
-  patternOpacity?: number
+  patternOpacity?: number,
+  paint: Pick<CategoryItem, 'fillOpacity' | 'strokeOpacity'> = {}
 ): string {
   const safeFill = escapeSvgAttribute(fill ?? 'none');
   const safeStroke = escapeSvgAttribute(stroke ?? 'none');
   const safeStrokeWidth = Number.isFinite(strokeWidth) ? strokeWidth : 0;
+  const opacity =
+    (paint.fillOpacity !== undefined
+      ? ` fill-opacity="${clampOpacity(paint.fillOpacity)}"`
+      : '') +
+    (paint.strokeOpacity !== undefined
+      ? ` stroke-opacity="${clampOpacity(paint.strokeOpacity)}"`
+      : '');
 
   switch (type) {
     case 'box':
-      return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     case 'line': {
       const y1 = y + height / 2;
       const y2 = y1;
-      return `<line x1="${x}" y1="${y1}" x2="${x + width}" y2="${y2}" stroke="${safeStroke || safeFill}" stroke-width="${safeStrokeWidth}" />`;
+      return `<line x1="${x}" y1="${y1}" x2="${x + width}" y2="${y2}" stroke="${safeStroke || safeFill}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     }
     case 'symbol': {
       const [cx, cy] = [x + width / 2, y + height / 2];
@@ -465,10 +481,10 @@ function create_shape(
       const transform = `translate(${cx},${cy})${scale}`;
       const path = escapeSvgAttribute(symbol ?? '');
 
-      return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
     }
     case 'pattern': {
-      const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}"${opacity} />`;
       if (!patternFill) {
         return baseRect;
       }
@@ -476,6 +492,10 @@ function create_shape(
       return `<defs>${patternFill.defs}</defs>${baseRect}<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="${patternOpacity ?? PATTERN_OVERLAY_OPACITY}" stroke="none" />`;
     }
   }
+}
+
+function clampOpacity(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
 }
 
 function create_label(

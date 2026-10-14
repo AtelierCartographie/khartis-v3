@@ -24,9 +24,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
-    getDragBounds,
-    remapPointToResizedArea,
-    snapPointWithinBounds
+    remapAreaPointToResizedPage,
+    snapAreaPointWithinPage
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     geoIndicationsActions,
@@ -85,6 +84,10 @@
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';
 
+  // In the 40 × 50 viewBox of the indicator, so the letter keeps its
+  // proportion to the arrow or the rose whatever their size.
+  const NORTH_LETTER_SIZE = 15;
+
   let {
     interactive = true,
     hidden = false
@@ -103,8 +106,7 @@
   );
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
-  const INSET_ZOOM_SCALE = 1.2;
-  const INSET_EXTENT_POINT_RADIUS = 4;
+  const INSET_EXTENT_POINT_RADIUS = 2.5;
   const INSET_EXTENT_MIN_SIZE = 8;
   const INSET_OUTLINE_MIN_POINTS = 4;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
@@ -471,10 +473,6 @@
     };
   }
 
-  function getInsetZoomScale(): number {
-    return INSET_ZOOM_SCALE;
-  }
-
   function createInsetProjection(
     dimensions: InsetDimensions,
     bounds: MapBounds | null
@@ -495,8 +493,8 @@
       .rotate([-rotationLng, -rotationLat])
       .clipAngle(90);
 
+    // The whole sphere fits the frame, so its outline stays in view.
     projection.fitExtent(extent, WORLD_SPHERE);
-    projection.scale(projection.scale() * getInsetZoomScale());
 
     return projection;
   }
@@ -679,6 +677,13 @@
     );
   });
 
+  const insetSphereColor = $derived(
+    hslToHex(
+      geoIndicationsState.insetMap.sphereColor.hue,
+      geoIndicationsState.insetMap.sphereColor.saturation,
+      geoIndicationsState.insetMap.sphereColor.lightness
+    )
+  );
   const insetSeaColor = $derived.by(() => {
     return hslToHex(
       geoIndicationsState.insetMap.seaColor.hue,
@@ -993,12 +998,11 @@
       return position;
     }
 
-    return snapPointWithinBounds(
+    return snapAreaPointWithinPage(
       position,
-      getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth,
-        height: dragElement.offsetHeight
-      }),
+      { width: dragElement.offsetWidth, height: dragElement.offsetHeight },
+      { width: formatState.width, height: formatState.height },
+      { x: formatState.margins.left, y: formatState.margins.top },
       snapEnabled
     );
   }
@@ -1029,16 +1033,10 @@
 
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
-  // A page resize keeps the margins, so the map stage changes by the same
-  // amount as the page; a dragged indication keeps its distance to the
-  // nearest edge. Declared before the re-clamping effects so they clamp the
-  // remapped position.
+  // Declared before the re-clamping effects so they clamp the remapped
+  // position.
   function remapStoredDragPositions(pageResize: PageResize): void {
     const { margins } = formatState;
-    const toStageSize = (page: { width: number; height: number }) => ({
-      width: page.width - margins.left - margins.right,
-      height: page.height - margins.top - margins.bottom
-    });
 
     for (const target of ['scale', 'orientation', 'inset'] as const) {
       const dragPosition = getDragPosition(target);
@@ -1049,11 +1047,12 @@
 
       setDragPosition(
         target,
-        remapPointToResizedArea(
+        remapAreaPointToResizedPage(
           dragPosition,
           { width: element.offsetWidth, height: element.offsetHeight },
-          toStageSize(pageResize.from),
-          toStageSize(pageResize.to)
+          pageResize.from,
+          pageResize.to,
+          { x: margins.left, y: margins.top }
         )
       );
     }
@@ -1543,9 +1542,9 @@
             />
             <text
               x="20"
-              y="11"
+              y="14"
               text-anchor="middle"
-              font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
+              font-size={NORTH_LETTER_SIZE}
               font-weight="bold"
               fill={orientationColor}
               font-family={orientationFontFamily}
@@ -1578,9 +1577,9 @@
             />
             <text
               x="20"
-              y="11"
+              y="14"
               text-anchor="middle"
-              font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
+              font-size={NORTH_LETTER_SIZE}
               font-weight="bold"
               fill={orientationColor}
               font-family={orientationFontFamily}
@@ -1652,10 +1651,10 @@
                 class="inset-graticule-path"
                 d={insetRenderState.graticulePath}
                 fill="none"
-                stroke="rgba(0, 0, 0, 0.3)"
+                stroke={insetSphereColor}
                 stroke-width="0.5"
                 vector-effect="non-scaling-stroke"
-                style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 0.5; vector-effect: non-scaling-stroke;"
+                style={`fill: none; stroke: ${insetSphereColor}; stroke-width: 0.5; vector-effect: non-scaling-stroke;`}
               ></path>
             {/if}
           </g>
@@ -1663,10 +1662,10 @@
             class="inset-outline"
             d={insetRenderState.spherePath}
             fill="none"
-            stroke="rgba(0, 0, 0, 0.3)"
+            stroke={insetSphereColor}
             stroke-width="1"
             vector-effect="non-scaling-stroke"
-            style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 1; vector-effect: non-scaling-stroke;"
+            style={`fill: none; stroke: ${insetSphereColor}; stroke-width: 1; vector-effect: non-scaling-stroke;`}
           ></path>
           {#if insetRenderState.viewportPath}
             <path
@@ -1687,12 +1686,8 @@
               cy={insetRenderState.viewportPoint.y}
               r={insetRenderState.viewportPoint.radius}
               fill={insetWindowColor}
-              stroke={insetWindowColor}
-              stroke-width={insetRenderState.windowStrokeWidth}
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              vector-effect="non-scaling-stroke"
-              style={`fill: ${insetWindowColor}; stroke: ${insetWindowColor};`}
+              stroke="none"
+              style={`fill: ${insetWindowColor}; stroke: none;`}
             ></circle>
           {/if}
         </svg>
@@ -1806,13 +1801,11 @@
   }
 
   .inset-graticule-path {
-    stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 0.5;
     vector-effect: non-scaling-stroke;
   }
 
-  .inset-extent-path,
-  .inset-extent-point {
+  .inset-extent-path {
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -1820,7 +1813,6 @@
 
   .inset-outline {
     fill: none;
-    stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }

@@ -34,8 +34,11 @@ import {
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 import { toFiniteNumber } from './finite-number.utils';
-
-const LEGEND_MIN_SWATCH_OPACITY = 0.2;
+import {
+  round,
+  round_extreme
+} from '$lib/features/commons/components/legend/utils';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 
 export type LegendSwatchPrimitive = 'area' | 'point' | 'line';
 
@@ -98,8 +101,18 @@ function resolveStyleColor(
   return typeof color === 'string' ? color : fallback;
 }
 
+// A size legend whose color is carried by classes or categories shows the
+// sizes alone: a neutral mark, so it does not read as one of those colors.
 function resolveSymbolFillColor(viz: VisualizationConfig): string {
-  const symbolFill = getSymbolPrimitive(viz)?.fillColor;
+  const symbol = getSymbolPrimitive(viz);
+  if (
+    symbol?.fillMode === FillMode.CLASSES ||
+    symbol?.fillMode === FillMode.CATEGORIES
+  ) {
+    return NEUTRAL_CARTOGRAPHY_COLORS.dataFill;
+  }
+
+  const symbolFill = symbol?.fillColor;
   if (symbolFill) {
     return resolveStyleColor(symbolFill, DEFAULT_COLORS.fill);
   }
@@ -199,39 +212,53 @@ function getStatisticsValue(
   return (statistics as Record<'min' | 'max', unknown>)[key];
 }
 
-function buildProportionalLineLegendSteps(
+// The widest line is labelled with its value rounded as far as the data
+// allows, the way the symbol legend rounds its extremes; the thinner ones take
+// the round values (1, 2 or 5 × 10ⁿ) at most half and a quarter of it.
+export function getProportionalLineLegendValues(
   maxValue: number,
-  maxWidth: number
-): LegendContinuousStep[] {
-  if (maxValue <= 0) {
-    return [
-      {
-        kind: 'continuous',
-        value: 0,
-        size: 0
-      }
-    ];
+  valueSample: number[] = []
+): number[] {
+  if (!(maxValue > 0)) {
+    return [0];
   }
 
-  const midValue = maxValue / 2;
+  const sortedSample = valueSample
+    .map(Math.abs)
+    .filter((value) => Number.isFinite(value) && value <= maxValue)
+    .sort((a, b) => a - b);
+  const roundedMax =
+    sortedSample.length > 1
+      ? round_extreme(sortedSample, maxValue, 'max')
+      : round(maxValue, 2);
+  const lower = [roundedMax / 2, roundedMax / 4].map(floorToRoundValue);
 
-  return [
-    {
+  return Array.from(new Set([roundedMax, ...lower])).filter(
+    (value) => value > 0
+  );
+}
+
+function floorToRoundValue(value: number): number {
+  const order = 10 ** Math.floor(Math.log10(value));
+  const step = [5, 2, 1].find((factor) => factor * order <= value) ?? 1;
+  return step * order;
+}
+
+function buildProportionalLineLegendSteps(
+  maxValue: number,
+  maxWidth: number,
+  valueSample?: number[]
+): LegendContinuousStep[] {
+  return getProportionalLineLegendValues(maxValue, valueSample).map(
+    (value) => ({
       kind: 'continuous',
-      value: maxValue,
-      size: getProportionalLineWidthForValue(maxValue, maxValue, maxWidth)
-    },
-    {
-      kind: 'continuous',
-      value: midValue,
-      size: getProportionalLineWidthForValue(midValue, maxValue, maxWidth)
-    },
-    {
-      kind: 'continuous',
-      value: 0,
-      size: getProportionalLineWidthForValue(0, maxValue, maxWidth)
-    }
-  ];
+      value,
+      size:
+        maxValue > 0
+          ? getProportionalLineWidthForValue(value, maxValue, maxWidth)
+          : 0
+    })
+  );
 }
 
 function buildProportionalSymbolLegendSteps(
@@ -483,10 +510,7 @@ export function getPointSizeLegendScale(
   const minSize = Math.max(1, symbol.minSize ?? 1);
   const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
   const proportionalMaxSize = Math.max(0, symbol.maxSize ?? maxSize);
-  const fillOpacity = Math.max(
-    LEGEND_MIN_SWATCH_OPACITY,
-    normalizeOpacity(symbol.opacity, 1)
-  );
+  const fillOpacity = normalizeOpacity(symbol.opacity, 1);
 
   if (symbol.mode === SymbolMode.PROPORTIONAL && !!symbol.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));
@@ -557,7 +581,8 @@ export function getPointSizeLegendScale(
 
 export function getLineWidthLegendScale(
   viz: VisualizationConfig | undefined,
-  statistics?: ColumnStatisticsLike
+  statistics?: ColumnStatisticsLike,
+  valueSample?: number[]
 ): LineWidthLegendScale | null {
   const line = getLinePrimitive(viz);
   const classification = viz && getLineThicknessClassification(viz);
@@ -567,10 +592,12 @@ export function getLineWidthLegendScale(
   }
 
   const maxLineWidth = Math.max(1, line.maxWidth ?? 1);
-  const opacity = Math.max(
-    LEGEND_MIN_SWATCH_OPACITY,
-    normalizeOpacity(line.opacity, 1)
-  );
+  const color =
+    line.colorMode === ColorMode.CLASSES ||
+    line.colorMode === ColorMode.CATEGORIES
+      ? NEUTRAL_CARTOGRAPHY_COLORS.dataStroke
+      : resolveStyleColor(line.color, DEFAULT_COLORS.line);
+  const opacity = normalizeOpacity(line.opacity, 1);
 
   if (line.thicknessMode === ThicknessMode.PROPORTIONAL && !!line.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));
@@ -586,9 +613,10 @@ export function getLineWidthLegendScale(
       kind: 'proportional',
       steps: buildProportionalLineLegendSteps(
         proportionalDomainMax,
-        maxLineWidth
+        maxLineWidth,
+        valueSample
       ),
-      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
+      color,
       opacity,
       dashed: line.dashed ?? false
     };
@@ -607,7 +635,7 @@ export function getLineWidthLegendScale(
     return {
       kind: 'classes',
       steps: buildClassedLegendSteps(classCount, 1, maxLineWidth),
-      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
+      color,
       opacity,
       dashed: line.dashed ?? false
     };

@@ -2,6 +2,7 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
@@ -9,8 +10,13 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
-  import { TableOfContents, TextFont } from 'carbon-icons-svelte';
-  import { Select, SelectItem, TextInput } from 'carbon-components-svelte';
+  import {
+    ArrowsHorizontal,
+    ArrowsVertical,
+    TableOfContents,
+    TextFont
+  } from 'carbon-icons-svelte';
+  import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
     AVAILABLE_FONTS,
@@ -21,8 +27,16 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
-  import { selectRenderedLegendItems } from './legend-items.utils';
-  import type { LegendItem } from '../../types/legend.types';
+  import {
+    resolveLegendItemLayout,
+    selectRenderedLegendItems
+  } from './legend-items.utils';
+  import {
+    getRenderedLegendSegments,
+    hasNothingToDraw
+  } from './legend-rendered-segments.svelte';
+  import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+  import type { LegendItem, LegendItemLayout } from '../../types/legend.types';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
   type ColorPickerValidateEvent = {
@@ -33,6 +47,20 @@
   };
 
   type LegendItemTextField = 'title' | 'subtitle' | 'note';
+
+  const TEXT_FIELDS: {
+    key: LegendItemTextField;
+    label: () => string;
+    placeholder: () => string;
+  }[] = [
+    { key: 'title', label: m.legend_title, placeholder: m.legend_title },
+    {
+      key: 'subtitle',
+      label: m.legend_subtitle,
+      placeholder: m.legend_no_subtitle
+    },
+    { key: 'note', label: m.legend_note, placeholder: m.legend_no_note }
+  ];
   type LegendSyncInputs = readonly [
     locale: string,
     visualizationVersion: number
@@ -42,7 +70,11 @@
   // Only expose the legends that are actually drawn on the map. In a collection
   // the base visualization renders no legend, so listing it here would surface a
   // phantom "Visualisation" entry that edits nothing visible.
-  const items = $derived(selectRenderedLegendItems(legendState.items));
+  const items = $derived(
+    selectRenderedLegendItems(legendState.items).filter(
+      (item) => !item.primitive || !hasNothingToDraw(item.id)
+    )
+  );
   const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
@@ -124,14 +156,9 @@
     });
   }
 
-  function getTextInputValue(
-    event: CustomEvent<string | number | null>
-  ): string {
-    return typeof event.detail === 'string'
-      ? event.detail
-      : event.detail == null
-        ? ''
-        : String(event.detail);
+  function getTextAreaValue(event: Event): string {
+    const target = event.target;
+    return target instanceof HTMLTextAreaElement ? target.value : '';
   }
 
   function handleTabChange(tab: LegendTab): void {
@@ -232,6 +259,26 @@
     setItemExpanded(item.id, true);
   }
 
+  const ENTRY_LABEL_PLACEHOLDERS: Record<
+    LegendSubtitlePrimitive,
+    () => string
+  > = {
+    area: m.polygons_title,
+    point: m.symbols_title,
+    line: m.lines_title,
+    text: m.texts_title
+  };
+
+  function updateItemLayout(item: LegendItem, updates: LegendItemLayout): void {
+    legendActions.updateLegendItemLayout(item.id, updates);
+  }
+
+  function updateEntryLabel(item: LegendItem, value: string): void {
+    legendActions.updateLegendItem(item.id, {
+      entryLabel: sanitizeTextInput(value, { trim: false })
+    });
+  }
+
   function getItemHeaderTitle(item: LegendItem): string {
     if (item.primitive) {
       return item.name;
@@ -269,6 +316,8 @@
     <div id="legend-content-panel" class="legend-panel" role="tabpanel">
       <div class="expandable-stack">
         {#each items as item (item.id)}
+          {@const segments = getRenderedLegendSegments(item.id)}
+          {@const layout = resolveLegendItemLayout(item)}
           <ExpandableSection
             title={getItemHeaderTitle(item)}
             showToggle={true}
@@ -279,35 +328,114 @@
               handleItemVisibilityChange(item, checked)}
           >
             <div class="legend-fields">
-              <TextInput
-                labelText={m.legend_title()}
-                size="xl"
-                placeholder={m.legend_title()}
-                id={`${item.id}-title`}
-                value={item.title}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'title', getTextInputValue(e))}
-              />
+              {#each TEXT_FIELDS as field (field.key)}
+                <TextArea
+                  labelText={field.label()}
+                  placeholder={field.placeholder()}
+                  id={`${item.id}-${field.key}`}
+                  rows={Math.max(1, item[field.key].split('\n').length)}
+                  value={item[field.key]}
+                  on:input={(e: Event) =>
+                    updateItemField(item.id, field.key, getTextAreaValue(e))}
+                />
+              {/each}
 
-              <TextInput
-                labelText={m.legend_subtitle()}
-                size="sm"
-                placeholder={m.legend_no_subtitle()}
-                id={`${item.id}-subtitle`}
-                value={item.subtitle}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'subtitle', getTextInputValue(e))}
-              />
+              {#if item.primitive && segments.some((segment) => segment.kind === 'unique')}
+                <TextArea
+                  labelText={m.legend_entry_label()}
+                  placeholder={ENTRY_LABEL_PLACEHOLDERS[item.primitive]()}
+                  id={`${item.id}-entry-label`}
+                  rows={1}
+                  value={item.entryLabel ?? ''}
+                  on:input={(e: Event) =>
+                    updateEntryLabel(item, getTextAreaValue(e))}
+                />
+              {/if}
 
-              <TextInput
-                labelText={m.legend_note()}
-                size="sm"
-                placeholder={m.legend_no_note()}
-                id={`${item.id}-note`}
-                value={item.note}
-                on:input={(e: CustomEvent<string | number | null>) =>
-                  updateItemField(item.id, 'note', getTextInputValue(e))}
-              />
+              {#if segments.some((segment) => segment.kind === 'class-bar')}
+                <div class="legend-layout-group">
+                  <span class="legend-field-label">{m.legend_layout()}</span>
+                  <ToggleTabs
+                    size="md"
+                    activeIndex={layout.classBarOrientation === 'vertical'
+                      ? 1
+                      : 0}
+                    items={[
+                      {
+                        icon: ArrowsHorizontal,
+                        label: m.legend_orientation_horizontal(),
+                        iconSize: 16
+                      },
+                      {
+                        icon: ArrowsVertical,
+                        label: m.legend_orientation_vertical(),
+                        iconSize: 16
+                      }
+                    ]}
+                    onchange={(tabIndex) =>
+                      updateItemLayout(item, {
+                        classBarOrientation:
+                          tabIndex === 1 ? 'vertical' : 'horizontal'
+                      })}
+                  />
+                  {#if layout.classBarOrientation === 'vertical'}
+                    <SimpleRadioGroup
+                      name={`${item.id}-order`}
+                      legendText={m.legend_order()}
+                      items={[
+                        {
+                          value: 'ascending',
+                          labelText: m.legend_order_ascending()
+                        },
+                        {
+                          value: 'descending',
+                          labelText: m.legend_order_descending()
+                        }
+                      ]}
+                      selected={layout.lowAtBottom ? 'descending' : 'ascending'}
+                      onchange={(order) =>
+                        updateItemLayout(item, {
+                          lowAtBottom: order === 'descending'
+                        })}
+                    />
+                  {/if}
+                  <div class="legend-switch-row">
+                    <span class="legend-field-label"
+                      >{m.legend_proportional_classes()}</span
+                    >
+                    <Switch
+                      labelText={m.legend_proportional_classes()}
+                      hideLabel
+                      size="sm"
+                      toggled={layout.proportionalClasses}
+                      labelA={m.no()}
+                      labelB={m.yes()}
+                      showStateLabel
+                      onchange={(toggled) =>
+                        updateItemLayout(item, {
+                          proportionalClasses: toggled
+                        })}
+                    />
+                  </div>
+                </div>
+              {/if}
+
+              {#if segments.some((segment) => segment.kind === 'entries')}
+                <SliderWithInput
+                  label={m.legend_entry_spacing()}
+                  value={Math.round(layout.entrySpacing * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  showMinMax
+                  minLabel="0"
+                  maxLabel="100"
+                  inputWidth="72px"
+                  showSteppers={false}
+                  onchange={(value) =>
+                    updateItemLayout(item, { entrySpacing: value })}
+                />
+              {/if}
             </div>
           </ExpandableSection>
         {/each}
@@ -491,6 +619,19 @@
     color: var(--cds-text-secondary, #525252);
   }
 
+  .legend-layout-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .legend-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
+  }
+
   .legend-divider {
     height: 1px;
     background: var(--cds-border-subtle-01, #c6c6c6);
@@ -509,7 +650,13 @@
     min-height: var(--kh-size-sm);
   }
 
-  :global(#khartis-legend-tool .bx--text-input) {
+  :global(#khartis-legend-tool .bx--text-area) {
+    min-height: 0;
+    resize: vertical;
+  }
+
+  :global(#khartis-legend-tool .bx--text-input),
+  :global(#khartis-legend-tool .bx--text-area) {
     font-size: 0.875rem;
     line-height: 1.125rem;
     letter-spacing: 0.16px;

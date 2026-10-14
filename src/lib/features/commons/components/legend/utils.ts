@@ -89,6 +89,13 @@ export function splitLegendOverflow<T>(items: T[]): {
   };
 }
 
+/** Share of the default gap kept between two legend entries, from 0 to 1. */
+export function clampEntrySpacing(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : 1;
+}
+
 export function escapeSvgText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -179,7 +186,24 @@ export function measureLegendLongestToken(
   );
 }
 
+// A line break typed by the user starts a new line; an empty one keeps its blank line.
 export function wrapLegendText(
+  text: string,
+  font: string,
+  maxWidth: number
+): string[] {
+  const paragraphs = text.trim().split(/\r?\n/);
+  if (paragraphs.length > 1) {
+    return paragraphs.flatMap((paragraph) => {
+      const lines = wrapLegendParagraph(paragraph, font, maxWidth);
+      return lines.length > 0 ? lines : [''];
+    });
+  }
+
+  return wrapLegendParagraph(text, font, maxWidth);
+}
+
+function wrapLegendParagraph(
   text: string,
   font: string,
   maxWidth: number

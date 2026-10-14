@@ -23,7 +23,8 @@
     PAGE_GRID_SIZE_PX,
     clampPointToBounds,
     getDragBounds,
-    remapPointToResizedArea,
+    remapAreaPointToResizedPage,
+    snapAreaPointWithinPage,
     snapPointWithinBounds,
     type PageGridPoint,
     type PageGridSize
@@ -40,7 +41,8 @@
   import {
     getLegendState,
     legendActions,
-    selectRenderedLegendItems
+    selectRenderedLegendItems,
+    setRenderedLegendSegments
   } from '$lib/features/step-toolbar/tools/legend';
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
@@ -54,7 +56,10 @@
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { getLocale } from '$lib/paraglide/runtime.js';
-  import { getLegendSegments } from '../utils/legend-segments.utils';
+  import {
+    getLegendSegments,
+    type LegendSegment
+  } from '../utils/legend-segments.utils';
 
   // `scopeVizId`, `inline`, and `sizeScale` make legends facet-cell scoped.
   let {
@@ -81,7 +86,7 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived.by(() =>
+  const candidateItems = $derived.by(() =>
     selectRenderedLegendItems(
       legendState.items.filter((i) => i.visible),
       { scopeVizId }
@@ -107,6 +112,36 @@
     void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
+  });
+
+  const segmentsByItemId = $derived.by(() => {
+    void getLocale();
+    const segments: Record<string, LegendSegment[]> = {};
+    for (const item of candidateItems) {
+      segments[item.id] = getLegendSegments(
+        item,
+        vizByItemId.get(item.id),
+        legendState.style
+      );
+    }
+    return segments;
+  });
+
+  // A primitive legend that draws nothing (an outline repeating its fill)
+  // gets no frame.
+  const visibleItems = $derived(
+    candidateItems.filter(
+      (item) => !item.primitive || (segmentsByItemId[item.id]?.length ?? 0) > 0
+    )
+  );
+
+  $effect(() => {
+    for (const [itemId, segments] of Object.entries(segmentsByItemId)) {
+      setRenderedLegendSegments(
+        itemId,
+        segments.map(({ key, kind }) => ({ key, kind }))
+      );
+    }
   });
 
   const bgColor = $derived(legendState.style.background.color);
@@ -317,6 +352,10 @@
     };
   }
 
+  function getMapAreaOffset(): PageGridPoint {
+    return { x: formatState.margins.left, y: formatState.margins.top };
+  }
+
   function normalizeFramePosition(
     itemId: string,
     position: PageGridPoint,
@@ -329,9 +368,19 @@
       return position;
     }
 
-    return snapPointWithinBounds(
+    if (inline) {
+      return snapPointWithinBounds(
+        position,
+        getDragBounds(overlaySize, frameSize),
+        snapEnabled
+      );
+    }
+
+    return snapAreaPointWithinPage(
       position,
-      getDragBounds(overlaySize, frameSize),
+      frameSize,
+      { width: formatState.width, height: formatState.height },
+      getMapAreaOffset(),
       snapEnabled
     );
   }
@@ -440,14 +489,10 @@
 
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
-  // A page resize keeps the margins, so the legend stage changes by the same
-  // amount as the page; a dragged frame keeps its distance to the nearest edge.
+  // A page resize keeps the margins, so a dragged frame keeps its distance to
+  // the nearest page edge.
   function remapDraggedFrames(pageResize: PageResize): void {
-    const { margins } = formatState;
-    const toStageSize = (page: PageGridSize): PageGridSize => ({
-      width: page.width - margins.left - margins.right,
-      height: page.height - margins.top - margins.bottom
-    });
+    const offset = getMapAreaOffset();
 
     for (const item of visibleItems) {
       const frameSize = getFrameSize(item.id);
@@ -456,11 +501,12 @@
       }
 
       legendActions.updateLegendItem(item.id, {
-        dragPosition: remapPointToResizedArea(
+        dragPosition: remapAreaPointToResizedPage(
           item.dragPosition,
           frameSize,
-          toStageSize(pageResize.from),
-          toStageSize(pageResize.to)
+          pageResize.from,
+          pageResize.to,
+          offset
         )
       });
     }
@@ -778,8 +824,7 @@
     bind:this={overlayElement}
   >
     {#each visibleItems as item (item.id)}
-      {@const viz = vizByItemId.get(item.id)}
-      {@const legendSegments = getLegendSegments(item, viz, legendState.style)}
+      {@const legendSegments = segmentsByItemId[item.id] ?? []}
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
@@ -941,6 +986,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-subtitle {
@@ -950,6 +996,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-note {
@@ -960,6 +1007,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   :global(.legend-svg) {
