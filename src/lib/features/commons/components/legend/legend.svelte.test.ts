@@ -41,6 +41,14 @@ describe('common legend generators', () => {
     ]);
   });
 
+  it('should start a new line at each typed line break when the text has one', () => {
+    expect(wrapLegendText('Alpha\n\nbeta gamma', '12px Inter', 75)).toEqual([
+      'Alpha',
+      '',
+      'beta gamma'
+    ]);
+  });
+
   it('wraps an unbroken legend label within the measured width', () => {
     const lines = wrapLegendText(
       'population_identifier_with_no_spaces',

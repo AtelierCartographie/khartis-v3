@@ -941,6 +941,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-subtitle {
@@ -950,6 +951,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-note {
@@ -960,6 +962,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   :global(.legend-svg) {
