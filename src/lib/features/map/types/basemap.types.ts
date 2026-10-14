@@ -90,6 +90,10 @@ export interface BasemapMetadata {
   description_en?: string;
   source: string;
   date: string;
+  /** First and last years (inclusive) the basemap is valid for, when the
+   * geography is unchanged over several vintages (see basemap-validity.utils). */
+  valid_from?: number;
+  valid_to?: number;
   display_id_fr?: string;
   display_id_en?: string;
   bbox: [number, number, number, number];

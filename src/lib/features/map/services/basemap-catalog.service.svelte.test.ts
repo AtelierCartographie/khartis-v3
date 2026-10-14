@@ -7,7 +7,8 @@ import type { BasemapMetadata } from '../types/basemap.types';
 import {
   rankBasemapsByGPSBbox,
   rankBasemapsByJoinSynthesis,
-  shouldPreferTextBasemapRefinementForGPS
+  shouldPreferTextBasemapRefinementForGPS,
+  sortCatalogBasemapsForDisplay
 } from './basemap-catalog.service.svelte';
 
 function createBasemap(
@@ -32,7 +33,9 @@ function createBasemap(
     description_fr: overrides.description_fr,
     description_en: overrides.description_en,
     simplification_level: overrides.simplification_level,
-    isCustom: overrides.isCustom
+    isCustom: overrides.isCustom,
+    valid_from: overrides.valid_from,
+    valid_to: overrides.valid_to
   };
 }
 
@@ -274,5 +277,50 @@ describe('rankBasemapsByJoinSynthesis', () => {
     ]);
     expect(suggestions[0]?.matchScore).toBe(96);
     expect(suggestions[0]?.matchReason).toBe('Join synthesis coverage');
+  });
+});
+
+describe('sortCatalogBasemapsForDisplay', () => {
+  it('ranks a basemap by the end of its validity period', () => {
+    const franceBbox: [number, number, number, number] = [
+      -5.14, 41.33, 9.56, 51.09
+    ];
+    const communes2025 = createBasemap({
+      file: 'france-commune-2025-high',
+      title_fr: 'France',
+      title_en: 'France',
+      subtitle_fr: 'par communes',
+      date: '2025',
+      bbox: franceBbox
+    });
+    const communes2026 = createBasemap({
+      file: 'france-commune-2026-high',
+      title_fr: 'France',
+      title_en: 'France',
+      subtitle_fr: 'par communes',
+      date: '2026',
+      bbox: franceBbox
+    });
+    const regions = createBasemap({
+      file: 'france-region-2025-high',
+      title_fr: 'France',
+      title_en: 'France',
+      subtitle_fr: 'par régions',
+      date: '2025',
+      valid_from: 2017,
+      valid_to: 2026,
+      bbox: franceBbox
+    });
+
+    expect(
+      sortCatalogBasemapsForDisplay(
+        [communes2025, regions, communes2026],
+        'fr'
+      ).map((basemap) => basemap.file)
+    ).toEqual([
+      'france-commune-2026-high',
+      'france-region-2025-high',
+      'france-commune-2025-high'
+    ]);
   });
 });
