@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatBasemapValidity } from '$lib/features/map/utils/basemap-validity.utils';
   import ThumbnailPreview from '$lib/features/commons/components/thumbnail-preview.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
@@ -142,7 +143,9 @@
         <span class="source">{source}</span>
         <span class="date">
           <Calendar size={16} />
-          {basemap.date}
+          <!-- A validity period wraps after its dash ("2018–" / "2026") to keep
+               the date column close to the width of a single year. -->
+          <span class="date-text">{formatBasemapValidity(basemap)}</span>
         </span>
       </div>
     {/if}
@@ -385,6 +388,11 @@
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
+  }
+
+  .date-text {
+    /* longest unbreakable part: "2018–" for a period, the year otherwise */
+    width: min-content;
   }
 
   .basemap-card--suggestion .source,
