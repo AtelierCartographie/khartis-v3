@@ -14,7 +14,10 @@ export {
   type LegendPatternFill,
   type KhartisLineWidthLegendStep
 } from './khartis-extensions';
-export { draw_quanti_color_legend } from './quantitative';
+export {
+  draw_quanti_color_legend,
+  type QuantiColorSwatch
+} from './quantitative';
 export { draw_symbols_legend, type SymbolType } from './symbols';
 export {
   createLegendSvg,
