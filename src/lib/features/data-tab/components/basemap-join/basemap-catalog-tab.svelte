@@ -1,24 +1,34 @@
 <script lang="ts">
   import {
     formatBasemapValidity,
-    getBasemapValidYears,
     isBasemapValidForYear
   } from '$lib/features/map/utils/basemap-validity.utils';
+  import {
+    countFacet,
+    countYears,
+    getBasemapAreaLabel,
+    getBasemapLevelLabel,
+    type FacetOption
+  } from '$lib/features/map/utils/basemap-catalog-facets.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
-  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import type {
+    BasemapExtent,
+    BasemapMetadata,
+    BasemapZone
+  } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Button,
     ComboBox,
-    InlineNotification,
-    Tag
+    Dropdown,
+    InlineNotification
   } from 'carbon-components-svelte';
-  import { Add, List, MagicWandFilled } from 'carbon-icons-svelte';
+  import { Add, List, MagicWandFilled, Reset } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
@@ -61,21 +71,179 @@
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
 
-  let searchQuery = $state('');
-  let selectedYear = $state('all');
-  let searchSelectedId = $state<string | undefined>(undefined);
+  const ALL = 'all';
+  const ZONE_ORDER: BasemapZone[] = ['world', 'continent', 'country'];
+  const EXTENT_ORDER: BasemapExtent[] = [
+    'whole',
+    'region',
+    'department',
+    'epci',
+    'commune',
+    'state'
+  ];
 
-  const availableYears = $derived.by(() => {
-    const years = new Set(allBasemaps.flatMap((b) => getBasemapValidYears(b)));
-    return Array.from(years).sort((a, b) => b.localeCompare(a));
-  });
+  let searchQuery = $state('');
+  let searchSelectedId = $state<string | undefined>(undefined);
+  let selectedZone = $state(ALL);
+  let selectedArea = $state(ALL);
+  let selectedExtent = $state(ALL);
+  let selectedLevel = $state(ALL);
+  let selectedYear = $state(ALL);
 
   const sortedBasemaps = $derived(
     sortCatalogBasemapsForDisplay(allBasemaps, getLocale())
   );
 
+  function zoneLabel(zone: BasemapZone): string {
+    if (zone === 'world') return m.basemap_zone_world();
+    if (zone === 'continent') return m.basemap_zone_continent();
+    return m.basemap_zone_country();
+  }
+
+  function extentLabel(extent: BasemapExtent): string {
+    switch (extent) {
+      case 'whole':
+        return m.basemap_extent_whole();
+      case 'region':
+        return m.basemap_extent_region();
+      case 'department':
+        return m.basemap_extent_department();
+      case 'epci':
+        return m.basemap_extent_epci();
+      case 'commune':
+        return m.basemap_extent_commune();
+      case 'state':
+        return m.basemap_extent_state();
+      default:
+        // An extent added to the export before Khartis knows its label.
+        return extent;
+    }
+  }
+
+  // An upstream choice can leave a downstream one without any basemap: it then
+  // falls back to "all" instead of emptying the list.
+  function effective(selected: string, options: FacetOption[]): string {
+    return options.some((o) => o.id === selected) ? selected : ALL;
+  }
+
+  function narrow(
+    basemaps: BasemapMetadata[],
+    selected: string,
+    matches: (basemap: BasemapMetadata) => boolean
+  ): BasemapMetadata[] {
+    return selected === ALL ? basemaps : basemaps.filter(matches);
+  }
+
+  const zoneOptions = $derived(
+    countFacet(
+      sortedBasemaps,
+      (b) => b.catalog?.zone,
+      (_, zone) => zoneLabel(zone)
+    ).sort((a, b) => ZONE_ORDER.indexOf(a.id) - ZONE_ORDER.indexOf(b.id))
+  );
+  const zone = $derived(effective(selectedZone, zoneOptions));
+  const inZone = $derived(
+    narrow(sortedBasemaps, zone, (b) => b.catalog?.zone === zone)
+  );
+
+  const areaOptions = $derived(
+    zone === ALL || zone === 'world'
+      ? []
+      : countFacet(
+          inZone,
+          (b) => b.catalog?.area,
+          (b) => getBasemapAreaLabel(b, getLocale())
+        ).sort((a, b) => a.label.localeCompare(b.label, getLocale()))
+  );
+  const area = $derived(effective(selectedArea, areaOptions));
+  const inArea = $derived(
+    narrow(inZone, area, (b) => b.catalog?.area === area)
+  );
+
+  const extentOptions = $derived(
+    area === ALL
+      ? []
+      : countFacet(
+          inArea,
+          (b) => b.catalog?.extent,
+          (_, extent) => extentLabel(extent)
+        ).sort(
+          (a, b) => EXTENT_ORDER.indexOf(a.id) - EXTENT_ORDER.indexOf(b.id)
+        )
+  );
+  const extent = $derived(effective(selectedExtent, extentOptions));
+  const inExtent = $derived(
+    narrow(inArea, extent, (b) => b.catalog?.extent === extent)
+  );
+
+  // Level and year stay disabled until a coverage is chosen: across the whole
+  // catalog they mix every country's meshes and every vintage.
+  const levelOptions = $derived(
+    zone === ALL
+      ? []
+      : countFacet(
+          inExtent,
+          (b) => b.catalog?.level,
+          (b) => getBasemapLevelLabel(b, getLocale())
+        ).sort((a, b) => a.maxEntities - b.maxEntities)
+  );
+  const level = $derived(effective(selectedLevel, levelOptions));
+  const inLevel = $derived(
+    narrow(inExtent, level, (b) => b.catalog?.level === level)
+  );
+
+  const yearOptions = $derived(zone === ALL ? [] : countYears(inLevel));
+  const year = $derived(effective(selectedYear, yearOptions));
+  const inYear = $derived(
+    narrow(inLevel, year, (b) => isBasemapValidForYear(b, year))
+  );
+
+  const hasActiveFilter = $derived(
+    [zone, area, extent, level, year].some((value) => value !== ALL)
+  );
+
+  interface FacetView {
+    items: { id: string; text: string }[];
+    selectedId: string;
+    disabled: boolean;
+  }
+
+  // A facet with a single option shows it, disabled, so that every facet keeps
+  // its place and tells what the narrowed list contains.
+  function facetView(
+    options: FacetOption[],
+    allLabel: string,
+    total: number,
+    selected: string
+  ): FacetView {
+    const items = [
+      {
+        id: ALL,
+        text: m.basemap_facet_count({ label: allLabel, count: total })
+      },
+      ...options.map((o) => ({
+        id: o.id,
+        text: m.basemap_facet_count({ label: o.label, count: o.count })
+      }))
+    ];
+    const disabled = options.length <= 1;
+    return {
+      items,
+      selectedId: options.length === 1 ? options[0].id : selected,
+      disabled
+    };
+  }
+
+  function resetFilters() {
+    selectedZone = ALL;
+    selectedArea = ALL;
+    selectedExtent = ALL;
+    selectedLevel = ALL;
+    selectedYear = ALL;
+  }
+
   const filteredBasemaps = $derived.by(() => {
-    let results: BasemapMetadata[] = [...sortedBasemaps];
+    let results: BasemapMetadata[] = inYear;
 
     const trimmedQuery = searchQuery.trim();
     if (trimmedQuery) {
@@ -92,33 +260,7 @@
       });
     }
 
-    if (selectedYear !== 'all') {
-      results = results.filter((b) => isBasemapValidForYear(b, selectedYear));
-    }
-
     return results;
-  });
-
-  const suggestionIds = $derived.by(
-    () => new Set(suggestedBasemaps.map((s) => s.basemap.file))
-  );
-
-  const displayedBasemaps = $derived.by(() => {
-    if (searchQuery.trim() || selectedYear !== 'all') {
-      return filteredBasemaps.filter((b) => !suggestionIds.has(b.file));
-    }
-
-    return sortedBasemaps.filter((b) => !suggestionIds.has(b.file));
-  });
-
-  const yearCounts = $derived.by(() => {
-    const counts: Record<string, number> = {};
-    allBasemaps.forEach((b) => {
-      for (const year of getBasemapValidYears(b)) {
-        counts[year] = (counts[year] || 0) + 1;
-      }
-    });
-    return counts;
   });
 
   const suggestionsPanelOpen = $derived(
@@ -175,6 +317,24 @@
   }
 </script>
 
+{#snippet facet(label: string, view: FacetView, onSelect: (id: string) => void)}
+  <div
+    class="funnel-facet"
+    class:active={!view.disabled && view.selectedId !== ALL}
+  >
+    <Dropdown
+      translateWithId={translateCarbonId}
+      translateWithIdSelection={translateCarbonId}
+      size="sm"
+      labelText={label}
+      items={view.items}
+      selectedId={view.selectedId}
+      disabled={view.disabled}
+      on:select={(e) => onSelect(e.detail.selectedId)}
+    />
+  </div>
+{/snippet}
+
 <div class="tab-content">
   <div class="suggestions-section">
     <ExpandableSection
@@ -220,7 +380,7 @@
 
   <div class="catalogue-section">
     <ExpandableSection
-      title={m.basemap_other()}
+      title={m.basemap_catalog_all()}
       open={catalogPanelOpen}
       onToggle={onCatalogToggle}
     >
@@ -258,31 +418,74 @@
           on:clear={handleSearchClear}
         />
 
-        <div class="year-filters">
-          <span class="filter-label">{m.basemap_filter_year()}</span>
-          <Tag
-            type={selectedYear === 'all' ? 'blue' : 'gray'}
-            interactive
-            on:click={() => (selectedYear = 'all')}
-          >
-            {m.basemap_all_years()}
-          </Tag>
-          {#each availableYears as year (year)}
-            <Tag
-              type={selectedYear === year ? 'blue' : 'gray'}
-              interactive
-              on:click={() => (selectedYear = year)}
+        <div class="funnel-filters">
+          {@render facet(
+            m.basemap_filter_zone(),
+            facetView(
+              zoneOptions,
+              m.basemap_filter_all(),
+              sortedBasemaps.length,
+              zone
+            ),
+            (id) => {
+              selectedZone = id;
+              selectedArea = ALL;
+              selectedExtent = ALL;
+            }
+          )}
+          {@render facet(
+            m.basemap_filter_area(),
+            facetView(areaOptions, m.basemap_filter_all(), inZone.length, area),
+            (id) => {
+              selectedArea = id;
+              selectedExtent = ALL;
+            }
+          )}
+          {@render facet(
+            m.basemap_filter_extent(),
+            facetView(
+              extentOptions,
+              m.basemap_filter_all(),
+              inArea.length,
+              extent
+            ),
+            (id) => (selectedExtent = id)
+          )}
+          {@render facet(
+            m.basemap_filter_level(),
+            facetView(
+              levelOptions,
+              m.basemap_filter_all(),
+              inExtent.length,
+              level
+            ),
+            (id) => (selectedLevel = id)
+          )}
+          {@render facet(
+            m.basemap_filter_year(),
+            facetView(
+              yearOptions,
+              m.basemap_filter_all(),
+              inLevel.length,
+              year
+            ),
+            (id) => (selectedYear = id)
+          )}
+          <div class="funnel-reset">
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Reset}
+              disabled={!hasActiveFilter}
+              on:click={resetFilters}
             >
-              {m.basemap_year_count({
-                year,
-                count: yearCounts[year] || 0
-              })}
-            </Tag>
-          {/each}
+              {m.basemap_filters_reset()}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {#if displayedBasemaps.length === 0}
+      {#if filteredBasemaps.length === 0}
         <p class="no-results">{m.basemap_no_results()}</p>
       {:else}
         <div
@@ -290,7 +493,7 @@
           class:compact-slider={isCompact}
         >
           <div class="basemap-slider-track">
-            {#each displayedBasemaps as basemap (basemap.file)}
+            {#each filteredBasemaps as basemap (basemap.file)}
               <BasemapCardVertical
                 basemap={basemap}
                 selected={basemap.file === basemapSelected}
@@ -398,18 +601,20 @@
     margin-bottom: var(--cds-spacing-03);
   }
 
-  .year-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--cds-spacing-02);
-    align-items: center;
+  .funnel-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: var(--cds-spacing-03) var(--cds-spacing-04);
+    align-items: end;
   }
 
-  .filter-label {
-    font-size: 0.875rem;
+  .funnel-facet {
+    min-width: 0;
+  }
+
+  .funnel-facet.active :global(.bx--list-box__label) {
+    color: var(--cds-link-01);
     font-weight: 600;
-    color: var(--cds-text-01);
-    margin-right: var(--cds-spacing-03);
   }
 
   .no-results {
