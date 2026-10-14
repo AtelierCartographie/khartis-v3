@@ -607,6 +607,7 @@
   "geo_inset_map_window_color": "Couleur de l’emprise",
   "geo_inset_map_continent_color": "Continents",
   "geo_inset_map_sea_color": "Mers et océans",
+  "geo_inset_map_sphere_color": "Sphère et graticules",
   "geo_inset_map_use_basemap_colors": "Couleurs similaires au fond de carte",
   "geo_inset_map_center_longitude": "Centrage longitude",
   "geo_inset_map_center_latitude": "Centrage latitude",
