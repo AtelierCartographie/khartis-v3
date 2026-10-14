@@ -2971,6 +2971,726 @@
     "entity_count": 5161
   },
   {
+    "file": "espagne-comunidad-autonoma-2026-high",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par communautés autonomes",
+    "title_en": "Spain",
+    "subtitle_en": "by autonomous communities",
+    "description_fr": "Les 17 communautés autonomes d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 17 autonomous communities of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des communautés autonomes",
+        "title_en": "Autonomous community centroids",
+        "type": "centroid",
+        "file": "espagne-comunidad-autonoma-centroids-2026-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-high",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 19
+  },
+  {
+    "file": "espagne-comunidad-autonoma-2026-low",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par communautés autonomes",
+    "title_en": "Spain",
+    "subtitle_en": "by autonomous communities",
+    "description_fr": "Les 17 communautés autonomes d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 17 autonomous communities of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des communautés autonomes",
+        "title_en": "Autonomous community centroids",
+        "type": "centroid",
+        "file": "espagne-comunidad-autonoma-centroids-2026-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-low",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 19
+  },
+  {
+    "file": "espagne-comunidad-autonoma-2026-medium",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par communautés autonomes",
+    "title_en": "Spain",
+    "subtitle_en": "by autonomous communities",
+    "description_fr": "Les 17 communautés autonomes d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 17 autonomous communities of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des communautés autonomes",
+        "title_en": "Autonomous community centroids",
+        "type": "centroid",
+        "file": "espagne-comunidad-autonoma-centroids-2026-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 19
+  },
+  {
+    "file": "espagne-municipio-2026-high",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par municipalités (municipios)",
+    "title_en": "Spain",
+    "subtitle_en": "by municipalities (municipios)",
+    "description_fr": "Les 8 132 municipalités d'Espagne (division en vigueur en 2026 ; Canaries en encart). Les 81 territoires indivis (« comunidades », « facerías »), possédés en commun par plusieurs municipios et rattachés à aucun, restent hors des entités. Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 8,132 municipalities of Spain (division in force in 2026; Canary Islands as an inset). The 81 jointly owned territories (\"comunidades\", \"facerías\"), shared by several municipios and part of none, are left out of the entities. Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 2024,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des municipalités",
+        "title_en": "Municipality centroids",
+        "type": "centroid",
+        "file": "espagne-municipio-centroids-2026-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des municipalités",
+        "title_en": "Municipality boundaries",
+        "type": "limit",
+        "file": "espagne-municipio-limites-2026-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des provinces",
+        "title_en": "Province boundaries",
+        "type": "limit",
+        "file": "espagne-provincia-limites-2026-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-high",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 8132
+  },
+  {
+    "file": "espagne-municipio-2026-medium",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par municipalités (municipios)",
+    "title_en": "Spain",
+    "subtitle_en": "by municipalities (municipios)",
+    "description_fr": "Les 8 132 municipalités d'Espagne (division en vigueur en 2026 ; Canaries en encart). Les 81 territoires indivis (« comunidades », « facerías »), possédés en commun par plusieurs municipios et rattachés à aucun, restent hors des entités. Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 8,132 municipalities of Spain (division in force in 2026; Canary Islands as an inset). The 81 jointly owned territories (\"comunidades\", \"facerías\"), shared by several municipios and part of none, are left out of the entities. Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 2024,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des municipalités",
+        "title_en": "Municipality centroids",
+        "type": "centroid",
+        "file": "espagne-municipio-centroids-2026-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des municipalités",
+        "title_en": "Municipality boundaries",
+        "type": "limit",
+        "file": "espagne-municipio-limites-2026-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des provinces",
+        "title_en": "Province boundaries",
+        "type": "limit",
+        "file": "espagne-provincia-limites-2026-medium",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-medium",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 8132
+  },
+  {
+    "file": "espagne-provincia-2026-high",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par provinces",
+    "title_en": "Spain",
+    "subtitle_en": "by provinces",
+    "description_fr": "Les 50 provinces d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 50 provinces of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des provinces",
+        "title_en": "Province centroids",
+        "type": "centroid",
+        "file": "espagne-provincia-centroids-2026-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des provinces",
+        "title_en": "Province boundaries",
+        "type": "limit",
+        "file": "espagne-provincia-limites-2026-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-high",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 52
+  },
+  {
+    "file": "espagne-provincia-2026-low",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par provinces",
+    "title_en": "Spain",
+    "subtitle_en": "by provinces",
+    "description_fr": "Les 50 provinces d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 50 provinces of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des provinces",
+        "title_en": "Province centroids",
+        "type": "centroid",
+        "file": "espagne-provincia-centroids-2026-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des provinces",
+        "title_en": "Province boundaries",
+        "type": "limit",
+        "file": "espagne-provincia-limites-2026-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-low",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 52
+  },
+  {
+    "file": "espagne-provincia-2026-medium",
+    "title_fr": "Espagne",
+    "subtitle_fr": "par provinces",
+    "title_en": "Spain",
+    "subtitle_en": "by provinces",
+    "description_fr": "Les 50 provinces d'Espagne et les villes autonomes de Ceuta et Melilla (division en vigueur en 2026 ; Canaries en encart). Limites : IGN España, BDLJE 2026, généralisées par l'Atelier de cartographie de Sciences Po (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Pays voisins : Eurostat GISCO.",
+    "description_en": "The 50 provinces of Spain and the autonomous cities of Ceuta and Melilla (division in force in 2026; Canary Islands as an inset). Boundaries: IGN España, BDLJE 2026, generalised by the Sciences Po Atelier de cartographie (Obra derivada de BDLJE 2026 CC-BY 4.0 ign.es). Neighbouring countries: Eurostat GISCO.",
+    "source": "IGN España - BDLJE",
+    "date": "2026",
+    "valid_from": 1995,
+    "valid_to": 2026,
+    "bbox": [-9.3015, 35.2655, 4.3278, 43.7924],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ESPAGNE_LAMBERT",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des provinces",
+        "title_en": "Province centroids",
+        "type": "centroid",
+        "file": "espagne-provincia-centroids-2026-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des provinces",
+        "title_en": "Province boundaries",
+        "type": "limit",
+        "file": "espagne-provincia-limites-2026-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des communautés autonomes",
+        "title_en": "Autonomous community boundaries",
+        "type": "limit",
+        "file": "espagne-comunidad-autonoma-limites-2026-medium",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière de l'Espagne",
+        "title_en": "Spanish border",
+        "type": "limit",
+        "file": "espagne-limites-2026-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "espagne-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "espagne-land-2026-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "espagne-voisins-limites-2026-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "espagne-voisins-2026-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nombre",
+    "display_id_en": "nombre",
+    "entity_count": 52
+  },
+  {
     "file": "europe-nuts1-2021-high",
     "title_fr": "Europe",
     "subtitle_fr": "par régions NUTS 1",
