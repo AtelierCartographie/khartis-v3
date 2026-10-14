@@ -500,11 +500,13 @@ function draw_vertical_quanti_color_legend(
       markup: box(margin, top, cell_width, height, colors[i], options.opacity)
     };
   });
-  const tick_x1 = margin + cell_width;
-  const tick_x2 = tick_x1 + tick_gap;
+  // As on the horizontal bar, inner thresholds cross the bar and stick out
+  // towards their label; the two ends need no tick.
+  const tick_x2 = margin + cell_width + tick_gap;
   const ticks = thresholds
-    .map((_value, i) => y_of(i))
-    .map((y) => `<path d="M${tick_x1},${y}L${tick_x2},${y}" />`);
+    .slice(1, -1)
+    .map((_value, i) => y_of(i + 1))
+    .map((y) => `<path d="M${margin},${y}L${tick_x2},${y}" />`);
   const label_markup = thresholds.map(
     (_value, i) =>
       `<text x="${tick_x2 + tick_gap}" y="${y_of(i)}">${escapeSvgText(labels[i])}</text>`
