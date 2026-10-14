@@ -182,7 +182,7 @@
   const mapCanvasHeight = $derived(
     Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
   );
-  const legendStageStyle = $derived(
+  const layoutStageStyle = $derived(
     `left: ${renderedPageMargins.left}px; top: ${renderedPageMargins.top}px; width: ${mapCanvasWidth}px; height: ${mapCanvasHeight}px;`
   );
   const renderModelMatrix = $derived.by(() => {
@@ -2077,17 +2077,21 @@
           <SkeletonPlaceholder style="width: 100%; height: 100%;" />
         </div>
       {/if}
+    </div>
 
-      {#if showGeoIndicationsOverlay}
+    <!-- Layout items sit over the map area but may move into the margins, so
+         they live outside the clipped map stage. -->
+    {#if showGeoIndicationsOverlay}
+      <div class="layout-stage" style={layoutStageStyle}>
         <GeoIndicationsOverlay
           interactive={isStylingMode}
           hidden={!isStylingMode}
         />
-      {/if}
-    </div>
+      </div>
+    {/if}
 
     {#if showLegendOverlay}
-      <div class="legend-stage" style={legendStageStyle}>
+      <div class="layout-stage" style={layoutStageStyle}>
         <LegendOverlay hidden={!showLegendPreview} />
       </div>
     {/if}
@@ -2110,7 +2114,7 @@
     overflow: hidden;
   }
 
-  .legend-stage {
+  .layout-stage {
     position: absolute;
     pointer-events: none;
   }
