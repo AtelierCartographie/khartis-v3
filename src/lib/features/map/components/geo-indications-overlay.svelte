@@ -107,7 +107,7 @@
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_SCALE = 1.2;
-  const INSET_EXTENT_POINT_RADIUS = 4;
+  const INSET_EXTENT_POINT_RADIUS = 2.5;
   const INSET_EXTENT_MIN_SIZE = 8;
   const INSET_OUTLINE_MIN_POINTS = 4;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
@@ -682,6 +682,13 @@
     );
   });
 
+  const insetSphereColor = $derived(
+    hslToHex(
+      geoIndicationsState.insetMap.sphereColor.hue,
+      geoIndicationsState.insetMap.sphereColor.saturation,
+      geoIndicationsState.insetMap.sphereColor.lightness
+    )
+  );
   const insetSeaColor = $derived.by(() => {
     return hslToHex(
       geoIndicationsState.insetMap.seaColor.hue,
@@ -1649,10 +1656,10 @@
                 class="inset-graticule-path"
                 d={insetRenderState.graticulePath}
                 fill="none"
-                stroke="rgba(0, 0, 0, 0.3)"
+                stroke={insetSphereColor}
                 stroke-width="0.5"
                 vector-effect="non-scaling-stroke"
-                style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 0.5; vector-effect: non-scaling-stroke;"
+                style={`fill: none; stroke: ${insetSphereColor}; stroke-width: 0.5; vector-effect: non-scaling-stroke;`}
               ></path>
             {/if}
           </g>
@@ -1660,10 +1667,10 @@
             class="inset-outline"
             d={insetRenderState.spherePath}
             fill="none"
-            stroke="rgba(0, 0, 0, 0.3)"
+            stroke={insetSphereColor}
             stroke-width="1"
             vector-effect="non-scaling-stroke"
-            style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 1; vector-effect: non-scaling-stroke;"
+            style={`fill: none; stroke: ${insetSphereColor}; stroke-width: 1; vector-effect: non-scaling-stroke;`}
           ></path>
           {#if insetRenderState.viewportPath}
             <path
@@ -1684,12 +1691,8 @@
               cy={insetRenderState.viewportPoint.y}
               r={insetRenderState.viewportPoint.radius}
               fill={insetWindowColor}
-              stroke={insetWindowColor}
-              stroke-width={insetRenderState.windowStrokeWidth}
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              vector-effect="non-scaling-stroke"
-              style={`fill: ${insetWindowColor}; stroke: ${insetWindowColor};`}
+              stroke="none"
+              style={`fill: ${insetWindowColor}; stroke: none;`}
             ></circle>
           {/if}
         </svg>
@@ -1803,13 +1806,11 @@
   }
 
   .inset-graticule-path {
-    stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 0.5;
     vector-effect: non-scaling-stroke;
   }
 
-  .inset-extent-path,
-  .inset-extent-point {
+  .inset-extent-path {
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -1817,7 +1818,6 @@
 
   .inset-outline {
     fill: none;
-    stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }

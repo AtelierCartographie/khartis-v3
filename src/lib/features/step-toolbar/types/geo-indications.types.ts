@@ -48,6 +48,8 @@ export interface GeoIndicationsState {
     windowColor: ColorState;
     continentColor: ColorState;
     seaColor: ColorState;
+    /** Outline of the globe and its graticules. */
+    sphereColor: ColorState;
     useBasemapColors: boolean;
     zoom: number;
     centerLongitude: number;
