@@ -8,11 +8,13 @@ export {
 export {
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
+  draw_khartis_proportional_line_legend,
   draw_khartis_swatch_legend,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type LegendPatternFill,
-  type KhartisLineWidthLegendStep
+  type KhartisLineWidthLegendStep,
+  type KhartisProportionalLineLegendStep
 } from './khartis-extensions';
 export {
   draw_quanti_color_legend,

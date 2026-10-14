@@ -7,6 +7,7 @@ import {
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_line_width_legend,
+  draw_khartis_proportional_line_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend
@@ -152,6 +153,31 @@ describe('common legend generators', () => {
       labelY(thermometer, '100')
     );
     expect(labelY(topDown, '0')).toBeLessThan(labelY(topDown, '100'));
+  });
+
+  it('should centre each value under its own segment, thinnest first, when lines are proportional', () => {
+    const { markup } = draw_khartis_proportional_line_legend([
+      { label: '1 200', width: 6 },
+      { label: '500', width: 2.5 }
+    ]);
+    const segments = [
+      ...markup.matchAll(
+        /<line x1="([\d.]+)" y1="[\d.]+" x2="([\d.]+)" y2="[\d.]+" stroke-width="([\d.]+)"/g
+      )
+    ].map(([, x1, x2, width]) => ({
+      center: (Number(x1) + Number(x2)) / 2,
+      width: Number(width)
+    }));
+    const labels = [
+      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+">([^<]+)</g)
+    ].map(([, x, text]) => ({ x: Number(x), text }));
+
+    expect(segments.map((segment) => segment.width)).toEqual([2.5, 6]);
+    expect(labels).toEqual([
+      { x: segments[0].center, text: '500' },
+      { x: segments[1].center, text: '1 200' }
+    ]);
+    expect(markup).toContain('stroke="currentColor"');
   });
 
   it('draws categorical legends and escapes labels before raw SVG rendering', () => {
