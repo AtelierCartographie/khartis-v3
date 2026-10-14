@@ -146,6 +146,139 @@ export function draw_khartis_line_width_legend(
   });
 }
 
+export interface KhartisProportionalLineLegendStep {
+  label: string;
+  width: number;
+}
+
+export interface KhartisProportionalLineLegendOptions extends CommonLegendTextOptions {
+  dashed?: boolean;
+  footerItems?: KhartisLegendSwatchItem[];
+}
+
+/**
+ * Proportional lines read like a class bar of lines: segments side by side,
+ * thinnest first, each one labelled underneath. Like proportional symbols,
+ * they are drawn in the text color, so the thickness alone carries the value.
+ */
+export function draw_khartis_proportional_line_legend(
+  steps: KhartisProportionalLineLegendStep[],
+  options: KhartisProportionalLineLegendOptions = {}
+): LegendSvgDefinition {
+  const fontSize = options.fontSize ?? 12;
+  const fontFamily = resolveLegendFontFamily(options.fontFamily);
+  const titleSize = options.title ? Math.round(fontSize * 1.16) : 0;
+  const subtitleSize = options.subtitle ? fontSize : 0;
+  const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
+  const font = createLegendFont({ fontSize, fontFamily });
+  const titleFont = createLegendFont({
+    fontSize: titleSize,
+    fontFamily,
+    weight: 'bold'
+  });
+  const subtitleFont = createLegendFont({ fontSize: subtitleSize, fontFamily });
+  const noteFont = createLegendFont({ fontSize: noteSize, fontFamily });
+  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const gap = Math.max(8, Math.round(fontSize * 0.6));
+  const labelGap = Math.max(4, Math.round(fontSize * 0.4));
+  const segmentGap = Math.max(6, Math.round(fontSize * 0.5));
+  const ordered = steps.slice().sort((a, b) => a.width - b.width);
+  const labelWidths = ordered.map((step) =>
+    Textbox.measureText(step.label, font)
+  );
+  const segmentLength = Math.max(
+    Math.round(fontSize * 3),
+    ...labelWidths.map((width) => Math.ceil(width) + segmentGap)
+  );
+  const maxWidth = Math.max(1, ...ordered.map((step) => step.width));
+  const footerItems = options.footerItems ?? [];
+  const footerLabelWidth = Math.max(
+    0,
+    ...footerItems.map((item) => Textbox.measureText(item.label, font))
+  );
+  const footerShapeWidth = 28;
+  const rowWidth =
+    ordered.length * segmentLength + (ordered.length - 1) * segmentGap;
+  const bodyWidth = Math.max(
+    margin * 2 + rowWidth,
+    footerItems.length > 0
+      ? margin * 2 + footerShapeWidth + gap + footerLabelWidth
+      : 0,
+    margin * 2 +
+      Math.max(
+        measureLegendLongestToken(options.title, titleFont),
+        measureLegendLongestToken(options.subtitle, subtitleFont),
+        measureLegendLongestToken(options.note, noteFont)
+      )
+  );
+  const maxTextWidth = bodyWidth - margin * 2;
+  const header = renderLegendHeader({
+    title: options.title,
+    subtitle: options.subtitle,
+    x: margin,
+    y: margin,
+    maxWidth: maxTextWidth,
+    titleSize,
+    subtitleSize,
+    fontFamily,
+    titleFont,
+    subtitleFont
+  });
+  const lineY = margin + header.height + gap + maxWidth / 2;
+  const labelY = lineY + maxWidth / 2 + labelGap;
+  const dash = options.dashed ? ' stroke-dasharray="5,3"' : '';
+  const segments = ordered.map((step, index) => {
+    const x = margin + index * (segmentLength + segmentGap);
+    return {
+      line: `<line x1="${x}" y1="${lineY}" x2="${x + segmentLength}" y2="${lineY}" stroke-width="${Math.max(0.5, step.width)}"${dash} />`,
+      label: `<text x="${x + segmentLength / 2}" y="${labelY}">${escapeSvgText(step.label)}</text>`
+    };
+  });
+  const rowBottom = labelY + fontSize * 1.2;
+  const sectionGap = Math.max(10, Math.round(fontSize * 0.6));
+  const footerRowHeight = fontSize * 1.2;
+  let footerMarkup = '';
+  footerItems.forEach((item, index) => {
+    const top = rowBottom + sectionGap + index * (footerRowHeight + gap);
+    const mid = top + footerRowHeight / 2;
+    footerMarkup += `${draw_line(item, margin, mid, footerShapeWidth)}<text x="${margin + footerShapeWidth + gap}" y="${mid}" dominant-baseline="middle">${escapeSvgText(item.label)}</text>`;
+  });
+  const bottom =
+    footerItems.length > 0
+      ? rowBottom +
+        sectionGap +
+        footerItems.length * (footerRowHeight + gap) -
+        gap
+      : rowBottom;
+  const note = renderLegendNote({
+    note: options.note,
+    x: margin,
+    y: bottom + (options.note ? sectionGap : 0),
+    maxWidth: maxTextWidth,
+    noteSize,
+    fontFamily,
+    noteFont
+  });
+  const height = bottom + note.height + margin;
+
+  return {
+    markup: `<g class="khartis_proportional_line_legend" font-family="${escapeSvgAttribute(fontFamily)}">
+    ${createLegendCanvasRect(bodyWidth, height)}
+    <g class="segments" stroke="currentColor" stroke-linecap="butt" fill="none">
+      ${segments.map((segment) => segment.line).join('')}
+    </g>
+    <g class="labels" text-anchor="middle" dominant-baseline="hanging" font-size="${fontSize}" font-variant="tabular-nums">
+      ${segments.map((segment) => segment.label).join('')}
+    </g>
+    <g class="footer" font-size="${fontSize}">${footerMarkup}</g>
+    ${header.markup}
+    ${note.markup}
+  </g>`,
+    width: bodyWidth,
+    height
+  };
+}
+
 export function draw_khartis_density_legend(
   options: KhartisDensityLegendOptions
 ): LegendSvgDefinition {

@@ -56,6 +56,7 @@ import {
   draw_categorical_legend,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
+  draw_khartis_proportional_line_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend,
@@ -202,6 +203,7 @@ export type LegendSegment = {
 };
 
 const NON_LIST_SEGMENT_KEYS = new Set([
+  'proportional-line-width',
   'point-size',
   'double-point-size',
   'double-point-size-primary',
@@ -1532,7 +1534,7 @@ function getQuantiColorMissingDataOptions(
   return {
     nodata: true,
     nodataLabel: item.label,
-    nodataFill: item.fill,
+    nodataFill: item.fill ?? item.stroke,
     nodataPatternFill: item.patternFill
   };
 }
@@ -2024,15 +2026,39 @@ function getLineWidthLegendDraft(
     return null;
   }
 
+  if (scale.kind === 'proportional') {
+    const proportionalSteps = scale.steps.map((step) => ({
+      label: getLegendStepLabel(step, undefined),
+      width: step.size
+    }));
+
+    return {
+      key: 'proportional-line-width',
+      primitive: 'line',
+      variable: sizeColumn,
+      className: 'legend-svg--line-width',
+      consumesMissingData: isLegendMissingDataShown(viz, 'line'),
+      create: (options, context) =>
+        toLegendSvg(
+          draw_khartis_proportional_line_legend(proportionalSteps, {
+            ...options,
+            dashed: scale.dashed,
+            footerItems: getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter,
+              'line'
+            ).footerItems
+          })
+        )
+    };
+  }
+
   const classification = getLineThicknessClassification(viz);
   const breaks = classification?.breaks ?? viz.classification?.breaks;
   const classCount = getClassificationClassCount(classification);
   const steps: KhartisLineWidthLegendStep[] = scale.steps.map((step) => ({
     label: getLegendStepLabel(step, breaks, classCount),
-    width:
-      scale.kind === 'proportional'
-        ? step.size
-        : getLineLegendDisplayWidth(scale, step.size),
+    width: getLineLegendDisplayWidth(scale, step.size),
     color: scale.color,
     opacity: scale.opacity,
     dashed: scale.dashed
@@ -2353,6 +2379,14 @@ function getMissingDataLegendItem(
       strokeWidth: 0.75,
       symbol: getShapePath(resolveMissingDataPointShape(missingData?.shape)),
       size: Math.max(6, Math.min(14, missingData?.size ?? 6))
+    };
+  }
+
+  if (primitive === 'line') {
+    return {
+      label: m.missing_data_text(),
+      stroke: color,
+      strokeWidth: 2
     };
   }
 
