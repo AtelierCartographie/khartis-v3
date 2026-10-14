@@ -2,6 +2,7 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
@@ -10,8 +11,6 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import {
-    ArrowDown,
-    ArrowUp,
     ArrowsHorizontal,
     ArrowsVertical,
     TableOfContents,
@@ -381,10 +380,9 @@
 
               {#if segments.some((segment) => segment.kind === 'class-bar')}
                 <div class="legend-layout-group">
-                  <span class="legend-field-label">{m.legend_class_bar()}</span>
+                  <span class="legend-field-label">{m.legend_layout()}</span>
                   <ToggleTabs
                     size="md"
-                    hideInactiveLabel={false}
                     activeIndex={layout.classBarOrientation === 'vertical'
                       ? 1
                       : 0}
@@ -407,24 +405,24 @@
                       })}
                   />
                   {#if layout.classBarOrientation === 'vertical'}
-                    <ToggleTabs
-                      size="md"
-                      hideInactiveLabel={false}
-                      activeIndex={layout.lowAtBottom ? 0 : 1}
+                    <SimpleRadioGroup
+                      name={`${item.id}-order`}
+                      legendText={m.legend_order()}
                       items={[
                         {
-                          icon: ArrowUp,
-                          label: m.legend_low_at_bottom(),
-                          iconSize: 16
+                          value: 'ascending',
+                          labelText: m.legend_order_ascending()
                         },
                         {
-                          icon: ArrowDown,
-                          label: m.legend_low_at_top(),
-                          iconSize: 16
+                          value: 'descending',
+                          labelText: m.legend_order_descending()
                         }
                       ]}
-                      onchange={(tabIndex) =>
-                        updateItemLayout(item, { lowAtBottom: tabIndex === 0 })}
+                      selected={layout.lowAtBottom ? 'descending' : 'ascending'}
+                      onchange={(order) =>
+                        updateItemLayout(item, {
+                          lowAtBottom: order === 'descending'
+                        })}
                     />
                   {/if}
                   <div class="legend-switch-row">
