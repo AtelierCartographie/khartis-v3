@@ -91,8 +91,7 @@ import {
   createUniquePatternBaseFillAccessor
 } from './polygon-fill-accessors.utils';
 import { orderPrimitiveLayers } from './primitive-layer-order';
-
-const POLYGON_STROKE_WIDTH_DIVISOR = 4;
+import { POLYGON_STROKE_WIDTH_DIVISOR } from './stroke-width.constants';
 
 type PointLayerFactory = (
   jsTable: ArrowTable,

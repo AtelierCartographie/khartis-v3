@@ -27,6 +27,8 @@ export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
   classPatternFills?: (LegendPatternFill | null)[];
   /** Draws each class as a colored outline, as for a classed stroke. */
   outlineWidth?: number;
+  /** Opacity of the class color, as the map applies it. */
+  opacity?: number;
 }
 
 const DEFAULT_NODATA_FILL = NEUTRAL_CARTOGRAPHY_COLORS.missingData;
@@ -185,13 +187,21 @@ export function draw_quanti_color_legend(
           x[i + 1] - x[i],
           box_height,
           colors[d],
-          options.outlineWidth
+          options.outlineWidth,
+          options.opacity
         )
       };
     }
 
     return {
-      markup: box(x[i], actual_box_top, x[i + 1] - x[i], box_height, colors[d])
+      markup: box(
+        x[i],
+        actual_box_top,
+        x[i + 1] - x[i],
+        box_height,
+        colors[d],
+        options.opacity
+      )
     };
   });
   const boxesDefs = boxes
@@ -276,9 +286,16 @@ function box(
   y: number,
   width: number,
   height: number,
-  fill: string
+  fill: string,
+  opacity?: number
 ): string {
-  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(fill)}"/>`;
+  const fillOpacity =
+    opacity !== undefined ? ` fill-opacity="${clamp_opacity(opacity)}"` : '';
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(fill)}"${fillOpacity}/>`;
+}
+
+function clamp_opacity(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
 }
 
 // Inset so that neighbouring outlines stay apart instead of merging.
@@ -288,10 +305,13 @@ function outline_box(
   width: number,
   height: number,
   stroke: string,
-  strokeWidth: number
+  strokeWidth: number,
+  opacity?: number
 ): string {
   const inset = strokeWidth / 2 + 1;
-  return `<rect x="${x + inset}" y="${y + strokeWidth / 2}" width="${Math.max(0, width - 2 * inset)}" height="${height - strokeWidth}" fill="none" stroke="${escapeSvgAttribute(stroke)}" stroke-width="${strokeWidth}"/>`;
+  const strokeOpacity =
+    opacity !== undefined ? ` stroke-opacity="${clamp_opacity(opacity)}"` : '';
+  return `<rect x="${x + inset}" y="${y + strokeWidth / 2}" width="${Math.max(0, width - 2 * inset)}" height="${height - strokeWidth}" fill="none" stroke="${escapeSvgAttribute(stroke)}" stroke-width="${strokeWidth}"${strokeOpacity}/>`;
 }
 
 function pattern_box(

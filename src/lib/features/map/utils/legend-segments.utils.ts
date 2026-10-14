@@ -91,6 +91,7 @@ import {
 } from '$lib/features/step-toolbar/tools/facets';
 import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
+import { POLYGON_STROKE_WIDTH_DIVISOR } from '../layers/stroke-width.constants';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -984,11 +985,13 @@ function getStrokeColorLegendDraft(
     primitive === 'point'
       ? getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE)
       : null;
+  const strokeOpacity = getPrimitivePaintOpacity(viz, primitive).stroke;
   const items: KhartisLegendSwatchItem[] = entries.map(({ label, color }) => ({
     label,
     fill: 'none',
     stroke: color,
     strokeWidth: 2,
+    strokeOpacity,
     ...(symbol ? { symbol, size: 8 } : {})
   }));
   if (items.length === 0) return null;
@@ -1034,7 +1037,8 @@ function getPolygonStrokeClassesLegendDraft(
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
-          outlineWidth: 2
+          outlineWidth: 2,
+          opacity: getPrimitivePaintOpacity(viz, 'area').stroke
         })
       )
   };
@@ -1354,6 +1358,9 @@ function getQuantitativeColorLegendDraft(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
           classPatternFills,
+          opacity: classPatternFills
+            ? undefined
+            : getPrimitivePaintOpacity(viz, 'area').fill,
           ...getQuantiColorMissingDataOptions(
             viz,
             context.includeMissingDataFooter
@@ -1717,7 +1724,8 @@ function getUniquePointSymbolLegendDraft(
             0.5,
             symbol.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth
           ),
-    opacity: normalizeLegendOpacity(symbol.opacity, 1),
+    fillOpacity: normalizeLegendOpacity(symbol.opacity, 1),
+    strokeOpacity: normalizeLegendOpacity(symbol.strokeOpacity, 1),
     symbol: getShapePath(symbol.shape ?? ShapeType.CIRCLE),
     size: getUniquePointLegendDisplaySize(symbol.size)
   };
@@ -1786,11 +1794,13 @@ function getUniquePolygonLegendDraft(
       : resolveLegendColor(polygon.strokeColor, DEFAULT_COLORS.stroke),
     strokeWidth: strokeNone
       ? 0
-      : Math.max(
-          0.5,
-          Math.min(3, polygon.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth)
+      : Math.min(
+          3,
+          (polygon.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth) /
+            POLYGON_STROKE_WIDTH_DIVISOR
         ),
-    opacity: normalizeLegendOpacity(polygon.fillOpacity, 1),
+    fillOpacity: normalizeLegendOpacity(polygon.fillOpacity, 1),
+    strokeOpacity: normalizeLegendOpacity(polygon.strokeOpacity, 1),
     patternFill,
     patternOpacity: patternFill ? 1 : undefined,
     dashed: !strokeNone && polygon.strokeDashed
@@ -1967,18 +1977,21 @@ function getCategoricalLegendItems(
   primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>
 ): { type: CategoricalShapeType; categories: CategoryItem[] } {
   let type: CategoricalShapeType = 'box';
+  const opacity = getPrimitivePaintOpacity(viz, primitive);
   const categories: CategoryItem[] = entries.map((entry) => ({
     label: entry.label,
     fill: entry.color,
     stroke: 'none',
-    strokeWidth: 0
+    strokeWidth: 0,
+    fillOpacity: opacity.fill
   }));
 
   if (primitive === 'line') {
     type = 'line';
     categories.forEach((category) => {
       category.stroke = category.fill;
-      category.strokeWidth = Math.max(2, Math.min(6, viz.style.lineWidth ?? 3));
+      category.strokeWidth = getLineLegendSwatchWidth(viz);
+      category.strokeOpacity = opacity.stroke;
     });
   } else if (primitive === 'point') {
     type = 'symbol';
@@ -2007,6 +2020,7 @@ function getClassedColorLegendItems(
 ): KhartisLegendSwatchItem[] {
   const breaks = (classification.breaks ?? []).filter(Number.isFinite);
   const colors = getEffectiveClassedColors(classification.colors ?? [], breaks);
+  const opacity = getPrimitivePaintOpacity(viz, primitive);
 
   return colors.map((color, index) => {
     const label = getColorScaleLabel(breaks, colors.length, index);
@@ -2015,9 +2029,9 @@ function getClassedColorLegendItems(
       return {
         label,
         stroke: color,
-        strokeWidth: Math.max(2, Math.min(6, viz.style.lineWidth ?? 3)),
-        opacity: normalizeLegendOpacity(viz.style.lineOpacity, 1),
-        dashed: viz.style.lineDashed ?? false
+        strokeWidth: getLineLegendSwatchWidth(viz),
+        opacity: opacity.stroke,
+        dashed: getLinePrimitive(viz)?.dashed ?? false
       };
     }
 
@@ -2028,6 +2042,7 @@ function getClassedColorLegendItems(
         fill: color,
         stroke: 'rgba(0, 0, 0, 0.25)',
         strokeWidth: 0.75,
+        fillOpacity: opacity.fill,
         symbol: getShapePath(symbol?.shape ?? ShapeType.CIRCLE),
         size: 8
       };
@@ -2037,7 +2052,8 @@ function getClassedColorLegendItems(
       label,
       fill: color,
       stroke: 'rgba(0, 0, 0, 0.15)',
-      strokeWidth: 1
+      strokeWidth: 1,
+      fillOpacity: opacity.fill
     };
   });
 }
@@ -2058,7 +2074,7 @@ function getPointSizeLegendItems(
     fill: scale.fillColor,
     stroke: scale.strokeColor,
     strokeWidth: 0.75,
-    opacity: scale.fillOpacity,
+    fillOpacity: scale.fillOpacity,
     symbol: getShapePath(scale.shape),
     size: getPointLegendDisplaySize(step.size)
   }));
@@ -2313,6 +2329,43 @@ function getSwatchType(
   }
 
   return 'box';
+}
+
+type PrimitivePaintOpacity = { fill: number; stroke: number };
+
+// The legend fades a mark the way the map does: fill and stroke apart.
+function getPrimitivePaintOpacity(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): PrimitivePaintOpacity {
+  switch (primitive) {
+    case 'point': {
+      const symbol = getSymbolPrimitive(viz);
+      return {
+        fill: normalizeLegendOpacity(symbol?.opacity, 1),
+        stroke: normalizeLegendOpacity(symbol?.strokeOpacity, 1)
+      };
+    }
+    case 'line': {
+      const opacity = normalizeLegendOpacity(getLinePrimitive(viz)?.opacity, 1);
+      return { fill: opacity, stroke: opacity };
+    }
+    case 'area':
+    default: {
+      const polygon = getPolygonPrimitive(viz);
+      return {
+        fill: normalizeLegendOpacity(polygon?.fillOpacity, 1),
+        stroke: normalizeLegendOpacity(polygon?.strokeOpacity, 1)
+      };
+    }
+  }
+}
+
+function getLineLegendSwatchWidth(viz: VisualizationConfig): number {
+  return Math.max(
+    2,
+    Math.min(6, getLinePrimitive(viz)?.width ?? viz.style.lineWidth ?? 3)
+  );
 }
 
 function normalizeLegendOpacity(
