@@ -4,8 +4,12 @@ import Textbox from '@borgar/textbox';
 import type { LegendPatternFill } from './khartis-extensions';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
+  classLegendEntry,
   createLegendCanvasRect,
   createLegendFont,
+  LEGEND_ENTRY_ATTRIBUTE,
+  MISSING_LEGEND_ENTRY,
+  wrapLegendEntry,
   escapeSvgAttribute,
   escapeSvgText,
   linearScale,
@@ -272,7 +276,9 @@ export function draw_quanti_color_legend(
   const labels = x.map((d, i) => label(d, actual_tick_end, thresholds[i]));
 
   return create_svg_markup(
-    boxes.map((entry) => entry.markup),
+    boxes.map((entry, i) =>
+      wrapLegendEntry(classLegendEntry(index[i]), entry.markup)
+    ),
     ticks,
     labels
   );
@@ -323,7 +329,7 @@ export function draw_quanti_color_legend(
                 )
               };
       nodata_defs = nodata_box.defs ?? '';
-      nodata_markup = `<g class="nodata" stroke="none">
+      nodata_markup = `<g class="nodata" stroke="none" ${LEGEND_ENTRY_ATTRIBUTE}="${MISSING_LEGEND_ENTRY}">
         ${nodata_box.markup}
         <text x="${nodata_label_x}" y="${nodata_y + nodata_box_h / 2}" dominant-baseline="central" font-size="${fontSize}">${escapeSvgText(nodata_label)}</text>
       </g>`;
@@ -568,7 +574,7 @@ function draw_vertical_quanti_color_legend(
               markup: box(margin, nodata_y, cell_width, nodata_h, nodata_fill)
             };
     nodata_defs = nodata_box.defs ?? '';
-    nodata_markup = `<g class="nodata" stroke="none">
+    nodata_markup = `<g class="nodata" stroke="none" ${LEGEND_ENTRY_ATTRIBUTE}="${MISSING_LEGEND_ENTRY}">
         ${nodata_box.markup}
         <text x="${margin + cell_width + label_gap}" y="${nodata_y + nodata_h / 2}" dominant-baseline="central" font-size="${fontSize}">${escapeSvgText(nodata_label)}</text>
       </g>`;
@@ -597,7 +603,9 @@ function draw_vertical_quanti_color_legend(
       ${createLegendCanvasRect(body_width, height)}
       ${defs || nodata_defs ? `<defs>${defs}${nodata_defs}</defs>` : ''}
       <g class="box" stroke="none">
-        ${cells.map((cell) => cell.markup).join('')}
+        ${cells
+          .map((cell, i) => wrapLegendEntry(classLegendEntry(i), cell.markup))
+          .join('')}
       </g>
       <g class="ticks" stroke="black">
         ${ticks.join('')}

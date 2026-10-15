@@ -55,6 +55,7 @@
   import { tick, untrack, onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
+  import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
@@ -113,6 +114,26 @@
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
   });
+
+  // A legend points at the hovered feature when its visualization draws from
+  // the same dataset; a legend anchored in a collection map answers to that
+  // map alone. Exports never carry the mark.
+  function getActiveEntry(
+    item: LegendItem,
+    segment: LegendSegment
+  ): string | null {
+    const hoveredRow = mapHoverHighlightStore.hoveredRow;
+    if (!hoveredRow || globalState.isMapExporting || !segment.resolveEntry) {
+      return null;
+    }
+    if (scopeVizId && hoveredRow.vizId !== scopeVizId) {
+      return null;
+    }
+    const viz = vizByItemId.get(item.id);
+    return viz?.datasetId === hoveredRow.datasetId
+      ? segment.resolveEntry(hoveredRow.readValue)
+      : null;
+  }
 
   const segmentsByItemId = $derived.by(() => {
     void getLocale();
@@ -847,6 +868,7 @@
             {#key frameScale}
               {#each legendSegments as segment (segment.key)}
                 <LegendSvg
+                  activeEntry={getActiveEntry(item, segment)}
                   markup={segment.svg.markup}
                   width={segment.svg.width}
                   height={segment.svg.height}

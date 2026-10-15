@@ -24,11 +24,13 @@ import { hasAnyHighlightedFeature } from './layer-highlight.utils';
 import { createSplitAwareRowAccessor } from './split-rendering-accessors';
 import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.utils';
 
-const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
-  15, 98, 254, 255
+// Fluorescent yellow: absent from Khartis' palettes and from its blue
+// interface, so a highlighted feature stands out at once.
+export const HIGHLIGHT_STROKE_COLOR: [number, number, number, number] = [
+  255, 230, 0, 255
 ];
-const SELECTED_POLYGON_STROKE_WIDTH = 3;
-const SELECTED_POINT_RING_RADIUS = 8;
+export const HIGHLIGHT_STROKE_WIDTH = 2;
+export const HIGHLIGHT_POINT_RING_RADIUS = 8;
 const POINT_GEOMETRY_TYPES = new Set<string>([
   GeometryType.POINT,
   GeometryType.MULTIPOINT
@@ -124,11 +126,11 @@ function createHighlightedPointRingOverlay(
     filled: false,
     stroked: true,
     radiusUnits: 'pixels',
-    getRadius: SELECTED_POINT_RING_RADIUS,
+    getRadius: HIGHLIGHT_POINT_RING_RADIUS,
     lineWidthUnits: 'pixels',
-    getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
-    lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
-    getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+    getLineWidth: HIGHLIGHT_STROKE_WIDTH,
+    lineWidthMinPixels: HIGHLIGHT_STROKE_WIDTH,
+    getLineColor: HIGHLIGHT_STROKE_COLOR,
     pickable: false,
     parameters: {
       depthCompare: 'always' as const,
@@ -181,13 +183,12 @@ export function createHighlightedBinaryPolygonOverlay(
     outlineData,
     (featureId) =>
       isHighlighted(featureId)
-        ? SELECTED_POLYGON_STROKE_COLOR
+        ? HIGHLIGHT_STROKE_COLOR
         : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
   );
   strokeBinaryData.attributes.getWidth = pathWidthAttr(
     outlineData,
-    (featureId) =>
-      isHighlighted(featureId) ? SELECTED_POLYGON_STROKE_WIDTH : 0
+    (featureId) => (isHighlighted(featureId) ? HIGHLIGHT_STROKE_WIDTH : 0)
   );
 
   return new PathLayer({
@@ -195,7 +196,7 @@ export function createHighlightedBinaryPolygonOverlay(
     ...(strokePathProps as unknown as Record<string, unknown>),
     getColor: TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
     widthUnits: 'pixels',
-    getWidth: SELECTED_POLYGON_STROKE_WIDTH,
+    getWidth: HIGHLIGHT_STROKE_WIDTH,
     widthMinPixels: 0,
     pickable: false,
     parameters: {

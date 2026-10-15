@@ -3,18 +3,23 @@
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
-  import { resolveTooltipViewportPosition } from '../utils/tooltip-position.utils';
+  import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+  import {
+    resolveCursorTooltipPosition,
+    resolveTooltipViewportPosition
+  } from '../utils/tooltip-position.utils';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
-  const PREVIEW_PRIMARY_ENTRIES_COUNT = 2;
+  const PREVIEW_MAX_ENTRIES_COUNT = 5;
   const DESKTOP_INSPECTOR_TARGET_HEIGHT = 352;
   const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
   const VIEWPORT_PADDING = 8;
+  const CURSOR_OFFSET = 14;
   const HEADLINE_ENTRY_KEYS = ['NAME_LATIN', 'NAME', 'LABEL', 'TITLE'] as const;
   const BADGE_ENTRY_KEYS = ['NUTS_ID', 'OGC_FID', 'ID', 'CODE'] as const;
 
@@ -36,7 +41,7 @@
   );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return tooltipState.entries.slice(0, PREVIEW_PRIMARY_ENTRIES_COUNT);
+      return tooltipState.entries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
@@ -49,7 +54,7 @@
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, tooltipState.entries.length - PREVIEW_PRIMARY_ENTRIES_COUNT)
+      : Math.max(0, tooltipState.entries.length - PREVIEW_MAX_ENTRIES_COUNT)
   );
 
   function getTooltipViewerRect(): {
@@ -122,6 +127,12 @@
   });
 
   $effect(() => {
+    if (!tooltipState.visible) {
+      mapHoverHighlightStore.clear();
+    }
+  });
+
+  $effect(() => {
     if (
       globalState.isMobileView &&
       tooltipState.visible &&
@@ -183,6 +194,37 @@
       width: typeof window !== 'undefined' ? window.innerWidth : 0,
       height: typeof window !== 'undefined' ? window.innerHeight : 0
     };
+
+    if (!isInteractive) {
+      return {
+        ...resolveCursorTooltipPosition({
+          cursor: { x: tooltipState.x, y: tooltipState.y },
+          tooltipSize: {
+            width: rect?.width ?? 0,
+            height: rect?.height ?? 0
+          },
+          bounds: {
+            left: Math.max(0, viewerRect?.left ?? 0),
+            top: Math.max(0, viewerRect?.top ?? 0),
+            right: Math.min(
+              viewportSize.width,
+              viewerRect
+                ? viewerRect.left + viewerRect.width
+                : viewportSize.width
+            ),
+            bottom: Math.min(
+              viewportSize.height,
+              viewerRect
+                ? viewerRect.top + viewerRect.height
+                : viewportSize.height
+            )
+          },
+          padding: VIEWPORT_PADDING,
+          offset: CURSOR_OFFSET
+        }),
+        interactiveHeight: 0
+      };
+    }
     const interactiveHeight = isInteractive
       ? resolveDesktopInspectorHeight(
           viewportSize.height - (viewerRect?.top ?? 0) - VIEWPORT_PADDING * 2
@@ -273,7 +315,9 @@
       <div class="tooltip-entries">
         {#each visibleEntries as entry (entry.key)}
           <div class="tooltip-row">
-            <span class="tooltip-key">{entry.key}</span>
+            <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+              >{entry.key}</span
+            >
             <span class="tooltip-value">{entry.value}</span>
           </div>
         {/each}
@@ -306,7 +350,13 @@
     line-height: 1.25;
   }
 
+  /* Translucent so the map stays readable under the cursor. */
   .map-tooltip.hover-preview {
+    background: color-mix(
+      in srgb,
+      var(--cds-layer-01, #ffffff) 82%,
+      transparent
+    );
     width: min(13rem, calc(100vw - 16px));
     max-width: min(13rem, calc(100vw - 16px));
     max-height: min(8.5rem, calc(100dvh - 16px));
@@ -461,6 +511,11 @@
     flex-shrink: 1;
   }
 
+  .tooltip-key.viz-column {
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+  }
+
   .tooltip-value {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -501,6 +556,10 @@
     letter-spacing: 0.03em;
     text-transform: uppercase;
     color: #6f6f6f;
+  }
+
+  .interactive .tooltip-key.viz-column {
+    color: var(--cds-text-primary, #161616);
   }
 
   .interactive .tooltip-value {

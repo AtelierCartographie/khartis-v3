@@ -22,8 +22,12 @@ export {
 } from './quantitative';
 export { draw_symbols_legend, type SymbolType } from './symbols';
 export {
+  categoryLegendEntry,
+  classLegendEntry,
   createLegendSvg,
+  LEGEND_ENTRY_ATTRIBUTE,
   MAX_LEGEND_CATEGORIES,
+  MISSING_LEGEND_ENTRY,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';

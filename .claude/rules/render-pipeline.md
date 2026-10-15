@@ -41,7 +41,7 @@ Labels are a primitive (see `cartography.md`), and the glyph atlas is the main t
 
 - A visualization is a layer group: one sub-layer per active primitive plus shared basemap sub-layers. Respect the render order (basemap back, thematic, basemap front) and the show, hide and move contract.
 - Deck.gl props are immutable. Produce new layer instances (`.clone({...})`) instead of mutating props by reference.
-- Hover and touch tooltips render at a fixed viewer position with the visualization's variables first. Keep them on this shared path.
+- The hover tooltip follows the cursor within the map viewer, and the pinned inspector and the touch sheet keep a fixed position; the visualization's variables come first. The hover outline is appended by `setLayers` on top of the applied stack, never rebuilt into the thematic layers. Keep them on this shared path.
 - Neutral map, basemap and blank-visualization defaults use `NEUTRAL_CARTOGRAPHY_COLORS` or `NEUTRAL_CARTOGRAPHY_RGBA_COLORS` (`commons/constants/colors.constants.ts`), not grayscale literals.
 
 ## Simplification and export

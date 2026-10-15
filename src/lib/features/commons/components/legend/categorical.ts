@@ -13,6 +13,7 @@ import {
   resolveLegendFontFamily,
   scaleLegendMetric,
   splitLegendOverflow,
+  wrapLegendEntry,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -31,6 +32,8 @@ export interface CategoryItem {
   patternOpacity?: number;
   fillOpacity?: number;
   strokeOpacity?: number;
+  /** Lets a hovered map feature point at this entry. */
+  entryKey?: string;
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
@@ -328,9 +331,16 @@ export function draw_categorical_legend(
   const width = body_width;
   const height = content_bottom + note_section_height + margin.bottom;
 
+  const entryKeys = [...categories, ...footerItems].map(
+    (item) => item.entryKey
+  );
   return create_svg_markup(
-    [...boxes, ...footerBoxes],
-    [...labels, ...footerLabels]
+    [...boxes, ...footerBoxes].map((markup, index) =>
+      wrapLegendEntry(entryKeys[index], markup)
+    ),
+    [...labels, ...footerLabels].map((markup, index) =>
+      wrapLegendEntry(entryKeys[index], markup)
+    )
   );
 
   function adjust_label_width(
