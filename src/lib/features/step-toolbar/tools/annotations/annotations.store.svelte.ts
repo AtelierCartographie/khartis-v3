@@ -157,7 +157,7 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   caption: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize,
     bold: false,
-    italic: true
+    italic: false
   }
 };
 

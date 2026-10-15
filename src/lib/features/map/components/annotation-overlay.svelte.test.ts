@@ -228,6 +228,17 @@ function setupAnnotationViewport(): {
 describe('annotation overlay drawing interactions', () => {
   beforeEach(() => {
     cleanup();
+    // jsdom has no ResizeObserver; the overlay measures item heights with one.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+
+        unobserve(): void {}
+
+        disconnect(): void {}
+      }
+    );
     annotationsActions.reset();
     globalActions.resetNavigationState();
     globalActions.setPageZoomScale(1);

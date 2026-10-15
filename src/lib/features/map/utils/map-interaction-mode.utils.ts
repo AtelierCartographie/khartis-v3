@@ -42,7 +42,7 @@ export function resolveOrthographicInteractionController(
   }
   return {
     dragPan: true,
-    scrollZoom: false,
+    scrollZoom: true,
     doubleClickZoom: false,
     touchZoom: true,
     keyboard: true
