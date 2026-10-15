@@ -10,12 +10,7 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    ArrowsHorizontal,
-    ArrowsVertical,
-    TableOfContents,
-    TextFont
-  } from 'carbon-icons-svelte';
+  import { TableOfContents, TextFont } from 'carbon-icons-svelte';
   import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
@@ -354,28 +349,26 @@
 
               {#if segments.some((segment) => segment.kind === 'class-bar')}
                 <div class="legend-layout-group">
-                  <span class="legend-field-label">{m.legend_layout()}</span>
-                  <ToggleTabs
-                    size="md"
-                    activeIndex={layout.classBarOrientation === 'vertical'
-                      ? 1
-                      : 0}
+                  <SimpleRadioGroup
+                    name={`${item.id}-orientation`}
+                    legendText={m.legend_layout()}
                     items={[
                       {
-                        icon: ArrowsHorizontal,
-                        label: m.legend_orientation_horizontal(),
-                        iconSize: 16
+                        value: 'horizontal',
+                        labelText: m.legend_orientation_horizontal()
                       },
                       {
-                        icon: ArrowsVertical,
-                        label: m.legend_orientation_vertical(),
-                        iconSize: 16
+                        value: 'vertical',
+                        labelText: m.legend_orientation_vertical()
                       }
                     ]}
-                    onchange={(tabIndex) =>
+                    selected={layout.classBarOrientation === 'vertical'
+                      ? 'vertical'
+                      : 'horizontal'}
+                    onchange={(orientation) =>
                       updateItemLayout(item, {
                         classBarOrientation:
-                          tabIndex === 1 ? 'vertical' : 'horizontal'
+                          orientation === 'vertical' ? 'vertical' : 'horizontal'
                       })}
                   />
                   {#if layout.classBarOrientation === 'vertical'}
