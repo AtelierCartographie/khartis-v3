@@ -24,6 +24,7 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
     remapAreaPointToResizedPage,
     snapAreaPointWithinPage
   } from '$lib/features/commons/utils/page-grid.utils';
@@ -878,7 +879,7 @@
   }
 
   function getKeyboardMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+    return formatState.gridEnabled ? PAGE_SNAP_STEP_PX : 1;
   }
 
   function getKeyboardFastMoveStep(): number {
@@ -1722,7 +1723,7 @@
     position: absolute;
     bottom: 12px;
     left: 12px;
-    padding: 3px 5px;
+    padding: 4px;
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;

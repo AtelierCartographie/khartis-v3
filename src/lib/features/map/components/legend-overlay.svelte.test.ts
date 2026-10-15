@@ -696,10 +696,10 @@ describe('legend overlay visibility', () => {
 
     const [first, second] = getLegendState().items;
     expect(first.dragPosition ?? null).toBeNull();
-    expect(second.dragPosition).toEqual({ x: 36, y: 84 });
+    expect(second.dragPosition).toEqual({ x: 40, y: 84 });
   });
 
-  it('snaps legend dragging to the shared page grid when enabled', async () => {
+  it('snaps legend dragging to the page snap step when enabled', async () => {
     globalState.selectedTool = StylingTools.Legend;
 
     const { container } = render(LegendOverlay);
@@ -736,7 +736,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 40, y: 36 });
 
     await fireEvent.pointerUp(window);
 
@@ -864,7 +864,7 @@ describe('legend overlay visibility', () => {
       clientY: 21.5
     });
 
-    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 40, y: 36 });
   });
 
   it('keeps a dragged legend at its distance to the nearest edges when the page shrinks', async () => {
@@ -898,7 +898,7 @@ describe('legend overlay visibility', () => {
     formatActions.setSize(180, 120);
 
     await waitFor(() => {
-      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 60 });
+      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 64 });
     });
   });
 

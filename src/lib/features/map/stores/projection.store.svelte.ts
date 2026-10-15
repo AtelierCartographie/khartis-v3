@@ -133,7 +133,7 @@ function createProjectionStore() {
   function setFitPadding(fitPaddingPx: number): void {
     const nextFitPaddingPx =
       Number.isFinite(fitPaddingPx) && fitPaddingPx >= 0
-        ? Math.round(fitPaddingPx)
+        ? fitPaddingPx
         : DEFAULT_FIT_PADDING_PX;
 
     if (nextFitPaddingPx === state.fitPaddingPx) {

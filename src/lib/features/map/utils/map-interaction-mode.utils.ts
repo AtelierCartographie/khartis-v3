@@ -27,9 +27,19 @@ export interface OrthographicInteractionController {
   keyboard: boolean;
 }
 
+export interface OrthographicInteractiveView {
+  clone: (props: {
+    controller: OrthographicInteractionController | false;
+  }) => OrthographicInteractiveView;
+}
+
 export interface OrthographicInteractiveDeck {
+  props: {
+    views?: OrthographicInteractiveView | OrthographicInteractiveView[] | null;
+  };
   setProps: (props: {
     controller: OrthographicInteractionController | false;
+    views?: OrthographicInteractiveView[];
   }) => void;
   redraw: (reason?: string) => void;
 }
@@ -86,8 +96,20 @@ export function syncOrthographicInteractionMode(
   isPageMode: boolean,
   scheduleFrame: (cb: FrameRequestCallback) => number = requestAnimationFrame
 ): void {
+  const controller = resolveOrthographicInteractionController(isPageMode);
+  const { views } = deck.props;
+  // Deck copies a truthy `controller` onto its first view and never takes it
+  // back, so `controller: false` alone leaves the map zooming on the wheel in
+  // page mode. The views carry the controller themselves.
   deck.setProps({
-    controller: resolveOrthographicInteractionController(isPageMode)
+    controller,
+    ...(views
+      ? {
+          views: (Array.isArray(views) ? views : [views]).map((view) =>
+            view.clone({ controller })
+          )
+        }
+      : {})
   });
   deck.redraw('zoomModeChange');
   scheduleFrame(() => {
