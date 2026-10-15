@@ -1,5 +1,5 @@
 import type { Layer, PickingInfo } from '@deck.gl/core';
-import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 
 import {
   HIGHLIGHT_POINT_RING_RADIUS,
@@ -9,6 +9,7 @@ import {
 
 const HOVER_HIGHLIGHT_SUFFIX = 'hover-highlight';
 const POINT_RING_GAP_PX = 2;
+const TRANSPARENT: [number, number, number, number] = [0, 0, 0, 0];
 
 const HIGHLIGHT_PARAMETERS = {
   depthCompare: 'always' as const,
@@ -80,16 +81,17 @@ export function resolveHoveredFeature(
   info: PickingInfo
 ): HoveredFeature | null {
   const layerId = info.layer?.id;
+  if (!layerId || info.index === undefined || info.index < 0) {
+    return null;
+  }
+  const objectRowIndex = resolveObjectRowIndex(info);
+  if (objectRowIndex !== null) {
+    return { sourceLayerId: layerId, featureId: objectRowIndex };
+  }
+
   const data = info.layer?.props?.data;
   const geometry = resolvePickGeometry(info);
-  if (
-    !layerId ||
-    !geometry ||
-    typeof data !== 'object' ||
-    data === null ||
-    info.index === undefined ||
-    info.index < 0
-  ) {
+  if (!geometry || typeof data !== 'object' || data === null) {
     return null;
   }
   const layerFeatureIds = Reflect.get(data, 'featureIds');
@@ -102,6 +104,12 @@ export function resolveHoveredFeature(
   return featureId === undefined
     ? null
     : { sourceLayerId: layerId, featureId: Number(featureId) };
+}
+
+function resolveObjectRowIndex(info: PickingInfo): number | null {
+  const rowIndex = (info.object as { rowIndex?: unknown } | undefined)
+    ?.rowIndex;
+  return typeof rowIndex === 'number' ? rowIndex : null;
 }
 
 type RingPath = Float32Array;
@@ -234,14 +242,40 @@ function buildPathOverlay(
   });
 }
 
+// A label is outlined by its own background box: the hovered datum is drawn
+// again with the label's props, its glyphs hidden and the box bordered.
+function buildTextBoxOverlay(info: PickingInfo, id: string): Layer | null {
+  if (!(info.layer instanceof TextLayer) || info.object === undefined) {
+    return null;
+  }
+  return info.layer.clone({
+    id,
+    data: [info.object],
+    getColor: TRANSPARENT,
+    outlineWidth: 0,
+    background: true,
+    getBackgroundColor: TRANSPARENT,
+    getBorderColor: HIGHLIGHT_STROKE_COLOR,
+    getBorderWidth: HIGHLIGHT_STROKE_WIDTH,
+    pickable: false
+  }) as Layer;
+}
+
 export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
   const hovered = resolveHoveredFeature(info);
-  const geometry = resolvePickGeometry(info);
-  if (!hovered || !geometry) {
+  if (!hovered) {
     return null;
   }
 
   const id = `${hovered.sourceLayerId}-${HOVER_HIGHLIGHT_SUFFIX}`;
+  if (resolveObjectRowIndex(info) !== null) {
+    return buildTextBoxOverlay(info, id);
+  }
+
+  const geometry = resolvePickGeometry(info);
+  if (!geometry) {
+    return null;
+  }
   const placement = pickPlacementProps(info);
 
   if (isPolygonGeometry(geometry)) {

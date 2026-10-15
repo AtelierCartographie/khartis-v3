@@ -1020,20 +1020,18 @@ function getCategoryColumn(
   );
 }
 
-// Classes are assigned as the map colors them, from the breaks and the
-// palette length, so the legend points at the class the reader sees.
-function createClassedEntryResolver(
-  viz: VisualizationConfig,
-  primitive: LegendSwatchPrimitive,
-  classification: ClassificationConfig
+// Classes are assigned as the map assigns them, from the breaks and the
+// class count the map uses, so the legend points at the class the reader sees.
+function createClassEntryResolver(
+  column: string | undefined,
+  breaks: readonly number[] | undefined,
+  classCount: number,
+  options: { singleClass?: boolean; mapClassCount?: number } = {}
 ): LegendEntryResolver | undefined {
-  const column = getClassedValueColumn(viz, primitive);
-  const colors = classification.colors ?? [];
-  if (!column || colors.length === 0) {
+  const finiteBreaks = (breaks ?? []).filter(Number.isFinite);
+  if (!column || classCount < 1) {
     return undefined;
   }
-  const breaks = (classification.breaks ?? []).filter(Number.isFinite);
-  const classCount = getEffectiveClassedColors(colors, breaks).length;
 
   return (readValue) => {
     const value = readValue(column);
@@ -1044,18 +1042,46 @@ function createClassedEntryResolver(
     if (!Number.isFinite(numericValue)) {
       return MISSING_LEGEND_ENTRY;
     }
-    if (getSingleClassValue(classification) !== null) {
+    if (options.singleClass) {
       return classLegendEntry(0);
     }
     const classIndex = getClassIndexForValue(
       numericValue,
-      breaks,
-      colors.length
+      finiteBreaks,
+      options.mapClassCount ?? classCount
     );
     return classIndex === null
       ? null
       : classLegendEntry(Math.min(classIndex, classCount - 1));
   };
+}
+
+function createClassedColorEntryResolver(
+  column: string | undefined,
+  classification: ClassificationConfig
+): LegendEntryResolver | undefined {
+  const colors = classification.colors ?? [];
+  const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+  return createClassEntryResolver(
+    column,
+    breaks,
+    getEffectiveClassedColors(colors, breaks).length,
+    {
+      singleClass: getSingleClassValue(classification) !== null,
+      mapClassCount: colors.length
+    }
+  );
+}
+
+function createClassedEntryResolver(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive,
+  classification: ClassificationConfig
+): LegendEntryResolver | undefined {
+  return createClassedColorEntryResolver(
+    getClassedValueColumn(viz, primitive),
+    classification
+  );
 }
 
 function getCategoryValues(classification: ClassificationConfig): string[] {
@@ -1064,11 +1090,9 @@ function getCategoryValues(classification: ClassificationConfig): string[] {
   );
 }
 
-function createCategoricalEntryResolver(
-  viz: VisualizationConfig,
-  primitive: LegendSwatchPrimitive
+function createCategoryEntryResolver(
+  column: string | undefined
 ): LegendEntryResolver | undefined {
-  const column = getCategoryColumn(viz, primitive);
   if (!column) {
     return undefined;
   }
@@ -1082,6 +1106,13 @@ function createCategoricalEntryResolver(
       ? MISSING_LEGEND_ENTRY
       : categoryLegendEntry(String(value));
   };
+}
+
+function createCategoricalEntryResolver(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): LegendEntryResolver | undefined {
+  return createCategoryEntryResolver(getCategoryColumn(viz, primitive));
 }
 
 function getClassedColorLegendDraft(
@@ -1193,26 +1224,41 @@ function getStrokeColorLegendDraft(
     if (barDraft) return barDraft;
   }
 
-  let entries: { label: string; color: string }[];
+  const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
+  let entries: { label: string; color: string; entryKey: string }[];
+  let resolveEntry: LegendEntryResolver | undefined;
   if (config.strokeMode === StrokeMode.CLASSES) {
     const breaks = (classification.breaks ?? []).filter(Number.isFinite);
     if (breaks.length === 0) return null;
     const classColors = getEffectiveClassedColors(colors, breaks);
     entries = classColors.map((color, index) => ({
       label: getColorScaleLabel(breaks, classColors.length, index),
-      color
+      color,
+      entryKey: classLegendEntry(index)
     }));
+    resolveEntry = createClassedColorEntryResolver(
+      config.strokeValueColumn ?? getPrimitiveValueColumn(viz, filter),
+      classification
+    );
   } else {
     const labels = classification.labels ?? [];
+    const values = getCategoryValues(classification);
     const disabled = new Set((classification.disabledLabels ?? []).map(String));
     entries = colors
-      .map((color, index) => ({
-        label:
+      .map((color, index) => {
+        const label =
           labels[index] ??
-          m.palette_category_default_label({ index: index + 1 }),
-        color
-      }))
+          m.palette_category_default_label({ index: index + 1 });
+        return {
+          label,
+          color,
+          entryKey: categoryLegendEntry(values[index] ?? label)
+        };
+      })
       .filter((entry) => !disabled.has(entry.label));
+    resolveEntry = createCategoryEntryResolver(
+      config.strokeCategoryColumn ?? getPrimitiveCategoryColumn(viz, filter)
+    );
   }
 
   const symbol =
@@ -1220,19 +1266,23 @@ function getStrokeColorLegendDraft(
       ? getShapePath(getSymbolPrimitive(viz)?.shape ?? ShapeType.CIRCLE)
       : null;
   const strokeOpacity = getPrimitivePaintOpacity(viz, primitive).stroke;
-  const items: KhartisLegendSwatchItem[] = entries.map(({ label, color }) => ({
-    label,
-    fill: 'none',
-    stroke: color,
-    strokeWidth: 2,
-    strokeOpacity,
-    ...(symbol ? { symbol, size: 8 } : {})
-  }));
+  const items: KhartisLegendSwatchItem[] = entries.map(
+    ({ label, color, entryKey }) => ({
+      label,
+      fill: 'none',
+      stroke: color,
+      strokeWidth: 2,
+      strokeOpacity,
+      entryKey,
+      ...(symbol ? { symbol, size: 8 } : {})
+    })
+  );
   if (items.length === 0) return null;
 
   return {
     key: `stroke-color-${primitive}`,
     primitive,
+    resolveEntry,
     className: 'legend-svg--categorical',
     consumesMissingData: false,
     create: (options) =>
@@ -1267,6 +1317,7 @@ function getStrokeClassesLegendDraft(
   return {
     key: `stroke-color-${primitive}`,
     primitive,
+    resolveEntry: createClassedColorEntryResolver(valueColumn, classification),
     className: 'legend-svg--quantitative',
     consumesMissingData: false,
     create: (options, context) =>
@@ -1330,6 +1381,7 @@ function getTextColorLegendDraft(
     const disabled = new Set(
       (classification.disabledLabels ?? []).map((label) => String(label))
     );
+    const values = getCategoryValues(classification);
     const allCategories: CategoryItem[] = (classification.colors ?? [])
       .map((color, index) => {
         const label =
@@ -1343,7 +1395,8 @@ function getTextColorLegendDraft(
           strokeWidth,
           symbol,
           size: 9,
-          opacity: text.opacity
+          opacity: text.opacity,
+          entryKey: categoryLegendEntry(values[index] ?? label)
         };
       })
       .filter((entry) => !disabled.has(entry.label));
@@ -1356,6 +1409,9 @@ function getTextColorLegendDraft(
     return {
       key: 'text-categorical-color',
       primitive: 'text',
+      resolveEntry: createCategoryEntryResolver(
+        getPrimitiveCategoryColumn(viz, PrimitiveFilterType.TEXT)
+      ),
       className: 'legend-svg--text-color',
       consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
@@ -1388,7 +1444,8 @@ function getTextColorLegendDraft(
       strokeWidth,
       symbol,
       size: 9,
-      opacity: text.opacity
+      opacity: text.opacity,
+      entryKey: classLegendEntry(index)
     }));
 
     if (items.length === 0) {
@@ -1398,6 +1455,10 @@ function getTextColorLegendDraft(
     return {
       key: 'text-classed-color',
       primitive: 'text',
+      resolveEntry: createClassedColorEntryResolver(
+        getPrimitiveValueColumn(viz, PrimitiveFilterType.TEXT),
+        classification
+      ),
       className: 'legend-svg--text-color',
       consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
@@ -1454,6 +1515,7 @@ function getTextSizeClassLegendItems(
 
     return {
       label: getColorScaleLabel(breaks, classCount, index),
+      entryKey: classLegendEntry(index),
       fill:
         text.colorMode === ColorMode.UNIQUE
           ? style.fill
@@ -1521,6 +1583,11 @@ function getTextSizeLegendDraft(
     return {
       key: 'text-size-classes',
       primitive: 'text',
+      resolveEntry: createClassEntryResolver(
+        text.valueColumn,
+        getPrimitiveClassification(viz, PrimitiveFilterType.TEXT)?.breaks,
+        items.length
+      ),
       className: 'legend-svg--text-size',
       consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
@@ -1968,6 +2035,12 @@ function getPointSizeLegendDrafts(
     {
       key: 'point-size-classes',
       primitive: 'point',
+      resolveEntry: createClassEntryResolver(
+        symbol?.sizeColumn ?? viz.mapping.sizeColumn,
+        getPrimitiveClassification(viz, PrimitiveFilterType.POINT)?.breaks ??
+          viz.classification?.breaks,
+        items.length
+      ),
       className: 'legend-svg--symbols',
       consumesMissingData: isLegendMissingDataShown(viz, 'point'),
       create: (options, context) =>
@@ -2228,6 +2301,11 @@ function getLineWidthLegendDraft(
   return {
     key: 'line-width',
     primitive: 'line',
+    resolveEntry: createClassEntryResolver(
+      sizeColumn,
+      classification?.breaks,
+      strokeWidths.length
+    ),
     className: 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
@@ -2417,6 +2495,9 @@ function getPointSizeLegendItems(
 
   return scale.steps.map((step) => ({
     label: getLegendStepLabel(step, breaks, classCount),
+    ...(step.kind === 'classes'
+      ? { entryKey: classLegendEntry(step.index) }
+      : {}),
     fill: scale.fillColor,
     stroke: scale.strokeColor,
     strokeWidth: 0.75,
@@ -2603,7 +2684,8 @@ function getTextMissingDataLegendItem(
     strokeWidth: getTextLegendStrokeWidth(text.haloWidth, text.halo),
     symbol: getTextLegendSymbolPath(),
     size: 9,
-    opacity: text.opacity
+    opacity: text.opacity,
+    entryKey: MISSING_LEGEND_ENTRY
   };
 }
 

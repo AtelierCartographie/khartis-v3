@@ -210,6 +210,14 @@ function resolvePickedRowIndex(info: PickingInfo): number | null {
     return null;
   }
 
+  // Object layers (labels) are sorted for drawing, so their datum carries the
+  // attribute row instead of its index.
+  const objectRowIndex = (info.object as { rowIndex?: unknown } | undefined)
+    ?.rowIndex;
+  if (typeof objectRowIndex === 'number' && objectRowIndex >= 0) {
+    return objectRowIndex;
+  }
+
   const sourceTable = resolveSourceTable(info);
   if (!sourceTable) {
     return info.index;

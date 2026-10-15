@@ -219,7 +219,13 @@ il est construit à partir de la géométrie binaire de la couche survolée
 (`khartisPickGeometry`), sans reconstruire les couches thématiques. Un clic
 épingle l'inspecteur complet en haut de la carte.
 
-Les légendes en classes et en catégories désignent aussi l'entité survolée :
+Les textes sont survolables : leur boîte est cernée en jaune. En densité, un
+remplissage transparent sous les points porte le survol : c'est le polygone,
+qui porte la valeur, qui est cerné.
+
+Les légendes en classes et en catégories (couleur de fond, de contour, de
+texte, taille en classes des symboles, lignes et textes) désignent aussi
+l'entité survolée :
 les autres entrées s'estompent. Les générateurs marquent chaque entrée d'un
 attribut `data-legend-entry` (classe, catégorie, absence de données), chaque
 segment de légende sait résoudre l'entrée d'une ligne
