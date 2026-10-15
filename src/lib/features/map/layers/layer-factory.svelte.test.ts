@@ -154,7 +154,8 @@ import {
 import { MultiShapeLayer } from './multi-shape-layer';
 import {
   createHighlightedFeatureOverlay,
-  HIGHLIGHT_STROKE_COLOR
+  HIGHLIGHT_STROKE_COLOR,
+  HIGHLIGHT_STROKE_WIDTH
 } from './layer-selection-overlays';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { EXPLICIT_TEXT_CHARACTER_SET } from './text-character-set';
@@ -1578,7 +1579,7 @@ describe('createPolygonLayers', () => {
     );
 
     const selectionLayer = layers.find((layer) =>
-      String(layer.props.id).endsWith('selection-overlay')
+      String(layer.props.id).includes('selection-overlay')
     ) as PathLayer | undefined;
     const selectionData = selectionLayer?.props.data as
       | {
@@ -1594,7 +1595,7 @@ describe('createPolygonLayers', () => {
       new Uint8ClampedArray([0, 0, 0, 0, ...HIGHLIGHT_STROKE_COLOR])
     );
     expect(selectionData?.attributes.getWidth?.value).toEqual(
-      new Float32Array([0, 3])
+      new Float32Array([0, HIGHLIGHT_STROKE_WIDTH])
     );
   });
 
@@ -2651,7 +2652,7 @@ describe('createHighlightedFeatureOverlay', () => {
       new Set([1, 3]),
       0,
       createContext(createVisualization(FillMode.UNIQUE))
-    ).at(-1) as ScatterplotLayer | undefined;
+    ) as ScatterplotLayer | null;
     const data = overlay?.props.data as unknown as {
       length: number;
       attributes: { getPosition: { value: Float64Array } };

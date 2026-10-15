@@ -5,14 +5,21 @@ import {
   resolveHoveredFeature
 } from '../layers/hover-highlight-overlay';
 
+/** The hovered feature's row, read by column name for the legends. */
+export interface HoveredRow {
+  datasetId: string;
+  readValue: (column: string) => unknown;
+}
+
 // Kept apart from the search highlight: hovering must neither clear a search
 // selection nor rebuild the thematic layers.
 function createMapHoverHighlightStore() {
-  let overlay = $state.raw<Layer[]>([]);
+  let overlay = $state.raw<Layer | null>(null);
+  let hoveredRow = $state.raw<HoveredRow | null>(null);
   let sourceLayerId: string | null = null;
   let hoveredKey: string | null = null;
 
-  function setFromPick(info: PickingInfo): void {
+  function setFromPick(info: PickingInfo, row: HoveredRow | null): void {
     const hovered = resolveHoveredFeature(info);
     if (!hovered) {
       clear();
@@ -27,23 +34,28 @@ function createMapHoverHighlightStore() {
     hoveredKey = key;
     sourceLayerId = hovered.sourceLayerId;
     overlay = createHoverHighlightOverlay(info);
+    hoveredRow = row;
   }
 
   function clear(): void {
-    if (hoveredKey === null && overlay.length === 0) {
+    if (hoveredKey === null && overlay === null && hoveredRow === null) {
       return;
     }
     hoveredKey = null;
     sourceLayerId = null;
-    overlay = [];
+    overlay = null;
+    hoveredRow = null;
   }
 
   return {
-    get overlay(): Layer[] {
+    get overlay(): Layer | null {
       return overlay;
     },
     get sourceLayerId(): string | null {
       return sourceLayerId;
+    },
+    get hoveredRow(): HoveredRow | null {
+      return hoveredRow;
     },
     setFromPick,
     clear
