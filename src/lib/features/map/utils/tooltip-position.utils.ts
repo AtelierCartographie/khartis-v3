@@ -66,3 +66,43 @@ export function resolveTooltipViewportPosition({
 
   return { left, top };
 }
+
+export interface TooltipBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export interface ResolveCursorTooltipPositionParams {
+  cursor: { x: number; y: number };
+  tooltipSize: TooltipSize;
+  bounds: TooltipBounds;
+  padding: number;
+  offset: number;
+}
+
+// Below-right of the cursor, flipped to the other side on an axis where it
+// would leave the bounds, so the pointer never covers what it describes and
+// the tooltip never slides under the side panels.
+export function resolveCursorTooltipPosition({
+  cursor,
+  tooltipSize,
+  bounds,
+  padding,
+  offset
+}: ResolveCursorTooltipPositionParams): TooltipViewportPosition {
+  const minLeft = bounds.left + padding;
+  const maxLeft = bounds.right - padding - tooltipSize.width;
+  const minTop = bounds.top + padding;
+  const maxTop = bounds.bottom - padding - tooltipSize.height;
+  const right = cursor.x + offset;
+  const below = cursor.y + offset;
+  const left = right <= maxLeft ? right : cursor.x - offset - tooltipSize.width;
+  const top = below <= maxTop ? below : cursor.y - offset - tooltipSize.height;
+
+  return {
+    left: clamp(left, minLeft, maxLeft),
+    top: clamp(top, minTop, maxTop)
+  };
+}

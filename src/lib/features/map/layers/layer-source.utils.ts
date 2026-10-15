@@ -15,6 +15,9 @@ export type BinaryLayerInteractionData = {
 
   khartisSplitDatasetRowByGeomRow?: Int32Array;
   featureIds?: Uint32Array;
+  // The parsed geometry the layer draws, kept so the hover highlight can
+  // outline the picked feature without rebuilding the layer.
+  khartisPickGeometry?: object;
 };
 
 export function attachBinaryPickingMetadata(
@@ -49,6 +52,7 @@ export function attachBinaryPickingMetadata(
   if (sourceData.featureIds instanceof Uint32Array) {
     target.featureIds = sourceData.featureIds;
   }
+  target.khartisPickGeometry = sourceData;
 }
 
 export function getRepresentativePointSource(

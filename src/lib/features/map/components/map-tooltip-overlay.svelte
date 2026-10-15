@@ -3,7 +3,11 @@
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
-  import { resolveTooltipViewportPosition } from '../utils/tooltip-position.utils';
+  import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+  import {
+    resolveCursorTooltipPosition,
+    resolveTooltipViewportPosition
+  } from '../utils/tooltip-position.utils';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
@@ -15,6 +19,7 @@
   const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
   const VIEWPORT_PADDING = 8;
+  const CURSOR_OFFSET = 14;
   const HEADLINE_ENTRY_KEYS = ['NAME_LATIN', 'NAME', 'LABEL', 'TITLE'] as const;
   const BADGE_ENTRY_KEYS = ['NUTS_ID', 'OGC_FID', 'ID', 'CODE'] as const;
 
@@ -122,6 +127,12 @@
   });
 
   $effect(() => {
+    if (!tooltipState.visible) {
+      mapHoverHighlightStore.clear();
+    }
+  });
+
+  $effect(() => {
     if (
       globalState.isMobileView &&
       tooltipState.visible &&
@@ -183,6 +194,37 @@
       width: typeof window !== 'undefined' ? window.innerWidth : 0,
       height: typeof window !== 'undefined' ? window.innerHeight : 0
     };
+
+    if (!isInteractive) {
+      return {
+        ...resolveCursorTooltipPosition({
+          cursor: { x: tooltipState.x, y: tooltipState.y },
+          tooltipSize: {
+            width: rect?.width ?? 0,
+            height: rect?.height ?? 0
+          },
+          bounds: {
+            left: Math.max(0, viewerRect?.left ?? 0),
+            top: Math.max(0, viewerRect?.top ?? 0),
+            right: Math.min(
+              viewportSize.width,
+              viewerRect
+                ? viewerRect.left + viewerRect.width
+                : viewportSize.width
+            ),
+            bottom: Math.min(
+              viewportSize.height,
+              viewerRect
+                ? viewerRect.top + viewerRect.height
+                : viewportSize.height
+            )
+          },
+          padding: VIEWPORT_PADDING,
+          offset: CURSOR_OFFSET
+        }),
+        interactiveHeight: 0
+      };
+    }
     const interactiveHeight = isInteractive
       ? resolveDesktopInspectorHeight(
           viewportSize.height - (viewerRect?.top ?? 0) - VIEWPORT_PADDING * 2
