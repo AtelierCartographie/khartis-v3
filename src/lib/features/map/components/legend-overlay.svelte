@@ -21,9 +21,11 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
     clampPointToBounds,
     getDragBounds,
     remapAreaPointToResizedPage,
+    roundToLayoutUnit,
     snapAreaPointWithinPage,
     snapPointWithinBounds,
     type PageGridPoint,
@@ -192,7 +194,7 @@
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
   );
   const stackGap = $derived(
-    Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))
+    roundToLayoutUnit(layoutTokens.legend.fontSize * 0.7, 2)
   );
 
   function getPositionClass(position: LegendPosition): string {
@@ -252,10 +254,10 @@
   function getFrameStyle(item: LegendItem): string {
     const hasBackground = legendState.style.background.enabled;
     const shellPaddingInline = hasBackground
-      ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
+      ? layoutTokens.legend.paddingInline
       : 0;
     const shellPaddingBlock = hasBackground
-      ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
+      ? layoutTokens.legend.paddingBlock
       : 0;
     const position = getFramePosition(item);
     const transform =
@@ -313,7 +315,7 @@
   }
 
   function getKeyboardMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+    return formatState.gridEnabled ? PAGE_SNAP_STEP_PX : 1;
   }
 
   function getKeyboardFastMoveStep(): number {
@@ -924,7 +926,7 @@
     align-items: flex-end;
     justify-content: flex-end;
     gap: 4px;
-    padding: 6px;
+    padding: 8px;
   }
 
   .legend-overlay.inline .legend-container {
@@ -1001,7 +1003,7 @@
   }
 
   .legend-title {
-    margin: 0 0 3px 0;
+    margin: 0 0 4px 0;
     font-size: 1em;
     font-weight: 600;
     color: inherit;
@@ -1012,7 +1014,7 @@
   }
 
   .legend-subtitle {
-    margin: 0 0 2px 0;
+    margin: 0 0 4px 0;
     color: inherit;
     font-size: 0.9em;
     line-height: 1.3;

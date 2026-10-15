@@ -65,8 +65,8 @@ const TOKENS_BY_PROFILE = {
     legend: {
       fontSize: 8,
       maxWidth: 200,
-      paddingInline: 16,
-      paddingBlock: 12,
+      paddingInline: 8,
+      paddingBlock: 4,
       swatchSize: 16,
       patternedSwatchSize: 20
     },
@@ -106,8 +106,8 @@ const TOKENS_BY_PROFILE = {
     legend: {
       fontSize: 8,
       maxWidth: 260,
-      paddingInline: 18,
-      paddingBlock: 14,
+      paddingInline: 8,
+      paddingBlock: 4,
       swatchSize: 18,
       patternedSwatchSize: 22
     },
@@ -147,8 +147,8 @@ const TOKENS_BY_PROFILE = {
     legend: {
       fontSize: 8,
       maxWidth: 320,
-      paddingInline: 20,
-      paddingBlock: 16,
+      paddingInline: 8,
+      paddingBlock: 8,
       swatchSize: 20,
       patternedSwatchSize: 24
     },

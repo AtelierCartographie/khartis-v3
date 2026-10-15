@@ -11,7 +11,11 @@
     formatState
   } from '$lib/features/step-toolbar/tools/format';
   import { EVENT } from '../commons/constants/dom.constants';
-  import { PAGE_GRID_SIZE_PX } from '../commons/utils/page-grid.utils';
+  import {
+    PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
+    snapToPageGrid
+  } from '../commons/utils/page-grid.utils';
   import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
@@ -343,7 +347,7 @@
   } | null>(null);
 
   function getKeyboardResizeStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+    return formatState.gridEnabled ? PAGE_SNAP_STEP_PX : 1;
   }
 
   function getKeyboardFastResizeStep(): number {
@@ -365,6 +369,14 @@
     if (edge.includes('w')) left = startMargins.left + dx;
     if (edge.includes('s')) bottom = startMargins.bottom - dy;
     if (edge.includes('n')) top = startMargins.top + dy;
+
+    // The frame edges snap in page coordinates, where layout objects snap too.
+    const snap = formatState.gridEnabled;
+    const { width, height } = formatState;
+    top = snapToPageGrid(top, snap);
+    left = snapToPageGrid(left, snap);
+    right = width - snapToPageGrid(width - right, snap);
+    bottom = height - snapToPageGrid(height - bottom, snap);
 
     formatActions.setMargins({
       top: Math.round(top),
