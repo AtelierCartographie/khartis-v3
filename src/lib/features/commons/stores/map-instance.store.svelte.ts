@@ -910,7 +910,8 @@ function createMapInstanceStore() {
     state.map = null;
     state.deckOverlay = null;
     state.deckInstance = null;
-    state.workspaceViewportElement = null;
+    // The workspace viewport outlives the map engines: it registers and
+    // clears its own element, so a map switch must not orphan it.
     state.isMapLoaded = false;
     state.zoomLevel = 100;
     state.baseZoomLevel = DEFAULT_MAP_BASE_ZOOM;

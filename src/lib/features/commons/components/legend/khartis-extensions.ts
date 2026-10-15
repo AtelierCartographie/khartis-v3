@@ -11,6 +11,7 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   splitLegendOverflow,
+  wrapLegendEntry,
   wrapLegendText,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
@@ -37,6 +38,8 @@ export interface KhartisLegendSwatchItem {
   patternFill?: LegendPatternFill | null;
   patternOpacity?: number;
   dashed?: boolean;
+  /** Lets a hovered map feature point at this entry. */
+  entryKey?: string;
 }
 
 export interface KhartisSwatchLegendOptions extends CommonLegendTextOptions {
@@ -88,6 +91,7 @@ interface RowLegendOptions<T> extends CommonLegendTextOptions {
   // row then grow with the item, so a legend meant to read at map scale is not
   // squeezed into a box derived from the font size.
   getShapeSize?: (item: T) => number | undefined;
+  getEntryKey?: (item: T) => string | undefined;
   /** Share of the default gap kept between two entries, from 0 to 1. */
   entrySpacing?: number;
   footerItems?: KhartisLegendSwatchItem[];
@@ -105,6 +109,7 @@ export function draw_khartis_swatch_legend(
     className: `khartis_${type}_legend`,
     items,
     getLabel: (item) => item.label,
+    getEntryKey: (item) => item.entryKey,
     shapeWidth: getSwatchShapeWidth(
       type,
       Math.round((options.fontSize ?? 12) * 1.25)
@@ -412,7 +417,10 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     );
 
     return {
-      markup: `${shape.markup}${label}`,
+      markup: wrapLegendEntry(
+        options.getEntryKey?.(item),
+        `${shape.markup}${label}`
+      ),
       defs: shape.defs
     };
   });
@@ -455,7 +463,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     );
 
     return {
-      markup: `${shape.markup}${label}`,
+      markup: wrapLegendEntry(item.entryKey, `${shape.markup}${label}`),
       defs: shape.defs
     };
   });

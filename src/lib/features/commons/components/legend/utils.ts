@@ -107,6 +107,28 @@ export function escapeSvgAttribute(value: string): string {
   return escapeSvgText(value).replace(/"/g, '&quot;');
 }
 
+// Entries a hovered map feature can point at carry this attribute, so the map
+// overlay can bring the matching entry forward without redrawing the legend.
+export const LEGEND_ENTRY_ATTRIBUTE = 'data-legend-entry';
+export const MISSING_LEGEND_ENTRY = 'missing';
+
+export function classLegendEntry(classIndex: number): string {
+  return `class:${classIndex}`;
+}
+
+export function categoryLegendEntry(category: string): string {
+  return `category:${category}`;
+}
+
+export function wrapLegendEntry(
+  entryKey: string | undefined,
+  markup: string
+): string {
+  return entryKey
+    ? `<g ${LEGEND_ENTRY_ATTRIBUTE}="${escapeSvgAttribute(entryKey)}">${markup}</g>`
+    : markup;
+}
+
 export function createLegendSvg(svg: LegendSvgDefinition): LegendSvgDefinition;
 export function createLegendSvg(
   markup: string,

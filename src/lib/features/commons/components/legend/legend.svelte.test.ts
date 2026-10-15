@@ -243,6 +243,22 @@ describe('common legend generators', () => {
     expect(countColumns(200)).toBe(5);
   });
 
+  it('should tag every class and the missing-data box when a hovered feature has to find its entry', () => {
+    const svg = draw_quanti_color_legend(
+      [0, 10, 20, 30],
+      ['#eee', '#999', '#333'],
+      {
+        nodata: true
+      }
+    );
+    const entries = Array.from(
+      svg.markup.matchAll(/data-legend-entry="([^"]+)"/g),
+      (match) => match[1]
+    );
+
+    expect(entries).toEqual(['class:0', 'class:1', 'class:2', 'missing']);
+  });
+
   it('keeps categorical missing data compact in the same SVG', () => {
     const svg = createLegendSvg(
       draw_categorical_legend(
