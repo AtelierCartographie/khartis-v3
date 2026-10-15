@@ -1076,7 +1076,6 @@
     });
     basemapStyleStore.setReferenceBasemap(null);
     basemapStyleStore.setStyle(referenceStyle);
-    basemapStyleStore.requestViewportReset(referenceStyle);
 
     projectStore.updateProjectData({
       basemap: {
