@@ -451,12 +451,18 @@ export async function computeClassificationBreaks(
     requestedClassCount,
     result.counts.length
   );
-  const colors = resolveClassificationBreakColors(
+  const rampColors = resolveClassificationBreakColors(
     classification,
     actualClassCount,
     result.breaks,
     breakpointValue
   );
+  // A single-value series is one class: it takes the middle of the ramp, and
+  // the requested class count stays stored for when the series spreads again.
+  const colors =
+    result.counts.length === 1 && rampColors
+      ? [rampColors[Math.floor(rampColors.length / 2)]]
+      : rampColors;
 
   return {
     normalizedMethod: storeMethod,
@@ -618,7 +624,10 @@ export function useClassificationBreaksController({
       primitive: options.primitive
     });
     const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}:${rowScopeClause ?? 'all'}`;
-    const hasExistingBreaks = Boolean(classification?.breaks?.length);
+    // A single-value series completes with no break but one count.
+    const hasExistingBreaks = Boolean(
+      classification?.breaks?.length || classification?.counts?.length
+    );
 
     if (inFlightKeys.get(options.scopeKey) === breaksKey) {
       return;
