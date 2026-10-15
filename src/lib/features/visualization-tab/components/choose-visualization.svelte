@@ -402,6 +402,29 @@
     }
   });
 
+  // A visualization picked elsewhere (toolbar tab, layers panel) brings its
+  // dataset along; without this the effect below would select the first
+  // visualization of the dataset shown here and cancel the pick. Only a change
+  // of selection counts, so picking a dataset in the menu still wins.
+  let lastSelectedVisualizationId: string | undefined;
+  $effect(() => {
+    const selected = visualizationStore.selectedVisualization;
+    if (selected?.id === lastSelectedVisualizationId) return;
+    lastSelectedVisualizationId = selected?.id;
+    if (!selected || selected.facet) return;
+
+    untrack(() => {
+      if (selected.datasetId === selectedDatasetId) return;
+      if (
+        datasetsStore.datasets.some(
+          (dataset) => dataset.id === selected.datasetId
+        )
+      ) {
+        selectedDatasetId = selected.datasetId;
+      }
+    });
+  });
+
   $effect(() => {
     const targetViz = targetVisualization;
 
