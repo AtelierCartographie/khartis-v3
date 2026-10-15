@@ -1056,6 +1056,13 @@ function createClassEntryResolver(
   };
 }
 
+// The class count the layers hand to their classed size accessors.
+function getMapSizeClassCount(
+  classification: ClassificationConfig | undefined
+): number | undefined {
+  return classification?.numClasses ?? classification?.colors?.length;
+}
+
 function createClassedColorEntryResolver(
   column: string | undefined,
   classification: ClassificationConfig
@@ -2035,11 +2042,17 @@ function getPointSizeLegendDrafts(
     {
       key: 'point-size-classes',
       primitive: 'point',
+      // Classed sizes read the symbol's value column, as the map sizes them.
       resolveEntry: createClassEntryResolver(
-        symbol?.sizeColumn ?? viz.mapping.sizeColumn,
+        symbol?.valueColumn,
         getPrimitiveClassification(viz, PrimitiveFilterType.POINT)?.breaks ??
           viz.classification?.breaks,
-        items.length
+        items.length,
+        {
+          mapClassCount: getMapSizeClassCount(
+            getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+          )
+        }
       ),
       className: 'legend-svg--symbols',
       consumesMissingData: isLegendMissingDataShown(viz, 'point'),
@@ -2301,10 +2314,12 @@ function getLineWidthLegendDraft(
   return {
     key: 'line-width',
     primitive: 'line',
+    // Classed widths read the line's value column, as the map sizes them.
     resolveEntry: createClassEntryResolver(
-      sizeColumn,
+      getLinePrimitive(viz)?.valueColumn,
       classification?.breaks,
-      strokeWidths.length
+      strokeWidths.length,
+      { mapClassCount: getMapSizeClassCount(classification) }
     ),
     className: 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),

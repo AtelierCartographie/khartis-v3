@@ -115,14 +115,18 @@
     legendActions.syncWithVisualizations();
   });
 
-  // A legend points at the hovered feature only when its visualization draws
-  // from the same dataset; exports never carry the mark.
+  // A legend points at the hovered feature when its visualization draws from
+  // the same dataset; a legend anchored in a collection map answers to that
+  // map alone. Exports never carry the mark.
   function getActiveEntry(
     item: LegendItem,
     segment: LegendSegment
   ): string | null {
     const hoveredRow = mapHoverHighlightStore.hoveredRow;
     if (!hoveredRow || globalState.isMapExporting || !segment.resolveEntry) {
+      return null;
+    }
+    if (scopeVizId && hoveredRow.vizId !== scopeVizId) {
       return null;
     }
     const viz = vizByItemId.get(item.id);
