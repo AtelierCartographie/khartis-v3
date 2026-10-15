@@ -1,4 +1,19 @@
-export const PAGE_GRID_SIZE_PX = 12;
+/**
+ * One base unit drives the layout: the snap step is one unit, the visible grid
+ * is a multiple of it, and the inner margins of layout objects (legends, geo
+ * indications) are multiples of it too, so their edges and contents can share
+ * the same alignments.
+ */
+export const LAYOUT_UNIT_PX = 4;
+export const PAGE_SNAP_STEP_PX = LAYOUT_UNIT_PX;
+export const PAGE_GRID_SIZE_PX = LAYOUT_UNIT_PX * 3;
+
+export function roundToLayoutUnit(value: number, minUnits = 0): number {
+  return Math.max(
+    minUnits * LAYOUT_UNIT_PX,
+    Math.round(value / LAYOUT_UNIT_PX) * LAYOUT_UNIT_PX
+  );
+}
 
 export interface PageGridPoint {
   x: number;
@@ -61,7 +76,7 @@ export function snapToPageGrid(value: number, enabled = true): number {
     return value;
   }
 
-  return Math.round(value / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
+  return Math.round(value / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
 }
 
 export function snapPointToPageGrid(
@@ -78,8 +93,8 @@ export function getGridAlignedRange(
   min: number,
   max: number
 ): { min: number; max: number } | null {
-  const alignedMin = Math.ceil(min / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
-  const alignedMax = Math.floor(max / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
+  const alignedMin = Math.ceil(min / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
+  const alignedMax = Math.floor(max / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
 
   if (alignedMin > alignedMax) {
     return null;

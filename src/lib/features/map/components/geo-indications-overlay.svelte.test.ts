@@ -239,7 +239,7 @@ describe('geo indications overlay dragging', () => {
     globalActions.resetNavigationState();
   });
 
-  it('snaps and clamps scale dragging to the shared page grid when enabled', async () => {
+  it('snaps and clamps scale dragging to the page snap step when enabled', async () => {
     geoIndicationsActions.toggleScale();
 
     const { container } = render(GeoIndicationsOverlay);
@@ -278,7 +278,7 @@ describe('geo indications overlay dragging', () => {
 
     expect(geoIndicationsState.scale.dragPosition).toEqual({
       x: 240,
-      y: 168
+      y: 172
     });
 
     await fireEvent.pointerUp(window);
@@ -492,7 +492,7 @@ describe('geo indications overlay dragging', () => {
     await waitFor(() => {
       expect(geoIndicationsState.insetMap.dragPosition).toEqual({
         x: 96,
-        y: 12
+        y: 16
       });
     });
   });
