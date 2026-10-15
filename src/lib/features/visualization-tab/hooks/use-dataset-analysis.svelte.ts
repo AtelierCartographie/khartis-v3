@@ -20,6 +20,10 @@ export interface DataFieldItem {
 
 const NUMERIC_DATA_FIELD_TYPES = new Set(['number', 'numeric']);
 
+export function isNumericDataFieldType(type: string | undefined): boolean {
+  return NUMERIC_DATA_FIELD_TYPES.has(type ?? '');
+}
+
 export interface UseDatasetAnalysisDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
 }
@@ -110,9 +114,7 @@ export function useDatasetAnalysis(
   function isNumericDataField(columnName: string | undefined): boolean {
     if (!columnName) return false;
     return dataFieldItems.some(
-      (field) =>
-        field.text === columnName &&
-        NUMERIC_DATA_FIELD_TYPES.has(field.type ?? '')
+      (field) => field.text === columnName && isNumericDataFieldType(field.type)
     );
   }
 
