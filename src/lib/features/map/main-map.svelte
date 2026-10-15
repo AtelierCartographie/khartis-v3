@@ -22,6 +22,7 @@
   import { mapLoadingStore } from './stores/map-loading.store.svelte';
   import { MAP_TIMING } from './constants/timing.constants';
   import { useMapDisplayData } from './hooks';
+  import { useBackgroundClassificationRefresh } from '$lib/features/visualization-tab';
   import { getKeyboardMoveDelta } from './utils/keyboard-position.utils';
 
   let isInitializing = $state(true);
@@ -44,6 +45,8 @@
     hasError = true;
     errorMessage = message;
   }
+
+  useBackgroundClassificationRefresh();
 
   const mapDisplayData = useMapDisplayData({
     getIsInitializing: () => isInitializing,

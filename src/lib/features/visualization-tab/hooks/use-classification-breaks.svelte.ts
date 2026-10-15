@@ -336,6 +336,51 @@ export function resolveClassificationColors({
   return applyPaletteInversion(colors, classification?.inverted ?? false);
 }
 
+/** The classification fields a breaks computation rewrites. */
+export function buildClassificationUpdate(
+  computation: ClassificationBreaksComputation,
+  classification: ClassificationConfig | undefined,
+  method: ClassificationMethod
+): Partial<ClassificationConfig> {
+  const update: Partial<ClassificationConfig> = {
+    breaks: computation.result.breaks,
+    counts: computation.result.counts,
+    roundedMin: computation.result.roundedMin,
+    roundedMax: computation.result.roundedMax,
+    colors: computation.colors
+  };
+
+  if (computation.breakpointLowerClassCount != null) {
+    update.breakpointLowerClassCount = computation.breakpointLowerClassCount;
+  }
+
+  if (
+    computation.autoBreakpointApplied &&
+    computation.breakpointValue != null
+  ) {
+    update.breakpointValue = computation.breakpointValue;
+  }
+
+  if (computation.autoBreakpointCleared) {
+    update.breakpointValue = null;
+  }
+
+  if (
+    computation.normalizedMethod !== method ||
+    computation.actualClassCount !==
+      (classification?.numClasses ??
+        classification?.classes ??
+        DEFAULT_DISCRETIZATION_CLASS_COUNT) ||
+    classification?.classes !== computation.actualClassCount
+  ) {
+    update.method = computation.normalizedMethod;
+    update.classes = computation.actualClassCount;
+    update.numClasses = computation.actualClassCount;
+  }
+
+  return update;
+}
+
 export async function computeClassificationBreaks(
   options: ComputeClassificationBreaksOptions
 ): Promise<ClassificationBreaksComputation | null> {
@@ -680,44 +725,9 @@ export function useClassificationBreaksController({
         return;
       }
 
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: computation.result.breaks,
-        counts: computation.result.counts,
-        roundedMin: computation.result.roundedMin,
-        roundedMax: computation.result.roundedMax,
-        colors: computation.colors
-      };
-
-      if (computation.breakpointLowerClassCount != null) {
-        classificationUpdate.breakpointLowerClassCount =
-          computation.breakpointLowerClassCount;
-      }
-
-      if (
-        computation.autoBreakpointApplied &&
-        computation.breakpointValue != null
-      ) {
-        classificationUpdate.breakpointValue = computation.breakpointValue;
-      }
-
-      if (computation.autoBreakpointCleared) {
-        classificationUpdate.breakpointValue = null;
-      }
-
-      if (
-        computation.normalizedMethod !== method ||
-        computation.actualClassCount !==
-          (classification?.numClasses ??
-            classification?.classes ??
-            DEFAULT_DISCRETIZATION_CLASS_COUNT) ||
-        classification?.classes !== computation.actualClassCount
-      ) {
-        classificationUpdate.method = computation.normalizedMethod;
-        classificationUpdate.classes = computation.actualClassCount;
-        classificationUpdate.numClasses = computation.actualClassCount;
-      }
-
-      options.applyUpdate(classificationUpdate);
+      options.applyUpdate(
+        buildClassificationUpdate(computation, classification, method)
+      );
       lastCompletedKeys.set(options.scopeKey, breaksKey);
       clearRetry(options.scopeKey);
     } catch (error) {
