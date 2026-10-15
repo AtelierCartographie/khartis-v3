@@ -24,6 +24,8 @@
   import {
     Add,
     Checkmark,
+    ChevronLeft,
+    ChevronRight,
     Copy,
     Edit,
     OverflowMenuVertical,
@@ -389,18 +391,65 @@
     }
   });
 
+  const selectedTabId = $derived(
+    isVizStep
+      ? visualizationStore.selectedVisualization?.id
+      : globalState.dataButtons.find((b) => b.isSelected)?.id
+  );
+
+  function revealSelectedTab(behavior: ScrollBehavior): void {
+    if (!selectedTabId) return;
+    tabRefs.get(selectedTabId)?.scrollIntoView({
+      behavior,
+      block: 'nearest',
+      inline: 'nearest'
+    });
+  }
+
   $effect(() => {
-    const selectedButton = globalState.dataButtons.find((b) => b.isSelected);
-    if (selectedButton) {
-      const element = tabRefs.get(selectedButton.id);
-      if (element) {
-        element.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'nearest'
-        });
-      }
-    }
+    void selectedTabId;
+    void tabRefs.size;
+    revealSelectedTab('smooth');
+  });
+
+  // The scrollbar is hidden, so overflowing tabs get explicit arrows:
+  // otherwise only a wheel gesture reaches them.
+  let canScrollLeft = $state(false);
+  let canScrollRight = $state(false);
+
+  function updateScrollState(): void {
+    if (!tabsScroller) return;
+    const { scrollLeft, scrollWidth, clientWidth } = tabsScroller;
+    canScrollLeft = scrollLeft > 1;
+    canScrollRight = scrollLeft + clientWidth < scrollWidth - 1;
+  }
+
+  // Resizes include the arrows appearing, which narrows the strip after the
+  // selected tab was revealed.
+  function handleScrollerResize(): void {
+    revealSelectedTab('auto');
+    updateScrollState();
+  }
+
+  function scrollTabs(direction: -1 | 1): void {
+    tabsScroller?.scrollBy({
+      left: direction * tabsScroller.clientWidth * 0.8,
+      behavior: 'smooth'
+    });
+  }
+
+  $effect(() => {
+    const scroller = tabsScroller;
+    if (!scroller) return;
+    const observer = new ResizeObserver(handleScrollerResize);
+    observer.observe(scroller);
+    const mutationObserver = new MutationObserver(updateScrollState);
+    mutationObserver.observe(scroller, { childList: true });
+    updateScrollState();
+    return () => {
+      observer.disconnect();
+      mutationObserver.disconnect();
+    };
   });
 
   const onWheel = (e: WheelEvent) => {
@@ -571,16 +620,29 @@
       'toolbar-tabs-collapsed opacity-0'
   )}
 >
+  {#if canScrollLeft || canScrollRight}
+    <IconButton
+      kind="ghost"
+      size="small"
+      class="tabs-scroll-button"
+      iconDescription={m.toolbar_tabs_scroll_left()}
+      icon={ChevronLeft}
+      disabled={!canScrollLeft}
+      on:click={() => scrollTabs(-1)}
+    />
+  {/if}
   <div
     class="tabs-scroller scrollbar-hidden"
     bind:this={tabsScroller}
     onwheel={onWheel}
+    onscroll={updateScrollState}
   >
     {#if isVizStep}
       {#each vizTabs as vizTab (vizTab.id)}
         <div
           class="tab-button-wrapper with-menu"
           class:selected={vizTab.isSelected}
+          use:registerTab={vizTab.id}
         >
           <Button
             isSelected={vizTab.isSelected}
@@ -838,6 +900,18 @@
     {/if}
   </div>
 
+  {#if canScrollLeft || canScrollRight}
+    <IconButton
+      kind="ghost"
+      size="small"
+      class="tabs-scroll-button"
+      iconDescription={m.toolbar_tabs_scroll_right()}
+      icon={ChevronRight}
+      disabled={!canScrollRight}
+      on:click={() => scrollTabs(1)}
+    />
+  {/if}
+
   <div class="add-btn-wrapper">
     <Button
       kind="ghost"
@@ -950,7 +1024,7 @@
     flex: 1 1 0;
     /* Browser-tab behaviour: shrink down to a readable minimum that still
        shows part of the title, then let the scroller overflow horizontally. */
-    min-width: 5.5rem;
+    min-width: 8rem;
     max-width: 250px;
     border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
 
