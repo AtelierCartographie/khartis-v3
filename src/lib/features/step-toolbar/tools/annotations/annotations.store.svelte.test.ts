@@ -87,19 +87,19 @@ describe('annotations store', () => {
     );
 
     expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.position).toEqual({
-      x: 48,
-      y: 48
+      x: 44,
+      y: 44
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.position).toEqual({
-      x: 48,
-      y: 72
+      x: 44,
+      y: 68
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
-      x: 576,
+      x: 572,
       y: 456
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
-      x: 576,
+      x: 572,
       y: 528
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
@@ -221,7 +221,7 @@ describe('annotations store', () => {
       (item) => item.role === ANNOTATION_ROLE.NOTE
     );
 
-    expect(note?.position).toEqual({ x: 576, y: 432 });
+    expect(note?.position).toEqual({ x: 572, y: 432 });
     expect(note?.coordinateSpace).toBe('page');
     expect(note?.positionMode).toBe('manual');
   });
@@ -309,7 +309,7 @@ describe('annotations store', () => {
     const [legacyShape] = getAnnotationsState().items;
 
     expect(legacyShape.coordinateSpace).toBe('map');
-    expect(legacyShape.position).toEqual({ x: 36, y: 72 });
+    expect(legacyShape.position).toEqual({ x: 40, y: 72 });
   });
 
   it('starts placement without spawning the annotation until commit', () => {

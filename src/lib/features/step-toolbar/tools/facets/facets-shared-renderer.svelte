@@ -114,7 +114,7 @@
   let referenceBasemapRequestId = 0;
   let worldBaseTable = $state.raw<ArrowTable | null>(null);
 
-  const FACET_VIEWPORT_FIT_PADDING_PX = 16;
+  const FACET_VIEWPORT_FIT_PADDING_PX = 24;
   // A manual view from the single map keeps its framing once the projection
   // is refitted to the facet cell.
   let inheritedFramingScale = untrack(() =>
@@ -210,8 +210,14 @@
     height: Math.max(1, descriptors[0]?.frame.height ?? 1)
   }));
 
-  // Keep facet fit padding fixed so viewport fitting cannot feed back into relayout.
-  const mapViewportFitPaddingPx = FACET_VIEWPORT_FIT_PADDING_PX;
+  // Cells are drawn at the rendered page size, so the padding is a page length
+  // scaled like them: a fixed screen padding would make every page zoom step
+  // zoom the maps too. It never depends on the fit, so it cannot feed back
+  // into relayout.
+  const mapViewportFitPaddingPx = $derived(
+    FACET_VIEWPORT_FIT_PADDING_PX *
+      Math.max(globalState.zoom.pageZoomScale, 0.1)
+  );
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );

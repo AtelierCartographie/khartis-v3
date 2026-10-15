@@ -72,7 +72,11 @@
     getAnchorScaleFactor
   } from '../utils/map-anchor-projection.utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
-  import { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
+  import {
+    PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
+    snapToPageGrid
+  } from '$lib/features/commons/utils/page-grid.utils';
 
   let {
     interactive = true,
@@ -384,7 +388,7 @@
   }
 
   function getKeyboardMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+    return formatState.gridEnabled ? PAGE_SNAP_STEP_PX : 1;
   }
 
   function getKeyboardFastMoveStep(): number {
@@ -1455,9 +1459,7 @@
     dx: number
   ): void {
     const snapEdge = (value: number) =>
-      formatState.gridEnabled
-        ? Math.round(value / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX
-        : value;
+      snapToPageGrid(value, formatState.gridEnabled);
     let left = state.startAnnotationX;
     let right = state.startAnnotationX + state.startW;
 

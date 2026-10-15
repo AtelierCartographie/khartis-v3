@@ -363,7 +363,10 @@
         return;
       }
 
+      // In page mode the wheel belongs to the page zoom alone, also between
+      // two of its steps.
       event.preventDefault();
+      event.stopPropagation();
       // A trackpad fires many small deltas where a mouse notch fires one large
       // one: accumulate so both step the page zoom at a comparable pace.
       const deltaPx =
