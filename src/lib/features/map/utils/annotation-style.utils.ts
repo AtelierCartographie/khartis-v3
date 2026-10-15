@@ -60,6 +60,8 @@ export function toOpacityUnit(opacity: number | undefined): number {
   return clampedPercent / 100;
 }
 
+const TEXT_BACKGROUND_PADDING = '2px 4px';
+
 export function getTextStyleFromStyle(
   style: AnnotationStyle | undefined
 ): string {
@@ -101,6 +103,7 @@ export function getTextStyleFromStyle(
     styles.push(
       `background: color-mix(in srgb, ${bgColor} ${bgOpacity * 100}%, transparent)`
     );
+    styles.push(`padding: ${TEXT_BACKGROUND_PADDING}`);
   } else {
     styles.push('background: transparent');
     styles.push('box-shadow: none');

@@ -17,6 +17,7 @@ import {
   annotationsActions,
   getAnnotationsState
 } from './annotations.store.svelte';
+import { stackBottomRightPageElements } from './annotations-page-layout.utils';
 
 describe('annotations store', () => {
   beforeEach(async () => {
@@ -402,5 +403,32 @@ describe('annotations store', () => {
     expect(drawing?.coordinateSpace).toBe('map');
     expect(drawing?.position).toEqual({ x: 48 - 32, y: 60 - 32 });
     expect(drawing?.anchor).toBeUndefined();
+  });
+
+  it('should stack footer blocks on whole grid rows when one of them wraps', () => {
+    const positions = stackBottomRightPageElements(
+      [
+        { id: 'source', role: ANNOTATION_ROLE.SOURCE, height: 19.2 },
+        { id: 'credit', role: ANNOTATION_ROLE.CREDIT, height: 9.6 },
+        { id: 'basemap', role: ANNOTATION_ROLE.BASEMAP_SOURCE, height: 12 },
+        {
+          id: 'signature',
+          role: ANNOTATION_ROLE.SIGNATURE,
+          positionMode: 'manual',
+          height: 12
+        }
+      ],
+      {
+        width: 600,
+        height: 400,
+        margins: { top: 24, bottom: 24, left: 24, right: 24 }
+      }
+    );
+
+    // The map frame ends at 376; the stack starts one grid row above it.
+    expect(positions.get('credit')).toBe(352);
+    expect(positions.get('basemap')).toBe(340);
+    expect(positions.get('source')).toBe(316);
+    expect(positions.has('signature')).toBe(false);
   });
 });

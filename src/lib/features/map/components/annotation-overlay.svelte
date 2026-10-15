@@ -18,7 +18,8 @@
   import {
     annotationsActions,
     getAnnotationsState,
-    getKnownPageElementDefaultContents
+    getKnownPageElementDefaultContents,
+    stackBottomRightPageElements
   } from '$lib/features/step-toolbar/tools/annotations';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
@@ -88,6 +89,7 @@
   const KEYBOARD_FAST_MOVE_GRID_MULTIPLIER = 5;
   const KEYBOARD_FAST_MOVE_STEP_PX = 10;
   const DEFAULT_TEXT_PLACEMENT_SIZE = { width: 220, height: 64 } as const;
+  const TEXT_MIN_WIDTH_PX = PAGE_GRID_SIZE_PX * 2;
   const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
   const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
   const DEFAULT_DRAWING_PLACEMENT_SIZE = { width: 132, height: 80 } as const;
@@ -277,6 +279,22 @@
       : []
   );
   const selectedId = $derived(annotationsState.selectedId);
+  let measuredItemHeights = $state<Record<string, number>>({});
+  const stackedPageElementY = $derived(
+    stackBottomRightPageElements(
+      visibleItems.map((item) => ({
+        id: item.id,
+        role: item.role,
+        positionMode: item.positionMode,
+        height: measuredItemHeights[item.id] ?? 0
+      })),
+      {
+        width: formatState.width,
+        height: formatState.height,
+        margins: pageMargins
+      }
+    )
+  );
 
   // MapLibre viewport mutations must bump `mapViewRevision` like deck viewState does.
   $effect(() => {
@@ -339,12 +357,19 @@
     return anchoredScreenPositions[item.id]?.scale ?? 1;
   }
 
+  function getPagePosition(item: Annotation): { x: number; y: number } {
+    const stackedY = stackedPageElementY.get(item.id);
+    return stackedY === undefined
+      ? item.position
+      : { x: item.position.x, y: stackedY };
+  }
+
   function getLocalRenderedPosition(item: Annotation): {
     x: number;
     y: number;
   } {
     if (getAnnotationScope(item) === 'page') {
-      return item.position;
+      return getPagePosition(item);
     }
     const anchored = item.anchor ? anchoredScreenPositions[item.id] : undefined;
     return anchored ? { x: anchored.x, y: anchored.y } : item.position;
@@ -553,7 +578,7 @@
 
   function getRenderedPosition(item: Annotation): { x: number; y: number } {
     if (getAnnotationScope(item) === 'page') {
-      return item.position;
+      return getPagePosition(item);
     }
 
     // Fall back to pixel-page placement when a WGS84 anchor cannot be projected.
@@ -589,7 +614,12 @@
     const boundsOrigin = getVectorShapeBoundsOrigin(item);
     const scale = getPageScale();
     const mapFactor = getMapScaleFactor(item);
-    return `left: ${(x + boundsOrigin.x * mapFactor) * scale}px; top: ${(y + boundsOrigin.y * mapFactor) * scale}px; transform: scale(${scale * mapFactor});`;
+    const textWidth =
+      item.type === AnnotationKind.TEXT ? item.style?.shapeWidth : undefined;
+    const widthStyle = textWidth
+      ? ` width: ${textWidth}px; max-width: none;`
+      : '';
+    return `left: ${(x + boundsOrigin.x * mapFactor) * scale}px; top: ${(y + boundsOrigin.y * mapFactor) * scale}px; transform: scale(${scale * mapFactor});${widthStyle}`;
   }
 
   function getShapeAccessibleLabel(item: Annotation): string {
@@ -1332,6 +1362,27 @@
     event.stopPropagation();
     cancelFocusedAnnotationReset();
 
+    if (item.type === AnnotationKind.TEXT) {
+      const itemElement =
+        event.currentTarget instanceof HTMLElement
+          ? event.currentTarget.closest<HTMLElement>('.annotation-item')
+          : null;
+      const position = getLocalRenderedPosition(item);
+      resizeState = {
+        id: item.id,
+        handle,
+        startAnnotationX: position.x,
+        startAnnotationY: position.y,
+        startW: itemElement?.offsetWidth ?? item.style?.shapeWidth ?? 0,
+        startH: itemElement?.offsetHeight ?? 0,
+        startPointerX: event.clientX,
+        startPointerY: event.clientY
+      };
+      window.addEventListener(EVENT.POINTERMOVE, handleResizePointerMove);
+      window.addEventListener(EVENT.POINTERUP, handleResizePointerUp);
+      return;
+    }
+
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     resizeState = {
@@ -1363,6 +1414,11 @@
     const dx = (event.clientX - resizeState.startPointerX) / scale;
     const dy = (event.clientY - resizeState.startPointerY) / scale;
 
+    if (item.type === AnnotationKind.TEXT) {
+      resizeTextAnnotation(item, resizeState, dx);
+      return;
+    }
+
     const resizedBounds = resolveResizedShapeBounds(
       item,
       resizeState.handle,
@@ -1388,6 +1444,40 @@
     refreshMapAnchorIfPresent(item, {
       x: resizedBounds.x,
       y: resizedBounds.y
+    });
+  }
+
+  // Only the width is resizable: the height follows the wrapped text. Resizing
+  // pins an auto-placed page element where it is rendered.
+  function resizeTextAnnotation(
+    item: Annotation,
+    state: NonNullable<typeof resizeState>,
+    dx: number
+  ): void {
+    const snapEdge = (value: number) =>
+      formatState.gridEnabled
+        ? Math.round(value / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX
+        : value;
+    let left = state.startAnnotationX;
+    let right = state.startAnnotationX + state.startW;
+
+    if (state.handle === 'w') {
+      left = clamp(snapEdge(left + dx), 0, right - TEXT_MIN_WIDTH_PX);
+    } else {
+      right = clamp(
+        snapEdge(right + dx),
+        left + TEXT_MIN_WIDTH_PX,
+        Math.max(left + TEXT_MIN_WIDTH_PX, formatState.width)
+      );
+    }
+
+    annotationsActions.updateAnnotation(item.id, {
+      position: { x: left, y: state.startAnnotationY },
+      positionMode: 'manual',
+      style: {
+        ...(item.style ?? {}),
+        shapeWidth: Math.round(right - left)
+      }
     });
   }
 
@@ -2156,6 +2246,8 @@
         selectedId === item.id &&
         item.type !== AnnotationKind.SHAPE}
       class:dragging={dragState?.id === item.id}
+      class:has-text-width={item.type === AnnotationKind.TEXT &&
+        !!item.style?.shapeWidth}
       data-annotation-role={item.role}
       data-khartis-export-placeholder={isExportPlaceholderPageElement(item)
         ? 'true'
@@ -2172,11 +2264,24 @@
         handleAnnotationPointerDown(event, item)}
       onkeydown={(event: KeyboardEvent) =>
         handleAnnotationKeyDown(event, item.id)}
+      bind:offsetHeight={measuredItemHeights[item.id]}
     >
       {#if item.type === AnnotationKind.TEXT}
         <div class="annotation-text" style={getTextStyle(item)}>
           {item.content || ''}
         </div>
+        {#if interactive && isAnnotationEditing && selectedId === item.id}
+          {#each ['w', 'e'] as edge (edge)}
+            <div
+              class="text-resize-edge text-resize-{edge}"
+              role="button"
+              tabindex="-1"
+              aria-label={m.annotations_text_resize_handle()}
+              onpointerdown={(e: PointerEvent) =>
+                handleResizePointerDown(e, item, edge)}
+            ></div>
+          {/each}
+        {/if}
       {:else if item.type === AnnotationKind.SHAPE}
         {#if isVectorShapeItem(item)}
           {@const vectorPoints = getVectorPoints(item)}
@@ -2610,16 +2715,9 @@
     cursor: grabbing;
   }
 
-  .annotation-item[data-annotation-role] {
-    min-height: 24px;
-  }
-
   .annotation-item[data-annotation-role] .annotation-text {
     width: 100%;
     max-width: none;
-    padding: 0;
-    border-radius: 0;
-    line-height: 24px;
   }
 
   .annotation-item[data-annotation-role='title'],
@@ -2638,13 +2736,32 @@
   }
 
   .annotation-text {
-    background: rgba(255, 255, 255, 0.9);
-    padding: 8px 12px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     max-width: 300px;
+    line-height: 1.2;
     word-wrap: break-word;
     white-space: pre-wrap;
+  }
+
+  .annotation-item.has-text-width .annotation-text {
+    width: 100%;
+    max-width: none;
+  }
+
+  .text-resize-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 7px;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .text-resize-w {
+    left: -4px;
+  }
+
+  .text-resize-e {
+    right: -4px;
   }
 
   .annotation-shape,
