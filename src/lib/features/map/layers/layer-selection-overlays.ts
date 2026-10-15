@@ -24,11 +24,11 @@ import { hasAnyHighlightedFeature } from './layer-highlight.utils';
 import { createSplitAwareRowAccessor } from './split-rendering-accessors';
 import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.utils';
 
-const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
+export const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
-const SELECTED_POLYGON_STROKE_WIDTH = 3;
-const SELECTED_POINT_RING_RADIUS = 8;
+export const SELECTED_POLYGON_STROKE_WIDTH = 3;
+export const SELECTED_POINT_RING_RADIUS = 8;
 const POINT_GEOMETRY_TYPES = new Set<string>([
   GeometryType.POINT,
   GeometryType.MULTIPOINT

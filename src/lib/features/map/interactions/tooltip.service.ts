@@ -10,9 +10,9 @@ import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
 import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { MAP_TIMING } from '../constants/timing.constants';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
+import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {
   if (typeof value === 'string') {
@@ -287,119 +287,84 @@ export function extractTooltipEntries(
   return entries;
 }
 
-interface PendingHoverTooltipPayload {
-  x: number;
-  y: number;
-  entries: TooltipEntry[];
-  layerId: string | null;
-  rowIndex: number;
+interface PointerLike {
+  srcEvent?: { clientX?: unknown; clientY?: unknown };
 }
 
-let hoverTooltipTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
-let pendingHoverTooltip: PendingHoverTooltipPayload | null = null;
-
-function clearPendingHoverTooltip(): void {
-  if (hoverTooltipTimer !== null) {
-    globalThis.clearTimeout(hoverTooltipTimer);
-    hoverTooltipTimer = null;
+// The tooltip is fixed-positioned, so it needs viewport coordinates; deck's
+// info.x/y are relative to its canvas, which is not where the page is.
+function resolveClientPoint(
+  info: PickingInfo,
+  event: unknown
+): { x: number; y: number } {
+  const srcEvent = (event as PointerLike | undefined)?.srcEvent;
+  if (
+    typeof srcEvent?.clientX === 'number' &&
+    typeof srcEvent.clientY === 'number'
+  ) {
+    return { x: srcEvent.clientX, y: srcEvent.clientY };
   }
-
-  pendingHoverTooltip = null;
+  return { x: info.x ?? 0, y: info.y ?? 0 };
 }
 
-function scheduleHoverTooltip(payload: PendingHoverTooltipPayload): void {
-  const isSamePendingTarget =
-    pendingHoverTooltip?.layerId === payload.layerId &&
-    pendingHoverTooltip?.rowIndex === payload.rowIndex;
-
-  pendingHoverTooltip = payload;
-
-  if (isSamePendingTarget && hoverTooltipTimer !== null) {
-    return;
-  }
-
-  clearPendingHoverTooltip();
-  pendingHoverTooltip = payload;
-
-  hoverTooltipTimer = globalThis.setTimeout(() => {
-    hoverTooltipTimer = null;
-    const nextPayload = pendingHoverTooltip;
-    pendingHoverTooltip = null;
-
-    if (!nextPayload) {
-      return;
-    }
-
-    mapTooltipStore.showAtHover(
-      nextPayload.x,
-      nextPayload.y,
-      nextPayload.entries,
-      nextPayload.layerId,
-      nextPayload.rowIndex
-    );
-  }, MAP_TIMING.TOOLTIP_DELAY_MS);
+function clearHover(): void {
+  mapHoverHighlightStore.clear();
+  mapTooltipStore.hide();
 }
 
 export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
-): (info: PickingInfo) => void {
-  return (info: PickingInfo) => {
+): (info: PickingInfo, event?: unknown) => void {
+  return (info: PickingInfo, event?: unknown) => {
     if (globalState.selectedStep === ToolbarStep.Styling) {
-      clearPendingHoverTooltip();
+      mapHoverHighlightStore.clear();
       mapTooltipStore.unpin();
       return;
     }
 
     if (globalState.isMobileView) {
-      clearPendingHoverTooltip();
-      mapTooltipStore.hide();
+      clearHover();
       return;
     }
 
     if (mapTooltipStore.pinned) {
-      clearPendingHoverTooltip();
+      return;
+    }
+
+    const layerId = info.layer?.id ?? null;
+    const rowIndex = resolvePickedRowIndex(info) ?? -1;
+    const { x, y } = resolveClientPoint(info, event);
+    const isSameTarget =
+      mapTooltipStore.visible &&
+      mapTooltipStore.state.layerId === layerId &&
+      mapTooltipStore.state.rowIndex === rowIndex;
+
+    if (isSameTarget && info.picked) {
+      mapTooltipStore.showAtHover(
+        x,
+        y,
+        mapTooltipStore.state.entries,
+        layerId,
+        rowIndex
+      );
       return;
     }
 
     const entries = extractTooltipEntries(info, getVisualizations?.());
     if (entries.length === 0) {
-      clearPendingHoverTooltip();
-      mapTooltipStore.hide();
+      clearHover();
       return;
     }
 
-    const x = info.x ?? 0;
-    const y = info.y ?? 0;
-    const layerId = info.layer?.id ?? null;
-    const rowIndex = resolvePickedRowIndex(info) ?? -1;
-    const isSameVisibleTarget =
-      mapTooltipStore.visible &&
-      !mapTooltipStore.pinned &&
-      mapTooltipStore.state.layerId === layerId &&
-      mapTooltipStore.state.rowIndex === rowIndex;
-
-    if (isSameVisibleTarget) {
-      clearPendingHoverTooltip();
-      mapTooltipStore.showAtHover(x, y, entries, layerId, rowIndex);
-      return;
-    }
-
-    scheduleHoverTooltip({
-      x,
-      y,
-      entries,
-      layerId,
-      rowIndex
-    });
+    mapHoverHighlightStore.setFromPick(info);
+    mapTooltipStore.showAtHover(x, y, entries, layerId, rowIndex);
   };
 }
 
 export function createClickHandler(
   getVisualizations?: () => VisualizationConfig[]
-): (info: PickingInfo) => void {
-  return (info: PickingInfo) => {
-    clearPendingHoverTooltip();
-
+): (info: PickingInfo, event?: unknown) => void {
+  return (info: PickingInfo, event?: unknown) => {
     if (globalState.selectedStep === ToolbarStep.Styling) {
       mapTooltipStore.unpin();
       return;
@@ -416,9 +381,9 @@ export function createClickHandler(
       return;
     }
 
-    const x = info.x ?? 0;
-    const y = info.y ?? 0;
+    const { x, y } = resolveClientPoint(info, event);
     const rowIndex = resolvePickedRowIndex(info) ?? -1;
+    mapHoverHighlightStore.setFromPick(info);
     mapTooltipStore.pinAt(x, y, entries, info.layer?.id ?? null, rowIndex);
   };
 }

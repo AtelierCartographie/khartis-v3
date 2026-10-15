@@ -211,6 +211,14 @@ Les données binaires conservent les identifiants d'entité : le service
 d'infobulle retrouve la ligne Arrow d'un résultat de picking, y compris en rendu
 split.
 
+Au survol, l'infobulle suit le curseur, bornée à la zone de la carte, et l'entité
+survolée est cernée du même contour que la recherche. Ce contour est une couche
+ajoutée par `setLayers` au-dessus de la pile appliquée
+(`map-hover-highlight.store.svelte.ts`, `layers/hover-highlight-overlay.ts`) :
+il est construit à partir de la géométrie binaire de la couche survolée
+(`khartisPickGeometry`), sans reconstruire les couches thématiques. Un clic
+épingle l'inspecteur complet en haut de la carte.
+
 ## Habillage et facettes
 
 Légendes, annotations, échelle, orientation, indications géographiques et
