@@ -1179,6 +1179,7 @@
   "annotations_vector_helper": "Once selected: drag the endpoints to resize, double-click the line to add an anchor point, and drag the center handle to curve it. The arrowhead keeps its size.",
   "annotations_add_shape": "Draw shape",
   "annotations_shape_resize_handle": "Resize annotation shape",
+  "annotations_text_resize_handle": "Resize text box",
   "annotations_shape_rotate_handle": "Rotate annotation shape",
   "annotations_curve_handle": "Drag this handle to curve the segment",
   "annotations_delete_shape": "Delete shape",
