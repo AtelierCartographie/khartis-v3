@@ -8,7 +8,7 @@ import {
 // Kept apart from the search highlight: hovering must neither clear a search
 // selection nor rebuild the thematic layers.
 function createMapHoverHighlightStore() {
-  let overlay = $state.raw<Layer | null>(null);
+  let overlay = $state.raw<Layer[]>([]);
   let sourceLayerId: string | null = null;
   let hoveredKey: string | null = null;
 
@@ -30,16 +30,16 @@ function createMapHoverHighlightStore() {
   }
 
   function clear(): void {
-    if (hoveredKey === null && overlay === null) {
+    if (hoveredKey === null && overlay.length === 0) {
       return;
     }
     hoveredKey = null;
     sourceLayerId = null;
-    overlay = null;
+    overlay = [];
   }
 
   return {
-    get overlay(): Layer | null {
+    get overlay(): Layer[] {
       return overlay;
     },
     get sourceLayerId(): string | null {

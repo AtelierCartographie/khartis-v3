@@ -315,17 +315,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const overlay = untrack(() => mapHoverHighlightStore.overlay);
     const sourceLayerId = mapHoverHighlightStore.sourceLayerId;
     const isExporting = untrack(() => globalState.isMapExporting);
-    if (!overlay || !sourceLayerId || isExporting) {
+    if (overlay.length === 0 || !sourceLayerId || isExporting) {
       return layers;
     }
     const sourceLayer = layers.find((layer) => layer.id === sourceLayerId);
     if (
       !sourceLayer ||
-      sourceLayer.props.modelMatrix !== overlay.props.modelMatrix
+      sourceLayer.props.modelMatrix !== overlay[0].props.modelMatrix
     ) {
       return layers;
     }
-    return [...layers, overlay as Layer<DeckDataRow>];
+    return [...layers, ...(overlay as Layer<DeckDataRow>[])];
   }
 
   $effect(() => {
@@ -1548,11 +1548,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ) {
             layers.push(...createDeckLayers(table, unhighlightedCtx));
           }
-          const selectionOverlay = table
-            ? createSelectionOverlay(table, fallbackCtx)
-            : null;
-          if (selectionOverlay) {
-            layers.push(selectionOverlay);
+          if (table) {
+            layers.push(...createSelectionOverlay(table, fallbackCtx));
           }
         }
       }

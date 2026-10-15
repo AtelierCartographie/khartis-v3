@@ -14,7 +14,7 @@
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
-  const PREVIEW_PRIMARY_ENTRIES_COUNT = 2;
+  const PREVIEW_MAX_ENTRIES_COUNT = 5;
   const DESKTOP_INSPECTOR_TARGET_HEIGHT = 352;
   const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
@@ -41,7 +41,7 @@
   );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return tooltipState.entries.slice(0, PREVIEW_PRIMARY_ENTRIES_COUNT);
+      return tooltipState.entries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
@@ -54,7 +54,7 @@
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, tooltipState.entries.length - PREVIEW_PRIMARY_ENTRIES_COUNT)
+      : Math.max(0, tooltipState.entries.length - PREVIEW_MAX_ENTRIES_COUNT)
   );
 
   function getTooltipViewerRect(): {
@@ -315,7 +315,9 @@
       <div class="tooltip-entries">
         {#each visibleEntries as entry (entry.key)}
           <div class="tooltip-row">
-            <span class="tooltip-key">{entry.key}</span>
+            <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+              >{entry.key}</span
+            >
             <span class="tooltip-value">{entry.value}</span>
           </div>
         {/each}
@@ -348,7 +350,13 @@
     line-height: 1.25;
   }
 
+  /* Translucent so the map stays readable under the cursor. */
   .map-tooltip.hover-preview {
+    background: color-mix(
+      in srgb,
+      var(--cds-layer-01, #ffffff) 82%,
+      transparent
+    );
     width: min(13rem, calc(100vw - 16px));
     max-width: min(13rem, calc(100vw - 16px));
     max-height: min(8.5rem, calc(100dvh - 16px));
@@ -503,6 +511,11 @@
     flex-shrink: 1;
   }
 
+  .tooltip-key.viz-column {
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+  }
+
   .tooltip-value {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
@@ -543,6 +556,10 @@
     letter-spacing: 0.03em;
     text-transform: uppercase;
     color: #6f6f6f;
+  }
+
+  .interactive .tooltip-key.viz-column {
+    color: var(--cds-text-primary, #161616);
   }
 
   .interactive .tooltip-value {
