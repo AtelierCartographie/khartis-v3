@@ -31,6 +31,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { getSingleClassValue } from '$lib/features/commons/utils/discretization.utils';
 import {
   rowScopeStore,
   type ColumnDomain
@@ -989,7 +990,10 @@ function getClassedColorLegendDraft(
     return null;
   }
 
-  if (primitive === 'area') {
+  // A single class is drawn as one swatch, from the list below.
+  const isSingleClass = getSingleClassValue(classification) !== null;
+
+  if (!isSingleClass && primitive === 'area') {
     const classPatternPalette = resolveClassPatternPalette(
       classification,
       FillMode.CLASSES
@@ -1005,7 +1009,7 @@ function getClassedColorLegendDraft(
     if (!classification.patternId) {
       return getQuantitativeColorLegendDraft(viz, classification);
     }
-  } else {
+  } else if (!isSingleClass) {
     const barDraft = getQuantitativeColorLegendDraft(
       viz,
       classification,
@@ -2241,9 +2245,13 @@ function getClassedColorLegendItems(
   const breaks = (classification.breaks ?? []).filter(Number.isFinite);
   const colors = getEffectiveClassedColors(classification.colors ?? [], breaks);
   const opacity = getPrimitivePaintOpacity(viz, primitive);
+  const singleClassValue = getSingleClassValue(classification);
 
   return colors.map((color, index) => {
-    const label = getColorScaleLabel(breaks, colors.length, index);
+    const label =
+      singleClassValue !== null
+        ? formatValue(singleClassValue)
+        : getColorScaleLabel(breaks, colors.length, index);
 
     if (primitive === 'line') {
       return {

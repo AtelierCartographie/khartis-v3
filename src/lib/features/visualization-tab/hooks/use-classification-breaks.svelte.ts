@@ -336,6 +336,51 @@ export function resolveClassificationColors({
   return applyPaletteInversion(colors, classification?.inverted ?? false);
 }
 
+/** The classification fields a breaks computation rewrites. */
+export function buildClassificationUpdate(
+  computation: ClassificationBreaksComputation,
+  classification: ClassificationConfig | undefined,
+  method: ClassificationMethod
+): Partial<ClassificationConfig> {
+  const update: Partial<ClassificationConfig> = {
+    breaks: computation.result.breaks,
+    counts: computation.result.counts,
+    roundedMin: computation.result.roundedMin,
+    roundedMax: computation.result.roundedMax,
+    colors: computation.colors
+  };
+
+  if (computation.breakpointLowerClassCount != null) {
+    update.breakpointLowerClassCount = computation.breakpointLowerClassCount;
+  }
+
+  if (
+    computation.autoBreakpointApplied &&
+    computation.breakpointValue != null
+  ) {
+    update.breakpointValue = computation.breakpointValue;
+  }
+
+  if (computation.autoBreakpointCleared) {
+    update.breakpointValue = null;
+  }
+
+  if (
+    computation.normalizedMethod !== method ||
+    computation.actualClassCount !==
+      (classification?.numClasses ??
+        classification?.classes ??
+        DEFAULT_DISCRETIZATION_CLASS_COUNT) ||
+    classification?.classes !== computation.actualClassCount
+  ) {
+    update.method = computation.normalizedMethod;
+    update.classes = computation.actualClassCount;
+    update.numClasses = computation.actualClassCount;
+  }
+
+  return update;
+}
+
 export async function computeClassificationBreaks(
   options: ComputeClassificationBreaksOptions
 ): Promise<ClassificationBreaksComputation | null> {
@@ -451,12 +496,18 @@ export async function computeClassificationBreaks(
     requestedClassCount,
     result.counts.length
   );
-  const colors = resolveClassificationBreakColors(
+  const rampColors = resolveClassificationBreakColors(
     classification,
     actualClassCount,
     result.breaks,
     breakpointValue
   );
+  // A single-value series is one class: it takes the middle of the ramp, and
+  // the requested class count stays stored for when the series spreads again.
+  const colors =
+    result.counts.length === 1 && rampColors
+      ? [rampColors[Math.floor(rampColors.length / 2)]]
+      : rampColors;
 
   return {
     normalizedMethod: storeMethod,
@@ -618,7 +669,10 @@ export function useClassificationBreaksController({
       primitive: options.primitive
     });
     const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}:${rowScopeClause ?? 'all'}`;
-    const hasExistingBreaks = Boolean(classification?.breaks?.length);
+    // A single-value series completes with no break but one count.
+    const hasExistingBreaks = Boolean(
+      classification?.breaks?.length || classification?.counts?.length
+    );
 
     if (inFlightKeys.get(options.scopeKey) === breaksKey) {
       return;
@@ -671,44 +725,9 @@ export function useClassificationBreaksController({
         return;
       }
 
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: computation.result.breaks,
-        counts: computation.result.counts,
-        roundedMin: computation.result.roundedMin,
-        roundedMax: computation.result.roundedMax,
-        colors: computation.colors
-      };
-
-      if (computation.breakpointLowerClassCount != null) {
-        classificationUpdate.breakpointLowerClassCount =
-          computation.breakpointLowerClassCount;
-      }
-
-      if (
-        computation.autoBreakpointApplied &&
-        computation.breakpointValue != null
-      ) {
-        classificationUpdate.breakpointValue = computation.breakpointValue;
-      }
-
-      if (computation.autoBreakpointCleared) {
-        classificationUpdate.breakpointValue = null;
-      }
-
-      if (
-        computation.normalizedMethod !== method ||
-        computation.actualClassCount !==
-          (classification?.numClasses ??
-            classification?.classes ??
-            DEFAULT_DISCRETIZATION_CLASS_COUNT) ||
-        classification?.classes !== computation.actualClassCount
-      ) {
-        classificationUpdate.method = computation.normalizedMethod;
-        classificationUpdate.classes = computation.actualClassCount;
-        classificationUpdate.numClasses = computation.actualClassCount;
-      }
-
-      options.applyUpdate(classificationUpdate);
+      options.applyUpdate(
+        buildClassificationUpdate(computation, classification, method)
+      );
       lastCompletedKeys.set(options.scopeKey, breaksKey);
       clearRetry(options.scopeKey);
     } catch (error) {

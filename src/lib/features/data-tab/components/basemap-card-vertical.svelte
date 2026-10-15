@@ -51,6 +51,9 @@
   const source = $derived(
     isOSMBasemap ? m.osm_basemap_source() : basemap.source
   );
+  // Catalog sources read "Producer - Product" ("IGN / Insee - CONTOURS-IRIS"):
+  // the card shows the producer, the full source stays in the tooltip.
+  const sourceProducer = $derived(source.split(' - ')[0]);
 
   function handleCardClick() {
     if (!disabled && onclick) onclick();
@@ -131,7 +134,7 @@
   <div class="content-section">
     <div class="title-row">
       <div class="title-copy">
-        <p class="card-title">{title}</p>
+        <p class="card-title" title={title}>{title}</p>
         {#if subtitle}
           <p class="card-subtitle">{subtitle}</p>
         {/if}
@@ -139,13 +142,11 @@
     </div>
 
     {#if showMetadata}
-      <div class="metadata-row">
-        <span class="source">{source}</span>
+      <div class="metadata">
+        <span class="source" title={source}>{sourceProducer}</span>
         <span class="date">
           <Calendar size={16} />
-          <!-- A validity period wraps after its dash ("2018–" / "2026") to keep
-               the date column close to the width of a single year. -->
-          <span class="date-text">{formatBasemapValidity(basemap)}</span>
+          <span>{formatBasemapValidity(basemap)}</span>
         </span>
       </div>
     {/if}
@@ -153,19 +154,19 @@
 
   {#if showMatchScore && matchPercentage !== undefined}
     <div class="match-section">
-      <div class="match-header">
-        <span class="match-label">{m.basemap_match_score()}</span>
+      <span class="match-label">{m.basemap_match_score()}</span>
+      <div class="match-gauge">
+        <div
+          class="progress-bar"
+          role="progressbar"
+          aria-label={`${m.basemap_match_score()}${m.aria_label_separator()}${title}`}
+          aria-valuenow={matchPercentage}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div class="progress-fill" style="width: {matchPercentage}%"></div>
+        </div>
         <span class="match-value">{matchPercentage} %</span>
-      </div>
-      <div
-        class="progress-bar"
-        role="progressbar"
-        aria-label={`${m.basemap_match_score()}${m.aria_label_separator()}${title}`}
-        aria-valuenow={matchPercentage}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div class="progress-fill" style="width: {matchPercentage}%"></div>
       </div>
     </div>
   {/if}
@@ -343,6 +344,11 @@
     line-height: 1.125rem;
     letter-spacing: 0.16px;
     overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
     color: var(--cds-text-primary, #161616);
   }
 
@@ -362,15 +368,17 @@
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
-  .metadata-row {
+  .metadata {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--kh-gap-param);
+    flex-direction: column;
+    gap: var(--kh-gap-label);
     margin-top: auto;
   }
 
   .source {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-size: 0.75rem;
     line-height: 16px;
     letter-spacing: 0.32px;
@@ -390,11 +398,6 @@
     color: var(--cds-text-secondary, #525252);
   }
 
-  .date-text {
-    /* longest unbreakable part: "2018–" for a period, the year otherwise */
-    width: min-content;
-  }
-
   .basemap-card--suggestion .source,
   .basemap-card--suggestion .date {
     color: var(--khartis-additions-text-secondary-suggestions, #00539a);
@@ -408,10 +411,9 @@
     border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .match-header {
+  .match-gauge {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--kh-gap-inline);
   }
 
@@ -428,7 +430,6 @@
     line-height: 18px;
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
-    flex: 1;
     overflow-wrap: break-word;
   }
 
@@ -437,7 +438,7 @@
   }
 
   .progress-bar {
-    width: 100%;
+    flex: 1;
     height: 4px;
     background: var(--cds-border-subtle-01, #c6c6c6);
     overflow: hidden;

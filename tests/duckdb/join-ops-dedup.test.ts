@@ -32,7 +32,14 @@ import {
 } from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
-import { DuckDBSimplifiedType } from '$lib/features/duckdb/enums';
+import {
+  DuckDBSimplifiedType,
+  FilterOperatorEnum
+} from '$lib/features/duckdb/enums';
+import {
+  clearFiltersForTable,
+  setFilters
+} from '$lib/features/duckdb/orchestrator/state.svelte';
 import {
   createTestInstance,
   destroyTestInstance,
@@ -418,6 +425,52 @@ describe('exact_claimed_ids deduplication', () => {
 
     expect(rows.find((r) => r.geo === 'Lyon')!.id).toBeNull();
     expect(rows.find((r) => r.geo === '69123')!.id).toBe('LY_01');
+  });
+
+  it('should grade the filtered rows and finalize the full table when a table filter is active', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE user_filtered (geo VARCHAR, dep VARCHAR)`
+    );
+    await run(
+      db,
+      `INSERT INTO user_filtered VALUES ('Lyon', '69'), ('69123', '01')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_filtered', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING },
+      { name: 'dep', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+    setFilters('user_filtered', [
+      {
+        id: 'dep-69',
+        label: 'dep = 69',
+        column: 'dep',
+        operator: FilterOperatorEnum.EQUALS,
+        value: '69',
+        sql: `"dep" = '69'`
+      }
+    ]);
+
+    try {
+      const quality = await computeJoinStats(
+        dataset,
+        FAKE_BASEMAP_METADATA,
+        'geo',
+        Duck
+      );
+      expect(quality.joinedCount).toBe(1);
+
+      await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+      const rows = (await Duck.query(
+        `SELECT geo, "${JOINED_BASEMAP_COLUMN.ID}" AS id FROM user_filtered ORDER BY geo`,
+        { format: 'array' }
+      )) as Array<{ geo: string; id: string | null }>;
+      expect(rows.map((r) => r.id)).toEqual(['LY_01', 'LY_01']);
+    } finally {
+      clearFiltersForTable('user_filtered');
+    }
   });
 
   it('keeps realistic typos as suggestions but drops distinct-place noise (cutoff 0.9)', async () => {
