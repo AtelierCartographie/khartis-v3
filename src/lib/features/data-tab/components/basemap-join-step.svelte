@@ -441,6 +441,14 @@
     cancelJoinLoading();
   }
 
+  // Leaving the reference basemap also leaves its tiled style, which would
+  // otherwise keep MapLibre on and hide the next basemap behind the tiles.
+  function clearReferenceBasemap(): void {
+    const wasActive = osmBasemapStore.isActive;
+    osmBasemapStore.clear();
+    if (wasActive) basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
+  }
+
   function isOSMBasemapId(basemapId: string): boolean {
     return basemapId.startsWith('osm_');
   }
@@ -799,7 +807,7 @@
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
 
-    osmBasemapStore.clear();
+    clearReferenceBasemap();
     dataTabActions.clearJoinStats();
     basemapAttributes.clearValues();
     dataTabStore.resetStepCompletion(stepIndex);
@@ -909,7 +917,7 @@
       });
     }
 
-    osmBasemapStore.clear();
+    clearReferenceBasemap();
     dataTabActions.clearJoinStats();
     basemapAttributes.clearValues();
     dataTabActions.setBasemapJoinState({
@@ -976,7 +984,7 @@
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       hasDismissedSuggestedBasemap = false;
-      osmBasemapStore.clear();
+      clearReferenceBasemap();
       dataTabActions.setBasemapJoinState({
         selectedBasemap: customBasemap.file,
         basemapSource: BasemapSource.IMPORT
@@ -1956,7 +1964,7 @@
     ) {
       abortCurrentJoin();
 
-      osmBasemapStore.clear();
+      clearReferenceBasemap();
       dataTabActions.clearJoinStats();
       basemapAttributes.clearValues();
       dataTabActions.setBasemapJoinState({
