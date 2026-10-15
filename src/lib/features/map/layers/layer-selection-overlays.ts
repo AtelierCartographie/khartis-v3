@@ -24,11 +24,18 @@ import { hasAnyHighlightedFeature } from './layer-highlight.utils';
 import { createSplitAwareRowAccessor } from './split-rendering-accessors';
 import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.utils';
 
-export const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
-  15, 98, 254, 255
+// A fluorescent core on a dark casing: the pair stays legible on light and
+// dark fills alike, and the hue appears in none of Khartis' palettes nor in
+// its blue interface.
+export const HIGHLIGHT_STROKE_COLOR: [number, number, number, number] = [
+  255, 230, 0, 255
 ];
-export const SELECTED_POLYGON_STROKE_WIDTH = 3;
-export const SELECTED_POINT_RING_RADIUS = 8;
+export const HIGHLIGHT_CASING_COLOR: [number, number, number, number] = [
+  22, 22, 22, 255
+];
+export const HIGHLIGHT_STROKE_WIDTH = 3;
+export const HIGHLIGHT_CASING_WIDTH = 6;
+export const HIGHLIGHT_POINT_RING_RADIUS = 8;
 const POINT_GEOMETRY_TYPES = new Set<string>([
   GeometryType.POINT,
   GeometryType.MULTIPOINT
@@ -54,9 +61,9 @@ export function createHighlightedFeatureOverlay(
   highlightedRowIds: Set<number> | undefined,
   highlightVersion: number,
   ctx: LayerContext
-): Layer<DeckDataRow> | null {
+): Layer<DeckDataRow>[] {
   if (!highlightedRowIds || highlightedRowIds.size === 0) {
-    return null;
+    return [];
   }
 
   try {
@@ -85,7 +92,7 @@ export function createHighlightedFeatureOverlay(
       LogCategory.MAP,
       error
     );
-    return null;
+    return [];
   }
 }
 
@@ -96,7 +103,7 @@ function createHighlightedPointRingOverlay(
   highlightedRowIds: Set<number>,
   highlightVersion: number,
   ctx: LayerContext
-): Layer<DeckDataRow> | null {
+): Layer<DeckDataRow>[] {
   const resolveRowId = createRowIdResolver(jsTable, ctx);
   const size = pointData.size ?? 2;
   const selected: number[] = [];
@@ -110,10 +117,10 @@ function createHighlightedPointRingOverlay(
   }
 
   if (selected.length === 0) {
-    return null;
+    return [];
   }
 
-  return new ScatterplotLayer({
+  const ring: ScatterplotLayer = new ScatterplotLayer({
     id: `${layerId}-selection-overlay-points`,
     data: {
       length: selected.length / 2,
@@ -124,11 +131,11 @@ function createHighlightedPointRingOverlay(
     filled: false,
     stroked: true,
     radiusUnits: 'pixels',
-    getRadius: SELECTED_POINT_RING_RADIUS,
+    getRadius: HIGHLIGHT_POINT_RING_RADIUS,
     lineWidthUnits: 'pixels',
-    getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
-    lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
-    getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+    getLineWidth: HIGHLIGHT_STROKE_WIDTH,
+    lineWidthMinPixels: HIGHLIGHT_STROKE_WIDTH,
+    getLineColor: HIGHLIGHT_STROKE_COLOR,
     pickable: false,
     parameters: {
       depthCompare: 'always' as const,
@@ -139,7 +146,14 @@ function createHighlightedPointRingOverlay(
     updateTriggers: {
       getLineColor: [highlightVersion]
     }
-  }) as unknown as Layer<DeckDataRow>;
+  });
+  const casing = ring.clone({
+    id: `${layerId}-selection-overlay-points-casing`,
+    getLineWidth: HIGHLIGHT_CASING_WIDTH,
+    lineWidthMinPixels: HIGHLIGHT_CASING_WIDTH,
+    getLineColor: HIGHLIGHT_CASING_COLOR
+  });
+  return [casing, ring] as unknown as Layer<DeckDataRow>[];
 }
 
 export function createHighlightedBinaryPolygonOverlay(
@@ -149,13 +163,13 @@ export function createHighlightedBinaryPolygonOverlay(
   highlightedRowIds: Set<number> | undefined,
   highlightVersion: number,
   ctx: LayerContext
-): Layer<DeckDataRow> | null {
+): Layer<DeckDataRow>[] {
   if (
     !highlightedRowIds ||
     highlightedRowIds.size === 0 ||
     outlineData.length === 0
   ) {
-    return null;
+    return [];
   }
 
   const resolveRowId = createRowIdResolver(jsTable, ctx);
@@ -167,47 +181,57 @@ export function createHighlightedBinaryPolygonOverlay(
       highlightedRowIds
     )
   ) {
-    return null;
+    return [];
   }
 
   const isHighlighted = (featureId: number) =>
     highlightedRowIds.has(resolveRowId(featureId));
 
-  const strokePathProps = createPathLayerProps(outlineData);
-  const strokeBinaryData = strokePathProps.data as {
-    attributes: Record<string, unknown>;
-  };
-  strokeBinaryData.attributes.getColor = pathColorAttr(
-    outlineData,
-    (featureId) =>
-      isHighlighted(featureId)
-        ? SELECTED_POLYGON_STROKE_COLOR
-        : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
-  );
-  strokeBinaryData.attributes.getWidth = pathWidthAttr(
-    outlineData,
-    (featureId) =>
-      isHighlighted(featureId) ? SELECTED_POLYGON_STROKE_WIDTH : 0
-  );
+  const buildStroke = (
+    suffix: string,
+    color: [number, number, number, number],
+    width: number
+  ): PathLayer => {
+    const strokePathProps = createPathLayerProps(outlineData);
+    const strokeBinaryData = strokePathProps.data as {
+      attributes: Record<string, unknown>;
+    };
+    strokeBinaryData.attributes.getColor = pathColorAttr(
+      outlineData,
+      (featureId) =>
+        isHighlighted(featureId)
+          ? color
+          : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+    );
+    strokeBinaryData.attributes.getWidth = pathWidthAttr(
+      outlineData,
+      (featureId) => (isHighlighted(featureId) ? width : 0)
+    );
 
-  return new PathLayer({
-    id: `${layerId}-selection-overlay`,
-    ...(strokePathProps as unknown as Record<string, unknown>),
-    getColor: TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
-    widthUnits: 'pixels',
-    getWidth: SELECTED_POLYGON_STROKE_WIDTH,
-    widthMinPixels: 0,
-    pickable: false,
-    parameters: {
-      depthCompare: 'always' as const,
-      stencilCompare: 'always' as const
-    },
-    ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-    ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-    updateTriggers: {
-      getColor: [highlightVersion],
-      getWidth: [highlightVersion]
-    },
-    dataComparator: (newData, oldData) => newData === oldData
-  });
+    return new PathLayer({
+      id: `${layerId}-selection-overlay${suffix}`,
+      ...(strokePathProps as unknown as Record<string, unknown>),
+      getColor: TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
+      widthUnits: 'pixels',
+      getWidth: width,
+      widthMinPixels: 0,
+      pickable: false,
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
+      ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+      ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+      updateTriggers: {
+        getColor: [highlightVersion],
+        getWidth: [highlightVersion]
+      },
+      dataComparator: (newData, oldData) => newData === oldData
+    });
+  };
+
+  return [
+    buildStroke('-casing', HIGHLIGHT_CASING_COLOR, HIGHLIGHT_CASING_WIDTH),
+    buildStroke('', HIGHLIGHT_STROKE_COLOR, HIGHLIGHT_STROKE_WIDTH)
+  ] as unknown as Layer<DeckDataRow>[];
 }

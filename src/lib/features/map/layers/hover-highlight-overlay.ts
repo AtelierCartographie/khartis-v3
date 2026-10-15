@@ -2,9 +2,11 @@ import type { Layer, PickingInfo } from '@deck.gl/core';
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 
 import {
-  SELECTED_POINT_RING_RADIUS,
-  SELECTED_POLYGON_STROKE_COLOR,
-  SELECTED_POLYGON_STROKE_WIDTH
+  HIGHLIGHT_CASING_COLOR,
+  HIGHLIGHT_CASING_WIDTH,
+  HIGHLIGHT_POINT_RING_RADIUS,
+  HIGHLIGHT_STROKE_COLOR,
+  HIGHLIGHT_STROKE_WIDTH
 } from './layer-selection-overlays';
 
 const HOVER_HIGHLIGHT_SUFFIX = 'hover-highlight';
@@ -73,15 +75,31 @@ function resolvePickGeometry(info: PickingInfo): object | null {
   return typeof geometry === 'object' && geometry !== null ? geometry : null;
 }
 
+// The picked index addresses the layer's own buffers, which may be reordered
+// (symbols are drawn largest first), so the feature id comes from the layer's
+// featureIds; the parsed geometry is then searched by that id.
 export function resolveHoveredFeature(
   info: PickingInfo
 ): HoveredFeature | null {
   const layerId = info.layer?.id;
+  const data = info.layer?.props?.data;
   const geometry = resolvePickGeometry(info);
-  if (!layerId || !geometry || info.index === undefined || info.index < 0) {
+  if (
+    !layerId ||
+    !geometry ||
+    typeof data !== 'object' ||
+    data === null ||
+    info.index === undefined ||
+    info.index < 0
+  ) {
     return null;
   }
-  const featureIds = Reflect.get(geometry, 'featureIds') as ArrayLike<number>;
+  const layerFeatureIds = Reflect.get(data, 'featureIds');
+  const featureIds = (
+    ArrayBuffer.isView(layerFeatureIds)
+      ? layerFeatureIds
+      : Reflect.get(geometry, 'featureIds')
+  ) as ArrayLike<number>;
   const featureId = featureIds[info.index];
   return featureId === undefined
     ? null
@@ -175,7 +193,7 @@ function resolvePickedRadiusPx(info: PickingInfo): number {
         ? props.getRadius
         : 0;
   return Math.max(
-    SELECTED_POINT_RING_RADIUS,
+    HIGHLIGHT_POINT_RING_RADIUS,
     radius * radiusScale + POINT_RING_GAP_PX
   );
 }
@@ -196,19 +214,31 @@ function pickPlacementProps(info: PickingInfo): Record<string, unknown> {
   return placement;
 }
 
+// The casing is drawn first, under the fluorescent core, as for the search
+// highlight.
+function withCasing(
+  core: PathLayer<RingPath> | ScatterplotLayer,
+  casingProps: Record<string, unknown>
+): Layer[] {
+  return [
+    core.clone({ id: `${core.id}-casing`, ...casingProps }),
+    core
+  ] as Layer[];
+}
+
 function buildPathOverlay(
   id: string,
   paths: RingPath[],
   placement: Record<string, unknown>
-): Layer {
-  return new PathLayer<RingPath>({
+): Layer[] {
+  const core = new PathLayer<RingPath>({
     id,
     data: paths,
     getPath: (path) => path as unknown as [number, number][],
     positionFormat: 'XY',
     _pathType: 'open',
-    getColor: SELECTED_POLYGON_STROKE_COLOR,
-    getWidth: SELECTED_POLYGON_STROKE_WIDTH,
+    getColor: HIGHLIGHT_STROKE_COLOR,
+    getWidth: HIGHLIGHT_STROKE_WIDTH,
     widthUnits: 'pixels',
     jointRounded: true,
     capRounded: true,
@@ -216,13 +246,17 @@ function buildPathOverlay(
     parameters: HIGHLIGHT_PARAMETERS,
     ...placement
   });
+  return withCasing(core, {
+    getColor: HIGHLIGHT_CASING_COLOR,
+    getWidth: HIGHLIGHT_CASING_WIDTH
+  });
 }
 
-export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
+export function createHoverHighlightOverlay(info: PickingInfo): Layer[] {
   const hovered = resolveHoveredFeature(info);
   const geometry = resolvePickGeometry(info);
   if (!hovered || !geometry) {
-    return null;
+    return [];
   }
 
   const id = `${hovered.sourceLayerId}-${HOVER_HIGHLIGHT_SUFFIX}`;
@@ -230,20 +264,20 @@ export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
 
   if (isPolygonGeometry(geometry)) {
     const rings = collectPolygonRings(geometry, hovered.featureId);
-    return rings.length > 0 ? buildPathOverlay(id, rings, placement) : null;
+    return rings.length > 0 ? buildPathOverlay(id, rings, placement) : [];
   }
 
   if (isPathGeometry(geometry)) {
     const paths = collectPaths(geometry, hovered.featureId);
-    return paths.length > 0 ? buildPathOverlay(id, paths, placement) : null;
+    return paths.length > 0 ? buildPathOverlay(id, paths, placement) : [];
   }
 
   if (isPointGeometry(geometry)) {
     const positions = collectPoints(geometry, hovered.featureId);
     if (positions.length === 0) {
-      return null;
+      return [];
     }
-    return new ScatterplotLayer({
+    const ring = new ScatterplotLayer({
       id,
       data: {
         length: positions.length / 2,
@@ -254,13 +288,17 @@ export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
       radiusUnits: 'pixels',
       getRadius: resolvePickedRadiusPx(info),
       lineWidthUnits: 'pixels',
-      getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
-      getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+      getLineWidth: HIGHLIGHT_STROKE_WIDTH,
+      getLineColor: HIGHLIGHT_STROKE_COLOR,
       pickable: false,
       parameters: HIGHLIGHT_PARAMETERS,
       ...placement
-    }) as unknown as Layer;
+    });
+    return withCasing(ring, {
+      getLineWidth: HIGHLIGHT_CASING_WIDTH,
+      getLineColor: HIGHLIGHT_CASING_COLOR
+    });
   }
 
-  return null;
+  return [];
 }

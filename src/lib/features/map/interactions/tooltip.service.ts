@@ -252,7 +252,7 @@ function sortEntriesByVizPriority(
   const rest: TooltipEntry[] = [];
   for (const entry of entries) {
     if (vizColumns.has(entry.key)) {
-      priority.push(entry);
+      priority.push({ ...entry, isVizColumn: true });
     } else {
       rest.push(entry);
     }
