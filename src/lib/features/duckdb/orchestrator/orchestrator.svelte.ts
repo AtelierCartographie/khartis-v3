@@ -446,8 +446,8 @@ export const duckDBOrchestrator = {
       });
     }
 
-    // Join grading and finalization both operate on the full table: display
-    // filters never change the join, so both share one similarity cache key.
+    // Grading follows the table filters; finalization covers the full table
+    // (see JoinRowScope).
     return joinOps.computeJoinStats(dataset, basemap, geoColumn, Duck, options);
   },
 
