@@ -55,7 +55,10 @@ import {
   createHighlightedBinaryPolygonOverlay,
   createHighlightedFeatureOverlay
 } from './layer-selection-overlays';
-import { attachBinaryPickingMetadata } from './layer-source.utils';
+import {
+  attachBinaryPickingMetadata,
+  type BinaryLayerInteractionData
+} from './layer-source.utils';
 import {
   DASH_EXTENSION,
   normalizeOpacity,
@@ -108,6 +111,12 @@ export type PolygonLayerDependencies = {
   createPointLayers: PointLayerFactory;
   createRepresentativePointSymbolLayers: RepresentativePointLayerFactory;
 };
+
+// Fully transparent: deck still picks it through its picking colors, and the
+// SVG export skips fills with no opacity.
+const DENSITY_PICKING_FILL_COLOR: [number, number, number, number] = [
+  0, 0, 0, 0
+];
 
 export function createPolygonLayerStack(
   jsTable: ArrowTable,
@@ -297,7 +306,47 @@ export function createPolygonLayerStack(
     }
   }
 
+  // The polygon carries the value, not its dots: an invisible fill under them
+  // lets the polygon be hovered, outlined and read like any other.
+  function createDensityPickingLayer(): Layer<DeckDataRow> | null {
+    if (!isNativeGeoArrow && !isWkbEncoded) {
+      return null;
+    }
+    try {
+      const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
+      const solidProps = createCompatibleSolidPolygonLayerProps(polyData);
+      attachBinaryPickingMetadata(
+        solidProps.data as BinaryLayerInteractionData,
+        jsTable,
+        polyData,
+        ctx
+      );
+      return new SolidPolygonLayer({
+        id: `${layerId}-density-picking`,
+        ...(solidProps as unknown as Record<string, unknown>),
+        getFillColor: DENSITY_PICKING_FILL_COLOR,
+        pickable: true,
+        parameters: {
+          depthCompare: 'always' as const,
+          stencilCompare: 'always' as const
+        },
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId })
+      }) as Layer<DeckDataRow>;
+    } catch (error) {
+      logger.warn(
+        'Failed to create density picking polygons',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
+  }
+
   if (densityRequested) {
+    const densityPickingLayer = polygonPrimitiveAllowed
+      ? createDensityPickingLayer()
+      : null;
     const densityLayers =
       densityTable && densityGeometryInfo
         ? createPointLayers(densityTable, densityGeometryInfo, ctx)
@@ -311,6 +360,14 @@ export function createPolygonLayerStack(
       : [];
     const layers = orderPrimitiveLayers(
       [
+        ...(densityPickingLayer
+          ? [
+              {
+                primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+                layer: densityPickingLayer
+              }
+            ]
+          : []),
         // Under the dots: a row with no value produces none, which otherwise
         // reads as a zero.
         ...missingDataLayers.map((layer) => ({
