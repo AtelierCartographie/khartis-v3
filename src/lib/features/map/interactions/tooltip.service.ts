@@ -12,7 +12,10 @@ import type { PickingInfo } from '@deck.gl/core';
 import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
-import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+import {
+  mapHoverHighlightStore,
+  type HoveredRow
+} from '../stores/map-hover-highlight.store.svelte';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {
   if (typeof value === 'string') {
@@ -287,6 +290,31 @@ export function extractTooltipEntries(
   return entries;
 }
 
+// Legends of every visualization drawn from the hovered dataset read the
+// same row, so a collection marks the place in each of its maps' legends.
+function resolveHoveredRow(
+  info: PickingInfo,
+  visualizations: VisualizationConfig[] | undefined
+): HoveredRow | null {
+  const layerId = info.layer?.id;
+  const datasetId = layerId
+    ? visualizations?.find((viz) => layerId.includes(viz.id))?.datasetId
+    : undefined;
+  const table = resolveSourceTable(info);
+  const rowIndex = resolvePickedRowIndex(info);
+  if (!datasetId || !table || rowIndex === null) {
+    return null;
+  }
+  return {
+    datasetId,
+    // An absent column reads as undefined, a missing value as null.
+    readValue: (column) => {
+      const child = table.getChild(column);
+      return child ? child.get(rowIndex) : undefined;
+    }
+  };
+}
+
 interface PointerLike {
   srcEvent?: { clientX?: unknown; clientY?: unknown };
 }
@@ -350,13 +378,17 @@ export function createHoverHandler(
       return;
     }
 
-    const entries = extractTooltipEntries(info, getVisualizations?.());
+    const visualizations = getVisualizations?.();
+    const entries = extractTooltipEntries(info, visualizations);
     if (entries.length === 0) {
       clearHover();
       return;
     }
 
-    mapHoverHighlightStore.setFromPick(info);
+    mapHoverHighlightStore.setFromPick(
+      info,
+      resolveHoveredRow(info, visualizations)
+    );
     mapTooltipStore.showAtHover(x, y, entries, layerId, rowIndex);
   };
 }
@@ -375,7 +407,8 @@ export function createClickHandler(
       return;
     }
 
-    const entries = extractTooltipEntries(info, getVisualizations?.());
+    const visualizations = getVisualizations?.();
+    const entries = extractTooltipEntries(info, visualizations);
     if (entries.length === 0) {
       mapTooltipStore.unpin();
       return;
@@ -383,7 +416,10 @@ export function createClickHandler(
 
     const { x, y } = resolveClientPoint(info, event);
     const rowIndex = resolvePickedRowIndex(info) ?? -1;
-    mapHoverHighlightStore.setFromPick(info);
+    mapHoverHighlightStore.setFromPick(
+      info,
+      resolveHoveredRow(info, visualizations)
+    );
     mapTooltipStore.pinAt(x, y, entries, info.layer?.id ?? null, rowIndex);
   };
 }

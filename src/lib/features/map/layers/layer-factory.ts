@@ -63,7 +63,7 @@ export function createPolygonLayers(
 export function createSelectionOverlay(
   source: ArrowTable,
   ctx: LayerContext
-): Layer<DeckDataRow>[] {
+): Layer<DeckDataRow> | null {
   const highlightVersion = ctx.highlightVersion ?? 0;
   const geometryInfo = extractGeometryInfo(source);
   return geometryInfo
@@ -75,7 +75,7 @@ export function createSelectionOverlay(
         highlightVersion,
         ctx
       )
-    : [];
+    : null;
 }
 
 export function createDeckLayers(

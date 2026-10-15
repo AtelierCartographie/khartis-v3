@@ -330,16 +330,17 @@ export function createPolygonLayerStack(
       ],
       primitiveOrder
     );
-    layers.push(
-      ...createHighlightedFeatureOverlay(
-        layerId,
-        jsTable,
-        geometryInfo,
-        polyHighlightedRowIds,
-        hlVersion,
-        ctx
-      )
+    const selectionOverlay = createHighlightedFeatureOverlay(
+      layerId,
+      jsTable,
+      geometryInfo,
+      polyHighlightedRowIds,
+      hlVersion,
+      ctx
     );
+    if (selectionOverlay) {
+      layers.push(selectionOverlay);
+    }
     return layers;
   }
 
@@ -793,16 +794,17 @@ export function createPolygonLayerStack(
 
       layers.push(...orderedLayers);
 
-      layers.push(
-        ...createHighlightedBinaryPolygonOverlay(
-          layerId,
-          jsTable,
-          outlineData,
-          polyHighlightedRowIds,
-          hlVersion,
-          ctx
-        )
+      const selectionOverlay = createHighlightedBinaryPolygonOverlay(
+        layerId,
+        jsTable,
+        outlineData,
+        polyHighlightedRowIds,
+        hlVersion,
+        ctx
       );
+      if (selectionOverlay) {
+        layers.push(selectionOverlay);
+      }
 
       return layers;
     } catch (error) {

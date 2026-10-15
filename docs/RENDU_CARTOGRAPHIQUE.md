@@ -212,12 +212,22 @@ d'infobulle retrouve la ligne Arrow d'un résultat de picking, y compris en rend
 split.
 
 Au survol, l'infobulle suit le curseur, bornée à la zone de la carte, et l'entité
-survolée est cernée du même contour que la recherche. Ce contour est une couche
+survolée est cernée du même contour jaune que la recherche. Ce contour est une couche
 ajoutée par `setLayers` au-dessus de la pile appliquée
 (`map-hover-highlight.store.svelte.ts`, `layers/hover-highlight-overlay.ts`) :
 il est construit à partir de la géométrie binaire de la couche survolée
 (`khartisPickGeometry`), sans reconstruire les couches thématiques. Un clic
 épingle l'inspecteur complet en haut de la carte.
+
+Les légendes en classes et en catégories désignent aussi l'entité survolée :
+les autres entrées s'estompent. Les générateurs marquent chaque entrée d'un
+attribut `data-legend-entry` (classe, catégorie, absence de données), chaque
+segment de légende sait résoudre l'entrée d'une ligne
+(`LegendSegment.resolveEntry`, avec `getClassIndexForValue` comme la carte), et
+`LegendSvg` bascule les classes CSS sans redessiner la légende. Toutes les
+légendes d'une visualisation tirée du même jeu de données lisent la même ligne,
+ce qui marque le lieu dans chaque carte d'une collection. Les exports ne portent
+jamais cette marque.
 
 ## Habillage et facettes
 

@@ -53,7 +53,10 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import * as m from '$lib/paraglide/messages';
 import {
+  categoryLegendEntry,
+  classLegendEntry,
   createLegendSvg,
+  MISSING_LEGEND_ENTRY,
   draw_categorical_legend,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
@@ -105,6 +108,8 @@ import {
 } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
 import { POLYGON_STROKE_WIDTH_DIVISOR } from '../layers/stroke-width.constants';
+import { isMissingThematicValue } from '../layers/layer-highlight.utils';
+import { getClassIndexForValue } from './data-styling.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -174,6 +179,8 @@ type LegendCategoricalEntry = {
   label: string;
   color: string;
   originalIndex: number;
+  /** The data value the map matches this entry's color against. */
+  value: string;
 };
 
 type LegendSegmentContext = {
@@ -185,11 +192,21 @@ type LegendSegmentContext = {
 /** Text options plus the gap list legends keep between their entries. */
 type LegendDraftOptions = CommonLegendTextOptions & { entrySpacing: number };
 
+/**
+ * Names the legend entry a map feature falls in, from the feature's own
+ * column values, or null when the legend cannot tell. readValue returns
+ * undefined for a column the feature's table lacks, null for a missing value.
+ */
+export type LegendEntryResolver = (
+  readValue: (column: string) => unknown
+) => string | null;
+
 type LegendSegmentDraft = {
   key: string;
   className: string;
   primitive: LegendSubtitlePrimitive;
   consumesMissingData?: boolean;
+  resolveEntry?: LegendEntryResolver;
   create: (
     options: LegendDraftOptions,
     context: LegendSegmentContext
@@ -201,6 +218,7 @@ export type LegendSegment = {
   className: string;
   kind: RenderedLegendSegmentKind;
   svg: LegendSvgDefinition;
+  resolveEntry?: LegendEntryResolver;
 };
 
 const NON_LIST_SEGMENT_KEYS = new Set([
@@ -309,6 +327,7 @@ function getLegendCategoricalEntries(
   }
 
   const labels = classification?.labels ?? [];
+  const values = classification ? getCategoryValues(classification) : [];
   const disabled = new Set(
     (classification?.disabledLabels ?? []).map((label) => String(label))
   );
@@ -322,7 +341,8 @@ function getLegendCategoricalEntries(
         key: `${label}-${index}`,
         label,
         color,
-        originalIndex: index
+        originalIndex: index,
+        value: values[index] ?? label
       };
     })
     .filter((entry) => !disabled.has(entry.label));
@@ -898,7 +918,8 @@ export function getLegendSegments(
             key: draft.key,
             className: draft.className,
             kind: getLegendSegmentKind(draft),
-            svg
+            svg,
+            resolveEntry: draft.resolveEntry
           }
         : null;
     })
@@ -975,6 +996,94 @@ function toLegendSvg(
   return svg.width > 0 && svg.height > 0 ? svg : null;
 }
 
+function getClassedValueColumn(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): string | undefined {
+  return primitive === 'point'
+    ? getSymbolFillValueColumn(viz)
+    : getPrimitiveValueColumn(viz, LEGEND_SWATCH_PRIMITIVE_FILTER[primitive]);
+}
+
+function getCategoryColumn(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): string | undefined {
+  if (primitive === 'point') {
+    return getSymbolPrimitive(viz)?.mode === SymbolMode.CATEGORIES
+      ? getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT)
+      : getSymbolFillCategoryColumn(viz);
+  }
+  return getPrimitiveCategoryColumn(
+    viz,
+    LEGEND_SWATCH_PRIMITIVE_FILTER[primitive]
+  );
+}
+
+// Classes are assigned as the map colors them, from the breaks and the
+// palette length, so the legend points at the class the reader sees.
+function createClassedEntryResolver(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive,
+  classification: ClassificationConfig
+): LegendEntryResolver | undefined {
+  const column = getClassedValueColumn(viz, primitive);
+  const colors = classification.colors ?? [];
+  if (!column || colors.length === 0) {
+    return undefined;
+  }
+  const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+  const classCount = getEffectiveClassedColors(colors, breaks).length;
+
+  return (readValue) => {
+    const value = readValue(column);
+    if (value === undefined) {
+      return null;
+    }
+    const numericValue = isMissingThematicValue(value) ? NaN : Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return MISSING_LEGEND_ENTRY;
+    }
+    if (getSingleClassValue(classification) !== null) {
+      return classLegendEntry(0);
+    }
+    const classIndex = getClassIndexForValue(
+      numericValue,
+      breaks,
+      colors.length
+    );
+    return classIndex === null
+      ? null
+      : classLegendEntry(Math.min(classIndex, classCount - 1));
+  };
+}
+
+function getCategoryValues(classification: ClassificationConfig): string[] {
+  return (classification.categoryValues ?? classification.labels ?? []).map(
+    (value) => String(value)
+  );
+}
+
+function createCategoricalEntryResolver(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): LegendEntryResolver | undefined {
+  const column = getCategoryColumn(viz, primitive);
+  if (!column) {
+    return undefined;
+  }
+
+  return (readValue) => {
+    const value = readValue(column);
+    if (value === undefined) {
+      return null;
+    }
+    return isMissingThematicValue(value)
+      ? MISSING_LEGEND_ENTRY
+      : categoryLegendEntry(String(value));
+  };
+}
+
 function getClassedColorLegendDraft(
   viz: VisualizationConfig | undefined,
   primitive: LegendSwatchPrimitive
@@ -1033,6 +1142,7 @@ function getClassedColorLegendDraft(
   return {
     key: `classed-color-${primitive}`,
     primitive,
+    resolveEntry: createClassedEntryResolver(viz, primitive, classification),
     className:
       type === 'pattern' ? 'legend-svg--patterns' : 'legend-svg--categorical',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
@@ -1501,10 +1611,7 @@ function getQuantitativeColorLegendDraft(
   primitive: LegendSwatchPrimitive = 'area'
 ): LegendSegmentDraft | null {
   const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
-  const valueColumn =
-    primitive === 'point'
-      ? getSymbolFillValueColumn(viz)
-      : getPrimitiveValueColumn(viz, filter);
+  const valueColumn = getClassedValueColumn(viz, primitive);
   const domain = getColumnDomain(viz, valueColumn, filter);
   // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
   const hasSharedScale =
@@ -1528,6 +1635,7 @@ function getQuantitativeColorLegendDraft(
         ? 'quantitative-color'
         : `quantitative-color-${primitive}`,
     primitive,
+    resolveEntry: createClassedEntryResolver(viz, primitive, classification),
     className: classPatternFills
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
@@ -1604,12 +1712,14 @@ function getCategoricalLegendDraft(
         label: entry.label,
         fill: '#ffffff',
         patternFill: patternFills[entry.originalIndex] ?? null,
-        patternOpacity: 1
+        patternOpacity: 1,
+        entryKey: categoryLegendEntry(entry.value)
       }));
 
       return {
         key: 'categorical-patterns',
         primitive,
+        resolveEntry: createCategoricalEntryResolver(viz, primitive),
         className: 'legend-svg--patterns',
         consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
@@ -1628,13 +1738,15 @@ function getCategoricalLegendDraft(
     }
 
     if (classification.patternId) {
-      const items = entries.map((entry) =>
-        getPatternLegendItem(entry.label, entry.color, classification)
-      );
+      const items = entries.map((entry) => ({
+        ...getPatternLegendItem(entry.label, entry.color, classification),
+        entryKey: categoryLegendEntry(entry.value)
+      }));
 
       return {
         key: 'categorical-patterns',
         primitive,
+        resolveEntry: createCategoricalEntryResolver(viz, primitive),
         className: 'legend-svg--patterns',
         consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
@@ -1662,6 +1774,7 @@ function getCategoricalLegendDraft(
   return {
     key: `categorical-color-${primitive}`,
     primitive,
+    resolveEntry: createCategoricalEntryResolver(viz, primitive),
     className: 'legend-svg--categorical',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
     create: (options, context) =>
@@ -2207,7 +2320,8 @@ function getCategoricalLegendItems(
     fill: entry.color,
     stroke: 'none',
     strokeWidth: 0,
-    fillOpacity: opacity.fill
+    fillOpacity: opacity.fill,
+    entryKey: categoryLegendEntry(entry.value)
   }));
 
   if (primitive === 'line') {
@@ -2247,11 +2361,12 @@ function getClassedColorLegendItems(
   const opacity = getPrimitivePaintOpacity(viz, primitive);
   const singleClassValue = getSingleClassValue(classification);
 
-  return colors.map((color, index) => {
+  return colors.map((color, index): KhartisLegendSwatchItem => {
     const label =
       singleClassValue !== null
         ? formatValue(singleClassValue)
         : getColorScaleLabel(breaks, colors.length, index);
+    const entryKey = classLegendEntry(index);
 
     if (primitive === 'line') {
       return {
@@ -2259,7 +2374,8 @@ function getClassedColorLegendItems(
         stroke: color,
         strokeWidth: getLineLegendSwatchWidth(viz),
         opacity: opacity.stroke,
-        dashed: getLinePrimitive(viz)?.dashed ?? false
+        dashed: getLinePrimitive(viz)?.dashed ?? false,
+        entryKey
       };
     }
 
@@ -2272,7 +2388,8 @@ function getClassedColorLegendItems(
         strokeWidth: 0.75,
         fillOpacity: opacity.fill,
         symbol: getShapePath(symbol?.shape ?? ShapeType.CIRCLE),
-        size: 8
+        size: 8,
+        entryKey
       };
     }
 
@@ -2281,7 +2398,8 @@ function getClassedColorLegendItems(
       fill: color,
       stroke: 'rgba(0, 0, 0, 0.15)',
       strokeWidth: 1,
-      fillOpacity: opacity.fill
+      fillOpacity: opacity.fill,
+      entryKey
     };
   });
 }
@@ -2424,6 +2542,16 @@ function getCategoricalMissingDataFooterOptions(
 }
 
 function getMissingDataLegendItem(
+  viz: VisualizationConfig,
+  primitive: LegendSwatchPrimitive
+): KhartisLegendSwatchItem {
+  return {
+    ...getMissingDataLegendSwatch(viz, primitive),
+    entryKey: MISSING_LEGEND_ENTRY
+  };
+}
+
+function getMissingDataLegendSwatch(
   viz: VisualizationConfig,
   primitive: LegendSwatchPrimitive
 ): KhartisLegendSwatchItem {
