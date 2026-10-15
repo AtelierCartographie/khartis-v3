@@ -5,6 +5,7 @@
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import {
     getVisualizationOriginMode,
     visualizationStore
@@ -347,8 +348,15 @@
 
     untrack(() => {
       if (datasetsStore.selectedDatasetId === datasetId) return;
-      if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
-        return;
+      const dataset = datasetsStore.datasets.find(
+        (item) => item.id === datasetId
+      );
+      if (!dataset) return;
+      // The data tab of its source file follows, with the data step reset
+      // that comes with a source change; then the dataset itself, for a file
+      // holding several.
+      if (dataset.sourceFileId) {
+        globalActions.selectDataButton(dataset.sourceFileId);
       }
       datasetsStore.selectDataset(datasetId);
     });
