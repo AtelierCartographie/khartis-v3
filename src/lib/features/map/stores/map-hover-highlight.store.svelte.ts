@@ -8,6 +8,8 @@ import {
 /** The hovered feature's row, read by column name for the legends. */
 export interface HoveredRow {
   datasetId: string;
+  /** The visualization of the hovered map, a collection's own map included. */
+  vizId: string;
   readValue: (column: string) => unknown;
 }
 

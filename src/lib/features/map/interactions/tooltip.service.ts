@@ -305,16 +305,21 @@ function resolveHoveredRow(
   visualizations: VisualizationConfig[] | undefined
 ): HoveredRow | null {
   const layerId = info.layer?.id;
-  const datasetId = layerId
-    ? visualizations?.find((viz) => layerId.includes(viz.id))?.datasetId
+  // A collection map's id extends its source visualization's: the longest
+  // match names the map actually hovered.
+  const viz = layerId
+    ? visualizations
+        ?.filter((candidate) => layerId.includes(candidate.id))
+        .sort((a, b) => b.id.length - a.id.length)[0]
     : undefined;
   const table = resolveSourceTable(info);
   const rowIndex = resolvePickedRowIndex(info);
-  if (!datasetId || !table || rowIndex === null) {
+  if (!viz?.datasetId || !table || rowIndex === null) {
     return null;
   }
   return {
-    datasetId,
+    datasetId: viz.datasetId,
+    vizId: viz.id,
     // An absent column reads as undefined, a missing value as null.
     readValue: (column) => {
       const child = table.getChild(column);
