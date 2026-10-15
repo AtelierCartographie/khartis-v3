@@ -496,17 +496,18 @@ export async function calculateBreaks(
       return null;
     }
 
-    if (numClasses <= 1) {
+    // A single value (a constant column, or one left by a filter) has nothing
+    // to discretize: one class, without running a break macro. Returning null
+    // here would read as a failure and be retried.
+    if (numClasses <= 1 || stats.distinctCount <= 1) {
       return {
         breaks: [],
         counts: [stats.rowCount],
         min: stats.min,
-        max: stats.max
+        max: stats.max,
+        roundedMin: stats.min,
+        roundedMax: stats.max
       };
-    }
-
-    if (stats.distinctCount <= 1) {
-      return null;
     }
 
     if (numClasses >= stats.distinctCount) {
@@ -514,15 +515,6 @@ export async function calculateBreaks(
       if (method === ClassificationMethod.NESTED_MEANS) {
         numClasses = 2 ** Math.floor(Math.log2(numClasses));
       }
-    }
-
-    if (stats.min === stats.max) {
-      return {
-        breaks: [stats.min],
-        counts: [0],
-        min: stats.min,
-        max: stats.max
-      };
     }
 
     let breaks: number[] = [];

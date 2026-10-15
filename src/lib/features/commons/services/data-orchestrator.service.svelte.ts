@@ -77,6 +77,7 @@ import {
   PALETTE_TYPE
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
+  getSingleClassValue,
   normalizeClassificationMethod,
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
@@ -1002,6 +1003,9 @@ function createDataOrchestratorService() {
     ) {
       return false;
     }
+
+    // A single-value series is classified as one class, without a break.
+    if (getSingleClassValue(viz.classification) !== null) return false;
 
     const breaks = viz.classification.breaks;
     const colors = viz.classification.colors;

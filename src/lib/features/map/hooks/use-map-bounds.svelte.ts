@@ -19,6 +19,8 @@ export interface UseMapBoundsProps {
 interface FitViewportOptions {
   animate?: boolean;
   reason?: ViewportFitReason;
+  /** Overrides the layout fit padding, e.g. 0 to reproduce a framing as is. */
+  paddingPx?: number;
 }
 
 export interface UseMapBoundsReturn {
@@ -55,7 +57,7 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
 
   function executeFitBounds(
     bounds: LngLatBoundsLike,
-    { animate = false, reason = 'dataset' }: FitViewportOptions = {}
+    { animate = false, reason = 'dataset', paddingPx }: FitViewportOptions = {}
   ): void {
     const map = getMap();
     if (!map) {
@@ -63,7 +65,7 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
       return;
     }
 
-    const padding = getNormalizedFitPaddingPx();
+    const padding = paddingPx ?? getNormalizedFitPaddingPx();
     mapInstanceStore.markViewportAutoFit(reason);
     map.fitBounds(bounds, {
       padding: {
@@ -129,7 +131,8 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     if (!map || !getIsMapLoaded()) return;
     executeFitBounds(bounds, {
       reason: options.reason ?? 'dataset',
-      animate: options.animate
+      animate: options.animate,
+      paddingPx: options.paddingPx
     });
   }
 

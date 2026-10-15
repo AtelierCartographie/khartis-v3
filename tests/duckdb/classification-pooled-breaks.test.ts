@@ -116,6 +116,25 @@ describe('calculateBreaks over pooled columns', () => {
     expect(pooled).toBe(0);
   });
 
+  it('should return a single class without breaks when the scoped series holds one value', async () => {
+    const single = await calculateBreaks({
+      datasetId: 'source',
+      columnName: 'y1960',
+      method: EQUAL_INTERVAL,
+      numClasses: 5,
+      rowScopeClause: '"y1960" = 3'
+    });
+
+    expect(single).toEqual({
+      breaks: [],
+      counts: [1],
+      min: 3,
+      max: 3,
+      roundedMin: 3,
+      roundedMax: 3
+    });
+  });
+
   it('drops the temporary pooled table', async () => {
     const tables = await query(
       state.db!,

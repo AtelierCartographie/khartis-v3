@@ -92,6 +92,18 @@
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
+  // Suggestions and join grading follow the table filters (see JoinRowScope).
+  const tableFilterKey = $derived.by(() => {
+    void duckDBDatasetsVersion;
+    const tableName = getCurrentDuckDataset(
+      datasetIdForOrchestrator
+    )?.tableName;
+    if (!tableName) return '';
+    return duckDBOrchestrator
+      .getFilters(tableName)
+      .map((filter) => filter.sql)
+      .join(' AND ');
+  });
 
   const joinRows = $derived(dataTabState.basemapJoin.joinMappings);
   const duplicates = $derived(dataTabState.basemapJoin.duplicateEntities);
@@ -306,6 +318,7 @@
   let joinLoadingRequestId = 0;
   let suggestionsDatasetIdentity = $state<string | null>(null);
   let suggestionsGeoColumn = $state<string | null>(null);
+  let suggestionsTableFilterKey: string | null = null;
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -426,6 +439,14 @@
       currentJoinAbortController = null;
     }
     cancelJoinLoading();
+  }
+
+  // Leaving the reference basemap also leaves its tiled style, which would
+  // otherwise keep MapLibre on and hide the next basemap behind the tiles.
+  function clearReferenceBasemap(): void {
+    const wasActive = osmBasemapStore.isActive;
+    osmBasemapStore.clear();
+    if (wasActive) basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
   }
 
   function isOSMBasemapId(basemapId: string): boolean {
@@ -786,7 +807,7 @@
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
 
-    osmBasemapStore.clear();
+    clearReferenceBasemap();
     dataTabActions.clearJoinStats();
     basemapAttributes.clearValues();
     dataTabStore.resetStepCompletion(stepIndex);
@@ -896,7 +917,7 @@
       });
     }
 
-    osmBasemapStore.clear();
+    clearReferenceBasemap();
     dataTabActions.clearJoinStats();
     basemapAttributes.clearValues();
     dataTabActions.setBasemapJoinState({
@@ -963,7 +984,7 @@
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       hasDismissedSuggestedBasemap = false;
-      osmBasemapStore.clear();
+      clearReferenceBasemap();
       dataTabActions.setBasemapJoinState({
         selectedBasemap: customBasemap.file,
         basemapSource: BasemapSource.IMPORT
@@ -1063,7 +1084,6 @@
     });
     basemapStyleStore.setReferenceBasemap(null);
     basemapStyleStore.setStyle(referenceStyle);
-    basemapStyleStore.requestViewportReset(referenceStyle);
 
     projectStore.updateProjectData({
       basemap: {
@@ -1368,6 +1388,7 @@
     const persistedBasemapId = runtimePersistedBasemap?.id;
     const hasDatasetGeometry = Boolean(datasetSnapshot.geometry);
     const processedDataset = normalizeToProcessedDataset(datasetSnapshot);
+    const requestedTableFilterKey = tableFilterKey;
 
     try {
       if (
@@ -1375,6 +1396,7 @@
         basemapSuggestions.length > 0 &&
         suggestionsDatasetIdentity === requestedDatasetIdentity &&
         suggestionsGeoColumn === (geoColumn ?? null) &&
+        suggestionsTableFilterKey === requestedTableFilterKey &&
         hasAvailableBasemap(selectedBasemapId)
       ) {
         return;
@@ -1491,6 +1513,7 @@
 
       basemapSuggestions = suggestions;
       suggestionsGeoColumn = geoColumn ?? null;
+      suggestionsTableFilterKey = requestedTableFilterKey;
 
       const isDatasetChanged =
         suggestionsDatasetIdentity !== requestedDatasetIdentity;
@@ -1883,6 +1906,49 @@
     }
   });
 
+  let previousTableFilterKey: string | null = null;
+
+  // A filter change regrades the finalized join on the rows left visible; the
+  // join itself still covers the full table.
+  $effect(() => {
+    const filterKey = tableFilterKey;
+    const previousKey = previousTableFilterKey;
+    previousTableFilterKey = filterKey;
+    if (previousKey === null || previousKey === filterKey) return;
+
+    untrack(() => {
+      const resolvedDatasetId = datasetIdForOrchestrator;
+      const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+      if (!resolvedDatasetId || !linkedVariableName || hasGPSCoordinates) {
+        return;
+      }
+      if (
+        !basemapSelected ||
+        !isCatalogJoinFinalizedForBasemap(
+          basemapSelected,
+          linkedVariableName,
+          resolvedDatasetId
+        )
+      ) {
+        return;
+      }
+      const basemap = allBasemapsForLookup.find(
+        (candidate) => candidate.file === basemapSelected
+      );
+      if (!basemap) return;
+
+      abortCurrentJoin();
+      currentJoinAbortController = new AbortController();
+      void refreshFinalizedJoinStats(
+        basemap,
+        resolvedDatasetId,
+        linkedVariableName,
+        currentJoinAbortController.signal,
+        basemapStepIndex
+      );
+    });
+  });
+
   let previousDatasetIdentity: string | null = null;
 
   $effect(() => {
@@ -1898,7 +1964,7 @@
     ) {
       abortCurrentJoin();
 
-      osmBasemapStore.clear();
+      clearReferenceBasemap();
       dataTabActions.clearJoinStats();
       basemapAttributes.clearValues();
       dataTabActions.setBasemapJoinState({

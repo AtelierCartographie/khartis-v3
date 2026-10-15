@@ -195,14 +195,9 @@
       if (osmBasemapStore.isActive) {
         osmBasemapStore.clear();
       }
-      if (nextStyle === basemapStyleStore.selectedStyle) {
-        basemapStyleStore.requestViewportReset(nextStyle, {
-          preferPreset: true
-        });
-        return;
+      if (nextStyle !== basemapStyleStore.selectedStyle) {
+        basemapStyleStore.setStyle(nextStyle);
       }
-      basemapStyleStore.setStyle(nextStyle);
-      basemapStyleStore.requestViewportReset(nextStyle, { preferPreset: true });
     }
   }
 
@@ -217,15 +212,9 @@
       setFlatProjection();
       osmBasemapStore.clear();
     }
-    if (nextStyle === basemapStyleStore.selectedStyle) {
-      basemapStyleStore.requestViewportReset(nextStyle);
-      return;
+    if (nextStyle !== basemapStyleStore.selectedStyle) {
+      basemapStyleStore.setStyle(nextStyle);
     }
-    if (nextStyle === BasemapStyle.BLANK_WHITE) {
-      basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
-      return;
-    }
-    basemapStyleStore.setStyle(nextStyle);
   }
 
   function isReferenceLayerVisible(item: ReferenceLayerItem): boolean {

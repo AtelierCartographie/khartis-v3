@@ -35,6 +35,8 @@ import { getLocale } from '$lib/paraglide/runtime';
 import type { Table } from 'apache-arrow/Arrow';
 import { addGeoArrowMetadata } from '$lib/features/map/services/read-geoparquet-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
+import { buildFilterWhereClause } from './filter-ops';
+import { getFiltersMap } from './state.svelte';
 import type {
   JoinCandidate,
   JoinMapping,
@@ -117,11 +119,33 @@ const pendingSimilarityCacheBuilds = new Map<
  */
 const fullFuzzyPassRequests = new Set<string>();
 
+function getColumnKey(datasetTable: string, geoColumn: string): string {
+  return `${datasetTable}::${geoColumn}`;
+}
+
+/**
+ * Rows a similarity cache reads. Grading, suggestions and the fuzzy pass follow
+ * the table filters, so their counts describe the rows the user sees; the
+ * finalized join covers the full table, so lifting a filter later does not
+ * reveal rows left without geometry.
+ */
+export type JoinRowScope = 'filtered' | 'full';
+
+function resolveJoinRowFilter(
+  datasetTable: string,
+  scope: JoinRowScope
+): string | null {
+  if (scope === 'full') return null;
+  return buildFilterWhereClause(getFiltersMap().get(datasetTable));
+}
+
 function getSimilarityCacheBuildKey(
   datasetTable: string,
-  geoColumn: string
+  geoColumn: string,
+  rowFilter: string | null
 ): string {
-  return `${datasetTable}::${geoColumn}`;
+  const columnKey = getColumnKey(datasetTable, geoColumn);
+  return rowFilter ? `${columnKey}::${rowFilter}` : columnKey;
 }
 
 function hashSimilarityCacheKey(buildKey: string): string {
@@ -134,15 +158,14 @@ function hashSimilarityCacheKey(buildKey: string): string {
 
 function getSimilarityCacheTableName(
   datasetTable: string,
-  geoColumn: string
+  geoColumn: string,
+  buildKey: string
 ): string {
   // The hash keeps names unique when sanitization collapses distinct keys.
   const sanitized = `${datasetTable}__${geoColumn}`
     .replace(/[^a-zA-Z0-9_]/g, '_')
     .slice(0, 80);
-  const hash = hashSimilarityCacheKey(
-    getSimilarityCacheBuildKey(datasetTable, geoColumn)
-  );
+  const hash = hashSimilarityCacheKey(buildKey);
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}_${hash}`;
 }
 
@@ -252,14 +275,23 @@ function buildTargetNamesCte(candidateBasemapsCte: string): string {
 async function ensureSimilarityCached(
   dataset: DuckDBDataset,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  scope: JoinRowScope = 'filtered'
 ): Promise<string> {
+  const rowFilter = resolveJoinRowFilter(dataset.tableName, scope);
+  const buildKey = getSimilarityCacheBuildKey(
+    dataset.tableName,
+    geoColumn,
+    rowFilter
+  );
   const cacheTableName = getSimilarityCacheTableName(
     dataset.tableName,
-    geoColumn
+    geoColumn,
+    buildKey
   );
-  const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
-  const fuzzyMode: FuzzyPassMode = fullFuzzyPassRequests.has(buildKey)
+  const fuzzyMode: FuzzyPassMode = fullFuzzyPassRequests.has(
+    getColumnKey(dataset.tableName, geoColumn)
+  )
     ? 'full'
     : 'auto';
 
@@ -317,7 +349,7 @@ async function ensureSimilarityCached(
           CAST("${escapedGeoCol}" AS VARCHAR) as original_name,
           normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR)) as normalized_name
         FROM "${escapeIdentifier(dataset.tableName)}"
-        WHERE "${escapedGeoCol}" IS NOT NULL
+        WHERE "${escapedGeoCol}" IS NOT NULL${rowFilter ? ` AND (${rowFilter})` : ''}
       ),
       source_data AS (
         SELECT
@@ -508,7 +540,7 @@ async function fetchFuzzyPassEstimate(
   cacheTableName: string,
   Duck: DuckDBClientForJoin
 ): Promise<JoinFuzzyPassEstimate> {
-  const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
+  const columnKey = getColumnKey(dataset.tableName, geoColumn);
   const escapedCache = escapeIdentifier(cacheTableName);
 
   const rows = (await Duck.query(
@@ -535,7 +567,7 @@ async function fetchFuzzyPassEstimate(
 
   const candidates = Number(rows[0]?.candidates ?? 0);
   const targetNames = Number(rows[0]?.target_names ?? 0);
-  const fullPassRequested = fullFuzzyPassRequests.has(buildKey);
+  const fullPassRequested = fullFuzzyPassRequests.has(columnKey);
 
   return {
     candidates,
@@ -571,14 +603,14 @@ export async function runFullFuzzyPass(
   geoColumn: string,
   Duck: DuckDBClientForJoin
 ): Promise<void> {
-  const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
-  fullFuzzyPassRequests.add(buildKey);
+  const columnKey = getColumnKey(dataset.tableName, geoColumn);
+  fullFuzzyPassRequests.add(columnKey);
   try {
     await ensureSimilarityCached(dataset, geoColumn, Duck);
   } catch (error) {
     // A failed pass leaves no suggestions, so the request must not stick or
     // every later refresh would silently pay for the unbounded scope.
-    fullFuzzyPassRequests.delete(buildKey);
+    fullFuzzyPassRequests.delete(columnKey);
     throw error;
   }
 }
@@ -1309,6 +1341,7 @@ export async function computeJoinStats(
   );
 
   if (quality.duplicateCount > 0) {
+    const rowFilter = resolveJoinRowFilter(dataset.tableName, 'filtered');
     const escapedTable = escapeIdentifier(dataset.tableName);
     const escapedGeoCol = escapeIdentifier(geoColumn);
     const dupValues = quality.duplicateEntities
@@ -1324,7 +1357,7 @@ export async function computeJoinStats(
       const idCol = hasRowId.length > 0 ? `"${INTERNAL_COLUMN.ID}"` : 'rowid';
 
       const dupRows = (await Duck.query(
-        `SELECT "${escapedGeoCol}" as dataValue, array_agg(${idCol} ORDER BY ${idCol}) as lines FROM "${escapedTable}" WHERE "${escapedGeoCol}" IN (${dupValues}) GROUP BY "${escapedGeoCol}" HAVING COUNT(*) > 1`,
+        `SELECT "${escapedGeoCol}" as dataValue, array_agg(${idCol} ORDER BY ${idCol}) as lines FROM "${escapedTable}" WHERE "${escapedGeoCol}" IN (${dupValues})${rowFilter ? ` AND (${rowFilter})` : ''} GROUP BY "${escapedGeoCol}" HAVING COUNT(*) > 1`,
         { format: 'array' }
       )) as Array<{ dataValue: string; lines: number[] }>;
 
@@ -1661,7 +1694,12 @@ export async function finalizeJoin(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
 
-  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'full'
+  );
 
   await applyCachedJoinAssociation(
     dataset.tableName,

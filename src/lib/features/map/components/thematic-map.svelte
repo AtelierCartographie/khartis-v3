@@ -10,9 +10,9 @@
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
   import {
     BasemapStyle,
-    getBasemapViewportPreset,
-    getBasemapZone
+    getBasemapViewportPreset
   } from '../constants/basemap-styles';
+  import { screenPxToData } from '../utils/map-anchor-projection.utils';
   import { hslToHex } from '../../commons/utils/color-utils';
   import {
     mapInstanceStore,
@@ -266,10 +266,15 @@
   let pendingOrthographicFitReason = $state<ViewportFitReason>('dataset');
   let pendingMapLibreViewportPreset = $state<{
     bounds: LngLatBoundsLike;
-    preferPreset: boolean;
   } | null>(null);
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
+  let lastMapLibreRenderScale: number | null = null;
+  interface OrthographicFraming {
+    bounds: [[number, number], [number, number]];
+    manual: boolean;
+  }
+  let orthographicFramingForMapLibre: OrthographicFraming | null = null;
   let handledMarginsEditId = untrack(() => getMarginsEditId());
   // A manual view inherited from another renderer (the facet collection) was
   // framed on its fit; the first reference refresh refits it to this canvas.
@@ -291,7 +296,6 @@
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastLayoutSnapshot: string | null = null;
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
-  let lastSelectedBasemapZone = getBasemapZone(basemapStyleStore.selectedStyle);
 
   let isApplyingMapLibreSync = false;
 
@@ -1079,16 +1083,45 @@
       return;
     }
 
-    const { bounds: presetBounds, preferPreset } =
-      pendingMapLibreViewportPreset;
+    const { bounds: presetBounds } = pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
 
-    // `preferPreset` makes every pending viewport consumer frame the chosen zone.
-    const dataBounds = preferPreset ? null : resolveUserDataBounds();
+    const dataBounds = resolveUserDataBounds();
     mapBounds.fitToBounds(dataBounds ?? presetBounds, {
       animate: true,
       reason: dataBounds ? 'dataset' : 'basemap'
     });
+  }
+
+  /**
+   * Geographic extent of the orthographic view, from the frame edges inverted
+   * to lon/lat, so the tiled basemap opens on what the user was looking at.
+   * Null when part of the frame does not invert (composite projection,
+   * projected data without an invertible projection, frame past the globe).
+   */
+  function captureOrthographicFraming(): OrthographicFraming | null {
+    const samples = [0, 0.5, 1];
+    const lons: number[] = [];
+    const lats: number[] = [];
+    for (const fx of samples) {
+      for (const fy of samples) {
+        const point = screenPxToData(
+          fx * logicalMapCanvasWidth,
+          fy * logicalMapCanvasHeight
+        );
+        if (!point) return null;
+        lons.push(point.lon);
+        lats.push(point.lat);
+      }
+    }
+    const clampLat = (lat: number) => Math.max(-85, Math.min(85, lat));
+    return {
+      bounds: [
+        [Math.min(...lons), clampLat(Math.min(...lats))],
+        [Math.max(...lons), clampLat(Math.max(...lats))]
+      ],
+      manual: !mapInstanceStore.isViewportAutoFitManaged
+    };
   }
 
   function fitMapLibreViewportAfterViewModeSwitch(
@@ -1098,14 +1131,21 @@
       return;
     }
 
+    const framing = orthographicFramingForMapLibre;
+    orthographicFramingForMapLibre = null;
+
     if (mapInstanceStore.applyPendingMapLibreRestore()) {
       return;
     }
 
-    if (
-      pendingMapLibreViewportPreset?.preferPreset ||
-      (reason === 'basemap' && pendingMapLibreViewportPreset)
-    ) {
+    if (framing && reason === 'basemap') {
+      pendingMapLibreViewportPreset = null;
+      mapBounds.fitToBounds(framing.bounds, { reason, paddingPx: 0 });
+      if (framing.manual) mapInstanceStore.markViewportManual();
+      return;
+    }
+
+    if (reason === 'basemap' && pendingMapLibreViewportPreset) {
       applyPendingMapLibreViewportPreset();
       return;
     }
@@ -1388,6 +1428,8 @@
 
     untrack(() => {
       const previousFramingScale = mapInstanceStore.measureFramingScale();
+      const previousRenderScale = lastMapLibreRenderScale;
+      lastMapLibreRenderScale = pageDisplayScale;
       projectionStore.setRenderScale(pageDisplayScale);
       projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
       updateCanvasSize();
@@ -1401,6 +1443,11 @@
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         if (mapInit.viewMode === ViewMode.MAPLIBRE) {
           mapInit.map?.resize();
+          if (previousRenderScale !== null) {
+            mapInstanceStore.rescaleMapLibreView(
+              pageDisplayScale / previousRenderScale
+            );
+          }
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           scheduleLayerUpdate('effect:canvasResize');
           if (mapInstanceStore.hasPendingOrthographicRestore) {
@@ -1493,6 +1540,7 @@
       });
 
       if (shouldUseMapLibre && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+        orthographicFramingForMapLibre = captureOrthographicFraming();
         isSwitchingViewMode = true;
         mapBasemap.cleanup();
         mapInit.switchToMapLibreMode();
@@ -1779,9 +1827,6 @@
     const isMapLoaded = mapInit.isMapLoaded;
     const viewMode = mapInit.viewMode;
     const map = mapInit.map;
-    const nextZone = getBasemapZone(selectedStyle);
-    const previousZone = lastSelectedBasemapZone;
-    lastSelectedBasemapZone = nextZone;
 
     if (
       selectedStyle !== BasemapStyle.BLANK_WHITE &&
@@ -1792,23 +1837,6 @@
       untrack(() =>
         scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')
       );
-    }
-
-    if (
-      selectedStyle === BasemapStyle.BLANK_WHITE ||
-      !previousZone ||
-      !nextZone ||
-      previousZone === nextZone
-    ) {
-      return;
-    }
-
-    const preset = getBasemapViewportPreset(selectedStyle);
-    if (preset) {
-      pendingMapLibreViewportPreset = {
-        bounds: preset.bounds,
-        preferPreset: false
-      };
     }
   });
 
@@ -1831,7 +1859,6 @@
     void basemapStyleStore.viewportRequestVersion;
 
     const requestedStyle = basemapStyleStore.requestedViewportStyle;
-    const preferPreset = basemapStyleStore.requestedViewportPreferPreset;
     const preset = requestedStyle
       ? getBasemapViewportPreset(requestedStyle)
       : null;
@@ -1840,7 +1867,7 @@
       return;
     }
 
-    pendingMapLibreViewportPreset = { bounds: preset.bounds, preferPreset };
+    pendingMapLibreViewportPreset = { bounds: preset.bounds };
 
     untrack(() => {
       if (
