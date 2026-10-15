@@ -92,6 +92,18 @@
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
+  // Suggestions and join grading follow the table filters (see JoinRowScope).
+  const tableFilterKey = $derived.by(() => {
+    void duckDBDatasetsVersion;
+    const tableName = getCurrentDuckDataset(
+      datasetIdForOrchestrator
+    )?.tableName;
+    if (!tableName) return '';
+    return duckDBOrchestrator
+      .getFilters(tableName)
+      .map((filter) => filter.sql)
+      .join(' AND ');
+  });
 
   const joinRows = $derived(dataTabState.basemapJoin.joinMappings);
   const duplicates = $derived(dataTabState.basemapJoin.duplicateEntities);
@@ -306,6 +318,7 @@
   let joinLoadingRequestId = 0;
   let suggestionsDatasetIdentity = $state<string | null>(null);
   let suggestionsGeoColumn = $state<string | null>(null);
+  let suggestionsTableFilterKey: string | null = null;
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -1368,6 +1381,7 @@
     const persistedBasemapId = runtimePersistedBasemap?.id;
     const hasDatasetGeometry = Boolean(datasetSnapshot.geometry);
     const processedDataset = normalizeToProcessedDataset(datasetSnapshot);
+    const requestedTableFilterKey = tableFilterKey;
 
     try {
       if (
@@ -1375,6 +1389,7 @@
         basemapSuggestions.length > 0 &&
         suggestionsDatasetIdentity === requestedDatasetIdentity &&
         suggestionsGeoColumn === (geoColumn ?? null) &&
+        suggestionsTableFilterKey === requestedTableFilterKey &&
         hasAvailableBasemap(selectedBasemapId)
       ) {
         return;
@@ -1491,6 +1506,7 @@
 
       basemapSuggestions = suggestions;
       suggestionsGeoColumn = geoColumn ?? null;
+      suggestionsTableFilterKey = requestedTableFilterKey;
 
       const isDatasetChanged =
         suggestionsDatasetIdentity !== requestedDatasetIdentity;
@@ -1881,6 +1897,49 @@
     if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
       dataTabStore.markStepComplete(basemapStepIndex);
     }
+  });
+
+  let previousTableFilterKey: string | null = null;
+
+  // A filter change regrades the finalized join on the rows left visible; the
+  // join itself still covers the full table.
+  $effect(() => {
+    const filterKey = tableFilterKey;
+    const previousKey = previousTableFilterKey;
+    previousTableFilterKey = filterKey;
+    if (previousKey === null || previousKey === filterKey) return;
+
+    untrack(() => {
+      const resolvedDatasetId = datasetIdForOrchestrator;
+      const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+      if (!resolvedDatasetId || !linkedVariableName || hasGPSCoordinates) {
+        return;
+      }
+      if (
+        !basemapSelected ||
+        !isCatalogJoinFinalizedForBasemap(
+          basemapSelected,
+          linkedVariableName,
+          resolvedDatasetId
+        )
+      ) {
+        return;
+      }
+      const basemap = allBasemapsForLookup.find(
+        (candidate) => candidate.file === basemapSelected
+      );
+      if (!basemap) return;
+
+      abortCurrentJoin();
+      currentJoinAbortController = new AbortController();
+      void refreshFinalizedJoinStats(
+        basemap,
+        resolvedDatasetId,
+        linkedVariableName,
+        currentJoinAbortController.signal,
+        basemapStepIndex
+      );
+    });
   });
 
   let previousDatasetIdentity: string | null = null;
