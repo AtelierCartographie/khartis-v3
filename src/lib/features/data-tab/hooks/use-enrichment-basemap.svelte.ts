@@ -325,7 +325,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     }
     basemapStyleStore.setReferenceBasemap(null);
     basemapStyleStore.setStyle(referenceStyle);
-    basemapStyleStore.requestViewportReset(referenceStyle);
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
       basemapSource: BasemapSource.OSM
