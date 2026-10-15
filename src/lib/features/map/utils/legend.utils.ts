@@ -34,6 +34,7 @@ import {
   getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 import { toFiniteNumber } from './finite-number.utils';
+import { getSingleClassValue } from '$lib/features/commons/utils/discretization.utils';
 import {
   round,
   round_extreme
@@ -129,6 +130,15 @@ function normalizeOpacity(value: number | undefined, fallback: number): number {
   const resolved = value ?? fallback;
   const normalized = resolved > 1 ? resolved / 100 : resolved;
   return Math.max(0, Math.min(1, normalized));
+}
+
+function hasLegendClasses(
+  classification: ClassificationConfig | undefined
+): boolean {
+  return (
+    !!classification?.breaks?.length ||
+    getSingleClassValue(classification) !== null
+  );
 }
 
 function resolveClassificationClassCount(
@@ -398,7 +408,7 @@ export function getClassedColorLegendPrimitives(
     symbol.fillMode === FillMode.CLASSES &&
     !!getSymbolFillValueColumn(viz) &&
     !!pointClassification?.colors?.length &&
-    !!pointClassification?.breaks?.length
+    hasLegendClasses(pointClassification)
   ) {
     primitives.push('point');
   }
@@ -408,7 +418,7 @@ export function getClassedColorLegendPrimitives(
     line.colorMode === ColorMode.CLASSES &&
     !!getPrimitiveValueColumn(viz, PrimitiveFilterType.LINE) &&
     !!lineClassification?.colors?.length &&
-    !!lineClassification?.breaks?.length
+    hasLegendClasses(lineClassification)
   ) {
     primitives.push('line');
   }
@@ -418,7 +428,7 @@ export function getClassedColorLegendPrimitives(
     polygon.fillMode === FillMode.CLASSES &&
     !!getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON) &&
     !!polygonClassification?.colors?.length &&
-    !!polygonClassification?.breaks?.length
+    hasLegendClasses(polygonClassification)
   ) {
     primitives.push('area');
   }
