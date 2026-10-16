@@ -16,7 +16,8 @@ const CLASSIFICATION_METHOD = {
   MANUAL: 'manual',
   Q6: 'q6',
   NESTED_MEANS: 'nested_means',
-  HEAD_TAIL: 'head_tail'
+  HEAD_TAIL: 'head_tail',
+  CALENDAR: 'calendar'
 } as const;
 
 export function normalizeClassificationMethod(
@@ -30,6 +31,7 @@ export function normalizeClassificationMethod(
     case CLASSIFICATION_METHOD.Q6:
     case CLASSIFICATION_METHOD.NESTED_MEANS:
     case CLASSIFICATION_METHOD.HEAD_TAIL:
+    case CLASSIFICATION_METHOD.CALENDAR:
       return method as ClassificationMethod;
     default:
       return CLASSIFICATION_METHOD.KMEANS as ClassificationMethod;

@@ -30,7 +30,14 @@ import {
   type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import { formatValue } from '$lib/features/commons/utils/format.utils';
+import {
+  formatValue,
+  resolveLocale
+} from '$lib/features/commons/utils/format.utils';
+import {
+  formatCalendarBoundary,
+  formatCalendarClassLabel
+} from '$lib/features/commons/utils/calendar-breaks.utils';
 import { getSingleClassValue } from '$lib/features/commons/utils/discretization.utils';
 import {
   rowScopeStore,
@@ -729,6 +736,53 @@ function getBreakFractionDigits(breaks: number[]): number {
   return MAX_LEGEND_BREAK_FRACTION_DIGITS;
 }
 
+/** Period label of a calendar class: `[start, next start[` read at the step granularity. */
+function getCalendarClassLabel(
+  classification: ClassificationConfig,
+  index: number
+): string | null {
+  const step = classification.calendarStep;
+  if (!step) return null;
+  const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+  const bounds = [
+    classification.roundedMin,
+    ...breaks,
+    classification.roundedMax
+  ];
+  const start = bounds[index];
+  const end = bounds[index + 1];
+  if (
+    typeof start !== 'number' ||
+    typeof end !== 'number' ||
+    !Number.isFinite(start) ||
+    !Number.isFinite(end)
+  ) {
+    return null;
+  }
+  return formatCalendarClassLabel(start, end, step, resolveLocale());
+}
+
+function getCalendarThresholdFormatter(
+  classification: ClassificationConfig
+): ((value: number) => string) | undefined {
+  const step = classification.calendarStep;
+  if (!step) return undefined;
+  const locale = resolveLocale();
+  return (value) => formatCalendarBoundary(value, step, locale);
+}
+
+function getClassLabel(
+  classification: ClassificationConfig,
+  breaks: number[],
+  colorCount: number,
+  index: number
+): string {
+  return (
+    getCalendarClassLabel(classification, index) ??
+    getColorScaleLabel(breaks, colorCount, index)
+  );
+}
+
 function getColorScaleLabel(
   breaks: number[],
   colorCount: number,
@@ -1236,10 +1290,10 @@ function getStrokeColorLegendDraft(
   let resolveEntry: LegendEntryResolver | undefined;
   if (config.strokeMode === StrokeMode.CLASSES) {
     const breaks = (classification.breaks ?? []).filter(Number.isFinite);
-    if (breaks.length === 0) return null;
+    if (breaks.length === 0 && !classification.calendarStep) return null;
     const classColors = getEffectiveClassedColors(colors, breaks);
     entries = classColors.map((color, index) => ({
-      label: getColorScaleLabel(breaks, classColors.length, index),
+      label: getClassLabel(classification, breaks, classColors.length, index),
       color,
       entryKey: classLegendEntry(index)
     }));
@@ -1320,6 +1374,7 @@ function getStrokeClassesLegendDraft(
     max: classification.roundedMax ?? domain?.max
   });
   if (!thresholds) return null;
+  const formatThreshold = getCalendarThresholdFormatter(classification);
 
   return {
     key: `stroke-color-${primitive}`,
@@ -1333,6 +1388,7 @@ function getStrokeClassesLegendDraft(
           ...options,
           ...getClassBarLayoutOptions(context.layout),
           outlineWidth: 2,
+          formatThreshold,
           swatch: getQuantiColorSwatch(viz, primitive, true),
           opacity: getPrimitivePaintOpacity(viz, primitive).stroke
         })
@@ -1445,7 +1501,7 @@ function getTextColorLegendDraft(
       breaks
     );
     const items = colors.map((color, index) => ({
-      label: getColorScaleLabel(breaks, colors.length, index),
+      label: getClassLabel(classification, breaks, colors.length, index),
       fill: color,
       stroke,
       strokeWidth,
@@ -1687,9 +1743,12 @@ function getQuantitativeColorLegendDraft(
   const filter = LEGEND_SWATCH_PRIMITIVE_FILTER[primitive];
   const valueColumn = getClassedValueColumn(viz, primitive);
   const domain = getColumnDomain(viz, valueColumn, filter);
-  // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
+  // A shared facet scale merges several domains, so the classification's own
+  // bounds stop describing it — except calendar bounds, computed on the pool.
   const hasSharedScale =
+    !classification.calendarStep &&
     getSharedFacetScaleColumns(viz, valueColumn).length > 0;
+  const formatThreshold = getCalendarThresholdFormatter(classification);
   const roundedMin = hasSharedScale ? undefined : classification.roundedMin;
   const roundedMax = hasSharedScale ? undefined : classification.roundedMax;
   const thresholds = buildQuantiColorThresholds({
@@ -1720,6 +1779,7 @@ function getQuantitativeColorLegendDraft(
           ...options,
           ...getClassBarLayoutOptions(context.layout),
           classPatternFills,
+          formatThreshold,
           swatch: getQuantiColorSwatch(viz, primitive),
           opacity: classPatternFills
             ? undefined
@@ -2458,7 +2518,7 @@ function getClassedColorLegendItems(
     const label =
       singleClassValue !== null
         ? formatValue(singleClassValue)
-        : getColorScaleLabel(breaks, colors.length, index);
+        : getClassLabel(classification, breaks, colors.length, index);
     const entryKey = classLegendEntry(index);
 
     if (primitive === 'line') {

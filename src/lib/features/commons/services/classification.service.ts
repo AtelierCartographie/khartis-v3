@@ -13,6 +13,16 @@ import {
 } from '@ateliercartographie/ok-palette';
 import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
+import {
+  addCalendarStep,
+  buildCalendarBreaks,
+  buildEvenCalendarBreaks,
+  chooseCalendarStep,
+  countCalendarClasses,
+  floorToCalendarStep,
+  inferCalendarGranularity,
+  type CalendarStep
+} from '../utils/calendar-breaks.utils';
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';
 const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
@@ -30,6 +40,8 @@ export interface BreaksResult {
   breakpointLowerClassCount?: number;
   /** Classes the method determines on its own, independent of the request. */
   naturalClassCount?: number;
+  /** Step of a calendar classification; breaks, bounds and min/max are then epoch milliseconds. */
+  calendarStep?: CalendarStep;
 }
 
 export interface ClassificationOptions {
@@ -41,6 +53,8 @@ export interface ClassificationOptions {
   rowScopeClause?: string | null;
   /** Classify the values of all these columns together, e.g. a map collection's common scale. */
   pooledColumnNames?: string[];
+  /** Calendar step to keep while it fits the series; otherwise one is chosen from `numClasses`. */
+  calendarStep?: CalendarStep;
 }
 
 export interface BreakCountOptions {
@@ -144,6 +158,7 @@ export function mapMethodToMacro(
     case ClassificationMethod.HEAD_TAIL:
       return 'headtail2';
     case ClassificationMethod.MANUAL:
+    case ClassificationMethod.CALENDAR:
       return null;
     default:
       return 'quantile';
@@ -462,6 +477,17 @@ export async function calculateBreaks(
   const { datasetId, columnName, method } = options;
   let { numClasses } = options;
 
+  if (method === ClassificationMethod.CALENDAR) {
+    return calculateCalendarBreaks({
+      datasetId,
+      columnName,
+      maxClasses: numClasses,
+      step: options.calendarStep,
+      rowScopeClause: options.rowScopeClause,
+      pooledColumnNames: options.pooledColumnNames
+    });
+  }
+
   const context = getQueryContext(datasetId, columnName);
   if (!context) {
     return null;
@@ -775,6 +801,244 @@ export async function calculateBreakCounts(
     return null;
   } finally {
     await prepared.cleanup();
+  }
+}
+
+export interface CalendarClassificationOptions {
+  datasetId: string;
+  columnName: string;
+  /** Class count a step is chosen for: the finest step that stays within it. */
+  maxClasses: number;
+  /** Current step, kept while it gives 2 to `stepClassLimit` classes. */
+  step?: CalendarStep;
+  stepClassLimit?: number;
+  rowScopeClause?: string | null;
+  pooledColumnNames?: string[];
+}
+
+function buildEpochValuesSource(
+  context: QueryContext,
+  columnNames: string[],
+  rowScopeClause: string | null | undefined
+): string {
+  const scope = rowScopeClause ? ` WHERE ${rowScopeClause}` : '';
+  const selects = columnNames.map(
+    (columnName) =>
+      `SELECT epoch_ms("${escapeIdentifier(columnName)}") AS v FROM "${context.escapedTable}"${scope}`
+  );
+  return `(${selects.join(' UNION ALL ')})`;
+}
+
+const TEMPORAL_COLUMN_TYPE = /^(DATE|TIMESTAMP)\b/;
+
+/** Whether the column is a DATE or TIMESTAMP in DuckDB: it is then classed on calendar steps. */
+export async function isTemporalColumn(
+  datasetId: string,
+  columnName: string
+): Promise<boolean> {
+  const context = getQueryContext(datasetId, columnName);
+  if (!context) {
+    return false;
+  }
+
+  try {
+    const result = (await Duck.query(
+      `SELECT data_type FROM information_schema.columns WHERE table_name = '${escapeSqlString(context.tableName)}' AND column_name = '${escapeSqlString(columnName)}'`
+    )) as Table;
+    const dataType = result.getChild?.('data_type')?.get(0);
+    return typeof dataType === 'string' && TEMPORAL_COLUMN_TYPE.test(dataType);
+  } catch (error) {
+    logger.warn('Failed to read the classified column type', LogCategory.DATA, {
+      error,
+      flow: 'classification_column_type',
+      extra: { tableName: context.tableName, columnName }
+    });
+    return false;
+  }
+}
+
+interface EpochStats {
+  min: number;
+  max: number;
+}
+
+async function queryEpochStats(source: string): Promise<EpochStats | null> {
+  const statsResult = (await Duck.query(
+    `SELECT COUNT(v) AS row_count, MIN(v) AS min_val, MAX(v) AS max_val FROM ${source} AS s WHERE v IS NOT NULL`
+  )) as Table;
+  const rowCount = Number(statsResult.getChild?.('row_count')?.get(0) ?? 0);
+  const rawMin = statsResult.getChild?.('min_val')?.get(0);
+  const rawMax = statsResult.getChild?.('max_val')?.get(0);
+  if (!rowCount || rawMin == null || rawMax == null) {
+    return null;
+  }
+  const min = Number(rawMin);
+  const max = Number(rawMax);
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+}
+
+/** Values per class `[bounds[i], bounds[i + 1][`; the bounds enclose the series. */
+async function queryEpochCounts(
+  source: string,
+  bounds: readonly number[]
+): Promise<number[]> {
+  const countColumns = bounds
+    .slice(0, -1)
+    .map(
+      (start, index) =>
+        `COUNT(*) FILTER (WHERE v >= ${start} AND v < ${bounds[index + 1]}) AS cnt_${index}`
+    );
+  const countsResult = (await Duck.query(
+    `SELECT ${countColumns.join(', ')} FROM ${source} AS s WHERE v IS NOT NULL`
+  )) as Table;
+  return countColumns.map((_, index) =>
+    Number(countsResult.getChild?.(`cnt_${index}`)?.get(0) ?? 0)
+  );
+}
+
+function logCalendarFailure(
+  message: string,
+  flow: string,
+  context: QueryContext,
+  datasetId: string,
+  error: unknown
+): void {
+  logger.error(
+    message,
+    LogCategory.DATA,
+    {
+      datasetId,
+      tableName: context.tableName,
+      columnName: context.columnName,
+      error
+    },
+    { feature: 'visualization', flow }
+  );
+}
+
+/** Calendar-aligned breaks on a DATE or TIMESTAMP column, in epoch milliseconds. */
+export async function calculateCalendarBreaks(
+  options: CalendarClassificationOptions
+): Promise<BreaksResult | null> {
+  const context = getQueryContext(options.datasetId, options.columnName);
+  if (!context) {
+    return null;
+  }
+
+  const source = buildEpochValuesSource(
+    context,
+    resolvePooledColumnNames(options.pooledColumnNames) ?? [options.columnName],
+    options.rowScopeClause
+  );
+
+  try {
+    const stats = await queryEpochStats(source);
+    if (!stats) {
+      return null;
+    }
+    const { min, max } = stats;
+
+    const stepClassLimit = Math.max(
+      2,
+      options.stepClassLimit ?? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+    );
+    const currentClassCount = options.step
+      ? countCalendarClasses(min, max, options.step, stepClassLimit)
+      : 0;
+    const step =
+      options.step &&
+      currentClassCount >= 2 &&
+      currentClassCount <= stepClassLimit
+        ? options.step
+        : chooseCalendarStep(min, max, Math.max(2, options.maxClasses));
+    const { breaks, lower, upper } = buildCalendarBreaks(min, max, step);
+    const counts = await queryEpochCounts(source, [lower, ...breaks, upper]);
+
+    return {
+      breaks,
+      counts,
+      min,
+      max,
+      roundedMin: lower,
+      roundedMax: upper,
+      calendarStep: step
+    };
+  } catch (error) {
+    logCalendarFailure(
+      'Failed to calculate calendar breaks',
+      'classification_calendar_breaks',
+      context,
+      options.datasetId,
+      error
+    );
+    return null;
+  }
+}
+
+/**
+ * Counts for manual date bounds (epoch milliseconds). The outer bounds and the
+ * labels follow the coarsest unit the thresholds share: all on 1 January reads
+ * in years, all on the 1st in months, otherwise in days.
+ */
+export async function calculateCalendarBreakCounts(
+  options: BreakCountOptions & {
+    /** When the bounds do not make this many classes, even ones replace them. */
+    classCount?: number;
+  }
+): Promise<BreaksResult | null> {
+  const context = getQueryContext(options.datasetId, options.columnName);
+  if (!context) {
+    return null;
+  }
+
+  const source = buildEpochValuesSource(
+    context,
+    resolvePooledColumnNames(options.pooledColumnNames) ?? [options.columnName],
+    options.rowScopeClause
+  );
+
+  try {
+    const stats = await queryEpochStats(source);
+    if (!stats) {
+      return null;
+    }
+    const { min, max } = stats;
+    const requested =
+      options.classCount && options.breaks.length !== options.classCount - 1
+        ? buildEvenCalendarBreaks(min, max, options.classCount)
+        : options.breaks;
+    const breaks = requested
+      .filter((value) => Number.isFinite(value) && value > min && value <= max)
+      .sort((a, b) => a - b)
+      .filter(
+        (value, index, values) => index === 0 || value !== values[index - 1]
+      );
+    const granularity = inferCalendarGranularity(breaks);
+    const lower = floorToCalendarStep(min, granularity);
+    const upper = addCalendarStep(
+      floorToCalendarStep(max, granularity),
+      granularity
+    );
+    const counts = await queryEpochCounts(source, [lower, ...breaks, upper]);
+
+    return {
+      breaks,
+      counts,
+      min,
+      max,
+      roundedMin: lower,
+      roundedMax: upper,
+      calendarStep: granularity
+    };
+  } catch (error) {
+    logCalendarFailure(
+      'Failed to count manual calendar classes',
+      'classification_calendar_manual_counts',
+      context,
+      options.datasetId,
+      error
+    );
+    return null;
   }
 }
 

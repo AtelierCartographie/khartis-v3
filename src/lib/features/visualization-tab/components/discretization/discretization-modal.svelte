@@ -45,6 +45,19 @@
     resolveClassificationBreakColors,
     type ClassificationBreaksComputation
   } from '../../hooks/use-classification-breaks.svelte';
+  import {
+    formatCalendarBoundary,
+    listCalendarStepOptions,
+    parseCalendarBoundary,
+    type CalendarStep
+  } from '$lib/features/commons/utils/calendar-breaks.utils';
+  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
+  import {
+    formatCalendarStepName,
+    toCalendarStepId
+  } from './discretization.utils';
+
+  const DAY_MS = 86_400_000;
 
   interface MethodSelection {
     method: ClassificationMethod;
@@ -129,6 +142,38 @@
   let currentBreakpoint = $state<number | null>(null);
   let currentBreakpointLowerClassCount = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
+  let currentCalendarStep = $state<CalendarStep | undefined>(undefined);
+  let calendarExtent = $state<{ min: number; max: number } | null>(null);
+  // Calendar and manual date results both carry a step; before the first one, the stored config tells.
+  const isDateValue = $derived(
+    calendarExtent !== null || Boolean(activeClassification?.calendarStep)
+  );
+  const calendarStepOptions = $derived(
+    calendarExtent
+      ? listCalendarStepOptions(
+          calendarExtent.min,
+          calendarExtent.max,
+          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+        ).map((step) => ({
+          id: toCalendarStepId(step),
+          text: formatCalendarStepName(step)
+        }))
+      : []
+  );
+  const calendarStepId = $derived(
+    currentCalendarStep ? toCalendarStepId(currentCalendarStep) : ''
+  );
+
+  // A class shows its first day; the last bound is exclusive, so its inclusive day is shown.
+  function formatCalendarBound(value: number, role: 'start' | 'end'): string {
+    return role === 'end'
+      ? formatCalendarBoundary(value - DAY_MS, undefined, resolveLocale())
+      : formatCalendarBoundary(value, currentCalendarStep, resolveLocale());
+  }
+
+  function parseCalendarBound(text: string): number | null {
+    return parseCalendarBoundary(text, resolveLocale());
+  }
   let lastAppliedSelection: MethodSelection = {
     method: ClassificationMethod.KMEANS,
     numClasses: DEFAULT_CLASSIFICATION_CLASS_COUNT
@@ -165,6 +210,8 @@
       actualClassCount ?? storedNumClasses
     );
     currentBreakpoint = classification?.breakpointValue ?? null;
+    currentCalendarStep = classification?.calendarStep;
+    calendarExtent = null;
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
       currentNumClasses,
       classification?.breakpointLowerClassCount
@@ -318,13 +365,20 @@
 
     const { actualClassCount, colors, normalizedMethod, result } = computation;
 
-    discretizationNote = resolveDiscretizationNote({
-      method: normalizedMethod,
-      requestedClassCount: computation.requestedClassCount,
-      actualClassCount,
-      naturalClassCount: result.naturalClassCount,
-      emptyClassCount: result.counts.filter((count) => count === 0).length
-    });
+    // A calendar step sets its own class count: fewer classes than requested is no loss.
+    discretizationNote = result.calendarStep
+      ? null
+      : resolveDiscretizationNote({
+          method: normalizedMethod,
+          requestedClassCount: computation.requestedClassCount,
+          actualClassCount,
+          naturalClassCount: result.naturalClassCount,
+          emptyClassCount: result.counts.filter((count) => count === 0).length
+        });
+    currentCalendarStep = result.calendarStep;
+    calendarExtent = result.calendarStep
+      ? { min: result.min, max: result.max }
+      : null;
 
     // A method with a fixed class count cannot be applied to a series that refuses it.
     if (
@@ -341,6 +395,8 @@
       method: normalizedMethod,
       numClasses: actualClassCount
     };
+    // The column type can override the stored method (a date is never classed by a numeric method).
+    currentMethod = normalizedMethod;
     currentNumClasses = actualClassCount;
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
       actualClassCount,
@@ -366,6 +422,7 @@
       counts: result.counts,
       roundedMin: result.roundedMin,
       roundedMax: result.roundedMax,
+      calendarStep: currentCalendarStep,
       colors,
       breakpointValue: currentBreakpoint,
       breakpointLowerClassCount:
@@ -489,7 +546,10 @@
           vizFilters: visualization.dataFilters,
           primitive
         }),
-        classification: activeClassification,
+        classification:
+          isDateValue && activeClassification
+            ? { ...activeClassification, calendarStep: currentCalendarStep }
+            : activeClassification,
         method: storeMethod,
         numClasses: currentNumClasses,
         breakValues: getCurrentBreakValues(),
@@ -569,6 +629,7 @@
       counts: undefined,
       roundedMin: undefined,
       roundedMax: undefined,
+      calendarStep: currentCalendarStep,
       breakpointValue,
       breakpointLowerClassCount,
       paletteId: activeClassification?.paletteId,
@@ -707,6 +768,19 @@
     });
   }
 
+  function handleCalendarStepChange(id: string) {
+    const option = calendarExtent
+      ? listCalendarStepOptions(
+          calendarExtent.min,
+          calendarExtent.max,
+          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+        ).find((step) => toCalendarStepId(step) === id)
+      : undefined;
+    if (!option) return;
+    currentCalendarStep = option;
+    void computeBreaks();
+  }
+
   function handleBreaksChange(breaks: ClassBreak[]) {
     currentBreaks = breaks;
     void computeBreaks();
@@ -750,6 +824,12 @@
           divergingPreviewColors={divergingPreview}
           sizePreview={role === 'size' ? sizePreview : undefined}
           binFillStrategy={binFillStrategy}
+          calendarStepOptions={calendarStepOptions}
+          calendarStepId={calendarStepId}
+          oncalendarstepchange={handleCalendarStepChange}
+          isDateValue={isDateValue}
+          formatBound={isDateValue ? formatCalendarBound : undefined}
+          parseBound={isDateValue ? parseCalendarBound : undefined}
           classCountMax={currentMethod === ClassificationMethod.HEAD_TAIL
             ? headTailClassCountMax
             : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}

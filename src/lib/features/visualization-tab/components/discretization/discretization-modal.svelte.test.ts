@@ -12,7 +12,8 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
     upperCount: 2,
     hasCenterClass: true
   })),
-  generateColorsForBreaks: vi.fn(() => [])
+  generateColorsForBreaks: vi.fn(() => []),
+  isTemporalColumn: vi.fn(async () => false)
 }));
 
 vi.mock('$lib/features/commons/services/row-scope.service', () => ({

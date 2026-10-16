@@ -15,7 +15,9 @@ export interface FieldSelectionWithHandler extends FieldSelection {
 
 export const NONE_FIELD_ID = -1;
 
-export type FieldSelectionKind = 'numeric' | 'textual' | 'any';
+/** `classed-color`: a color in classes, which accepts dates as well as numbers. */
+export type FieldSelectionKind =
+  'numeric' | 'classed-color' | 'textual' | 'any';
 
 function matchesFieldSelectionKind(
   item: FieldSelectionItem,
@@ -25,9 +27,14 @@ function matchesFieldSelectionKind(
     return true;
   }
 
+  // Column metadata may use `number` or `numeric`; both must stay selectable.
+  const isNumeric = item.type === 'number' || item.type === 'numeric';
   if (kind === 'numeric') {
-    // Column metadata may use `number` or `numeric`; both must stay selectable.
-    return item.type === 'number' || item.type === 'numeric';
+    return isNumeric;
+  }
+
+  if (kind === 'classed-color') {
+    return isNumeric || item.type === 'date';
   }
 
   return (
