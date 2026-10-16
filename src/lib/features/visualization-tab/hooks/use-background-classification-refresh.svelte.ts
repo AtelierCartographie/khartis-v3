@@ -31,7 +31,7 @@ import {
   buildClassificationUpdate,
   computeClassificationBreaks
 } from './use-classification-breaks.svelte';
-import { isNumericDataFieldType } from './use-dataset-analysis.svelte';
+import { resolveClassableFieldKind } from './use-dataset-analysis.svelte';
 
 interface RefreshTarget {
   key: string;
@@ -242,7 +242,7 @@ export function useBackgroundClassificationRefresh(): void {
           if (
             !method ||
             method === ClassificationMethod.MANUAL ||
-            !isNumericDataFieldType(columnType)
+            !resolveClassableFieldKind(columnType)
           ) {
             continue;
           }
@@ -258,6 +258,9 @@ export function useBackgroundClassificationRefresh(): void {
             target.valueColumn,
             method,
             target.classification?.numClasses ?? target.classification?.classes,
+            target.classification?.calendarStep
+              ? `${target.classification.calendarStep.count}${target.classification.calendarStep.unit}`
+              : 'none',
             rowScopeClause ?? 'all'
           ].join('|');
           const previous = lastInputs.get(scope);

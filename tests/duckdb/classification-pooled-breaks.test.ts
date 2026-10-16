@@ -44,18 +44,22 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 import {
   calculateBreakCounts,
   calculateBreaks,
+  calculateCalendarBreakCounts,
+  calculateCalendarBreaks,
+  isTemporalColumn,
   detectDivergingBreakpoint
 } from '$lib/features/commons/services/classification.service';
 import type { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const EQUAL_INTERVAL = 'equal_interval' as ClassificationMethod;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 beforeAll(async () => {
   state.db = await createTestInstance();
   await state.db.connection.run(breaksMacros);
   await run(
     state.db,
-    'CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020, i::DOUBLE AS gain, (-i)::DOUBLE AS loss FROM range(1, 11) t(i)'
+    "CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020, i::DOUBLE AS gain, (-i)::DOUBLE AS loss, DATE '2020-03-15' + (i * 40)::INTEGER AS d2020, DATE '2023-01-01' + (i * 40)::INTEGER AS d2023, TIMESTAMPTZ '2021-06-29 23:30:00+00' + to_days(i::INTEGER) AS ts FROM range(1, 11) t(i)"
   );
 });
 
@@ -133,6 +137,90 @@ describe('calculateBreaks over pooled columns', () => {
       roundedMin: 3,
       roundedMax: 3
     });
+  });
+
+  it('should cut a DATE column on calendar boundaries and count every value once', async () => {
+    // 2020-04-24 … 2021-04-09
+    const result = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 6
+    });
+
+    expect(result?.calendarStep).toEqual({ unit: 'month', count: 3 });
+    expect(result?.breaks.map(isoDay)).toEqual([
+      '2020-07-01',
+      '2020-10-01',
+      '2021-01-01',
+      '2021-04-01'
+    ]);
+    expect(isoDay(result!.roundedMin!)).toBe('2020-04-01');
+    expect(isoDay(result!.roundedMax!)).toBe('2021-07-01');
+    expect(result?.counts.reduce((a, b) => a + b, 0)).toBe(10);
+  });
+
+  it('should keep the current step and fall back to an automatic one when it gives too many classes', async () => {
+    const forced = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 3,
+      step: { unit: 'month', count: 2 }
+    });
+    expect(forced?.calendarStep).toEqual({ unit: 'month', count: 2 });
+    expect(forced?.counts).toHaveLength(7);
+
+    const tooFine = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 3,
+      step: { unit: 'day', count: 1 }
+    });
+    expect(tooFine?.calendarStep).toEqual({ unit: 'month', count: 6 });
+  });
+
+  it('should pool date columns on one calendar scale', async () => {
+    const pooled = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 6,
+      pooledColumnNames: ['d2020', 'd2023']
+    });
+
+    expect(pooled?.calendarStep).toEqual({ unit: 'year', count: 1 });
+    expect(pooled?.counts.reduce((a, b) => a + b, 0)).toBe(20);
+  });
+
+  it('should read a TIMESTAMPTZ column as UTC calendar dates', async () => {
+    const result = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'ts',
+      maxClasses: 2,
+      step: { unit: 'month', count: 1 }
+    });
+
+    expect(result?.calendarStep).toEqual({ unit: 'month', count: 1 });
+    expect(result?.breaks.map(isoDay)).toEqual(['2021-07-01']);
+    expect(result?.counts).toEqual([1, 9]);
+  });
+
+  it('should count manual date classes and read their bounds at the shared granularity', async () => {
+    // 2020-04-24 … 2021-04-09
+    const result = await calculateCalendarBreakCounts({
+      datasetId: 'source',
+      columnName: 'd2020',
+      breaks: [Date.UTC(2020, 9, 1), Date.UTC(2021, 0, 1)]
+    });
+
+    expect(result?.calendarStep).toEqual({ unit: 'month', count: 1 });
+    expect(result?.counts).toEqual([4, 3, 3]);
+    expect(isoDay(result!.roundedMin!)).toBe('2020-04-01');
+    expect(isoDay(result!.roundedMax!)).toBe('2021-05-01');
+  });
+
+  it('should route DATE and TIMESTAMPTZ columns to calendar classes, not numbers', async () => {
+    expect(await isTemporalColumn('source', 'd2020')).toBe(true);
+    expect(await isTemporalColumn('source', 'ts')).toBe(true);
+    expect(await isTemporalColumn('source', 'y1960')).toBe(false);
   });
 
   it('drops the temporary pooled table', async () => {

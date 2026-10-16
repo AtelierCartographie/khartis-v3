@@ -19,6 +19,7 @@ import type {
   PatternPaletteConfig,
   PatternType
 } from '../constants/pattern.constants';
+import type { CalendarStep } from '../utils/calendar-breaks.utils';
 
 export { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
 
@@ -29,7 +30,9 @@ export enum ClassificationMethod {
   MANUAL = 'manual',
   Q6 = 'q6',
   NESTED_MEANS = 'nested_means',
-  HEAD_TAIL = 'head_tail'
+  HEAD_TAIL = 'head_tail',
+  /** Regular calendar step on a date column (year, quarter, month…). */
+  CALENDAR = 'calendar'
 }
 
 export enum ScaleType {
@@ -61,8 +64,14 @@ export interface ClassificationConfig {
   method: ClassificationMethod;
   classes: number;
   numClasses?: number;
+  /** Epoch milliseconds when the classified column is a date (`calendarStep` set). */
   breaks?: number[];
   counts?: number[];
+  /**
+   * Calendar step (or, in manual mode, the granularity of the bounds); its
+   * presence marks the breaks as dates.
+   */
+  calendarStep?: CalendarStep;
   /** Rounded scale bounds kept for the legend; classes are assigned from breaks alone. */
   roundedMin?: number;
   roundedMax?: number;
