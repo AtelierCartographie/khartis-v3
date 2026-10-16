@@ -339,8 +339,9 @@ function buildMissingValuePredicate({
   numeric
 }: MissingValueColumn): string {
   const ref = `"${escapeIdentifier(column)}"`;
+  // A classed column is a number or a date: a date does not cast to DOUBLE.
   return numeric
-    ? `NOT COALESCE(isfinite(TRY_CAST(${ref} AS DOUBLE)), FALSE)`
+    ? `NOT COALESCE(isfinite(TRY_CAST(${ref} AS DOUBLE)), isfinite(TRY_CAST(${ref} AS TIMESTAMP)), FALSE)`
     : `${ref} IS NULL OR trim(CAST(${ref} AS VARCHAR)) = ''`;
 }
 

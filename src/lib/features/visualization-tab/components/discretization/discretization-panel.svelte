@@ -58,6 +58,14 @@
     showHistogram?: boolean;
     sizePreview?: SizePreview;
     binFillStrategy?: BinFillStrategy;
+    /** The classified column is a date: calendar step or manual dates only. */
+    isDateValue?: boolean;
+    /** Calendar steps that fit the series. */
+    calendarStepOptions?: { id: string; text: string }[];
+    calendarStepId?: string;
+    oncalendarstepchange?: (id: string) => void;
+    formatBound?: (value: number, role: 'start' | 'end') => string;
+    parseBound?: (text: string) => number | null;
     onmethodchange?: (method: ClassificationMethod) => void;
     onclasseschange?: (num: number) => void;
     onbreakpointchange?: (value: number | null) => void;
@@ -84,6 +92,12 @@
     showHistogram = true,
     sizePreview,
     binFillStrategy = { mode: 'unique', colors: [] },
+    isDateValue = false,
+    calendarStepOptions = [],
+    calendarStepId = '',
+    oncalendarstepchange,
+    formatBound,
+    parseBound,
     onmethodchange,
     onclasseschange,
     onbreakpointchange,
@@ -103,7 +117,8 @@
     [ClassificationMethod.MANUAL]: m.discretization_desc_manual,
     [ClassificationMethod.Q6]: m.discretization_desc_q6,
     [ClassificationMethod.NESTED_MEANS]: m.discretization_desc_nested_means,
-    [ClassificationMethod.HEAD_TAIL]: m.discretization_desc_head_tail
+    [ClassificationMethod.HEAD_TAIL]: m.discretization_desc_head_tail,
+    [ClassificationMethod.CALENDAR]: m.discretization_desc_calendar
   };
 
   function normalizePanelMethod(
@@ -123,6 +138,13 @@
   });
 
   const isClassCountLocked = $derived(method === ClassificationMethod.Q6);
+  const isCalendar = $derived(method === ClassificationMethod.CALENDAR);
+
+  function handleCalendarStepChange(e: Event) {
+    const target = e.currentTarget as HTMLSelectElement;
+    if (target.value === calendarStepId) return;
+    oncalendarstepchange?.(target.value);
+  }
 
   const NOTE_MESSAGES: Record<
     DiscretizationNote['kind'],
@@ -343,74 +365,104 @@
       selected={method}
       on:change={handleMethodChange}
     >
-      <SelectItem
-        value={ClassificationMethod.KMEANS}
-        text={m.discretization_method_kmeans()}
-      />
-      <SelectItem
-        value={ClassificationMethod.QUANTILES}
-        text={m.discretization_method_quantile()}
-      />
-      <SelectItem
-        value={ClassificationMethod.EQUAL_INTERVAL}
-        text={m.discretization_method_equal_interval()}
-      />
-      <SelectItem
-        value={ClassificationMethod.Q6}
-        text={m.discretization_method_q6()}
-      />
-      <SelectItem
-        value={ClassificationMethod.NESTED_MEANS}
-        text={m.discretization_method_nested_means()}
-      />
-      <SelectItem
-        value={ClassificationMethod.HEAD_TAIL}
-        text={m.discretization_method_head_tail()}
-      />
-      <SelectItem
-        value={ClassificationMethod.MANUAL}
-        text={m.discretization_method_manual()}
-      />
+      {#if isDateValue}
+        <SelectItem
+          value={ClassificationMethod.CALENDAR}
+          text={m.discretization_method_calendar()}
+        />
+        <SelectItem
+          value={ClassificationMethod.MANUAL}
+          text={m.discretization_method_manual()}
+        />
+      {:else}
+        <SelectItem
+          value={ClassificationMethod.KMEANS}
+          text={m.discretization_method_kmeans()}
+        />
+        <SelectItem
+          value={ClassificationMethod.QUANTILES}
+          text={m.discretization_method_quantile()}
+        />
+        <SelectItem
+          value={ClassificationMethod.EQUAL_INTERVAL}
+          text={m.discretization_method_equal_interval()}
+        />
+        <SelectItem
+          value={ClassificationMethod.Q6}
+          text={m.discretization_method_q6()}
+        />
+        <SelectItem
+          value={ClassificationMethod.NESTED_MEANS}
+          text={m.discretization_method_nested_means()}
+        />
+        <SelectItem
+          value={ClassificationMethod.HEAD_TAIL}
+          text={m.discretization_method_head_tail()}
+        />
+        <SelectItem
+          value={ClassificationMethod.MANUAL}
+          text={m.discretization_method_manual()}
+        />
+      {/if}
     </Select>
   </div>
 
-  <div class="section">
-    <div class="labeled-input">
-      <p class="input-label">{m.discretization_num_classes()}</p>
-      {#if isNestedMeans}
-        <Select
-          size="sm"
-          id="nested-means-classes"
-          labelText={m.discretization_num_classes()}
-          hideLabel
-          selected={String(numClasses)}
-          on:change={handleNestedMeansChange}
-        >
-          {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
-            <SelectItem value={String(val)} text={String(val)} />
-          {/each}
-        </Select>
-      {:else}
-        <CompactNumberInput
-          bind:value={numClasses}
-          min={2}
-          max={classCountMax}
-          disabled={isClassCountLocked}
-          ariaLabel={m.discretization_num_classes()}
-          onchange={handleClassesChange}
-          width="100%"
-        />
+  {#if isCalendar}
+    <div class="section">
+      <Select
+        size="sm"
+        id="calendar-step"
+        labelText={m.discretization_calendar_step()}
+        selected={calendarStepId}
+        on:change={handleCalendarStepChange}
+      >
+        {#each calendarStepOptions as option (option.id)}
+          <SelectItem value={option.id} text={option.text} />
+        {/each}
+      </Select>
+    </div>
+  {/if}
+
+  <!-- A calendar step sets its own class count. -->
+  {#if !isCalendar}
+    <div class="section">
+      <div class="labeled-input">
+        <p class="input-label">{m.discretization_num_classes()}</p>
+        {#if isNestedMeans}
+          <Select
+            size="sm"
+            id="nested-means-classes"
+            labelText={m.discretization_num_classes()}
+            hideLabel
+            selected={String(numClasses)}
+            on:change={handleNestedMeansChange}
+          >
+            {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
+              <SelectItem value={String(val)} text={String(val)} />
+            {/each}
+          </Select>
+        {:else}
+          <CompactNumberInput
+            bind:value={numClasses}
+            min={2}
+            max={classCountMax}
+            disabled={isClassCountLocked}
+            ariaLabel={m.discretization_num_classes()}
+            onchange={handleClassesChange}
+            width="100%"
+          />
+        {/if}
+      </div>
+      {#if discretizationNoteText}
+        <div class="class-count-note" role="status">
+          <Information size={16} />
+          <span>{discretizationNoteText}</span>
+        </div>
       {/if}
     </div>
-    {#if discretizationNoteText}
-      <div class="class-count-note" role="status">
-        <Information size={16} />
-        <span>{discretizationNoteText}</span>
-      </div>
-    {/if}
-  </div>
+  {/if}
 
-  {#if showBreakpointControls}
+  {#if showBreakpointControls && !isDateValue}
     <div class="section breakpoint-section">
       <div class="breakpoint-row">
         <div class="breakpoint-input-col">
@@ -471,6 +523,8 @@
       canEditBreakRow={canEditBreakRow}
       resolveHistogramColor={resolveHistogramColor}
       resolveSizePreviewStyle={resolveSizePreviewStyle}
+      formatBound={formatBound}
+      parseBound={parseBound}
       onbreakvalueinput={updateBreakValue}
       onbreakblur={handleBreakBlur}
     />

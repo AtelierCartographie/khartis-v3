@@ -7,6 +7,7 @@ import { DUCK_CONST, EXTENSIONS } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { addRowId } from './reader-utils';
+import { promoteImportedTextDates } from './text-dates';
 
 interface FileWithId extends File {
   id?: string;
@@ -36,6 +37,7 @@ export async function readJsonTabular(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 
+  await promoteImportedTextDates(ctx.connection, tablename);
   ctx.loaded_files.set(tablename, file.name);
   markTableMutated(ctx, tablename);
   await addRowId(ctx.connection, tablename);

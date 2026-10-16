@@ -28,6 +28,7 @@ const serviceMocks = vi.hoisted(() => ({
     upperCount: 2
   })),
   detectDivergingBreakpoint: vi.fn(),
+  isTemporalColumn: vi.fn(async () => false),
   generateColorsForBreaks: vi.fn((count: number) =>
     Array.from({ length: count }, (_, index) => `#auto-${index}`)
   )

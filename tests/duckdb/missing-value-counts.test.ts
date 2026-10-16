@@ -33,12 +33,12 @@ beforeAll(async () => {
   await run(
     db,
     `CREATE TABLE communes AS SELECT * FROM (VALUES
-      ('A', 10.0, 'rural', 'FR-01'),
-      ('B', NULL, 'urbain', 'FR-02'),
-      ('C', 'NaN'::DOUBLE, '  ', 'FR-03'),
-      ('D', 5.0, NULL, NULL),
-      ('E', NULL, 'rural', NULL)
-    ) AS t(name, rate, kind, basemap_id)`
+      ('A', 10.0, 'rural', 'FR-01', DATE '2020-01-15'),
+      ('B', NULL, 'urbain', 'FR-02', DATE '1950-06-01'),
+      ('C', 'NaN'::DOUBLE, '  ', 'FR-03', NULL),
+      ('D', 5.0, NULL, NULL, DATE '2001-12-31'),
+      ('E', NULL, 'rural', NULL, DATE '1999-03-03')
+    ) AS t(name, rate, kind, basemap_id, created)`
   );
 });
 
@@ -47,6 +47,17 @@ afterAll(async () => {
 });
 
 describe('getMissingValueCountsInScope', () => {
+  it('should count only NULL dates as missing when a date column is classed', async () => {
+    const counts = await getMissingValueCountsInScope(
+      'communes',
+      null,
+      [{ column: 'created', numeric: true }],
+      duck
+    );
+
+    expect(counts).toEqual([1]);
+  });
+
   it('counts null and non-finite numbers, and null or blank labels', async () => {
     const counts = await getMissingValueCountsInScope(
       'communes',
