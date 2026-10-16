@@ -85,6 +85,33 @@ schéma d'URL (`http`/`https`). Appelé directement, le processeur distant
 télécharge la réponse entière avec un timeout, sans ces contrôles : toute
 nouvelle entrée réseau définit ses propres limites.
 
+## Reconnaissance des dates
+
+Le renifleur de `read_csv` type une colonne en `DATE` ou `TIMESTAMP` dans les
+cas simples, mais il l'abandonne en `VARCHAR` dès qu'une seule valeur est
+invalide (« 2021-02-30 », « 0000-00-00 », « inconnu »). Il ne reconnaît ni
+l'année-mois (« 2020-01 », « 01/2020 ») ni la date-heure à la française, et
+il perd même `jj/mm/aaaa` sur certains fichiers.
+
+Après chaque import CSV, géographique ou JSON, `promoteImportedTextDates()`
+(`duckdb/io/text-dates.ts`) reprend les colonnes restées `VARCHAR` :
+
+- un échantillon de 1 000 valeurs non vides désigne le premier format de
+  `TEXT_DATE_FORMATS` qui les lit toutes (le jour avant le mois pour
+  « 01/02/2020 ») ;
+- une passe sur la colonne entière vérifie qu'aucune valeur n'échappe à ce
+  format ;
+- la colonne est alors convertie en `DATE`, ou en `TIMESTAMP` si le format
+  porte une heure, et une année-mois devient le 1er du mois.
+
+Une colonne dont une seule valeur sort du format reste du texte : la
+reconnaissance ne vide jamais une cellule. L'année seule reste un nombre.
+
+Le forçage manuel « → date » (`changeColumnType`) prend le format qui lit le
+plus de valeurs, puis l'année seule (1er janvier), et signale les valeurs
+qu'il a dû vider. Le jeu `tests-datasets/csv/dates-departements-formats.csv`
+couvre ces cas.
+
 ## Tables et identifiant de ligne
 
 Un import produit une table nommée et un `DuckDBDataset`. Analyse de colonnes,

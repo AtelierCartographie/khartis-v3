@@ -97,6 +97,7 @@ est exclu de `pnpm preview` et des déploiements.
 | Jointure par nom ou code     | `csv/naissances-par-commune-departement-et-region-2018.csv`, `csv/world-bank-rural-pop.csv` ; flou : `csv/fuzzy-countries.csv`                                    |
 | Coordonnées GPS              | `csv/sites-seveso-idf.csv` et ses variantes `-swapped-gps`, `-invalid-gps`, `-custom-gps-columns`                                                                 |
 | Robustesse du lecteur CSV    | `csv/csv-malformed--with-*`                                                                                                                                       |
+| Dates                        | `csv/dates-departements-formats.csv` : ISO, jour d'abord, mois d'abord, année-mois, date-heure, valeur invalide, série de six mois, année entière                 |
 | Lecteurs de formats          | `geojson/`, `gpkg/`, `shp/`, `shp-incomplete/`, `gpx/`, `kml-kmz/`, `zip/`                                                                                        |
 | Sémiologie et simplification | `csv/visualization-toolbox-cases.csv`, `geojson/visualization-toolbox-cases.geojson`, `csv/france-regions-simplification-check.csv`, `geojson/nuts2_data.geojson` |
 
