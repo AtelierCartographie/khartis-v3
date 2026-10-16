@@ -27,6 +27,8 @@
     resolveSizePreviewStyle: (index: number) => string;
     onbreakvalueinput: (index: number, value: number) => void;
     onbreakblur: () => void;
+    formatBound?: (value: number, role: 'start' | 'end') => string;
+    parseBound?: (text: string) => number | null;
   }
 
   let {
@@ -38,8 +40,14 @@
     resolveHistogramColor,
     resolveSizePreviewStyle,
     onbreakvalueinput,
-    onbreakblur
+    onbreakblur,
+    formatBound,
+    parseBound
   }: Props = $props();
+
+  function displayBound(value: number, role: 'start' | 'end'): string {
+    return formatBound ? formatBound(value, role) : String(value);
+  }
 </script>
 
 <div class="section histogram-section">
@@ -59,10 +67,12 @@
             hideLabel
             labelText={m.filters_value_min()}
             disabled={!canEditBreakRow(index)}
-            value={String(breakItem.min)}
+            value={displayBound(breakItem.min, 'start')}
             on:input={(e) => {
-              const value = Number(e.detail);
-              if (Number.isFinite(value)) {
+              const value = parseBound
+                ? parseBound(String(e.detail ?? ''))
+                : Number(e.detail);
+              if (value !== null && Number.isFinite(value)) {
                 onbreakvalueinput(index, value);
               }
             }}
@@ -94,7 +104,10 @@
           <div
             class="histogram-bar"
             style="width: {widthPercent}%; background-color: {histogramColor}"
-            title="{breakItem.min} - {breakItem.max}: {breakItem.count} {m.discretization_values()}"
+            title="{displayBound(breakItem.min, 'start')} - {displayBound(
+              breakItem.max,
+              'end'
+            )}: {breakItem.count} {m.discretization_values()}"
           ></div>
         </div>
       </div>
@@ -108,7 +121,9 @@
           hideLabel
           labelText={m.filters_value_max()}
           disabled
-          value={String(breaks[breaks.length - 1]?.max ?? '')}
+          value={breaks.length
+            ? displayBound(breaks[breaks.length - 1].max, 'end')
+            : ''}
         />
       </div>
       <div class="histogram-caret">

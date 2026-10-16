@@ -59,6 +59,8 @@ export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
   outlineWidth?: number;
   /** Opacity of the class color, as the map applies it. */
   opacity?: number;
+  /** Threshold label, `formatValue` by default; dates pass a calendar formatter. */
+  formatThreshold?: (value: number) => string;
 }
 
 const DEFAULT_NODATA_FILL = NEUTRAL_CARTOGRAPHY_COLORS.missingData;
@@ -87,12 +89,13 @@ export function draw_quanti_color_legend(
   const subtitleSize = subtitle ? fontSize : 0;
   const noteSize = note ? Math.round(fontSize * 0.92) : 0;
   const nb_boxes = thresholds.length - 1;
+  const formatThreshold = options.formatThreshold ?? formatValue;
   const index = thresholds.slice().map((_d, i) => i);
   const x_domain = variable_width ? thresholds : index;
   let x: number[] = [];
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const labels_length = thresholds.map((d) =>
-    Textbox.measureText(formatValue(d), font)
+    Textbox.measureText(formatThreshold(d), font)
   );
   const label_gap = scaleLegendMetric(10, fontSize);
   const label_safety_padding = scaleLegendMetric(7, fontSize);
@@ -273,7 +276,9 @@ export function draw_quanti_color_legend(
   const ticks = x
     .slice(1, -1)
     .map((d) => tick(d, actual_box_top, actual_tick_end));
-  const labels = x.map((d, i) => label(d, actual_tick_end, thresholds[i]));
+  const labels = x.map((d, i) =>
+    label(d, actual_tick_end, formatThreshold(thresholds[i]))
+  );
 
   return create_svg_markup(
     boxes.map((entry, i) =>
@@ -414,7 +419,8 @@ function draw_vertical_quanti_color_legend(
     label_spacing,
     scaleLegendMetric(22, fontSize)
   );
-  const labels = thresholds.map((value) => formatValue(value));
+  const formatThreshold = options.formatThreshold ?? formatValue;
+  const labels = thresholds.map((value) => formatThreshold(value));
   const label_width = Math.max(
     0,
     ...labels.map((label) => Textbox.measureText(label, font))
@@ -723,6 +729,6 @@ function tick(x: number, y1: number, y2: number): string {
   return `<path d="M${x},${y1}L${x},${y2}" />`;
 }
 
-function label(x: number, y: number, text: number): string {
-  return `<text x="${x}" y="${y}">${escapeSvgText(formatValue(text))}</text>`;
+function label(x: number, y: number, text: string): string {
+  return `<text x="${x}" y="${y}">${escapeSvgText(text)}</text>`;
 }

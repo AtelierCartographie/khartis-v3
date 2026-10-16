@@ -3,8 +3,11 @@ import {
   calculateBreakCounts,
   calculateDivergingBreaks,
   calculateBreaks,
+  calculateCalendarBreakCounts,
+  calculateCalendarBreaks,
   computeDivergingSplit,
   detectDivergingBreakpoint,
+  isTemporalColumn,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
@@ -350,6 +353,12 @@ export function buildClassificationUpdate(
     colors: computation.colors
   };
 
+  if (computation.result.calendarStep) {
+    update.calendarStep = computation.result.calendarStep;
+  } else if (classification?.calendarStep) {
+    update.calendarStep = undefined;
+  }
+
   if (computation.breakpointLowerClassCount != null) {
     update.breakpointLowerClassCount = computation.breakpointLowerClassCount;
   }
@@ -385,9 +394,21 @@ export async function computeClassificationBreaks(
   options: ComputeClassificationBreaksOptions
 ): Promise<ClassificationBreaksComputation | null> {
   const classification = options.classification;
-  const storeMethod = normalizeClassificationMethod(
+  const requestedMethod = normalizeClassificationMethod(
     options.method ?? classification?.method ?? ClassificationMethod.KMEANS
   );
+  // The column decides: a date is classed on calendar steps or manual dates, a number never on calendar steps.
+  const temporal = await isTemporalColumn(
+    options.datasetSourceFileId,
+    options.valueColumn
+  );
+  const storeMethod = temporal
+    ? requestedMethod === ClassificationMethod.MANUAL
+      ? ClassificationMethod.MANUAL
+      : ClassificationMethod.CALENDAR
+    : requestedMethod === ClassificationMethod.CALENDAR
+      ? ClassificationMethod.KMEANS
+      : requestedMethod;
   const requestedClassCount = resolveRequestedClassCount(
     storeMethod,
     options.numClasses ??
@@ -395,6 +416,14 @@ export async function computeClassificationBreaks(
       classification?.classes ??
       5
   );
+  if (temporal) {
+    return await computeCalendarClassificationBreaks(
+      options,
+      storeMethod,
+      requestedClassCount
+    );
+  }
+
   const breakpointExplicit = Object.prototype.hasOwnProperty.call(
     options,
     'breakpointValue'
@@ -518,6 +547,62 @@ export async function computeClassificationBreaks(
     breakpointValue,
     autoBreakpointApplied,
     autoBreakpointCleared,
+    colors
+  };
+}
+
+async function computeCalendarClassificationBreaks(
+  options: ComputeClassificationBreaksOptions,
+  method: ClassificationMethod,
+  requestedClassCount: number
+): Promise<ClassificationBreaksComputation | null> {
+  const classification = options.classification;
+  const manualBreaks = options.breakValues ?? classification?.breaks ?? [];
+  const isManual = method === ClassificationMethod.MANUAL;
+  const result = isManual
+    ? await calculateCalendarBreakCounts({
+        datasetId: options.datasetSourceFileId,
+        columnName: options.valueColumn,
+        breaks: manualBreaks,
+        classCount: requestedClassCount,
+        rowScopeClause: options.rowScopeClause,
+        pooledColumnNames: options.pooledColumnNames
+      })
+    : await calculateCalendarBreaks({
+        datasetId: options.datasetSourceFileId,
+        columnName: options.valueColumn,
+        maxClasses: requestedClassCount,
+        step: classification?.calendarStep,
+        rowScopeClause: options.rowScopeClause,
+        pooledColumnNames: options.pooledColumnNames
+      });
+  if (!result) {
+    return null;
+  }
+
+  // The step (or the manual bounds) sets the class count, below or above the stored one.
+  const actualClassCount =
+    result.counts.length >= 2 ? result.counts.length : requestedClassCount;
+  const rampColors = resolveClassificationBreakColors(
+    classification,
+    actualClassCount,
+    result.breaks,
+    null
+  );
+  const colors =
+    result.counts.length === 1 && rampColors
+      ? [rampColors[Math.floor(rampColors.length / 2)]]
+      : rampColors;
+
+  return {
+    normalizedMethod: isManual
+      ? ClassificationMethod.MANUAL
+      : ClassificationMethod.CALENDAR,
+    requestedClassCount,
+    actualClassCount,
+    result,
+    breakpointValue: null,
+    autoBreakpointCleared: classification?.breakpointValue != null,
     colors
   };
 }
@@ -668,7 +753,10 @@ export function useClassificationBreaksController({
       vizFilters: getVisualization()?.dataFilters,
       primitive: options.primitive
     });
-    const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}:${rowScopeClause ?? 'all'}`;
+    const calendarStepKey = classification?.calendarStep
+      ? `${classification.calendarStep.count}${classification.calendarStep.unit}`
+      : 'none';
+    const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}:${calendarStepKey}:${rowScopeClause ?? 'all'}`;
     // A single-value series completes with no break but one count.
     const hasExistingBreaks = Boolean(
       classification?.breaks?.length || classification?.counts?.length

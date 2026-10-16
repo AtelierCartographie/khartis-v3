@@ -425,6 +425,10 @@ function buildComputedClassification(
     colors: computation.colors
   };
 
+  if (computation.result.calendarStep) {
+    computed.calendarStep = { ...computation.result.calendarStep };
+  }
+
   if (computation.breakpointLowerClassCount != null) {
     computed.breakpointLowerClassCount = computation.breakpointLowerClassCount;
   }

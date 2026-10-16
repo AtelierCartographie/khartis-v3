@@ -194,7 +194,7 @@
   const selectableValueDataFields = $derived(
     filterFieldsByKind(
       selectableDataFields,
-      'numeric',
+      'classed-color',
       colorFieldSelection.selectedFieldId
     )
   );

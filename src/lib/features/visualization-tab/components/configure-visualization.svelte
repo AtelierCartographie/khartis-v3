@@ -112,8 +112,8 @@
     if (activePrimitives.includes(PrimitiveFilterType.TEXT)) return 'texts';
     return undefined;
   });
-  const isNumericDataField = (name: string | undefined) =>
-    datasetAnalysis.isNumericDataField(name);
+  const getClassableFieldKind = (name: string | undefined) =>
+    datasetAnalysis.getClassableFieldKind(name);
 
   function updatePrimitiveClassificationState(
     primitive: ClassifiablePrimitive,
@@ -410,7 +410,7 @@
 
   const breaksOrchestrator = useClassificationBreaksOrchestrator({
     classificationBreaks,
-    isNumericDataField,
+    getClassableFieldKind,
     getDatasetId: () => selectedViz?.datasetId,
     getPrimitiveValueColumn,
     getPrimitiveClassification,

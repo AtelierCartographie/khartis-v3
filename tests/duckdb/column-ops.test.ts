@@ -172,6 +172,39 @@ describe('changeColumnType', () => {
     ]);
     expect(result.invalidatedCount).toBe(1);
   });
+
+  it('should read day-first dates and bare years when forcing a date type', async () => {
+    await run(db, 'DROP TABLE IF EXISTS "type_change_fr_date"');
+    await run(
+      db,
+      `CREATE TABLE "type_change_fr_date" (id INTEGER, value VARCHAR)`
+    );
+    await run(
+      db,
+      `INSERT INTO "type_change_fr_date" VALUES
+        (1, '15/01/2024'),
+        (2, '30/02/2024'),
+        (3, '1950')`
+    );
+
+    const result = await changeColumnType(
+      'type_change_fr_date',
+      'value',
+      'DATE',
+      duckClient()
+    );
+
+    const rows = await query(
+      db,
+      `SELECT id, strftime(value, '%Y-%m-%d') AS day FROM "type_change_fr_date" ORDER BY id`
+    );
+    expect(rows).toEqual([
+      { id: 1, day: '2024-01-15' },
+      { id: 2, day: null },
+      { id: 3, day: '1950-01-01' }
+    ]);
+    expect(result.invalidatedCount).toBe(1);
+  });
 });
 
 describe('DUCK_CONST.DEFAULT.NULL_VALUES', () => {

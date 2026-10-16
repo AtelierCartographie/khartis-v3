@@ -18,6 +18,7 @@ import {
   registerFiles
 } from './file-registry';
 import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
+import { promoteImportedTextDates } from './text-dates';
 
 const SAFE_CSV_DELIMITERS = new Set([';', ',', '\t', '|']);
 const SAFE_CSV_DECIMAL_SEPARATORS = new Set(['.', ',']);
@@ -188,6 +189,7 @@ export async function readTabular(
             }
 
             await restoreNormalizedColumnNames(ctx.connection, finalTablename);
+            await promoteImportedTextDates(ctx.connection, finalTablename);
           }
 
           if (format === DUCK_CONST.TYPE.PARQUET) {

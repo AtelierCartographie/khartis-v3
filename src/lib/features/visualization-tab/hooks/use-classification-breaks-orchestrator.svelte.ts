@@ -4,6 +4,7 @@ import type {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { ClassificationBreakTarget } from '../utils/classification-targets.utils';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { ClassableFieldKind } from './use-dataset-analysis.svelte';
 import {
   buildClassificationScopeKey,
   CLASSIFICATION_BREAKS_TRIGGER,
@@ -24,7 +25,9 @@ type ClassificationBreaksController = ReturnType<
 
 export interface ClassificationBreaksOrchestratorOptions {
   classificationBreaks: ClassificationBreaksController;
-  isNumericDataField: (column: string | undefined) => boolean;
+  getClassableFieldKind: (
+    column: string | undefined
+  ) => ClassableFieldKind | null;
   getDatasetId: () => string | undefined;
   getPrimitiveValueColumn: (
     viz: VisualizationConfig | undefined,
@@ -71,7 +74,7 @@ const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 export function useClassificationBreaksOrchestrator(
   opts: ClassificationBreaksOrchestratorOptions
 ) {
-  function computeBreaksIfNumeric(
+  function computeBreaksIfClassable(
     role: 'fill' | 'stroke' | 'size',
     target: ClassificationScopeTarget,
     valueColumn: string | undefined,
@@ -80,7 +83,7 @@ export function useClassificationBreaksOrchestrator(
     trigger: ClassificationBreakTrigger
   ): void {
     const scopeKey = buildClassificationScopeKey(role, target);
-    if (!opts.isNumericDataField(valueColumn)) {
+    if (!opts.getClassableFieldKind(valueColumn)) {
       opts.classificationBreaks.clearRetry(scopeKey);
       return;
     }
@@ -100,7 +103,7 @@ export function useClassificationBreaksOrchestrator(
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const viz = opts.getSelectedVisualization();
-    computeBreaksIfNumeric(
+    computeBreaksIfClassable(
       'fill',
       primitive,
       opts.getPrimitiveValueColumn(viz, primitive),
@@ -119,7 +122,7 @@ export function useClassificationBreaksOrchestrator(
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const target = opts.getLineThicknessTarget();
-    computeBreaksIfNumeric(
+    computeBreaksIfClassable(
       'size',
       PrimitiveFilterType.LINE,
       target?.valueColumn,
@@ -135,7 +138,7 @@ export function useClassificationBreaksOrchestrator(
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const viz = opts.getSelectedVisualization();
-    computeBreaksIfNumeric(
+    computeBreaksIfClassable(
       'stroke',
       primitive,
       opts.getPrimitiveStrokeValueColumn(viz, primitive),
@@ -154,7 +157,7 @@ export function useClassificationBreaksOrchestrator(
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const target = opts.getSymbolFillTarget();
-    computeBreaksIfNumeric(
+    computeBreaksIfClassable(
       'fill',
       SYMBOL_FILL_SCOPE_TARGET,
       target?.valueColumn,
