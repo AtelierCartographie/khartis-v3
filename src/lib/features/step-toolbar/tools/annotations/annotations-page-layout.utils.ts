@@ -363,6 +363,48 @@ export function getPageElementPosition(
   }
 }
 
+const GRID_ROW_EPSILON = 0.01;
+
+export type MeasuredPageElement = {
+  id: string;
+  role?: PageElementRole;
+  positionMode?: 'auto' | 'manual';
+  height: number;
+};
+
+// Auto-placed bottom-right blocks stack upward from the slot the credit takes,
+// each one occupying whole grid rows: a block that wraps pushes the others up
+// instead of overlapping them, and every block stays on the grid.
+export function stackBottomRightPageElements(
+  elements: MeasuredPageElement[],
+  layout: PageLayout
+): Map<string, number> {
+  const frame = resolveMapFrame(layout);
+  const stackTopBound = frame.top;
+  let stackBottom =
+    frame.bottom -
+    BOTTOM_RIGHT_SAFE_OFFSET +
+    PAGE_ELEMENT_HEIGHTS[ANNOTATION_ROLE.CREDIT];
+  const positions = new Map<string, number>();
+
+  for (const role of BOTTOM_RIGHT_STACK_ORDER) {
+    for (const element of elements) {
+      if (element.role !== role || element.positionMode === 'manual') {
+        continue;
+      }
+      const rows = Math.max(
+        1,
+        Math.ceil(element.height / PAGE_GRID_SIZE_PX - GRID_ROW_EPSILON)
+      );
+      const y = Math.max(stackTopBound, stackBottom - rows * PAGE_GRID_SIZE_PX);
+      positions.set(element.id, y);
+      stackBottom = y;
+    }
+  }
+
+  return positions;
+}
+
 export function isBottomRightPageElementRole(role: PageElementRole): boolean {
   return BOTTOM_RIGHT_STACK_ORDER.includes(role);
 }

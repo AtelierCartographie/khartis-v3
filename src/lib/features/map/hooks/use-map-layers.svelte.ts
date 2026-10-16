@@ -1,4 +1,5 @@
 import type { Layer } from '@deck.gl/core';
+import { untrack } from 'svelte';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Matrix4 } from '@math.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -16,6 +17,8 @@ import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
 import {
   BASEMAP_LAYER_ID,
@@ -303,7 +306,39 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     });
   }
 
-  function setLayers(layers: Layer<DeckDataRow>[]): boolean {
+  // The hover outline rides on top of the applied stack instead of entering
+  // it, so a hover never rebuilds the thematic layers. It is dropped once its
+  // source layer is gone or has moved to a new placement, and while exporting.
+  function withHoverHighlight(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const overlay = untrack(() => mapHoverHighlightStore.overlay);
+    const sourceLayerId = mapHoverHighlightStore.sourceLayerId;
+    const isExporting = untrack(() => globalState.isMapExporting);
+    if (!overlay || !sourceLayerId || isExporting) {
+      return layers;
+    }
+    const sourceLayer = layers.find((layer) => layer.id === sourceLayerId);
+    if (
+      !sourceLayer ||
+      sourceLayer.props.modelMatrix !== overlay.props.modelMatrix
+    ) {
+      return layers;
+    }
+    return [...layers, overlay as Layer<DeckDataRow>];
+  }
+
+  $effect(() => {
+    void mapHoverHighlightStore.overlay;
+    untrack(() => {
+      if (lastAppliedLayers.length > 0) {
+        setLayers(lastAppliedLayers);
+      }
+    });
+  });
+
+  function setLayers(stack: Layer<DeckDataRow>[]): boolean {
+    const layers = withHoverHighlight(stack);
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
 

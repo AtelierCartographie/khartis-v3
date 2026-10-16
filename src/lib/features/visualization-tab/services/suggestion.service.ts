@@ -677,18 +677,24 @@ export function resolveSuggestionBehavior(
   );
   const datasetPrimitive = resolveDatasetPrimitive(dataset);
   const isPolygonDataset = datasetPrimitive === PrimitiveFilterType.POLYGON;
-  const primaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
+  const numericColumn = findPreferredNumericColumn(dataset.columns, {
     preferred: suggestion.columns?.[0],
     allowIdLikeFallback: true,
     excludeLikelyCoordinates: true
   });
+  // Every behavior reading this column classes it, and a date is classed on calendar steps.
+  const preferredDateColumn = dataset.columns?.find(
+    (column) =>
+      column.name === suggestion.columns?.[0] && column.type === 'date'
+  )?.name;
+  const primaryNumericColumn = preferredDateColumn ?? numericColumn;
   const secondaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
     preferred: suggestion.columns?.[1],
     allowIdLikeFallback: true,
     excludeLikelyCoordinates: true
   });
   const proportionalSizeColumn =
-    findLatestYearNumericColumn(dataset.columns) ?? primaryNumericColumn;
+    findLatestYearNumericColumn(dataset.columns) ?? numericColumn;
   const primaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[0]
   });

@@ -71,13 +71,41 @@ export type StylePreset = PathStylePreset | PolygonStylePreset;
 
 export type StylePresets = Record<string, StylePreset>;
 
+/**
+ * Geometry file shipped inside another one: `file` (without row_groups) is the
+ * whole parent file, otherwise only those row groups of it, read with HTTP Range
+ * requests. The basemap or layer keeps its own `file` as identifier.
+ */
+export interface BasemapGeometryPack {
+  file: string;
+  row_groups?: number[];
+}
+
 export interface BasemapLayer {
   title_fr?: string;
   title_en?: string;
   type: BasemapLayerType;
   file?: string;
+  pack?: BasemapGeometryPack;
   style?: string | null;
   step?: number;
+}
+
+export type BasemapZone = 'world' | 'continent' | 'country';
+
+export type BasemapExtent =
+  'whole' | 'region' | 'department' | 'epci' | 'commune' | 'state';
+
+/**
+ * Facets of the catalog funnel filter, set by the khartis-basemaps export
+ * (`lib/catalog-facets.py`). Labels come from the title ("France" in
+ * "France — Ain") and subtitle ("par communes"); `level` is unique across areas.
+ */
+export interface BasemapCatalogFacets {
+  zone: BasemapZone;
+  area: string;
+  extent: BasemapExtent;
+  level: string;
 }
 
 export interface BasemapMetadata {
@@ -90,6 +118,10 @@ export interface BasemapMetadata {
   description_en?: string;
   source: string;
   date: string;
+  /** First and last years (inclusive) the basemap is valid for, when the
+   * geography is unchanged over several vintages (see basemap-validity.utils). */
+  valid_from?: number;
+  valid_to?: number;
   display_id_fr?: string;
   display_id_en?: string;
   bbox: [number, number, number, number];
@@ -97,6 +129,8 @@ export interface BasemapMetadata {
   proj_to: ProjectionConfig;
   simplification_level?: string;
   entity_count?: number;
+  catalog?: BasemapCatalogFacets;
+  pack?: BasemapGeometryPack;
   layers: BasemapLayer[];
   isCustom?: boolean;
   // Built from a dataset's own geometry rather than picked as a reference

@@ -24,6 +24,10 @@ vi.mock('../facets', () => ({
   }
 }));
 
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
+  visualizationStore: { visualizations: [] }
+}));
+
 const { selectRenderedLegendItems } = await import('./legend-items.utils');
 
 function makeItem(id: string, variableId?: string): LegendItem {

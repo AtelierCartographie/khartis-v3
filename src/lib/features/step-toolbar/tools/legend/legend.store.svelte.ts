@@ -15,16 +15,19 @@ import {
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
-  getEnabledLegendPrimitives,
+  getComponentLegendSubtitle,
   getPrimitiveLegendSubtitle,
   joinLegendSubtitleParts,
+  type LegendComponent,
   type LegendSubtitlePrimitive
 } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 import { facetsStore, SCALE_MODE } from '../facets';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
+import { getLegendItemSlots, type LegendItemSlot } from './legend-items.utils';
 import type {
   LegendItem,
+  LegendItemLayout,
   LegendState,
   LegendStyle
 } from '../../types/legend.types';
@@ -62,6 +65,7 @@ type LegendActions = {
   addLegendItem: (item: Omit<LegendItem, 'id'>) => LegendItem;
   removeLegendItem: (id: string) => void;
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
+  updateLegendItemLayout: (id: string, updates: LegendItemLayout) => void;
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
   setActiveTab: (tab: LegendTab) => void;
@@ -116,43 +120,63 @@ function truncateAutoTitle(title: string): string {
 
 function getDefaultLegendTitle(
   visualization: VisualizationConfig,
-  primitive: LegendSubtitlePrimitive
+  slot: LegendItemSlot
 ): string {
-  const variables = isSharedCollectionLegend(visualization, primitive)
+  const variables = isSharedCollectionLegend(visualization, slot.primitive)
     ? joinLegendSubtitleParts(facetsStore.variables)
-    : getPrimitiveLegendSubtitle(visualization, primitive);
+    : slot.split && slot.component
+      ? getComponentLegendSubtitle(
+          visualization,
+          slot.primitive,
+          slot.component
+        )
+      : getPrimitiveLegendSubtitle(visualization, slot.primitive);
   return truncateAutoTitle(variables || visualization.name);
+}
+
+function getComponentLabel(
+  primitive: LegendSubtitlePrimitive,
+  component: LegendComponent
+): string {
+  switch (component) {
+    case 'stroke':
+      return m.legend_component_stroke();
+    case 'size':
+      return primitive === 'line'
+        ? m.legend_component_thickness()
+        : m.legend_component_size();
+    case 'color':
+    default:
+      return m.legend_component_color();
+  }
 }
 
 function getLegendItemName(
   visualization: VisualizationConfig,
-  primitive: LegendSubtitlePrimitive
+  slot: LegendItemSlot
 ): string {
-  return `${visualization.name} — ${PRIMITIVE_LABELS[primitive]()}`;
-}
-
-function getLegendItemId(
-  visualization: VisualizationConfig,
-  primitive: LegendSubtitlePrimitive
-): string {
-  return `${LEGEND_ID_PREFIXES.VIZ}${visualization.id}--${primitive}`;
+  const name = `${visualization.name} — ${PRIMITIVE_LABELS[slot.primitive]()}`;
+  return slot.split && slot.component
+    ? `${name} (${getComponentLabel(slot.primitive, slot.component)})`
+    : name;
 }
 
 function createLegendItemFromVisualization(
   visualization: VisualizationConfig,
-  primitive: LegendSubtitlePrimitive
+  slot: LegendItemSlot
 ): LegendItem {
   return {
-    id: getLegendItemId(visualization, primitive),
-    name: getLegendItemName(visualization, primitive),
+    id: slot.id,
+    name: getLegendItemName(visualization, slot),
     visible: true,
-    title: getDefaultLegendTitle(visualization, primitive),
+    title: getDefaultLegendTitle(visualization, slot),
     titleMode: 'auto',
     subtitle: '',
     subtitleMode: 'auto',
     note: '',
     variableId: visualization.id,
-    primitive,
+    primitive: slot.primitive,
+    ...(slot.component ? { component: slot.component } : {}),
     dragPosition: null
   };
 }
@@ -199,65 +223,99 @@ function getPendingFacetVisualizationIds(
   );
 }
 
+function findExistingLegendItem(
+  currentItems: LegendItem[],
+  usedItemIds: Set<string>,
+  visualization: VisualizationConfig,
+  slot: LegendItemSlot,
+  isFirstSlot: boolean,
+  isFirstPrimitive: boolean
+): LegendItem | undefined {
+  const candidates = currentItems.filter(
+    (item) =>
+      !usedItemIds.has(item.id) &&
+      item.variableId === visualization.id &&
+      item.primitive === slot.primitive
+  );
+
+  return (
+    // A primitive that gains or loses a channel keeps each channel's legend:
+    // the single legend records the channel it covers.
+    candidates.find((item) => item.component === slot.component) ??
+    (isFirstSlot ? candidates[0] : undefined) ??
+    // A legend saved before primitives were split covers the whole
+    // visualization, so its text and position carry over to the first one.
+    (isFirstSlot && isFirstPrimitive
+      ? currentItems.find(
+          (item) =>
+            !usedItemIds.has(item.id) &&
+            !item.primitive &&
+            (item.variableId === visualization.id ||
+              (!item.variableId && item.name === visualization.name))
+        )
+      : undefined)
+  );
+}
+
 function syncLegendItemsWithVisualizations(
   currentItems: LegendItem[],
   visualizations: VisualizationConfig[]
 ): LegendItem[] {
   const usedItemIds = new Set<string>();
 
-  const linkedItems = visualizations.flatMap((visualization) => {
-    const primitives = getEnabledLegendPrimitives(visualization);
-
-    return primitives.map((primitive, index) => {
-      const existing =
-        currentItems.find(
-          (item) =>
-            item.variableId === visualization.id && item.primitive === primitive
-        ) ??
-        // A legend saved before primitives were split covers the whole
-        // visualization, so its text and position carry over to the first one.
-        (index === 0
-          ? currentItems.find(
-              (item) =>
-                !item.primitive &&
-                (item.variableId === visualization.id ||
-                  (!item.variableId && item.name === visualization.name))
-            )
-          : undefined);
+  const linkedItems = visualizations.flatMap((visualization) =>
+    getLegendItemSlots(visualization).map((slot, slotIndex, slots) => {
+      const isFirstSlot =
+        slots.findIndex((other) => other.primitive === slot.primitive) ===
+        slotIndex;
+      const existing = findExistingLegendItem(
+        currentItems,
+        usedItemIds,
+        visualization,
+        slot,
+        isFirstSlot,
+        slotIndex === 0
+      );
 
       if (!existing) {
-        return createLegendItemFromVisualization(visualization, primitive);
+        return createLegendItemFromVisualization(visualization, slot);
       }
 
       usedItemIds.add(existing.id);
 
-      const name = getLegendItemName(visualization, primitive);
       const titleMode = resolveTitleMode(existing);
       const subtitleMode = resolveSubtitleMode(existing, visualization);
+      const { component: _previousComponent, ...rest } = existing;
 
       return {
-        ...existing,
-        id: getLegendItemId(visualization, primitive),
-        name,
+        ...rest,
+        id: slot.id,
+        name: getLegendItemName(visualization, slot),
         title:
           titleMode === 'auto'
-            ? getDefaultLegendTitle(visualization, primitive)
+            ? getDefaultLegendTitle(visualization, slot)
             : existing.title,
         titleMode,
         subtitle: subtitleMode === 'auto' ? '' : existing.subtitle,
         subtitleMode,
         variableId: visualization.id,
-        primitive,
+        primitive: slot.primitive,
+        ...(slot.component ? { component: slot.component } : {}),
         dragPosition: existing.dragPosition ?? null
       };
-    });
-  });
+    })
+  );
 
+  // A legend whose primitive or channel is switched off stays dormant, with
+  // its text and position, until it comes back; it is not drawn meanwhile.
+  const visualizationIds = new Set(visualizations.map((viz) => viz.id));
   const pendingFacetIds = getPendingFacetVisualizationIds(visualizations);
   const keptItems = currentItems.filter(
     (item) =>
       !usedItemIds.has(item.id) &&
-      (!item.variableId || pendingFacetIds.has(item.variableId))
+      (!item.variableId ||
+        visualizationIds.has(item.variableId) ||
+        pendingFacetIds.has(item.variableId))
   );
 
   return [...linkedItems, ...keptItems];
@@ -282,6 +340,7 @@ function areLegendItemsEqual(a: LegendItem[], b: LegendItem[]): boolean {
       current.note !== next.note ||
       current.variableId !== next.variableId ||
       current.primitive !== next.primitive ||
+      current.component !== next.component ||
       current.dragPosition?.x !== next.dragPosition?.x ||
       current.dragPosition?.y !== next.dragPosition?.y
     ) {
@@ -309,6 +368,13 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     updateLegendItem: (id: string, updates: Partial<LegendItem>) => {
       s.items = s.items.map((item) =>
         item.id === id ? { ...item, ...updates } : item
+      );
+    },
+    updateLegendItemLayout: (id: string, updates: LegendItemLayout) => {
+      s.items = s.items.map((item) =>
+        item.id === id
+          ? { ...item, layout: { ...item.layout, ...updates } }
+          : item
       );
     },
     toggleLegendVisibility: () => {

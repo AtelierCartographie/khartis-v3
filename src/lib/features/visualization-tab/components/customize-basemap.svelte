@@ -291,17 +291,8 @@
       }
     }
 
-    if (nextStyle === basemapStyleStore.selectedStyle) {
-      if (checked) {
-        basemapStyleStore.requestViewportReset(nextStyle);
-      }
-      return;
-    }
-
-    basemapStyleStore.setStyle(nextStyle);
-
-    if (checked) {
-      basemapStyleStore.requestViewportReset(nextStyle);
+    if (nextStyle !== basemapStyleStore.selectedStyle) {
+      basemapStyleStore.setStyle(nextStyle);
     }
   }
 </script>

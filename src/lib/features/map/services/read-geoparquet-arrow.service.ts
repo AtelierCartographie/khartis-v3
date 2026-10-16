@@ -20,7 +20,7 @@ const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
 
 let parquetWasmReady: Promise<typeof ParquetWasm> | null = null;
 
-async function getParquetWasm(): Promise<typeof ParquetWasm> {
+export async function getParquetWasm(): Promise<typeof ParquetWasm> {
   if (!parquetWasmReady) {
     parquetWasmReady = (async () => {
       const mod = await import('parquet-wasm');

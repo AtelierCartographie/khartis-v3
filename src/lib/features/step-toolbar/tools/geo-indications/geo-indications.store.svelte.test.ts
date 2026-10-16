@@ -72,6 +72,22 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
   });
 
+  it('should give the sphere its default color when a saved inset map predates it', () => {
+    const { sphereColor, ...savedInsetMap } = geoIndicationsState.insetMap;
+    geoIndicationsActions.setInsetMapSphereColor({
+      hue: 0,
+      saturation: 100,
+      lightness: 50
+    });
+    geoIndicationsActions.reset();
+
+    geoIndicationsActions.setState({
+      insetMap: savedInsetMap as typeof geoIndicationsState.insetMap
+    });
+
+    expect(geoIndicationsState.insetMap.sphereColor).toEqual(sphereColor);
+  });
+
   it('promotes default sizes to the A3 profile on first enable', () => {
     formatActions.setModel(PageModel.A3_LANDSCAPE);
 

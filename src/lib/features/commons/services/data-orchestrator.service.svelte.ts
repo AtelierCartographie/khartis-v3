@@ -77,6 +77,7 @@ import {
   PALETTE_TYPE
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
+  getSingleClassValue,
   normalizeClassificationMethod,
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
@@ -890,16 +891,20 @@ function createDataOrchestratorService() {
                 columnName: viz.mapping.valueColumn!,
                 method: normalizedMethod,
                 rowScopeClause,
-                numClasses: requestedClassCount
+                numClasses: requestedClassCount,
+                calendarStep: viz.classification?.calendarStep
               });
 
         if (!result) continue;
 
-        const actualNumClasses = resolveComputedClassCount(
-          normalizedMethod,
-          requestedClassCount,
-          result.counts.length
-        );
+        // A calendar step sets the class count, below or above the request.
+        const actualNumClasses = result.calendarStep
+          ? Math.max(1, result.counts.length)
+          : resolveComputedClassCount(
+              normalizedMethod,
+              requestedClassCount,
+              result.counts.length
+            );
         const existingColors = viz.classification?.colors;
         let colors: string[];
         if (existingColors && existingColors.length === actualNumClasses) {
@@ -951,6 +956,11 @@ function createDataOrchestratorService() {
           roundedMin: result.roundedMin,
           roundedMax: result.roundedMax,
           colors,
+          ...(result.calendarStep
+            ? {
+                calendarStep: result.calendarStep
+              }
+            : {}),
           ...(result.breakpointLowerClassCount != null
             ? {
                 breakpointLowerClassCount: result.breakpointLowerClassCount
@@ -1002,6 +1012,9 @@ function createDataOrchestratorService() {
     ) {
       return false;
     }
+
+    // A single-value series is classified as one class, without a break.
+    if (getSingleClassValue(viz.classification) !== null) return false;
 
     const breaks = viz.classification.breaks;
     const colors = viz.classification.colors;

@@ -51,6 +51,10 @@
     }
   } as const;
 
+  const WORKSPACE_SELECTOR = '.workspace-viewport';
+  const WHEEL_LINE_HEIGHT_PX = 16;
+  const PAGE_WHEEL_STEP_PX = 50;
+
   function isStylingTool(tool: string | undefined): boolean {
     return tool !== undefined && STYLING_TOOL_IDS.includes(tool);
   }
@@ -351,8 +355,40 @@
       }
     }
 
+    let pageWheelDelta = 0;
+
+    function handlePlainPageWheel(event: WheelEvent): void {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!zoomModeStore.isPageMode || !target?.closest(WORKSPACE_SELECTOR)) {
+        return;
+      }
+
+      // In page mode the wheel belongs to the page zoom alone, also between
+      // two of its steps.
+      event.preventDefault();
+      event.stopPropagation();
+      // A trackpad fires many small deltas where a mouse notch fires one large
+      // one: accumulate so both step the page zoom at a comparable pace.
+      const deltaPx =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? event.deltaY * WHEEL_LINE_HEIGHT_PX
+          : event.deltaY;
+      pageWheelDelta += deltaPx;
+      if (Math.abs(pageWheelDelta) < PAGE_WHEEL_STEP_PX) {
+        return;
+      }
+
+      if (pageWheelDelta < 0) {
+        globalActions.zoomInPage();
+      } else {
+        globalActions.zoomOutPage();
+      }
+      pageWheelDelta = 0;
+    }
+
     function handleWheel(event: WheelEvent): void {
       if (!hasAnyPrimaryModifier(event)) {
+        handlePlainPageWheel(event);
         return;
       }
 

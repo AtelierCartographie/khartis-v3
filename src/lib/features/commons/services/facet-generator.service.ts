@@ -278,7 +278,8 @@ async function buildFacetClassification(
       primitive: resolveFacetPrimitiveFilter(slotPath)
     }),
     pooledColumnNames:
-      scaleMode === SCALE_MODE.SHARED ? collectionVariables : undefined
+      scaleMode === SCALE_MODE.SHARED ? collectionVariables : undefined,
+    calendarStep: baseClassification.calendarStep
   };
   const { breakpointValue } = baseClassification;
   const lowerClassCount =
@@ -314,6 +315,11 @@ async function buildFacetClassification(
     counts: result.counts,
     roundedMin: result.roundedMin,
     roundedMax: result.roundedMax,
+    ...(result.calendarStep
+      ? {
+          calendarStep: result.calendarStep
+        }
+      : {}),
     ...(result.breakpointLowerClassCount != null
       ? { breakpointLowerClassCount: result.breakpointLowerClassCount }
       : {})

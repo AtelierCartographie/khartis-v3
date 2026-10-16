@@ -89,6 +89,13 @@ export function splitLegendOverflow<T>(items: T[]): {
   };
 }
 
+/** Share of the default gap kept between two legend entries, from 0 to 1. */
+export function clampEntrySpacing(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : 1;
+}
+
 export function escapeSvgText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -98,6 +105,28 @@ export function escapeSvgText(value: string): string {
 
 export function escapeSvgAttribute(value: string): string {
   return escapeSvgText(value).replace(/"/g, '&quot;');
+}
+
+// Entries a hovered map feature can point at carry this attribute, so the map
+// overlay can bring the matching entry forward without redrawing the legend.
+export const LEGEND_ENTRY_ATTRIBUTE = 'data-legend-entry';
+export const MISSING_LEGEND_ENTRY = 'missing';
+
+export function classLegendEntry(classIndex: number): string {
+  return `class:${classIndex}`;
+}
+
+export function categoryLegendEntry(category: string): string {
+  return `category:${category}`;
+}
+
+export function wrapLegendEntry(
+  entryKey: string | undefined,
+  markup: string
+): string {
+  return entryKey
+    ? `<g ${LEGEND_ENTRY_ATTRIBUTE}="${escapeSvgAttribute(entryKey)}">${markup}</g>`
+    : markup;
 }
 
 export function createLegendSvg(svg: LegendSvgDefinition): LegendSvgDefinition;
@@ -179,7 +208,24 @@ export function measureLegendLongestToken(
   );
 }
 
+// A line break typed by the user starts a new line; an empty one keeps its blank line.
 export function wrapLegendText(
+  text: string,
+  font: string,
+  maxWidth: number
+): string[] {
+  const paragraphs = text.trim().split(/\r?\n/);
+  if (paragraphs.length > 1) {
+    return paragraphs.flatMap((paragraph) => {
+      const lines = wrapLegendParagraph(paragraph, font, maxWidth);
+      return lines.length > 0 ? lines : [''];
+    });
+  }
+
+  return wrapLegendParagraph(text, font, maxWidth);
+}
+
+function wrapLegendParagraph(
   text: string,
   font: string,
   maxWidth: number

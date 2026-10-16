@@ -29,6 +29,7 @@ import {
   registerFiles
 } from './file-registry';
 import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
+import { promoteImportedTextDates } from './text-dates';
 
 interface GeofileMetadata {
   crs: string | null;
@@ -420,6 +421,7 @@ export async function readGeofile(
 
   if (!usedGeoPackageBrowserFallback) {
     await dropSyntheticFeatureIdColumn(ctx.connection, finalTablename);
+    await promoteImportedTextDates(ctx.connection, finalTablename);
     await addRowId(ctx.connection, finalTablename);
   }
 

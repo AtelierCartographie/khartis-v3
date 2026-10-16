@@ -5,6 +5,7 @@
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import {
     getVisualizationOriginMode,
     visualizationStore
@@ -347,8 +348,15 @@
 
     untrack(() => {
       if (datasetsStore.selectedDatasetId === datasetId) return;
-      if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
-        return;
+      const dataset = datasetsStore.datasets.find(
+        (item) => item.id === datasetId
+      );
+      if (!dataset) return;
+      // The data tab of its source file follows, with the data step reset
+      // that comes with a source change; then the dataset itself, for a file
+      // holding several.
+      if (dataset.sourceFileId) {
+        globalActions.selectDataButton(dataset.sourceFileId);
       }
       datasetsStore.selectDataset(datasetId);
     });
@@ -400,6 +408,29 @@
     ) {
       selectedSuggestionKey = undefined;
     }
+  });
+
+  // A visualization picked elsewhere (toolbar tab, layers panel) brings its
+  // dataset along; without this the effect below would select the first
+  // visualization of the dataset shown here and cancel the pick. Only a change
+  // of selection counts, so picking a dataset in the menu still wins.
+  let lastSelectedVisualizationId: string | undefined;
+  $effect(() => {
+    const selected = visualizationStore.selectedVisualization;
+    if (selected?.id === lastSelectedVisualizationId) return;
+    lastSelectedVisualizationId = selected?.id;
+    if (!selected || selected.facet) return;
+
+    untrack(() => {
+      if (selected.datasetId === selectedDatasetId) return;
+      if (
+        datasetsStore.datasets.some(
+          (dataset) => dataset.id === selected.datasetId
+        )
+      ) {
+        selectedDatasetId = selected.datasetId;
+      }
+    });
   });
 
   $effect(() => {

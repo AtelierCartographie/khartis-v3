@@ -280,3 +280,140 @@ function getLineLegendSubtitleParts(
 
   return parts;
 }
+
+/**
+ * A channel of a primitive that encodes a variable: its color (fill for
+ * polygons and symbols), its outline, or its size (thickness for lines).
+ */
+export type LegendComponent = 'color' | 'stroke' | 'size';
+
+const CLASSED_OR_CATEGORICAL_STROKE: ReadonlySet<StrokeMode | undefined> =
+  new Set([StrokeMode.CLASSES, StrokeMode.CATEGORIES]);
+const CLASSED_OR_CATEGORICAL_COLOR: ReadonlySet<ColorMode | undefined> =
+  new Set([ColorMode.CLASSES, ColorMode.CATEGORIES]);
+
+function getComponentColumns(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): Partial<Record<LegendComponent, Array<string | undefined>>> {
+  const mapping = visualization.mapping;
+
+  switch (primitive) {
+    case 'area': {
+      const polygon = visualization.polygon;
+      const columns: Partial<
+        Record<LegendComponent, Array<string | undefined>>
+      > = {};
+      if (polygon?.fillMode === FillMode.CATEGORIES) {
+        columns.color = [polygon.categoryColumn ?? mapping.categoryColumn];
+      } else if (
+        polygon?.fillMode === FillMode.CLASSES ||
+        polygon?.fillMode === FillMode.DENSITY
+      ) {
+        columns.color = [polygon.valueColumn ?? mapping.valueColumn];
+      }
+      if (CLASSED_OR_CATEGORICAL_STROKE.has(polygon?.strokeMode)) {
+        columns.stroke = [getStrokeColumn(polygon)];
+      }
+      return columns;
+    }
+    case 'point': {
+      const symbol = visualization.symbol;
+      const columns: Partial<
+        Record<LegendComponent, Array<string | undefined>>
+      > = {};
+      if (
+        symbol?.mode === SymbolMode.PROPORTIONAL ||
+        symbol?.mode === SymbolMode.CLASSES
+      ) {
+        columns.size = [
+          symbol.sizeColumn ?? mapping.sizeColumn,
+          symbol.proportionalType === ProportionalType.DOUBLE
+            ? (symbol.valueColumn ?? mapping.valueColumn)
+            : undefined
+        ];
+      }
+      if (symbol?.mode === SymbolMode.CATEGORIES) {
+        columns.color = [symbol.categoryColumn ?? mapping.categoryColumn];
+      } else if (symbol?.fillMode === FillMode.CATEGORIES) {
+        columns.color = [
+          symbol.fillCategoryColumn ??
+            mapping.colorColumn ??
+            mapping.categoryColumn
+        ];
+      } else if (symbol?.fillMode === FillMode.CLASSES) {
+        columns.color = [
+          symbol.fillValueColumn ?? mapping.colorColumn ?? mapping.valueColumn
+        ];
+      }
+      if (CLASSED_OR_CATEGORICAL_STROKE.has(symbol?.strokeMode)) {
+        columns.stroke = [getStrokeColumn(symbol)];
+      }
+      return columns;
+    }
+    case 'line': {
+      const line = visualization.line;
+      const columns: Partial<
+        Record<LegendComponent, Array<string | undefined>>
+      > = {};
+      if (line?.colorMode === ColorMode.CATEGORIES) {
+        columns.color = [line.categoryColumn ?? mapping.categoryColumn];
+      } else if (line?.colorMode === ColorMode.CLASSES) {
+        columns.color = [
+          line.valueColumn ?? mapping.colorColumn ?? mapping.valueColumn
+        ];
+      }
+      if (
+        line?.thicknessMode === ThicknessMode.PROPORTIONAL ||
+        line?.thicknessMode === ThicknessMode.CLASSES
+      ) {
+        columns.size = [line.sizeColumn ?? mapping.sizeColumn];
+      }
+      return columns;
+    }
+    case 'text': {
+      const text = visualization.text;
+      const columns: Partial<
+        Record<LegendComponent, Array<string | undefined>>
+      > = {};
+      if (CLASSED_OR_CATEGORICAL_COLOR.has(text?.colorMode)) {
+        columns.color = [
+          text?.colorMode === ColorMode.CATEGORIES
+            ? text.categoryColumn
+            : text?.valueColumn
+        ];
+      }
+      if (
+        text?.sizeMode === SizeMode.PROPORTIONAL ||
+        text?.sizeMode === SizeMode.CLASSES
+      ) {
+        columns.size = [text.valueColumn ?? mapping.valueColumn];
+      }
+      return columns;
+    }
+  }
+}
+
+const LEGEND_COMPONENT_ORDER: LegendComponent[] = ['color', 'stroke', 'size'];
+
+/**
+ * The channels of a primitive that encode a variable. Each one may come from
+ * its own column, so when there are several each gets a legend of its own.
+ */
+export function getLegendComponents(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): LegendComponent[] {
+  const columns = getComponentColumns(visualization, primitive);
+  return LEGEND_COMPONENT_ORDER.filter((component) => columns[component]);
+}
+
+export function getComponentLegendSubtitle(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive,
+  component: LegendComponent
+): string {
+  return joinLegendSubtitleParts(
+    getComponentColumns(visualization, primitive)[component] ?? []
+  );
+}

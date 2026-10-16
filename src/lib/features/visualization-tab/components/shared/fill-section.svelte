@@ -187,7 +187,11 @@
         : undefined) ?? DEFAULT_COMMON_ASPECT.patternConfig
   });
   const selectableValueFields = $derived(
-    filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
+    filterFieldsByKind(
+      selectableDataFields,
+      'classed-color',
+      selectedValueFieldId
+    )
   );
   const selectableCategoryFields = $derived(
     filterFieldsByKind(selectableDataFields, 'textual', selectedCategoryFieldId)

@@ -447,7 +447,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           },
           width: '100%',
           height: '100%',
-          controller: { scrollZoom: false, doubleClickZoom: false },
+          controller: { doubleClickZoom: false },
           layers: [],
           onDeviceInitialized: (device) => {
             deckDevice = device;
