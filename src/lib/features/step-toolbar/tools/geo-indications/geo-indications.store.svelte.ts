@@ -36,13 +36,11 @@ import type {
   GeoIndicationsState
 } from '../../types/geo-indications.types';
 
-const DEFAULT_INSET_WINDOW_COLOR: ColorState = {
-  hue: 7.741935483870967,
-  saturation: 69.50672645739911,
-  lightness: 56.27450980392157
-};
-const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#d9d9d9');
-const DEFAULT_INSET_SEA_COLOR = hexToHsl('#d0e2ff');
+// The Khartis identity and the vector basemap palette.
+const DEFAULT_INSET_WINDOW_COLOR = hexToHsl('#0085cc');
+const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#ffffff');
+const DEFAULT_INSET_SEA_COLOR = hexToHsl('#f0f7f9');
+const DEFAULT_INSET_SPHERE_COLOR = hexToHsl('#ced6d9');
 
 const DEFAULT_STATE: GeoIndicationsState = {
   visible: true,
@@ -72,6 +70,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     windowColor: DEFAULT_INSET_WINDOW_COLOR,
     continentColor: DEFAULT_INSET_CONTINENT_COLOR,
     seaColor: DEFAULT_INSET_SEA_COLOR,
+    sphereColor: DEFAULT_INSET_SPHERE_COLOR,
     useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
@@ -227,6 +226,10 @@ function normalizeState(
         nextInsetMap?.seaColor,
         current.insetMap.seaColor
       ),
+      sphereColor: normalizeColorState(
+        nextInsetMap?.sphereColor,
+        current.insetMap.sphereColor
+      ),
       useBasemapColors: false,
       zoom: DEFAULT_STATE.insetMap.zoom,
       centerLongitude: clampNumber(
@@ -290,6 +293,7 @@ type GeoIndicationsActions = {
   setInsetMapContinentColorFromHex: (hex: string) => void;
   setInsetMapSeaColor: (colorState: ColorState) => void;
   setInsetMapSeaColorFromHex: (hex: string) => void;
+  setInsetMapSphereColor: (colorState: ColorState) => void;
   setInsetMapZoom: (zoom: number) => void;
   setInsetMapCenterLongitude: (longitude: number) => void;
   setInsetMapCenterLatitude: (latitude: number) => void;
@@ -452,6 +456,9 @@ const { state, actions } = createToolStore<
     },
     setInsetMapSeaColor: (colorState: ColorState) => {
       s.insetMap.seaColor = colorState;
+    },
+    setInsetMapSphereColor: (colorState: ColorState) => {
+      s.insetMap.sphereColor = colorState;
     },
     setInsetMapSeaColorFromHex: (hex: string) => {
       s.insetMap.seaColor = hexToHsl(hex);

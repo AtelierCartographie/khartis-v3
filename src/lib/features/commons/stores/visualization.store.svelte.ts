@@ -153,6 +153,11 @@ export interface VisualizationStore {
     classification: Partial<ClassificationConfig>,
     options?: { preserveOrigin?: boolean }
   ) => void;
+  updateSymbolFillClassification: (
+    id: string,
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ) => void;
   updatePrimitiveStrokeClassification: (
     id: string,
     primitive: PrimitiveFilter,
@@ -600,6 +605,31 @@ function createVisualizationStore(): VisualizationStore {
             ...line.thicknessClassification,
             ...classification
           } as ClassificationConfig
+        }
+      } as Partial<VisualizationConfig>;
+    });
+  }
+
+  function updateSymbolFillClassification(
+    id: string,
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const symbol = buildSymbolPrimitiveConfig(visualization);
+
+      return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
+        symbol: {
+          ...symbol,
+          fillClassification: {
+            method: ClassificationMethod.KMEANS,
+            classes: DEFAULT_DISCRETIZATION_CLASS_COUNT,
+            ...symbol.fillClassification,
+            ...classification
+          }
         }
       } as Partial<VisualizationConfig>;
     });
@@ -1359,6 +1389,7 @@ function createVisualizationStore(): VisualizationStore {
     updateClassification,
     updatePrimitiveClassification,
     updateLineThicknessClassification,
+    updateSymbolFillClassification,
     updatePrimitiveStrokeClassification,
     updateVisualization,
     renameVisualization,

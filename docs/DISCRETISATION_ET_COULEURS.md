@@ -39,11 +39,53 @@ dans `mapMethodToMacro()`, jamais par une boucle JavaScript.
 | `nested_means`                   | `nested_means` | 2, 4, 8 ou 16 classes                                             |
 | `head_tail`                      | `headtail2`    | nombre de classes déterminé par la série                          |
 | `manual`                         | —              | bornes saisies par l'utilisateur, jamais recalculées ni arrondies |
+| `calendar` (pas calendaire)      | —              | colonne `DATE` ou `TIMESTAMP` seulement, voir ci-dessous          |
 
 `suggestClassificationDefaults()` propose une méthode selon l'asymétrie de la
 série : `head_tail` à partir de 3, `quantiles` à partir de 1,5 en valeur
 absolue, sinon la méthode courante. Le nombre de classes est plafonné à
 max(2, lignes / 3). L'utilisateur reste libre de ce choix.
+
+## Dates : pas calendaire ou bornes manuelles
+
+Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire
+ou par bornes manuelles, jamais par une méthode numérique ; une colonne
+numérique ne se classe jamais par pas calendaire. `computeClassificationBreaks()`
+lit le type DuckDB de la colonne (`isTemporalColumn()`) et impose la méthode,
+quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
+
+- **Calcul.** `calculateCalendarBreaks()` lit `epoch_ms(colonne)` dans DuckDB
+  (min, max, effectifs). Le choix et l'alignement du pas sont des fonctions
+  pures de `commons/utils/calendar-breaks.utils.ts`, en UTC : jour, semaine
+  ISO (lundi), mois, 2 mois, trimestre, semestre, puis 1, 2, 5, 10, 20, 25,
+  50, 100… ans. Les seuils tombent sur le premier jour d'une période (années
+  multiples du pas, trimestres en janvier, avril, juillet et octobre).
+- **Classes.** Elles sont semi-ouvertes, `[début, début suivant[`.
+  `roundedMin` est le minimum ramené au début de sa période, `roundedMax` la
+  première limite après le maximum (exclue).
+- **Choix du pas.** Il n'y a pas de mode automatique : `calendarStep` est le
+  pas courant, gardé tant qu'il donne entre 2 et 12 classes. Sans pas, ou
+  quand le pas ne convient plus (filtre, nouvelle colonne), le pas retenu est
+  le plus fin qui donne au plus le nombre de classes stocké ; recalculer avec
+  le nombre obtenu redonne le même pas. Le panneau ne propose que les pas qui
+  donnent de 2 à 12 classes, jusqu'au premier qui n'en donne plus que 2.
+- **Bornes manuelles.** `calculateCalendarBreakCounts()` compte les classes
+  de seuils saisis. La granularité commune des seuils (tous au 1er janvier →
+  année, tous au 1er du mois → mois, sinon jour) devient `calendarStep` : elle
+  fixe les bornes extérieures et les libellés. `parseCalendarBoundary()` relit
+  les saisies (« 1975 », « 04/1975 », « 12/04/1975 », « avr. 1975 »…).
+- **Unités.** Bornes, `min` et `max` sont en millisecondes epoch : c'est
+  l'unité que reçoit le rendu, qui décode la date Arrow sans `useDate`.
+- **Légende.** La même que pour les nombres (barre horizontale ou verticale,
+  liste), avec des seuils formatés à la granularité du pas
+  (`formatCalendarBoundary()`) : « 1950 », « avr. 2020 », « 12 avr. 2020 ».
+  Les listes de pastilles libellent chaque classe par sa période, fin incluse
+  (`formatCalendarClassLabel()`) : « 1950–1969 », « janv.–mars 2021 ».
+- **Hors périmètre.** Pas de point de rupture ni de taille proportionnelle sur
+  une date.
+
+La reconnaissance des dates à l'import est décrite dans
+[Import DuckDB](IMPORT_DUCKDB.md).
 
 ## Nombre de classes
 
@@ -156,7 +198,9 @@ profil choisi est enregistré dans les réglages d'interface du projet.
 `ClassificationConfig` (`commons/stores/visualization.types.ts`) est enregistré
 dans le projet et l'archive `.kh` : méthode, nombre de classes, bornes et
 effectifs, bornes d'échelle, couleurs résolues, identifiant de palette,
-inversion, libellés, pivot et répartition, motif, déclinaison catégorielle.
+inversion, libellés, pivot et répartition, motif, déclinaison catégorielle,
+pas calendaire ou granularité des bornes manuelles (`calendarStep`, champ
+optionnel sans montée de schéma).
 
 Les couleurs sont **stockées résolues** : une carte rouverte garde les couleurs
 avec lesquelles elle a été faite, même si une famille de palettes évolue.

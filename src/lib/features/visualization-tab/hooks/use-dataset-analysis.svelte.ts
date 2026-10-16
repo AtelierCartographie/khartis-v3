@@ -20,6 +20,23 @@ export interface DataFieldItem {
 
 const NUMERIC_DATA_FIELD_TYPES = new Set(['number', 'numeric']);
 
+export function isNumericDataFieldType(type: string | undefined): boolean {
+  return NUMERIC_DATA_FIELD_TYPES.has(type ?? '');
+}
+
+export const DATE_DATA_FIELD_TYPE = 'date';
+
+/** How a column can be classed: numeric breaks, calendar breaks on a date, or not at all. */
+export type ClassableFieldKind = 'numeric' | 'date';
+
+export function resolveClassableFieldKind(
+  type: string | undefined
+): ClassableFieldKind | null {
+  if (isNumericDataFieldType(type)) return 'numeric';
+  if (type === DATE_DATA_FIELD_TYPE) return 'date';
+  return null;
+}
+
 export interface UseDatasetAnalysisDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
 }
@@ -34,7 +51,9 @@ export interface DatasetAnalysis {
   readonly showsSymbolsConfig: boolean;
   readonly showsPolygonsConfig: boolean;
   readonly showsLinesConfig: boolean;
-  isNumericDataField(columnName: string | undefined): boolean;
+  getClassableFieldKind(
+    columnName: string | undefined
+  ): ClassableFieldKind | null;
   getSelectedDataset(): ReturnType<typeof datasetsStore.datasets.find> | null;
 }
 
@@ -107,13 +126,12 @@ export function useDatasetAnalysis(
     availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
   );
 
-  function isNumericDataField(columnName: string | undefined): boolean {
-    if (!columnName) return false;
-    return dataFieldItems.some(
-      (field) =>
-        field.text === columnName &&
-        NUMERIC_DATA_FIELD_TYPES.has(field.type ?? '')
-    );
+  function getClassableFieldKind(
+    columnName: string | undefined
+  ): ClassableFieldKind | null {
+    if (!columnName) return null;
+    const field = dataFieldItems.find((item) => item.text === columnName);
+    return resolveClassableFieldKind(field?.type);
   }
 
   return {
@@ -138,7 +156,7 @@ export function useDatasetAnalysis(
     get showsLinesConfig() {
       return showsLinesConfig;
     },
-    isNumericDataField,
+    getClassableFieldKind,
     getSelectedDataset
   };
 }

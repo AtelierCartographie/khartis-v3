@@ -7,6 +7,7 @@ import {
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_line_width_legend,
+  draw_khartis_proportional_line_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend
@@ -38,6 +39,14 @@ describe('common legend generators', () => {
     expect(wrapLegendText('Alpha beta gamma', '12px Inter', 75)).toEqual([
       'Alpha beta',
       'gamma'
+    ]);
+  });
+
+  it('should start a new line at each typed line break when the text has one', () => {
+    expect(wrapLegendText('Alpha\n\nbeta gamma', '12px Inter', 75)).toEqual([
+      'Alpha',
+      '',
+      'beta gamma'
     ]);
   });
 
@@ -112,6 +121,65 @@ describe('common legend generators', () => {
     );
   });
 
+  it('should size proportional classes after their share of the value range when labels have room', () => {
+    const svg = draw_quanti_color_legend([0, 30, 100], ['#f7fbff', '#2171b5'], {
+      variable_width: true
+    });
+    const widths = [
+      ...svg.markup.matchAll(/<rect x="[\d.]+" y="[\d.]+" width="([\d.]+)"/g)
+    ]
+      .map((match) => Number(match[1]))
+      .filter((width) => width < svg.width);
+
+    expect(widths).toHaveLength(2);
+    expect(widths[1] / widths[0]).toBeCloseTo(70 / 30, 1);
+  });
+
+  it('should put the lowest class at the bottom of a vertical bar when it reads like a thermometer', () => {
+    const labelY = (markup: string, label: string): number =>
+      Number(new RegExp(`y="([\\d.]+)">${label}<`).exec(markup)?.[1]);
+    const thermometer = draw_quanti_color_legend(
+      [0, 50, 100],
+      ['#f7fbff', '#2171b5'],
+      { orientation: 'vertical', lowAtBottom: true }
+    ).markup;
+    const topDown = draw_quanti_color_legend(
+      [0, 50, 100],
+      ['#f7fbff', '#2171b5'],
+      { orientation: 'vertical', lowAtBottom: false }
+    ).markup;
+
+    expect(labelY(thermometer, '0')).toBeGreaterThan(
+      labelY(thermometer, '100')
+    );
+    expect(labelY(topDown, '0')).toBeLessThan(labelY(topDown, '100'));
+  });
+
+  it('should centre each value under its own segment, thinnest first, when lines are proportional', () => {
+    const { markup } = draw_khartis_proportional_line_legend([
+      { label: '1 200', width: 6 },
+      { label: '500', width: 2.5 }
+    ]);
+    const segments = [
+      ...markup.matchAll(
+        /<line x1="([\d.]+)" y1="[\d.]+" x2="([\d.]+)" y2="[\d.]+" stroke-width="([\d.]+)"/g
+      )
+    ].map(([, x1, x2, width]) => ({
+      center: (Number(x1) + Number(x2)) / 2,
+      width: Number(width)
+    }));
+    const labels = [
+      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+">([^<]+)</g)
+    ].map(([, x, text]) => ({ x: Number(x), text }));
+
+    expect(segments.map((segment) => segment.width)).toEqual([2.5, 6]);
+    expect(labels).toEqual([
+      { x: segments[0].center, text: '500' },
+      { x: segments[1].center, text: '1 200' }
+    ]);
+    expect(markup).toContain('stroke="currentColor"');
+  });
+
   it('draws categorical legends and escapes labels before raw SVG rendering', () => {
     const svg = createLegendSvg(
       draw_categorical_legend([
@@ -173,6 +241,22 @@ describe('common legend generators', () => {
     expect(countColumns(91)).toBe(4);
     expect(countColumns(121)).toBe(5);
     expect(countColumns(200)).toBe(5);
+  });
+
+  it('should tag every class and the missing-data box when a hovered feature has to find its entry', () => {
+    const svg = draw_quanti_color_legend(
+      [0, 10, 20, 30],
+      ['#eee', '#999', '#333'],
+      {
+        nodata: true
+      }
+    );
+    const entries = Array.from(
+      svg.markup.matchAll(/data-legend-entry="([^"]+)"/g),
+      (match) => match[1]
+    );
+
+    expect(entries).toEqual(['class:0', 'class:1', 'class:2', 'missing']);
   });
 
   it('keeps categorical missing data compact in the same SVG', () => {

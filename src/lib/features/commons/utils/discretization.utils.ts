@@ -1,4 +1,7 @@
-import type { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  ClassificationMethod
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
 
@@ -13,7 +16,8 @@ const CLASSIFICATION_METHOD = {
   MANUAL: 'manual',
   Q6: 'q6',
   NESTED_MEANS: 'nested_means',
-  HEAD_TAIL: 'head_tail'
+  HEAD_TAIL: 'head_tail',
+  CALENDAR: 'calendar'
 } as const;
 
 export function normalizeClassificationMethod(
@@ -27,6 +31,7 @@ export function normalizeClassificationMethod(
     case CLASSIFICATION_METHOD.Q6:
     case CLASSIFICATION_METHOD.NESTED_MEANS:
     case CLASSIFICATION_METHOD.HEAD_TAIL:
+    case CLASSIFICATION_METHOD.CALENDAR:
       return method as ClassificationMethod;
     default:
       return CLASSIFICATION_METHOD.KMEANS as ClassificationMethod;
@@ -191,4 +196,26 @@ export function resolveHeadTailClassCountMax(
   }
 
   return DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+}
+
+/**
+ * The value of a classification that collapsed to one class because its
+ * series holds a single value (see calculateBreaks), or null. A class bar
+ * cannot span one value, so the legend shows a single swatch instead.
+ */
+export function getSingleClassValue(
+  classification: ClassificationConfig | undefined
+): number | null {
+  if (!classification) return null;
+  const { roundedMin, roundedMax } = classification;
+  if (
+    (classification.breaks ?? []).length === 0 &&
+    (classification.colors ?? []).length === 1 &&
+    typeof roundedMin === 'number' &&
+    Number.isFinite(roundedMin) &&
+    roundedMin === roundedMax
+  ) {
+    return roundedMin;
+  }
+  return null;
 }

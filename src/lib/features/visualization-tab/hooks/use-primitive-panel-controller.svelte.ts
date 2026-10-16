@@ -155,13 +155,19 @@ function resetClassificationComputedValues(
 
   return {
     ...classification,
+    // Manual bounds belong to the previous column; nothing recomputes them.
+    method:
+      classification.method === ClassificationMethod.MANUAL
+        ? ClassificationMethod.KMEANS
+        : classification.method,
     breaks: undefined,
     counts: undefined,
     roundedMin: undefined,
     roundedMax: undefined,
     colors: undefined,
     breakpointValue: null,
-    breakpointLowerClassCount: undefined
+    breakpointLowerClassCount: undefined,
+    calendarStep: undefined
   };
 }
 

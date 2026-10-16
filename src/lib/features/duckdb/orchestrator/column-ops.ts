@@ -11,6 +11,10 @@ import {
 } from '../types';
 import { SQL_FUNCTIONS } from '../constants';
 import { buildNormalizedNumericTextSql } from '$lib/features/commons/utils/numeric-format.utils';
+import {
+  buildTextDateExpression,
+  resolveBestTextDateFormat
+} from '../io/text-dates';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -140,6 +144,34 @@ export interface ChangeColumnTypeResult {
   invalidatedCount: number;
 }
 
+// ISO strings cast directly; other layouts (day-first, year-month, a bare
+// year) go through the format most of the column's values parse with.
+async function buildDateCastExpression(
+  tableName: string,
+  columnName: string,
+  targetType: 'DATE' | 'TIMESTAMP',
+  Duck: DuckDBClient
+): Promise<string> {
+  const ref = `"${escapeIdentifier(columnName)}"`;
+  const format = await resolveBestTextDateFormat(
+    async (sql) =>
+      ((await Duck.query(sql, { format: 'array' })) ?? []) as Record<
+        string,
+        unknown
+      >[],
+    tableName,
+    columnName
+  );
+  const candidates = [
+    `TRY_CAST(${ref} AS ${targetType})`,
+    ...(format
+      ? [`${buildTextDateExpression(ref, format)}::${targetType}`]
+      : []),
+    `${buildTextDateExpression(ref, { pattern: '%Y', hasTime: false })}::${targetType}`
+  ];
+  return `COALESCE(${candidates.join(', ')})`;
+}
+
 export async function changeColumnType(
   tableName: string,
   columnName: string,
@@ -162,7 +194,15 @@ export async function changeColumnType(
   const usingExpr = isNumericColumnType(normalizedType)
     ? buildNormalizedNumericTextSql(`trim("${escapedCol}"::VARCHAR)`)
     : `"${escapedCol}"`;
-  const castExpr = `TRY_CAST(${usingExpr} AS ${normalizedType})`;
+  const castExpr =
+    normalizedType === 'DATE' || normalizedType === 'TIMESTAMP'
+      ? await buildDateCastExpression(
+          tableName,
+          columnName,
+          normalizedType,
+          Duck
+        )
+      : `TRY_CAST(${usingExpr} AS ${normalizedType})`;
 
   const invalidatedResult = (await Duck.query(
     `SELECT COUNT(*) FILTER (

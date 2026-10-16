@@ -90,8 +90,7 @@ import {
   usesDoubleProportionalSymbols
 } from './symbol-layer.utils';
 import { MultiShapeLayer } from './multi-shape-layer';
-
-const SYMBOL_STROKE_WIDTH_DIVISOR = 3;
+import { SYMBOL_STROKE_WIDTH_DIVISOR } from './stroke-width.constants';
 
 function createDoubleProportionalPointLayers(
   pointData: BinaryPointData,

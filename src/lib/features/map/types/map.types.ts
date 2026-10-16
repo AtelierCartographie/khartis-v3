@@ -24,6 +24,8 @@ export type RGBColor = [number, number, number];
 export interface TooltipEntry {
   key: string;
   value: string;
+  /** The column drives one of the hovered layer's visualizations. */
+  isVizColumn?: boolean;
 }
 
 export interface OrthographicMainViewState {

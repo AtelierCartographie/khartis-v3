@@ -134,7 +134,7 @@
     "@ateliercartographie/geoarrow-deck-stream": "^1.2.0",
     "@ateliercartographie/motif.js": "^0.1.5",
     "@ateliercartographie/ok-palette": "^0.1.4",
-    "@ateliercartographie/proj-suggest": "^0.0.1",
+    "@ateliercartographie/proj-suggest": "^0.1.0",
     "@borgar/textbox": "^2.0.0",
     "@deck.gl/core": "^9.4.0",
     "@deck.gl/extensions": "^9.4.0",

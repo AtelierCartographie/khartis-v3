@@ -28,11 +28,13 @@ import {
 } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type {
+  BasemapGeometryPack,
   BasemapMetadata,
   ProjectionPresets,
   StylePresets
 } from '../types/basemap.types';
 import { readGeoParquetDirect } from './read-geoparquet-arrow.service';
+import { readParquetRowGroups } from './basemap-geometry-pack.service';
 import { SimplificationLevel } from '../../commons/types/enums';
 import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
 import { GEOMETRY_WKT_TYPES } from '../../commons/constants/geometry.constants';
@@ -933,33 +935,72 @@ function createBasemapService() {
     }
   }
 
-  async function loadGeometryFromParquet(
+  // A catalog geometry file may be shipped inside another one (metadata "pack":
+  // whole parent file, or some of its row groups): see basemap-geometry-pack.
+  function findGeometryPack(filename: string): BasemapGeometryPack | undefined {
+    for (const basemap of getAvailableBasemaps()) {
+      if (basemap.file === filename) {
+        return basemap.pack;
+      }
+      const layer = basemap.layers?.find(
+        (candidate) => candidate.file === filename
+      );
+      if (layer) {
+        return layer.pack;
+      }
+    }
+    return undefined;
+  }
+
+  // Parquet bytes of a catalog geometry file, virtual or not.
+  async function fetchGeometryParquet(
     filename: string,
-    bbox?: [number, number, number, number]
-  ): Promise<ArrowTable> {
-    perfMark(PERF_PHASE.GEOMETRY_FETCH);
-    const url = getGeometryParquetUrl(filename);
-    let arrayBuffer: ArrayBuffer;
+    errorDetails: Record<string, unknown> = {}
+  ): Promise<ArrayBuffer> {
+    const pack = findGeometryPack(filename);
+    const url = getGeometryParquetUrl(pack?.file ?? filename);
+
+    const fetchWholeFile = async (): Promise<ArrayBuffer> => {
+      try {
+        return await fetchWithTimeout(
+          url,
+          async (response) => {
+            if (!response.ok) {
+              throw new PipelineError(
+                `Failed to fetch geometry ${filename}: ${response.statusText}`,
+                BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
+                {
+                  ...errorDetails,
+                  filename,
+                  status: response.status,
+                  statusText: response.statusText,
+                  url: response.url || url
+                }
+              );
+            }
+
+            return response.arrayBuffer();
+          },
+          BASEMAP_FETCH_TIMEOUT_MS
+        );
+      } catch (error) {
+        throw normalizeBasemapDownloadError(
+          error,
+          url,
+          BASEMAP_GEOMETRY_FETCH_ERROR_CODE
+        );
+      }
+    };
+
+    if (!pack?.row_groups?.length) {
+      return fetchWholeFile();
+    }
 
     try {
-      arrayBuffer = await fetchWithTimeout(
+      return await readParquetRowGroups(
         url,
-        async (response) => {
-          if (!response.ok) {
-            throw new PipelineError(
-              `Failed to fetch geometry ${filename}: ${response.statusText}`,
-              BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
-              {
-                filename,
-                status: response.status,
-                statusText: response.statusText,
-                url: response.url || url
-              }
-            );
-          }
-
-          return response.arrayBuffer();
-        },
+        [...pack.row_groups],
+        fetchWholeFile,
         BASEMAP_FETCH_TIMEOUT_MS
       );
     } catch (error) {
@@ -969,7 +1010,14 @@ function createBasemapService() {
         BASEMAP_GEOMETRY_FETCH_ERROR_CODE
       );
     }
+  }
 
+  async function loadGeometryFromParquet(
+    filename: string,
+    bbox?: [number, number, number, number]
+  ): Promise<ArrowTable> {
+    perfMark(PERF_PHASE.GEOMETRY_FETCH);
+    const arrayBuffer = await fetchGeometryParquet(filename);
     const parsedGeometryTable = await readGeoParquetDirect(arrayBuffer, bbox);
     perfMeasure(PERF_PHASE.GEOMETRY_FETCH);
     return parsedGeometryTable;
@@ -1179,30 +1227,15 @@ function createBasemapService() {
       }
     }
 
-    const url = getGeometryParquetUrl(resolvedBasemapId);
+    const url = getGeometryParquetUrl(
+      findGeometryPack(resolvedBasemapId)?.file ?? resolvedBasemapId
+    );
 
     try {
-      const arrayBuffer = await fetchWithTimeout(
-        url,
-        async (response) => {
-          if (!response.ok) {
-            throw new PipelineError(
-              `Failed to fetch geometry: ${response.statusText}`,
-              BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
-              {
-                basemapId: normalizedBasemapId,
-                resolvedBasemapId,
-                status: response.status,
-                statusText: response.statusText,
-                url: response.url || url
-              }
-            );
-          }
-
-          return response.arrayBuffer();
-        },
-        BASEMAP_FETCH_TIMEOUT_MS
-      );
+      const arrayBuffer = await fetchGeometryParquet(resolvedBasemapId, {
+        basemapId: normalizedBasemapId,
+        resolvedBasemapId
+      });
       const escapedTableName = escapeIdentifier(tableName);
       const tempTableName = `tmp_${tableName}_${Date.now()}`;
       const escapedTempTableName = escapeIdentifier(tempTableName);

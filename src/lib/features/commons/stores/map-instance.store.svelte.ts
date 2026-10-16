@@ -468,6 +468,24 @@ function createMapInstanceStore() {
     rescaleTarget(framingScale / previousFramingScale);
   }
 
+  /**
+   * MapLibre draws at the rendered page size, so a change of render scale
+   * (the side panel opening or resizing) changes the visible extent unless the
+   * zoom follows it. The base zoom moves too, so the zoom percentage holds.
+   */
+  function rescaleMapLibreView(ratio: number): void {
+    if (!state.map || !state.isMapLoaded) return;
+    if (!Number.isFinite(ratio) || ratio <= 0 || ratio === 1) return;
+
+    const zoomDelta = Math.log2(ratio);
+    const center = state.map.getCenter();
+    const zoom = state.map.getZoom() + zoomDelta;
+    state.baseZoomLevel += zoomDelta;
+    applyMapZoomBounds();
+    state.map.jumpTo({ center, zoom });
+    updateZoomFromMap();
+  }
+
   function getMapZoom(): number {
     return state.map?.getZoom() ?? 0;
   }
@@ -892,7 +910,8 @@ function createMapInstanceStore() {
     state.map = null;
     state.deckOverlay = null;
     state.deckInstance = null;
-    state.workspaceViewportElement = null;
+    // The workspace viewport outlives the map engines: it registers and
+    // clears its own element, so a map switch must not orphan it.
     state.isMapLoaded = false;
     state.zoomLevel = 100;
     state.baseZoomLevel = DEFAULT_MAP_BASE_ZOOM;
@@ -974,6 +993,7 @@ function createMapInstanceStore() {
     panForResizedFrame,
     measureFramingScale,
     rescaleTargetFrom,
+    rescaleMapLibreView,
     getMapZoom,
     getMapCenter,
     setBaseZoomLevel,

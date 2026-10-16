@@ -42,9 +42,33 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 }));
 
 import { getLegendState, legendActions } from './legend.store.svelte';
+import { selectRenderedLegendItems } from './legend-items.utils';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS } from './legend.constants';
 import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
+
+function buildLineViz(
+  lineOverrides: Partial<NonNullable<VisualizationConfig['line']>> = {}
+): VisualizationConfig {
+  return createVisualization({
+    id: 'viz-line-only',
+    mapping: { categoryColumn: 'category', sizeColumn: 'unused-size' },
+    line: {
+      enabled: true,
+      colorMode: ColorMode.CATEGORIES,
+      thicknessMode: ThicknessMode.CLASSES,
+      color: '#1e3a5f',
+      width: 2,
+      maxWidth: 10,
+      opacity: 1,
+      dashed: false,
+      categoryColumn: 'line_type',
+      sizeColumn: 'traffic',
+      ...lineOverrides
+    },
+    modes: {}
+  });
+}
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -276,40 +300,89 @@ describe('legend store responsive defaults', () => {
     ]);
   });
 
-  it('uses active line color and thickness columns for line-only legends', () => {
-    mockVisualizationStore.visualizations = [
-      createVisualization({
-        id: 'viz-line-only',
-        mapping: {
-          categoryColumn: 'category',
-          sizeColumn: 'unused-size'
-        },
-        line: {
-          enabled: true,
-          colorMode: ColorMode.CATEGORIES,
-          thicknessMode: ThicknessMode.CLASSES,
-          color: '#1e3a5f',
-          width: 2,
-          maxWidth: 10,
-          opacity: 1,
-          dashed: false,
-          categoryColumn: 'line_type',
-          sizeColumn: 'traffic'
-        },
-        modes: {}
-      })
-    ];
+  it('should give each encoded channel its own legend when a line encodes color and thickness', () => {
+    mockVisualizationStore.visualizations = [buildLineViz()];
 
     legendActions.syncWithVisualizations();
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        id: 'legend-viz-viz-line-only--line',
+        id: 'legend-viz-viz-line-only--line--color',
         primitive: 'line',
-        title: 'line_type / traffic',
-        subtitle: ''
+        component: 'color',
+        title: 'line_type'
+      }),
+      expect.objectContaining({
+        id: 'legend-viz-viz-line-only--line--size',
+        primitive: 'line',
+        component: 'size',
+        title: 'traffic'
       })
     ]);
+  });
+
+  it('should keep each channel legend position when a channel is switched off and back on', () => {
+    mockVisualizationStore.visualizations = [buildLineViz()];
+    legendActions.syncWithVisualizations();
+    const [colorItem, sizeItem] = getLegendState().items;
+    legendActions.updateLegendItem(colorItem.id, {
+      dragPosition: { x: 10, y: 20 }
+    });
+    legendActions.updateLegendItem(sizeItem.id, {
+      dragPosition: { x: 300, y: 40 }
+    });
+
+    mockVisualizationStore.visualizations = [
+      buildLineViz({ colorMode: ColorMode.UNIQUE })
+    ];
+    legendActions.syncWithVisualizations();
+    expect(selectRenderedLegendItems(getLegendState().items)).toEqual([
+      expect.objectContaining({
+        id: 'legend-viz-viz-line-only--line',
+        dragPosition: { x: 300, y: 40 }
+      })
+    ]);
+
+    mockVisualizationStore.visualizations = [buildLineViz()];
+    legendActions.syncWithVisualizations();
+    expect(
+      selectRenderedLegendItems(getLegendState().items).map((item) => [
+        item.component,
+        item.dragPosition
+      ])
+    ).toEqual([
+      ['color', { x: 10, y: 20 }],
+      ['size', { x: 300, y: 40 }]
+    ]);
+  });
+
+  it('should keep a legend position when its primitive is hidden and shown again', () => {
+    const withSymbols = (enabled: boolean) =>
+      createVisualization({
+        id: 'viz-both',
+        polygon: { enabled: true, fillMode: FillMode.UNIQUE } as never,
+        symbol: { enabled, mode: SymbolMode.UNIQUE } as never,
+        modes: {}
+      });
+    mockVisualizationStore.visualizations = [withSymbols(true)];
+    legendActions.syncWithVisualizations();
+    legendActions.updateLegendItem('legend-viz-viz-both--point', {
+      dragPosition: { x: 42, y: 84 }
+    });
+
+    mockVisualizationStore.visualizations = [withSymbols(false)];
+    legendActions.syncWithVisualizations();
+    expect(
+      selectRenderedLegendItems(getLegendState().items).map((item) => item.id)
+    ).toEqual(['legend-viz-viz-both--area']);
+
+    mockVisualizationStore.visualizations = [withSymbols(true)];
+    legendActions.syncWithVisualizations();
+    expect(
+      getLegendState().items.find(
+        (item) => item.id === 'legend-viz-viz-both--point'
+      )?.dragPosition
+    ).toEqual({ x: 42, y: 84 });
   });
 
   it('keeps a collection map legend text while the map is regenerated', () => {

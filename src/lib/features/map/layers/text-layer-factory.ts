@@ -678,6 +678,9 @@ export function createTextOverlayLayers(
       (datum) => resolveAccessorValue(textSizeAccessor, datum)
     );
     if (textData.length > 0) {
+      // Each datum names its attribute row, so hovering a label reads the row
+      // it was drawn from, split rendering included.
+      Object.assign(textData, { khartisSourceTable: textAttributeTable });
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
       const textCharacterSet = extendTextCharacterSet(
         collectTextLayerGlyphs(textData, [missingTextLabel])
@@ -733,7 +736,7 @@ export function createTextOverlayLayers(
           backgroundPadding: sharedBackgroundPadding,
           backgroundBorderRadius: 2,
           billboard: true,
-          pickable: false,
+          pickable: true,
           parameters: THEMATIC_OVERLAY_PARAMETERS,
           ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
           ...(ctx.beforeId && { beforeId: ctx.beforeId }),

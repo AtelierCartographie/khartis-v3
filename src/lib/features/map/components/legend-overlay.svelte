@@ -21,9 +21,12 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
     clampPointToBounds,
     getDragBounds,
-    remapPointToResizedArea,
+    remapAreaPointToResizedPage,
+    roundToLayoutUnit,
+    snapAreaPointWithinPage,
     snapPointWithinBounds,
     type PageGridPoint,
     type PageGridSize
@@ -40,7 +43,8 @@
   import {
     getLegendState,
     legendActions,
-    selectRenderedLegendItems
+    selectRenderedLegendItems,
+    setRenderedLegendSegments
   } from '$lib/features/step-toolbar/tools/legend';
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
@@ -53,8 +57,12 @@
   import { tick, untrack, onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
+  import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
-  import { getLegendSegments } from '../utils/legend-segments.utils';
+  import {
+    getLegendSegments,
+    type LegendSegment
+  } from '../utils/legend-segments.utils';
 
   // `scopeVizId`, `inline`, and `sizeScale` make legends facet-cell scoped.
   let {
@@ -81,7 +89,7 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived.by(() =>
+  const candidateItems = $derived.by(() =>
     selectRenderedLegendItems(
       legendState.items.filter((i) => i.visible),
       { scopeVizId }
@@ -107,6 +115,56 @@
     void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
+  });
+
+  // A legend points at the hovered feature when its visualization draws from
+  // the same dataset; a legend anchored in a collection map answers to that
+  // map alone. Exports never carry the mark.
+  function getActiveEntry(
+    item: LegendItem,
+    segment: LegendSegment
+  ): string | null {
+    const hoveredRow = mapHoverHighlightStore.hoveredRow;
+    if (!hoveredRow || globalState.isMapExporting || !segment.resolveEntry) {
+      return null;
+    }
+    if (scopeVizId && hoveredRow.vizId !== scopeVizId) {
+      return null;
+    }
+    const viz = vizByItemId.get(item.id);
+    return viz?.datasetId === hoveredRow.datasetId
+      ? segment.resolveEntry(hoveredRow.readValue)
+      : null;
+  }
+
+  const segmentsByItemId = $derived.by(() => {
+    void getLocale();
+    const segments: Record<string, LegendSegment[]> = {};
+    for (const item of candidateItems) {
+      segments[item.id] = getLegendSegments(
+        item,
+        vizByItemId.get(item.id),
+        legendState.style
+      );
+    }
+    return segments;
+  });
+
+  // A primitive legend that draws nothing (an outline repeating its fill)
+  // gets no frame.
+  const visibleItems = $derived(
+    candidateItems.filter(
+      (item) => !item.primitive || (segmentsByItemId[item.id]?.length ?? 0) > 0
+    )
+  );
+
+  $effect(() => {
+    for (const [itemId, segments] of Object.entries(segmentsByItemId)) {
+      setRenderedLegendSegments(
+        itemId,
+        segments.map(({ key, kind }) => ({ key, kind }))
+      );
+    }
   });
 
   const bgColor = $derived(legendState.style.background.color);
@@ -136,7 +194,7 @@
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
   );
   const stackGap = $derived(
-    Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))
+    roundToLayoutUnit(layoutTokens.legend.fontSize * 0.7, 2)
   );
 
   function getPositionClass(position: LegendPosition): string {
@@ -196,10 +254,10 @@
   function getFrameStyle(item: LegendItem): string {
     const hasBackground = legendState.style.background.enabled;
     const shellPaddingInline = hasBackground
-      ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
+      ? layoutTokens.legend.paddingInline
       : 0;
     const shellPaddingBlock = hasBackground
-      ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
+      ? layoutTokens.legend.paddingBlock
       : 0;
     const position = getFramePosition(item);
     const transform =
@@ -257,7 +315,7 @@
   }
 
   function getKeyboardMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+    return formatState.gridEnabled ? PAGE_SNAP_STEP_PX : 1;
   }
 
   function getKeyboardFastMoveStep(): number {
@@ -317,6 +375,10 @@
     };
   }
 
+  function getMapAreaOffset(): PageGridPoint {
+    return { x: formatState.margins.left, y: formatState.margins.top };
+  }
+
   function normalizeFramePosition(
     itemId: string,
     position: PageGridPoint,
@@ -329,9 +391,19 @@
       return position;
     }
 
-    return snapPointWithinBounds(
+    if (inline) {
+      return snapPointWithinBounds(
+        position,
+        getDragBounds(overlaySize, frameSize),
+        snapEnabled
+      );
+    }
+
+    return snapAreaPointWithinPage(
       position,
-      getDragBounds(overlaySize, frameSize),
+      frameSize,
+      { width: formatState.width, height: formatState.height },
+      getMapAreaOffset(),
       snapEnabled
     );
   }
@@ -440,14 +512,10 @@
 
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
-  // A page resize keeps the margins, so the legend stage changes by the same
-  // amount as the page; a dragged frame keeps its distance to the nearest edge.
+  // A page resize keeps the margins, so a dragged frame keeps its distance to
+  // the nearest page edge.
   function remapDraggedFrames(pageResize: PageResize): void {
-    const { margins } = formatState;
-    const toStageSize = (page: PageGridSize): PageGridSize => ({
-      width: page.width - margins.left - margins.right,
-      height: page.height - margins.top - margins.bottom
-    });
+    const offset = getMapAreaOffset();
 
     for (const item of visibleItems) {
       const frameSize = getFrameSize(item.id);
@@ -456,11 +524,12 @@
       }
 
       legendActions.updateLegendItem(item.id, {
-        dragPosition: remapPointToResizedArea(
+        dragPosition: remapAreaPointToResizedPage(
           item.dragPosition,
           frameSize,
-          toStageSize(pageResize.from),
-          toStageSize(pageResize.to)
+          pageResize.from,
+          pageResize.to,
+          offset
         )
       });
     }
@@ -778,8 +847,7 @@
     bind:this={overlayElement}
   >
     {#each visibleItems as item (item.id)}
-      {@const viz = vizByItemId.get(item.id)}
-      {@const legendSegments = getLegendSegments(item, viz, legendState.style)}
+      {@const legendSegments = segmentsByItemId[item.id] ?? []}
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
@@ -802,6 +870,7 @@
             {#key frameScale}
               {#each legendSegments as segment (segment.key)}
                 <LegendSvg
+                  activeEntry={getActiveEntry(item, segment)}
                   markup={segment.svg.markup}
                   width={segment.svg.width}
                   height={segment.svg.height}
@@ -857,7 +926,7 @@
     align-items: flex-end;
     justify-content: flex-end;
     gap: 4px;
-    padding: 6px;
+    padding: 8px;
   }
 
   .legend-overlay.inline .legend-container {
@@ -934,22 +1003,24 @@
   }
 
   .legend-title {
-    margin: 0 0 3px 0;
+    margin: 0 0 4px 0;
     font-size: 1em;
     font-weight: 600;
     color: inherit;
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-subtitle {
-    margin: 0 0 2px 0;
+    margin: 0 0 4px 0;
     color: inherit;
     font-size: 0.9em;
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   .legend-note {
@@ -960,6 +1031,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+    white-space: pre-line;
   }
 
   :global(.legend-svg) {

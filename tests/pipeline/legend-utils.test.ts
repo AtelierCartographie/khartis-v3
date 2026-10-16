@@ -237,13 +237,13 @@ describe('getLineWidthLegendScale', () => {
       scale?.steps.map((step) =>
         step.kind === 'continuous' ? step.value : Number.NaN
       )
-    ).toEqual([200, 100, 0]);
+    ).toEqual([200, 100, 50]);
     expect(scale?.steps.map((step) => step.size)).toEqual([
       getProportionalLineWidthForValue(200, 200, 8),
       getProportionalLineWidthForValue(100, 200, 8),
-      getProportionalLineWidthForValue(0, 200, 8)
+      getProportionalLineWidthForValue(50, 200, 8)
     ]);
-    expect(scale?.steps.map((step) => step.size)).toEqual([8, 4, 0]);
+    expect(scale?.steps.map((step) => step.size)).toEqual([8, 4, 2]);
   });
 
   it('renders a zero-only proportional legend when the magnitude domain is not positive', () => {

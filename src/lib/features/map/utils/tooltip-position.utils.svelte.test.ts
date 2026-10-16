@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTooltipViewportPosition } from './tooltip-position.utils';
+import {
+  resolveCursorTooltipPosition,
+  resolveTooltipViewportPosition
+} from './tooltip-position.utils';
 
 describe('resolveTooltipViewportPosition', () => {
   it('anchors the tooltip to the viewer right edge above the viewer when enough space is available', () => {
@@ -105,5 +108,46 @@ describe('resolveTooltipViewportPosition', () => {
       left: 8,
       top: 68
     });
+  });
+});
+
+describe('resolveCursorTooltipPosition', () => {
+  const tooltipSize = { width: 200, height: 100 };
+  const bounds = { left: 0, top: 0, right: 1000, bottom: 800 };
+
+  it('should sit below-right of the cursor when it fits there', () => {
+    expect(
+      resolveCursorTooltipPosition({
+        cursor: { x: 300, y: 200 },
+        tooltipSize,
+        bounds,
+        padding: 8,
+        offset: 14
+      })
+    ).toEqual({ left: 314, top: 214 });
+  });
+
+  it('should flip to the left and above when the cursor is near the bottom-right corner', () => {
+    expect(
+      resolveCursorTooltipPosition({
+        cursor: { x: 950, y: 760 },
+        tooltipSize,
+        bounds,
+        padding: 8,
+        offset: 14
+      })
+    ).toEqual({ left: 736, top: 646 });
+  });
+
+  it('should flip left when the map viewer ends before the window does', () => {
+    expect(
+      resolveCursorTooltipPosition({
+        cursor: { x: 500, y: 200 },
+        tooltipSize,
+        bounds: { left: 100, top: 50, right: 600, bottom: 800 },
+        padding: 8,
+        offset: 14
+      })
+    ).toEqual({ left: 286, top: 214 });
   });
 });
