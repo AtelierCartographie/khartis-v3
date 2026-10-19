@@ -228,6 +228,24 @@ export type LegendSegment = {
   resolveEntry?: LegendEntryResolver;
 };
 
+// Segments whose symbols are drawn at map size (proportional or classed sizes
+// and widths): shrinking them would break the match with the map.
+const MAP_SIZE_SEGMENT_KEYS = new Set([
+  'point-size',
+  'point-size-classes',
+  'double-point-size',
+  'double-point-size-primary',
+  'double-point-size-secondary',
+  'proportional-line-width',
+  'line-width',
+  'text-size',
+  'text-size-classes'
+]);
+
+export function isMapSizeLegendSegment(segment: Pick<LegendSegment, 'key'>) {
+  return MAP_SIZE_SEGMENT_KEYS.has(segment.key);
+}
+
 const NON_LIST_SEGMENT_KEYS = new Set([
   'proportional-line-width',
   'point-size',

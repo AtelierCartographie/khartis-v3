@@ -61,6 +61,7 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
+    isMapSizeLegendSegment,
     type LegendSegment
   } from '../utils/legend-segments.utils';
 
@@ -190,6 +191,15 @@
   const frameScale = $derived(
     pageScale * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1)
   );
+  // A facet-cell legend is shrunk to fit its cell, unless it draws symbols at
+  // map size (proportional circles, widths…): those must keep the map's scale.
+  function getItemScale(item: LegendItem): number {
+    if (!inline) {
+      return frameScale;
+    }
+    const segments = segmentsByItemId[item.id] ?? [];
+    return segments.some(isMapSizeLegendSegment) ? pageScale : frameScale;
+  }
   const layoutTokens = $derived.by(() =>
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
   );
@@ -252,6 +262,7 @@
   }
 
   function getFrameStyle(item: LegendItem): string {
+    const itemScale = getItemScale(item);
     const hasBackground = legendState.style.background.enabled;
     const shellPaddingInline = hasBackground
       ? layoutTokens.legend.paddingInline
@@ -264,14 +275,14 @@
       !inline &&
       !position &&
       legendState.position === LegendPosition.BOTTOM_CENTER
-        ? `translateX(-50%) scale(${frameScale})`
-        : `scale(${frameScale})`;
+        ? `translateX(-50%) scale(${itemScale})`
+        : `scale(${itemScale})`;
     const legendFontSize = clampFontSize(
       legendState.style.fontSize,
       layoutTokens.legend.fontSize
     );
     const styles: string[] = [
-      `--legend-page-scale: ${frameScale}`,
+      `--legend-page-scale: ${itemScale}`,
       `--legend-padding-inline: ${shellPaddingInline}px`,
       `--legend-padding-block: ${shellPaddingBlock}px`,
       `--legend-item-gap: ${stackGap}px`,
@@ -292,8 +303,8 @@
     }
 
     if (position) {
-      styles.push(`left: ${position.x * frameScale}px`);
-      styles.push(`top: ${position.y * frameScale}px`);
+      styles.push(`left: ${position.x * itemScale}px`);
+      styles.push(`top: ${position.y * itemScale}px`);
     }
 
     return styles.join('; ');
@@ -867,7 +878,7 @@
         <div class="legend-item">
           {#if legendSegments.length > 0}
             <!-- Chrome keeps SVG text metrics from the last painted ancestor scale; a fresh SVG root re-measures its labels. -->
-            {#key frameScale}
+            {#key getItemScale(item)}
               {#each legendSegments as segment (segment.key)}
                 <LegendSvg
                   activeEntry={getActiveEntry(item, segment)}
