@@ -533,6 +533,34 @@ describe('legend overlay visibility', () => {
     expect(screen.queryAllByText('1 200')).toHaveLength(0);
   });
 
+  it('keeps map-size symbols at the map scale in a shrunk facet-cell legend', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPointSizeClassesViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay, {
+      props: { inline: true, sizeScale: 0.4 }
+    });
+
+    const frame = container.querySelector<HTMLElement>('.legend-container');
+    expect(frame?.style.transform).toBe('scale(1)');
+  });
+
+  it('still shrinks a facet-cell legend without map-size symbols', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay, {
+      props: { inline: true, sizeScale: 0.4 }
+    });
+
+    const frame = container.querySelector<HTMLElement>('.legend-container');
+    expect(frame?.style.transform).toBe('scale(0.4)');
+  });
+
   it('uses symbol missing data visibility for point size legends', () => {
     const viz = buildPointSizeClassesViz();
     viz.missingData = {
