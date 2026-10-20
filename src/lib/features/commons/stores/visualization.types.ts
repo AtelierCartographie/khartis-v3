@@ -266,6 +266,8 @@ export interface TextSecondaryLabelsConfig {
   halo: boolean;
   haloColor?: string;
   haloWidth: number;
+  /** 0 to 1. */
+  haloOpacity: number;
   collisionDetection: boolean;
   dxpMasking: boolean;
 }
@@ -285,6 +287,8 @@ export interface TextPrimitiveConfig {
   halo: boolean;
   haloColor?: string;
   haloWidth: number;
+  /** 0 to 1. */
+  haloOpacity: number;
   collisionDetection: boolean;
   dxpMasking: boolean;
   valueColumn?: string;
@@ -419,6 +423,7 @@ export interface VisualizationConfig {
     textHalo?: boolean;
     textHaloColor?: string;
     textHaloWidth?: number;
+    textHaloOpacity?: number;
     textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
@@ -431,6 +436,7 @@ export interface VisualizationConfig {
     labelHalo?: boolean;
     labelHaloColor?: string;
     labelHaloWidth?: number;
+    labelHaloOpacity?: number;
     labelCollisionDetection?: boolean;
     labelDxpMasking?: boolean;
   };

@@ -42,6 +42,7 @@
     halo: boolean;
     haloColor: string;
     haloWidth: number;
+    haloOpacity: number;
     valueColumnName: string;
     categoryColumnName: string;
     colorDiscretizationLabel: string;
@@ -69,6 +70,7 @@
     onHaloToggle: (value: boolean) => void;
     onHaloColorChange: (value: string) => void;
     onHaloWidthChange: (value: number) => void;
+    onHaloOpacityChange: (value: number) => void;
   }
 
   let {
@@ -78,6 +80,7 @@
     halo,
     haloColor,
     haloWidth,
+    haloOpacity,
     valueColumnName,
     categoryColumnName,
     colorDiscretizationLabel,
@@ -104,7 +107,8 @@
     onInvertPalette,
     onHaloToggle,
     onHaloColorChange,
-    onHaloWidthChange
+    onHaloWidthChange,
+    onHaloOpacityChange
   }: Props = $props();
 
   const colorModeItems = $derived([
@@ -284,6 +288,17 @@
       showMinMax
       inputWidth="64px"
       onchange={onHaloWidthChange}
+    />
+
+    <SliderWithInput
+      label={m.opacity()}
+      min={SLIDER_LIMITS.textOpacity.min}
+      max={SLIDER_LIMITS.textOpacity.max}
+      step={SLIDER_LIMITS.textOpacity.step}
+      value={haloOpacity}
+      showMinMax
+      inputWidth="64px"
+      onchange={onHaloOpacityChange}
     />
   {/if}
 </div>
