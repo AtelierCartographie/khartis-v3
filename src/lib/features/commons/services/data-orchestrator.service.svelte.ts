@@ -1373,7 +1373,8 @@ function createDataOrchestratorService() {
               format: layoutSettings.format,
               annotations: layoutSettings.annotations,
               legend: layoutSettings.legend,
-              geoIndications: layoutSettings.geoIndications
+              geoIndications: layoutSettings.geoIndications,
+              labelLayouts: layoutSettings.labels ?? {}
             });
           }
 

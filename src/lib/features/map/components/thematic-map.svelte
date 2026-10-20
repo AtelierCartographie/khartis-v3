@@ -40,6 +40,12 @@
   import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+  import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+  import {
+    attachLabelDragController,
+    type LabelEditRequest
+  } from '../interactions/label-drag.controller';
+  import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
@@ -1911,6 +1917,7 @@
     basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
+    labelLayoutVersion: labelLayoutStore.version,
     dataVersion,
     dataSize: `${tables.size}`,
     rowScopeVersion: rowScopeStore.version,
@@ -2000,6 +2007,40 @@
       isApplyingMapLibreSync = true;
       map.jumpTo({ center: sv.center, zoom: sv.zoom });
     }
+  });
+
+  let isOverDraggableLabel = $state(false);
+  let labelEditRequest = $state.raw<LabelEditRequest | null>(null);
+
+  $effect(() => {
+    const container = mapContainer;
+    const canMoveLabels =
+      !isFacetCell &&
+      globalState.selectedStep === ToolbarStep.Styling &&
+      !globalState.isMapExporting;
+    if (!container || !canMoveLabels) {
+      return;
+    }
+
+    const detach = attachLabelDragController({
+      container,
+      pick: (x, y, radius) => {
+        const target = mapInit.deckOverlay ?? mapInit.deckInstance;
+        return target?.pickObject({ x, y, radius }) ?? null;
+      },
+      onHoverChange: (isOverLabel) => {
+        isOverDraggableLabel = isOverLabel;
+      },
+      onEditLabel: (request) => {
+        labelEditRequest = request;
+      }
+    });
+
+    return () => {
+      detach();
+      isOverDraggableLabel = false;
+      labelEditRequest = null;
+    };
   });
 
   onMount(() => {
@@ -2096,6 +2137,7 @@
         bind:this={mapContainer}
         class="map-canvas"
         class:is-empty={isBlankCanvas}
+        class:is-over-label={isOverDraggableLabel}
         style={mapCanvasStyle}
       ></div>
 
@@ -2125,6 +2167,17 @@
 
     {#if showAnnotationOverlay}
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
+    {/if}
+
+    {#if labelEditRequest}
+      {#key labelEditRequest}
+        <LabelTextEditor
+          request={labelEditRequest}
+          onclose={() => {
+            labelEditRequest = null;
+          }}
+        />
+      {/key}
     {/if}
   </div>
 {/if}
@@ -2162,6 +2215,11 @@
 
   .map-canvas :global(canvas) {
     display: block;
+  }
+
+  /* Deck.gl and MapLibre rewrite the canvas cursor on every frame. */
+  .map-canvas.is-over-label :global(canvas) {
+    cursor: move !important;
   }
 
   .view-mode-loader {

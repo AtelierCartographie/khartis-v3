@@ -104,8 +104,45 @@ primitives configurées :
 | Polygones | `polygon-layer-factory` : `SolidPolygonLayer` + `PathLayer` binaires      | aplat, contour, ordre, données jointes                         |
 | Lignes    | `line-layer-factory` : `PathLayer`                                        | chemin binaire, style, ordre                                   |
 | Points    | `point-layer-factory` : `MultiShapeLayer` (dérivée de `ScatterplotLayer`) | taille, symbole, picking, ordre des symboles                   |
-| Textes    | `text-layer-factory` : `TextLayer`                                        | lien aux entités, lisibilité, ordre par rapport aux géométries |
+| Textes    | `text-layer-factory` : `TextLayer`, `LabelLeaderLayer` pour les filets    | lien aux entités, lisibilité, ordre par rapport aux géométries |
 | Densité   | `density-layer-factory` : `ScatterplotLayer`, points calculés par DuckDB  | calcul préalable ; peut remplacer l'aplat polygonal            |
+
+### Étiquettes déplacées et filets
+
+À l'étape Habillage, une étiquette se déplace à la souris
+(`interactions/label-drag.controller.ts`). Un double-clic ouvre son éditeur
+(`components/label-text-editor.svelte`) : le texte saisi remplace la valeur des
+données pour cette entité (traduction, correction), seul ce qui diffère des
+données est enregistré, et l'éditeur permet aussi de replacer l'étiquette. Les
+glyphes des textes saisis rejoignent le jeu de caractères des couches de texte.
+La position est le centre du bloc d'étiquettes (principale et secondaire), en
+pixels de page depuis l'ancrage de l'entité. Elle est rangée par visualisation
+et par clé d'entité dans `labelLayoutStore`, puis enregistrée dans
+`layoutSettings.labels`. La clé vient de l'identifiant du fond joint (`f:`) ou du
+`__id` de la ligne (`r:`) : elle survit à un rechargement, pas à un réimport de
+données modifiées.
+
+Pendant le glisser, l'étiquette est retirée des couches thématiques et un aperçu
+est posé au-dessus de la pile, comme le surlignage au survol : suivre le
+pointeur ne reconstruit pas les couches.
+
+Le filet (`computeLabelLeader`) part d'une zone tampon autour du symbole et ne
+suit que trois directions : une branche à 45° qui quitte le symbole, puis une
+branche horizontale vers le milieu du côté de l'étiquette qui lui fait face, ou
+verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
+en dessous. Il n'apparaît qu'au-delà d'un écart minimal. L'étiquette est ferrée
+vers l'entité (`resolveLabelAlignment`) : à gauche quand elle est à droite du
+centroïde, à droite quand elle est à gauche, au centre au-dessus ou en dessous.
+Une étiquette plus large que 10 em passe à la ligne après un espace ou un trait
+d'union, jamais au milieu d'un mot (`wrapLabelText`) ; une dernière ligne de trois
+caractères ou moins rejoint la précédente. Khartis calcule ces lignes lui-même et
+les passe à deck.gl, de sorte que mesure, rendu et export SVG coïncident.
+Les étiquettes principale et secondaire s'empilent chacune selon sa hauteur
+réelle, lignes renvoyées comprises, avec un interligne fixe.
+
+`LabelLeaderLayer` ancre ses deux
+extrémités sur l'entité et les décale en pixels dans le shader, comme le
+`getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
 
 Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
 placent derrière ou devant les couches thématiques ; l'ordre affiché dans le
