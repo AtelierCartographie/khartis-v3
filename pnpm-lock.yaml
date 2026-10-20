@@ -33,6 +33,9 @@ importers:
       '@ateliercartographie/geoarrow-deck-stream':
         specifier: ^1.2.0
         version: 1.2.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@deck.gl/layers@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.2)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.2.0))(apache-arrow@21.2.0)
+      '@ateliercartographie/label-placer':
+        specifier: github:AtelierCartographie/label-placer#257897c45aeb7011e543900fcded0ab4cbab3a17
+        version: git+https://git@github.com:AtelierCartographie/label-placer.git#257897c45aeb7011e543900fcded0ab4cbab3a17
       '@ateliercartographie/motif.js':
         specifier: ^0.1.5
         version: 0.1.5
@@ -343,6 +346,11 @@ packages:
       '@deck.gl/layers': '>=9.0.0'
       '@geoarrow/geoarrow-js': '>=0.3.0'
       apache-arrow: '>=21.0.0'
+
+  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#257897c45aeb7011e543900fcded0ab4cbab3a17':
+    resolution: {commit: 257897c45aeb7011e543900fcded0ab4cbab3a17, repo: git@github.com:AtelierCartographie/label-placer.git, type: git}
+    version: 0.0.0
+    engines: {node: '>=22.18'}
 
   '@ateliercartographie/motif.js@0.1.5':
     resolution: {integrity: sha512-of4obGxpTyw1YGd/ExO0iGV7HixL1AO7WTvLwOI0kZ5nCsYTYs43sMugpZzA+3jIk9lWGBxLWayxsg0MJOGfIA==}
@@ -6503,6 +6511,8 @@ snapshots:
       apache-arrow: 21.2.0
       d3-geo: 3.1.1
       earcut: 3.2.4
+
+  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#257897c45aeb7011e543900fcded0ab4cbab3a17': {}
 
   '@ateliercartographie/motif.js@0.1.5':
     dependencies:
