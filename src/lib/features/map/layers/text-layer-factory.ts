@@ -541,6 +541,12 @@ export function createTextOverlayLayers(
     resolvePointRadiusForDatum(datum) > 0
       ? 'start'
       : resolveTextAnchor(secondaryLabelsConfig.align);
+  // Placement is computed in page pixels; symbols and glyphs both follow the
+  // page zoom, so the gap between them has to as well.
+  const toDisplayOffset = ([x, y]: [number, number]): [number, number] => [
+    x * pageDisplayScale,
+    y * pageDisplayScale
+  ];
 
   const pointAnchorTriggers = [
     pointConfig?.enabled,
@@ -572,7 +578,8 @@ export function createTextOverlayLayers(
     pointConfig?.missingData?.size,
     textBaseSize,
     labelBaseSize,
-    sharedBackgroundPadding
+    sharedBackgroundPadding,
+    pageDisplayScale
   ];
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
@@ -598,7 +605,7 @@ export function createTextOverlayLayers(
         getAlignmentBaseline: (d) =>
           resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
         getPixelOffset: (d) =>
-          resolveSecondaryPlacement(d).secondaryPixelOffset,
+          toDisplayOffset(resolveSecondaryPlacement(d).secondaryPixelOffset),
         maxWidth: 10,
         fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
@@ -712,7 +719,8 @@ export function createTextOverlayLayers(
           getTextAnchor: resolvePrimaryTextAnchor,
           getAlignmentBaseline: (d) =>
             resolvePrimaryPlacement(d).primaryAlignmentBaseline,
-          getPixelOffset: (d) => resolvePrimaryPlacement(d).primaryPixelOffset,
+          getPixelOffset: (d) =>
+            toDisplayOffset(resolvePrimaryPlacement(d).primaryPixelOffset),
           maxWidth: 10,
           fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
           fontWeight: resolveDeckTextFontWeight(
