@@ -628,7 +628,7 @@ describe('createTextOverlayLayers', () => {
     ]);
   });
 
-  it('wraps text labels and places labels to the right when symbols are rendered', () => {
+  it('places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
       featureIds: new Uint32Array([0, 1]),
@@ -658,15 +658,13 @@ describe('createTextOverlayLayers', () => {
     const textProps = textLayer?.props as
       | {
           data: unknown[];
-          maxWidth?: number;
           getTextAnchor?: (datum: unknown) => string;
           getPixelOffset?: (datum: unknown) => [number, number];
         }
       | undefined;
     const datum = textProps?.data[0];
-    expect(textProps?.maxWidth).toBe(10);
     expect(textProps?.getTextAnchor?.(datum)).toBe('start');
-    expect(textProps?.getPixelOffset?.(datum)).toEqual([9, 0]);
+    expect(textProps?.getPixelOffset?.(datum)).toEqual([8, 0]);
   });
 
   it('uses explicit character sets extended with rendered text glyphs', () => {

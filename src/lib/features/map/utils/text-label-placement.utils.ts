@@ -1,7 +1,7 @@
 import type { LabelAlignment, LabelOffset } from './label-layout.utils';
 
 const TEXT_STACK_GAP_PX = 2;
-const TEXT_SYMBOL_GAP_PX = 4;
+const TEXT_SYMBOL_GAP_PX = 3;
 
 /** Heights of the rendered text, every wrapped line included. */
 export interface LabelStackParams {
