@@ -65,6 +65,7 @@
   } from '$lib/features/step-toolbar/tools/annotations';
   import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import {
     buildAnchorFromScreenPx,
     canAnchorToMap,
@@ -284,6 +285,7 @@
   );
   const selectedId = $derived(annotationsState.selectedId);
   let measuredItemHeights = $state<Record<string, number>>({});
+  let measuredItemWidths = $state<Record<string, number>>({});
   const stackedPageElementY = $derived(
     stackBottomRightPageElements(
       visibleItems.map((item) => ({
@@ -1931,7 +1933,34 @@
     }
   });
 
+  // Labels placed automatically keep clear of the page elements (title,
+  // sources…). Marks anchored on the map are part of it and stay out.
+  $effect(() => {
+    const boxes = visibleItems.flatMap((item) => {
+      const width = measuredItemWidths[item.id] ?? 0;
+      const height = measuredItemHeights[item.id] ?? 0;
+      if (
+        getAnnotationScope(item) !== 'page' ||
+        isExportPlaceholderPageElement(item) ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        return [];
+      }
+
+      const position = getRenderedPosition(item);
+      const origin = getVectorShapeBoundsOrigin(item);
+      const x = position.x + origin.x - pageMargins.left;
+      const y = position.y + origin.y - pageMargins.top;
+      return [
+        [x, y, x + width, y + height] as [number, number, number, number]
+      ];
+    });
+    pageItemObstaclesStore.setBoxes('annotations', boxes);
+  });
+
   onDestroy(() => {
+    pageItemObstaclesStore.setBoxes('annotations', []);
     centeredAnnotationId = null;
     cancelFocusedAnnotationReset();
     clearSuppressedAnnotationClick();
@@ -2267,6 +2296,7 @@
       onkeydown={(event: KeyboardEvent) =>
         handleAnnotationKeyDown(event, item.id)}
       bind:offsetHeight={measuredItemHeights[item.id]}
+      bind:offsetWidth={measuredItemWidths[item.id]}
     >
       {#if item.type === AnnotationKind.TEXT}
         <div class="annotation-text" style={getTextStyle(item)}>
