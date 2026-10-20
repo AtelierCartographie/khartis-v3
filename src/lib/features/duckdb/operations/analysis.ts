@@ -14,7 +14,6 @@ import {
 } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { getRowCount } from './table-ops';
 import { DuckDBSimplifiedType } from '../types';
 import type {
   AnalyseOptions,
@@ -270,7 +269,7 @@ function buildHistogramQuery(
 /**
  * Analyzes the specified table and returns an array of indicators with summaries and histograms.
  *
- * For large tables (>50k rows), uses a sample for analysis.
+ * Every statistic reads the whole table (no sampling, whatever its size).
  * Statistics are computed through multi-column queries grouped by type family
  * (general summary, numeric summary, date summary, histograms), with a
  * per-column fallback when a merged query fails.
@@ -323,29 +322,11 @@ export async function analyse(
       d.type_simple !== DuckDBSimplifiedType.STRING
   );
 
-  const rowCount = await getRowCount(ctx, table);
-  const SAMPLE_THRESHOLD = 50000;
-  let analysisTable = table;
-  const sampleViewName = `${table}_sample_${Date.now()}`;
-  const escapedSampleViewName = escapeIdentifier(sampleViewName);
-
-  if (rowCount > SAMPLE_THRESHOLD) {
-    try {
-      const escapedTableForSample = escapeIdentifier(table);
-      await executeQuery(
-        ctx.connection,
-        `CREATE TEMP TABLE "${escapedSampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
-      );
-      analysisTable = sampleViewName;
-    } catch (error) {
-      logger.error(
-        'Failed to create DuckDB analysis sample table',
-        LogCategory.DUCKDB,
-        error
-      );
-    }
-  }
-
+  // Every statistic reads the whole table. The legends, the proportional sizes and
+  // widths and the data summaries rely on them, and all are exact aggregates that
+  // DuckDB computes in one pass (or one sort) per column: a sample would make the
+  // extremes and counts wrong, and change from one import to the next.
+  const analysisTable = table;
   const escapedAnalysisTable = escapeSqlString(analysisTable);
   const analysisTableIdentifier = `"${escapeIdentifier(analysisTable)}"`;
 
@@ -567,13 +548,5 @@ export async function analyse(
     return analysis_result;
   } finally {
     perfMeasure(PERF_PHASE.COLUMN_ANALYSIS);
-    try {
-      await executeQuery(
-        ctx.connection,
-        `DROP TABLE IF EXISTS "${escapedSampleViewName}"`
-      );
-    } catch {
-      /* ignore cleanup errors */
-    }
   }
 }
