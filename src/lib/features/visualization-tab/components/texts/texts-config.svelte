@@ -142,6 +142,7 @@
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
+  let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
 
   let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
@@ -271,6 +272,10 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+      haloOpacity = parseOpacityToSlider(
+        visualization.style.textHaloOpacity,
+        VISUALIZATION_DEFAULTS.haloOpacity
+      );
 
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
@@ -335,7 +340,8 @@
       color: textColor,
       halo,
       haloColor,
-      haloWidth
+      haloWidth,
+      haloOpacity: haloOpacity / 100
     };
 
     if (
@@ -416,6 +422,12 @@
     haloWidth = value;
     onStyleChange?.({ textHaloWidth: value });
     onSecondaryLabelsChange?.({ haloWidth: value });
+  }
+
+  function handleHaloOpacityChange(value: number) {
+    haloOpacity = value;
+    onStyleChange?.({ textHaloOpacity: value / 100 });
+    onSecondaryLabelsChange?.({ haloOpacity: value / 100 });
   }
 
   // The slider carries the whole type scale: both texts are multiplied by it so
@@ -638,6 +650,7 @@
         halo={halo}
         haloColor={haloColor}
         haloWidth={haloWidth}
+        haloOpacity={haloOpacity}
         valueColumnName={valueColumnName}
         categoryColumnName={categoryColumnName}
         colorDiscretizationLabel={textSizeDiscretizationLabel}
@@ -665,6 +678,7 @@
         onHaloToggle={handleHaloToggle}
         onHaloColorChange={handleHaloColorChange}
         onHaloWidthChange={handleHaloWidthChange}
+        onHaloOpacityChange={handleHaloOpacityChange}
       />
     </div>
   </ExpandableSection>

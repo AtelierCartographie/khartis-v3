@@ -29,6 +29,7 @@ const TEXT_STYLE_MIRROR_KEYS = [
   'textHalo',
   'textHaloColor',
   'textHaloWidth',
+  'textHaloOpacity',
   'textCollisionDetection',
   'textDxpMasking'
 ] as const satisfies ReadonlyArray<keyof VisualizationConfig['style']>;
@@ -47,6 +48,7 @@ const SECONDARY_LABEL_STYLE_MIRROR: ReadonlyArray<{
   { from: 'halo', to: 'labelHalo' },
   { from: 'haloColor', to: 'labelHaloColor' },
   { from: 'haloWidth', to: 'labelHaloWidth' },
+  { from: 'haloOpacity', to: 'labelHaloOpacity' },
   { from: 'collisionDetection', to: 'labelCollisionDetection' },
   { from: 'dxpMasking', to: 'labelDxpMasking' }
 ];
@@ -86,6 +88,7 @@ export function createTextHandlers(deps: TextHandlersDeps) {
         { from: 'textHalo', to: 'halo' },
         { from: 'textHaloColor', to: 'haloColor' },
         { from: 'textHaloWidth', to: 'haloWidth' },
+        { from: 'textHaloOpacity', to: 'haloOpacity' },
         { from: 'textCollisionDetection', to: 'collisionDetection' },
         { from: 'textDxpMasking', to: 'dxpMasking' }
       ],
