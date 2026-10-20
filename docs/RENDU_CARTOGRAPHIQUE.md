@@ -104,8 +104,28 @@ primitives configurées :
 | Polygones | `polygon-layer-factory` : `SolidPolygonLayer` + `PathLayer` binaires      | aplat, contour, ordre, données jointes                         |
 | Lignes    | `line-layer-factory` : `PathLayer`                                        | chemin binaire, style, ordre                                   |
 | Points    | `point-layer-factory` : `MultiShapeLayer` (dérivée de `ScatterplotLayer`) | taille, symbole, picking, ordre des symboles                   |
-| Textes    | `text-layer-factory` : `TextLayer`                                        | lien aux entités, lisibilité, ordre par rapport aux géométries |
+| Textes    | `text-layer-factory` : `TextLayer`, `LabelLeaderLayer` pour les filets    | lien aux entités, lisibilité, ordre par rapport aux géométries |
 | Densité   | `density-layer-factory` : `ScatterplotLayer`, points calculés par DuckDB  | calcul préalable ; peut remplacer l'aplat polygonal            |
+
+### Étiquettes déplacées et filets
+
+À l'étape Habillage, une étiquette se déplace à la souris
+(`interactions/label-drag.controller.ts`) et un double-clic la remet en place.
+La position est le centre du bloc d'étiquettes (principale et secondaire), en
+pixels de page depuis l'ancrage de l'entité. Elle est rangée par visualisation
+et par clé d'entité dans `labelLayoutStore`, puis enregistrée dans
+`layoutSettings.labels`. La clé vient de l'identifiant du fond joint (`f:`) ou du
+`__id` de la ligne (`r:`) : elle survit à un rechargement, pas à un réimport de
+données modifiées.
+
+Pendant le glisser, l'étiquette est retirée des couches thématiques et un aperçu
+est posé au-dessus de la pile, comme le surlignage au survol : suivre le
+pointeur ne reconstruit pas les couches. Le filet (`computeLabelLeader`) part du
+bord du symbole et rejoint le milieu du côté de l'étiquette qui lui fait face,
+ou le bord haut ou bas quand l'étiquette est surtout au-dessus ou en dessous.
+Il n'apparaît qu'au-delà d'un écart minimal. `LabelLeaderLayer` ancre ses deux
+extrémités sur l'entité et les décale en pixels dans le shader, comme le
+`getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
 
 Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
 placent derrière ou devant les couches thématiques ; l'ordre affiché dans le

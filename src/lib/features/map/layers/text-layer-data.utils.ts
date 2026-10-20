@@ -18,6 +18,8 @@ export interface TextLayerDatum {
   secondaryText: string | null;
   isMissingData: boolean;
   rowIndex: number;
+  /** Row of the representative-point (geometry) table. */
+  featureId: number;
 }
 
 export function keepTextDataInRowScope(
@@ -215,7 +217,8 @@ export function createTextLayerDataFromBinary(
       primaryText,
       secondaryText,
       isMissingData,
-      rowIndex
+      rowIndex,
+      featureId: fid
     });
   }
 

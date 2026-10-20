@@ -1,4 +1,4 @@
-import type { Color } from '@deck.gl/core';
+import type { Color, Layer } from '@deck.gl/core';
 import { TextLayer } from '@deck.gl/layers';
 import type { TextLayerProps } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
@@ -10,6 +10,7 @@ import {
   SizeMode,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
   getPrimitiveClassification,
@@ -20,6 +21,10 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  computeTextLines,
+  measureTextWidth
+} from '$lib/features/commons/utils/text-measure.utils';
 
 import { DeckLayerId, GeometryType } from '../constants';
 import type {
@@ -37,7 +42,21 @@ import {
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
-import { resolveTextLabelPlacement } from '../utils/text-label-placement.utils';
+import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+import {
+  computeLabelLeader,
+  DEFAULT_LABEL_LEADER_STYLE,
+  type LabelOffset
+} from '../utils/label-layout.utils';
+import {
+  resolveLabelStack,
+  resolveManualLabelPlacement,
+  resolveTextLabelPlacement
+} from '../utils/text-label-placement.utils';
+import {
+  LabelLeaderLayer,
+  type LabelLeaderSegment
+} from './label-leader-layer';
 import { sortBySizeDescending, withOpacity } from './layer-helpers';
 import {
   isMissingThematicValue,
@@ -92,6 +111,57 @@ import {
   resolveEffectiveCategoryColorMap,
   resolveStyleColor
 } from './layer-color.utils';
+
+const LABEL_MAX_WIDTH_EM = 10;
+const LABEL_LEADER_WIDTH_PX = 0.75;
+const LABEL_LEADER_MIN_GAP_PX = 6;
+const LABEL_LEADER_MIN_GAP_EM = 0.5;
+
+/**
+ * What the label drag interaction needs from a rendered text layer. It rides
+ * on the layer's data array, like `khartisSourceTable`, so a pick on any
+ * visualization's labels finds it.
+ */
+export interface LabelEditingContext {
+  vizId: string;
+  pageDisplayScale: number;
+  resolveFeatureKey: (datum: TextLayerDatum) => string | null;
+  hasManualPosition: (datum: TextLayerDatum) => boolean;
+  /** Centre of the label block, in page pixels from the anchor. */
+  resolveBlockCenter: (datum: TextLayerDatum) => LabelOffset;
+  buildDragPreview: (datum: TextLayerDatum, center: LabelOffset) => Layer[];
+}
+
+export function getLabelEditingContext(
+  layer: Pick<Layer, 'props'> | null | undefined
+): LabelEditingContext | null {
+  const data = layer?.props.data as
+    { khartisLabelEditing?: LabelEditingContext } | undefined;
+  return data?.khartisLabelEditing ?? null;
+}
+
+function toLeaderColor(color: Color): [number, number, number, number] {
+  return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, color[3] ?? 255];
+}
+
+function measureLabelWidth(
+  text: string,
+  size: number,
+  fontFamily: string,
+  fontWeight: string | number
+): number {
+  const weight = String(fontWeight);
+  return Math.max(
+    0,
+    ...computeTextLines(
+      text,
+      size,
+      LABEL_MAX_WIDTH_EM * size,
+      fontFamily,
+      weight
+    ).map((line) => measureTextWidth(line, size, fontFamily, weight))
+  );
+}
 
 export function createTextOverlayLayers(
   jsTable: ArrowTable,
@@ -223,6 +293,45 @@ export function createTextOverlayLayers(
       );
     }
   }
+
+  const vizId = viz.id;
+  const labelLayout = labelLayoutStore.layouts[vizId];
+  const draggedFeatureKey =
+    labelLayoutStore.draggedLabel?.vizId === vizId
+      ? labelLayoutStore.draggedLabel.featureKey
+      : null;
+  // A joined basemap names features by its own id; a dataset drawn from its
+  // own geometry by the row id it got at import. Both survive a reload.
+  const geometryFeatureIdVector =
+    textFeatureIdColumn && textPointSource
+      ? textPointSource.table.getChild(textFeatureIdColumn)
+      : null;
+  const attributeRowIdVector = textAttributeTable.getChild(INTERNAL_COLUMN.ID);
+  const featureKeyByDatum = new Map<TextLayerDatum, string | null>();
+  const resolveFeatureKey = (datum: TextLayerDatum): string | null => {
+    const cached = featureKeyByDatum.get(datum);
+    if (cached !== undefined) return cached;
+    const featureId = geometryFeatureIdVector?.get(datum.featureId);
+    const rowId = attributeRowIdVector?.get(datum.rowIndex);
+    const key =
+      featureId !== null && featureId !== undefined
+        ? `f:${String(featureId)}`
+        : rowId !== null && rowId !== undefined
+          ? `r:${String(rowId)}`
+          : null;
+    featureKeyByDatum.set(datum, key);
+    return key;
+  };
+  const resolveManualCenter = (
+    datum: TextLayerDatum
+  ): LabelOffset | undefined => {
+    if (!labelLayout) return undefined;
+    const key = resolveFeatureKey(datum);
+    return key ? labelLayoutStore.getOffset(vizId, key) : undefined;
+  };
+  const isDraggedDatum = (datum: TextLayerDatum): boolean =>
+    draggedFeatureKey !== null &&
+    resolveFeatureKey(datum) === draggedFeatureKey;
 
   const layers: ThematicLayer[] = [];
   const labelColor = resolveStyleColor(
@@ -547,6 +656,190 @@ export function createTextOverlayLayers(
     x * pageDisplayScale,
     y * pageDisplayScale
   ];
+  const resolveLabelStackParams = (datum: TextLayerDatum) => ({
+    hasSecondaryLabel: hasSecondaryLabelForDatum(datum),
+    primarySize: resolveAccessorValue(textSizeAccessor, datum),
+    secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
+    paddingY
+  });
+  const resolveManualPlacement = (datum: TextLayerDatum, center: LabelOffset) =>
+    resolveManualLabelPlacement(center, resolveLabelStackParams(datum));
+
+  const primaryFontFamily = resolveDeckTextFontFamily(textConfig.fontFamily);
+  const primaryFontWeight = resolveDeckTextFontWeight(
+    textConfig.bold ? '700' : '400',
+    textConfig.italic
+  );
+  const secondaryFontFamily = resolveDeckTextFontFamily(
+    secondaryLabelsConfig.fontFamily
+  );
+  const secondaryFontWeight = resolveDeckTextFontWeight(
+    secondaryLabelsConfig.bold ? '700' : '400',
+    secondaryLabelsConfig.italic
+  );
+  let secondaryDatumByFeatureId: Map<number, TextLayerDatum> | null = null;
+  const findSecondaryDatum = (
+    datum: TextLayerDatum
+  ): TextLayerDatum | undefined => {
+    if (!shouldRenderLabelLayer || !secondaryLabelLayerData) return undefined;
+    secondaryDatumByFeatureId ??= new Map(
+      secondaryLabelLayerData
+        .filter((candidate) => !candidate.isMissingData)
+        .map((candidate) => [candidate.featureId, candidate])
+    );
+    return secondaryDatumByFeatureId.get(datum.featureId);
+  };
+  const measurePrimaryWidth = (datum: TextLayerDatum): number =>
+    shouldRenderTextLayer
+      ? measureLabelWidth(
+          resolveTextDatumText(datum, missingTextLabel),
+          resolveAccessorValue(textSizeAccessor, datum),
+          primaryFontFamily,
+          primaryFontWeight
+        )
+      : 0;
+  const measureBlockHalfSize = (datum: TextLayerDatum): LabelOffset => {
+    const secondaryDatum = findSecondaryDatum(datum);
+    const secondaryWidth = secondaryDatum
+      ? measureLabelWidth(
+          secondaryDatum.primaryText ?? '',
+          resolveAccessorValue(labelSizeAccessor, secondaryDatum),
+          secondaryFontFamily,
+          secondaryFontWeight
+        )
+      : 0;
+    const halfWidth =
+      Math.max(measurePrimaryWidth(datum), secondaryWidth) / 2 +
+      (sharedBackgroundPadding[0] ?? 0);
+    return [
+      halfWidth,
+      resolveLabelStack(resolveLabelStackParams(datum)).halfHeight
+    ];
+  };
+  const resolveDefaultBlockCenter = (datum: TextLayerDatum): LabelOffset => {
+    const [offsetX, offsetY] =
+      resolvePrimaryPlacement(datum).primaryPixelOffset;
+    const halfWidth = measurePrimaryWidth(datum) / 2;
+    const anchor = resolvePrimaryTextAnchor(datum);
+    const centerX =
+      anchor === 'start'
+        ? offsetX + halfWidth
+        : anchor === 'end'
+          ? offsetX - halfWidth
+          : offsetX;
+    const { primaryShift } = resolveLabelStack(resolveLabelStackParams(datum));
+    return [centerX, offsetY - primaryShift];
+  };
+  const leaderColorAccessor = createTextColorAccessor(textColor, textOpacity);
+  const buildLeaderSegments = (
+    datum: TextLayerDatum,
+    center: LabelOffset
+  ): LabelLeaderSegment[] => {
+    const points = computeLabelLeader({
+      center,
+      halfSize: measureBlockHalfSize(datum),
+      symbolRadius: resolvePointRadiusForDatum(datum),
+      minGap: Math.max(
+        LABEL_LEADER_MIN_GAP_PX,
+        LABEL_LEADER_MIN_GAP_EM * resolveAccessorValue(textSizeAccessor, datum)
+      ),
+      style: labelLayout?.leaderStyle ?? DEFAULT_LABEL_LEADER_STYLE
+    });
+    if (!points) return [];
+    const color = toLeaderColor(
+      datum.isMissingData
+        ? withOpacity(missingTextColor, textOpacity)
+        : resolveAccessorValue(leaderColorAccessor, datum)
+    );
+    return points.slice(1).map((target, index) => ({
+      position: datum.position,
+      source: toDisplayOffset(points[index]),
+      target: toDisplayOffset(target),
+      color
+    }));
+  };
+  const leaderLayerId = createThematicLayerId(
+    DeckLayerId.LABEL_LEADER_LAYER,
+    ctx
+  );
+  const createLeaderLayer = (
+    id: string,
+    segments: LabelLeaderSegment[]
+  ): ThematicLayer =>
+    new LabelLeaderLayer<LabelLeaderSegment>({
+      id,
+      data: segments,
+      getSourcePosition: (segment) => segment.position,
+      getTargetPosition: (segment) => segment.position,
+      getSourcePixelOffset: (segment) => segment.source,
+      getTargetPixelOffset: (segment) => segment.target,
+      getColor: (segment) => segment.color,
+      getWidth: LABEL_LEADER_WIDTH_PX,
+      widthUnits: 'pixels',
+      widthScale: pageDisplayScale,
+      pickable: false,
+      parameters: THEMATIC_OVERLAY_PARAMETERS,
+      ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+      ...(ctx.beforeId && { beforeId: ctx.beforeId })
+    }) as unknown as ThematicLayer;
+  let primaryTextLayer: TextLayer<TextLayerDatum> | null = null;
+  let secondaryTextLayer: TextLayer<TextLayerDatum> | null = null;
+  const buildLabelDragPreview = (
+    datum: TextLayerDatum,
+    center: LabelOffset
+  ): Layer[] => {
+    const preview: Layer[] = [];
+    const segments = buildLeaderSegments(datum, center);
+    if (segments.length > 0) {
+      preview.push(
+        createLeaderLayer(`${leaderLayerId}-drag-preview`, segments)
+      );
+    }
+    const secondaryDatum = findSecondaryDatum(datum);
+    if (secondaryTextLayer && secondaryDatum) {
+      preview.push(
+        secondaryTextLayer.clone({
+          id: `${secondaryTextLayer.id}-drag-preview`,
+          data: [secondaryDatum],
+          getTextAnchor: 'middle',
+          getAlignmentBaseline: 'center',
+          getPixelOffset: toDisplayOffset(
+            resolveManualPlacement(secondaryDatum, center).secondaryPixelOffset
+          )
+        })
+      );
+    }
+    if (primaryTextLayer) {
+      preview.push(
+        primaryTextLayer.clone({
+          id: `${primaryTextLayer.id}-drag-preview`,
+          data: [datum],
+          pickable: false,
+          getTextAnchor: 'middle',
+          getAlignmentBaseline: 'center',
+          getPixelOffset: toDisplayOffset(
+            resolveManualPlacement(datum, center).primaryPixelOffset
+          )
+        })
+      );
+    }
+    return preview;
+  };
+
+  if (labelLayout && Object.keys(labelLayout.offsets).length > 0) {
+    const showMissingText = textConfig.missingData?.show ?? true;
+    const leaderSegments = textLayerData.flatMap((datum) => {
+      const center = resolveManualCenter(datum);
+      if (!center || isDraggedDatum(datum)) return [];
+      const isRendered = shouldRenderTextLayer
+        ? !datum.isMissingData || showMissingText
+        : findSecondaryDatum(datum) !== undefined;
+      return isRendered ? buildLeaderSegments(datum, center) : [];
+    });
+    if (leaderSegments.length > 0) {
+      layers.push(createLeaderLayer(leaderLayerId, leaderSegments));
+    }
+  }
 
   const pointAnchorTriggers = [
     pointConfig?.enabled,
@@ -584,7 +877,9 @@ export function createTextOverlayLayers(
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
     const labelData = sortBySizeDescending(
-      secondaryLabelLayerData.filter((datum) => !datum.isMissingData),
+      secondaryLabelLayerData.filter(
+        (datum) => !datum.isMissingData && !isDraggedDatum(datum)
+      ),
       (datum) => resolveAccessorValue(labelSizeAccessor, datum)
     );
     if (labelData.length > 0) {
@@ -601,11 +896,20 @@ export function createTextOverlayLayers(
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
         sizeScale: pageDisplayScale,
-        getTextAnchor: resolveSecondaryTextAnchor,
+        getTextAnchor: (d) =>
+          resolveManualCenter(d) ? 'middle' : resolveSecondaryTextAnchor(d),
         getAlignmentBaseline: (d) =>
-          resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
-        getPixelOffset: (d) =>
-          toDisplayOffset(resolveSecondaryPlacement(d).secondaryPixelOffset),
+          resolveManualCenter(d)
+            ? 'center'
+            : resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
+        getPixelOffset: (d) => {
+          const center = resolveManualCenter(d);
+          return toDisplayOffset(
+            center
+              ? resolveManualPlacement(d, center).secondaryPixelOffset
+              : resolveSecondaryPlacement(d).secondaryPixelOffset
+          );
+        },
         maxWidth: 10,
         fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
@@ -655,9 +959,17 @@ export function createTextOverlayLayers(
             textClassification?.breaks,
             textClassification?.numClasses
           ],
-          getTextAnchor: [secondaryLabelsConfig.align, ...pointAnchorTriggers],
-          getPixelOffset: [...labelPlacementTriggers, secondaryLabelColumn],
-          getAlignmentBaseline: labelPlacementTriggers,
+          getTextAnchor: [
+            secondaryLabelsConfig.align,
+            ...pointAnchorTriggers,
+            labelLayout
+          ],
+          getPixelOffset: [
+            ...labelPlacementTriggers,
+            secondaryLabelColumn,
+            labelLayout
+          ],
+          getAlignmentBaseline: [...labelPlacementTriggers, labelLayout],
           outlineColor: [secondaryLabelsConfig.haloColor],
           outlineWidth: [
             secondaryLabelsConfig.halo,
@@ -670,9 +982,8 @@ export function createTextOverlayLayers(
         }
       };
 
-      layers.push(
-        new TextLayer<TextLayerDatum>(labelLayerProps) as ThematicLayer
-      );
+      secondaryTextLayer = new TextLayer<TextLayerDatum>(labelLayerProps);
+      layers.push(secondaryTextLayer as ThematicLayer);
     }
   }
 
@@ -680,14 +991,27 @@ export function createTextOverlayLayers(
     const textData = sortBySizeDescending(
       textLayerData.filter(
         (datum) =>
-          !datum.isMissingData || (textConfig.missingData?.show ?? true)
+          (!datum.isMissingData || (textConfig.missingData?.show ?? true)) &&
+          !isDraggedDatum(datum)
       ),
       (datum) => resolveAccessorValue(textSizeAccessor, datum)
     );
     if (textData.length > 0) {
       // Each datum names its attribute row, so hovering a label reads the row
       // it was drawn from, split rendering included.
-      Object.assign(textData, { khartisSourceTable: textAttributeTable });
+      const labelEditing: LabelEditingContext = {
+        vizId,
+        pageDisplayScale,
+        resolveFeatureKey,
+        hasManualPosition: (datum) => resolveManualCenter(datum) !== undefined,
+        resolveBlockCenter: (datum) =>
+          resolveManualCenter(datum) ?? resolveDefaultBlockCenter(datum),
+        buildDragPreview: buildLabelDragPreview
+      };
+      Object.assign(textData, {
+        khartisSourceTable: textAttributeTable,
+        khartisLabelEditing: labelEditing
+      });
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
       const textCharacterSet = extendTextCharacterSet(
         collectTextLayerGlyphs(textData, [missingTextLabel])
@@ -706,88 +1030,103 @@ export function createTextOverlayLayers(
           : baseTextColorAccessor;
       };
 
-      layers.push(
-        new TextLayer<TextLayerDatum>({
-          id: textLayerId,
-          data: textData,
-          getPosition: (d) => d.position,
-          getText: (d) => resolveTextDatumText(d, missingTextLabel),
-          getColor: textColorAccessor,
-          getSize: textSizeAccessor,
-          sizeUnits: 'pixels',
-          sizeScale: pageDisplayScale,
-          getTextAnchor: resolvePrimaryTextAnchor,
-          getAlignmentBaseline: (d) =>
-            resolvePrimaryPlacement(d).primaryAlignmentBaseline,
-          getPixelOffset: (d) =>
-            toDisplayOffset(resolvePrimaryPlacement(d).primaryPixelOffset),
-          maxWidth: 10,
-          fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
-          fontWeight: resolveDeckTextFontWeight(
-            textConfig.bold ? '700' : '400',
-            textConfig.italic
-          ),
-          characterSet: textCharacterSet,
-          fontSettings: resolveTextFontSettings(
-            textBaseSize * pageDisplayScale
-          ),
-          lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
-          outlineColor: withOpacity(
-            resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
-            1
-          ),
-          outlineWidth: resolveTextOutlineWidth(primaryHaloWidth, textBaseSize),
-          background: true,
-          getBackgroundColor: backgroundColorAccessor,
-          getBorderWidth: backgroundBorderWidth,
-          getBorderColor: backgroundBorderColor,
-          backgroundPadding: sharedBackgroundPadding,
-          backgroundBorderRadius: 2,
-          billboard: true,
-          pickable: true,
-          parameters: THEMATIC_OVERLAY_PARAMETERS,
-          ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-          ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-          updateTriggers: {
-            getText: [
-              textConfig.labelColumn,
-              textConfig.missingData?.show,
-              textConfig.missingData?.label
-            ],
-            getColor: [
-              colorMode,
-              textValueColumn,
-              textCategoryColumn,
-              textClassification?.breaks,
-              textClassification?.colors,
-              textClassification?.labels,
-              textClassification?.disabledLabels,
-              textConfig.color,
-              textOpacity,
-              textConfig.missingData?.color
-            ],
-            getSize: [
-              textConfig.size,
-              sizeMode,
-              variableTextSizeColumn,
-              textStatistics.max,
-              textClassification?.breaks,
-              textClassification?.numClasses
-            ],
-            getTextAnchor: [textConfig.align, ...pointAnchorTriggers],
-            getPixelOffset: [...labelPlacementTriggers, secondaryLabelColumn],
-            getAlignmentBaseline: [
-              ...labelPlacementTriggers,
-              secondaryLabelColumn
-            ],
-            outlineColor: [textConfig.haloColor],
-            outlineWidth: [textConfig.halo, textConfig.haloWidth, textBaseSize],
-            getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
-            getBorderWidth: [],
-            getBorderColor: []
-          }
-        }) as ThematicLayer
-      );
+      primaryTextLayer = new TextLayer<TextLayerDatum>({
+        id: textLayerId,
+        data: textData,
+        getPosition: (d) => d.position,
+        getText: (d) => resolveTextDatumText(d, missingTextLabel),
+        getColor: textColorAccessor,
+        getSize: textSizeAccessor,
+        sizeUnits: 'pixels',
+        sizeScale: pageDisplayScale,
+        getTextAnchor: (d) =>
+          resolveManualCenter(d) ? 'middle' : resolvePrimaryTextAnchor(d),
+        getAlignmentBaseline: (d) =>
+          resolveManualCenter(d)
+            ? 'center'
+            : resolvePrimaryPlacement(d).primaryAlignmentBaseline,
+        getPixelOffset: (d) => {
+          const center = resolveManualCenter(d);
+          return toDisplayOffset(
+            center
+              ? resolveManualPlacement(d, center).primaryPixelOffset
+              : resolvePrimaryPlacement(d).primaryPixelOffset
+          );
+        },
+        maxWidth: 10,
+        fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
+        fontWeight: resolveDeckTextFontWeight(
+          textConfig.bold ? '700' : '400',
+          textConfig.italic
+        ),
+        characterSet: textCharacterSet,
+        fontSettings: resolveTextFontSettings(textBaseSize * pageDisplayScale),
+        lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
+        outlineColor: withOpacity(
+          resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
+          1
+        ),
+        outlineWidth: resolveTextOutlineWidth(primaryHaloWidth, textBaseSize),
+        background: true,
+        getBackgroundColor: backgroundColorAccessor,
+        getBorderWidth: backgroundBorderWidth,
+        getBorderColor: backgroundBorderColor,
+        backgroundPadding: sharedBackgroundPadding,
+        backgroundBorderRadius: 2,
+        billboard: true,
+        pickable: true,
+        parameters: THEMATIC_OVERLAY_PARAMETERS,
+        ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+        ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+        updateTriggers: {
+          getText: [
+            textConfig.labelColumn,
+            textConfig.missingData?.show,
+            textConfig.missingData?.label
+          ],
+          getColor: [
+            colorMode,
+            textValueColumn,
+            textCategoryColumn,
+            textClassification?.breaks,
+            textClassification?.colors,
+            textClassification?.labels,
+            textClassification?.disabledLabels,
+            textConfig.color,
+            textOpacity,
+            textConfig.missingData?.color
+          ],
+          getSize: [
+            textConfig.size,
+            sizeMode,
+            variableTextSizeColumn,
+            textStatistics.max,
+            textClassification?.breaks,
+            textClassification?.numClasses
+          ],
+          getTextAnchor: [
+            textConfig.align,
+            ...pointAnchorTriggers,
+            labelLayout
+          ],
+          getPixelOffset: [
+            ...labelPlacementTriggers,
+            secondaryLabelColumn,
+            labelLayout
+          ],
+          getAlignmentBaseline: [
+            ...labelPlacementTriggers,
+            secondaryLabelColumn,
+            labelLayout
+          ],
+          outlineColor: [textConfig.haloColor],
+          outlineWidth: [textConfig.halo, textConfig.haloWidth, textBaseSize],
+          getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
+          getBorderWidth: [],
+          getBorderColor: []
+        }
+      });
+      layers.push(primaryTextLayer as ThematicLayer);
     }
   }
 

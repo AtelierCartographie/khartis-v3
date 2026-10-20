@@ -421,7 +421,7 @@ describe('project schema migrations', () => {
     expect(legacy.manifest.version).toBe('3.9.0');
   });
 
-  it.each(['3.10.0', '3.11.0'])(
+  it.each(['3.10.0', '3.11.0', '3.12.0'])(
     'should open a %s project as the current schema unchanged',
     (version) => {
       const previous = {
@@ -433,7 +433,7 @@ describe('project schema migrations', () => {
       const migrated = migrateIfNeeded(previous);
 
       expect(migrated.manifest).toEqual({
-        version: '3.12.0',
+        version: PROJECT_CONST.SCHEMA_VERSION,
         name: 'Previous project'
       });
       expect(migrated.data).toEqual(previous.data);

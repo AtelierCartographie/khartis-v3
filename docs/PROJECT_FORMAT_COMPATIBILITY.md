@@ -12,7 +12,7 @@ Contrat de compatibilité des projets Khartis. Il porte sur deux versions qui
 | Archive exportée | v2       | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`    |
 | Archives lues    | v2       | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` |
 | Schéma baseline  | `3.9.0`  | `PROJECT_CONST.SCHEMA_BASELINE_VERSION`    |
-| Schéma courant   | `3.12.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
+| Schéma courant   | `3.13.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
 
 Les archives v1 et les schémas antérieurs à `3.9.0` datent du développement et
 ne sont pas supportés.
@@ -22,6 +22,7 @@ ne sont pas supportés.
 | `3.9.0` → `3.10.0`  | Aucune transformation. Le projet possède désormais l'asset source de ses fonds importés (`customBasemaps.metadata[].sourceAsset`). Le changement de version empêche un build antérieur (onglet PWA en cache) de réenregistrer le projet sans ces références et de supprimer l'asset. |
 | `3.10.0` → `3.11.0` | Aucune transformation. Chaque couche tabulaire d'une archive ZIP a désormais un asset Parquet écrit par DuckDB, comme les couches géographiques. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces assets.                                     |
 | `3.11.0` → `3.12.0` | Aucune transformation. Une couche enrichie par un tableau a désormais un instantané Parquet de sa table (`enrichmentSnapshot`), relu au rechargement à la place de la source. Le changement de version empêche un build antérieur de réenregistrer le projet sans cet asset.         |
+| `3.12.0` → `3.13.0` | Aucune transformation. Les positions manuelles des étiquettes et le style de leurs filets sont enregistrés dans `layoutSettings.labels`, par visualisation et par entité. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces positions.         |
 
 Avant toute restauration d'asset, l'import rejette explicitement une version
 absente, inconnue, future, ou ancienne sans migration. Une version inconnue
