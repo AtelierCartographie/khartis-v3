@@ -14,16 +14,22 @@ import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibi
 const DRAG_THRESHOLD_PX = 3;
 const PICK_RADIUS_PX = 2;
 
+export interface PickedLabel {
+  context: LabelEditingContext;
+  datum: TextLayerDatum;
+  featureKey: string;
+}
+
+export interface LabelEditRequest extends PickedLabel {
+  clientX: number;
+  clientY: number;
+}
+
 interface LabelDragControllerOptions {
   container: HTMLElement;
   pick: (x: number, y: number, radius: number) => PickingInfo | null;
   onHoverChange: (isOverLabel: boolean) => void;
-}
-
-interface PickedLabel {
-  context: LabelEditingContext;
-  datum: TextLayerDatum;
-  featureKey: string;
+  onEditLabel: (request: LabelEditRequest) => void;
 }
 
 interface ActiveDrag extends PickedLabel {
@@ -36,7 +42,8 @@ interface ActiveDrag extends PickedLabel {
 }
 
 /**
- * Lets the user drag a thematic label in the Styling step. Listeners run in
+ * Lets the user drag a thematic label in the Styling step, and open its
+ * editor with a double-click. Listeners run in
  * the capture phase on the map container, so a press on a label never reaches
  * the Deck.gl controller or MapLibre's drag-pan, and a press anywhere else
  * passes through untouched.
@@ -44,7 +51,8 @@ interface ActiveDrag extends PickedLabel {
 export function attachLabelDragController({
   container,
   pick,
-  onHoverChange
+  onHoverChange,
+  onEditLabel
 }: LabelDragControllerOptions): () => void {
   let drag: ActiveDrag | null = null;
   let previewFrame: number | null = null;
@@ -181,9 +189,11 @@ export function attachLabelDragController({
     if (!picked) return;
     event.preventDefault();
     event.stopPropagation();
-    if (picked.context.hasManualPosition(picked.datum)) {
-      labelLayoutStore.clearOffset(picked.context.vizId, picked.featureKey);
-    }
+    onEditLabel({
+      ...picked,
+      clientX: event.clientX,
+      clientY: event.clientY
+    });
   }
 
   function handleHoverMove(event: PointerEvent): void {
