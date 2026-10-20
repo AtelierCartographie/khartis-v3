@@ -126,7 +126,8 @@ Pendant le glisser, l'étiquette est retirée des couches thématiques et un ape
 est posé au-dessus de la pile, comme le surlignage au survol : suivre le
 pointeur ne reconstruit pas les couches.
 
-Le filet (`computeLabelLeader`) part d'une zone tampon autour du symbole et ne
+Le filet (`computeLabelLeader`, qui délègue à `leaderGeometry` du paquet
+`@ateliercartographie/label-placer`) part d'une zone tampon autour du symbole et ne
 suit que trois directions : une branche à 45° qui quitte le symbole, puis une
 branche horizontale vers le milieu du côté de l'étiquette qui lui fait face, ou
 verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
@@ -143,6 +144,33 @@ réelle, lignes renvoyées comprises, avec un interligne fixe.
 `LabelLeaderLayer` ancre ses deux
 extrémités sur l'entité et les décale en pixels dans le shader, comme le
 `getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
+
+### Placement automatique des étiquettes
+
+L'option « Placement automatique » du panneau Textes (`collisionDetection` du
+primitif texte) confie le placement au paquet `@ateliercartographie/label-placer`
+(`utils/label-auto-placement.utils.ts`). La fabrique projette chaque ancrage en
+pixels de page à travers le viewport deck courant, mesure le bloc d'étiquettes et
+le rayon du symbole, puis le moteur choisit pour chaque bloc une position autour
+du symbole (ordre d'Imhof), dans le symbole s'il y tient, ou plus loin avec un
+filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferrage,
+empilement, filets et export SVG suivent sans chemin propre.
+
+- Les étiquettes retenues par un filtre Textes sont requises : jamais masquées,
+  en chevauchement en dernier recours. Sans filtre, celles qui ne trouvent pas
+  de place sont masquées, des moins importantes aux plus importantes (rayon du
+  symbole, puis taille du texte, puis valeur).
+- Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
+  autres.
+- Les bornes sont le cadre du fond de carte quand la projection en a un, sinon
+  le canvas. Les éléments de page (légende, titre) ne sont pas encore des
+  obstacles.
+- Le placement est recalculé une fois la vue stabilisée
+  (`labelPlacementViewStore`, 250 ms après un zoom, un déplacement ou un
+  redimensionnement du canvas) et réutilise le résultat précédent pour que les
+  étiquettes restent en place. Il est mis en cache par visualisation.
+- Il ne s'applique pas aux collections de cartes, dont les cellules ont leur
+  propre vue.
 
 Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
 placent derrière ou devant les couches thématiques ; l'ordre affiché dans le

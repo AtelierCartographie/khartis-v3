@@ -1402,6 +1402,8 @@
   "max_size_info": "Maximum size in pixels for the largest value. Lower values are proportionally reduced.",
   "shape_info": "Geometric shape used to represent each entity on the map.",
   "missing_data_none": "No missing values for this variable in the displayed data.",
+  "text_automatic_placement": "Automatic placement",
+  "text_automatic_placement_info": "Moves labels so they do not overlap and hides those that find no room, the least important first. A label kept by a filter always stays visible, and a label moved by hand keeps its position.",
   "show_missing_data_info": "Displays a specific style for entities whose value is empty in the imported data, so that they remain visible on the map.",
   "fill_section_info": "Inner color of the symbols. Can be uniform, classified or categorical.",
   "stroke_section_info": "Stroke drawn around each symbol. Helps distinguish overlapping entities.",
