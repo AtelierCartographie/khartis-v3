@@ -986,7 +986,7 @@ export function createTextOverlayLayers(
         lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
         outlineColor: withOpacity(
           resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
-          1
+          normalizeOpacity(secondaryLabelsConfig.haloOpacity, 1)
         ),
         outlineWidth: resolveTextOutlineWidth(
           secondaryHaloWidth,
@@ -1035,7 +1035,10 @@ export function createTextOverlayLayers(
             secondaryLabelColumn,
             labelLayout
           ],
-          outlineColor: [secondaryLabelsConfig.haloColor],
+          outlineColor: [
+            secondaryLabelsConfig.haloColor,
+            secondaryLabelsConfig.haloOpacity
+          ],
           outlineWidth: [
             secondaryLabelsConfig.halo,
             secondaryLabelsConfig.haloWidth,
@@ -1123,7 +1126,7 @@ export function createTextOverlayLayers(
         lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
         outlineColor: withOpacity(
           resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
-          1
+          normalizeOpacity(textConfig.haloOpacity, 1)
         ),
         outlineWidth: resolveTextOutlineWidth(primaryHaloWidth, textBaseSize),
         background: true,
@@ -1174,7 +1177,7 @@ export function createTextOverlayLayers(
             secondaryLabelColumn,
             labelLayout
           ],
-          outlineColor: [textConfig.haloColor],
+          outlineColor: [textConfig.haloColor, textConfig.haloOpacity],
           outlineWidth: [textConfig.halo, textConfig.haloWidth, textBaseSize],
           getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
           getBorderWidth: [],

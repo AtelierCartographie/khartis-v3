@@ -373,6 +373,7 @@ function createTextVisualization(): VisualizationConfig {
       halo: false,
       haloColor: '#ffffff',
       haloWidth: 2,
+      haloOpacity: 1,
       collisionDetection: true,
       dxpMasking: false,
       missingData: {
@@ -394,6 +395,7 @@ function createTextVisualization(): VisualizationConfig {
         halo: false,
         haloColor: '#ffffff',
         haloWidth: 2,
+        haloOpacity: 1,
         collisionDetection: true,
         dxpMasking: false
       }

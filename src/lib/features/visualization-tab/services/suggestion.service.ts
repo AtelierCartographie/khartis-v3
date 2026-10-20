@@ -483,6 +483,7 @@ function buildTextPrimitiveConfig(
     haloColor: text?.secondaryLabels.haloColor ?? DEFAULT_COLORS.halo,
     haloWidth:
       text?.secondaryLabels.haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth,
+    haloOpacity: text?.secondaryLabels.haloOpacity ?? 1,
     collisionDetection: text?.secondaryLabels.collisionDetection ?? true,
     dxpMasking: text?.secondaryLabels.dxpMasking ?? false
   };
@@ -508,6 +509,7 @@ function buildTextPrimitiveConfig(
     halo: text?.halo ?? false,
     haloColor: text?.haloColor ?? DEFAULT_COLORS.halo,
     haloWidth: text?.haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth,
+    haloOpacity: text?.haloOpacity ?? 1,
     collisionDetection: text?.collisionDetection ?? false,
     dxpMasking: text?.dxpMasking ?? false,
     missingData: buildDisabledMissingData(
@@ -1475,6 +1477,7 @@ function mergeTextPrimitiveConfig(
         halo: false,
         haloColor: DEFAULT_COLORS.halo,
         haloWidth: VISUALIZATION_DEFAULTS.haloWidth,
+        haloOpacity: 1,
         collisionDetection: true,
         dxpMasking: false
       }),
