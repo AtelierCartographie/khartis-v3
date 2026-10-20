@@ -20,6 +20,7 @@ import {
   ScaleType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
 
@@ -46,10 +47,17 @@ import {
   resolveLabelAlignment,
   type LabelOffset
 } from '../utils/label-layout.utils';
+import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
+import {
+  placeLabelBlocks,
+  resolveLabelPlacementFrame,
+  type AutoLabelEntry
+} from '../utils/label-auto-placement.utils';
 import {
   resolveLabelStack,
   resolveManualLabelPlacement,
   resolveTextLabelPlacement,
+  TEXT_SYMBOL_GAP_PX,
   type LabelStackParams
 } from '../utils/text-label-placement.utils';
 import {
@@ -796,7 +804,7 @@ export function createTextOverlayLayers(
     ReturnType<typeof placeManualLabel>
   >();
   const resolveManualPlacement = (datum: TextLayerDatum) => {
-    const center = resolveManualCenter(datum);
+    const center = resolvePlacedCenter(datum);
     if (!center) return undefined;
     const cached = manualPlacementByRow.get(datum.rowIndex);
     if (cached) return cached;
@@ -818,6 +826,55 @@ export function createTextOverlayLayers(
     const { primaryShift } = resolveLabelStack(resolveLabelStackParams(datum));
     return [centerX, offsetY - primaryShift];
   };
+  const showMissingText = textConfig.missingData?.show ?? true;
+  const isRenderedLabel = (datum: TextLayerDatum): boolean =>
+    shouldRenderTextLayer
+      ? !datum.isMissingData || showMissingText
+      : findSecondaryDatum(datum) !== undefined;
+  const resolveLeaderMinGap = (datum: TextLayerDatum): number =>
+    Math.max(
+      LABEL_LEADER_MIN_GAP_PX,
+      LABEL_LEADER_MIN_GAP_EM * resolveAccessorValue(textSizeAccessor, datum)
+    );
+
+  // Automatic placement needs the live map view, which facet cells do not share.
+  const placementFrame =
+    textConfig.collisionDetection && !facetsStore.enabled
+      ? resolveLabelPlacementFrame(
+          ctx.modelMatrix,
+          pageDisplayScale,
+          getBasemapFrameExtent(ctx.customProjection)
+        )
+      : null;
+  // Labels a Texts filter kept are the ones the user asked for: never hidden.
+  const placementMode =
+    scopedTextTable || scopedTextRowIds ? 'required' : 'optional';
+  const resolvePlacementPriority = (datum: TextLayerDatum): number => {
+    const value = Number(thematicValueVector?.get(datum.rowIndex));
+    const valueMax = getAbsoluteDomainMax(
+      textStatistics.min,
+      textStatistics.max
+    );
+    const valueShare =
+      Number.isFinite(value) && valueMax > 0 ? Math.abs(value) / valueMax : 0;
+    return (
+      resolvePointRadiusForDatum(datum) * 10000 +
+      resolveAccessorValue(textSizeAccessor, datum) * 100 +
+      valueShare * 99
+    );
+  };
+  let autoCenters: Map<number, LabelOffset | null> | null = null;
+  /** Where a moved or automatically placed label block sits, if not at its default. */
+  const resolvePlacedCenter = (
+    datum: TextLayerDatum
+  ): LabelOffset | undefined =>
+    resolveManualCenter(datum) ??
+    autoCenters?.get(datum.featureId) ??
+    undefined;
+  const isHiddenByPlacement = (datum: TextLayerDatum): boolean =>
+    autoCenters?.get(datum.featureId) === null &&
+    resolveManualCenter(datum) === undefined;
+
   const leaderColorAccessor = createTextColorAccessor(textColor, textOpacity);
   const buildLeaderSegments = (
     datum: TextLayerDatum,
@@ -828,10 +885,7 @@ export function createTextOverlayLayers(
       halfSize: resolveBlockHalfSize(datum),
       symbolRadius: resolvePointRadiusForDatum(datum),
       symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
-      minGap: Math.max(
-        LABEL_LEADER_MIN_GAP_PX,
-        LABEL_LEADER_MIN_GAP_EM * resolveAccessorValue(textSizeAccessor, datum)
-      )
+      minGap: resolveLeaderMinGap(datum)
     });
     if (!points) return [];
     const color = toLeaderColor(
@@ -921,15 +975,39 @@ export function createTextOverlayLayers(
     return preview;
   };
 
-  if (labelLayout) {
-    const showMissingText = textConfig.missingData?.show ?? true;
-    const leaderSegments = textLayerData.flatMap((datum) => {
+  if (placementFrame) {
+    const entries: AutoLabelEntry[] = [];
+    const leaderMinGaps: number[] = [];
+    for (const datum of textLayerData) {
+      if (!isRenderedLabel(datum)) continue;
+      const anchor = placementFrame.toPagePx(datum.position);
+      if (!anchor) continue;
       const center = resolveManualCenter(datum);
+      entries.push({
+        id: datum.featureId,
+        anchor,
+        halfSize: resolveBlockHalfSize(datum),
+        symbolRadius: resolvePointRadiusForDatum(datum),
+        priority: resolvePlacementPriority(datum),
+        mode: center ? 'pinned' : placementMode,
+        center
+      });
+      leaderMinGaps.push(resolveLeaderMinGap(datum));
+    }
+    autoCenters = placeLabelBlocks(vizId, entries, {
+      bounds: placementFrame.bounds,
+      gap: TEXT_SYMBOL_GAP_PX,
+      symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
+      minGap: leaderMinGaps.length
+        ? leaderMinGaps.sort((a, b) => a - b)[leaderMinGaps.length >> 1]
+        : LABEL_LEADER_MIN_GAP_PX
+    });
+  }
+  if (labelLayout || autoCenters) {
+    const leaderSegments = textLayerData.flatMap((datum) => {
+      const center = resolvePlacedCenter(datum);
       if (!center || isDraggedDatum(datum)) return [];
-      const isRendered = shouldRenderTextLayer
-        ? !datum.isMissingData || showMissingText
-        : findSecondaryDatum(datum) !== undefined;
-      return isRendered ? buildLeaderSegments(datum, center) : [];
+      return isRenderedLabel(datum) ? buildLeaderSegments(datum, center) : [];
     });
     if (leaderSegments.length > 0) {
       layers.push(createLeaderLayer(leaderLayerId, leaderSegments));
@@ -955,6 +1033,7 @@ export function createTextOverlayLayers(
     labelBaseSize,
     sharedBackgroundPadding,
     pageDisplayScale,
+    autoCenters,
     textConfig.labelColumn,
     textConfig.fontFamily,
     textConfig.bold,
@@ -970,7 +1049,10 @@ export function createTextOverlayLayers(
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
     const labelData = sortBySizeDescending(
       secondaryLabelLayerData.filter(
-        (datum) => !datum.isMissingData && !isDraggedDatum(datum)
+        (datum) =>
+          !datum.isMissingData &&
+          !isDraggedDatum(datum) &&
+          !isHiddenByPlacement(datum)
       ),
       (datum) => resolveAccessorValue(labelSizeAccessor, datum)
     );
@@ -1095,8 +1177,9 @@ export function createTextOverlayLayers(
     const textData = sortBySizeDescending(
       textLayerData.filter(
         (datum) =>
-          (!datum.isMissingData || (textConfig.missingData?.show ?? true)) &&
-          !isDraggedDatum(datum)
+          (!datum.isMissingData || showMissingText) &&
+          !isDraggedDatum(datum) &&
+          !isHiddenByPlacement(datum)
       ),
       (datum) => resolveAccessorValue(textSizeAccessor, datum)
     );
@@ -1115,7 +1198,7 @@ export function createTextOverlayLayers(
           dataSecondary: resolveDataSecondaryText(datum)
         }),
         resolveBlockCenter: (datum) =>
-          resolveManualCenter(datum) ?? resolveDefaultBlockCenter(datum),
+          resolvePlacedCenter(datum) ?? resolveDefaultBlockCenter(datum),
         buildDragPreview: buildLabelDragPreview
       };
       Object.assign(textData, {

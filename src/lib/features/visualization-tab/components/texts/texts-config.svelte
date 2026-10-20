@@ -2,6 +2,7 @@
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
   import { VizFilterButton, VizFilterPanel } from '../shared';
   import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
@@ -140,6 +141,7 @@
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
+  let automaticPlacement = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
   let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
@@ -269,6 +271,7 @@
       colorMode = visualization.modes?.color ?? ColorMode.UNIQUE;
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
+      automaticPlacement = visualization.style.textCollisionDetection ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
@@ -404,6 +407,11 @@
     textOpacity = value;
     onStyleChange?.({ textOpacity: value / 100 });
     onSecondaryLabelsChange?.({ opacity: value / 100 });
+  }
+
+  function handleAutomaticPlacementToggle(value: boolean) {
+    automaticPlacement = value;
+    onStyleChange?.({ textCollisionDetection: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -614,6 +622,13 @@
         onSecondarySelect={handleSecondaryFieldSelect}
         onTogglePrimaryFormat={togglePrimaryFormat}
         onToggleSecondaryFormat={toggleSecondaryFormat}
+      />
+
+      <ToggleWithLabel
+        label={m.text_automatic_placement()}
+        toggled={automaticPlacement}
+        infoText={m.text_automatic_placement_info()}
+        ontoggle={handleAutomaticPlacementToggle}
       />
 
       <TextMissingDataSection
