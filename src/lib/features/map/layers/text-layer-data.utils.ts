@@ -103,19 +103,6 @@ export function resolveMissingTextLabel(label: string | undefined): string {
   return normalizedLabel && normalizedLabel.length > 0 ? normalizedLabel : '•';
 }
 
-export function resolveTextDatumText(
-  datum: TextLayerDatum,
-  missingTextLabel: string
-): string {
-  if (datum.isMissingData || !datum.primaryText) {
-    return missingTextLabel;
-  }
-
-  return datum.secondaryText
-    ? `${datum.primaryText}\n${datum.secondaryText}`
-    : datum.primaryText;
-}
-
 function addTextGlyphs(glyphs: Set<string>, text: string | null): void {
   if (!text) return;
   for (const char of text) {

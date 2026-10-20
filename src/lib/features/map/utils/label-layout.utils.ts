@@ -170,8 +170,21 @@ export function computeLabelLeader({
 /** Label block centre relative to its feature anchor, in page pixels. */
 export type LabelOffset = [number, number];
 
-/** Keyed by visualization id, then by feature key. */
-export type LabelLayouts = Record<string, Record<string, LabelOffset>>;
+/** Text typed over the data value of a label, for a translation or a fix. */
+export interface LabelTextOverride {
+  primary?: string;
+  secondary?: string;
+}
+
+export interface LabelLayout {
+  offsets: Record<string, LabelOffset>;
+  texts: Record<string, LabelTextOverride>;
+}
+
+/** Keyed by visualization id; inside, offsets and texts by feature key. */
+export type LabelLayouts = Record<string, LabelLayout>;
+
+const LABEL_TEXT_MAX_LENGTH = 500;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -179,6 +192,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function roundLabelOffset([dx, dy]: LabelOffset): LabelOffset {
   return [Math.round(dx * 10) / 10, Math.round(dy * 10) / 10];
+}
+
+/** A typed label text, or undefined when it is blank and the data value stands. */
+export function normalizeLabelText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim().slice(0, LABEL_TEXT_MAX_LENGTH);
+  return text.length > 0 ? text : undefined;
 }
 
 function parseLabelOffset(value: unknown): LabelOffset | null {
@@ -192,6 +212,30 @@ function parseLabelOffset(value: unknown): LabelOffset | null {
     : null;
 }
 
+function parseLabelTextOverride(value: unknown): LabelTextOverride | null {
+  if (!isRecord(value)) return null;
+  const primary = normalizeLabelText(value.primary);
+  const secondary = normalizeLabelText(value.secondary);
+  if (!primary && !secondary) return null;
+  return {
+    ...(primary && { primary }),
+    ...(secondary && { secondary })
+  };
+}
+
+function parseEntries<T>(
+  value: unknown,
+  parse: (entry: unknown) => T | null
+): Record<string, T> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) => {
+      const parsed = parse(entry);
+      return parsed ? [[key, parsed]] : [];
+    })
+  );
+}
+
 /**
  * Reads persisted label layouts, dropping anything malformed. `fromEntries`
  * keeps keys such as `__proto__` as plain own properties.
@@ -200,15 +244,13 @@ export function parseLabelLayouts(data: unknown): LabelLayouts {
   if (!isRecord(data)) return {};
 
   return Object.fromEntries(
-    Object.entries(data).flatMap(([vizId, offsets]) => {
-      if (!isRecord(offsets)) return [];
-      const valid = Object.fromEntries(
-        Object.entries(offsets).flatMap(([key, value]) => {
-          const offset = parseLabelOffset(value);
-          return offset ? [[key, offset]] : [];
-        })
-      );
-      return Object.keys(valid).length > 0 ? [[vizId, valid]] : [];
+    Object.entries(data).flatMap(([vizId, layout]) => {
+      if (!isRecord(layout)) return [];
+      const offsets = parseEntries(layout.offsets, parseLabelOffset);
+      const texts = parseEntries(layout.texts, parseLabelTextOverride);
+      return Object.keys(offsets).length > 0 || Object.keys(texts).length > 0
+        ? [[vizId, { offsets, texts }]]
+        : [];
     })
   );
 }

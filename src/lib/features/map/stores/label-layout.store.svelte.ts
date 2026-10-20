@@ -6,10 +6,13 @@ import {
 } from '$lib/features/project-management/core';
 
 import {
+  normalizeLabelText,
   parseLabelLayouts,
   roundLabelOffset,
+  type LabelLayout,
   type LabelLayouts,
-  type LabelOffset
+  type LabelOffset,
+  type LabelTextOverride
 } from '../utils/label-layout.utils';
 
 const PERSISTENCE_KEY = 'labelLayouts';
@@ -19,8 +22,14 @@ export interface DraggedLabel {
   featureKey: string;
 }
 
+const EMPTY_LAYOUT: LabelLayout = { offsets: {}, texts: {} };
+
+function hasOwn(record: object | undefined, key: string): boolean {
+  return !!record && Object.prototype.hasOwnProperty.call(record, key);
+}
+
 /**
- * Manual label positions per visualization, plus the transient state of a
+ * Manual label positions and texts per visualization, plus the transient state of a
  * drag: the dragged label is left out of the thematic layers and drawn by
  * `dragPreview`, so a pointer move never rebuilds them.
  */
@@ -30,15 +39,15 @@ function createLabelLayoutStore() {
   let draggedLabel = $state.raw<DraggedLabel | null>(null);
   let dragPreview = $state.raw<Layer[] | null>(null);
 
-  function writeOffsets(
-    vizId: string,
-    offsets: Record<string, LabelOffset>
-  ): void {
+  function writeLayout(vizId: string, layout: LabelLayout): void {
     const next = { ...layouts };
-    if (Object.keys(offsets).length === 0) {
+    if (
+      Object.keys(layout.offsets).length === 0 &&
+      Object.keys(layout.texts).length === 0
+    ) {
       delete next[vizId];
     } else {
-      next[vizId] = offsets;
+      next[vizId] = layout;
     }
     layouts = next;
     version += 1;
@@ -50,23 +59,42 @@ function createLabelLayoutStore() {
     featureKey: string,
     offset: LabelOffset
   ): void {
-    writeOffsets(vizId, {
-      ...layouts[vizId],
-      [featureKey]: roundLabelOffset(offset)
+    const layout = layouts[vizId] ?? EMPTY_LAYOUT;
+    writeLayout(vizId, {
+      ...layout,
+      offsets: { ...layout.offsets, [featureKey]: roundLabelOffset(offset) }
     });
   }
 
   function clearOffset(vizId: string, featureKey: string): void {
-    const offsets = layouts[vizId];
-    if (
-      !offsets ||
-      !Object.prototype.hasOwnProperty.call(offsets, featureKey)
-    ) {
+    const layout = layouts[vizId];
+    if (!layout || !hasOwn(layout.offsets, featureKey)) return;
+    const offsets = { ...layout.offsets };
+    delete offsets[featureKey];
+    writeLayout(vizId, { ...layout, offsets });
+  }
+
+  /** Blank fields fall back to the data value. */
+  function setText(
+    vizId: string,
+    featureKey: string,
+    override: LabelTextOverride
+  ): void {
+    const layout = layouts[vizId] ?? EMPTY_LAYOUT;
+    const primary = normalizeLabelText(override.primary);
+    const secondary = normalizeLabelText(override.secondary);
+    const texts = { ...layout.texts };
+    if (primary || secondary) {
+      texts[featureKey] = {
+        ...(primary && { primary }),
+        ...(secondary && { secondary })
+      };
+    } else if (hasOwn(texts, featureKey)) {
+      delete texts[featureKey];
+    } else {
       return;
     }
-    const next = { ...offsets };
-    delete next[featureKey];
-    writeOffsets(vizId, next);
+    writeLayout(vizId, { ...layout, texts });
   }
 
   // Drag state is never saved: it only lives while the pointer is down.
@@ -118,14 +146,16 @@ function createLabelLayoutStore() {
       return dragPreview;
     },
     getOffset(vizId: string, featureKey: string): LabelOffset | undefined {
-      const offsets = layouts[vizId];
-      return offsets &&
-        Object.prototype.hasOwnProperty.call(offsets, featureKey)
-        ? offsets[featureKey]
-        : undefined;
+      const offsets = layouts[vizId]?.offsets;
+      return hasOwn(offsets, featureKey) ? offsets?.[featureKey] : undefined;
+    },
+    getText(vizId: string, featureKey: string): LabelTextOverride | undefined {
+      const texts = layouts[vizId]?.texts;
+      return hasOwn(texts, featureKey) ? texts?.[featureKey] : undefined;
     },
     setOffset,
     clearOffset,
+    setText,
     beginDrag,
     updateDragPreview,
     endDrag,

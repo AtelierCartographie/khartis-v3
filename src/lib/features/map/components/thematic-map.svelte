@@ -41,7 +41,11 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
-  import { attachLabelDragController } from '../interactions/label-drag.controller';
+  import {
+    attachLabelDragController,
+    type LabelEditRequest
+  } from '../interactions/label-drag.controller';
+  import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
@@ -2006,6 +2010,7 @@
   });
 
   let isOverDraggableLabel = $state(false);
+  let labelEditRequest = $state.raw<LabelEditRequest | null>(null);
 
   $effect(() => {
     const container = mapContainer;
@@ -2025,12 +2030,16 @@
       },
       onHoverChange: (isOverLabel) => {
         isOverDraggableLabel = isOverLabel;
+      },
+      onEditLabel: (request) => {
+        labelEditRequest = request;
       }
     });
 
     return () => {
       detach();
       isOverDraggableLabel = false;
+      labelEditRequest = null;
     };
   });
 
@@ -2158,6 +2167,17 @@
 
     {#if showAnnotationOverlay}
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
+    {/if}
+
+    {#if labelEditRequest}
+      {#key labelEditRequest}
+        <LabelTextEditor
+          request={labelEditRequest}
+          onclose={() => {
+            labelEditRequest = null;
+          }}
+        />
+      {/key}
     {/if}
   </div>
 {/if}

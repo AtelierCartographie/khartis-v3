@@ -88,7 +88,6 @@ import {
   resolveAccessorValue,
   resolveMissingTextLabel,
   resolveTextAnchor,
-  resolveTextDatumText,
   resolveVariableTextSizeBounds,
   resolveVerticalPadding,
   toTextValue,
@@ -130,6 +129,13 @@ export interface LabelEditingContext {
   pageDisplayScale: number;
   resolveFeatureKey: (datum: TextLayerDatum) => string | null;
   hasManualPosition: (datum: TextLayerDatum) => boolean;
+  /** Texts as drawn and as found in the data; secondary is null without one. */
+  resolveTexts: (datum: TextLayerDatum) => {
+    primary: string;
+    secondary: string | null;
+    dataPrimary: string;
+    dataSecondary: string | null;
+  };
   /** Centre of the label block, in page pixels from the anchor. */
   resolveBlockCenter: (datum: TextLayerDatum) => LabelOffset;
   buildDragPreview: (datum: TextLayerDatum, center: LabelOffset) => Layer[];
@@ -641,12 +647,30 @@ export function createTextOverlayLayers(
   );
   // Both label layers name the same row, so stacking reads the texts by row
   // rather than from the datum, whose text depends on the layer.
-  const resolveSecondaryLabelText = (rowIndex: number): string | null =>
+  const resolveDataSecondaryText = (datum: TextLayerDatum): string | null =>
     shouldRenderLabelLayer && secondaryLabelValueVector
-      ? toTextValue(secondaryLabelValueVector.get(rowIndex))
+      ? toTextValue(secondaryLabelValueVector.get(datum.rowIndex))
       : null;
-  const resolvePrimaryLabelText = (rowIndex: number): string =>
-    toTextValue(primaryLabelVector?.get(rowIndex)) ?? missingTextLabel;
+  const resolveDataPrimaryText = (datum: TextLayerDatum): string =>
+    toTextValue(primaryLabelVector?.get(datum.rowIndex)) ?? missingTextLabel;
+  const resolveTextOverride = (datum: TextLayerDatum) => {
+    if (!labelLayout) return undefined;
+    const key = resolveFeatureKey(datum);
+    return key ? labelLayoutStore.getText(vizId, key) : undefined;
+  };
+  // A text typed in the Styling step replaces the data value; a secondary
+  // label is only replaced where the data has one.
+  const resolvePrimaryLabelText = (datum: TextLayerDatum): string =>
+    resolveTextOverride(datum)?.primary ?? resolveDataPrimaryText(datum);
+  const resolveSecondaryLabelText = (datum: TextLayerDatum): string | null => {
+    const dataText = resolveDataSecondaryText(datum);
+    return dataText
+      ? (resolveTextOverride(datum)?.secondary ?? dataText)
+      : null;
+  };
+  const overrideTexts = Object.values(labelLayout?.texts ?? {}).flatMap(
+    (override) => [override.primary ?? '', override.secondary ?? '']
+  );
   const resolvePrimaryTextAnchor = (datum: TextLayerDatum) =>
     resolvePointRadiusForDatum(datum) > 0
       ? 'start'
@@ -695,10 +719,10 @@ export function createTextOverlayLayers(
   const resolveTextMetrics = (datum: TextLayerDatum, needsWidth: boolean) => {
     const primarySize = resolveAccessorValue(textSizeAccessor, datum);
     const secondarySize = resolveAccessorValue(labelSizeAccessor, datum);
-    const secondaryText = resolveSecondaryLabelText(datum.rowIndex);
+    const secondaryText = resolveSecondaryLabelText(datum);
     return {
       primary: measureText(
-        resolvePrimaryLabelText(datum.rowIndex),
+        resolvePrimaryLabelText(datum),
         primarySize,
         primaryFontFamily,
         primaryFontWeight,
@@ -953,7 +977,7 @@ export function createTextOverlayLayers(
     if (labelData.length > 0) {
       const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
       const labelCharacterSet = extendTextCharacterSet(
-        collectTextLayerGlyphs(labelData)
+        collectTextLayerGlyphs(labelData, overrideTexts)
       );
       const labelLayerProps: TextLayerProps<TextLayerDatum> = {
         id: labelLayerId,
@@ -961,7 +985,7 @@ export function createTextOverlayLayers(
         getPosition: (d) => d.position,
         getText: (d) =>
           measureText(
-            d.primaryText ?? '',
+            resolveSecondaryLabelText(d) ?? '',
             resolveAccessorValue(labelSizeAccessor, d),
             secondaryFontFamily,
             secondaryFontWeight,
@@ -1008,6 +1032,7 @@ export function createTextOverlayLayers(
         ...(ctx.beforeId && { beforeId: ctx.beforeId }),
         updateTriggers: {
           getText: [
+            labelLayout,
             secondaryLabelColumn,
             secondaryLabelsConfig.size,
             secondaryLabelsConfig.fontFamily,
@@ -1083,6 +1108,12 @@ export function createTextOverlayLayers(
         pageDisplayScale,
         resolveFeatureKey,
         hasManualPosition: (datum) => resolveManualCenter(datum) !== undefined,
+        resolveTexts: (datum) => ({
+          primary: resolvePrimaryLabelText(datum),
+          secondary: resolveSecondaryLabelText(datum),
+          dataPrimary: resolveDataPrimaryText(datum),
+          dataSecondary: resolveDataSecondaryText(datum)
+        }),
         resolveBlockCenter: (datum) =>
           resolveManualCenter(datum) ?? resolveDefaultBlockCenter(datum),
         buildDragPreview: buildLabelDragPreview
@@ -1093,7 +1124,7 @@ export function createTextOverlayLayers(
       });
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
       const textCharacterSet = extendTextCharacterSet(
-        collectTextLayerGlyphs(textData, [missingTextLabel])
+        collectTextLayerGlyphs(textData, [missingTextLabel, ...overrideTexts])
       );
       const baseTextColorAccessor = createTextColorAccessor(
         textColor,
@@ -1115,7 +1146,7 @@ export function createTextOverlayLayers(
         getPosition: (d) => d.position,
         getText: (d) =>
           measureText(
-            resolveTextDatumText(d, missingTextLabel),
+            resolvePrimaryLabelText(d),
             resolveAccessorValue(textSizeAccessor, d),
             primaryFontFamily,
             primaryFontWeight,
@@ -1159,6 +1190,7 @@ export function createTextOverlayLayers(
         ...(ctx.beforeId && { beforeId: ctx.beforeId }),
         updateTriggers: {
           getText: [
+            labelLayout,
             textConfig.labelColumn,
             textConfig.missingData?.show,
             textConfig.missingData?.label,

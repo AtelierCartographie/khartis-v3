@@ -110,7 +110,11 @@ primitives configurées :
 ### Étiquettes déplacées et filets
 
 À l'étape Habillage, une étiquette se déplace à la souris
-(`interactions/label-drag.controller.ts`) et un double-clic la remet en place.
+(`interactions/label-drag.controller.ts`). Un double-clic ouvre son éditeur
+(`components/label-text-editor.svelte`) : le texte saisi remplace la valeur des
+données pour cette entité (traduction, correction), seul ce qui diffère des
+données est enregistré, et l'éditeur permet aussi de replacer l'étiquette. Les
+glyphes des textes saisis rejoignent le jeu de caractères des couches de texte.
 La position est le centre du bloc d'étiquettes (principale et secondaire), en
 pixels de page depuis l'ancrage de l'entité. Elle est rangée par visualisation
 et par clé d'entité dans `labelLayoutStore`, puis enregistrée dans
