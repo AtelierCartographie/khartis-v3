@@ -120,10 +120,19 @@ données modifiées.
 
 Pendant le glisser, l'étiquette est retirée des couches thématiques et un aperçu
 est posé au-dessus de la pile, comme le surlignage au survol : suivre le
-pointeur ne reconstruit pas les couches. Le filet (`computeLabelLeader`) part du
-bord du symbole et rejoint le milieu du côté de l'étiquette qui lui fait face,
-ou le bord haut ou bas quand l'étiquette est surtout au-dessus ou en dessous.
-Il n'apparaît qu'au-delà d'un écart minimal. `LabelLeaderLayer` ancre ses deux
+pointeur ne reconstruit pas les couches.
+
+Le filet (`computeLabelLeader`) part d'une zone tampon autour du symbole et ne
+suit que trois directions : une branche à 45° qui quitte le symbole, puis une
+branche horizontale vers le milieu du côté de l'étiquette qui lui fait face, ou
+verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
+en dessous. Il n'apparaît qu'au-delà d'un écart minimal. L'étiquette est ferrée
+vers l'entité (`resolveLabelAlignment`) : à gauche quand elle est à droite du
+centroïde, à droite quand elle est à gauche, au centre au-dessus ou en dessous.
+Les étiquettes principale et secondaire s'empilent chacune selon sa hauteur
+réelle, lignes renvoyées comprises, avec un interligne fixe.
+
+`LabelLeaderLayer` ancre ses deux
 extrémités sur l'entité et les décale en pixels dans le shader, comme le
 `getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
 

@@ -6,7 +6,6 @@
   import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
-  import TextPlacementSection from './text-placement-section.svelte';
   import TextSizeSection from './text-size-section.svelte';
   import type {
     ClassificationConfig,
@@ -667,10 +666,6 @@
         onHaloColorChange={handleHaloColorChange}
         onHaloWidthChange={handleHaloWidthChange}
       />
-
-      {#if visualization}
-        <TextPlacementSection vizId={visualization.id} />
-      {/if}
     </div>
   </ExpandableSection>
 

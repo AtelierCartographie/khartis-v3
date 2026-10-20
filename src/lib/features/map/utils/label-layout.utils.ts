@@ -1,8 +1,6 @@
-export const LABEL_LEADER_STYLES = ['straight', 'elbow', 'none'] as const;
-
-export type LabelLeaderStyle = (typeof LABEL_LEADER_STYLES)[number];
-
 export type LabelLeaderPoint = [number, number];
+
+export type LabelAlignment = 'start' | 'middle' | 'end';
 
 /**
  * Coordinates are in page pixels, relative to the feature anchor, y down.
@@ -12,8 +10,16 @@ export interface LabelLeaderInput {
   center: LabelLeaderPoint;
   halfSize: LabelLeaderPoint;
   symbolRadius: number;
+  /** Clear space kept between a symbol and the start of its leader. */
+  symbolGap: number;
   minGap: number;
-  style: LabelLeaderStyle;
+}
+
+type LeaderEnd = 'horizontal' | 'vertical' | 'diagonal';
+
+interface LeaderPort {
+  port: LabelLeaderPoint;
+  end: LeaderEnd;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -26,114 +32,149 @@ function distanceToRange(value: number, min: number, max: number): number {
   return 0;
 }
 
-function pointOnCircle(
-  toward: LabelLeaderPoint,
-  radius: number
-): LabelLeaderPoint {
-  const length = Math.hypot(toward[0], toward[1]);
-  if (radius <= 0 || length === 0) {
-    return [0, 0];
-  }
-  return [(toward[0] / length) * radius, (toward[1] / length) * radius];
+function signOf(value: number): number {
+  return value < 0 ? -1 : 1;
+}
+
+function resolveGaps(
+  [cx, cy]: LabelLeaderPoint,
+  [hw, hh]: LabelLeaderPoint
+): { horizontal: number; vertical: number } {
+  return {
+    horizontal: distanceToRange(0, cx - hw, cx + hw),
+    vertical: distanceToRange(0, cy - hh, cy + hh)
+  };
 }
 
 /**
- * Where the leader meets the label: the middle of the facing vertical side
- * when the label sits mostly beside the anchor, otherwise the facing
- * horizontal side, kept within its central half so the leader never lands
- * on a corner.
+ * Cartographers flush a label towards its feature: left when it sits on the
+ * right, right when it sits on the left, centred above or below.
  */
-function resolveLabelPort(
+export function resolveLabelAlignment(
   center: LabelLeaderPoint,
   halfSize: LabelLeaderPoint
-): { port: LabelLeaderPoint; onVerticalSide: boolean } {
-  const [cx, cy] = center;
-  const [hw, hh] = halfSize;
-  const horizontalGap = distanceToRange(0, cx - hw, cx + hw);
-  const verticalGap = distanceToRange(0, cy - hh, cy + hh);
-
-  if (horizontalGap >= verticalGap) {
-    return {
-      port: [cx > 0 ? cx - hw : cx + hw, cy],
-      onVerticalSide: true
-    };
+): LabelAlignment {
+  const gaps = resolveGaps(center, halfSize);
+  if (gaps.horizontal === 0 || gaps.horizontal < gaps.vertical) {
+    return 'middle';
   }
+  return center[0] > 0 ? 'start' : 'end';
+}
 
-  return {
-    port: [clamp(0, cx - hw / 2, cx + hw / 2), cy > 0 ? cy - hh : cy + hh],
-    onVerticalSide: false
-  };
+// The middle of the facing vertical side, reached by a horizontal last leg.
+function resolveSidePort(
+  [cx, cy]: LabelLeaderPoint,
+  [hw]: LabelLeaderPoint
+): LeaderPort | null {
+  const x = cx - hw > 0 ? cx - hw : cx + hw < 0 ? cx + hw : null;
+  if (x === null || Math.abs(cy) > Math.abs(x)) return null;
+  return { port: [x, cy], end: 'horizontal' };
+}
+
+// The facing horizontal edge, within its central half, reached by a vertical
+// last leg, or by the 45 degree leg alone when that is the only way in.
+function resolveEdgePort(
+  [cx, cy]: LabelLeaderPoint,
+  [hw, hh]: LabelLeaderPoint
+): LeaderPort | null {
+  const y = cy - hh > 0 ? cy - hh : cy + hh < 0 ? cy + hh : null;
+  if (y === null) return null;
+  const x = clamp(0, cx - hw / 2, cx + hw / 2);
+  if (Math.abs(x) <= Math.abs(y)) {
+    return { port: [x, y], end: 'vertical' };
+  }
+  const diagonalX = signOf(x) * Math.abs(y);
+  return diagonalX >= cx - hw && diagonalX <= cx + hw
+    ? { port: [diagonalX, y], end: 'diagonal' }
+    : null;
+}
+
+// Where the 45 degree ray towards the label enters its box.
+function resolveDiagonalPort(
+  [cx, cy]: LabelLeaderPoint,
+  [hw, hh]: LabelLeaderPoint
+): LeaderPort | null {
+  const sx = signOf(cx);
+  const sy = signOf(cy);
+  const enter = Math.max(sx * cx - hw, sy * cy - hh, 0);
+  const exit = Math.min(sx * cx + hw, sy * cy + hh);
+  return enter > 0 && enter <= exit
+    ? { port: [sx * enter, sy * enter], end: 'diagonal' }
+    : null;
 }
 
 /**
  * The polyline joining a symbol (a circle of `symbolRadius` around the
  * anchor, or the anchor alone) to its displaced label, or null when the
- * label still reads as attached without one.
+ * label still reads as attached without one. Every segment is horizontal,
+ * vertical or at 45 degrees: a diagonal leg out of the symbol, then a
+ * horizontal or vertical leg into the label.
  */
 export function computeLabelLeader({
   center,
   halfSize,
   symbolRadius,
-  minGap,
-  style
+  symbolGap,
+  minGap
 }: LabelLeaderInput): LabelLeaderPoint[] | null {
-  if (style === 'none') {
-    return null;
-  }
-
   const [cx, cy] = center;
   const [hw, hh] = halfSize;
   const nearest: LabelLeaderPoint = [
     clamp(0, cx - hw, cx + hw),
     clamp(0, cy - hh, cy + hh)
   ];
-  const radius = Math.max(0, symbolRadius);
-  const gap = Math.hypot(nearest[0], nearest[1]) - radius;
-  if (gap < minGap) {
+  const symbol = Math.max(0, symbolRadius);
+  if (Math.hypot(nearest[0], nearest[1]) - symbol < minGap) {
     return null;
   }
 
-  const { port, onVerticalSide } = resolveLabelPort(center, halfSize);
+  const gaps = resolveGaps(center, halfSize);
+  const candidates =
+    gaps.horizontal >= gaps.vertical
+      ? [resolveSidePort, resolveEdgePort]
+      : [resolveEdgePort, resolveSidePort];
+  const route =
+    candidates.reduce<LeaderPort | null>(
+      (found, resolve) => found ?? resolve(center, halfSize),
+      null
+    ) ?? resolveDiagonalPort(center, halfSize);
+  if (!route) return null;
+
+  const { port, end } = route;
   const [px, py] = port;
+  const elbow: LabelLeaderPoint =
+    end === 'horizontal'
+      ? [signOf(px) * Math.abs(py), py]
+      : end === 'vertical'
+        ? [px, signOf(py) * Math.abs(px)]
+        : port;
+  const radius = symbol > 0 ? symbol + Math.max(0, symbolGap) : 0;
+  const elbowDistance = Math.hypot(elbow[0], elbow[1]);
 
-  if (style === 'elbow' && onVerticalSide && Math.abs(py) < Math.abs(px)) {
-    if (Math.abs(py) < radius) {
-      const x = Math.sign(px) * Math.sqrt(radius * radius - py * py);
-      return [[x, py], port];
-    }
-
-    const elbow: LabelLeaderPoint = [Math.sign(px) * Math.abs(py), py];
-    const start = pointOnCircle(elbow, radius);
-    return start[0] === elbow[0] && start[1] === elbow[1]
-      ? [start, port]
-      : [start, elbow, port];
+  if (elbowDistance > radius) {
+    const start: LabelLeaderPoint = [
+      (elbow[0] / elbowDistance) * radius,
+      (elbow[1] / elbowDistance) * radius
+    ];
+    return elbow === port ? [start, port] : [start, elbow, port];
   }
 
-  return [pointOnCircle(port, radius), port];
+  // The bend falls inside the buffer: leave it along the last leg's line.
+  const start: LabelLeaderPoint =
+    end === 'vertical'
+      ? [px, signOf(py) * Math.sqrt(Math.max(0, radius * radius - px * px))]
+      : [signOf(px) * Math.sqrt(Math.max(0, radius * radius - py * py)), py];
+  return [start, port];
 }
 
 /** Label block centre relative to its feature anchor, in page pixels. */
 export type LabelOffset = [number, number];
 
-export interface LabelLayout {
-  leaderStyle: LabelLeaderStyle;
-  offsets: Record<string, LabelOffset>;
-}
-
 /** Keyed by visualization id, then by feature key. */
-export type LabelLayouts = Record<string, LabelLayout>;
-
-export const DEFAULT_LABEL_LEADER_STYLE: LabelLeaderStyle = 'straight';
+export type LabelLayouts = Record<string, Record<string, LabelOffset>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isLabelLeaderStyle(value: unknown): value is LabelLeaderStyle {
-  return (
-    typeof value === 'string' &&
-    (LABEL_LEADER_STYLES as readonly string[]).includes(value)
-  );
 }
 
 export function roundLabelOffset([dx, dy]: LabelOffset): LabelOffset {
@@ -159,26 +200,15 @@ export function parseLabelLayouts(data: unknown): LabelLayouts {
   if (!isRecord(data)) return {};
 
   return Object.fromEntries(
-    Object.entries(data).flatMap(([vizId, layout]) => {
-      if (!isRecord(layout)) return [];
-      const offsets = isRecord(layout.offsets)
-        ? Object.fromEntries(
-            Object.entries(layout.offsets).flatMap(([key, value]) => {
-              const offset = parseLabelOffset(value);
-              return offset ? [[key, offset]] : [];
-            })
-          )
-        : {};
-      const leaderStyle = isLabelLeaderStyle(layout.leaderStyle)
-        ? layout.leaderStyle
-        : DEFAULT_LABEL_LEADER_STYLE;
-      if (
-        Object.keys(offsets).length === 0 &&
-        leaderStyle === DEFAULT_LABEL_LEADER_STYLE
-      ) {
-        return [];
-      }
-      return [[vizId, { leaderStyle, offsets }]];
+    Object.entries(data).flatMap(([vizId, offsets]) => {
+      if (!isRecord(offsets)) return [];
+      const valid = Object.fromEntries(
+        Object.entries(offsets).flatMap(([key, value]) => {
+          const offset = parseLabelOffset(value);
+          return offset ? [[key, offset]] : [];
+        })
+      );
+      return Object.keys(valid).length > 0 ? [[vizId, valid]] : [];
     })
   );
 }

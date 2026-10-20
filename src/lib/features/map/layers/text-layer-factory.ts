@@ -45,13 +45,14 @@ import {
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import {
   computeLabelLeader,
-  DEFAULT_LABEL_LEADER_STYLE,
+  resolveLabelAlignment,
   type LabelOffset
 } from '../utils/label-layout.utils';
 import {
   resolveLabelStack,
   resolveManualLabelPlacement,
-  resolveTextLabelPlacement
+  resolveTextLabelPlacement,
+  type LabelStackParams
 } from '../utils/text-label-placement.utils';
 import {
   LabelLeaderLayer,
@@ -116,6 +117,10 @@ const LABEL_MAX_WIDTH_EM = 10;
 const LABEL_LEADER_WIDTH_PX = 0.75;
 const LABEL_LEADER_MIN_GAP_PX = 6;
 const LABEL_LEADER_MIN_GAP_EM = 0.5;
+const LABEL_LEADER_SYMBOL_GAP_PX = 3;
+// No glyph is wider than an em, so a label this short never wraps at
+// LABEL_MAX_WIDTH_EM and its lines need no measuring.
+const LABEL_SINGLE_LINE_MAX_CHARACTERS = LABEL_MAX_WIDTH_EM;
 
 /**
  * What the label drag interaction needs from a rendered text layer. It rides
@@ -144,23 +149,38 @@ function toLeaderColor(color: Color): [number, number, number, number] {
   return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, color[3] ?? 255];
 }
 
-function measureLabelWidth(
+interface LabelTextMetrics {
+  lines: number;
+  width: number;
+}
+
+function isSingleLineLabel(text: string): boolean {
+  return (
+    text.length <= LABEL_SINGLE_LINE_MAX_CHARACTERS && !text.includes('\n')
+  );
+}
+
+function measureLabelText(
   text: string,
   size: number,
   fontFamily: string,
   fontWeight: string | number
-): number {
+): LabelTextMetrics {
   const weight = String(fontWeight);
-  return Math.max(
-    0,
-    ...computeTextLines(
-      text,
-      size,
-      LABEL_MAX_WIDTH_EM * size,
-      fontFamily,
-      weight
-    ).map((line) => measureTextWidth(line, size, fontFamily, weight))
+  const lines = computeTextLines(
+    text,
+    size,
+    LABEL_MAX_WIDTH_EM * size,
+    fontFamily,
+    weight
   );
+  return {
+    lines: Math.max(1, lines.length),
+    width: Math.max(
+      0,
+      ...lines.map((line) => measureTextWidth(line, size, fontFamily, weight))
+    )
+  };
 }
 
 export function createTextOverlayLayers(
@@ -619,29 +639,17 @@ export function createTextOverlayLayers(
 
     return uniquePointRadius;
   };
-  const hasSecondaryLabelForDatum = (datum: TextLayerDatum): boolean =>
-    Boolean(
-      secondaryLabelValueVector &&
-      toTextValue(secondaryLabelValueVector.get(datum.rowIndex))
-    );
-  const resolvePrimaryPlacement = (datum: TextLayerDatum) =>
-    resolveTextLabelPlacement({
-      hasPointSymbol: resolvePointRadiusForDatum(datum) > 0,
-      pointRadius: resolvePointRadiusForDatum(datum),
-      hasSecondaryLabel: hasSecondaryLabelForDatum(datum),
-      primarySize: resolveAccessorValue(textSizeAccessor, datum),
-      secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
-      paddingY
-    });
-  const resolveSecondaryPlacement = (datum: TextLayerDatum) =>
-    resolveTextLabelPlacement({
-      hasPointSymbol: resolvePointRadiusForDatum(datum) > 0,
-      pointRadius: resolvePointRadiusForDatum(datum),
-      hasSecondaryLabel: true,
-      primarySize: resolveAccessorValue(textSizeAccessor, datum),
-      secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
-      paddingY
-    });
+  const primaryLabelVector = textAttributeTable.getChild(
+    textConfig.labelColumn
+  );
+  // Both label layers name the same row, so stacking reads the texts by row
+  // rather than from the datum, whose text depends on the layer.
+  const resolveSecondaryLabelText = (rowIndex: number): string | null =>
+    shouldRenderLabelLayer && secondaryLabelValueVector
+      ? toTextValue(secondaryLabelValueVector.get(rowIndex))
+      : null;
+  const resolvePrimaryLabelText = (rowIndex: number): string =>
+    toTextValue(primaryLabelVector?.get(rowIndex)) ?? missingTextLabel;
   const resolvePrimaryTextAnchor = (datum: TextLayerDatum) =>
     resolvePointRadiusForDatum(datum) > 0
       ? 'start'
@@ -656,14 +664,6 @@ export function createTextOverlayLayers(
     x * pageDisplayScale,
     y * pageDisplayScale
   ];
-  const resolveLabelStackParams = (datum: TextLayerDatum) => ({
-    hasSecondaryLabel: hasSecondaryLabelForDatum(datum),
-    primarySize: resolveAccessorValue(textSizeAccessor, datum),
-    secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
-    paddingY
-  });
-  const resolveManualPlacement = (datum: TextLayerDatum, center: LabelOffset) =>
-    resolveManualLabelPlacement(center, resolveLabelStackParams(datum));
 
   const primaryFontFamily = resolveDeckTextFontFamily(textConfig.fontFamily);
   const primaryFontWeight = resolveDeckTextFontWeight(
@@ -677,49 +677,116 @@ export function createTextOverlayLayers(
     secondaryLabelsConfig.bold ? '700' : '400',
     secondaryLabelsConfig.italic
   );
-  let secondaryDatumByFeatureId: Map<number, TextLayerDatum> | null = null;
-  const findSecondaryDatum = (
-    datum: TextLayerDatum
-  ): TextLayerDatum | undefined => {
-    if (!shouldRenderLabelLayer || !secondaryLabelLayerData) return undefined;
-    secondaryDatumByFeatureId ??= new Map(
-      secondaryLabelLayerData
-        .filter((candidate) => !candidate.isMissingData)
-        .map((candidate) => [candidate.featureId, candidate])
-    );
-    return secondaryDatumByFeatureId.get(datum.featureId);
+  const textMetricsCache = new Map<string, LabelTextMetrics>();
+  const measureText = (
+    text: string,
+    size: number,
+    fontFamily: string,
+    fontWeight: string | number,
+    needsWidth: boolean
+  ): LabelTextMetrics => {
+    if (!needsWidth && isSingleLineLabel(text)) {
+      return { lines: 1, width: 0 };
+    }
+    const key = `${fontFamily}|${fontWeight}|${size}|${text}`;
+    const cached = textMetricsCache.get(key);
+    if (cached) return cached;
+    const metrics = measureLabelText(text, size, fontFamily, fontWeight);
+    textMetricsCache.set(key, metrics);
+    return metrics;
   };
-  const measurePrimaryWidth = (datum: TextLayerDatum): number =>
-    shouldRenderTextLayer
-      ? measureLabelWidth(
-          resolveTextDatumText(datum, missingTextLabel),
-          resolveAccessorValue(textSizeAccessor, datum),
-          primaryFontFamily,
-          primaryFontWeight
-        )
-      : 0;
-  const measureBlockHalfSize = (datum: TextLayerDatum): LabelOffset => {
-    const secondaryDatum = findSecondaryDatum(datum);
-    const secondaryWidth = secondaryDatum
-      ? measureLabelWidth(
-          secondaryDatum.primaryText ?? '',
-          resolveAccessorValue(labelSizeAccessor, secondaryDatum),
-          secondaryFontFamily,
-          secondaryFontWeight
-        )
-      : 0;
-    const halfWidth =
-      Math.max(measurePrimaryWidth(datum), secondaryWidth) / 2 +
-      (sharedBackgroundPadding[0] ?? 0);
+  const resolveTextMetrics = (datum: TextLayerDatum, needsWidth: boolean) => {
+    const primarySize = resolveAccessorValue(textSizeAccessor, datum);
+    const secondarySize = resolveAccessorValue(labelSizeAccessor, datum);
+    const secondaryText = resolveSecondaryLabelText(datum.rowIndex);
+    return {
+      primary: measureText(
+        resolvePrimaryLabelText(datum.rowIndex),
+        primarySize,
+        primaryFontFamily,
+        primaryFontWeight,
+        needsWidth
+      ),
+      primarySize,
+      secondary: secondaryText
+        ? measureText(
+            secondaryText,
+            secondarySize,
+            secondaryFontFamily,
+            secondaryFontWeight,
+            needsWidth
+          )
+        : null,
+      secondarySize
+    };
+  };
+  const stackParamsByRow = new Map<number, LabelStackParams>();
+  const resolveLabelStackParams = (datum: TextLayerDatum): LabelStackParams => {
+    const cached = stackParamsByRow.get(datum.rowIndex);
+    if (cached) return cached;
+    const metrics = resolveTextMetrics(datum, false);
+    const params: LabelStackParams = {
+      hasSecondaryLabel: metrics.secondary !== null,
+      primaryHeight:
+        metrics.primary.lines * metrics.primarySize * DEFAULT_TEXT_LINE_HEIGHT,
+      secondaryHeight: metrics.secondary
+        ? metrics.secondary.lines *
+          metrics.secondarySize *
+          DEFAULT_TEXT_LINE_HEIGHT
+        : 0
+    };
+    stackParamsByRow.set(datum.rowIndex, params);
+    return params;
+  };
+  const resolveDefaultPlacement = (datum: TextLayerDatum) =>
+    resolveTextLabelPlacement({
+      hasPointSymbol: resolvePointRadiusForDatum(datum) > 0,
+      pointRadius: resolvePointRadiusForDatum(datum),
+      ...resolveLabelStackParams(datum)
+    });
+  const resolvePrimaryTextWidth = (datum: TextLayerDatum): number =>
+    shouldRenderTextLayer ? resolveTextMetrics(datum, true).primary.width : 0;
+  const resolveBlockHalfSize = (datum: TextLayerDatum): LabelOffset => {
+    const metrics = resolveTextMetrics(datum, true);
+    const textWidth = Math.max(
+      shouldRenderTextLayer ? metrics.primary.width : 0,
+      metrics.secondary?.width ?? 0
+    );
     return [
-      halfWidth,
-      resolveLabelStack(resolveLabelStackParams(datum)).halfHeight
+      textWidth / 2 + (sharedBackgroundPadding[0] ?? 0),
+      resolveLabelStack(resolveLabelStackParams(datum)).halfHeight + paddingY
     ];
+  };
+  const placeManualLabel = (datum: TextLayerDatum, center: LabelOffset) => {
+    const halfSize = resolveBlockHalfSize(datum);
+    const alignment = resolveLabelAlignment(center, halfSize);
+    return {
+      alignment,
+      ...resolveManualLabelPlacement(
+        center,
+        halfSize[0] - (sharedBackgroundPadding[0] ?? 0),
+        alignment,
+        resolveLabelStackParams(datum)
+      )
+    };
+  };
+  const manualPlacementByRow = new Map<
+    number,
+    ReturnType<typeof placeManualLabel>
+  >();
+  const resolveManualPlacement = (datum: TextLayerDatum) => {
+    const center = resolveManualCenter(datum);
+    if (!center) return undefined;
+    const cached = manualPlacementByRow.get(datum.rowIndex);
+    if (cached) return cached;
+    const placement = placeManualLabel(datum, center);
+    manualPlacementByRow.set(datum.rowIndex, placement);
+    return placement;
   };
   const resolveDefaultBlockCenter = (datum: TextLayerDatum): LabelOffset => {
     const [offsetX, offsetY] =
-      resolvePrimaryPlacement(datum).primaryPixelOffset;
-    const halfWidth = measurePrimaryWidth(datum) / 2;
+      resolveDefaultPlacement(datum).primaryPixelOffset;
+    const halfWidth = resolvePrimaryTextWidth(datum) / 2;
     const anchor = resolvePrimaryTextAnchor(datum);
     const centerX =
       anchor === 'start'
@@ -737,13 +804,13 @@ export function createTextOverlayLayers(
   ): LabelLeaderSegment[] => {
     const points = computeLabelLeader({
       center,
-      halfSize: measureBlockHalfSize(datum),
+      halfSize: resolveBlockHalfSize(datum),
       symbolRadius: resolvePointRadiusForDatum(datum),
+      symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
       minGap: Math.max(
         LABEL_LEADER_MIN_GAP_PX,
         LABEL_LEADER_MIN_GAP_EM * resolveAccessorValue(textSizeAccessor, datum)
-      ),
-      style: labelLayout?.leaderStyle ?? DEFAULT_LABEL_LEADER_STYLE
+      )
     });
     if (!points) return [];
     const color = toLeaderColor(
@@ -782,6 +849,18 @@ export function createTextOverlayLayers(
       ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
       ...(ctx.beforeId && { beforeId: ctx.beforeId })
     }) as unknown as ThematicLayer;
+  let secondaryDatumByFeatureId: Map<number, TextLayerDatum> | null = null;
+  const findSecondaryDatum = (
+    datum: TextLayerDatum
+  ): TextLayerDatum | undefined => {
+    if (!shouldRenderLabelLayer || !secondaryLabelLayerData) return undefined;
+    secondaryDatumByFeatureId ??= new Map(
+      secondaryLabelLayerData
+        .filter((candidate) => !candidate.isMissingData)
+        .map((candidate) => [candidate.featureId, candidate])
+    );
+    return secondaryDatumByFeatureId.get(datum.featureId);
+  };
   let primaryTextLayer: TextLayer<TextLayerDatum> | null = null;
   let secondaryTextLayer: TextLayer<TextLayerDatum> | null = null;
   const buildLabelDragPreview = (
@@ -789,6 +868,7 @@ export function createTextOverlayLayers(
     center: LabelOffset
   ): Layer[] => {
     const preview: Layer[] = [];
+    const placement = placeManualLabel(datum, center);
     const segments = buildLeaderSegments(datum, center);
     if (segments.length > 0) {
       preview.push(
@@ -801,11 +881,8 @@ export function createTextOverlayLayers(
         secondaryTextLayer.clone({
           id: `${secondaryTextLayer.id}-drag-preview`,
           data: [secondaryDatum],
-          getTextAnchor: 'middle',
-          getAlignmentBaseline: 'center',
-          getPixelOffset: toDisplayOffset(
-            resolveManualPlacement(secondaryDatum, center).secondaryPixelOffset
-          )
+          getTextAnchor: placement.alignment,
+          getPixelOffset: toDisplayOffset(placement.secondaryPixelOffset)
         })
       );
     }
@@ -815,18 +892,15 @@ export function createTextOverlayLayers(
           id: `${primaryTextLayer.id}-drag-preview`,
           data: [datum],
           pickable: false,
-          getTextAnchor: 'middle',
-          getAlignmentBaseline: 'center',
-          getPixelOffset: toDisplayOffset(
-            resolveManualPlacement(datum, center).primaryPixelOffset
-          )
+          getTextAnchor: placement.alignment,
+          getPixelOffset: toDisplayOffset(placement.primaryPixelOffset)
         })
       );
     }
     return preview;
   };
 
-  if (labelLayout && Object.keys(labelLayout.offsets).length > 0) {
+  if (labelLayout) {
     const showMissingText = textConfig.missingData?.show ?? true;
     const leaderSegments = textLayerData.flatMap((datum) => {
       const center = resolveManualCenter(datum);
@@ -841,19 +915,6 @@ export function createTextOverlayLayers(
     }
   }
 
-  const pointAnchorTriggers = [
-    pointConfig?.enabled,
-    pointConfig?.mode,
-    pointConfig?.size,
-    pointConfig?.minSize,
-    pointConfig?.maxSize,
-    pointConfig?.sizeColumn,
-    pointConfig?.valueColumn,
-    proportionalSymbolScale,
-    pointMissingColumn,
-    pointStatistics.min,
-    pointStatistics.max
-  ];
   const labelPlacementTriggers = [
     pointConfig?.enabled,
     pointConfig?.mode,
@@ -872,7 +933,17 @@ export function createTextOverlayLayers(
     textBaseSize,
     labelBaseSize,
     sharedBackgroundPadding,
-    pageDisplayScale
+    pageDisplayScale,
+    textConfig.labelColumn,
+    textConfig.fontFamily,
+    textConfig.bold,
+    textConfig.italic,
+    secondaryLabelsConfig.fontFamily,
+    secondaryLabelsConfig.bold,
+    secondaryLabelsConfig.italic,
+    sizeMode,
+    variableTextSizeColumn,
+    textStatistics.max
   ];
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
@@ -897,20 +968,14 @@ export function createTextOverlayLayers(
         sizeUnits: 'pixels',
         sizeScale: pageDisplayScale,
         getTextAnchor: (d) =>
-          resolveManualCenter(d) ? 'middle' : resolveSecondaryTextAnchor(d),
-        getAlignmentBaseline: (d) =>
-          resolveManualCenter(d)
-            ? 'center'
-            : resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
-        getPixelOffset: (d) => {
-          const center = resolveManualCenter(d);
-          return toDisplayOffset(
-            center
-              ? resolveManualPlacement(d, center).secondaryPixelOffset
-              : resolveSecondaryPlacement(d).secondaryPixelOffset
-          );
-        },
-        maxWidth: 10,
+          resolveManualPlacement(d)?.alignment ?? resolveSecondaryTextAnchor(d),
+        getAlignmentBaseline: 'center',
+        getPixelOffset: (d) =>
+          toDisplayOffset(
+            (resolveManualPlacement(d) ?? resolveDefaultPlacement(d))
+              .secondaryPixelOffset
+          ),
+        maxWidth: LABEL_MAX_WIDTH_EM,
         fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
           secondaryLabelsConfig.bold ? '700' : '400',
@@ -961,7 +1026,8 @@ export function createTextOverlayLayers(
           ],
           getTextAnchor: [
             secondaryLabelsConfig.align,
-            ...pointAnchorTriggers,
+            ...labelPlacementTriggers,
+            secondaryLabelColumn,
             labelLayout
           ],
           getPixelOffset: [
@@ -969,7 +1035,6 @@ export function createTextOverlayLayers(
             secondaryLabelColumn,
             labelLayout
           ],
-          getAlignmentBaseline: [...labelPlacementTriggers, labelLayout],
           outlineColor: [secondaryLabelsConfig.haloColor],
           outlineWidth: [
             secondaryLabelsConfig.halo,
@@ -1040,20 +1105,14 @@ export function createTextOverlayLayers(
         sizeUnits: 'pixels',
         sizeScale: pageDisplayScale,
         getTextAnchor: (d) =>
-          resolveManualCenter(d) ? 'middle' : resolvePrimaryTextAnchor(d),
-        getAlignmentBaseline: (d) =>
-          resolveManualCenter(d)
-            ? 'center'
-            : resolvePrimaryPlacement(d).primaryAlignmentBaseline,
-        getPixelOffset: (d) => {
-          const center = resolveManualCenter(d);
-          return toDisplayOffset(
-            center
-              ? resolveManualPlacement(d, center).primaryPixelOffset
-              : resolvePrimaryPlacement(d).primaryPixelOffset
-          );
-        },
-        maxWidth: 10,
+          resolveManualPlacement(d)?.alignment ?? resolvePrimaryTextAnchor(d),
+        getAlignmentBaseline: 'center',
+        getPixelOffset: (d) =>
+          toDisplayOffset(
+            (resolveManualPlacement(d) ?? resolveDefaultPlacement(d))
+              .primaryPixelOffset
+          ),
+        maxWidth: LABEL_MAX_WIDTH_EM,
         fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
           textConfig.bold ? '700' : '400',
@@ -1106,15 +1165,11 @@ export function createTextOverlayLayers(
           ],
           getTextAnchor: [
             textConfig.align,
-            ...pointAnchorTriggers,
-            labelLayout
-          ],
-          getPixelOffset: [
             ...labelPlacementTriggers,
             secondaryLabelColumn,
             labelLayout
           ],
-          getAlignmentBaseline: [
+          getPixelOffset: [
             ...labelPlacementTriggers,
             secondaryLabelColumn,
             labelLayout
