@@ -27,8 +27,8 @@ describe('resolveTextLabelPlacement', () => {
         secondaryHeight: 12
       })
     ).toEqual({
-      primaryPixelOffset: [14, -7],
-      secondaryPixelOffset: [14, 13]
+      primaryPixelOffset: [13, -7],
+      secondaryPixelOffset: [13, 13]
     });
   });
 
@@ -42,8 +42,8 @@ describe('resolveTextLabelPlacement', () => {
         secondaryHeight: 12
       })
     ).toEqual({
-      primaryPixelOffset: [14, 0],
-      secondaryPixelOffset: [14, 13]
+      primaryPixelOffset: [13, 0],
+      secondaryPixelOffset: [13, 13]
     });
   });
 

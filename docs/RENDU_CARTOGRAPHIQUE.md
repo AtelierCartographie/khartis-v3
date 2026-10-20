@@ -129,6 +129,10 @@ verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
 en dessous. Il n'apparaît qu'au-delà d'un écart minimal. L'étiquette est ferrée
 vers l'entité (`resolveLabelAlignment`) : à gauche quand elle est à droite du
 centroïde, à droite quand elle est à gauche, au centre au-dessus ou en dessous.
+Une étiquette plus large que 10 em passe à la ligne après un espace ou un trait
+d'union, jamais au milieu d'un mot (`wrapLabelText`) ; une dernière ligne de trois
+caractères ou moins rejoint la précédente. Khartis calcule ces lignes lui-même et
+les passe à deck.gl, de sorte que mesure, rendu et export SVG coïncident.
 Les étiquettes principale et secondaire s'empilent chacune selon sa hauteur
 réelle, lignes renvoyées comprises, avec un interligne fixe.
 

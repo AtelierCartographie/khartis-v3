@@ -21,10 +21,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  computeTextLines,
-  measureTextWidth
-} from '$lib/features/commons/utils/text-measure.utils';
+import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
 
 import { DeckLayerId, GeometryType } from '../constants';
 import type {
@@ -43,6 +40,7 @@ import {
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+import { wrapLabelText } from '../utils/label-wrap.utils';
 import {
   computeLabelLeader,
   resolveLabelAlignment,
@@ -152,6 +150,8 @@ function toLeaderColor(color: Color): [number, number, number, number] {
 interface LabelTextMetrics {
   lines: number;
   width: number;
+  /** The text as drawn, with its line breaks. */
+  wrapped: string;
 }
 
 function isSingleLineLabel(text: string): boolean {
@@ -160,6 +160,9 @@ function isSingleLineLabel(text: string): boolean {
   );
 }
 
+// Khartis wraps labels itself rather than through deck's word-break, so a
+// long name breaks after a hyphen instead of mid-word, and the measured lines
+// are exactly the drawn ones.
 function measureLabelText(
   text: string,
   size: number,
@@ -167,19 +170,13 @@ function measureLabelText(
   fontWeight: string | number
 ): LabelTextMetrics {
   const weight = String(fontWeight);
-  const lines = computeTextLines(
-    text,
-    size,
-    LABEL_MAX_WIDTH_EM * size,
-    fontFamily,
-    weight
-  );
+  const measure = (line: string): number =>
+    measureTextWidth(line, size, fontFamily, weight);
+  const lines = wrapLabelText(text, LABEL_MAX_WIDTH_EM * size, measure);
   return {
-    lines: Math.max(1, lines.length),
-    width: Math.max(
-      0,
-      ...lines.map((line) => measureTextWidth(line, size, fontFamily, weight))
-    )
+    lines: lines.length,
+    width: Math.max(0, ...lines.map(measure)),
+    wrapped: lines.join('\n')
   };
 }
 
@@ -686,7 +683,7 @@ export function createTextOverlayLayers(
     needsWidth: boolean
   ): LabelTextMetrics => {
     if (!needsWidth && isSingleLineLabel(text)) {
-      return { lines: 1, width: 0 };
+      return { lines: 1, width: 0, wrapped: text };
     }
     const key = `${fontFamily}|${fontWeight}|${size}|${text}`;
     const cached = textMetricsCache.get(key);
@@ -962,7 +959,14 @@ export function createTextOverlayLayers(
         id: labelLayerId,
         data: labelData,
         getPosition: (d) => d.position,
-        getText: (d) => d.primaryText ?? '',
+        getText: (d) =>
+          measureText(
+            d.primaryText ?? '',
+            resolveAccessorValue(labelSizeAccessor, d),
+            secondaryFontFamily,
+            secondaryFontWeight,
+            false
+          ).wrapped,
         getColor: createTextColorAccessor(labelColor, labelOpacity),
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
@@ -975,7 +979,6 @@ export function createTextOverlayLayers(
             (resolveManualPlacement(d) ?? resolveDefaultPlacement(d))
               .secondaryPixelOffset
           ),
-        maxWidth: LABEL_MAX_WIDTH_EM,
         fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
           secondaryLabelsConfig.bold ? '700' : '400',
@@ -1004,7 +1007,15 @@ export function createTextOverlayLayers(
         ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
         ...(ctx.beforeId && { beforeId: ctx.beforeId }),
         updateTriggers: {
-          getText: [secondaryLabelColumn],
+          getText: [
+            secondaryLabelColumn,
+            secondaryLabelsConfig.size,
+            secondaryLabelsConfig.fontFamily,
+            secondaryLabelsConfig.bold,
+            secondaryLabelsConfig.italic,
+            sizeMode,
+            variableTextSizeColumn
+          ],
           getColor: [
             colorMode,
             textValueColumn,
@@ -1102,7 +1113,14 @@ export function createTextOverlayLayers(
         id: textLayerId,
         data: textData,
         getPosition: (d) => d.position,
-        getText: (d) => resolveTextDatumText(d, missingTextLabel),
+        getText: (d) =>
+          measureText(
+            resolveTextDatumText(d, missingTextLabel),
+            resolveAccessorValue(textSizeAccessor, d),
+            primaryFontFamily,
+            primaryFontWeight,
+            false
+          ).wrapped,
         getColor: textColorAccessor,
         getSize: textSizeAccessor,
         sizeUnits: 'pixels',
@@ -1115,7 +1133,6 @@ export function createTextOverlayLayers(
             (resolveManualPlacement(d) ?? resolveDefaultPlacement(d))
               .primaryPixelOffset
           ),
-        maxWidth: LABEL_MAX_WIDTH_EM,
         fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
           textConfig.bold ? '700' : '400',
@@ -1144,7 +1161,13 @@ export function createTextOverlayLayers(
           getText: [
             textConfig.labelColumn,
             textConfig.missingData?.show,
-            textConfig.missingData?.label
+            textConfig.missingData?.label,
+            textConfig.size,
+            textConfig.fontFamily,
+            textConfig.bold,
+            textConfig.italic,
+            sizeMode,
+            variableTextSizeColumn
           ],
           getColor: [
             colorMode,
