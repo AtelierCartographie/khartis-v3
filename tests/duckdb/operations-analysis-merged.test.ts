@@ -188,6 +188,18 @@ beforeAll(async () => {
   );
 
   await run(db, 'CREATE TABLE empty_t (a INTEGER, b VARCHAR)');
+
+  // Larger than the former 50k-row analysis sample: a single row carries the
+  // maximum and another the minimum, so a sample would almost always miss them.
+  await run(
+    db,
+    `CREATE TABLE large AS SELECT
+      i::INTEGER AS id,
+      CASE WHEN i = 77777 THEN 6653 WHEN i = 1234 THEN -40 ELSE (i % 100) END AS trips,
+      DATE '2020-01-01' + (CASE WHEN i = 99999 THEN 4000 ELSE i % 365 END)::INTEGER AS day,
+      'seg_' || i AS label
+    FROM range(120000) t(i)`
+  );
 });
 
 afterAll(async () => {
@@ -249,15 +261,12 @@ describe('analyse output parity with per-column macro queries', () => {
 
     const profile = profileQueries(bridge.queries);
     expect(profile.describe).toHaveLength(1);
-    expect(profile.rowCount).toHaveLength(1);
+    expect(profile.rowCount).toHaveLength(0);
     expect(profile.general).toHaveLength(1);
     expect(profile.numeric).toHaveLength(1);
     expect(profile.date).toHaveLength(1);
     expect(profile.histogram).toHaveLength(1);
-    const statisticQueries = bridge.queries.filter(
-      (sql) => !sql.startsWith('DROP TABLE IF EXISTS')
-    );
-    expect(statisticQueries).toHaveLength(6);
+    expect(bridge.queries).toHaveLength(5);
   });
 
   it('should return identical results when the column count exceeds one merge batch', async () => {
@@ -272,10 +281,42 @@ describe('analyse output parity with per-column macro queries', () => {
     expect(profile.numeric).toHaveLength(2);
     expect(profile.date).toHaveLength(0);
     expect(profile.histogram).toHaveLength(2);
-    const statisticQueries = bridge.queries.filter(
-      (sql) => !sql.startsWith('DROP TABLE IF EXISTS')
+    expect(bridge.queries).toHaveLength(7);
+  });
+
+  it('should compute every statistic on the whole table, without sampling', async () => {
+    const results = await analyse(makeCtx(), 'large');
+    const column = (name: string) =>
+      results.find((result) => result.name === name) as Record<string, unknown>;
+
+    const trips = column('trips');
+    expect(Number(trips.max)).toBe(6653);
+    expect(Number(trips.min)).toBe(-40);
+    expect(Number(trips.length)).toBe(120000);
+    expect(Number(trips.count)).toBe(120000);
+
+    const label = column('label');
+    expect(Number(label.uniques)).toBe(120000);
+    expect(Number(label.duplicates)).toBe(0);
+
+    const day = column('day');
+    expect(String(day.max)).toContain('2030-12-14');
+
+    // The value sample (legend ticks) and the histogram include the extremes.
+    const sample = Array.from(trips.value_sample as ArrayLike<number>).map(
+      Number
     );
-    expect(statisticQueries).toHaveLength(8);
+    expect(sample[0]).toBe(-40);
+    expect(sample.at(-1)).toBe(6653);
+    expect(sample.at(-2)).toBe(99);
+    const histogramTotal = Array.from(
+      (trips.histogram as { toArray(): Record<string, unknown>[] }).toArray()
+    ).reduce((total, bin) => total + Number(bin.count), 0);
+    expect(histogramTotal).toBe(120000);
+
+    expect(bridge.queries.some((sql) => sql.includes('USING SAMPLE'))).toBe(
+      false
+    );
   });
 
   it('should return bare describe rows when the table is empty', async () => {
