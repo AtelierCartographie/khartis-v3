@@ -43,6 +43,7 @@ export enum DeckLayerId {
   POLYGON_LAYER = 'polygon-layer',
   TEXT_LAYER = 'text-layer',
   LABEL_LAYER = 'label-layer',
+  LABEL_LEADER_LAYER = 'label-leader-layer',
   WORLD_BASE_LAYER = 'world-base-layer',
   BASEMAP_TERRE = 'basemap-terre',
   BASEMAP_MERS = 'basemap-mers',

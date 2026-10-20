@@ -28,6 +28,7 @@ import { DeckLayerId } from '$lib/features/map/constants/map.constants';
 import { findById } from '$lib/features/commons/utils/array-helpers';
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
 import { LogCategory, logger } from './logger';
+import { computeTextLines, measureTextWidth } from './text-measure.utils';
 
 interface ExportOptions {
   width: number;
@@ -693,6 +694,7 @@ const VISUALIZATION_PREFIX_LABELS: [string, () => string][] = [
   [DeckLayerId.POINT_LAYER, m.svg_export_primitive_symbol],
   [DeckLayerId.LINE_LAYER, m.svg_export_primitive_line],
   [DeckLayerId.LABEL_LAYER, m.svg_export_primitive_label],
+  [DeckLayerId.LABEL_LEADER_LAYER, m.svg_export_primitive_label_leader],
   [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text]
 ];
 
@@ -2119,115 +2121,6 @@ function normalizeTextPadding(value: unknown): [number, number] {
   return [padding, padding];
 }
 
-let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
-
-function getTextMeasurementContext(): CanvasRenderingContext2D | null {
-  if (textMeasurementContext !== undefined) return textMeasurementContext;
-
-  if (typeof document === 'undefined') {
-    textMeasurementContext = null;
-    return textMeasurementContext;
-  }
-
-  const canvas = document.createElement('canvas');
-  textMeasurementContext = canvas.getContext('2d');
-  return textMeasurementContext;
-}
-
-function buildCanvasFont(
-  fontSize: number,
-  fontFamily: string,
-  fontWeight: string
-): string {
-  return `${fontWeight} ${roundSvgValue(fontSize)}px ${fontFamily}`;
-}
-
-function measureTextWidth(
-  text: string,
-  fontSize: number,
-  fontFamily: string,
-  fontWeight: string
-): number {
-  const context = getTextMeasurementContext();
-  if (context) {
-    context.font = buildCanvasFont(fontSize, fontFamily, fontWeight);
-    return context.measureText(text).width;
-  }
-
-  return text.length * fontSize * 0.58;
-}
-
-function splitLongWord(
-  word: string,
-  maxWidth: number,
-  measure: (text: string) => number
-): string[] {
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const character of word) {
-    const candidate = current + character;
-    if (current && measure(candidate) > maxWidth) {
-      chunks.push(current);
-      current = character;
-    } else {
-      current = candidate;
-    }
-  }
-
-  if (current) chunks.push(current);
-  return chunks;
-}
-
-function wrapLine(
-  line: string,
-  maxWidth: number,
-  measure: (text: string) => number
-): string[] {
-  if (maxWidth <= 0 || measure(line) <= maxWidth) return [line];
-
-  const words = line.split(' ');
-  const rows: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-
-    if (measure(candidate) <= maxWidth) {
-      current = candidate;
-      continue;
-    }
-
-    if (current) {
-      rows.push(current);
-    }
-
-    if (measure(word) > maxWidth) {
-      const chunks = splitLongWord(word, maxWidth, measure);
-      rows.push(...chunks.slice(0, -1));
-      current = chunks[chunks.length - 1] ?? '';
-    } else {
-      current = word;
-    }
-  }
-
-  if (current) rows.push(current);
-  return rows;
-}
-
-function computeTextLines(
-  text: string,
-  fontSize: number,
-  maxWidth: number,
-  fontFamily: string,
-  fontWeight: string
-): string[] {
-  const measure = (value: string): number =>
-    measureTextWidth(value, fontSize, fontFamily, fontWeight);
-
-  return text.split('\n').flatMap((line) => wrapLine(line, maxWidth, measure));
-}
-
 const TEXT_CENTRAL_BASELINE_OFFSET_EM = 0.35;
 const TEXT_TOP_ASCENT_OFFSET_EM = 0.8;
 const TEXT_BOTTOM_DESCENT_OFFSET_EM = 0.2;
@@ -2555,6 +2448,92 @@ function serializeTextLayer(
   return `<g ${groupAttributes}>${parts.join('')}</g>`;
 }
 
+function serializeLabelLeaderLayer(
+  layer: SvgDeckLayerLike,
+  context: SvgProjectionContext
+): string {
+  const props = getLayerProps(layer);
+  if (!Array.isArray(props.data)) return '';
+
+  const layerOpacity = getLayerNumber(props, 'opacity', 1);
+  const widthScale = getLayerNumber(props, 'widthScale', 1);
+  const pathsByStroke = new Map<
+    string,
+    { color: SvgColor; width: number; commands: string[] }
+  >();
+  let previousEnd: [number, number] | null = null;
+  let previousStrokeKey: string | null = null;
+
+  props.data.forEach((datum, index) => {
+    const anchor = projectPosition(
+      resolveAccessorTuple(props.getSourcePosition, datum, index, [0, 0]),
+      layer,
+      context
+    );
+    if (!anchor) return;
+
+    const [sourceX, sourceY] = resolveAccessorTuple(
+      props.getSourcePixelOffset,
+      datum,
+      index,
+      [0, 0]
+    );
+    const [targetX, targetY] = resolveAccessorTuple(
+      props.getTargetPixelOffset,
+      datum,
+      index,
+      [0, 0]
+    );
+    const start: [number, number] = [anchor[0] + sourceX, anchor[1] + sourceY];
+    const end: [number, number] = [anchor[0] + targetX, anchor[1] + targetY];
+    const color = applyLayerOpacity(
+      normalizeSvgColor(
+        resolveAccessorValue(props.getColor, datum, index),
+        SVG_DEFAULT_STROKE_COLOR
+      ),
+      layerOpacity
+    );
+    if (color.opacity <= 0) return;
+
+    const width =
+      resolveAccessorNumber(props.getWidth, datum, index, 1) * widthScale;
+    const strokeKey = `${svgColorKey(color)}|${width}`;
+    const group = pathsByStroke.get(strokeKey) ?? {
+      color,
+      width,
+      commands: []
+    };
+    pathsByStroke.set(strokeKey, group);
+
+    // An elbow leader comes as consecutive segments sharing an end.
+    const continuesPath =
+      previousStrokeKey === strokeKey &&
+      previousEnd !== null &&
+      previousEnd[0] === start[0] &&
+      previousEnd[1] === start[1];
+    group.commands.push(
+      `${continuesPath ? '' : `M${roundSvgCoord(start[0])} ${roundSvgCoord(start[1])} `}L${roundSvgCoord(end[0])} ${roundSvgCoord(end[1])}`
+    );
+    previousEnd = end;
+    previousStrokeKey = strokeKey;
+  });
+
+  return [...pathsByStroke.values()]
+    .map(
+      (group) => `
+      <path
+        d="${group.commands.join(' ')}"
+        fill="none"
+        ${colorAttributes('stroke', group.color)}
+        stroke-width="${roundSvgValue(group.width)}"
+        stroke-linecap="butt"
+        stroke-linejoin="miter"
+      />
+    `
+    )
+    .join('');
+}
+
 function serializeDeckLayer(
   layer: SvgDeckLayerLike,
   context: SvgProjectionContext
@@ -2563,6 +2542,10 @@ function serializeDeckLayer(
   if (props.visible === false) return '';
 
   const layerTypeName = getLayerTypeName(layer);
+
+  if (layerTypeName.includes('LabelLeaderLayer')) {
+    return serializeLabelLeaderLayer(layer, context);
+  }
 
   if (
     layerTypeName.includes('ScatterplotLayer') ||
