@@ -45,6 +45,7 @@
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
   import { labelPlacementViewStore } from '../stores/label-placement-view.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import {
     attachLabelDragController,
     type LabelEditRequest
@@ -1942,6 +1943,14 @@
   $effect(() => {
     if (!hasAutomaticLabelPlacement) return;
     void mapInstanceStore.deckViewState;
+    untrack(() => labelPlacementViewStore.scheduleRefresh());
+  });
+
+  // Moving, resizing or toggling a legend, a geo indication or an annotation
+  // frees or covers labels: place them again once the item has settled.
+  $effect(() => {
+    if (!hasAutomaticLabelPlacement) return;
+    void pageItemObstaclesStore.version;
     untrack(() => labelPlacementViewStore.scheduleRefresh());
   });
 

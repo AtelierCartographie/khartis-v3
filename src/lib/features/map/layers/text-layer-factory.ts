@@ -21,6 +21,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
+import { getFormatState } from '$lib/features/step-toolbar/tools/format';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
 
@@ -41,6 +42,7 @@ import {
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
 import { wrapLabelText } from '../utils/label-wrap.utils';
 import {
   computeLabelLeader,
@@ -838,12 +840,14 @@ export function createTextOverlayLayers(
     );
 
   // Automatic placement needs the live map view, which facet cells do not share.
+  const pageFormat = getFormatState();
   const placementFrame =
     textConfig.collisionDetection && !facetsStore.enabled
       ? resolveLabelPlacementFrame(
           ctx.modelMatrix,
           pageDisplayScale,
-          getBasemapFrameExtent(ctx.customProjection)
+          getBasemapFrameExtent(ctx.customProjection),
+          pageFormat.width - pageFormat.margins.left - pageFormat.margins.right
         )
       : null;
   // Labels a Texts filter kept are the ones the user asked for: never hidden.
@@ -996,6 +1000,7 @@ export function createTextOverlayLayers(
     }
     autoCenters = placeLabelBlocks(vizId, entries, {
       bounds: placementFrame.bounds,
+      obstacles: placementFrame.toObstacles(pageItemObstaclesStore.boxes),
       gap: TEXT_SYMBOL_GAP_PX,
       symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
       minGap: leaderMinGaps.length

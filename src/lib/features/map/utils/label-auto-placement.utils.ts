@@ -8,6 +8,8 @@ import type { Matrix4 } from '@math.gl/core';
 
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 
+import type { PageItemBox } from '../stores/page-item-obstacles.store.svelte';
+
 import type { BasemapFrameExtent } from './basemap-frame.utils';
 import type { LabelOffset } from './label-layout.utils';
 
@@ -28,6 +30,8 @@ export interface AutoLabelEntry {
 
 export interface AutoLabelPlacementOptions {
   bounds: [number, number, number, number];
+  /** Boxes labels must keep clear of, in page pixels. */
+  obstacles: [number, number, number, number][];
   gap: number;
   symbolGap: number;
   minGap: number;
@@ -65,17 +69,22 @@ export interface LabelPlacementFrame {
   /** The map area, in page pixels. */
   bounds: [number, number, number, number];
   toPagePx: (position: [number, number]) => LabelOffset | null;
+  /** The page items over the map area, as obstacles in page pixels. */
+  toObstacles: (boxes: PageItemBox[]) => [number, number, number, number][];
 }
 
 /**
  * Projects layer positions to page pixels through the live map viewport, or
  * null before the map has rendered once. The canvas spans the whole page, so
  * labels are kept inside the basemap frame when the projection has one.
+ * `mapAreaWidth` is the logical width of the map area, which page item boxes
+ * are measured against.
  */
 export function resolveLabelPlacementFrame(
   modelMatrix: Matrix4 | null | undefined,
   pageDisplayScale: number,
-  frameExtent: BasemapFrameExtent | null
+  frameExtent: BasemapFrameExtent | null,
+  mapAreaWidth: number
 ): LabelPlacementFrame | null {
   const viewport = resolveMapViewport();
   if (!viewport) return null;
@@ -109,8 +118,29 @@ export function resolveLabelPlacementFrame(
       Math.min(bounds[3], Math.max(a[1], b[1]))
     ];
   }
+  // MapLibre renders at page scale 1 on a canvas sized by the page zoom, so
+  // page item boxes are scaled to the canvas rather than assumed to match it.
+  const itemScale =
+    mapAreaWidth > 0 ? viewport.width / scale / mapAreaWidth : 1;
+  const toObstacles = (
+    boxes: PageItemBox[]
+  ): [number, number, number, number][] =>
+    boxes
+      .map(
+        (box) =>
+          box.map((value) => value * itemScale) as [
+            number,
+            number,
+            number,
+            number
+          ]
+      )
+      .filter(
+        ([x0, y0, x1, y1]) =>
+          x1 > bounds[0] && x0 < bounds[2] && y1 > bounds[1] && y0 < bounds[3]
+      );
   return bounds[2] > bounds[0] && bounds[3] > bounds[1]
-    ? { bounds, toPagePx }
+    ? { bounds, toPagePx, toObstacles }
     : null;
 }
 
@@ -126,7 +156,9 @@ function hashPlacementInput(
     ...options.bounds,
     options.gap,
     options.symbolGap,
-    options.minGap
+    options.minGap,
+    options.obstacles.length,
+    ...options.obstacles.flat()
   ])
     mix(value);
   for (const entry of entries) {
@@ -148,6 +180,7 @@ function hashPlacementInput(
 
 interface CachedPlacement {
   key: string;
+  obstaclesKey: string;
   result: PlacementResult;
   centers: Map<number, LabelOffset | null>;
 }
@@ -158,7 +191,8 @@ const placementByVisualization = new Map<string, CachedPlacement>();
  * Places the label blocks of a visualization and returns, by entry id, the
  * block centre relative to its anchor, or null for a label hidden for lack of
  * room. The previous result of the visualization keeps labels where they were
- * while their spot stays free, so a zoom does not reshuffle the map.
+ * while their spot stays free, so a zoom does not reshuffle the map. A page
+ * item that moves drops it, so labels it pushed aside come back once it leaves.
  */
 export function placeLabelBlocks(
   vizId: string,
@@ -168,6 +202,7 @@ export function placeLabelBlocks(
   const key = hashPlacementInput(entries, options);
   const cached = placementByVisualization.get(vizId);
   if (cached?.key === key) return cached.centers;
+  const obstaclesKey = options.obstacles.flat().join(',');
 
   const mayUseLeader = new Set(
     entries
@@ -193,19 +228,35 @@ export function placeLabelBlocks(
   }));
   const result = placeLabels(labels, {
     bounds: options.bounds,
+    obstacles: options.obstacles.map(([x0, y0, x1, y1]) => ({
+      type: 'rect',
+      box: [
+        x0 - options.gap,
+        y0 - options.gap,
+        x1 + options.gap,
+        y1 + options.gap
+      ]
+    })),
     gap: options.gap,
     leader: { symbolGap: options.symbolGap, minGap: options.minGap },
     // Without a symbol the label names an area or a bare point: centred first.
     areaOverflowCost: 0,
-    previous: cached?.result
+    previous: cached?.obstaclesKey === obstaclesKey ? cached.result : undefined
   });
 
+  // A required label with no free spot left falls back onto a blocked one;
+  // under a page item it could not be read, so it is hidden instead.
+  const isUnderPageItem = (box: [number, number, number, number]): boolean =>
+    options.obstacles.some(
+      ([x0, y0, x1, y1]) =>
+        box[0] < x1 && x0 < box[2] && box[1] < y1 && y0 < box[3]
+    );
   const centers = new Map<number, LabelOffset | null>();
   result.labels.forEach((placed, index) => {
     const entry = entries[index];
     centers.set(
       entry.id,
-      placed.box
+      placed.box && (entry.mode === 'pinned' || !isUnderPageItem(placed.box))
         ? [
             (placed.box[0] + placed.box[2]) / 2 - entry.anchor[0],
             (placed.box[1] + placed.box[3]) / 2 - entry.anchor[1]
@@ -213,6 +264,6 @@ export function placeLabelBlocks(
         : null
     );
   });
-  placementByVisualization.set(vizId, { key, result, centers });
+  placementByVisualization.set(vizId, { key, obstaclesKey, result, centers });
   return centers;
 }
