@@ -118,7 +118,10 @@ glyphes des textes saisis rejoignent le jeu de caractères des couches de texte.
 La position est le centre du bloc d'étiquettes (principale et secondaire), en
 pixels de page depuis l'ancrage de l'entité. Elle est rangée par visualisation
 et par clé d'entité dans `labelLayoutStore`, puis enregistrée dans
-`layoutSettings.labels`. La clé vient de l'identifiant du fond joint (`f:`) ou du
+`layoutSettings.labels`. Dans une collection de cartes, chaque facette a son
+propre identifiant de visualisation : une étiquette déplacée ou corrigée dans
+une facette ne bouge pas dans les autres. La carte simple et la collection
+partagent ce comportement par `useLabelEditing`. La clé vient de l'identifiant du fond joint (`f:`) ou du
 `__id` de la ligne (`r:`) : elle survit à un rechargement, pas à un réimport de
 données modifiées.
 
