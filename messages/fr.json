@@ -469,7 +469,7 @@
   "facets_columns_label": "Colonnes",
   "facets_frame_visible_label": "Afficher un cadre",
   "facets_reorder": "Réorganiser",
-  "facets_scale_shared_label": "Échelle commune",
+  "facets_scale_shared_label": "Légende commune",
   "facets_distribution_section": "Distribution",
   "facets_distribution_helper": "Répartir les variables sur les cartes souhaitées selon la position des cartes.",
   "facets_toggle_create_collection": "Séparer en plusieurs cartes",
