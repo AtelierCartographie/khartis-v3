@@ -229,6 +229,8 @@ export interface SymbolPrimitiveConfig {
   fillValueColumn?: string;
   fillCategoryColumn?: string;
   fillClassification?: ClassificationConfig;
+  /** Positive then negative fill when the size column holds both signs. */
+  signColors?: [string, string];
   missingData?: MissingDataConfig;
   modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
 }
@@ -402,6 +404,7 @@ export interface VisualizationConfig {
     fillColor?: string | string[];
     fillColorB?: string;
     symbolFillColor?: string | string[];
+    symbolSignColors?: [string, string];
     fillOpacity?: number;
     strokeColor?: string;
     strokeWidth?: number;

@@ -55,7 +55,10 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     const renamed = pickRenamedKeys<
       VisualizationConfig['style'],
       SymbolPrimitiveConfig
-    >(updates, [{ from: 'symbolFillColor', to: 'fillColor' }]);
+    >(updates, [
+      { from: 'symbolFillColor', to: 'fillColor' },
+      { from: 'symbolSignColors', to: 'signColors' }
+    ]);
     const passthrough = pickOwnedKeys(updates, [
       'fillColorB',
       'strokeColor'

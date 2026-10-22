@@ -69,6 +69,8 @@
     sectionInfoText?: string;
     densitySnippet?: Snippet;
     uniqueSnippet?: Snippet;
+    /** Replaces the variable, aspect and palette rows of the categories mode. */
+    categoriesSnippet?: Snippet;
     selectableDataFields: Array<{ id: number; text: string; type?: string }>;
     getFacetsSelectedFieldIds: (slotPath: FacetSlotPath) => number[];
     isFacetsActiveForSlot: (slotPath: FacetSlotPath) => boolean;
@@ -123,6 +125,7 @@
     sectionInfoText,
     densitySnippet,
     uniqueSnippet,
+    categoriesSnippet,
     selectableDataFields,
     getFacetsSelectedFieldIds,
     isFacetsActiveForSlot,
@@ -328,6 +331,8 @@
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
+{:else if fillMode === FillMode.CATEGORIES && categoriesSnippet}
+  {@render categoriesSnippet()}
 {:else if fillMode === FillMode.CATEGORIES}
   {#if categoryMapFills.length > 0}
     {@render mapFillPickers(categoryMapFills, selectableCategoryFields)}

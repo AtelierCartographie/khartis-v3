@@ -293,6 +293,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.style.symbolFillColor ??
       visualization.style.fillColor,
     fillColorB: existing?.fillColorB ?? visualization.style.fillColorB,
+    signColors: existing?.signColors ?? visualization.style.symbolSignColors,
     strokeMode:
       existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
     strokeColor:

@@ -40,6 +40,7 @@ import {
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { DataValidationError } from '../pipeline.errors';
 import { loadDistinctCategoryLabels } from '$lib/features/commons/utils/category-labels.utils';
+import { isSignedProportionalSymbol } from '$lib/features/commons/utils/symbol-sign.utils';
 
 function resolveFacetClassification(
   visualization: VisualizationConfig,
@@ -434,7 +435,7 @@ export function resolveFacetFillSlotPath(
     symbol.mode === SymbolMode.CLASSES ||
     (symbol.mode === SymbolMode.PROPORTIONAL &&
       symbol.proportionalType !== ProportionalType.DOUBLE);
-  if (!drawsFill) {
+  if (!drawsFill || isSignedProportionalSymbol(baseViz)) {
     return null;
   }
 

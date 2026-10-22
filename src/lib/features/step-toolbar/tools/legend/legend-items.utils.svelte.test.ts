@@ -36,6 +36,10 @@ vi.mock('../facets', () => ({
   }
 }));
 
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
+  datasetsStore: { getColumnStatistics: () => null }
+}));
+
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: { visualizations: [] }
 }));

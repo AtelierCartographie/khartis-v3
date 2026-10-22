@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     datasets: [{ id: 'table1', tableName: 'table1', sourceFileId: 'source1' }],
-    getUniqueValues: mocks.getUniqueValues
+    getUniqueValues: mocks.getUniqueValues,
+    getColumnStatistics: () => null
   }
 }));
 

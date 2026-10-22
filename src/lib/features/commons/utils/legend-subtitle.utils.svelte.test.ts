@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ColorMode,
   SizeMode
 } from '$lib/features/commons/constants/visualization.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { getEnabledLegendPrimitives } from './legend-subtitle.utils';
+
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
+  datasetsStore: { getColumnStatistics: () => null }
+}));
 
 function buildVisualization(
   text: Partial<NonNullable<VisualizationConfig['text']>>
