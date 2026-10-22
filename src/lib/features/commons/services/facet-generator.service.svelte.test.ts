@@ -289,6 +289,72 @@ describe('generateFacetVisualizations', () => {
     ]);
   });
 
+  it('gives a map its own fill categories while the others keep the base fill', async () => {
+    mocks.loadDistinctCategoryLabels.mockResolvedValue(['North', 'South']);
+    const fillClassification = {
+      method: 'equal_interval',
+      colors: ['#111', '#222'],
+      labels: ['EU27', 'EFTA'],
+      categoryValues: ['EU27', 'EFTA']
+    };
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'pop', categoryColumn: 'zone' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'pop',
+        fillMode: 'categories',
+        fillCategoryColumn: 'zone',
+        fillClassification
+      }
+    });
+
+    const [pop, gdp] = await generateFacetVisualizations(
+      base as never,
+      ['pop', 'gdp'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { gdp: 'region' }
+    );
+
+    expect(pop.symbol?.fillCategoryColumn).toBe('zone');
+    expect(pop.symbol?.fillClassification).toEqual(fillClassification);
+    expect(gdp.symbol?.sizeColumn).toBe('gdp');
+    expect(gdp.symbol?.fillCategoryColumn).toBe('region');
+    expect(gdp.symbol?.fillClassification?.labels).toEqual(['North', 'South']);
+    expect(gdp.mapping.categoryColumn).toBe('zone');
+  });
+
+  it('pools fill class breaks over every map fill column on a shared legend', async () => {
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'pop' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'pop',
+        fillMode: 'classes',
+        fillValueColumn: 'density',
+        fillClassification: makeBaseViz().classification
+      }
+    });
+
+    const [pop, gdp] = await generateFacetVisualizations(
+      base as never,
+      ['pop', 'gdp'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { gdp: 'income' }
+    );
+
+    expect(mocks.calculateBreaks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnName: 'density',
+        pooledColumnNames: ['density', 'income']
+      })
+    );
+    expect(pop.symbol?.fillValueColumn).toBe('density');
+    expect(gdp.symbol?.fillValueColumn).toBe('income');
+    expect(gdp.symbol?.fillClassification?.breaks).toEqual([20, 30, 40]);
+  });
+
   it('keeps the diverging breakpoint when facets are reclassified', async () => {
     mocks.calculateDivergingBreaks.mockResolvedValue({
       breaks: [-10, 0, 10],

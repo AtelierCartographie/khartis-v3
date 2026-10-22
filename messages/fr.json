@@ -477,6 +477,7 @@
   "facets_notice_title": "Collection de cartes",
   "facets_notice_replaced": "La collection précédente a été remplacée.",
   "facets_facet_title_label": "Titre de la carte « {variable} »",
+  "facets_map_fill_label": "{title} : Couleur selon",
   "facets_titles_section": "Titres",
   "facets_titles_helper": "Renommer le titre affiché au-dessus de chaque carte de la collection.",
   "facets_tiled_basemap_unsupported": "Les fonds de référence (IGN & OpenStreetMap) ne sont pas utilisables pour une collection de cartes. Veuillez sélectionner un fond issu du catalogue ou importer votre propre fond de carte.",

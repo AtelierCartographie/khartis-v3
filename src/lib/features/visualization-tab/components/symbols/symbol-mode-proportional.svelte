@@ -623,6 +623,8 @@
     selectableDataFields={selectableDataFields}
     getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
     isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
+    getFacetsMapFills={facetsSelection.getMapFills}
+    onFacetsMapFillSelect={facetsSelection.selectMapFill}
     onFillModeChange={handleFillModeChange}
     onFillColorChange={handleFillColorChange}
     onFillOpacityChange={handleFillOpacityChange}
