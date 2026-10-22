@@ -158,7 +158,7 @@ async function executeArrowIpcQuery(
   perfMark(PERF_PHASE.ARROW_TABLE);
   let ipcBuffer: Uint8Array;
 
-  if (Duck.queryStreaming && !options?.skipStreaming) {
+  if (!options?.skipStreaming) {
     ipcBuffer = await Duck.queryStreaming(query);
     const streamTable = tableFromIPC(ipcBuffer);
     if (streamTable.numRows > 0) {

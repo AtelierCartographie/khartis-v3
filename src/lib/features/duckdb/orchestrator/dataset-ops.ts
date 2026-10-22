@@ -137,7 +137,7 @@ export async function dropTable(
     }
 
     // Clear cached metadata for the dropped table (prevents reference leaks)
-    Duck.cleanupTableResources?.(tableName);
+    Duck.cleanupTableResources(tableName);
   } catch (error) {
     logger.error(
       '[duckDBOrchestrator:dropTable] ERROR',
