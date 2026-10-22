@@ -29,6 +29,7 @@
   import {
     useMapBasemap,
     useMapBounds,
+    useLabelEditing,
     useMapInit,
     useMapLayers,
     useMapReferenceBasemap,
@@ -46,10 +47,6 @@
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
   import { labelPlacementViewStore } from '../stores/label-placement-view.store.svelte';
   import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
-  import {
-    attachLabelDragController,
-    type LabelEditRequest
-  } from '../interactions/label-drag.controller';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
@@ -2061,38 +2058,16 @@
     }
   });
 
-  let isOverDraggableLabel = $state(false);
-  let labelEditRequest = $state.raw<LabelEditRequest | null>(null);
-
-  $effect(() => {
-    const container = mapContainer;
-    const canMoveLabels =
+  const labelEditing = useLabelEditing({
+    getContainer: () => mapContainer,
+    isEnabled: () =>
       !isFacetCell &&
       globalState.selectedStep === ToolbarStep.Styling &&
-      !globalState.isMapExporting;
-    if (!container || !canMoveLabels) {
-      return;
+      !globalState.isMapExporting,
+    pick: (x, y, radius) => {
+      const target = mapInit.deckOverlay ?? mapInit.deckInstance;
+      return target?.pickObject({ x, y, radius }) ?? null;
     }
-
-    const detach = attachLabelDragController({
-      container,
-      pick: (x, y, radius) => {
-        const target = mapInit.deckOverlay ?? mapInit.deckInstance;
-        return target?.pickObject({ x, y, radius }) ?? null;
-      },
-      onHoverChange: (isOverLabel) => {
-        isOverDraggableLabel = isOverLabel;
-      },
-      onEditLabel: (request) => {
-        labelEditRequest = request;
-      }
-    });
-
-    return () => {
-      detach();
-      isOverDraggableLabel = false;
-      labelEditRequest = null;
-    };
   });
 
   onMount(() => {
@@ -2189,7 +2164,7 @@
         bind:this={mapContainer}
         class="map-canvas"
         class:is-empty={isBlankCanvas}
-        class:is-over-label={isOverDraggableLabel}
+        class:is-over-label={labelEditing.isOverLabel}
         style={mapCanvasStyle}
       ></div>
 
@@ -2221,13 +2196,11 @@
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
     {/if}
 
-    {#if labelEditRequest}
-      {#key labelEditRequest}
+    {#if labelEditing.editRequest}
+      {#key labelEditing.editRequest}
         <LabelTextEditor
-          request={labelEditRequest}
-          onclose={() => {
-            labelEditRequest = null;
-          }}
+          request={labelEditing.editRequest}
+          onclose={labelEditing.closeEditor}
         />
       {/key}
     {/if}

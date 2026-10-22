@@ -17,6 +17,8 @@ export { mapLoadingStore } from './stores/map-loading.store.svelte';
 export { mapTooltipStore } from './stores/map-tooltip.store.svelte';
 export { rowScopeStore } from './stores/row-scope.store.svelte';
 export { trackWorkerParseVersion } from './utils/worker-parse.svelte';
+export { labelLayoutStore } from './stores/label-layout.store.svelte';
+export { default as LabelTextEditor } from './components/label-text-editor.svelte';
 
 export {
   basemapService,
