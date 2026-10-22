@@ -132,17 +132,19 @@ export async function readTabular(
             ): string[] => {
               const csvOptions: string[] = [
                 `header=${header}`,
-                `decimal_separator="${decimal_separator}"`,
+                `decimal_separator='${escapeSqlString(decimal_separator)}'`,
                 'normalize_names=true',
                 `nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES}`
               ];
 
               if (thousands_separator) {
-                csvOptions.push(`thousands="${thousands_separator}"`);
+                csvOptions.push(
+                  `thousands='${escapeSqlString(thousands_separator)}'`
+                );
               }
 
               if (delimiter) {
-                csvOptions.push(`delim='${delimiter}'`);
+                csvOptions.push(`delim='${escapeSqlString(delimiter)}'`);
               }
 
               if (ignoreErrors || retryOptions.ignoreErrors) {
