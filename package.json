@@ -132,7 +132,7 @@
   },
   "dependencies": {
     "@ateliercartographie/geoarrow-deck-stream": "^1.2.0",
-    "@ateliercartographie/label-placer": "github:AtelierCartographie/label-placer#257897c45aeb7011e543900fcded0ab4cbab3a17",
+    "@ateliercartographie/label-placer": "github:AtelierCartographie/label-placer#96fa48538561b7c69b3108a17262eb6b0b7ea52a",
     "@ateliercartographie/motif.js": "^0.1.5",
     "@ateliercartographie/ok-palette": "^0.1.4",
     "@ateliercartographie/proj-suggest": "^0.1.0",
