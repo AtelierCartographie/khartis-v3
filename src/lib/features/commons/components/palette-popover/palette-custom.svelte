@@ -103,6 +103,17 @@
     }
   });
 
+  // A diverging palette is defined by its two hues: from a single seed the
+  // opposite hue is computed, which would replace the palette in progress.
+  $effect(() => {
+    const isDiverging = paletteType === PALETTE_TYPE.DIVERGING;
+    untrack(() => {
+      if (!activeTabInitialized && activeTab !== 2) {
+        activeTab = isDiverging ? 1 : 0;
+      }
+    });
+  });
+
   const resolvedContrast = $derived<ContrastMode | undefined>(
     contrastMode === 'normal' ? undefined : contrastMode
   );

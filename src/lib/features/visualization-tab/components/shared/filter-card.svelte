@@ -10,6 +10,7 @@
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown, TextInput } from 'carbon-components-svelte';
   import { TrashCan } from 'carbon-icons-svelte';
+  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
   import {
     DEFAULT_FILTER_LIMIT,
     MAX_FILTER_LIMIT,
@@ -30,6 +31,7 @@
     index: number;
     dataFields: DataFieldOption[];
     dataFieldsDropdownItems: Array<{ id: string; text: string; type?: string }>;
+    collectionVariable?: string;
     onRemoveFilter: (filterId: string) => void;
     onUpdateFilter?: (
       filterId: string,
@@ -42,6 +44,7 @@
     index,
     dataFields,
     dataFieldsDropdownItems,
+    collectionVariable,
     onRemoveFilter,
     onUpdateFilter
   }: Props = $props();
@@ -70,6 +73,19 @@
   );
   const availOps = $derived(getAvailableOperatorsForType(currentColumnType));
   const opDef = $derived(getOperatorDef(filter.operator));
+  const canRankPerFacet = $derived(
+    Boolean(opDef?.requiresLimit && collectionVariable)
+  );
+  const isPerFacet = $derived(canRankPerFacet && Boolean(filter.perFacet));
+
+  function handlePerFacetToggle(perFacet: boolean): void {
+    onUpdateFilter?.(
+      filter.id,
+      perFacet && collectionVariable
+        ? { perFacet: true, column: collectionVariable }
+        : { perFacet: undefined }
+    );
+  }
 
   function handleColumnChange(newColumn: string): void {
     if (newColumn === filter.column) return;
@@ -108,6 +124,9 @@
       updates.limit = undefined;
       updates.secondaryValue = undefined;
     }
+    if (!def?.requiresLimit && filter.perFacet) {
+      updates.perFacet = undefined;
+    }
     onUpdateFilter?.(filter.id, updates);
   }
 </script>
@@ -127,25 +146,32 @@
     />
   </header>
 
-  <div class="filter-field">
-    <Dropdown
-      translateWithId={translateCarbonId}
-      translateWithIdSelection={translateCarbonId}
-      size="sm"
-      titleText={m.filter_variable()}
-      items={dataFieldsDropdownItems}
-      selectedId={String(
-        dataFields.find((f) => f.text === filter.column)?.id ?? ''
-      )}
-      on:select={(e) => {
-        const field = dataFields.find(
-          (f) => String(f.id) === e.detail.selectedId
-        );
-        if (field) handleColumnChange(field.text);
-      }}
-      type="default"
-    />
-  </div>
+  {#if isPerFacet}
+    <div class="filter-field">
+      <span class="filter-field-label">{m.filter_variable()}</span>
+      <span class="filter-field-static">{m.filter_per_facet_variable()}</span>
+    </div>
+  {:else}
+    <div class="filter-field">
+      <Dropdown
+        translateWithId={translateCarbonId}
+        translateWithIdSelection={translateCarbonId}
+        size="sm"
+        titleText={m.filter_variable()}
+        items={dataFieldsDropdownItems}
+        selectedId={String(
+          dataFields.find((f) => f.text === filter.column)?.id ?? ''
+        )}
+        on:select={(e) => {
+          const field = dataFields.find(
+            (f) => String(f.id) === e.detail.selectedId
+          );
+          if (field) handleColumnChange(field.text);
+        }}
+        type="default"
+      />
+    </div>
+  {/if}
 
   <div class="filter-field">
     <Dropdown
@@ -161,6 +187,15 @@
       type="default"
     />
   </div>
+
+  {#if canRankPerFacet}
+    <ToggleWithLabel
+      label={m.filter_per_facet()}
+      infoText={m.filter_per_facet_info()}
+      toggled={isPerFacet}
+      ontoggle={handlePerFacetToggle}
+    />
+  {/if}
 
   {#if opDef?.requiresRange}
     <div class="filter-field">
@@ -270,6 +305,11 @@
   .filter-field-label {
     font-size: 0.75rem;
     color: var(--cds-text-secondary);
+  }
+
+  .filter-field-static {
+    font-size: 0.875rem;
+    color: var(--cds-text-primary);
   }
 
   :global(.filter-card .bx--dropdown) {

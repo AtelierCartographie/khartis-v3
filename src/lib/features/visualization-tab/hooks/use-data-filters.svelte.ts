@@ -7,6 +7,7 @@ import {
 
 export interface UseDataFiltersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
+  onFiltersChange?: (visualizationId: string) => void;
 }
 
 export interface DataFiltersController {
@@ -33,12 +34,14 @@ export function useDataFilters(
     const viz = deps.getSelectedVisualization();
     if (!viz?.id) return;
     visualizationStore.addDataFilter(viz.id, { ...filter, primitiveType });
+    deps.onFiltersChange?.(viz.id);
   }
 
   function handleRemoveDataFilter(filterId: string) {
     const viz = deps.getSelectedVisualization();
     if (!viz?.id) return;
     visualizationStore.removeDataFilter(viz.id, filterId);
+    deps.onFiltersChange?.(viz.id);
   }
 
   function handleUpdateDataFilter(
@@ -48,6 +51,7 @@ export function useDataFilters(
     const viz = deps.getSelectedVisualization();
     if (!viz?.id) return;
     visualizationStore.updateDataFilter(viz.id, filterId, updates);
+    deps.onFiltersChange?.(viz.id);
   }
 
   function getFiltersForPrimitive(

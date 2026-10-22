@@ -11,7 +11,9 @@ import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   buildFacetVisualizationUpdates,
   generateFacetVisualizations,
-  resolveFacetPrimitiveFilter
+  resolveFacetFillSlotPath,
+  resolveFacetPrimitiveFilter,
+  type FacetFillVariables
 } from '$lib/features/commons/services/facet-generator.service';
 import {
   FACET_SLOT,
@@ -25,6 +27,7 @@ import {
   isAutoFacetDataColumn,
   isAutoFacetNumericColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
+import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
 
 export { FACET_SLOT, SCALE_MODE };
 export type { FacetSlotPath, ScaleMode };
@@ -103,6 +106,8 @@ export interface FacetsState {
   generatedVisualizationIds: string[];
   /** Custom facet titles keyed by facet variable name (Habillage step). */
   facetTitles: Record<string, string>;
+  /** Symbol fill column set apart per map, keyed by facet variable name. */
+  fillVariables: FacetFillVariables;
 }
 
 const DEFAULT_STATE: FacetsState = {
@@ -119,7 +124,8 @@ const DEFAULT_STATE: FacetsState = {
   },
   scaleMode: SCALE_MODE.SHARED,
   generatedVisualizationIds: [],
-  facetTitles: {}
+  facetTitles: {},
+  fillVariables: {}
 };
 
 function clampColumns(value: unknown, facetCount: number): number {
@@ -165,6 +171,40 @@ function isCollectionPrimitiveShown(
 ): boolean {
   return getEnabledPrimitiveFilters(baseViz).includes(
     resolveFacetPrimitiveFilter(slotPath)
+  );
+}
+
+function pickFillVariables(
+  fillVariables: FacetFillVariables,
+  variables: string[]
+): FacetFillVariables {
+  return Object.fromEntries(
+    Object.entries(fillVariables).filter(([variable]) =>
+      variables.includes(variable)
+    )
+  );
+}
+
+function resolveCompatibleFillVariables(
+  baseViz: VisualizationConfig,
+  primarySlotPath: FacetSlotPath,
+  fillVariables: FacetFillVariables
+): FacetFillVariables {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (!fillSlotPath) {
+    return {};
+  }
+
+  const entries = Object.entries(fillVariables);
+  const compatibleColumns = new Set(
+    filterCompatibleFacetVariables(
+      baseViz,
+      entries.map(([, column]) => column),
+      fillSlotPath
+    )
+  );
+  return Object.fromEntries(
+    entries.filter(([, column]) => compatibleColumns.has(column))
   );
 }
 
@@ -300,6 +340,19 @@ function createFacetsStore() {
               )
             )
           : { ...DEFAULT_STATE.facetTitles };
+
+      nextState.fillVariables =
+        restored.fillVariables != null &&
+        typeof restored.fillVariables === 'object'
+          ? Object.fromEntries(
+              Object.entries(
+                restored.fillVariables as Record<string, unknown>
+              ).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[1] === 'string' && entry[1].length > 0
+              )
+            )
+          : { ...DEFAULT_STATE.fillVariables };
     }
 
     Object.assign(state, nextState);
@@ -356,13 +409,22 @@ function createFacetsStore() {
       : SCALE_MODE.INDEPENDENT;
     const replacedPreviousCollection =
       state.enabled && state.generatedVisualizationIds.length > 0;
+    const nextFillVariables =
+      state.baseVisualizationId === baseVizId
+        ? pickFillVariables(state.fillVariables, capped)
+        : {};
 
     try {
       const facetConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
         nextScaleMode,
-        primarySlotPath
+        primarySlotPath,
+        resolveCompatibleFillVariables(
+          baseViz,
+          primarySlotPath,
+          nextFillVariables
+        )
       );
 
       if (state.generatedVisualizationIds.length > 0) {
@@ -378,6 +440,7 @@ function createFacetsStore() {
       state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
       state.scaleMode = nextScaleMode;
+      state.fillVariables = nextFillVariables;
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
@@ -442,7 +505,12 @@ function createFacetsStore() {
         baseViz,
         compatible,
         state.scaleMode,
-        state.primarySlotPath
+        state.primarySlotPath,
+        resolveCompatibleFillVariables(
+          baseViz,
+          state.primarySlotPath,
+          state.fillVariables
+        )
       );
 
       if (staleGeneratedIds.length > 0) {
@@ -513,6 +581,11 @@ function createFacetsStore() {
       return;
     }
 
+    const fillVariables = resolveCompatibleFillVariables(
+      baseViz,
+      primarySlotPath,
+      state.fillVariables
+    );
     try {
       for (const [index, visualization] of generatedVisualizations.entries()) {
         const variable = state.variables[index];
@@ -526,7 +599,8 @@ function createFacetsStore() {
           variable,
           collectionVariables: state.variables,
           scaleMode: state.scaleMode,
-          primarySlotPath
+          primarySlotPath,
+          fillVariables
         });
         visualizationStore.updateVisualization(visualization.id, {
           ...visualization,
@@ -560,6 +634,7 @@ function createFacetsStore() {
     state.variables = [];
     state.generatedVisualizationIds = [];
     state.facetTitles = {};
+    state.fillVariables = {};
     notifyPersistence();
   }
 
@@ -631,6 +706,60 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
+  function getFillSlotPath(): FacetSlotPath | null {
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    return baseViz && state.primarySlotPath
+      ? resolveFacetFillSlotPath(baseViz, state.primarySlotPath)
+      : null;
+  }
+
+  function getFillVariable(variable: string): string | undefined {
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    const fillSlotPath = getFillSlotPath();
+    if (!baseViz || !state.primarySlotPath || !fillSlotPath) {
+      return undefined;
+    }
+    return (
+      resolveCompatibleFillVariables(
+        baseViz,
+        state.primarySlotPath,
+        state.fillVariables
+      )[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath)
+    );
+  }
+
+  async function setFillVariable(
+    variable: string,
+    column: string
+  ): Promise<void> {
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    if (!baseViz || !state.primarySlotPath) {
+      return;
+    }
+    const fillSlotPath = resolveFacetFillSlotPath(
+      baseViz,
+      state.primarySlotPath
+    );
+    if (!fillSlotPath || !state.variables.includes(variable)) {
+      return;
+    }
+
+    // A map that picks the base column follows the base again.
+    const { [variable]: _previous, ...rest } = state.fillVariables;
+    state.fillVariables =
+      column === getFacetSlotVariable(baseViz, fillSlotPath)
+        ? rest
+        : { ...rest, [variable]: column };
+    notifyPersistence();
+    await syncGeneratedVisualizationsFromBase();
+  }
+
   function capturePreviousGeneratedName(): string | undefined {
     const previousSelectedId = visualizationStore.selectedVisualization?.id;
     if (!previousSelectedId) return undefined;
@@ -694,11 +823,17 @@ function createFacetsStore() {
     isRegenerating = true;
     try {
       const previousName = capturePreviousGeneratedName();
+      const nextFillVariables = pickFillVariables(state.fillVariables, capped);
       const newConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
         nextScaleMode,
-        primarySlotPath
+        primarySlotPath,
+        resolveCompatibleFillVariables(
+          baseViz,
+          primarySlotPath,
+          nextFillVariables
+        )
       );
       visualizationStore.removeBulkVisualizations(
         state.generatedVisualizationIds
@@ -707,6 +842,7 @@ function createFacetsStore() {
       state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
       state.scaleMode = nextScaleMode;
+      state.fillVariables = nextFillVariables;
       state.generatedVisualizationIds = newConfigs.map((config) => config.id);
       state.layout.columns = computeBestColumns(capped.length);
       restoreSelectionByName(newConfigs, previousName);
@@ -810,6 +946,11 @@ function createFacetsStore() {
               Boolean(visualization)
             );
           let nextGeneratedIds = state.generatedVisualizationIds;
+          const fillVariables = resolveCompatibleFillVariables(
+            baseViz,
+            primarySlotPath,
+            state.fillVariables
+          );
 
           if (
             generatedVisualizations.length ===
@@ -830,7 +971,8 @@ function createFacetsStore() {
                 variable,
                 collectionVariables: state.variables,
                 scaleMode: newMode,
-                primarySlotPath
+                primarySlotPath,
+                fillVariables
               });
               visualizationStore.updateVisualization(visualization.id, {
                 ...visualization,
@@ -847,7 +989,8 @@ function createFacetsStore() {
               baseViz,
               state.variables,
               newMode,
-              primarySlotPath
+              primarySlotPath,
+              fillVariables
             );
 
             visualizationStore.removeBulkVisualizations(
@@ -896,6 +1039,23 @@ function createFacetsStore() {
     get facetTitles() {
       return state.facetTitles;
     },
+    get fillVariables() {
+      return state.fillVariables;
+    },
+    /** Symbol fill slot each map can set apart, or null. */
+    get fillSlotPath(): FacetSlotPath | null {
+      return getFillSlotPath();
+    },
+    /** Distinct fill columns of the maps, in collection order. */
+    get mapFillVariables(): string[] {
+      return [
+        ...new Set(
+          state.variables
+            .map(getFillVariable)
+            .filter((column): column is string => Boolean(column))
+        )
+      ];
+    },
     get editedTitleVariable(): string | null {
       return editedTitleVariable;
     },
@@ -919,6 +1079,8 @@ function createFacetsStore() {
     toggleScaleMode,
     getFacetTitle,
     setFacetTitle,
+    getFillVariable,
+    setFillVariable,
     editFacetTitle,
     syncGeneratedVisualizationsFromBase,
     restoreFromSerialized,
@@ -938,7 +1100,8 @@ persistenceRegistry.register({
     layout: { ...facetsStore.layout },
     scaleMode: facetsStore.scaleMode,
     generatedVisualizationIds: [...facetsStore.generatedVisualizationIds],
-    facetTitles: { ...facetsStore.facetTitles }
+    facetTitles: { ...facetsStore.facetTitles },
+    fillVariables: { ...facetsStore.fillVariables }
   }),
   deserialize: (data: unknown) => facetsStore.restoreFromSerialized(data),
   reset: () => facetsStore.restoreFromSerialized(undefined),

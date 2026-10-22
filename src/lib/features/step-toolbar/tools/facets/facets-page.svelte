@@ -96,6 +96,9 @@
   const mapStageStyle = $derived(
     `width: ${mapStageWidth}px; height: ${mapStageHeight}px; background-color: ${pageBackgroundColor};`
   );
+  const layoutStageStyle = $derived(
+    `left: ${renderedPageMargins.left}px; top: ${renderedPageMargins.top}px; width: ${mapStageWidth}px; height: ${mapStageHeight}px;`
+  );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
@@ -140,12 +143,19 @@
       containerHeight={mapStageHeight}
       onReady={onReady}
     />
+  </div>
 
-    <LegendOverlay hidden={!showLegendPreview || isIndependentScale} />
+  <!-- Layout items sit over the map area but may move into the margins, so
+       they live outside the clipped map stage. -->
+  <div class="layout-stage" style={layoutStageStyle}>
     <GeoIndicationsOverlay
       interactive={isStylingMode}
       hidden={!isStylingMode}
     />
+  </div>
+
+  <div class="layout-stage" style={layoutStageStyle}>
+    <LegendOverlay hidden={!showLegendPreview || isIndependentScale} />
   </div>
 
   <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
@@ -161,5 +171,10 @@
   .facets-map-stage {
     position: relative;
     overflow: hidden;
+  }
+
+  .layout-stage {
+    position: absolute;
+    pointer-events: none;
   }
 </style>

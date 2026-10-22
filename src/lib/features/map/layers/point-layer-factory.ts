@@ -17,9 +17,14 @@ import {
   getSymbolFillClassification,
   getSymbolFillValueColumn,
   getSymbolPrimitive,
-  PrimitiveFilterType
+  PrimitiveFilterType,
+  type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import {
+  isSignedProportionalSymbol,
+  resolveSymbolSignColors
+} from '$lib/features/commons/utils/symbol-sign.utils';
 
 import { DeckLayerId, GeometryType } from '../constants';
 import type {
@@ -91,6 +96,22 @@ import {
 } from './symbol-layer.utils';
 import { MultiShapeLayer } from './multi-shape-layer';
 import { SYMBOL_STROKE_WIDTH_DIVISOR } from './stroke-width.constants';
+
+// Size draws the absolute value, so a size column holding both signs leaves
+// the fill as the only channel telling them apart, whatever mode is stored.
+function createSignFillAccessor(
+  viz: VisualizationConfig,
+  sizeColumn: string | undefined
+): ((row: DeckDataRow) => [number, number, number, number]) | null {
+  if (!sizeColumn || !isSignedProportionalSymbol(viz)) {
+    return null;
+  }
+  const [positive, negative] = resolveSymbolSignColors(viz).map(hexToRgb);
+  return (row) => {
+    const [r, g, b] = Number(row[sizeColumn]) < 0 ? negative : positive;
+    return [r, g, b, 255];
+  };
+}
 
 function createDoubleProportionalPointLayers(
   pointData: BinaryPointData,
@@ -785,7 +806,8 @@ export function createRepresentativePointSymbolLayers(
     width: strokeWidth,
     opacity: rawStrokeOpacity
   });
-  const hideSymbolFill = shouldHideSymbolFill(viz);
+  const signFillAccessor = createSignFillAccessor(viz, pointSizeColumn);
+  const hideSymbolFill = !signFillAccessor && shouldHideSymbolFill(viz);
 
   const representativePointSource = getRepresentativePointSource(ctx);
   if (!representativePointSource) {
@@ -877,23 +899,25 @@ export function createRepresentativePointSymbolLayers(
     pointColorCategoryColumn,
     PrimitiveFilterType.POINT
   );
-  const baseFillAccessor = useChoropleth
-    ? createChoroplethColorAccessor(
-        pointFillValueColumn!,
-        pointFillClassification!.breaks!,
-        pointFillClassification!.colors!,
-        missingPointColor,
-        showMissingPoints
-      )
-    : useCategoricalColor
-      ? createCategoricalColorAccessor(
-          pointColorCategoryColumn!,
-          effectiveCategoryColorMap,
+  const baseFillAccessor = signFillAccessor
+    ? signFillAccessor
+    : useChoropleth
+      ? createChoroplethColorAccessor(
+          pointFillValueColumn!,
+          pointFillClassification!.breaks!,
+          pointFillClassification!.colors!,
           missingPointColor,
-          showMissingPoints,
-          pointColorClassification?.disabledLabels ?? []
+          showMissingPoints
         )
-      : null;
+      : useCategoricalColor
+        ? createCategoricalColorAccessor(
+            pointColorCategoryColumn!,
+            effectiveCategoryColorMap,
+            missingPointColor,
+            showMissingPoints,
+            pointColorClassification?.disabledLabels ?? []
+          )
+        : null;
   const baseRadiusAccessor = useClassedSymbols
     ? createClassedSizeAccessor(
         pointValueColumn!,
@@ -1211,6 +1235,7 @@ export function createRepresentativePointSymbolLayers(
           pointConfig.missingData?.color,
           hideSymbolFill,
           pointColorClassification?.disabledLabels,
+          signFillAccessor && resolveSymbolSignColors(viz).join('|'),
           hlVersion
         ],
         getLineColor: [
@@ -1292,12 +1317,16 @@ export function createPointLayerStack(
   const hlVersion = ctx.highlightVersion ?? 0;
   const pointConfig = viz ? getSymbolPrimitive(viz) : undefined;
   const pointValueColumn = pointConfig?.valueColumn;
-  const pointCategoryColumn = pointConfig?.categoryColumn;
+  const pointCategoryColumn =
+    pointConfig?.mode !== SymbolMode.CATEGORIES &&
+    pointConfig?.fillMode === FillMode.CATEGORIES
+      ? (pointConfig.fillCategoryColumn ?? pointConfig.categoryColumn)
+      : pointConfig?.categoryColumn;
   const pointSizeColumn = pointConfig?.sizeColumn;
   const pointStrokeValueColumn =
     pointConfig?.strokeValueColumn ?? pointValueColumn;
   const pointStrokeCategoryColumn =
-    pointConfig?.strokeCategoryColumn ?? pointCategoryColumn;
+    pointConfig?.strokeCategoryColumn ?? pointConfig?.categoryColumn;
   const {
     color: pointStrokeColor,
     width: pointStrokeWidth,
@@ -1340,7 +1369,10 @@ export function createPointLayerStack(
     viz && shouldApplyCategorical(viz, PrimitiveFilterType.POINT);
   const useChoropleth =
     viz && shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
-  const hideSymbolFill = shouldHideSymbolFill(viz);
+  const signFillAccessor = viz
+    ? createSignFillAccessor(viz, pointSizeColumn)
+    : null;
+  const hideSymbolFill = !signFillAccessor && shouldHideSymbolFill(viz);
   const { min: minValue, max: maxValue } = pointStatistics;
   const proportionalDomainMax = getAbsoluteDomainMax(minValue, maxValue);
   const pointMissingColumn = resolvePointMissingColumn(
@@ -1398,8 +1430,9 @@ export function createPointLayerStack(
     PrimitiveFilterType.POINT
   );
 
-  const baseFillAccessor =
-    useChoropleth && viz
+  const baseFillAccessor = signFillAccessor
+    ? signFillAccessor
+    : useChoropleth && viz
       ? createChoroplethColorAccessor(
           (pointFillValueColumn ?? pointValueColumn)!,
           (pointFillClassification ?? pointClassification)!.breaks!,
@@ -1420,7 +1453,7 @@ export function createPointLayerStack(
 
   const usesPointCategories =
     pointConfig?.mode === SymbolMode.CATEGORIES ||
-    pointConfig?.fillMode === FillMode.CATEGORIES;
+    (!signFillAccessor && pointConfig?.fillMode === FillMode.CATEGORIES);
   const disabledPointCategoryLabels = new Set(
     [
       ...(pointConfig?.mode === SymbolMode.CATEGORIES
@@ -1783,6 +1816,7 @@ export function createPointLayerStack(
         pointConfig?.missingData?.show,
         pointConfig?.missingData?.color,
         hideSymbolFill,
+        signFillAccessor && resolveSymbolSignColors(viz).join('|'),
         hlVersion
       ],
       getRadius: [
