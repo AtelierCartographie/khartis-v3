@@ -41,6 +41,7 @@ import {
 import { DataValidationError } from '../pipeline.errors';
 import { loadDistinctCategoryLabels } from '$lib/features/commons/utils/category-labels.utils';
 import { isSignedProportionalSymbol } from '$lib/features/commons/utils/symbol-sign.utils';
+import { resolveFacetDataFilters } from '../utils/viz-filter.utils';
 
 function resolveFacetClassification(
   visualization: VisualizationConfig,
@@ -283,7 +284,7 @@ async function buildFacetClassification(
     method: baseClassification.method,
     rowScopeClause: resolveValueScopeClause({
       datasetId: datasetSourceFileId,
-      vizFilters: baseViz.dataFilters,
+      vizFilters: resolveFacetDataFilters(baseViz.dataFilters, variable),
       primitive: resolveFacetPrimitiveFilter(slotPath)
     }),
     pooledColumnNames:
@@ -562,6 +563,7 @@ export async function buildFacetVisualizationUpdates({
     ...fillUpdates,
     name: variable,
     primitiveFilters: getEnabledPrimitiveFilters(baseViz),
+    dataFilters: resolveFacetDataFilters(baseViz.dataFilters, variable),
     facet: {
       baseVisualizationId: baseViz.id
     }

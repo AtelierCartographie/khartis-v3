@@ -381,6 +381,8 @@ export interface VizDataFilter {
   secondaryValue?: string;
   limit?: number;
   primitiveType?: PrimitiveFilter;
+  /** Top filter only: each map of a collection ranks on its own variable instead of `column`. */
+  perFacet?: boolean;
 }
 
 export interface VisualizationConfig {
