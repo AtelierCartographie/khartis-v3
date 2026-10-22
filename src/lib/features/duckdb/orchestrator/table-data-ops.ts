@@ -271,7 +271,7 @@ export async function countDuplicateRows(
   const escapedTable = escapeIdentifier(tableName);
   const identityList = ROW_IDENTITY_COLUMNS.map((c) => `'${c}'`).join(', ');
   const result = (await Duck.query(
-    `SELECT (SELECT COUNT(*) FROM "${escapedTable}") - (SELECT COUNT(*) FROM (SELECT DISTINCT COLUMNS(c -> c NOT IN (${identityList})) FROM "${escapedTable}")) AS duplicates`
+    `SELECT (SELECT COUNT(*) FROM "${escapedTable}") - (SELECT COUNT(*) FROM (SELECT DISTINCT COLUMNS(lambda c: c NOT IN (${identityList})) FROM "${escapedTable}")) AS duplicates`
   )) as ArrowTableLike;
   const row = result.get(0) as Record<string, unknown>;
   return Number(row?.duplicates) || 0;

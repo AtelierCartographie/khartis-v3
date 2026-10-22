@@ -1065,7 +1065,8 @@ beforeAll(async () => {
   dbInstance = await DuckDBInstance.create(':memory:', {
     threads: '2',
     autoinstall_known_extensions: 'true',
-    autoload_known_extensions: 'true'
+    autoload_known_extensions: 'true',
+    lambda_syntax: 'disable_single_arrow'
   });
   dbConnection = await dbInstance.connect();
   await dbConnection.run('INSTALL spatial');
