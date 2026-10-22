@@ -4,13 +4,16 @@ import {
   type LabelMode,
   type PlacementResult
 } from '@ateliercartographie/label-placer';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { Matrix4 } from '@math.gl/core';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 
 import type { PageItemBox } from '../stores/page-item-obstacles.store.svelte';
 
 import type { BasemapFrameExtent } from './basemap-frame.utils';
+import { parsePathsWithProjection } from './geoarrow-stream-bridge.utils';
 import type { LabelOffset } from './label-layout.utils';
 
 /** Only the most important labels may move away with a leader line. */
@@ -32,6 +35,13 @@ export interface AutoLabelPlacementOptions {
   bounds: [number, number, number, number];
   /** Boxes labels must keep clear of, in page pixels. */
   obstacles: [number, number, number, number][];
+  /**
+   * Basemap outlines in page pixels: soft obstacles that keep label boxes off
+   * coastlines and borders where another spot is as good. Leaders may cross.
+   */
+  lines: LabelOffset[][];
+  /** `columns` stacks the labels of dense clusters in columns beside them. */
+  align: 'none' | 'columns';
   gap: number;
   symbolGap: number;
   minGap: number;
@@ -144,6 +154,54 @@ export function resolveLabelPlacementFrame(
     : null;
 }
 
+/** Outline vertices closer than this, in page pixels, are merged. */
+const OUTLINE_MIN_STEP_PX = 1.5;
+
+/**
+ * The outlines of the basemap land layers as page-pixel polylines, cut to the
+ * placement bounds and thinned to about one vertex per page pixel and a half.
+ * They reuse the paths the basemap stroke already parsed for the projection.
+ */
+export function projectOutlineLines(
+  tables: ArrowTable[],
+  projection: ProjectionLike | undefined,
+  frame: LabelPlacementFrame
+): LabelOffset[][] {
+  if (!projection) return [];
+  const [bx0, by0, bx1, by1] = frame.bounds;
+  const inside = ([x, y]: LabelOffset) =>
+    x >= bx0 && x <= bx1 && y >= by0 && y <= by1;
+  const lines: LabelOffset[][] = [];
+  for (const table of tables) {
+    const { positions, startIndices, length } = parsePathsWithProjection(
+      table,
+      projection
+    );
+    const vertexCount = positions.length / 2;
+    for (let path = 0; path < length; path++) {
+      const end = path + 1 < length ? startIndices[path + 1] : vertexCount;
+      let current: LabelOffset[] = [];
+      for (let v = startIndices[path]; v < end; v++) {
+        const point = frame.toPagePx([positions[v * 2], positions[v * 2 + 1]]);
+        if (!point || !inside(point)) {
+          if (current.length > 1) lines.push(current);
+          current = [];
+          continue;
+        }
+        const last = current[current.length - 1];
+        if (
+          !last ||
+          Math.abs(point[0] - last[0]) + Math.abs(point[1] - last[1]) >=
+            OUTLINE_MIN_STEP_PX
+        )
+          current.push(point);
+      }
+      if (current.length > 1) lines.push(current);
+    }
+  }
+  return lines;
+}
+
 function hashPlacementInput(
   entries: AutoLabelEntry[],
   options: AutoLabelPlacementOptions
@@ -158,9 +216,16 @@ function hashPlacementInput(
     options.symbolGap,
     options.minGap,
     options.obstacles.length,
-    ...options.obstacles.flat()
+    ...options.obstacles.flat(),
+    options.align === 'columns' ? 1 : 0,
+    options.lines.length
   ])
     mix(value);
+  for (const line of options.lines)
+    for (const [x, y] of line) {
+      mix(x);
+      mix(y);
+    }
   for (const entry of entries) {
     mix(entry.id);
     mix(entry.anchor[0]);
@@ -228,15 +293,23 @@ export function placeLabelBlocks(
   }));
   const result = placeLabels(labels, {
     bounds: options.bounds,
-    obstacles: options.obstacles.map(([x0, y0, x1, y1]) => ({
-      type: 'rect',
-      box: [
-        x0 - options.gap,
-        y0 - options.gap,
-        x1 + options.gap,
-        y1 + options.gap
-      ]
-    })),
+    obstacles: [
+      ...options.obstacles.map(([x0, y0, x1, y1]) => ({
+        type: 'rect' as const,
+        box: [
+          x0 - options.gap,
+          y0 - options.gap,
+          x1 + options.gap,
+          y1 + options.gap
+        ] as [number, number, number, number]
+      })),
+      ...options.lines.map((points) => ({
+        type: 'line' as const,
+        points,
+        soft: true
+      }))
+    ],
+    align: options.align,
     gap: options.gap,
     leader: { symbolGap: options.symbolGap, minGap: options.minGap },
     // Without a symbol the label names an area or a bare point: centred first.

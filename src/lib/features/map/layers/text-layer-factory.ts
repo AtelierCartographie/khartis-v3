@@ -52,6 +52,7 @@ import {
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
   placeLabelBlocks,
+  projectOutlineLines,
   resolveLabelPlacementFrame,
   type AutoLabelEntry
 } from '../utils/label-auto-placement.utils';
@@ -312,6 +313,8 @@ export function createTextOverlayLayers(
   const scopedTextRowIds = hasSplitRenderingContext(ctx)
     ? undefined
     : resolveScopedRowIds(ctx);
+  // Every point keeps its symbol, labelled or not: the placement avoids them all.
+  const symbolPointData = textLayerData;
   if (scopedTextRowIds) {
     textLayerData = keepTextDataInRowScope(
       textLayerData,
@@ -998,9 +1001,45 @@ export function createTextOverlayLayers(
       });
       leaderMinGaps.push(resolveLeaderMinGap(datum));
     }
+    // A symbol the Texts filter leaves without a label is still drawn, so it
+    // goes to the engine as a symbol alone: an obstacle for the labels. Split
+    // rendering reads the attributes in the Texts scope only, so it has no
+    // radius for those rows.
+    const symbolRowIds =
+      ctx.scopedRowIdsByPrimitive?.[PrimitiveFilterType.POINT];
+    if (hasPointSymbols && !hasSplitRenderingContext(ctx)) {
+      const labelled = new Set(entries.map((entry) => entry.id));
+      for (const datum of symbolPointData) {
+        if (labelled.has(datum.featureId)) continue;
+        if (symbolRowIds) {
+          const rowId = attributeRowIdVector?.get(datum.rowIndex);
+          if (rowId === null || rowId === undefined) continue;
+          if (!symbolRowIds.has(Number(rowId))) continue;
+        }
+        const symbolRadius = resolvePointRadiusForDatum(datum);
+        if (symbolRadius <= 0) continue;
+        const anchor = placementFrame.toPagePx(datum.position);
+        if (!anchor) continue;
+        entries.push({
+          id: datum.featureId,
+          anchor,
+          halfSize: [0, 0],
+          symbolRadius,
+          priority: 0,
+          mode: 'optional'
+        });
+      }
+    }
     autoCenters = placeLabelBlocks(vizId, entries, {
       bounds: placementFrame.bounds,
       obstacles: placementFrame.toObstacles(pageItemObstaclesStore.boxes),
+      lines: projectOutlineLines(
+        ctx.labelOutlineTables ?? [],
+        ctx.customProjection,
+        placementFrame
+      ),
+
+      align: textConfig.labelColumns ? 'columns' : 'none',
       gap: TEXT_SYMBOL_GAP_PX,
       symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
       minGap: leaderMinGaps.length

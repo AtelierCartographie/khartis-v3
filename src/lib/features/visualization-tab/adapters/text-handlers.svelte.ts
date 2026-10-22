@@ -31,6 +31,7 @@ const TEXT_STYLE_MIRROR_KEYS = [
   'textHaloWidth',
   'textHaloOpacity',
   'textCollisionDetection',
+  'textLabelColumns',
   'textDxpMasking'
 ] as const satisfies ReadonlyArray<keyof VisualizationConfig['style']>;
 
@@ -90,6 +91,7 @@ export function createTextHandlers(deps: TextHandlersDeps) {
         { from: 'textHaloWidth', to: 'haloWidth' },
         { from: 'textHaloOpacity', to: 'haloOpacity' },
         { from: 'textCollisionDetection', to: 'collisionDetection' },
+        { from: 'textLabelColumns', to: 'labelColumns' },
         { from: 'textDxpMasking', to: 'dxpMasking' }
       ],
       text

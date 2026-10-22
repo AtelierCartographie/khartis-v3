@@ -142,6 +142,7 @@
   let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
   let automaticPlacement = $state<boolean>(false);
+  let labelColumns = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
   let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
@@ -272,6 +273,7 @@
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
       automaticPlacement = visualization.style.textCollisionDetection ?? false;
+      labelColumns = visualization.style.textLabelColumns ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
@@ -412,6 +414,11 @@
   function handleAutomaticPlacementToggle(value: boolean) {
     automaticPlacement = value;
     onStyleChange?.({ textCollisionDetection: value });
+  }
+
+  function handleLabelColumnsToggle(value: boolean) {
+    labelColumns = value;
+    onStyleChange?.({ textLabelColumns: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -629,6 +636,13 @@
         toggled={automaticPlacement}
         infoText={m.text_automatic_placement_info()}
         ontoggle={handleAutomaticPlacementToggle}
+      />
+      <ToggleWithLabel
+        label={m.text_label_columns()}
+        toggled={automaticPlacement && labelColumns}
+        disabled={!automaticPlacement}
+        infoText={m.text_label_columns_info()}
+        ontoggle={handleLabelColumnsToggle}
       />
 
       <TextMissingDataSection

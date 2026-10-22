@@ -165,9 +165,19 @@ empilement, filets et export SVG suivent sans chemin propre.
   symbole, puis taille du texte, puis valeur).
 - Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
   autres.
+- Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
+  passent au moteur comme symboles seuls, des obstacles pour les étiquettes. En
+  rendu scindé (jeu joint à un fond), leurs attributs ne sont lus que dans le
+  périmètre des Textes, et ils ne sont pas transmis.
 - Les bornes sont le cadre du fond de carte quand la projection en a un, sinon
-  le canvas. Les éléments de page (légende, titre) ne sont pas encore des
-  obstacles.
+  le canvas. Les éléments de page (légende, indications géographiques,
+  annotations) sont des obstacles (`pageItemObstaclesStore`).
+- Le contour des couches « Territoire » visibles (`ctx.labelOutlineTables`,
+  orthographique seulement) est un obstacle souple : une étiquette évite de
+  chevaucher une côte ou une frontière extérieure quand une autre position la
+  vaut. Ces couches sont fusionnées en une géométrie, donc sans limites internes.
+- L'option « Aligner en colonnes » (`labelColumns`, champ optionnel du primitif
+  texte) range les étiquettes des groupes serrés en colonne à côté du groupe.
 - Le placement est recalculé une fois la vue stabilisée
   (`labelPlacementViewStore`, 250 ms après un zoom, un déplacement ou un
   redimensionnement du canvas) et réutilise le résultat précédent pour que les
