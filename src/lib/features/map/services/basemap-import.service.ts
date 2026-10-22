@@ -29,6 +29,7 @@ import {
   getDerivedOuterlinesTableName as getBasemapOuterlinesTableName,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
+import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 
 export {
   getBasemapInnerlinesTableName,
@@ -148,10 +149,10 @@ export async function processBasemapImport(
     // Restore skips a basemap whose table exists, so a failed import must not
     // leave a partial one behind.
     await dropBasemapImportTables(tableName);
-    if (error instanceof Error && error.message.includes('Out of Memory')) {
+    if (matchesDuckDBError(error, 'out-of-memory')) {
       throw new DuckDBError(m.basemap_import_error_out_of_memory(), undefined, {
         fileName: file.name,
-        cause: error.message
+        cause: error instanceof Error ? error.message : String(error)
       });
     }
     throw error;

@@ -50,6 +50,7 @@ Table names, column names and values almost always come from user files. `common
 ## Errors and NULLs
 
 - Throw `PipelineError` subclasses (for example `DuckDBError`) and surface them with `showError` or `showWarning`, localized through Paraglide. A swallowed query error or a bare `console.error` hides the failure from the user.
+- Tell DuckDB failures apart with `matchesDuckDBError(error, kind)` (`duckdb/utils/duckdb-error.utils.ts`), never with a local `message.includes(...)`: the engine words its errors in English only, and an upgrade rewords them. A new kind gets a case in `tests/duckdb/duckdb-error.test.ts` that triggers it on the real engine.
 - Which tokens mean "missing" is configured per project. Rely on that NULL set instead of testing only `''` or `null`.
 
 ## Tests

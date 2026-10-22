@@ -10,7 +10,7 @@
     type JoinFuzzyPassEstimate
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
+  import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
   import { BasemapStyle } from '$lib/features/map/constants';
   import {
     basemapCatalogService,
@@ -405,7 +405,7 @@
       return true;
     }
 
-    if (!datasetId || !isMissingDuckTableError(error)) {
+    if (!datasetId || !matchesDuckDBError(error, 'missing-table')) {
       return false;
     }
 
