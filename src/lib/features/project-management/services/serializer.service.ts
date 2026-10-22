@@ -2,7 +2,6 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services';
@@ -24,6 +23,7 @@ import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import * as m from '$lib/paraglide/messages';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 
 export { serializeUploadedFile, deserializeUploadedFile };
 
@@ -307,7 +307,7 @@ export async function serializeProjectData(
 
       if (tableExists && Array.isArray(tableExists) && tableExists.length > 0) {
         const basemapIds = customBasemaps
-          .map((basemap) => `'${escapeSqlString(basemap.file)}'`)
+          .map((basemap) => sqlString(basemap.file))
           .join(', ');
         const attributes = (await Duck.query(
           `SELECT * FROM custom_basemap_attributes WHERE basemap IN (${basemapIds})`,
@@ -399,7 +399,7 @@ export async function deserializeProjectData(
         const insertValues = validAttributes
           .map(
             (attr) =>
-              `('${escapeSqlString(attr.raw)}', '${escapeSqlString(attr.id)}', '${escapeSqlString(attr.variant)}', '${escapeSqlString(attr.normalized)}', '${escapeSqlString(attr.basemap)}', ${attr.basemap_count})`
+              `(${sqlString(attr.raw)}, ${sqlString(attr.id)}, ${sqlString(attr.variant)}, ${sqlString(attr.normalized)}, ${sqlString(attr.basemap)}, ${attr.basemap_count})`
           )
           .join(',\n');
 

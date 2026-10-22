@@ -4,14 +4,15 @@ import {
 } from '$lib/features/commons/constants/data.constants';
 import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { buildFilterWhereClause } from '$lib/features/duckdb/orchestrator/filter-ops';
 import { getFilters } from '$lib/features/duckdb/orchestrator/state.svelte';
 import type { JoinEntity, JoinStats } from '../components/index';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 export interface ComputeJoinStatsOptions {
   sourceTableName: string;
@@ -35,50 +36,39 @@ interface FuzzyMatchRow {
 // The enrich step can start a run before the previous one ends, and statements
 // interleave between awaits: each run owns its temp tables, or one run's
 // cleanup drops or replaces the tables another one is still reading.
-let joinStatsRunCount = 0;
-
 export async function computeDatasetJoinStats(
   options: ComputeJoinStatsOptions
 ): Promise<JoinStats> {
   const { sourceTableName, sourceColumn, targetTableName, targetColumn } =
     options;
 
-  const escapedSourceCol = escapeIdentifier(sourceColumn);
-  const escapedTargetCol = escapeIdentifier(targetColumn);
-  const escapedSourceTable = escapeIdentifier(sourceTableName);
-  const escapedTargetTable = escapeIdentifier(targetTableName);
-  const runId = ++joinStatsRunCount;
-  const escapedCandidatesTable = escapeIdentifier(
-    `__join_stats_candidates_${runId}__`
-  );
-  const escapedTargetCacheTable = escapeIdentifier(
-    `__join_stats_target_${runId}__`
-  );
+  const candidatesTable = sqlIdentifier(sqlTempName('__join_stats_candidates'));
+  const targetCacheTable = sqlIdentifier(sqlTempName('__join_stats_target'));
 
   const sourceFilters = getFilters(sourceTableName);
   const sourceFilterClause = buildFilterWhereClause(sourceFilters);
 
   try {
     await Duck.query(`
-      CREATE OR REPLACE TEMP TABLE "${escapedTargetCacheTable}" AS
+      CREATE OR REPLACE TEMP TABLE ${targetCacheTable} AS
       SELECT DISTINCT
-        CAST("${escapedTargetCol}" AS VARCHAR) AS raw,
-        normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) AS normalized
-      FROM "${escapedTargetTable}"
-      WHERE "${escapedTargetCol}" IS NOT NULL
+        CAST(${sqlIdentifier(targetColumn)} AS VARCHAR) AS raw,
+        normalize_text_join(CAST(${sqlIdentifier(targetColumn)} AS VARCHAR)) AS normalized
+      FROM ${sqlIdentifier(targetTableName)}
+      WHERE ${sqlIdentifier(targetColumn)} IS NOT NULL
     `);
 
     // Candidates land in a temp table so the unmatched residual never has to
     // round-trip through JS as a SQL literal list: at 700k values that list is
     // a 26 MB statement.
     await Duck.query(`
-      CREATE OR REPLACE TEMP TABLE "${escapedCandidatesTable}" AS
+      CREATE OR REPLACE TEMP TABLE ${candidatesTable} AS
       WITH source_data AS (
         SELECT
-          CAST("${escapedSourceCol}" AS VARCHAR) as source_val,
-          normalize_text_join(CAST("${escapedSourceCol}" AS VARCHAR)) as normalized_val
-        FROM "${escapedSourceTable}"
-        WHERE "${escapedSourceCol}" IS NOT NULL${sourceFilterClause ? ` AND ${sourceFilterClause}` : ''}
+          CAST(${sqlIdentifier(sourceColumn)} AS VARCHAR) as source_val,
+          normalize_text_join(CAST(${sqlIdentifier(sourceColumn)} AS VARCHAR)) as normalized_val
+        FROM ${sqlIdentifier(sourceTableName)}
+        WHERE ${sqlIdentifier(sourceColumn)} IS NOT NULL${sourceFilterClause ? ` AND ${sourceFilterClause}` : ''}
       ),
       source_with_counts AS (
         SELECT
@@ -93,12 +83,12 @@ export async function computeDatasetJoinStats(
         s.duplicate_count,
         t.raw as exact_match
       FROM source_with_counts s
-      LEFT JOIN "${escapedTargetCacheTable}" t ON s.normalized_val = t.normalized
+      LEFT JOIN ${targetCacheTable} t ON s.normalized_val = t.normalized
     `);
 
     const analysisResults = (await Duck.query(
       `SELECT source_val, normalized_val, duplicate_count, exact_match
-       FROM "${escapedCandidatesTable}"`,
+       FROM ${candidatesTable}`,
       { format: 'array' }
     )) as JoinAnalysisRow[];
 
@@ -125,10 +115,7 @@ export async function computeDatasetJoinStats(
 
     const matchesBySource =
       unmatchedValues.length > 0
-        ? await fetchFuzzyMatches(
-            escapedCandidatesTable,
-            escapedTargetCacheTable
-          )
+        ? await fetchFuzzyMatches(candidatesTable, targetCacheTable)
         : new Map<string, string[]>();
 
     for (const sourceVal of unmatchedValues) {
@@ -153,7 +140,7 @@ export async function computeDatasetJoinStats(
       ? await getDuplicateLines(
           sourceTableName,
           sourceColumn,
-          escapedCandidatesTable,
+          candidatesTable,
           sourceFilterClause
         )
       : [];
@@ -175,15 +162,15 @@ export async function computeDatasetJoinStats(
 
     return stats;
   } finally {
-    await dropTempTable(escapedCandidatesTable);
-    await dropTempTable(escapedTargetCacheTable);
+    await dropTempTable(candidatesTable);
+    await dropTempTable(targetCacheTable);
   }
 }
 
 /** Cleanup must never replace the error that triggered it. */
-async function dropTempTable(escapedTableName: string): Promise<void> {
+async function dropTempTable(table: string): Promise<void> {
   try {
-    await Duck.query(`DROP TABLE IF EXISTS "${escapedTableName}"`);
+    await Duck.query(`DROP TABLE IF EXISTS ${table}`);
   } catch {
     return;
   }
@@ -197,20 +184,20 @@ async function dropTempTable(escapedTableName: string): Promise<void> {
  * large column against every target value is quadratic in the import size.
  */
 async function fetchFuzzyMatches(
-  escapedCandidatesTable: string,
-  escapedTargetCacheTable: string
+  candidatesTable: string,
+  targetCacheTable: string
 ): Promise<Map<string, string[]>> {
   const rows = (await Duck.query(
     `WITH unmatched AS (
        SELECT DISTINCT source_val, normalized_val
-       FROM "${escapedCandidatesTable}"
+       FROM ${candidatesTable}
        WHERE exact_match IS NULL AND duplicate_count <= 1
      ),
      unmatched_count AS (
        SELECT COUNT(*) AS count FROM unmatched
      ),
      distinct_targets AS (
-       SELECT DISTINCT normalized FROM "${escapedTargetCacheTable}"
+       SELECT DISTINCT normalized FROM ${targetCacheTable}
      ),
      bounded_unmatched AS (
        SELECT u.*
@@ -231,7 +218,7 @@ async function fetchFuzzyMatches(
      )
      SELECT s.source_val, tt.raw
      FROM scored s
-     JOIN "${escapedTargetCacheTable}" tt ON tt.normalized = s.normalized
+     JOIN ${targetCacheTable} tt ON tt.normalized = s.normalized
      WHERE s.score > 0
      QUALIFY ROW_NUMBER() OVER (
        PARTITION BY s.source_val
@@ -256,15 +243,12 @@ async function fetchFuzzyMatches(
 async function getDuplicateLines(
   sourceTableName: string,
   sourceColumn: string,
-  escapedCandidatesTable: string,
+  candidatesTable: string,
   sourceFilterClause: string | null
 ): Promise<Array<{ dataValue: string; lines: number[] }>> {
-  const escapedSourceTable = escapeIdentifier(sourceTableName);
-  const escapedSourceCol = escapeIdentifier(sourceColumn);
-
   const hasRowId = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(sourceTableName)}'
+     WHERE table_name = ${sqlString(sourceTableName)}
        AND column_name = '__id'`,
     { format: 'array' }
   )) as Array<{ column_name: string }>;
@@ -272,13 +256,13 @@ async function getDuplicateLines(
 
   return (await Duck.query(
     `SELECT
-       CAST("${escapedSourceCol}" AS VARCHAR) AS dataValue,
+       CAST(${sqlIdentifier(sourceColumn)} AS VARCHAR) AS dataValue,
        array_agg(${idCol} ORDER BY ${idCol}) AS lines
-     FROM "${escapedSourceTable}"
-     WHERE CAST("${escapedSourceCol}" AS VARCHAR) IN (
-       SELECT source_val FROM "${escapedCandidatesTable}" WHERE duplicate_count > 1
+     FROM ${sqlIdentifier(sourceTableName)}
+     WHERE CAST(${sqlIdentifier(sourceColumn)} AS VARCHAR) IN (
+       SELECT source_val FROM ${candidatesTable} WHERE duplicate_count > 1
      )${sourceFilterClause ? ` AND ${sourceFilterClause}` : ''}
-     GROUP BY CAST("${escapedSourceCol}" AS VARCHAR)
+     GROUP BY CAST(${sqlIdentifier(sourceColumn)} AS VARCHAR)
      HAVING COUNT(*) > 1`,
     { format: 'array' }
   )) as Array<{ dataValue: string; lines: number[] }>;

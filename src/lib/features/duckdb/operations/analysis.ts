@@ -1,7 +1,3 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   PERF_PHASE,
@@ -22,6 +18,10 @@ import type {
   ArrowTableLike,
   DuckDBContext
 } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 registerTableMutationCallback((table, ctx) => {
   const table_metadata = ctx.table_metadata.get(table);
@@ -34,10 +34,9 @@ export async function describeColumns(
   ctx: DuckDBContext,
   table: string
 ): Promise<AnalysisResults> {
-  const escapedTable = escapeSqlString(table);
   const describe_full = (await executeQuery(
     ctx.connection,
-    `FROM describe_full('${escapedTable}')`,
+    `FROM describe_full(${sqlString(table)})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY, useProxy: false }
   )) as Record<string, unknown>[];
 
@@ -155,7 +154,7 @@ function createHistogramTable(rows: Record<string, unknown>[]): ArrowTableLike {
 }
 
 function summaryGeneralSelect(column: string, key: string): string {
-  const c = `"${escapeIdentifier(column)}"`;
+  const c = sqlIdentifier(column);
   return [
     `first(alias(${c})) AS "${key}_name"`,
     `count(*) AS "${key}_length"`,
@@ -170,7 +169,7 @@ function summaryGeneralSelect(column: string, key: string): string {
 }
 
 function summaryNumericSelect(column: string, key: string): string {
-  const c = `"${escapeIdentifier(column)}"`;
+  const c = sqlIdentifier(column);
   const min = `"${key}_min"`;
   const max = `"${key}_max"`;
   const minMag = `"${key}_min_mag"`;
@@ -195,34 +194,34 @@ function summaryNumericSelect(column: string, key: string): string {
 function shareRankIntervalSelect(
   column: string,
   key: string,
-  escapedTable: string
+  tableLiteral: string
 ): string {
-  return `share_rank_interval('${escapedTable}', "${escapeIdentifier(column)}") AS "${key}_share_rank_interval"`;
+  return `share_rank_interval(${tableLiteral}, ${sqlIdentifier(column)}) AS "${key}_share_rank_interval"`;
 }
 
 function valueSampleSelect(
   column: string,
   key: string,
-  escapedTable: string
+  tableLiteral: string
 ): string {
-  return `value_sample('${escapedTable}', "${escapeIdentifier(column)}") AS "${key}_value_sample"`;
+  return `value_sample(${tableLiteral}, ${sqlIdentifier(column)}) AS "${key}_value_sample"`;
 }
 
 function summaryDateSelect(column: string, key: string): string {
-  const c = `"${escapeIdentifier(column)}"`;
+  const c = sqlIdentifier(column);
   return `min(${c}) AS "${key}_min", max(${c}) AS "${key}_max"`;
 }
 
 function histogramSelect(
   spec: HistogramSpec,
   key: string,
-  escapedTable: string
+  tableLiteral: string
 ): string {
-  const c = `"${escapeIdentifier(spec.column)}"`;
+  const c = sqlIdentifier(spec.column);
   const struct = HISTOGRAM_STRUCT_FIELDS[spec.macro]
-    .map((field) => `'${field}': "${field}"`)
+    .map((field) => `${sqlString(field)}: ${sqlIdentifier(field)}`)
     .join(', ');
-  return `(SELECT list(h ORDER BY rn) FROM (SELECT {${struct}} AS h, row_number() OVER () AS rn FROM ${spec.macro}('${escapedTable}', ${c}))) AS "${key}"`;
+  return `(SELECT list(h ORDER BY rn) FROM (SELECT {${struct}} AS h, row_number() OVER () AS rn FROM ${spec.macro}(${tableLiteral}, ${c}))) AS ${sqlIdentifier(key)}`;
 }
 
 function buildGeneralQuery(batch: string[], tableIdentifier: string): string {
@@ -235,16 +234,16 @@ function buildGeneralQuery(batch: string[], tableIdentifier: string): string {
 function buildNumericQuery(
   batch: string[],
   tableIdentifier: string,
-  escapedTable: string
+  tableLiteral: string
 ): string {
   const aggregates = batch.map((column, index) =>
     summaryNumericSelect(column, columnKey(index))
   );
   const ranks = batch.map((column, index) =>
-    shareRankIntervalSelect(column, columnKey(index), escapedTable)
+    shareRankIntervalSelect(column, columnKey(index), tableLiteral)
   );
   const samples = batch.map((column, index) =>
-    valueSampleSelect(column, columnKey(index), escapedTable)
+    valueSampleSelect(column, columnKey(index), tableLiteral)
   );
   return `WITH t1 AS (SELECT ${aggregates.join(', ')} FROM ${tableIdentifier}) FROM t1 POSITIONAL JOIN (SELECT ${ranks.join(', ')}) POSITIONAL JOIN (SELECT ${samples.join(', ')})`;
 }
@@ -258,10 +257,10 @@ function buildDateQuery(batch: string[], tableIdentifier: string): string {
 
 function buildHistogramQuery(
   batch: HistogramSpec[],
-  escapedTable: string
+  tableLiteral: string
 ): string {
   const parts = batch.map((spec, index) =>
-    histogramSelect(spec, columnKey(index), escapedTable)
+    histogramSelect(spec, columnKey(index), tableLiteral)
   );
   return `SELECT ${parts.join(', ')}`;
 }
@@ -298,11 +297,9 @@ export async function analyse(
 
   perfMark(PERF_PHASE.COLUMN_ANALYSIS);
 
-  const escapedTable = escapeSqlString(table);
-
   const describe_full = (await executeQuery(
     ctx.connection,
-    `FROM describe_full('${escapedTable}')`,
+    `FROM describe_full(${sqlString(table)})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY, useProxy: false }
   )) as Record<string, unknown>[];
 
@@ -327,8 +324,8 @@ export async function analyse(
   // DuckDB computes in one pass (or one sort) per column: a sample would make the
   // extremes and counts wrong, and change from one import to the next.
   const analysisTable = table;
-  const escapedAnalysisTable = escapeSqlString(analysisTable);
-  const analysisTableIdentifier = `"${escapeIdentifier(analysisTable)}"`;
+  const analysisTableLiteral = sqlString(analysisTable);
+  const analysisTableIdentifier = sqlIdentifier(analysisTable);
 
   const logAnalysisStatisticFailure = (
     error: unknown,
@@ -379,7 +376,7 @@ export async function analyse(
   ): Promise<Record<string, unknown> | null> =>
     executeQuery(
       ctx.connection,
-      `FROM ${statistic}('${escapedAnalysisTable}', "${escapeIdentifier(columnName)}")`,
+      `FROM ${statistic}(${analysisTableLiteral}, ${sqlIdentifier(columnName)})`,
       { useProxy: false }
     )
       .then((result) =>
@@ -429,7 +426,7 @@ export async function analyse(
       try {
         const result = await executeQuery(
           ctx.connection,
-          buildHistogramQuery(batch, escapedAnalysisTable),
+          buildHistogramQuery(batch, analysisTableLiteral),
           { useProxy: false }
         );
         const row = readSingleRow(result);
@@ -446,7 +443,7 @@ export async function analyse(
           'histogram'
         );
         for (const spec of batch) {
-          const columnQuery = `FROM ${spec.macro}('${escapedAnalysisTable}', "${escapeIdentifier(spec.column)}")`;
+          const columnQuery = `FROM ${spec.macro}(${analysisTableLiteral}, ${sqlIdentifier(spec.column)})`;
           if (spec.macro === 'histogram_categorical') {
             byColumn.set(
               spec.column,
@@ -500,7 +497,7 @@ export async function analyse(
             buildNumericQuery(
               batch,
               analysisTableIdentifier,
-              escapedAnalysisTable
+              analysisTableLiteral
             ),
           SUMMARY_NUMERIC_FIELDS
         ),

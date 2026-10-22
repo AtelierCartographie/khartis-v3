@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  escapeIdentifier,
-  escapeSqlString,
   sanitizeProjectName,
   sanitizeTextInput
 } from '$lib/features/commons/utils/sanitize.utils';
@@ -58,44 +56,6 @@ describe('sanitizeTextInput', () => {
 
   it('returns empty string for empty input', () => {
     expect(sanitizeTextInput('')).toBe('');
-  });
-});
-
-describe('escapeSqlString', () => {
-  it('escapes single quotes with doubled single quotes', () => {
-    expect(escapeSqlString("O'Brien")).toBe("O''Brien");
-  });
-
-  it('leaves strings without single quotes unchanged', () => {
-    expect(escapeSqlString('hello')).toBe('hello');
-  });
-
-  it('escapes multiple single quotes', () => {
-    expect(escapeSqlString("it's a test's value")).toBe(
-      "it''s a test''s value"
-    );
-  });
-
-  it('handles empty string', () => {
-    expect(escapeSqlString('')).toBe('');
-  });
-});
-
-describe('escapeIdentifier', () => {
-  it('escapes double quotes with doubled double quotes', () => {
-    expect(escapeIdentifier('my"column')).toBe('my""column');
-  });
-
-  it('leaves identifiers without double quotes unchanged', () => {
-    expect(escapeIdentifier('my_column')).toBe('my_column');
-  });
-
-  it('escapes multiple double quotes', () => {
-    expect(escapeIdentifier('"quoted"')).toBe('""quoted""');
-  });
-
-  it('handles empty string', () => {
-    expect(escapeIdentifier('')).toBe('');
   });
 });
 

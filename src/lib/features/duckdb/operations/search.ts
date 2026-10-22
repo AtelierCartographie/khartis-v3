@@ -1,7 +1,3 @@
-import {
-  escapeSqlString,
-  escapeIdentifier
-} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
@@ -14,6 +10,10 @@ import {
 } from '../core/query';
 import { buildStripHtmlTextSqlExpression } from '../utils/html-like-text.utils';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 const MAX_ROWS_FOR_SEARCH = 10000;
 const MAX_CELLS_FOR_FUZZY = 100000;
@@ -90,13 +90,13 @@ function buildExactSearchSQL(
   tableName: string,
   textColumns: string[],
   numericColumns: string[],
-  escapedTerm: string,
-  escapedNumericTerm: string | null,
+  termLiteral: string,
+  numericTermLiteral: string | null,
   maxResults: number,
   filterColumn: string | null
 ): string {
   const textToSearch = filterSearchableColumns(textColumns, filterColumn);
-  const numericToSearch = escapedNumericTerm
+  const numericToSearch = numericTermLiteral
     ? filterSearchableColumns(numericColumns, filterColumn)
     : [];
 
@@ -105,28 +105,26 @@ function buildExactSearchSQL(
   }
 
   const textParts = textToSearch.map((col) => {
-    const escapedCol = escapeIdentifier(col);
-    const textValueExpr = buildStripHtmlTextSqlExpression(`"${escapedCol}"`);
-    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
-      CASE WHEN norm_value = '${escapedTerm}' THEN 1.0 ELSE 0.99 END AS score
+    const textValueExpr = buildStripHtmlTextSqlExpression(sqlIdentifier(col));
+    return `SELECT __id, ${sqlString(col)} AS column_name, column_value,
+      CASE WHEN norm_value = ${termLiteral} THEN 1.0 ELSE 0.99 END AS score
     FROM (
-      SELECT __id, ${textValueExpr} AS column_value, normalize_text("${escapedCol}") AS norm_value
-      FROM "${escapeIdentifier(tableName)}"
-      WHERE "${escapedCol}" IS NOT NULL AND length(trim(${textValueExpr})) > 0
+      SELECT __id, ${textValueExpr} AS column_value, normalize_text(${sqlIdentifier(col)}) AS norm_value
+      FROM ${sqlIdentifier(tableName)}
+      WHERE ${sqlIdentifier(col)} IS NOT NULL AND length(trim(${textValueExpr})) > 0
     ) sub
-    WHERE norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}')`;
+    WHERE norm_value = ${termLiteral} OR contains(norm_value, ${termLiteral})`;
   });
 
   const numericParts = numericToSearch.map((col) => {
-    const escapedCol = escapeIdentifier(col);
-    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
-      CASE WHEN column_value = '${escapedNumericTerm}' THEN 1.0 ELSE 0.99 END AS score
+    return `SELECT __id, ${sqlString(col)} AS column_name, column_value,
+      CASE WHEN column_value = ${numericTermLiteral} THEN 1.0 ELSE 0.99 END AS score
     FROM (
-      SELECT __id, CAST("${escapedCol}" AS VARCHAR) AS column_value
-      FROM "${escapeIdentifier(tableName)}"
-      WHERE "${escapedCol}" IS NOT NULL
+      SELECT __id, CAST(${sqlIdentifier(col)} AS VARCHAR) AS column_value
+      FROM ${sqlIdentifier(tableName)}
+      WHERE ${sqlIdentifier(col)} IS NOT NULL
     ) sub
-    WHERE contains(column_value, '${escapedNumericTerm}')`;
+    WHERE contains(column_value, ${numericTermLiteral})`;
   });
 
   return `${[...textParts, ...numericParts].join('\nUNION ALL\n')}
@@ -137,7 +135,7 @@ function buildExactSearchSQL(
 function buildFuzzySearchSQL(
   tableName: string,
   textColumns: string[],
-  escapedTerm: string,
+  termLiteral: string,
   threshold: number,
   maxResults: number,
   filterColumn: string | null
@@ -149,18 +147,17 @@ function buildFuzzySearchSQL(
   }
 
   const unionParts = columnsToSearch.map((col) => {
-    const escapedCol = escapeIdentifier(col);
-    const textValueExpr = buildStripHtmlTextSqlExpression(`"${escapedCol}"`);
-    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
-      jaro_winkler_similarity(norm_value, '${escapedTerm}') AS score
+    const textValueExpr = buildStripHtmlTextSqlExpression(sqlIdentifier(col));
+    return `SELECT __id, ${sqlString(col)} AS column_name, column_value,
+      jaro_winkler_similarity(norm_value, ${termLiteral}) AS score
     FROM (
-      SELECT __id, ${textValueExpr} AS column_value, normalize_text("${escapedCol}") AS norm_value
-      FROM "${escapeIdentifier(tableName)}"
-      WHERE "${escapedCol}" IS NOT NULL AND length(trim(${textValueExpr})) > 0
+      SELECT __id, ${textValueExpr} AS column_value, normalize_text(${sqlIdentifier(col)}) AS norm_value
+      FROM ${sqlIdentifier(tableName)}
+      WHERE ${sqlIdentifier(col)} IS NOT NULL AND length(trim(${textValueExpr})) > 0
     ) sub
-    WHERE length(norm_value) BETWEEN length('${escapedTerm}') * 0.5 AND length('${escapedTerm}') * 2
-      AND NOT (norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}'))
-      AND jaro_winkler_similarity(norm_value, '${escapedTerm}') > ${threshold}`;
+    WHERE length(norm_value) BETWEEN length(${termLiteral}) * 0.5 AND length(${termLiteral}) * 2
+      AND NOT (norm_value = ${termLiteral} OR contains(norm_value, ${termLiteral}))
+      AND jaro_winkler_similarity(norm_value, ${termLiteral}) > ${threshold}`;
   });
 
   return `${unionParts.join('\nUNION ALL\n')}
@@ -208,7 +205,6 @@ export async function searchInTable(
     ? AbortSignal.any([options.signal, abortController.signal])
     : abortController.signal;
 
-  const escapedQuery = escapeSqlString(trimmedQuery);
   const numericTerm = toCanonicalNumericTerm(trimmedQuery);
   const enableFuzzy = trimmedQuery.length >= MIN_QUERY_LENGTH_FOR_FUZZY;
   let isSampled = false;
@@ -218,9 +214,9 @@ export async function searchInTable(
       executeQuery(
         ctx.connection,
         `SELECT
-          normalize_text('${escapedQuery}') AS normalized_term,
-          (SELECT count(*) FROM "${escapeIdentifier(table)}") AS row_count,
-          (SELECT count(*) FROM duckdb_columns() WHERE table_name = '${escapeSqlString(table)}' AND column_name != '${INTERNAL_COLUMN.ID}') AS col_count`,
+          normalize_text(${sqlString(trimmedQuery)}) AS normalized_term,
+          (SELECT count(*) FROM ${sqlIdentifier(table)}) AS row_count,
+          (SELECT count(*) FROM duckdb_columns() WHERE table_name = ${sqlString(table)} AND column_name != '${INTERNAL_COLUMN.ID}') AS col_count`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       ) as Promise<
         Array<{
@@ -232,7 +228,7 @@ export async function searchInTable(
       executeQuery(
         ctx.connection,
         `SELECT column_name, data_type FROM duckdb_columns()
-         WHERE table_name = '${escapeSqlString(table)}'
+         WHERE table_name = ${sqlString(table)}
            AND column_name != '${INTERNAL_COLUMN.ID}'`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       ) as Promise<Array<{ column_name: string; data_type: string }>>
@@ -240,7 +236,7 @@ export async function searchInTable(
 
     if (searchId !== currentSearchId) return emptyResult;
 
-    const normalizedTerm = escapeSqlString(
+    const termLiteral = sqlString(
       metaResult[0]?.normalized_term ?? trimmedQuery
     );
     const rowCount = Number(metaResult[0]?.row_count ?? 0);
@@ -281,14 +277,12 @@ export async function searchInTable(
       // WKB binaries (can be several MB per row) that are never searched.
       const sampleColumns = [
         `"${INTERNAL_COLUMN.ID}"`,
-        ...[...textColumns, ...numericColumns].map(
-          (c) => `"${escapeIdentifier(c)}"`
-        )
+        ...[...textColumns, ...numericColumns].map((c) => sqlIdentifier(c))
       ].join(', ');
       await executeQuery(
         ctx.connection,
         `CREATE OR REPLACE TEMP TABLE __search_sample AS
-         SELECT ${sampleColumns} FROM "${escapeIdentifier(table)}" USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
+         SELECT ${sampleColumns} FROM ${sqlIdentifier(table)} USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       );
       searchTable = '__search_sample';
@@ -300,8 +294,8 @@ export async function searchInTable(
       searchTable,
       textColumns,
       numericColumns,
-      normalizedTerm,
-      numericTerm ? escapeSqlString(numericTerm) : null,
+      termLiteral,
+      numericTerm ? sqlString(numericTerm) : null,
       MAX_EXACT_RESULTS,
       column
     );
@@ -336,7 +330,7 @@ export async function searchInTable(
       const fuzzySQL = buildFuzzySearchSQL(
         searchTable,
         textColumns,
-        normalizedTerm,
+        termLiteral,
         threshold,
         MAX_FUZZY_RESULTS,
         column

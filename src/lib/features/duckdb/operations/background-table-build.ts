@@ -1,7 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { waitForQueryIdle } from '../core/query-activity';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 // DuckDB WASM runs one query at a time: a batch only starts once the connection
 // is idle, so a foreground query waits for one short batch at most.
@@ -68,8 +68,8 @@ export function buildTableInBackground(
       await dropTable(duck, stagingTable);
       if (!isCurrent()) return false;
       await duck.query(`
-        CREATE OR REPLACE TABLE "${escapeIdentifier(options.targetTable)}" AS
-        SELECT ${options.projection} FROM "${escapeIdentifier(options.sourceTable)}"
+        CREATE OR REPLACE TABLE ${sqlIdentifier(options.targetTable)} AS
+        SELECT ${options.projection} FROM ${sqlIdentifier(options.sourceTable)}
       `);
       duck.invalidateTableCache?.(options.targetTable);
       return isCurrent();
@@ -93,22 +93,20 @@ async function buildInBatches(
   stagingTable: string,
   isCurrent: () => boolean
 ): Promise<boolean> {
-  const escapedSource = escapeIdentifier(sourceTable);
-  const escapedStaging = escapeIdentifier(stagingTable);
   const selectBatch = (start: number) => `
-    SELECT ${projection} FROM "${escapedSource}"
+    SELECT ${projection} FROM ${sqlIdentifier(sourceTable)}
     WHERE rowid >= ${start} AND rowid < ${start + BATCH_ROW_COUNT}
   `;
 
   await waitForQueryIdle(FOREGROUND_IDLE_MS);
   const rows = (await duck.query(
-    `SELECT MAX(rowid) AS max_row_id FROM "${escapedSource}"`,
+    `SELECT MAX(rowid) AS max_row_id FROM ${sqlIdentifier(sourceTable)}`,
     { format: 'array' }
   )) as Array<{ max_row_id: number | bigint | null }>;
   const maxRowId = Number(rows[0]?.max_row_id ?? -1);
 
   await duck.query(
-    `CREATE OR REPLACE TABLE "${escapedStaging}" AS ${selectBatch(0)}`
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(stagingTable)} AS ${selectBatch(0)}`
   );
   for (
     let start = BATCH_ROW_COUNT;
@@ -120,7 +118,9 @@ async function buildInBatches(
       await dropTable(duck, stagingTable);
       return false;
     }
-    await duck.query(`INSERT INTO "${escapedStaging}" ${selectBatch(start)}`);
+    await duck.query(
+      `INSERT INTO ${sqlIdentifier(stagingTable)} ${selectBatch(start)}`
+    );
   }
 
   if (!isCurrent()) {
@@ -128,8 +128,8 @@ async function buildInBatches(
     return false;
   }
   await duck.query(`
-    DROP TABLE IF EXISTS "${escapeIdentifier(targetTable)}";
-    ALTER TABLE "${escapedStaging}" RENAME TO "${escapeIdentifier(targetTable)}";
+    DROP TABLE IF EXISTS ${sqlIdentifier(targetTable)};
+    ALTER TABLE ${sqlIdentifier(stagingTable)} RENAME TO ${sqlIdentifier(targetTable)};
   `);
   duck.invalidateTableCache?.(targetTable);
   return true;
@@ -140,7 +140,7 @@ async function dropTable(
   table: string
 ): Promise<void> {
   await duck
-    .query(`DROP TABLE IF EXISTS "${escapeIdentifier(table)}"`)
+    .query(`DROP TABLE IF EXISTS ${sqlIdentifier(table)}`)
     .catch(() => undefined);
 }
 

@@ -2,7 +2,6 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { bigIntReplacer } from './clone.utils';
-import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
 import {
@@ -15,6 +14,11 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 // Deliberate: without the BOM, Excel reads UTF-8 CSV as ANSI and garbles accents.
 const CSV_BOM = '\uFEFF';
@@ -95,7 +99,7 @@ export async function exportDatasetToCsv(
       throw new DuckDBError(m.error_duckdb_not_initialized());
     }
 
-    const viewName = `export_view_${Date.now()}`;
+    const viewName = sqlTempName('export_view');
     const nonGeomColumnNames = await getDuckDbExportableColumnNames(dataset);
     if (nonGeomColumnNames.length === 0) {
       throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
@@ -104,24 +108,24 @@ export async function exportDatasetToCsv(
       });
     }
 
-    const nonGeomColumns = nonGeomColumnNames
-      .map((columnName) => `"${escapeIdentifier(columnName)}"`)
-      .join(', ');
+    const nonGeomColumns = nonGeomColumnNames.map(sqlIdentifier).join(', ');
 
     try {
       await Duck.query(`
-        CREATE TEMPORARY VIEW "${viewName}" AS
-        SELECT ${nonGeomColumns} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"
+        CREATE TEMPORARY VIEW ${sqlIdentifier(viewName)} AS
+        SELECT ${nonGeomColumns} FROM ${sqlIdentifier(dataset.duckdbTableName!)}
       `);
 
       const blob = await exportToCsv(viewName);
 
-      await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`);
+      await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`);
 
       return blob;
     } catch (error) {
       if (Duck) {
-        await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
+        await Duck.query(
+          `DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`
+        ).catch(() => {});
       }
       throw error;
     }
@@ -196,19 +200,17 @@ function buildAlignedUnionSelect(
   exportableColumns: ReadonlySet<string>
 ): string {
   const selectColumns = allHeaders.map((columnName) => {
-    const escapedColumnName = escapeIdentifier(columnName);
     return exportableColumns.has(columnName)
-      ? `"${escapedColumnName}"`
-      : `NULL AS "${escapedColumnName}"`;
+      ? sqlIdentifier(columnName)
+      : `NULL AS ${sqlIdentifier(columnName)}`;
   });
-  const escapedName = escapeSqlString(dataset.name);
 
   const selectList = [
     ...selectColumns,
-    `'${escapedName}' as "${escapeIdentifier(sourceDatasetColumn)}"`
+    `${sqlString(dataset.name)} as ${sqlIdentifier(sourceDatasetColumn)}`
   ];
 
-  return `SELECT ${selectList.join(', ')} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
+  return `SELECT ${selectList.join(', ')} FROM ${sqlIdentifier(dataset.duckdbTableName!)}`;
 }
 
 export function exportToGeoJson(data: unknown): Blob {
@@ -279,7 +281,7 @@ export async function exportProcessedDatasets(
         throw new DuckDBError(m.error_duckdb_not_initialized());
       }
 
-      const unionViewName = `export_union_${Date.now()}`;
+      const unionViewName = sqlTempName('export_union');
 
       try {
         const exportableColumnsByDataset = await Promise.all(
@@ -299,20 +301,20 @@ export async function exportProcessedDatasets(
         });
 
         const unionQuery = `
-          CREATE TEMPORARY VIEW "${unionViewName}" AS
+          CREATE TEMPORARY VIEW ${sqlIdentifier(unionViewName)} AS
           ${unionParts.join(' UNION ALL ')}
         `;
 
         await Duck.query(unionQuery);
         const blob = await exportToCsv(unionViewName);
-        await Duck.query(`DROP VIEW IF EXISTS "${unionViewName}"`);
+        await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(unionViewName)}`);
 
         return blob;
       } catch (error) {
         if (Duck) {
-          await Duck.query(`DROP VIEW IF EXISTS "${unionViewName}"`).catch(
-            () => {}
-          );
+          await Duck.query(
+            `DROP VIEW IF EXISTS ${sqlIdentifier(unionViewName)}`
+          ).catch(() => {});
         }
         throw error;
       }

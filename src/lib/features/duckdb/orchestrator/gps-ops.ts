@@ -1,7 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';
 import { registerTableMutationCallback } from '../cache/cache-manager';
@@ -11,6 +10,10 @@ import type {
   GPSBounds,
   GPSColumns
 } from '../types';
+import {
+  sqlIdentifier,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 export type { GPSBounds, GPSColumns };
 
@@ -102,20 +105,17 @@ export async function validateGPSColumns(
   Duck: DuckDBClientForGPS
 ): Promise<GPSValidationResult> {
   try {
-    const escapedLat = escapeIdentifier(latCol);
-    const escapedLon = escapeIdentifier(lonCol);
-    const escapedTable = escapeIdentifier(tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_min,
-        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_max,
-        MEDIAN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_median,
-        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_min,
-        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_max,
-        MEDIAN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_median
-      FROM "${escapedTable}"
-      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
-        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL`,
+        MIN(TRY_CAST(${sqlIdentifier(latCol)} AS DOUBLE)) as lat_min,
+        MAX(TRY_CAST(${sqlIdentifier(latCol)} AS DOUBLE)) as lat_max,
+        MEDIAN(TRY_CAST(${sqlIdentifier(latCol)} AS DOUBLE)) as lat_median,
+        MIN(TRY_CAST(${sqlIdentifier(lonCol)} AS DOUBLE)) as lon_min,
+        MAX(TRY_CAST(${sqlIdentifier(lonCol)} AS DOUBLE)) as lon_max,
+        MEDIAN(TRY_CAST(${sqlIdentifier(lonCol)} AS DOUBLE)) as lon_median
+      FROM ${sqlIdentifier(tableName)}
+      WHERE TRY_CAST(${sqlIdentifier(latCol)} AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(lonCol)} AS DOUBLE) IS NOT NULL`,
       { format: 'array' }
     )) as Array<{
       lat_min: number;
@@ -271,27 +271,24 @@ export async function getGPSArrowTable(
   }
 
   const request = (async () => {
-    const gpsTable = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}_${dataset.id.replace(/[^a-zA-Z0-9_]/g, '_')}_${Math.round(performance.now()).toString(36)}`;
-    const escapedLon = escapeIdentifier(lon);
-    const escapedLat = escapeIdentifier(lat);
-    const escapedTableName = escapeIdentifier(dataset.tableName);
+    const gpsTable = sqlTempName('gps', dataset.tableName);
 
     // TRY_CAST to DOUBLE handles VARCHAR columns with leading whitespace
     // (e.g., CSV ` 2.497` after semicolon delimiter). Without it, BETWEEN
     // uses string comparison where " 2.49" < "-180" → 0 rows.
     await Duck.query(`
-      CREATE TEMP TABLE "${gpsTable}" AS
+      CREATE TEMP TABLE ${sqlIdentifier(gpsTable)} AS
       SELECT
         *,
         ST_Point(
-          TRY_CAST("${escapedLon}" AS DOUBLE),
-          TRY_CAST("${escapedLat}" AS DOUBLE)
+          TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE),
+          TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE)
         ) AS geom
-      FROM "${escapedTableName}"
-      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
-        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
-        AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
-        AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180
+      FROM ${sqlIdentifier(dataset.tableName)}
+      WHERE TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE) BETWEEN -180 AND 180
     `);
 
     try {
@@ -305,7 +302,7 @@ export async function getGPSArrowTable(
       setGPSArrowCacheEntry(dataset.tableName, requestKey, result);
       return result;
     } finally {
-      await Duck.query(`DROP TABLE IF EXISTS "${gpsTable}"`);
+      await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(gpsTable)}`);
     }
   })();
 
@@ -336,21 +333,18 @@ export async function getGPSBounds(
   const { lat, lon } = gpsColumns;
 
   try {
-    const escapedLat = escapeIdentifier(lat);
-    const escapedLon = escapeIdentifier(lon);
-    const escapedTableName = escapeIdentifier(dataset.tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as min_lon,
-        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as min_lat,
-        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as max_lon,
-        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as max_lat,
+        MIN(TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE)) as min_lon,
+        MIN(TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE)) as min_lat,
+        MAX(TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE)) as max_lon,
+        MAX(TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE)) as max_lat,
         COUNT(*) as valid_count
-      FROM "${escapedTableName}"
-      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
-        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
-        AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
-        AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180`,
+      FROM ${sqlIdentifier(dataset.tableName)}
+      WHERE TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE) IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(lat)} AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST(${sqlIdentifier(lon)} AS DOUBLE) BETWEEN -180 AND 180`,
       { format: 'array' }
     )) as Array<{
       min_lon: number;

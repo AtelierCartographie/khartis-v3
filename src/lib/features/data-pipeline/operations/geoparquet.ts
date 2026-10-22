@@ -1,15 +1,15 @@
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { isGeometryColumnType } from '$lib/features/duckdb';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import type {
   GeoParquetColumnMeta,
   GeoParquetCrsMetadata,
   GeoParquetMeta
 } from '$lib/features/map/services/geo-parquet-metadata.service';
 import * as m from '$lib/paraglide/messages';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 interface DuckDBGeoParquetClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -100,7 +100,7 @@ function applyCrsTransform(
     return geometryExpression;
   }
 
-  return `ST_Transform(${geometryExpression}, '${escapeSqlString(sourceCrs)}', 'EPSG:4326', true)`;
+  return `ST_Transform(${geometryExpression}, ${sqlString(sourceCrs)}, 'EPSG:4326', true)`;
 }
 
 function buildGeometryExpression(
@@ -111,11 +111,10 @@ function buildGeometryExpression(
   const encoding = columnMetadata.encoding
     ? normalizeEncoding(columnMetadata.encoding)
     : '';
-  const escapedColumn = `"${escapeIdentifier(columnName)}"`;
 
   if (encoding === 'wkb' || encoding === 'ogc.wkb') {
     return applyCrsTransform(
-      `ST_GeomFromWKB(${escapedColumn})`,
+      `ST_GeomFromWKB(${sqlIdentifier(columnName)})`,
       columnMetadata
     );
   }
@@ -126,11 +125,11 @@ function buildGeometryExpression(
   }
 
   const coordinates = buildNativeCoordinates(
-    escapedColumn,
+    sqlIdentifier(columnName),
     columnType,
     nativeEncoding.listDepth
   );
-  const geometryExpression = `ST_GeomFromGeoJSON(json_object('type', '${nativeEncoding.geoJsonType}', 'coordinates', ${coordinates}))`;
+  const geometryExpression = `ST_GeomFromGeoJSON(json_object('type', ${sqlString(nativeEncoding.geoJsonType)}, 'coordinates', ${coordinates}))`;
   return applyCrsTransform(geometryExpression, columnMetadata);
 }
 
@@ -178,17 +177,15 @@ export async function normalizeGeoParquetTable(
     });
   }
 
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedColumn = escapeIdentifier(primaryColumn);
   await Duck.query(`
-    CREATE OR REPLACE TABLE "${escapedTable}" AS
+    CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT * REPLACE (
       CASE
-        WHEN "${escapedColumn}" IS NULL THEN NULL
+        WHEN ${sqlIdentifier(primaryColumn)} IS NULL THEN NULL
         ELSE ${geometryExpression}
-      END AS "${escapedColumn}"
+      END AS ${sqlIdentifier(primaryColumn)}
     )
-    FROM "${escapedTable}"
+    FROM ${sqlIdentifier(tableName)}
   `);
   Duck.invalidateTableCache?.(tableName);
 

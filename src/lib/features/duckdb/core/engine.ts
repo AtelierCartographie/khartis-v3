@@ -18,6 +18,7 @@ import type {
   TableMetadata
 } from '../types';
 import { executeQuery } from './query';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 
 let db: duckdb.AsyncDuckDB | null = null;
 let connection: duckdb.AsyncDuckDBConnection | null = null;
@@ -79,7 +80,7 @@ async function configureRuntimeSettings(): Promise<void> {
   if (!connection) return;
 
   const pragmas: string[] = [
-    `PRAGMA memory_limit='${calculateOptimalMemory()}';`,
+    `PRAGMA memory_limit=${sqlString(calculateOptimalMemory())};`,
     `PRAGMA enable_progress_bar=false;`,
     `PRAGMA preserve_insertion_order=false;`,
     `PRAGMA enable_object_cache=true;`,
@@ -101,7 +102,7 @@ async function configureLocalExtensionRepository(): Promise<void> {
   try {
     await executeQuery(
       connection,
-      `SET custom_extension_repository = '${repositoryUrl}'`,
+      `SET custom_extension_repository = ${sqlString(repositoryUrl)}`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }

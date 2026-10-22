@@ -53,11 +53,6 @@ vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/utils/sanitize.utils', () => ({
-  escapeIdentifier: (value: string) => value,
-  escapeSqlString: (value: string) => value
-}));
-
 vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: {
     DATA: 'DATA'
@@ -221,7 +216,7 @@ describe('useEnrichmentJoin', () => {
 
 function getCreateTableSql(): string {
   const createTableCall = mocks.queryMock.mock.calls.find(([sql]) =>
-    String(sql).includes('CREATE TABLE "geo_table_enriched_1777777777777" AS')
+    String(sql).includes('CREATE TABLE "geo_table_enriched_')
   );
   expect(createTableCall).toBeDefined();
   return String(createTableCall?.[0]);

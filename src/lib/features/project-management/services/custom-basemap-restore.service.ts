@@ -1,7 +1,6 @@
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import {
   basemapCatalogService,
@@ -13,10 +12,11 @@ import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
 import { createFileFromAssetRef } from './asset-store.service';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 
 async function duckTableExists(tableName: string): Promise<boolean> {
   const rows = (await Duck.query(
-    `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(tableName)}'`,
+    `SELECT table_name FROM information_schema.tables WHERE table_name = ${sqlString(tableName)}`,
     { format: 'array' }
   )) as unknown[];
   return rows.length > 0;

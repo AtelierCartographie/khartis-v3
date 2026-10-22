@@ -1,6 +1,5 @@
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
 import {
   bumpDatasetsVersion,
@@ -9,6 +8,7 @@ import {
   setCurrentTableName,
   updateDatasets
 } from './state.svelte';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 
 export interface DuckDBClientForDataset {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -56,9 +56,8 @@ export async function registerExistingTable(
   }
 ): Promise<DuckDBDataset | null> {
   try {
-    const escapedTableNameForCheck = escapeSqlString(tableName);
     const tableCheck = (await Duck.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableNameForCheck}'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_name = ${sqlString(tableName)}`,
       { format: 'array' }
     )) as Array<{ table_name: string }>;
 

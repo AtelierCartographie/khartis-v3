@@ -1,11 +1,11 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { getCustomBasemapJoinCandidateColumns } from './custom-basemap-columns.service';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 const MAX_NULL_RATIO = 0.5;
 
@@ -29,12 +29,8 @@ export async function generateCustomBasemapAttributes(
       )
     `);
 
-  const safeTableName = escapeIdentifier(tableName);
-  const safeBasemapId = escapeSqlString(basemapId);
-  const safeFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
-
   await duck.query(
-    `DELETE FROM custom_basemap_attributes WHERE basemap = '${safeBasemapId}'`
+    `DELETE FROM custom_basemap_attributes WHERE basemap = ${sqlString(basemapId)}`
   );
 
   const columns = await duck.analyse(tableName);
@@ -42,7 +38,7 @@ export async function generateCustomBasemapAttributes(
   const candidateColumns = getCustomBasemapJoinCandidateColumns(columns);
 
   const countQuery = (await duck.query(
-    `SELECT COUNT(*) as total FROM "${safeTableName}"`,
+    `SELECT COUNT(*) as total FROM ${sqlIdentifier(tableName)}`,
     { format: 'array', useProxy: false }
   )) as Array<{ total: number }>;
   const totalCount = Number(countQuery?.[0]?.total ?? 0);
@@ -61,27 +57,24 @@ export async function generateCustomBasemapAttributes(
   }
 
   const unionQueries = validColumns.map((col) => {
-    const safeColName = escapeIdentifier(col.name);
-    const safeVariantName = escapeSqlString(col.name);
-
     return `
         SELECT DISTINCT
-          "${safeColName}" as raw,
-          CAST("${safeFeatureId}" AS VARCHAR) as id,
-          '${safeVariantName}' as variant,
+          ${sqlIdentifier(col.name)} as raw,
+          CAST(${sqlIdentifier(INTERNAL_COLUMN.FEATURE_ID)} AS VARCHAR) as id,
+          ${sqlString(col.name)} as variant,
           regexp_replace(
             regexp_replace(
-              lower(strip_accents(trim("${safeColName}"))),
+              lower(strip_accents(trim(${sqlIdentifier(col.name)}))),
               '[^a-z0-9]',
               ''
             ),
             '\\s+',
             ''
           ) as normalized,
-          '${safeBasemapId}' as basemap,
+          ${sqlString(basemapId)} as basemap,
           ${totalCount} as basemap_count
-        FROM "${safeTableName}"
-        WHERE "${safeColName}" IS NOT NULL
+        FROM ${sqlIdentifier(tableName)}
+        WHERE ${sqlIdentifier(col.name)} IS NOT NULL
       `;
   });
 

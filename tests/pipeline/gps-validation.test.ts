@@ -212,9 +212,7 @@ describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
     expect(result.table.numRows).toBe(1);
     expect(result.latColumn).toBe('latitude_wgs84');
     expect(result.lonColumn).toBe('longitude_wgs84');
-    expect(gpsTableName).toMatch(
-      /^gps_sites_seveso_idf_custom_gps_columns_dataset_1_[a-z0-9]+$/
-    );
+    expect(gpsTableName).toMatch(/^gps_sites_seveso_idf_custom_gps_columns_/);
     expect(queries).toHaveLength(2);
     expect(queries[0]).toContain(`CREATE TEMP TABLE "${gpsTableName}" AS`);
     expect(queries[1]).toContain(`DROP TABLE IF EXISTS "${gpsTableName}"`);

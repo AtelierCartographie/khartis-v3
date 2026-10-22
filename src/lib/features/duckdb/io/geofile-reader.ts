@@ -1,9 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
@@ -35,6 +31,10 @@ import {
 } from './file-registry';
 import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 interface GeofileMetadata {
   crs: string | null;
@@ -88,17 +88,17 @@ function isCrsNotFoundError(error: unknown): boolean {
  * it to WGS84 when the render path actually needs it.
  */
 function buildCrsTaggedReadQuery(
-  escapedFinalTable: string,
-  escapedGeoFileId: string,
+  tableName: string,
+  fileId: string,
   selectedLayerClause: string,
   sourceCrs: string
 ): string {
-  return `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS
+  return `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT * EXCLUDE ("${INTERNAL_COLUMN.WKB_GEOMETRY}"),
-      ST_GeomFromWKB("${INTERNAL_COLUMN.WKB_GEOMETRY}")::GEOMETRY('${escapeSqlString(
+      ST_GeomFromWKB("${INTERNAL_COLUMN.WKB_GEOMETRY}")::GEOMETRY(${sqlString(
         sourceCrs
-      )}') AS "${INTERNAL_COLUMN.GEOM}"
-    FROM ST_Read('${escapedGeoFileId}', keep_wkb := true${selectedLayerClause});`;
+      )}) AS "${INTERNAL_COLUMN.GEOM}"
+    FROM ST_Read(${sqlString(fileId)}, keep_wkb := true${selectedLayerClause});`;
 }
 
 async function runGeofileRead(
@@ -156,7 +156,7 @@ async function queryGeofileLayers(
        layer.geometry_fields[1].type AS geom_type
      FROM (
        SELECT unnest(layers) AS layer
-       FROM ST_Read_Meta('${escapeSqlString(fileId)}')
+       FROM ST_Read_Meta(${sqlString(fileId)})
      )`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{
@@ -289,7 +289,7 @@ async function detectGeofileMetadata(
          layers[1].geometry_fields[1].crs.auth_code AS crs_code,
          layers[1].geometry_fields[1].name AS geom_name,
          len(layers) AS layer_count
-       FROM ST_Read_Meta('${escapeSqlString(fileId)}')`,
+       FROM ST_Read_Meta(${sqlString(fileId)})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
     )) as ArrowTable;
     if (result && result.numRows > 0) {
@@ -337,10 +337,9 @@ export async function readGeofile(
   const geofileWithId = geofile as FileWithId;
 
   if (meta) {
-    const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
     const result = await executeQuery(
       ctx.connection,
-      `FROM ${SQL_FUNCTIONS.ST_READ_META}('${escapedFileIdMeta}')
+      `FROM ${SQL_FUNCTIONS.ST_READ_META}(${sqlString(geofileWithId.id)})
 				SELECT
 					file_name AS name,
 					driver_short_name AS format,
@@ -379,12 +378,10 @@ export async function readGeofile(
   );
 
   const finalTablename = tablename;
-  const escapedFinalTable = escapeIdentifier(finalTablename);
-  const escapedGeoFileId = escapeSqlString(geofileWithId.id);
   const selectedLayerClause = geoMeta.selectedLayer
-    ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
+    ? `, layer = ${sqlString(geoMeta.selectedLayer)}`
     : '';
-  const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
+  const readQuery = `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM ST_Read(${sqlString(geofileWithId.id)}${selectedLayerClause});`;
 
   try {
     await runGeofileRead(ctx, readQuery);
@@ -399,8 +396,8 @@ export async function readGeofile(
       await runGeofileRead(
         ctx,
         buildCrsTaggedReadQuery(
-          escapedFinalTable,
-          escapedGeoFileId,
+          finalTablename,
+          geofileWithId.id,
           selectedLayerClause,
           sourceCrs
         )

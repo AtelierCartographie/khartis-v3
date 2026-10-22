@@ -26,7 +26,6 @@ import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
 import { simplification_macros } from './macros/simplification';
 import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 
 import type {
   AnalyseOptions,
@@ -39,6 +38,7 @@ import type {
   SearchStats,
   TableMetadata
 } from './types';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 async function query(
   sql: string,
@@ -192,12 +192,12 @@ export const Duck = {
     await executeQuery(
       ctx.connection,
       [table, ...derivedTables]
-        .map((name) => `DROP TABLE IF EXISTS "${escapeIdentifier(name)}";`)
+        .map((name) => `DROP TABLE IF EXISTS ${sqlIdentifier(name)};`)
         .join('\n')
     );
     await executeQuery(
       ctx.connection,
-      `DROP SEQUENCE IF EXISTS "${rowIdSequenceName(table)}"`
+      `DROP SEQUENCE IF EXISTS ${sqlIdentifier(rowIdSequenceName(table))}`
     );
     markTableMutated(ctx, table);
     for (const derivedTable of derivedTables) {
