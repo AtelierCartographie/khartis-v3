@@ -23,7 +23,12 @@
     createClickHandler,
     createHoverHandler
   } from '$lib/features/map/interactions';
-  import { useMapLayers, useMapState } from '$lib/features/map/hooks';
+  import {
+    useLabelEditing,
+    useMapLayers,
+    useMapState
+  } from '$lib/features/map/hooks';
+  import { LabelTextEditor, labelLayoutStore } from '$lib/features/map';
   import {
     createDeckWithDeferredResizeObserver,
     patchLumaCanvasContextResizeGuard,
@@ -735,6 +740,23 @@
     };
   });
 
+  // Each facet keys its labels by its own visualization id, so a label moved
+  // or edited in one facet stays where it is in the others.
+  const labelEditing = useLabelEditing({
+    getContainer: () => rendererContainer,
+    isEnabled: () => isStylingMode && !globalState.isMapExporting,
+    pick: (x, y, radius) => deckInstance?.pickObject({ x, y, radius }) ?? null
+  });
+
+  $effect(() => {
+    void labelLayoutStore.version;
+    untrack(() => {
+      if (isRendererLoaded) {
+        mapLayers.updateLayers(tables, splitData, densityTables);
+      }
+    });
+  });
+
   // Off-main-thread geometry parses fill their cache asynchronously; each
   // completion bumps this version so the facet layer pass re-runs and picks
   // up the parsed buffers.
@@ -883,7 +905,11 @@
 
 <div class="facets-grid-wrapper">
   <div class="shared-facets-stage">
-    <div bind:this={rendererContainer} class="shared-facets-canvas"></div>
+    <div
+      bind:this={rendererContainer}
+      class="shared-facets-canvas"
+      class:is-over-label={labelEditing.isOverLabel}
+    ></div>
 
     <div class="facets-overlay">
       {#each descriptors as descriptor (descriptor.facetId)}
@@ -937,6 +963,15 @@
   </div>
 </div>
 
+{#if labelEditing.editRequest}
+  {#key labelEditing.editRequest}
+    <LabelTextEditor
+      request={labelEditing.editRequest}
+      onclose={labelEditing.closeEditor}
+    />
+  {/key}
+{/if}
+
 <style lang="scss">
   .facets-grid-wrapper {
     width: 100%;
@@ -953,6 +988,11 @@
   .shared-facets-canvas {
     position: absolute;
     inset: 0;
+  }
+
+  /* Deck.gl rewrites the canvas cursor on every frame. */
+  .shared-facets-canvas.is-over-label :global(canvas) {
+    cursor: move !important;
   }
 
   .facets-overlay {

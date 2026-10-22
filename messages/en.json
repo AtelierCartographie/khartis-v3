@@ -469,7 +469,7 @@
   "facets_columns_label": "Columns",
   "facets_frame_visible_label": "Show a frame",
   "facets_reorder": "Reorder",
-  "facets_scale_shared_label": "Common scale",
+  "facets_scale_shared_label": "Shared legend",
   "facets_distribution_section": "Distribution",
   "facets_distribution_helper": "Assign the variables to the maps according to their position.",
   "facets_toggle_create_collection": "Split into several maps",
