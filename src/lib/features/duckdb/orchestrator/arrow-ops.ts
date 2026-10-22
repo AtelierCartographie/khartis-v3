@@ -25,6 +25,8 @@ import {
 } from '$lib/features/commons/utils/proj4-crs.utils';
 import { Field, Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import * as m from '$lib/paraglide/messages';
 import {
   sqlIdentifier,
   sqlString
@@ -250,18 +252,23 @@ export async function fetchArrowTableWithGeometry(
       )
     : null;
 
+  // Spatial cannot reproject a geometry that carries no CRS.
+  if (geomColumn && normalizedTargetCrs && !geometrySourceCrs) {
+    throw new DuckDBError(
+      m.error_unsupported_source_projection({
+        fromCRS: geomColumn.column_type
+      }),
+      undefined,
+      { tableName, targetCrs: normalizedTargetCrs }
+    );
+  }
+
   const geometryProjection =
     geomIdentifier && normalizedTargetCrs && geometrySourceCrs
       ? `ST_Transform(${geomIdentifier}, ${sqlString(
           geometrySourceCrs
         )}, ${sqlString(normalizedTargetCrs)}, true) AS ${geomIdentifier}`
-      : geomIdentifier && normalizedTargetCrs
-        ? `ST_Transform(${geomIdentifier}, ${sqlString(
-            normalizedTargetCrs
-          )}) AS ${geomIdentifier}`
-        : geomIdentifier
-          ? geomIdentifier
-          : null;
+      : geomIdentifier;
 
   let query: string;
   if (projectedColumnNames && projectedColumnNames.length > 0) {

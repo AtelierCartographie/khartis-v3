@@ -6,6 +6,7 @@ import {
   getArrowTableDirect,
   getArrowTableReprojected
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
 function toIpcBuffer(table: ReturnType<typeof tableFromArrays>): Uint8Array {
   const ipc = tableToIPC(table);
@@ -128,6 +129,23 @@ describe('getArrowTableReprojected', () => {
     await expect(
       getArrowTableReprojected('projected_dataset', Duck, 'EPSG:4326')
     ).rejects.toThrow('crs not found');
+  });
+
+  it('should refuse without querying when the geometry carries no CRS', async () => {
+    const Duck = {
+      describe_table: vi.fn().mockResolvedValue({
+        name: ['geom'],
+        type: ['GEOMETRY']
+      }),
+      queryStreaming: vi.fn(),
+      query: vi.fn()
+    } as unknown as DuckClient;
+
+    await expect(
+      getArrowTableReprojected('crs_less_dataset', Duck, 'EPSG:4326')
+    ).rejects.toBeInstanceOf(DuckDBError);
+    expect(Duck.queryStreaming).not.toHaveBeenCalled();
+    expect(Duck.query).not.toHaveBeenCalled();
   });
 });
 
