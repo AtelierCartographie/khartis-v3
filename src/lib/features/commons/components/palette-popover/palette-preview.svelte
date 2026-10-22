@@ -13,7 +13,12 @@
   } from './categories-aspect-popover.types';
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type { Palette, PaletteType } from './palette.constants';
-  import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
+  import {
+    PALETTE_TYPE,
+    findPaletteById,
+    normalizePaletteId,
+    resolvePaletteForType
+  } from './palette.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
@@ -80,9 +85,14 @@
   const dropdownPreviewCount = $derived(
     colors.length > 0 ? Math.min(colors.length, MAX_PREVIEW_SWATCHES) : 5
   );
-  const normalizedSelectedPaletteId = $derived(
-    normalizePaletteId(selectedPaletteId) ?? selectedPaletteId
-  );
+  const normalizedSelectedPaletteId = $derived.by(() => {
+    const palette = selectedPaletteId
+      ? findPaletteById(selectedPaletteId)
+      : undefined;
+    return palette
+      ? resolvePaletteForType(palette, paletteType).id
+      : (normalizePaletteId(selectedPaletteId) ?? selectedPaletteId);
+  });
   const resolvedClassCount = $derived(
     classification?.numClasses ??
       classification?.classes ??
