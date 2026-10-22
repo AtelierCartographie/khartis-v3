@@ -15,15 +15,7 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
-
-export interface DuckDBClient {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  analyse(
-    tableName: string,
-    options?: { force?: boolean }
-  ): Promise<AnalysisResult[]>;
-  drop_rows(tableName: string, rowIds: number[]): Promise<void>;
-}
+import type { DuckClient } from '../duck';
 
 const ALLOWED_COLUMN_TYPES = new Set([
   'VARCHAR',
@@ -110,7 +102,7 @@ function isNumericColumnType(type: string): boolean {
 
 async function maybeAnalyse(
   tableName: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   if (options?.skipAnalysis) return;
@@ -121,7 +113,7 @@ export async function renameColumn(
   tableName: string,
   oldName: string,
   newName: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   await Duck.query(
@@ -146,7 +138,7 @@ async function buildDateCastExpression(
   tableName: string,
   columnName: string,
   targetType: 'DATE' | 'TIMESTAMP',
-  Duck: DuckDBClient
+  Duck: DuckClient
 ): Promise<string> {
   const ref = sqlIdentifier(columnName);
   const format = await resolveBestTextDateFormat(
@@ -172,7 +164,7 @@ export async function changeColumnType(
   tableName: string,
   columnName: string,
   newType: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<ChangeColumnTypeResult> {
   const normalizedType = newType.trim().toUpperCase();
@@ -222,7 +214,7 @@ export async function changeColumnType(
 export async function dropColumn(
   tableName: string,
   columnName: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   await Duck.query(
@@ -235,7 +227,7 @@ export async function dropColumn(
 export async function dropRows(
   tableName: string,
   rowIds: number[],
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   if (!rowIds.length) return;
@@ -248,7 +240,7 @@ export async function refineColumn(
   tableName: string,
   columnName: string,
   operation: RefineOperation,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   const operations: Record<RefineOperation, string> = {
@@ -281,7 +273,7 @@ export async function replaceInColumn(
   columnName: string,
   searchValue: string,
   replaceValue: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<number> {
   const normResult = (await Duck.query(
@@ -419,7 +411,7 @@ export async function addCalculatedColumn(
   tableName: string,
   columnName: string,
   expression: string,
-  Duck: DuckDBClient,
+  Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<AnalysisResult[]> {
   const trimmedName = columnName.trim();
@@ -452,7 +444,7 @@ export async function addCalculatedColumn(
 export async function testExpression(
   tableName: string,
   expression: string,
-  Duck: DuckDBClient
+  Duck: DuckClient
 ): Promise<unknown> {
   validateExpression(expression);
 

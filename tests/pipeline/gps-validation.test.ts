@@ -2,18 +2,18 @@ import { tableFromArrays } from 'apache-arrow';
 import { describe, expect, it, vi } from 'vitest';
 import {
   getGPSArrowTable,
-  validateGPSColumns,
-  type DuckDBClientForGPS
+  validateGPSColumns
 } from '$lib/features/duckdb/orchestrator/gps-ops';
 import { FileType, type DuckDBDataset } from '$lib/features/duckdb/types';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import type { DuckClient } from '$lib/features/duckdb';
 
-function mockDuck(result: Record<string, number>): DuckDBClientForGPS {
+function mockDuck(result: Record<string, number>): DuckClient {
   return {
     async query() {
       return [result];
     }
-  };
+  } as unknown as DuckClient;
 }
 
 describe('[D-06] validateGPSColumns — magnitude-based swap detection (CSV-11)', () => {
@@ -180,12 +180,12 @@ describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
 
   it('materializes GPS rows in a temp table and drops it after Arrow export', async () => {
     const queries: string[] = [];
-    const duck: DuckDBClientForGPS = {
+    const duck = {
       async query(sql: string) {
         queries.push(sql);
         return [];
       }
-    };
+    } as unknown as DuckClient;
     const arrowTable = tableFromArrays({ id: [1] });
     const getArrowTableDirect = vi.fn(async (_tableName: string) => arrowTable);
     const dataset: DuckDBDataset = {
@@ -225,7 +225,7 @@ describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
       gate.release = () => resolve();
     });
 
-    const duck: DuckDBClientForGPS = {
+    const duck = {
       async query(sql: string) {
         queries.push(sql);
         if (sql.includes('CREATE TEMP TABLE')) {
@@ -233,7 +233,7 @@ describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
         }
         return [];
       }
-    };
+    } as unknown as DuckClient;
     const arrowTable = tableFromArrays({ id: [1, 2] });
     const getArrowTableDirect = vi.fn(async (_tableName: string) => arrowTable);
     const dataset: DuckDBDataset = {

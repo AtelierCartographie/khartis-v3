@@ -14,12 +14,9 @@ import {
   sqlIdentifier,
   sqlTempName
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export type { GPSBounds, GPSColumns };
-
-export interface DuckDBClientForGPS {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-}
 
 export interface GPSValidationResult {
   isValid: boolean;
@@ -102,7 +99,7 @@ export async function validateGPSColumns(
   tableName: string,
   latCol: string,
   lonCol: string,
-  Duck: DuckDBClientForGPS
+  Duck: DuckClient
 ): Promise<GPSValidationResult> {
   try {
     const result = (await Duck.query(
@@ -245,7 +242,7 @@ export function detectGPSColumns(
 
 export async function getGPSArrowTable(
   dataset: DuckDBDataset,
-  Duck: DuckDBClientForGPS,
+  Duck: DuckClient,
   getArrowTableDirect: (tableName: string) => Promise<Table>
 ): Promise<GPSArrowTableResult> {
   if (!dataset.gpsMode || !dataset.gpsColumns) {
@@ -319,7 +316,7 @@ export async function getGPSArrowTable(
 
 export async function getGPSBounds(
   dataset: DuckDBDataset,
-  Duck: DuckDBClientForGPS
+  Duck: DuckClient
 ): Promise<GPSBounds | null> {
   // In tabular-gps mode (no join), gpsColumns may not be set yet —
   // fall back to the dataset geo detection and then to column-name heuristics.

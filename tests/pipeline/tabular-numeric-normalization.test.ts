@@ -8,19 +8,15 @@ import {
   run,
   type TestDuckDB
 } from './duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
-interface DuckQueryClient {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
-
-function wrapDuckDB(db: TestDuckDB): DuckQueryClient {
+function wrapDuckDB(db: TestDuckDB): DuckClient {
   return {
     async query(sql: string): Promise<unknown> {
       const reader = await db.connection.runAndReadAll(sql);
       return reader.getRowObjectsJson();
     }
-  };
+  } as unknown as DuckClient;
 }
 
 let db: TestDuckDB;

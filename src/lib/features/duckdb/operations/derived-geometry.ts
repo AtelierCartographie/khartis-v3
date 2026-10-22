@@ -5,16 +5,12 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 // The repair grid is a fraction of the average perimeter, so it holds whether
 // the coverage is in degrees or in metres. 1e-6 re-nodes what GEOS rejects while
 // moving vertices well below the pixel.
 const NODING_REPAIR_FACTOR = 0.000001;
-
-interface DuckDBClientForDerivedGeometry {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
 
 export function getDerivedLandTableName(sourceTable: string): string {
   return `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.LAND}`;
@@ -29,7 +25,7 @@ export function getDerivedOuterlinesTableName(sourceTable: string): string {
 }
 
 async function createEmptyGeometryTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   tableName: string
 ): Promise<void> {
   await duck.query(`
@@ -40,7 +36,7 @@ async function createEmptyGeometryTable(
 }
 
 async function createDerivedTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   candidateSelects: string[]
 ): Promise<void> {
@@ -68,7 +64,7 @@ async function createDerivedTable(
 }
 
 async function isValidPolygonCoverage(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<boolean> {
   try {
@@ -88,7 +84,7 @@ async function isValidPolygonCoverage(
 }
 
 async function runDerivedTableQuery(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   select: string
 ): Promise<void> {
@@ -120,7 +116,7 @@ function buildLineSelect(macroCall: string): string {
  * GEOS dissolve, re-noded on a second attempt.
  */
 export async function rebuildDerivedGeometryTables(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<void> {
   const landTable = getDerivedLandTableName(sourceTable);

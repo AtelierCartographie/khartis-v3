@@ -1,4 +1,5 @@
 export { Duck, initDuckDB } from './duck';
+export type { DuckClient } from './duck';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 export { detectGPSColumns, validateGPSColumns } from './orchestrator/gps-ops';
 export {

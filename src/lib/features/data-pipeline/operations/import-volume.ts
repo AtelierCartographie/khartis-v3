@@ -5,13 +5,7 @@ import { showWarning } from '$lib/features/commons/utils/notification.utils.svel
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { sqlString } from '$lib/features/commons/utils/sql.utils';
-
-interface DuckDBImportVolumeClient {
-  query(
-    sql: string,
-    options: { format: 'array'; useProxy?: boolean }
-  ): Promise<unknown>;
-}
+import type { DuckClient } from '$lib/features/duckdb';
 
 export function assertImportRowCountWithinLimit(
   rowCount: number,
@@ -49,7 +43,7 @@ export function warnOnLargeImport(rowCount: number): void {
 }
 
 export async function readParquetRowCount(
-  duck: DuckDBImportVolumeClient,
+  duck: DuckClient,
   fileId: string
 ): Promise<number | null> {
   try {

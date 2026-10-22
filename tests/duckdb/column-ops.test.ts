@@ -2,10 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  changeColumnType,
-  type DuckDBClient
-} from '$lib/features/duckdb/orchestrator/column-ops';
+import { changeColumnType } from '$lib/features/duckdb/orchestrator/column-ops';
 import { DUCK_CONST } from '$lib/features/duckdb/constants';
 import {
   createTestInstance,
@@ -14,6 +11,7 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 let db: TestDuckDB;
 let tempDir: string;
@@ -28,7 +26,7 @@ afterAll(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
 
-function duckClient(): DuckDBClient {
+function duckClient(): DuckClient {
   return {
     async query(sql: string, options?: { format?: string }): Promise<unknown> {
       if (options?.format === 'array') {
@@ -39,7 +37,7 @@ function duckClient(): DuckDBClient {
     },
     analyse: vi.fn(async () => []),
     drop_rows: vi.fn(async () => undefined)
-  };
+  } as unknown as DuckClient;
 }
 
 describe('changeColumnType', () => {

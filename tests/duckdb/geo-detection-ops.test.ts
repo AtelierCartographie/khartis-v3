@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
@@ -15,7 +16,7 @@ const ATTRIBUTES_PATH = path
   .replace(/'/g, "''");
 
 let db: TestDuckDB;
-let duck: { query: (sql: string) => Promise<unknown> };
+let duck: DuckClient;
 
 beforeAll(async () => {
   db = await createTestInstance();
@@ -28,7 +29,7 @@ beforeAll(async () => {
         toArray: () => rows
       };
     }
-  };
+  } as unknown as DuckClient;
 
   await run(db, join_macros);
   await run(
