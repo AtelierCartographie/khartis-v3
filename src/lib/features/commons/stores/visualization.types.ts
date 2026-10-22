@@ -243,6 +243,7 @@ export interface LinePrimitiveConfig {
   opacity: number;
   dashed: boolean;
   dashedPattern?: BasemapDottedPattern;
+  capRounded?: boolean;
   valueColumn?: string;
   categoryColumn?: string;
   sizeColumn?: string;
@@ -413,6 +414,7 @@ export interface VisualizationConfig {
     lineOpacity?: number;
     lineDashed?: boolean;
     lineDashedPattern?: BasemapDottedPattern;
+    lineCapRounded?: boolean;
     textColor?: string | string[];
     textOpacity?: number;
     textFontFamily?: string;

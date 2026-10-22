@@ -248,6 +248,7 @@
   "opacity": "Opacity",
   "thickness": "Width",
   "color": "Color",
+  "line_cap_rounded": "Rounded ends",
   "dashed": "Dashed",
   "stroke_dashed_pattern": "Dash pattern",
   "dashed_pattern_dots": "Dots",
