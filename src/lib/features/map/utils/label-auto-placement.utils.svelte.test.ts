@@ -21,6 +21,8 @@ const ENTRY: AutoLabelEntry = {
 const OPTIONS: AutoLabelPlacementOptions = {
   bounds: [0, 0, 400, 400],
   obstacles: [],
+  lines: [],
+  align: 'none',
   gap: 2,
   symbolGap: 3,
   minGap: 6

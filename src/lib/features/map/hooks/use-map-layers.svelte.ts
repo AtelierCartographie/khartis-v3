@@ -1139,6 +1139,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
       let hasPendingBasemapLayerSource = false;
+      let labelOutlineTables: ArrowTable[] = [];
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
@@ -1252,6 +1253,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               });
             }
           }
+
+          labelOutlineTables = metadataLayers
+            .filter((layer) => layer.type === BasemapLayerType.LAND)
+            .map((layer) => layer.table);
 
           const additionalData = {
             frontieresTable: shouldShowBasemapLayers
@@ -1390,6 +1395,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             projectionState.overrideSource,
             allowProjectionOverride
           );
+          ctx.labelOutlineTables = labelOutlineTables;
 
           if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
