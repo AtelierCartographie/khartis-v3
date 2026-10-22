@@ -62,7 +62,6 @@ export const GEO_CONSTANTS = {
  */
 export const EXTENSIONS = {
   SPATIAL: 'spatial',
-  HTTPFS: 'httpfs',
   JSON: 'json'
 } as const;
 

@@ -1,5 +1,6 @@
 import { markTableMutated } from '../cache/cache-manager';
-import { DUCK_CONST, EXTENSIONS } from '../constants';
+import { DUCK_CONST } from '../constants';
+import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { addRowId } from './reader-utils';
@@ -25,11 +26,7 @@ export async function readJsonTabular(
   const { tablename } = options;
   const fileid = (file as FileWithId).id ?? file.name;
 
-  await executeQuery(
-    ctx.connection,
-    `INSTALL ${EXTENSIONS.JSON}; LOAD ${EXTENSIONS.JSON};`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  );
+  await ensureExtension(ctx, 'json');
 
   await executeQuery(
     ctx.connection,

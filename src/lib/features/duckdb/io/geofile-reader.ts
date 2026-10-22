@@ -10,12 +10,8 @@ import {
 import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { markTableMutated } from '../cache/cache-manager';
-import {
-  DUCK_CONST,
-  EXTENSIONS,
-  LOAD_SPATIAL_SQL,
-  SQL_FUNCTIONS
-} from '../constants';
+import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
+import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
 import { isProjectionSupported } from './reprojection';
 import type {
@@ -196,7 +192,7 @@ export async function listGeofileSpatialLayers(
   await registerFiles(ctx.db, ctx.registered_files, [geofile]);
   const fileId = (geofile as FileWithId).id;
   try {
-    await ensureSpatialExtension(ctx);
+    await ensureExtension(ctx, 'spatial');
     return rankSpatialLayers(await queryGeofileLayers(ctx, fileId)).map(
       (layer) => layer.layerName!
     );
@@ -208,40 +204,6 @@ export async function listGeofileSpatialLayers(
     return [];
   } finally {
     await dropRegisteredFile(ctx.db, ctx.registered_files, fileId);
-  }
-}
-
-async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
-  if (ctx.extensionsLoaded.spatial) return;
-
-  try {
-    await executeQuery(ctx.connection, LOAD_SPATIAL_SQL, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
-    ctx.extensionsLoaded.spatial = true;
-  } catch (loadError) {
-    logger.error(
-      'Failed to load spatial extension, trying install fallback',
-      LogCategory.DUCKDB,
-      loadError
-    );
-    try {
-      await executeQuery(
-        ctx.connection,
-        `INSTALL ${EXTENSIONS.SPATIAL}; ${LOAD_SPATIAL_SQL}`,
-        {
-          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-        }
-      );
-      ctx.extensionsLoaded.spatial = true;
-    } catch (error) {
-      logger.error(
-        'Failed to load spatial extension',
-        LogCategory.DUCKDB,
-        error
-      );
-      throw error;
-    }
   }
 }
 
@@ -258,7 +220,7 @@ async function detectGeofileMetadata(
     autoSelectedLayer: false
   };
   try {
-    await ensureSpatialExtension(ctx);
+    await ensureExtension(ctx, 'spatial');
 
     const parsedLayers = await queryGeofileLayers(ctx, fileId);
 
