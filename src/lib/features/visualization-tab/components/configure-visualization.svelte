@@ -376,7 +376,8 @@
     handleUpdateDataFilter,
     handleClearFilters
   } = useDataFilters({
-    getSelectedVisualization: () => selectedViz
+    getSelectedVisualization: () => selectedViz,
+    onFiltersChange: syncFacetsFromVisualizationId
   });
 
   const primitiveFilterStats = usePrimitiveFilterStats({
