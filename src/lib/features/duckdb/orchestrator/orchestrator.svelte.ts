@@ -40,7 +40,7 @@ import {
   type GPSColumns,
   type SearchStats
 } from '../types';
-import { isMissingDuckTableError } from '../utils/duckdb-error.utils';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 
 import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
@@ -220,7 +220,7 @@ function shouldIgnoreFinalizeJoinError(
   expectedTableName: string,
   error: unknown
 ): boolean {
-  if (!isMissingDuckTableError(error)) {
+  if (!matchesDuckDBError(error, 'missing-table')) {
     return false;
   }
 

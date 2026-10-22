@@ -13,6 +13,7 @@ import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
 import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 import { isProjectionSupported } from './reprojection';
 import type {
   DuckDBContext,
@@ -40,16 +41,6 @@ interface GeofileMetadata {
   autoSelectedLayer: boolean;
 }
 
-function isThreadPoolError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('thread constructor failed') ||
-    message.includes('resource temporarily unavailable') ||
-    message.includes('pthread_create')
-  );
-}
-
 function isGeoPackageFile(filename: string): boolean {
   return filename.toLowerCase().endsWith('.gpkg');
 }
@@ -66,12 +57,6 @@ function shouldUseGeoPackageBrowserFallback(
     isGeoPackageFile(geofile.name) &&
     typeof window !== 'undefined' &&
     !ctx.threadsSupported
-  );
-}
-
-function isCrsNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof Error && /crs not found/i.test(error.message.toLowerCase())
   );
 }
 
@@ -351,7 +336,7 @@ export async function readGeofile(
     const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
 
     if (
-      isCrsNotFoundError(error) &&
+      matchesDuckDBError(error, 'crs-not-found') &&
       sourceCrs &&
       isProjectionSupported(sourceCrs)
     ) {
@@ -364,7 +349,10 @@ export async function readGeofile(
           sourceCrs
         )
       );
-    } else if (isGeoPackageFile(geofile.name) && isThreadPoolError(error)) {
+    } else if (
+      isGeoPackageFile(geofile.name) &&
+      matchesDuckDBError(error, 'thread-pool')
+    ) {
       const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
         geofile,
         {
