@@ -284,13 +284,7 @@ function createGlobalStore() {
   function setNavigationState(selectedStep: ToolbarStep): void {
     state.selectedStep = selectedStep;
 
-    if (selectedStep === ToolbarStep.Styling) {
-      state.toolbarState = ToolbarState.Collapsed;
-    } else if (selectedStep === ToolbarStep.Visualizations) {
-      state.toolbarState = ToolbarState.Compact;
-    } else if (state.toolbarState === ToolbarState.Collapsed) {
-      state.toolbarState = ToolbarState.Full;
-    }
+    state.toolbarState = resolveInitialToolbarState(selectedStep);
 
     notifyPersistence();
   }

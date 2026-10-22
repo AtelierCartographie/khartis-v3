@@ -1,3 +1,4 @@
+import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, SCALE_MODE } from '../facets';
 import {
   visualizationStore,
@@ -127,14 +128,23 @@ export function selectRenderedLegendItems(
 
   // In a map collection the base visualization is hidden, so its legend must
   // not appear; only the generated facets get a legend. With a shared scale
-  // every facet shares the same breaks, so a single legend stands for all.
+  // every facet shares the same breaks, so the first facet's legends stand
+  // for all, except fill categories that differ from one map to the next.
   const generatedIds = new Set(facetsStore.generatedVisualizationIds);
   const facetItems = drawnItems.filter(
     (item) => item.variableId != null && generatedIds.has(item.variableId)
   );
 
   if (facetsStore.scaleMode === SCALE_MODE.SHARED) {
-    return facetItems.slice(0, 1);
+    const firstFacetId = facetItems[0]?.variableId;
+    const colorPerMap =
+      facetsStore.fillSlotPath === FACET_SLOT.SYMBOL_FILL_CATEGORY &&
+      facetsStore.mapFillVariables.length > 1;
+    return facetItems.filter(
+      (item) =>
+        item.variableId === firstFacetId ||
+        (colorPerMap && item.component === 'color')
+    );
   }
 
   return facetItems;

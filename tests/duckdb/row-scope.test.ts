@@ -6,6 +6,8 @@ import {
   createFilterRecord
 } from '$lib/features/duckdb/orchestrator/filter-ops';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
+import { resolveFacetDataFilters } from '$lib/features/commons/utils/viz-filter.utils';
+import type { VizDataFilter } from '$lib/features/commons/stores/visualization.types';
 import { search_macros } from '$lib/features/duckdb/macros/search';
 import {
   getColumnDomainsInScope,
@@ -75,18 +77,19 @@ beforeAll(async () => {
        __id INTEGER,
        name VARCHAR,
        region VARCHAR,
-       pop INTEGER
+       pop INTEGER,
+       pop_1968 INTEGER
      )`
   );
   await run(
     db,
     `INSERT INTO "${TABLE}" VALUES
-       (1, 'Ajaccio', 'Corse', 71361),
-       (2, 'Bastia', 'Corse', 48146),
-       (3, 'Corte', 'Corse', 7451),
-       (4, 'Lille', 'Hauts-de-France', 236234),
-       (5, 'Roubaix', 'Hauts-de-France', 98828),
-       (6, 'Cambrai', 'Hauts-de-France', 32501)`
+       (1, 'Ajaccio', 'Corse', 71361, 42300),
+       (2, 'Bastia', 'Corse', 48146, 50100),
+       (3, 'Corte', 'Corse', 7451, 5400),
+       (4, 'Lille', 'Hauts-de-France', 236234, 190500),
+       (5, 'Roubaix', 'Hauts-de-France', 98828, 114500),
+       (6, 'Cambrai', 'Hauts-de-France', 32501, 39900)`
   );
 });
 
@@ -187,6 +190,61 @@ describe('row scope against DuckDB', () => {
 
     expect([Number(whole.lo), Number(whole.hi)]).toEqual([7451, 236234]);
     expect([Number(inScope.lo), Number(inScope.hi)]).toEqual([7451, 71361]);
+  });
+});
+
+describe('top filter ranked in each map of a collection', () => {
+  function facetClause(
+    filters: VizDataFilter[],
+    facetVariable: string
+  ): string | null {
+    return buildFilterClause(
+      TABLE,
+      (resolveFacetDataFilters(filters, facetVariable) ?? []).map((filter) => ({
+        column: filter.column,
+        operator: filter.operator,
+        value: filter.value,
+        limit: filter.limit
+      }))
+    );
+  }
+
+  const topThree = (perFacet: boolean): VizDataFilter => ({
+    id: 'top',
+    column: 'pop',
+    operator: 'top_asc',
+    value: '3',
+    limit: 3,
+    perFacet
+  });
+
+  it('ranks each map on its own variable', async () => {
+    await expect(
+      namesInScope(facetClause([topThree(true)], 'pop'))
+    ).resolves.toEqual(['Bastia', 'Cambrai', 'Corte']);
+    await expect(
+      namesInScope(facetClause([topThree(true)], 'pop_1968'))
+    ).resolves.toEqual(['Ajaccio', 'Cambrai', 'Corte']);
+  });
+
+  it('keeps the stored column when the filter is shared by the collection', async () => {
+    await expect(
+      namesInScope(facetClause([topThree(false)], 'pop_1968'))
+    ).resolves.toEqual(['Bastia', 'Cambrai', 'Corte']);
+  });
+
+  it('never retargets a filter that is not a top', async () => {
+    const overFortyThousand: VizDataFilter = {
+      id: 'gte',
+      column: 'pop',
+      operator: 'gte',
+      value: '40000',
+      perFacet: true
+    };
+
+    await expect(
+      namesInScope(facetClause([overFortyThousand], 'pop_1968'))
+    ).resolves.toEqual(['Ajaccio', 'Bastia', 'Lille', 'Roubaix']);
   });
 });
 

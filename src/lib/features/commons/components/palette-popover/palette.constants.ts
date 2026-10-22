@@ -332,6 +332,18 @@ export const divergingPalettes: Palette[] = [
   ...colorblindDivergingPalettes
 ];
 
+// A diverging classification never derives its ramp from a sequential
+// palette: the opposite hue computed from one seed is not in the picker.
+export function resolvePaletteForType(
+  palette: Palette,
+  type: PaletteType
+): Palette {
+  return type === PALETTE_TYPE.DIVERGING &&
+    palette.type === PALETTE_TYPE.SEQUENTIAL
+    ? divergingPalettes[0]
+    : palette;
+}
+
 export const colorblindQualitativePalettes: Palette[] = [
   {
     id: 'cb-wong',

@@ -102,8 +102,9 @@ export function createLineLayerStack(
   const lineDashArray = lineDashed
     ? resolveThematicStrokeDashArray(lineConfig?.dashedPattern)
     : ([0, 0] as [number, number]);
-  const lineCapRounded =
-    lineDashed && resolveThematicStrokeCapRounded(lineConfig?.dashedPattern);
+  const lineCapRounded = lineDashed
+    ? resolveThematicStrokeCapRounded(lineConfig?.dashedPattern)
+    : (lineConfig?.capRounded ?? true);
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
@@ -362,6 +363,7 @@ export function createLineLayerStack(
       ...(!dashArrayBinaryAttr && { getDashArray: lineDashArray }),
       dashJustified: true,
       capRounded: lineCapRounded,
+      jointRounded: lineCapRounded,
       widthUnits: 'pixels',
       widthScale: pageDisplayScale,
       ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),

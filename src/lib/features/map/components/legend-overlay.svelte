@@ -43,6 +43,7 @@
   import {
     getLegendState,
     legendActions,
+    requestLegendItemFocus,
     selectRenderedLegendItems,
     setRenderedLegendSegments
   } from '$lib/features/step-toolbar/tools/legend';
@@ -720,9 +721,13 @@
     }
   }
 
-  function handleFrameClick(event: MouseEvent | KeyboardEvent): void {
+  function handleFrameClick(
+    event: MouseEvent | KeyboardEvent,
+    item: LegendItem
+  ): void {
     event.stopPropagation();
     legendActions.markAsOpened();
+    requestLegendItemFocus(item.id);
     activateStylingToolFromMap(StylingTools.Legend);
   }
 
@@ -764,7 +769,7 @@
       return;
     }
 
-    handleFrameClick(event);
+    handleFrameClick(event, item);
     centeredItemId = item.id;
 
     const currentTarget = event.currentTarget;
@@ -801,7 +806,7 @@
     }
 
     event.preventDefault();
-    handleFrameClick(event);
+    handleFrameClick(event, item);
     legendActions.updateLegendItem(item.id, {
       dragPosition: normalizeFramePosition(item.id, {
         x: currentPosition.x + delta.x,
@@ -821,7 +826,7 @@
     }
 
     event.preventDefault();
-    handleFrameClick(event);
+    handleFrameClick(event, item);
     centeredItemId = item.id;
     void tick().then(() => {
       centerFrameInViewport(event.currentTarget);
