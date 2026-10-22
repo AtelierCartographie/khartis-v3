@@ -9,7 +9,7 @@ import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import { DUCK_CONST, EXTENSIONS } from '../constants';
+import { DUCK_CONST, EXTENSIONS, LOAD_SPATIAL_SQL } from '../constants';
 import type {
   DescribeResult,
   DuckDBContext,
@@ -144,7 +144,7 @@ async function loadSpatialExtension(): Promise<void> {
   try {
     await executeQuery(
       connection,
-      `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
+      `INSTALL ${EXTENSIONS.SPATIAL}; ${LOAD_SPATIAL_SQL}`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }

@@ -70,6 +70,14 @@ export const EXTENSIONS = {
 } as const;
 
 /**
+ * Loads spatial with coordinates read as [x, y] (lon/lat) whatever the CRS
+ * authority says. Spatial 2.0 rejects ST_Transform and the spheroid functions
+ * when the axis order is left unset. The setting only exists once spatial is
+ * loaded.
+ */
+export const LOAD_SPATIAL_SQL = `LOAD ${EXTENSIONS.SPATIAL}; SET geometry_always_xy = true;`;
+
+/**
  * DuckDB SQL function names.
  */
 export const SQL_FUNCTIONS = {
