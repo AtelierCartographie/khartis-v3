@@ -3,7 +3,7 @@ import proj4 from 'proj4';
 import { reprojectPoint } from '$lib/features/duckdb/io/reprojection';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { parseWkbToGeoJson } from '$lib/features/map/io/geometry-parser';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
@@ -41,7 +41,7 @@ type GeoPackageLayerRecord = SqliteRow & GeoPackageLayerRow;
 let sqliteModulePromise: Promise<SqliteModule> | null = null;
 
 function quoteIdentifier(identifier: string): string {
-  return `"${escapeIdentifier(identifier)}"`;
+  return sqlIdentifier(identifier);
 }
 
 function normalizeSqliteBlob(value: unknown): Uint8Array | null {

@@ -5,7 +5,6 @@ import {
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { withGeoDetection } from '../../services/geo-detection.service';
@@ -24,6 +23,7 @@ import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { projectStore } from '../project.store.svelte';
 import { visualizationStore } from '../visualization.store.svelte';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 function cloneContent(
   content: UploadedFile['content']
@@ -242,7 +242,7 @@ export async function duplicateDataset(
     const copyName = `${copyBaseName}${m.copy_suffix()}`;
 
     await Duck.query(
-      `CREATE TABLE "${escapeIdentifier(newTableName)}" AS SELECT * FROM "${escapeIdentifier(dataset.tableName)}"`
+      `CREATE TABLE ${sqlIdentifier(newTableName)} AS SELECT * FROM ${sqlIdentifier(dataset.tableName)}`
     );
 
     const virtualFileId = crypto.randomUUID();

@@ -1,8 +1,4 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import {
   RefineOperation,
@@ -15,6 +11,10 @@ import {
   buildTextDateExpression,
   resolveBestTextDateFormat
 } from '../io/text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -124,12 +124,8 @@ export async function renameColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedOld = escapeIdentifier(oldName);
-  const escapedNew = escapeIdentifier(newName);
-
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" RENAME COLUMN "${escapedOld}" TO "${escapedNew}"`
+    `ALTER TABLE ${sqlIdentifier(tableName)} RENAME COLUMN ${sqlIdentifier(oldName)} TO ${sqlIdentifier(newName)}`
   );
 
   await maybeAnalyse(tableName, Duck, options);
@@ -152,7 +148,7 @@ async function buildDateCastExpression(
   targetType: 'DATE' | 'TIMESTAMP',
   Duck: DuckDBClient
 ): Promise<string> {
-  const ref = `"${escapeIdentifier(columnName)}"`;
+  const ref = sqlIdentifier(columnName);
   const format = await resolveBestTextDateFormat(
     async (sql) =>
       ((await Duck.query(sql, { format: 'array' })) ?? []) as Record<
@@ -179,9 +175,6 @@ export async function changeColumnType(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<ChangeColumnTypeResult> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCol = escapeIdentifier(columnName);
-
   const normalizedType = newType.trim().toUpperCase();
   if (!isSupportedColumnType(normalizedType)) {
     throw new DuckDBError(m.error_unsupported_column_type({ newType }));
@@ -192,8 +185,10 @@ export async function changeColumnType(
   // target uses TRY_CAST so unparsable values become NULL instead of failing
   // the whole statement (the #166 contract).
   const usingExpr = isNumericColumnType(normalizedType)
-    ? buildNormalizedNumericTextSql(`trim("${escapedCol}"::VARCHAR)`)
-    : `"${escapedCol}"`;
+    ? buildNormalizedNumericTextSql(
+        `trim(${sqlIdentifier(columnName)}::VARCHAR)`
+      )
+    : sqlIdentifier(columnName);
   const castExpr =
     normalizedType === 'DATE' || normalizedType === 'TIMESTAMP'
       ? await buildDateCastExpression(
@@ -206,17 +201,17 @@ export async function changeColumnType(
 
   const invalidatedResult = (await Duck.query(
     `SELECT COUNT(*) FILTER (
-       WHERE "${escapedCol}" IS NOT NULL
-         AND trim("${escapedCol}"::VARCHAR) <> ''
+       WHERE ${sqlIdentifier(columnName)} IS NOT NULL
+         AND trim(${sqlIdentifier(columnName)}::VARCHAR) <> ''
          AND ${castExpr} IS NULL
      ) AS invalidated
-     FROM "${escapedTable}"`,
+     FROM ${sqlIdentifier(tableName)}`,
     { format: 'array' }
   )) as Array<{ invalidated?: number | bigint }> | undefined;
   const invalidatedCount = Number(invalidatedResult?.[0]?.invalidated ?? 0);
 
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType} USING ${castExpr}`
+    `ALTER TABLE ${sqlIdentifier(tableName)} ALTER COLUMN ${sqlIdentifier(columnName)} SET DATA TYPE ${normalizedType} USING ${castExpr}`
   );
 
   await maybeAnalyse(tableName, Duck, options);
@@ -230,10 +225,9 @@ export async function dropColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCol = escapeIdentifier(columnName);
-
-  await Duck.query(`ALTER TABLE "${escapedTable}" DROP COLUMN "${escapedCol}"`);
+  await Duck.query(
+    `ALTER TABLE ${sqlIdentifier(tableName)} DROP COLUMN ${sqlIdentifier(columnName)}`
+  );
 
   await maybeAnalyse(tableName, Duck, options);
 }
@@ -257,17 +251,14 @@ export async function refineColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCol = escapeIdentifier(columnName);
-
   const operations: Record<RefineOperation, string> = {
-    [RefineOperation.UPPERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = UPPER("${escapedCol}")`,
-    [RefineOperation.LOWERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = LOWER("${escapedCol}")`,
-    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = CASE
-      WHEN "${escapedCol}" IS NULL THEN NULL
+    [RefineOperation.UPPERCASE]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = UPPER(${sqlIdentifier(columnName)})`,
+    [RefineOperation.LOWERCASE]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = LOWER(${sqlIdentifier(columnName)})`,
+    [RefineOperation.TITLECASE]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = CASE
+      WHEN ${sqlIdentifier(columnName)} IS NULL THEN NULL
       ELSE array_to_string(
         list_transform(
-          string_split(lower("${escapedCol}"::VARCHAR), ' '),
+          string_split(lower(${sqlIdentifier(columnName)}::VARCHAR), ' '),
           x -> CASE
             WHEN x = '' THEN x
             ELSE upper(substr(x, 1, 1)) || substr(x, 2)
@@ -276,8 +267,8 @@ export async function refineColumn(
         ' '
       )
     END`,
-    [RefineOperation.TRIM]: `UPDATE "${escapedTable}" SET "${escapedCol}" = TRIM("${escapedCol}")`,
-    [RefineOperation.TRIM_ALL]: `UPDATE "${escapedTable}" SET "${escapedCol}" = REGEXP_REPLACE("${escapedCol}", '\\s+', ' ', 'g')`
+    [RefineOperation.TRIM]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = TRIM(${sqlIdentifier(columnName)})`,
+    [RefineOperation.TRIM_ALL]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = REGEXP_REPLACE(${sqlIdentifier(columnName)}, '\\s+', ' ', 'g')`
   };
 
   await Duck.query(operations[operation]);
@@ -293,21 +284,16 @@ export async function replaceInColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<number> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCol = escapeIdentifier(columnName);
-  const escapedSearchValue = escapeSqlString(searchValue);
-  const escapedReplaceValue = escapeSqlString(replaceValue);
-
   const normResult = (await Duck.query(
-    `SELECT normalize_raw_text('${escapedSearchValue}') as norm`,
+    `SELECT normalize_raw_text(${sqlString(searchValue)}) as norm`,
     { format: 'array' }
   )) as Array<{ norm: string }>;
   const normalizedSearch = normResult?.[0]?.norm ?? '';
 
-  const exactMatchCondition = `normalize_raw_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
+  const exactMatchCondition = `normalize_raw_text(${sqlIdentifier(columnName)}::VARCHAR) = ${sqlString(normalizedSearch)}`;
 
   const countResult = (await Duck.query(
-    `SELECT COUNT(*) as count FROM "${escapedTable}" WHERE ${exactMatchCondition}`
+    `SELECT COUNT(*) as count FROM ${sqlIdentifier(tableName)} WHERE ${exactMatchCondition}`
   )) as ArrowTableLike;
 
   const countRow = countResult.get(0) as Record<string, unknown>;
@@ -315,7 +301,7 @@ export async function replaceInColumn(
 
   if (count > 0) {
     await Duck.query(
-      `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
+      `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = ${sqlString(replaceValue)} WHERE ${exactMatchCondition}`
     );
 
     if (!options?.skipAnalysis) {
@@ -452,11 +438,8 @@ export async function addCalculatedColumn(
     );
   }
 
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedColumn = escapeIdentifier(trimmedName);
-
   await Duck.query(
-    `CREATE OR REPLACE TABLE "${escapedTable}" AS SELECT *, (${expression}) AS "${escapedColumn}" FROM "${escapedTable}"`
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT *, (${expression}) AS ${sqlIdentifier(trimmedName)} FROM ${sqlIdentifier(tableName)}`
   );
 
   const updatedColumns = options?.skipAnalysis
@@ -473,9 +456,8 @@ export async function testExpression(
 ): Promise<unknown> {
   validateExpression(expression);
 
-  const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
-    `SELECT (${expression}) as result FROM "${escapedTable}" LIMIT 1`
+    `SELECT (${expression}) as result FROM ${sqlIdentifier(tableName)} LIMIT 1`
   )) as ArrowTableLike;
 
   if (result.numRows === 0) {

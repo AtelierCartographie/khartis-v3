@@ -1,8 +1,4 @@
 import { rebuildDerivedGeometryTables } from './derived-geometry';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   DataValidationError,
@@ -11,6 +7,10 @@ import {
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export interface SimplificationMetrics {
   originalVertices: number;
@@ -34,12 +34,10 @@ async function resolveSimplificationMacro(
   tableName: string,
   geometryColumn: string
 ): Promise<SimplificationMacro> {
-  const escapedGeom = escapeIdentifier(geometryColumn);
-  const escapedTable = escapeIdentifier(tableName);
   const rows = (await Duck.query(
-    `SELECT DISTINCT ST_GeometryType("${escapedGeom}") AS geometry_type
-     FROM "${escapedTable}"
-     WHERE "${escapedGeom}" IS NOT NULL`,
+    `SELECT DISTINCT ST_GeometryType(${sqlIdentifier(geometryColumn)}) AS geometry_type
+     FROM ${sqlIdentifier(tableName)}
+     WHERE ${sqlIdentifier(geometryColumn)} IS NOT NULL`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ geometry_type: string | null }>;
   const geometryTypes = rows
@@ -68,12 +66,10 @@ async function countVertices(
   tableName: string,
   geometryColumn: string
 ): Promise<number> {
-  const escapedGeom = escapeIdentifier(geometryColumn);
-  const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
-    `SELECT SUM(ST_NPoints("${escapedGeom}")) as total_vertices
-     FROM "${escapedTable}"
-     WHERE "${escapedGeom}" IS NOT NULL`,
+    `SELECT SUM(ST_NPoints(${sqlIdentifier(geometryColumn)})) as total_vertices
+     FROM ${sqlIdentifier(tableName)}
+     WHERE ${sqlIdentifier(geometryColumn)} IS NOT NULL`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ total_vertices: number | null }>;
 
@@ -110,15 +106,10 @@ export async function simplifyGeometryTable(
     );
   }
 
-  const escapedInputValue = escapeSqlString(inputTableName);
-  const escapedInput = escapeIdentifier(inputTableName);
-  const escapedGeometryColumnValue = escapeSqlString(geometryColumn);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
   const resolvedTargetTable = options.targetTableName ?? targetTable;
-  const escapedTarget = escapeIdentifier(resolvedTargetTable);
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
@@ -132,16 +123,16 @@ export async function simplifyGeometryTable(
   try {
     if (simplificationMacro) {
       await Duck.query(`
-        ${createStatement} "${escapedTarget}" AS
-        FROM ${simplificationMacro}('${escapedInputValue}', '${escapedGeometryColumnValue}', ${tolerance})
+        ${createStatement} ${sqlIdentifier(resolvedTargetTable)} AS
+        FROM ${simplificationMacro}(${sqlString(inputTableName)}, ${sqlString(geometryColumn)}, ${tolerance})
       `);
     } else {
       await Duck.query(`
-        ${createStatement} "${escapedTarget}" AS
+        ${createStatement} ${sqlIdentifier(resolvedTargetTable)} AS
         SELECT
-          * EXCLUDE ("${escapedGeometryColumn}"),
-          "${escapedGeometryColumn}" AS geom
-        FROM "${escapedInput}"
+          * EXCLUDE (${sqlIdentifier(geometryColumn)}),
+          ${sqlIdentifier(geometryColumn)} AS geom
+        FROM ${sqlIdentifier(inputTableName)}
       `);
     }
     Duck.invalidateTableCache?.(resolvedTargetTable);

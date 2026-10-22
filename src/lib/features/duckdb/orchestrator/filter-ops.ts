@@ -1,10 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import { buildStripHtmlTextSqlExpression } from '../utils/html-like-text.utils';
 import type {
@@ -13,6 +9,10 @@ import type {
   FilterOperator
 } from '../types';
 import { FilterOperatorEnum } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export function formatFilterValue(value: string | number | undefined): string {
   if (value === undefined || value === null) {
@@ -33,7 +33,7 @@ export function formatFilterValue(value: string | number | undefined): string {
     return trimmed;
   }
 
-  return `'${escapeSqlString(trimmed)}'`;
+  return sqlString(trimmed);
 }
 
 export function assertFilterValue(
@@ -59,15 +59,15 @@ function formatTextFilterValue(value: string | number | undefined): string {
     return `''`;
   }
 
-  return `'${escapeSqlString(trimmed)}'`;
+  return sqlString(trimmed);
 }
 
 export function buildFilterSQL(
   tableName: string,
   filter: DataTableFilterInput
 ): string {
-  const columnRef = `"${escapeIdentifier(filter.column)}"`;
-  const tableRef = `"${escapeIdentifier(tableName)}"`;
+  const columnRef = sqlIdentifier(filter.column);
+  const tableRef = sqlIdentifier(tableName);
   const textRef = buildStripHtmlTextSqlExpression(columnRef);
   const value = formatFilterValue(filter.value);
   const secondValue = formatFilterValue(filter.secondaryValue);

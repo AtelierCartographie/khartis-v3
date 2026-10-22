@@ -1,13 +1,13 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST, EXTENSIONS } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { addRowId } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 interface FileWithId extends File {
   id?: string;
@@ -33,7 +33,7 @@ export async function readJsonTabular(
 
   await executeQuery(
     ctx.connection,
-    `CREATE OR REPLACE TABLE "${escapeIdentifier(tablename)}" AS FROM read_json_auto('${escapeSqlString(fileid)}');`,
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(tablename)} AS FROM read_json_auto(${sqlString(fileid)});`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 

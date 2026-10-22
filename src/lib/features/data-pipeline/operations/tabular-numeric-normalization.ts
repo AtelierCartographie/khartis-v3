@@ -1,12 +1,12 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import {
   buildDecimalLikeConditionSql,
   buildNormalizedNumericTextSql
 } from '$lib/features/commons/utils/numeric-format.utils';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 const MIN_NON_EMPTY_VALUES = 2;
 const INTERNAL_COLUMNS: Set<string> = new Set([INTERNAL_COLUMN.ID]);
@@ -43,7 +43,7 @@ function toCount(value: unknown): number {
 }
 
 function buildRawValueExpr(columnName: string): string {
-  return `trim("${escapeIdentifier(columnName)}"::VARCHAR)`;
+  return `trim(${sqlIdentifier(columnName)}::VARCHAR)`;
 }
 
 function buildConvertibilityCountersSql(
@@ -109,11 +109,8 @@ export async function normalizeFormattedNumericColumns(
   tableName: string,
   duck: DuckQueryClient
 ): Promise<string[]> {
-  const escapedTableString = escapeSqlString(tableName);
-  const escapedTableIdentifier = escapeIdentifier(tableName);
-
   const described = (await duck.query(
-    `FROM describe_full('${escapedTableString}')`,
+    `FROM describe_full(${sqlString(tableName)})`,
     { format: 'array' }
   )) as DescribeRow[];
 
@@ -139,7 +136,7 @@ export async function normalizeFormattedNumericColumns(
     .join(',');
 
   const statsResult = (await duck.query(
-    `SELECT ${countersSelect} FROM "${escapedTableIdentifier}"`,
+    `SELECT ${countersSelect} FROM ${sqlIdentifier(tableName)}`,
     { format: 'array' }
   )) as Array<Record<string, unknown>>;
 
@@ -156,21 +153,21 @@ export async function normalizeFormattedNumericColumns(
     const replaceList = conversions
       .map(
         (conversion) =>
-          `${buildConversionCastSql(conversion)} AS "${escapeIdentifier(conversion.name)}"`
+          `${buildConversionCastSql(conversion)} AS ${sqlIdentifier(conversion.name)}`
       )
       .join(', ');
 
     await duck.query(
-      `CREATE OR REPLACE TABLE "${escapedTableIdentifier}" AS
+      `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
         SELECT * REPLACE (${replaceList})
-        FROM "${escapedTableIdentifier}"`
+        FROM ${sqlIdentifier(tableName)}`
     );
   } else {
     const [conversion] = conversions;
 
     await duck.query(
-      `ALTER TABLE "${escapedTableIdentifier}"
-        ALTER COLUMN "${escapeIdentifier(conversion.name)}" SET DATA TYPE ${conversion.targetType}
+      `ALTER TABLE ${sqlIdentifier(tableName)}
+        ALTER COLUMN ${sqlIdentifier(conversion.name)} SET DATA TYPE ${conversion.targetType}
         USING ${buildConversionCastSql(conversion)}`
     );
   }

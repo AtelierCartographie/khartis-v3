@@ -12,10 +12,6 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import {
   PERF_PHASE,
   perfMark,
   perfMeasure
@@ -45,6 +41,12 @@ import type {
 import { detectGPSColumns } from './gps-ops';
 import { isGeometryColumnName } from '../utils/geometry-column.utils';
 import { selectBasemapJoinKeyColumns } from '../utils/basemap-join-key-columns.utils';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlNamePart,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 export type { FinalizeJoinResult };
 
@@ -162,9 +164,7 @@ function getSimilarityCacheTableName(
   buildKey: string
 ): string {
   // The hash keeps names unique when sanitization collapses distinct keys.
-  const sanitized = `${datasetTable}__${geoColumn}`
-    .replace(/[^a-zA-Z0-9_]/g, '_')
-    .slice(0, 80);
+  const sanitized = sqlNamePart(`${datasetTable}__${geoColumn}`, 80);
   const hash = hashSimilarityCacheKey(buildKey);
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}_${hash}`;
 }
@@ -174,7 +174,7 @@ function dropTempTable(tableName: string, duck?: DuckDBClientForJoin): void {
   // The facade throws synchronously before init; temp tables die with the engine.
   try {
     void duck
-      .query(`DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`)
+      .query(`DROP TABLE IF EXISTS ${sqlIdentifier(tableName)}`)
       .catch(() => undefined);
   } catch {
     return;
@@ -201,7 +201,7 @@ function getGradedCacheKey(
 function getGradedCacheTableName(basemapId: string, gradedKey: string): string {
   // Named after the basemap only: embedding the cache table name would make
   // every graded table read as a similarity cache table.
-  const sanitized = basemapId.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 80);
+  const sanitized = sqlNamePart(basemapId, 80);
   return `${GRADED_CACHE_PREFIX}${sanitized}_${hashSimilarityCacheKey(gradedKey)}`;
 }
 
@@ -303,7 +303,7 @@ async function ensureSimilarityCached(
     // Rebuild if DuckDB dropped the temp table externally.
     const check = reusable
       ? ((await Duck.query(
-          `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(cachedEntry.cacheTableName)}'`,
+          `SELECT table_name FROM information_schema.tables WHERE table_name = ${sqlString(cachedEntry.cacheTableName)}`,
           { format: 'array' }
         )) as Array<{ table_name: string }>)
       : [];
@@ -330,9 +330,6 @@ async function ensureSimilarityCached(
     perfMark(PERF_PHASE.SIMILARITY_CACHE);
     await ensureBasemapAttributesLoaded(Duck);
 
-    const escapedGeoCol = escapeIdentifier(geoColumn);
-    const escapedCacheTable = escapeIdentifier(cacheTableName);
-
     // Build the similarity cache in two phases:
     // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
     //          Cap rows per source value and basemap so broad codes such as
@@ -343,13 +340,13 @@ async function ensureSimilarityCached(
     // Normalization is pre-computed once in the candidates CTE to avoid
     // redundant computation inside the join/cross-join.
     await Duck.query(`
-      CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
+      CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(cacheTableName)} AS
       WITH source_raw AS (
         SELECT
-          CAST("${escapedGeoCol}" AS VARCHAR) as original_name,
-          normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR)) as normalized_name
-        FROM "${escapeIdentifier(dataset.tableName)}"
-        WHERE "${escapedGeoCol}" IS NOT NULL${rowFilter ? ` AND (${rowFilter})` : ''}
+          CAST(${sqlIdentifier(geoColumn)} AS VARCHAR) as original_name,
+          normalize_text_join(CAST(${sqlIdentifier(geoColumn)} AS VARCHAR)) as normalized_name
+        FROM ${sqlIdentifier(dataset.tableName)}
+        WHERE ${sqlIdentifier(geoColumn)} IS NOT NULL${rowFilter ? ` AND (${rowFilter})` : ''}
       ),
       source_data AS (
         SELECT
@@ -507,7 +504,7 @@ async function ensureSimilarityCached(
       similarityCacheEntries.delete(oldestKey);
       invalidateGradedCache(oldestEntry.cacheTableName, Duck);
       await Duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(oldestEntry.cacheTableName)}"`
+        `DROP TABLE IF EXISTS ${sqlIdentifier(oldestEntry.cacheTableName)}`
       ).catch(() => undefined);
     }
 
@@ -541,17 +538,16 @@ async function fetchFuzzyPassEstimate(
   Duck: DuckDBClientForJoin
 ): Promise<JoinFuzzyPassEstimate> {
   const columnKey = getColumnKey(dataset.tableName, geoColumn);
-  const escapedCache = escapeIdentifier(cacheTableName);
 
   const rows = (await Duck.query(
     `WITH candidate_basemaps AS (
        SELECT DISTINCT match_basemap AS basemap
-       FROM "${escapedCache}"
+       FROM ${sqlIdentifier(cacheTableName)}
        WHERE typo_match = 'exact'
      ),
      unmatched AS (
        SELECT original_name
-       FROM "${escapedCache}"
+       FROM ${sqlIdentifier(cacheTableName)}
        GROUP BY original_name
        HAVING COUNT(match_id) = 0
      )
@@ -620,9 +616,7 @@ type JoinBucketStatus =
 
 function buildExcludedValuesFilter(excludedValues: string[]): string {
   if (excludedValues.length === 0) return '';
-  const list = excludedValues
-    .map((value) => `'${escapeSqlString(value)}'`)
-    .join(', ');
+  const list = excludedValues.map(sqlString).join(', ');
   return `WHERE c.original_name NOT IN (${list})`;
 }
 
@@ -632,13 +626,10 @@ function buildJoinGradingCtes(
   basemapId: string,
   excludedValues: string[]
 ): string {
-  const escapedCache = escapeIdentifier(cacheTableName);
-  const escapedBasemapId = escapeSqlString(basemapId);
-
   return `WITH basemap_matches AS (
       SELECT *
-      FROM "${escapedCache}"
-      WHERE match_basemap = '${escapedBasemapId}'
+      FROM ${sqlIdentifier(cacheTableName)}
+      WHERE match_basemap = ${sqlString(basemapId)}
         AND match_id IS NOT NULL
     ),
     -- IDs already claimed by an unambiguous exact match (1 candidate has score=1
@@ -700,7 +691,7 @@ function buildJoinGradingCtes(
     ),
     all_candidates AS (
       SELECT DISTINCT original_name, source_dup_count
-      FROM "${escapedCache}"
+      FROM ${sqlIdentifier(cacheTableName)}
     ),
     graded AS (
       SELECT
@@ -758,7 +749,7 @@ async function ensureGradedMaterialized(
     );
 
     await Duck.query(`
-      CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(gradedTableName)}" AS
+      CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(gradedTableName)} AS
       ${gradingCtes}
       SELECT
         g.original_name,
@@ -778,7 +769,7 @@ async function ensureGradedMaterialized(
       if (oldestKey === gradedKey) break;
       gradedCacheEntries.delete(oldestKey);
       await Duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(oldestTable)}"`
+        `DROP TABLE IF EXISTS ${sqlIdentifier(oldestTable)}`
       ).catch(() => undefined);
     }
 
@@ -804,7 +795,7 @@ async function deriveJoinQualityFromCache(
   Duck: DuckDBClientForJoin,
   excludedValues: string[]
 ): Promise<JoinQuality> {
-  const gradedTable = escapeIdentifier(
+  const gradedTable = sqlIdentifier(
     await ensureGradedMaterialized(
       cacheTableName,
       basemapId,
@@ -815,7 +806,7 @@ async function deriveJoinQualityFromCache(
 
   const countRows = (await Duck.query(
     `SELECT status, COUNT(*) AS cnt
-    FROM "${gradedTable}"
+    FROM ${gradedTable}
     GROUP BY status`,
     { format: 'array' }
   )) as Array<{ status: JoinBucketStatus; cnt: number }>;
@@ -842,7 +833,7 @@ async function deriveJoinQualityFromCache(
           PARTITION BY status
           ORDER BY original_name
         ) AS bucket_rank
-      FROM "${gradedTable}"
+      FROM ${gradedTable}
       WHERE status IN ('check', 'ambiguous', 'duplicate', 'not_found')
     )
     WHERE status IN ('check', 'ambiguous')
@@ -936,7 +927,7 @@ export async function getJoinedEntitiesPage(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradedTable = escapeIdentifier(
+  const gradedTable = sqlIdentifier(
     await ensureGradedMaterialized(
       cacheTableName,
       basemapId,
@@ -947,7 +938,7 @@ export async function getJoinedEntitiesPage(
 
   const rows = (await Duck.query(
     `SELECT original_name, candidates
-    FROM "${gradedTable}"
+    FROM ${gradedTable}
     WHERE status = 'matched'
     ORDER BY original_name
     LIMIT ${Math.max(0, Math.trunc(options.limit))}
@@ -984,7 +975,7 @@ export async function getJoinedBasemapValues(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradedTable = escapeIdentifier(
+  const gradedTable = sqlIdentifier(
     await ensureGradedMaterialized(
       cacheTableName,
       basemapId,
@@ -995,7 +986,7 @@ export async function getJoinedBasemapValues(
 
   const rows = (await Duck.query(
     `SELECT DISTINCT (candidates[1]).name AS value
-    FROM "${gradedTable}"
+    FROM ${gradedTable}
     WHERE status = 'matched'
       AND candidates IS NOT NULL`,
     { format: 'array' }
@@ -1038,13 +1029,13 @@ interface BasemapMatchTally {
  * which is exactly when naming the right basemap matters most.
  */
 async function fetchSampledBasemapRanking(
-  escapedCache: string,
+  cacheTableName: string,
   Duck: DuckDBClientForJoin
 ): Promise<SampledBasemapRanking> {
   const sampleSizes = (await Duck.query(
     `WITH unmatched AS (
        SELECT original_name
-       FROM "${escapedCache}"
+       FROM ${sqlIdentifier(cacheTableName)}
        GROUP BY original_name
        HAVING COUNT(match_id) = 0
      )
@@ -1056,12 +1047,12 @@ async function fetchSampledBasemapRanking(
   const rows = (await Duck.query(
     `WITH candidate_basemaps AS (
       SELECT DISTINCT match_basemap AS basemap
-      FROM "${escapedCache}"
+      FROM ${sqlIdentifier(cacheTableName)}
       WHERE typo_match = 'exact'
     ),
     unmatched AS (
       SELECT original_name
-      FROM "${escapedCache}"
+      FROM ${sqlIdentifier(cacheTableName)}
       GROUP BY original_name
       HAVING COUNT(match_id) = 0
     ),
@@ -1112,14 +1103,12 @@ export async function computeJoinSynthesis(
 ): Promise<JoinSynthesisResult[]> {
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
 
-  const escapedCache = escapeIdentifier(cacheTableName);
-
   // The total lives in its own statement: when nothing matches at all the
   // grouped query returns no rows, and a scalar carried on those rows would
   // come back as a zero denominator.
   const totals = (await Duck.query(
     `SELECT COUNT(DISTINCT original_name) AS total_candidates
-     FROM "${escapedCache}"`,
+     FROM ${sqlIdentifier(cacheTableName)}`,
     { format: 'array' }
   )) as Array<{ total_candidates: number }>;
   const totalCandidates = Number(totals[0]?.total_candidates ?? 0);
@@ -1130,7 +1119,7 @@ export async function computeJoinSynthesis(
         original_name,
         match_basemap,
         match_basemap_count
-      FROM "${escapedCache}"
+      FROM ${sqlIdentifier(cacheTableName)}
       WHERE match_id IS NOT NULL
     )
     SELECT
@@ -1158,7 +1147,7 @@ export async function computeJoinSynthesis(
   );
 
   if (!estimate.withinBudget && estimate.candidates > 0) {
-    const sampled = await fetchSampledBasemapRanking(escapedCache, Duck);
+    const sampled = await fetchSampledBasemapRanking(cacheTableName, Duck);
     // Scale the sample back up to the residual it stands for, so a basemap
     // reached only through fuzzy matches is not under-reported next to one
     // reached through exact matches on every candidate.
@@ -1227,8 +1216,8 @@ async function getJoinColumnExcludeClause(
   const columnsToExclude = [...JOINED_BASEMAP_COLUMNS];
   const existingColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(tableName)}'
-     AND column_name IN (${columnsToExclude.map((column) => `'${column}'`).join(', ')})`,
+     WHERE table_name = ${sqlString(tableName)}
+     AND column_name IN (${columnsToExclude.map(sqlString).join(', ')})`,
     { format: 'array' }
   )) as Array<{ column_name: string }>;
 
@@ -1237,7 +1226,7 @@ async function getJoinColumnExcludeClause(
   }
 
   const excludeList = existingColumns
-    .map((row) => `"${escapeIdentifier(row.column_name)}"`)
+    .map((row) => sqlIdentifier(row.column_name))
     .join(', ');
 
   return `EXCLUDE (${excludeList})`;
@@ -1251,11 +1240,8 @@ async function generateAttributesForBasemap(
     const geometryTable =
       await basemapService.loadGeometryIntoDuckDB(basemapId);
 
-    const escapedBasemapId = escapeSqlString(basemapId);
-    const escapedGeomTable = escapeIdentifier(geometryTable);
-
     const columnsResult = (await Duck.query(
-      `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+      `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ${sqlString(geometryTable)}`,
       { format: 'array' }
     )) as Array<{ column_name: string; data_type: string }>;
 
@@ -1279,7 +1265,7 @@ async function generateAttributesForBasemap(
     );
 
     const countResult = (await Duck.query(
-      `SELECT COUNT(*) as total FROM "${escapedGeomTable}"`,
+      `SELECT COUNT(*) as total FROM ${sqlIdentifier(geometryTable)}`,
       { format: 'array' }
     )) as Array<{ total: number }>;
     const totalCount = Number(countResult?.[0]?.total ?? 0);
@@ -1287,18 +1273,16 @@ async function generateAttributesForBasemap(
     if (totalCount === 0) return false;
 
     const unionQueries = candidateColumns.map((columnName) => {
-      const safeColName = escapeIdentifier(columnName);
-      const safeVariantName = escapeSqlString(columnName);
       return `
         SELECT DISTINCT
-          "${safeColName}" as raw,
-          "${safeColName}" as id,
-          '${safeVariantName}' as variant,
-          normalize_text_join(CAST("${safeColName}" AS VARCHAR)) as normalized,
-          '${escapedBasemapId}' as basemap,
+          ${sqlIdentifier(columnName)} as raw,
+          ${sqlIdentifier(columnName)} as id,
+          ${sqlString(columnName)} as variant,
+          normalize_text_join(CAST(${sqlIdentifier(columnName)} AS VARCHAR)) as normalized,
+          ${sqlString(basemapId)} as basemap,
           ${totalCount} as basemap_count
-        FROM "${escapedGeomTable}"
-        WHERE "${safeColName}" IS NOT NULL
+        FROM ${sqlIdentifier(geometryTable)}
+        WHERE ${sqlIdentifier(columnName)} IS NOT NULL
       `;
     });
 
@@ -1342,22 +1326,18 @@ export async function computeJoinStats(
 
   if (quality.duplicateCount > 0) {
     const rowFilter = resolveJoinRowFilter(dataset.tableName, 'filtered');
-    const escapedTable = escapeIdentifier(dataset.tableName);
-    const escapedGeoCol = escapeIdentifier(geoColumn);
-    const dupValues = quality.duplicateEntities
-      .map((value) => `'${escapeSqlString(value)}'`)
-      .join(', ');
+    const dupValues = quality.duplicateEntities.map(sqlString).join(', ');
 
     if (dupValues) {
       const hasRowId = (await Duck.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(dataset.tableName)}' AND column_name = '${INTERNAL_COLUMN.ID}'`,
+        `SELECT column_name FROM information_schema.columns WHERE table_name = ${sqlString(dataset.tableName)} AND column_name = '${INTERNAL_COLUMN.ID}'`,
         { format: 'array' }
       )) as Array<{ column_name: string }>;
 
       const idCol = hasRowId.length > 0 ? `"${INTERNAL_COLUMN.ID}"` : 'rowid';
 
       const dupRows = (await Duck.query(
-        `SELECT "${escapedGeoCol}" as dataValue, array_agg(${idCol} ORDER BY ${idCol}) as lines FROM "${escapedTable}" WHERE "${escapedGeoCol}" IN (${dupValues})${rowFilter ? ` AND (${rowFilter})` : ''} GROUP BY "${escapedGeoCol}" HAVING COUNT(*) > 1`,
+        `SELECT ${sqlIdentifier(geoColumn)} as dataValue, array_agg(${idCol} ORDER BY ${idCol}) as lines FROM ${sqlIdentifier(dataset.tableName)} WHERE ${sqlIdentifier(geoColumn)} IN (${dupValues})${rowFilter ? ` AND (${rowFilter})` : ''} GROUP BY ${sqlIdentifier(geoColumn)} HAVING COUNT(*) > 1`,
         { format: 'array' }
       )) as Array<{ dataValue: string; lines: number[] }>;
 
@@ -1375,9 +1355,8 @@ async function ensureBasemapHasAttributes(
 ): Promise<void> {
   await ensureBasemapAttributesLoaded(Duck);
 
-  const escapedBasemapId = escapeSqlString(basemapId);
   const attributeCount = (await Duck.query(
-    `SELECT COUNT(*) as cnt FROM basemap_attributes WHERE basemap = '${escapedBasemapId}'`,
+    `SELECT COUNT(*) as cnt FROM basemap_attributes WHERE basemap = ${sqlString(basemapId)}`,
     { format: 'array' }
   )) as Array<{ cnt: number }>;
 
@@ -1392,7 +1371,7 @@ async function ensureBasemapHasAttributes(
     }
 
     const recheck = (await Duck.query(
-      `SELECT COUNT(*) as cnt FROM basemap_attributes WHERE basemap = '${escapedBasemapId}'`,
+      `SELECT COUNT(*) as cnt FROM basemap_attributes WHERE basemap = ${sqlString(basemapId)}`,
       { format: 'array' }
     )) as Array<{ cnt: number }>;
 
@@ -1417,14 +1396,13 @@ export async function getBasemapAttributeValues(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
 
-  const escapedBasemapId = escapeSqlString(basemapId);
   const displayVariants = getBasemapDisplayVariants(basemap);
   const displayOrder =
     displayVariants.length > 0
       ? `CASE ${displayVariants
           .map(
             (variant, index) =>
-              `WHEN variant = '${escapeSqlString(variant)}' THEN ${index}`
+              `WHEN variant = ${sqlString(variant)} THEN ${index}`
           )
           .join(' ')} ELSE ${displayVariants.length} END,`
       : '';
@@ -1436,7 +1414,7 @@ export async function getBasemapAttributeValues(
          variant,
          ROW_NUMBER() OVER () AS source_order
        FROM basemap_attributes
-       WHERE basemap = '${escapedBasemapId}' AND raw IS NOT NULL
+       WHERE basemap = ${sqlString(basemapId)} AND raw IS NOT NULL
      ),
      ranked AS (
        SELECT
@@ -1492,8 +1470,6 @@ export async function getBasemapAttributeAliasesByValue(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
 
-  const escapedBasemapId = escapeSqlString(basemapId);
-
   const rows = (await Duck.query(
     `WITH source AS (
        SELECT
@@ -1502,7 +1478,7 @@ export async function getBasemapAttributeAliasesByValue(
          COALESCE(id, raw) AS entity_id,
          ROW_NUMBER() OVER () AS rn
        FROM basemap_attributes
-       WHERE basemap = '${escapedBasemapId}'
+       WHERE basemap = ${sqlString(basemapId)}
      )
      SELECT raw, variant, entity_id, rn
      FROM source
@@ -1551,29 +1527,28 @@ export async function applyJoinCorrections(
   const valueRows = entries
     .map(
       ([original, corrected]) =>
-        `('${escapeSqlString(original)}', '${escapeSqlString(corrected)}')`
+        `(${sqlString(original)}, ${sqlString(corrected)})`
     )
     .join(', ');
 
-  const correctionsTable = `corrections_${crypto.randomUUID().replace(/-/g, '_')}`;
-
-  const escapedTableName = escapeIdentifier(dataset.tableName);
-  const escapedGeoCol = escapeIdentifier(geoColumn);
+  const correctionsTable = sqlTempName('corrections');
 
   try {
     await Duck.query(
-      `CREATE TEMP TABLE "${correctionsTable}" (original VARCHAR, corrected VARCHAR)`
+      `CREATE TEMP TABLE ${sqlIdentifier(correctionsTable)} (original VARCHAR, corrected VARCHAR)`
     );
-    await Duck.query(`INSERT INTO "${correctionsTable}" VALUES ${valueRows}`);
+    await Duck.query(
+      `INSERT INTO ${sqlIdentifier(correctionsTable)} VALUES ${valueRows}`
+    );
 
     await Duck.query(`
-      UPDATE "${escapedTableName}"
-      SET "${escapedGeoCol}" = c.corrected
-      FROM "${correctionsTable}" c
-      WHERE "${escapedGeoCol}" = c.original
+      UPDATE ${sqlIdentifier(dataset.tableName)}
+      SET ${sqlIdentifier(geoColumn)} = c.corrected
+      FROM ${sqlIdentifier(correctionsTable)} c
+      WHERE ${sqlIdentifier(geoColumn)} = c.original
     `);
   } finally {
-    await Duck.query(`DROP TABLE IF EXISTS "${correctionsTable}"`);
+    await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(correctionsTable)}`);
   }
 
   // Corrected source values require a fresh similarity cache.
@@ -1588,23 +1563,17 @@ async function applyCachedJoinAssociation(
   Duck: DuckDBClientForJoin,
   excludedValues: string[] = []
 ): Promise<void> {
-  const escapedDatasetTable = escapeIdentifier(datasetTableName);
-  const escapedGeoColumn = escapeIdentifier(geoColumn);
-  const escapedBasemapId = escapeSqlString(basemapId);
-  const escapedCacheTable = escapeIdentifier(cacheTableName);
   const excludeClause = await getJoinColumnExcludeClause(
     datasetTableName,
     Duck
   );
   const excludedValuesClause =
     excludedValues.length > 0
-      ? `AND original_name NOT IN (${excludedValues
-          .map((value) => `'${escapeSqlString(value)}'`)
-          .join(', ')})`
+      ? `AND original_name NOT IN (${excludedValues.map(sqlString).join(', ')})`
       : '';
 
   await Duck.query(`
-    CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
+    CREATE OR REPLACE TABLE ${sqlIdentifier(datasetTableName)} AS
     WITH all_basemap_matches AS (
       SELECT
         original_name AS geoname,
@@ -1612,8 +1581,8 @@ async function applyCachedJoinAssociation(
         match_raw AS label,
         match_score AS score,
         typo_match
-      FROM "${escapedCacheTable}"
-      WHERE match_basemap = '${escapedBasemapId}'
+      FROM ${sqlIdentifier(cacheTableName)}
+      WHERE match_basemap = ${sqlString(basemapId)}
         AND match_id IS NOT NULL
         ${excludedValuesClause}
     ),
@@ -1646,9 +1615,9 @@ async function applyCachedJoinAssociation(
       j.id AS "${JOINED_BASEMAP_COLUMN.ID}",
       j.label AS "${JOINED_BASEMAP_COLUMN.LABEL}",
       j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}"
-    FROM "${escapedDatasetTable}" t
+    FROM ${sqlIdentifier(datasetTableName)} t
     LEFT JOIN ranked_join j
-      ON t."${escapedGeoColumn}" = j.geoname
+      ON t.${sqlIdentifier(geoColumn)} = j.geoname
   `);
 }
 
@@ -1753,15 +1722,11 @@ export async function getJoinedArrowTable(
 ): Promise<Table> {
   const geometryTable = await loadGeometryIntoDuckDB(basemapId);
 
-  const sanitizedDataset = datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_');
-  const sanitizedBasemap = basemapId.replace(/[^a-zA-Z0-9_]/g, '_');
-  const joinedView = `joined_${sanitizedDataset}_${sanitizedBasemap}`;
-  const escapedDataset = escapeIdentifier(datasetTableName);
-  const escapedGeometry = escapeIdentifier(geometryTable);
+  const joinedView = `joined_${sqlNamePart(datasetTableName)}_${sqlNamePart(basemapId)}`;
 
   const geometryTableColumns = (await Duck.query(
     `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+     WHERE table_name = ${sqlString(geometryTable)}`,
     { format: 'array' }
   )) as InformationSchemaColumn[];
 
@@ -1785,20 +1750,17 @@ export async function getJoinedArrowTable(
       column.column_name.toLowerCase() === CANONICAL_ID_COLUMN &&
       !isGeometryColumnName(column.column_name)
   );
-  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
-  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
 
   const joinColumn = featureIdColumn ?? nativeIdColumn;
 
   if (joinColumn) {
-    const escapedJoinCol = escapeIdentifier(joinColumn.column_name);
     await Duck.query(`
-      CREATE OR REPLACE VIEW "${joinedView}" AS
-      SELECT d.*, g."${escapedGeomCol}" AS geometry
-      FROM "${escapedDataset}" d
-      INNER JOIN "${escapedGeometry}" g
-        ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
-      WHERE g."${escapedGeomCol}" IS NOT NULL
+      CREATE OR REPLACE VIEW ${sqlIdentifier(joinedView)} AS
+      SELECT d.*, g.${sqlIdentifier(geometryColumn.column_name)} AS geometry
+      FROM ${sqlIdentifier(datasetTableName)} d
+      INNER JOIN ${sqlIdentifier(geometryTable)} g
+        ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(g.${sqlIdentifier(joinColumn.column_name)} AS VARCHAR)
+      WHERE g.${sqlIdentifier(geometryColumn.column_name)} IS NOT NULL
     `);
   } else {
     const attrColumns = geometryTableColumns.filter((column) => {
@@ -1809,23 +1771,23 @@ export async function getJoinedArrowTable(
     });
 
     const colList = attrColumns
-      .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+      .map((c) => sqlIdentifier(c.column_name))
       .join(', ');
 
     await Duck.query(`
-      CREATE OR REPLACE VIEW "${joinedView}" AS
+      CREATE OR REPLACE VIEW ${sqlIdentifier(joinedView)} AS
       WITH geom_unpivot AS (
-        UNPIVOT "${escapedGeometry}"
+        UNPIVOT ${sqlIdentifier(geometryTable)}
         ON ${colList}
         INTO NAME _attr_col VALUE _attr_val
       )
       SELECT d.*, gu._geom_value AS geometry
-      FROM "${escapedDataset}" d
+      FROM ${sqlIdentifier(datasetTableName)} d
       INNER JOIN (
-        SELECT DISTINCT _attr_val, "${escapedGeomCol}" AS _geom_value
+        SELECT DISTINCT _attr_val, ${sqlIdentifier(geometryColumn.column_name)} AS _geom_value
         FROM geom_unpivot
       ) gu
-      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+      ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
       WHERE gu._geom_value IS NOT NULL
     `);
   }

@@ -6,12 +6,12 @@ import {
 } from '$lib/features/duckdb';
 import type { DataTableFilterInput, DuckDBDataset } from '$lib/features/duckdb';
 import { JOINED_BASEMAP_COLUMN } from '../constants/data.constants';
-import { escapeIdentifier } from '../utils/sanitize.utils';
 import type {
   PrimitiveFilter,
   VizDataFilter
 } from '../stores/visualization.types';
 import { selectVizFiltersForPrimitive } from '../utils/viz-filter.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 export interface RowScope {
   tableName: string;
@@ -43,7 +43,7 @@ function toFilterInput(
 // domains or missing-data count either.
 function resolveJoinedRowsClause(dataset: DuckDBDataset): string | null {
   return dataset.hasJoinKey
-    ? `"${escapeIdentifier(JOINED_BASEMAP_COLUMN.ID)}" IS NOT NULL`
+    ? `${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} IS NOT NULL`
     : null;
 }
 

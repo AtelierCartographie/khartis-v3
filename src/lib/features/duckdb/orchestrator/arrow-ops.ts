@@ -16,10 +16,6 @@ import {
   perfMeasure
 } from '$lib/features/commons/utils/perf-marks.utils';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import {
   ArrowExtension,
   GeometryType
 } from '$lib/features/map/constants/map.constants';
@@ -29,6 +25,10 @@ import {
 } from '$lib/features/commons/utils/proj4-crs.utils';
 import { Field, Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 let maximumInscribedCircleSupported = true;
 
@@ -108,13 +108,11 @@ async function resolveGeometryTypeForTable(
   geomColumnName: string,
   Duck: DuckDBClientForArrow
 ): Promise<string> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geomColumnName);
   const geomTypeResult = (await Duck.query(
     `SELECT DISTINCT geom_type FROM (
-       SELECT ST_GeometryType("${escapedGeometryColumn}") as geom_type
-       FROM "${escapedTable}"
-       WHERE "${escapedGeometryColumn}" IS NOT NULL
+       SELECT ST_GeometryType(${sqlIdentifier(geomColumnName)}) as geom_type
+       FROM ${sqlIdentifier(tableName)}
+       WHERE ${sqlIdentifier(geomColumnName)} IS NOT NULL
        LIMIT 1000
      )`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
@@ -194,23 +192,21 @@ function getRepresentativePointExpression(
   geometryType: string,
   options?: { simple?: boolean }
 ): string | null {
-  const escapedGeometryColumn = `"${escapeIdentifier(geometryColumnName)}"`;
-
   switch (geometryType) {
     case GeometryType.POLYGON:
     case GeometryType.MULTIPOLYGON:
       if (options?.simple) {
         return `CASE
-          WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-          ELSE ST_PointOnSurface(${escapedGeometryColumn})
+          WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+          ELSE ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         END`;
       }
       return `CASE
-        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-        WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+        WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+        WHEN NOT ST_IsValid(${sqlIdentifier(geometryColumnName)}) THEN ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         ELSE COALESCE(
-          ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
-          ST_PointOnSurface(${escapedGeometryColumn})
+          ST_MaximumInscribedCircle(${sqlIdentifier(geometryColumnName)}).center,
+          ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         )
       END`;
     case GeometryType.LINESTRING:
@@ -218,8 +214,8 @@ function getRepresentativePointExpression(
     case GeometryType.POINT:
     case GeometryType.MULTIPOINT:
       return `CASE
-        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-        ELSE ST_PointOnSurface(${escapedGeometryColumn})
+        WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+        ELSE ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
       END`;
     default:
       return null;
@@ -248,9 +244,8 @@ export async function fetchArrowTableWithGeometry(
   const geomColumn = columns.find((c: { column_type: string }) =>
     isGeometryColumnType(c.column_type)
   );
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeomColumn = geomColumn
-    ? escapeIdentifier(geomColumn.column_name)
+  const geomIdentifier = geomColumn
+    ? sqlIdentifier(geomColumn.column_name)
     : null;
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
@@ -264,31 +259,31 @@ export async function fetchArrowTableWithGeometry(
     : null;
 
   const geometryProjection =
-    escapedGeomColumn && normalizedTargetCrs && geometrySourceCrs
-      ? `ST_Transform("${escapedGeomColumn}", '${escapeSqlString(
+    geomIdentifier && normalizedTargetCrs && geometrySourceCrs
+      ? `ST_Transform(${geomIdentifier}, ${sqlString(
           geometrySourceCrs
-        )}', '${escapeSqlString(normalizedTargetCrs)}', true) AS "${escapedGeomColumn}"`
-      : escapedGeomColumn && normalizedTargetCrs
-        ? `ST_Transform("${escapedGeomColumn}", '${escapeSqlString(
+        )}, ${sqlString(normalizedTargetCrs)}, true) AS ${geomIdentifier}`
+      : geomIdentifier && normalizedTargetCrs
+        ? `ST_Transform(${geomIdentifier}, ${sqlString(
             normalizedTargetCrs
-          )}') AS "${escapedGeomColumn}"`
-        : escapedGeomColumn
-          ? `"${escapedGeomColumn}"`
+          )}) AS ${geomIdentifier}`
+        : geomIdentifier
+          ? geomIdentifier
           : null;
 
   let query: string;
   if (projectedColumnNames && projectedColumnNames.length > 0) {
-    const columnExpressions = projectedColumnNames.map(
-      (name) => `"${escapeIdentifier(name)}"`
+    const columnExpressions = projectedColumnNames.map((name) =>
+      sqlIdentifier(name)
     );
     if (geometryProjection) {
       columnExpressions.push(geometryProjection);
     }
-    query = `SELECT ${columnExpressions.join(', ')} FROM "${escapedTable}"`;
-  } else if (escapedGeomColumn && normalizedTargetCrs) {
-    query = `SELECT * EXCLUDE ("${escapedGeomColumn}"), ${geometryProjection} FROM "${escapedTable}"`;
+    query = `SELECT ${columnExpressions.join(', ')} FROM ${sqlIdentifier(tableName)}`;
+  } else if (geomIdentifier && normalizedTargetCrs) {
+    query = `SELECT * EXCLUDE (${geomIdentifier}), ${geometryProjection} FROM ${sqlIdentifier(tableName)}`;
   } else {
-    query = `SELECT * FROM "${escapedTable}"`;
+    query = `SELECT * FROM ${sqlIdentifier(tableName)}`;
   }
 
   if (whereClause) {
@@ -304,7 +299,7 @@ export async function fetchArrowTableWithGeometry(
       normalizedTargetCrs && geomColumn
         ? {
             ...geomColumn,
-            column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
+            column_type: `${GEOMETRY_COLUMN_TYPE}(${sqlString(normalizedTargetCrs)})`
           }
         : geomColumn
   };
@@ -327,10 +322,9 @@ export async function fetchArrowRepresentativePointTable(
   );
 
   if (!geomColumn) {
-    const escapedTable = escapeIdentifier(tableName);
     const query = whereClause
-      ? `SELECT * FROM "${escapedTable}" WHERE ${whereClause}`
-      : `SELECT * FROM "${escapedTable}"`;
+      ? `SELECT * FROM ${sqlIdentifier(tableName)} WHERE ${whereClause}`
+      : `SELECT * FROM ${sqlIdentifier(tableName)}`;
     return {
       table: await executeArrowIpcQuery(Duck, query, tableName),
       geomColumn: undefined
@@ -343,8 +337,6 @@ export async function fetchArrowRepresentativePointTable(
     geometryType,
     { simple: useSimpleExpression }
   );
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeomColumn = escapeIdentifier(geomColumn.column_name);
 
   if (!pointExpression) {
     return fetchArrowTableWithGeometry(tableName, Duck, whereClause);
@@ -353,10 +345,10 @@ export async function fetchArrowRepresentativePointTable(
   const buildQuery = (expression: string): string => {
     let q = `SELECT * REPLACE (
       CASE
-        WHEN "${escapedGeomColumn}" IS NULL THEN NULL
+        WHEN ${sqlIdentifier(geomColumn.column_name)} IS NULL THEN NULL
         ELSE ${expression}
-      END AS "${escapedGeomColumn}"
-    ) FROM "${escapedTable}"`;
+      END AS ${sqlIdentifier(geomColumn.column_name)}
+    ) FROM ${sqlIdentifier(tableName)}`;
     if (whereClause) {
       q += ` WHERE ${whereClause}`;
     }
@@ -367,7 +359,7 @@ export async function fetchArrowRepresentativePointTable(
   const finalGeomColumn = {
     ...geomColumn,
     column_type: geometryCrs
-      ? `${GEOMETRY_COLUMN_TYPE}('${geometryCrs}')`
+      ? `${GEOMETRY_COLUMN_TYPE}(${sqlString(geometryCrs)})`
       : GEOMETRY_COLUMN_TYPE
   };
 

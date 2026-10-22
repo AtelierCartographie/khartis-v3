@@ -21,11 +21,12 @@ All data work (import, typing, summary stats, sort, search, filter, calculator, 
 
 ## SQL: escape everything derived from user files
 
-Table names, column names and values almost always come from user files (`sanitize.utils.ts`):
+Table names, column names and values almost always come from user files. `commons/utils/sql.utils.ts` is the only place that renders them:
 
-- Identifiers go in double quotes through `escapeIdentifier()`: `"${escapeIdentifier(col)}"`.
-- String values go in single quotes through `escapeSqlString()`: `'${escapeSqlString(value)}'`.
-- An inline `table.replace(/"/g, '""')` or a raw concatenation is the bug this rule exists for.
+- `sqlIdentifier(col)` returns the identifier with its double quotes: `SELECT ${sqlIdentifier(col)} FROM ${sqlIdentifier(table)}`.
+- `sqlString(value)` returns the literal with its single quotes: `WHERE table_name = ${sqlString(table)}`.
+- `sqlNamePart(value)` reduces a value to `[A-Za-z0-9_]` for a deterministic generated name (cache table, sequence); `sqlTempName(prefix, value?)` returns a name no other call of the session returns, for temp tables and views.
+- Interpolate the helper call, not a variable that holds an "escaped" form: an inline `replace(/"/g, '""')`, a hand-written `"${…}"` around a value or a raw concatenation is the bug this rule exists for.
 
 ## Geometry: keep the source CRS, reproject when rendering needs it
 

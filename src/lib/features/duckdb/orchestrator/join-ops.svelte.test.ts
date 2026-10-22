@@ -340,8 +340,6 @@ describe('join-ops correction cleanup', () => {
       )
     ).rejects.toThrow(updateError);
 
-    expect(queries.at(-1)).toMatch(
-      /^DROP TABLE IF EXISTS "corrections_[a-f0-9_]+"/
-    );
+    expect(queries.at(-1)).toMatch(/^DROP TABLE IF EXISTS "corrections_\w+"/);
   });
 });

@@ -12,11 +12,12 @@ import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 export interface UseEnrichmentJoinProps {
   getEnrichmentDataset: () => DatasetResult | null;
@@ -123,7 +124,7 @@ export function useEnrichmentJoin(
     const cases = entries
       .map(
         ([original, corrected]) =>
-          `WHEN ${columnExpression} = '${escapeSqlString(original)}' THEN '${escapeSqlString(corrected)}'`
+          `WHEN ${columnExpression} = ${sqlString(original)} THEN ${sqlString(corrected)}`
       )
       .join('\n               ');
 
@@ -135,9 +136,7 @@ export function useEnrichmentJoin(
 
   function buildIgnoredWhereClause(columnExpression: string): string {
     if (ignoredDataValues.size === 0) return '';
-    const ignoredValues = [...ignoredDataValues]
-      .map((value) => `'${escapeSqlString(value)}'`)
-      .join(', ');
+    const ignoredValues = [...ignoredDataValues].map(sqlString).join(', ');
     return `WHERE ${columnExpression} NOT IN (${ignoredValues})`;
   }
 
@@ -178,8 +177,6 @@ export function useEnrichmentJoin(
     try {
       const geoTableName = getGeoTableName();
       if (!geoTableName) return;
-      const escapedGeoTableName = escapeIdentifier(geoTableName);
-      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
 
       const stats = await computeDatasetJoinStats({
         sourceTableName: enrichmentDataset.tableName,
@@ -190,9 +187,9 @@ export function useEnrichmentJoin(
       if (run !== latestJoinStatsRun) return;
 
       const targetValues = (await Duck.query(
-        `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
-         FROM "${escapedGeoTableName}"
-         WHERE "${escapedGeoColumn}" IS NOT NULL
+        `SELECT DISTINCT CAST(${sqlIdentifier(geoCol.columnName)} AS VARCHAR) as val
+         FROM ${sqlIdentifier(geoTableName)}
+         WHERE ${sqlIdentifier(geoCol.columnName)} IS NOT NULL
          ORDER BY val`,
         { format: 'array' }
       )) as Array<{ val: string }>;
@@ -380,23 +377,17 @@ export function useEnrichmentJoin(
       }
 
       const oldTableName = geoTableName;
-      const escapedGeoTableName = escapeIdentifier(geoTableName);
-      const escapedEnrichmentTableName = escapeIdentifier(
-        enrichmentDataset.tableName
-      );
-      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
-      const escapedEnrichmentColumn = escapeIdentifier(enrichCol.columnName);
 
       const enrichColsSelect = enrichmentColumns
-        .map((col) => `e."${escapeIdentifier(col)}"`)
+        .map((col) => `e.${sqlIdentifier(col)}`)
         .join(', ');
       const enrichColsDedupSelect = enrichmentColumns
         .map(
           (col) =>
-            `any_value(source."${escapeIdentifier(col)}") AS "${escapeIdentifier(col)}"`
+            `any_value(source.${sqlIdentifier(col)}) AS ${sqlIdentifier(col)}`
         )
         .join(',\n            ');
-      const enrichmentJoinValueExpression = `CAST(e."${escapedEnrichmentColumn}" AS VARCHAR)`;
+      const enrichmentJoinValueExpression = `CAST(e.${sqlIdentifier(enrichCol.columnName)} AS VARCHAR)`;
       const correctedJoinValueExpression = resolveCorrectedJoinExpression(
         enrichmentJoinValueExpression
       );
@@ -404,21 +395,17 @@ export function useEnrichmentJoin(
         enrichmentJoinValueExpression
       );
 
-      const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
-      const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
+      const enrichedTableName = sqlTempName(`${geoTableName}_enriched`);
 
       await Duck.query(
-        `CREATE TABLE "${escapedEnrichedTableName}" AS
+        `CREATE TABLE ${sqlIdentifier(enrichedTableName)} AS
          WITH enrichment_source AS (
            SELECT
              ${correctedJoinValueExpression} AS __khartis_join_value,
              ${enrichmentColumns
-               .map(
-                 (col) =>
-                   `e."${escapeIdentifier(col)}" AS "${escapeIdentifier(col)}"`
-               )
+               .map((col) => `e.${sqlIdentifier(col)} AS ${sqlIdentifier(col)}`)
                .join(',\n             ')}
-           FROM "${escapedEnrichmentTableName}" e
+           FROM ${sqlIdentifier(enrichmentDataset.tableName)} e
            ${ignoredWhereClause}
          ),
          enrichment_unique AS (
@@ -429,9 +416,9 @@ export function useEnrichmentJoin(
            GROUP BY 1
          )
          SELECT g.*, ${enrichColsSelect}
-         FROM "${escapedGeoTableName}" g
+         FROM ${sqlIdentifier(geoTableName)} g
          LEFT JOIN enrichment_unique e
-         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = e.join_key`,
+         ON normalize_text_join(CAST(g.${sqlIdentifier(geoCol.columnName)} AS VARCHAR)) = e.join_key`,
         { format: 'array' }
       );
 

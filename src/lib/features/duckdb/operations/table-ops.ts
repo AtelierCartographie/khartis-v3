@@ -1,8 +1,4 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import {
   getDescribe,
@@ -14,6 +10,10 @@ import {
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DescribeResult, DuckDBContext } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export async function describeTable(
   ctx: DuckDBContext,
@@ -23,12 +23,11 @@ export async function describeTable(
   if (cached) return cached;
 
   try {
-    const escapedTableForDescribe = escapeSqlString(table);
     const records = (await executeQuery(
       ctx.connection,
       `SELECT column_name, data_type AS column_type
        FROM information_schema.columns
-       WHERE table_name = '${escapedTableForDescribe}'
+       WHERE table_name = ${sqlString(table)}
        ORDER BY ordinal_position`,
       { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     )) as Array<{ column_name: string; column_type: string }>;
@@ -58,7 +57,7 @@ export async function getRowCount(
   try {
     const result = (await executeQuery(
       ctx.connection,
-      `SELECT COUNT(*)::INTEGER as num_rows FROM "${escapeIdentifier(table)}"`,
+      `SELECT COUNT(*)::INTEGER as num_rows FROM ${sqlIdentifier(table)}`,
       { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     )) as Array<{ num_rows: number }>;
 
@@ -84,7 +83,7 @@ export async function dropRows(
 
   await executeQuery(
     ctx.connection,
-    `DELETE FROM "${escapeIdentifier(table)}" WHERE ${INTERNAL_COLUMN.ID} IN (${validIds.join(',')})`,
+    `DELETE FROM ${sqlIdentifier(table)} WHERE ${INTERNAL_COLUMN.ID} IN (${validIds.join(',')})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
   markTableMutated(ctx, table);

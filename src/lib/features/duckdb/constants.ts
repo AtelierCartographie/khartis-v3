@@ -1,10 +1,7 @@
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 import { NULL_VALUE_TOKENS } from '$lib/features/commons/constants/detection.constants';
 
-function formatDuckDBStringLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
-}
-
-const DUCKDB_NULL_VALUES = `[${NULL_VALUE_TOKENS.map(formatDuckDBStringLiteral).join(', ')}]`;
+const DUCKDB_NULL_VALUES = `[${NULL_VALUE_TOKENS.map(sqlString).join(', ')}]`;
 
 /**
  * DuckDB configuration constants.
