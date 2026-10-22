@@ -93,7 +93,7 @@ describe('readTabular', () => {
 
     expect(importQuery).toContain('CREATE OR REPLACE TABLE "table""name"');
     expect(importQuery).toContain("read_csv('registered:quoted.csv''suffix'");
-    expect(importQuery).toContain('decimal_separator="."');
+    expect(importQuery).toContain("decimal_separator='.'");
     expect(importQuery).toContain("delim='|'");
     expect(importQuery).not.toContain('thousands=');
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'table"name');
