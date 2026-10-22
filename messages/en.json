@@ -477,6 +477,7 @@
   "facets_notice_title": "Map collection",
   "facets_notice_replaced": "The previous collection was replaced.",
   "facets_facet_title_label": "Title for map \"{variable}\"",
+  "facets_map_fill_label": "{title}: Color by",
   "facets_titles_section": "Titles",
   "facets_titles_helper": "Rename the title shown above each map of the collection.",
   "facets_tiled_basemap_unsupported": "Reference basemaps (IGN & OpenStreetMap) cannot be used in a map collection. Please select a basemap from the catalog or import your own.",

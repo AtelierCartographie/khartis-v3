@@ -30,6 +30,7 @@
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import type { FacetSlotPath } from '../../types/facets-contract.types';
+  import type { FacetMapFill } from '../../hooks/use-facets-variable-selection.svelte';
   import DiscretizationRow from './discretization-row.svelte';
   import MissingDataSection from './missing-data-section.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
@@ -71,6 +72,7 @@
     selectableDataFields: Array<{ id: number; text: string; type?: string }>;
     getFacetsSelectedFieldIds: (slotPath: FacetSlotPath) => number[];
     isFacetsActiveForSlot: (slotPath: FacetSlotPath) => boolean;
+    getFacetsMapFills?: (slotPath: FacetSlotPath) => FacetMapFill[];
     onFillModeChange: (mode: FillMode) => void;
     onFillColorChange: (color: string) => void;
     onFillOpacityChange: (opacity: number) => void;
@@ -85,6 +87,7 @@
       slotPath: FacetSlotPath,
       enabled: boolean
     ) => void | Promise<void>;
+    onFacetsMapFillSelect?: (variable: string, fieldId: number) => void;
     onOpenDiscretization: () => void;
     onClassificationChange: (updates: Partial<ClassificationConfig>) => void;
     onMissingDataShowChange?: (show: boolean) => void;
@@ -123,6 +126,7 @@
     selectableDataFields,
     getFacetsSelectedFieldIds,
     isFacetsActiveForSlot,
+    getFacetsMapFills,
     onFillModeChange,
     onFillColorChange,
     onFillOpacityChange,
@@ -130,6 +134,7 @@
     onCategoryFieldSelect,
     onFacetsVariablesChange,
     onFacetsToggle,
+    onFacetsMapFillSelect,
     onOpenDiscretization,
     onClassificationChange,
     onMissingDataShowChange,
@@ -140,6 +145,12 @@
   }: Props = $props();
 
   const fillModeItems = $derived(buildFillModeItems(availableModes));
+  const valueMapFills = $derived(
+    getFacetsMapFills?.(facetsValueSlotPath) ?? []
+  );
+  const categoryMapFills = $derived(
+    getFacetsMapFills?.(facetsCategorySlotPath) ?? []
+  );
   const fillModeIndex = $derived(availableModes.indexOf(fillMode));
 
   let valuePickerOpen = $state(false);
@@ -220,6 +231,26 @@
   });
 </script>
 
+{#snippet mapFillPickers(
+  mapFills: FacetMapFill[],
+  items: Array<{ id: number; text: string; type?: string }>
+)}
+  {#each mapFills as mapFill (mapFill.variable)}
+    <div class="field-group">
+      <FacetsVariablePicker
+        titleText={m.facets_map_fill_label({ title: mapFill.title })}
+        dataFields={dataFields}
+        singleSelectItems={items}
+        selectedFieldId={mapFill.fieldId}
+        isCollectionEnabled={false}
+        showCollectionFooter={false}
+        onSelect={(fieldId) =>
+          onFacetsMapFillSelect?.(mapFill.variable, fieldId)}
+      />
+    </div>
+  {/each}
+{/snippet}
+
 {#if sectionTitle !== undefined}
   <SectionHeading title={sectionTitle} infoText={sectionInfoText} />
 {/if}
@@ -261,21 +292,25 @@
 {:else if fillMode === FillMode.DENSITY && densitySnippet}
   {@render densitySnippet()}
 {:else if fillMode === FillMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={valuePickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableValueFields}
-      selectedFieldId={selectedValueFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
-      isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
-      onSelect={onValueFieldSelect}
-      onCollectionChange={(ids) =>
-        onFacetsVariablesChange(valueColumnName, facetsValueSlotPath, ids)}
-      onToggleCollection={(en) => onFacetsToggle(facetsValueSlotPath, en)}
-    />
-  </div>
+  {#if valueMapFills.length > 0}
+    {@render mapFillPickers(valueMapFills, selectableValueFields)}
+  {:else}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={valuePickerOpen}
+        titleText={m.color_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableValueFields}
+        selectedFieldId={selectedValueFieldId}
+        selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
+        isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
+        onSelect={onValueFieldSelect}
+        onCollectionChange={(ids) =>
+          onFacetsVariablesChange(valueColumnName, facetsValueSlotPath, ids)}
+        onToggleCollection={(en) => onFacetsToggle(facetsValueSlotPath, en)}
+      />
+    </div>
+  {/if}
   <DiscretizationRow
     label={m.discretization()}
     value={discretizationLabel}
@@ -294,25 +329,29 @@
     onClassificationChange={onClassificationChange}
   />
 {:else if fillMode === FillMode.CATEGORIES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={categoryPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableCategoryFields}
-      selectedFieldId={selectedCategoryFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
-      isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
-      onSelect={onCategoryFieldSelect}
-      onCollectionChange={(ids) =>
-        onFacetsVariablesChange(
-          categoryColumnName,
-          facetsCategorySlotPath,
-          ids
-        )}
-      onToggleCollection={(en) => onFacetsToggle(facetsCategorySlotPath, en)}
-    />
-  </div>
+  {#if categoryMapFills.length > 0}
+    {@render mapFillPickers(categoryMapFills, selectableCategoryFields)}
+  {:else}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={categoryPickerOpen}
+        titleText={m.color_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableCategoryFields}
+        selectedFieldId={selectedCategoryFieldId}
+        selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
+        isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
+        onSelect={onCategoryFieldSelect}
+        onCollectionChange={(ids) =>
+          onFacetsVariablesChange(
+            categoryColumnName,
+            facetsCategorySlotPath,
+            ids
+          )}
+        onToggleCollection={(en) => onFacetsToggle(facetsCategorySlotPath, en)}
+      />
+    </div>
+  {/if}
   <DiscretizationRow
     label={m.category_aspect()}
     value={(isSingularCount(resolvedCategoryCount)

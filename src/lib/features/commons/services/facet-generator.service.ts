@@ -16,8 +16,16 @@ import {
   type FacetSlotPath,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
-import { DEFAULT_CLASSIFICATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
-import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
+import {
+  DEFAULT_CLASSIFICATION_CLASS_COUNT,
+  FillMode,
+  ProportionalType,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
+import {
+  applyFacetVariablePatch,
+  getFacetSlotVariable
+} from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   calculateBreaks,
   calculateDivergingBreaks
@@ -403,13 +411,69 @@ export async function buildFacetSlotUpdates({
   };
 }
 
-export async function buildFacetVisualizationUpdates({
+/** Fill column chosen per map of a collection, keyed by the map's collection variable. */
+export type FacetFillVariables = Record<string, string>;
+
+/**
+ * The symbol fill slot each map of a collection can set apart, or null when
+ * the fill is the collection variable itself or is not drawn from the data.
+ */
+export function resolveFacetFillSlotPath(
+  baseViz: VisualizationConfig,
+  primarySlotPath: FacetSlotPath
+): FacetSlotPath | null {
+  const symbol = baseViz.symbol;
+  if (
+    !symbol ||
+    resolveFacetPrimitiveFilter(primarySlotPath) !== PrimitiveFilterType.POINT
+  ) {
+    return null;
+  }
+
+  const drawsFill =
+    symbol.mode === SymbolMode.CLASSES ||
+    (symbol.mode === SymbolMode.PROPORTIONAL &&
+      symbol.proportionalType !== ProportionalType.DOUBLE);
+  if (!drawsFill) {
+    return null;
+  }
+
+  const fillSlotPath =
+    symbol.fillMode === FillMode.CATEGORIES
+      ? FACET_SLOT.SYMBOL_FILL_CATEGORY
+      : symbol.fillMode === FillMode.CLASSES
+        ? FACET_SLOT.SYMBOL_FILL_VALUE
+        : null;
+
+  return fillSlotPath === primarySlotPath ? null : fillSlotPath;
+}
+
+export function resolveFacetFillVariable({
+  baseViz,
+  primarySlotPath,
+  fillVariables,
+  variable
+}: {
+  baseViz: VisualizationConfig;
+  primarySlotPath: FacetSlotPath;
+  fillVariables: FacetFillVariables;
+  variable: string;
+}): string | undefined {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (!fillSlotPath) {
+    return undefined;
+  }
+  return fillVariables[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath);
+}
+
+async function buildFacetFillUpdates({
   baseViz,
   visualization,
   variable,
   collectionVariables,
   scaleMode,
-  primarySlotPath
+  primarySlotPath,
+  fillVariables
 }: {
   baseViz: VisualizationConfig;
   visualization: VisualizationConfig;
@@ -417,6 +481,62 @@ export async function buildFacetVisualizationUpdates({
   collectionVariables: string[];
   scaleMode: ScaleMode;
   primarySlotPath: FacetSlotPath;
+  fillVariables: FacetFillVariables;
+}): Promise<Partial<VisualizationConfig>> {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (
+    !fillSlotPath ||
+    !collectionVariables.some((candidate) => fillVariables[candidate])
+  ) {
+    return {};
+  }
+
+  const baseFillVariable = getFacetSlotVariable(baseViz, fillSlotPath);
+  const fillVariable = fillVariables[variable] ?? baseFillVariable;
+  // Classes on a shared legend pool their breaks over every fill column, so
+  // a map that keeps the base column still needs new breaks.
+  const poolsBreaks =
+    !isFacetCategorySlot(fillSlotPath) && scaleMode === SCALE_MODE.SHARED;
+  if (!fillVariable || (fillVariable === baseFillVariable && !poolsBreaks)) {
+    return {};
+  }
+
+  const fillCollectionVariables = [
+    ...new Set(
+      collectionVariables
+        .map((candidate) => fillVariables[candidate] ?? baseFillVariable)
+        .filter((candidate): candidate is string => Boolean(candidate))
+    )
+  ];
+  // Only the symbol changes: the fill column lives there, while the mapping
+  // keys a fill slot would patch carry the collection variable.
+  const { symbol } = await buildFacetSlotUpdates({
+    baseViz,
+    visualization,
+    variable: fillVariable,
+    collectionVariables: fillCollectionVariables,
+    scaleMode,
+    slotPath: fillSlotPath
+  });
+  return { symbol };
+}
+
+export async function buildFacetVisualizationUpdates({
+  baseViz,
+  visualization,
+  variable,
+  collectionVariables,
+  scaleMode,
+  primarySlotPath,
+  fillVariables = {}
+}: {
+  baseViz: VisualizationConfig;
+  visualization: VisualizationConfig;
+  variable: string;
+  collectionVariables: string[];
+  scaleMode: ScaleMode;
+  primarySlotPath: FacetSlotPath;
+  fillVariables?: FacetFillVariables;
 }): Promise<Partial<VisualizationConfig>> {
   const slotUpdates = await buildFacetSlotUpdates({
     baseViz,
@@ -426,9 +546,19 @@ export async function buildFacetVisualizationUpdates({
     scaleMode,
     slotPath: primarySlotPath
   });
+  const fillUpdates = await buildFacetFillUpdates({
+    baseViz,
+    visualization: { ...visualization, ...slotUpdates },
+    variable,
+    collectionVariables,
+    scaleMode,
+    primarySlotPath,
+    fillVariables
+  });
 
   return {
     ...slotUpdates,
+    ...fillUpdates,
     name: variable,
     primitiveFilters: getEnabledPrimitiveFilters(baseViz),
     facet: {
@@ -451,7 +581,8 @@ export async function generateFacetVisualizations(
   baseViz: VisualizationConfig,
   variables: string[],
   scaleMode: ScaleMode,
-  primarySlotPath: FacetSlotPath
+  primarySlotPath: FacetSlotPath,
+  fillVariables: FacetFillVariables = {}
 ): Promise<VisualizationConfig[]> {
   const tableName = baseViz.datasetId;
 
@@ -483,7 +614,8 @@ export async function generateFacetVisualizations(
         variable,
         collectionVariables: variables,
         scaleMode,
-        primarySlotPath
+        primarySlotPath,
+        fillVariables
       }))
     };
 
