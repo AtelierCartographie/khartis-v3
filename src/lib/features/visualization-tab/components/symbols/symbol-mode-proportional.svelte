@@ -29,6 +29,8 @@
   import type { SymbolModeProps } from '../../types/symbol.types';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets';
+
+  const SIGN_FILL_MODES: readonly FillMode[] = [FillMode.CATEGORIES];
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
@@ -51,6 +53,10 @@
   } from '../../utils/coerce.utils';
   import { getDefaultScaleForShape } from './scale-by-shape.utils';
   import { scaleSymbolMinSize } from './classed-size.utils';
+  import {
+    isSignedProportionalSymbol,
+    resolveSymbolSignColors
+  } from '$lib/features/commons/utils/symbol-sign.utils';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -388,6 +394,21 @@
     });
   }
 
+  // Size draws the absolute value, so only the fill tells the signs apart.
+  const signedSize = $derived(
+    symbolMode === SymbolMode.PROPORTIONAL &&
+      isSignedProportionalSymbol(visualization)
+  );
+  const signColors = $derived(resolveSymbolSignColors(visualization));
+
+  function handleSignColorChange(index: 0 | 1, value: string) {
+    runUserChange(() => {
+      const next: [string, string] = [...signColors];
+      next[index] = value;
+      onStyleChange?.({ symbolSignColors: next });
+    });
+  }
+
   function handleFillColorChange(value: string) {
     runUserChange(() => {
       fillColor = value;
@@ -458,6 +479,24 @@
     { id: SymbolDoublePosition.DIVISION, text: m.symbol_position_division() }
   ]);
 </script>
+
+{#snippet signFillSnippet()}
+  <p class="sign-fill-info">
+    {m.symbol_sign_fill_info({ column: sizeColumnName ?? '' })}
+  </p>
+  <SingleColorPreview
+    exclusive
+    label={m.symbol_sign_positive()}
+    color={signColors[0]}
+    onchange={(value) => handleSignColorChange(0, value)}
+  />
+  <SingleColorPreview
+    exclusive
+    label={m.symbol_sign_negative()}
+    color={signColors[1]}
+    onchange={(value) => handleSignColorChange(1, value)}
+  />
+{/snippet}
 
 {#if symbolMode === SymbolMode.PROPORTIONAL}
   <div class="field-group">
@@ -605,8 +644,9 @@
   <FillSection
     visualization={fillVisualization}
     dataFields={dataFields}
-    availableModes={FILL_MODES_FOR_SYMBOLS}
-    fillMode={fillMode}
+    availableModes={signedSize ? SIGN_FILL_MODES : FILL_MODES_FOR_SYMBOLS}
+    fillMode={signedSize ? FillMode.CATEGORIES : fillMode}
+    categoriesSnippet={signedSize ? signFillSnippet : undefined}
     fillColor={fillColor}
     fillOpacity={fillOpacity}
     selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
@@ -685,6 +725,11 @@
 />
 
 <style lang="scss">
+  .sign-fill-info {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
+  }
+
   :global(.field-group .bx--dropdown) {
     max-width: 100%;
   }
