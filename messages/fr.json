@@ -248,6 +248,7 @@
   "opacity": "Opacité",
   "thickness": "Épaisseur",
   "color": "Couleur",
+  "line_cap_rounded": "Extrémités arrondies",
   "dashed": "Pointillés",
   "stroke_dashed_pattern": "Espacement des pointillés",
   "dashed_pattern_dots": "Points",

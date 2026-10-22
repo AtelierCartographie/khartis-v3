@@ -388,6 +388,7 @@ export function buildLinePrimitiveConfig(
       existing?.dashedPattern ??
       visualization.style.lineDashedPattern ??
       BasemapDottedPattern.DOTS,
+    capRounded: existing?.capRounded ?? visualization.style.lineCapRounded,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,

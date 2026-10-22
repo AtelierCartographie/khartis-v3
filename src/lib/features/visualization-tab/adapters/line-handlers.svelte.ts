@@ -48,7 +48,8 @@ export function createLineHandlers(deps: LineHandlersDeps) {
         { from: 'lineWidth', to: 'width' },
         { from: 'lineMaxWidth', to: 'maxWidth' },
         { from: 'lineDashed', to: 'dashed' },
-        { from: 'lineDashedPattern', to: 'dashedPattern' }
+        { from: 'lineDashedPattern', to: 'dashedPattern' },
+        { from: 'lineCapRounded', to: 'capRounded' }
       ],
       line
     );
