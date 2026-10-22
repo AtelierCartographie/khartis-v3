@@ -10,6 +10,7 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 const filteredRowCountCache = new Map<string, number>();
 
@@ -21,17 +22,6 @@ registerTableMutationCallback((table: string) => {
     }
   }
 });
-
-export interface DuckDBClientForTableData {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-  analyse(
-    tableName: string,
-    options?: { force?: boolean }
-  ): Promise<AnalysisResult[]>;
-}
 
 export interface GetTableDataOptions {
   offset?: number;
@@ -60,7 +50,7 @@ function normalizeRowId(value: unknown): number | null {
 
 async function buildSelectClauseWithoutGeometry(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<string> {
   try {
     const tableInfo = await Duck.describe_table(tableName);
@@ -81,7 +71,7 @@ async function buildSelectClauseWithoutGeometry(
 
 export async function getTableData(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   options?: GetTableDataOptions
 ): Promise<ArrowTableLike> {
   try {
@@ -122,7 +112,7 @@ export async function getTableData(
 
 export async function countRows(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   applyFilters: boolean
 ): Promise<number> {
   const filters = getFiltersMap();
@@ -141,7 +131,7 @@ export async function countRows(
 
 export async function getFilteredRowCount(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
@@ -169,7 +159,7 @@ export async function getFilteredRowCount(
 export async function getRowPosition(
   tableName: string,
   rowId: number | bigint | string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   options?: {
     orderBy?: string | null;
     orderByType?: string | null;
@@ -239,7 +229,7 @@ export async function getRowPosition(
 
 export async function getRowStats(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<FilterStats> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
@@ -262,7 +252,7 @@ const ROW_IDENTITY_COLUMNS = [INTERNAL_COLUMN.ID, INTERNAL_COLUMN.FEATURE_ID];
 
 export async function countDuplicateRows(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number> {
   const identityList = ROW_IDENTITY_COLUMNS.map(sqlString).join(', ');
   const result = (await Duck.query(
@@ -281,7 +271,7 @@ export async function getColumnDomainsInScope(
   tableName: string,
   clause: string | null,
   columns: string[],
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<Map<string, ColumnDomain>> {
   const domains = new Map<string, ColumnDomain>();
   if (columns.length === 0) {
@@ -343,7 +333,7 @@ export async function getMissingValueCountsInScope(
   tableName: string,
   clause: string | null,
   columns: MissingValueColumn[],
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number[]> {
   if (columns.length === 0) {
     return [];
@@ -373,7 +363,7 @@ function buildScopedCountExpression(clause: string | null): string {
 export async function getScopedRowStats(
   tableName: string,
   scopeClause: string | null,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<FilterStats> {
   // The denominator a primitive filter works against is what the table filter
   // already let through, not the whole table.
@@ -398,7 +388,7 @@ export async function getScopedRowStats(
 export async function getRowIdsInScope(
   tableName: string,
   clause: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<Set<number>> {
   const query = `SELECT ${INTERNAL_COLUMN.ID} FROM ${sqlIdentifier(tableName)} WHERE COALESCE(${clause}, FALSE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
@@ -417,7 +407,7 @@ export async function getRowIdsInScope(
 
 export async function getExcludedRowIds(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number[]> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
@@ -445,7 +435,7 @@ export async function getExcludedRowIds(
 
 export async function getFullAnalysis(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   detectSemioType: (col: AnalysisResult) => {
     semioType: AnalysisResult['semioType'];
     semioScore: number;
@@ -466,7 +456,7 @@ export async function getFullAnalysis(
 
 export async function runQuery(
   query: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<ArrowTableLike> {
   return Duck.query(query) as Promise<ArrowTableLike>;
 }

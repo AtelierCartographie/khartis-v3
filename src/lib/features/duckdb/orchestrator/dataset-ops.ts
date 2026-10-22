@@ -9,16 +9,7 @@ import {
   updateDatasets
 } from './state.svelte';
 import { sqlString } from '$lib/features/commons/utils/sql.utils';
-
-export interface DuckDBClientForDataset {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  dropTable(tableName: string): Promise<void>;
-  analyse(
-    tableName: string,
-    options?: { force?: boolean }
-  ): Promise<AnalysisResult[]>;
-  cleanupTableResources?(tableName: string): void;
-}
+import type { DuckClient } from '../duck';
 
 export interface DatasetCallbacks {
   getRowCount: (tableName: string) => Promise<number>;
@@ -47,7 +38,7 @@ export async function registerExistingTable(
   tableName: string,
   sourceFileId: string,
   fileName: string,
-  Duck: DuckDBClientForDataset,
+  Duck: DuckClient,
   callbacks: DatasetCallbacks,
   options?: {
     geoDetection?: GeoDetectionResult;
@@ -119,7 +110,7 @@ export async function registerExistingTable(
 
 export async function dropTable(
   tableName: string,
-  Duck: DuckDBClientForDataset
+  Duck: DuckClient
 ): Promise<void> {
   const state = getState();
 
@@ -241,7 +232,7 @@ function areGpsColumnsEqual(
 export async function updateDatasetTableName(
   sourceFileId: string,
   newTableName: string,
-  Duck: DuckDBClientForDataset,
+  Duck: DuckClient,
   callbacks: DatasetCallbacks
 ): Promise<DuckDBDataset | null> {
   const existing = findDatasetByIdOrSourceFile(sourceFileId);

@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { markTableMutated } from '$lib/features/duckdb/cache/cache-manager';
 import {
@@ -29,7 +30,7 @@ const duck = {
     return query(db, sql);
   },
   invalidateTableCache: () => undefined
-};
+} as unknown as DuckClient;
 
 const mutationContext = {
   describeCache: new Map(),

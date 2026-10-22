@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import {
   afterAll,
   beforeAll,
@@ -853,7 +854,7 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
 
   await normalizeFormattedNumericColumns(
     tableName,
-    wrapDuckConnection(dbConnection)
+    wrapDuckConnection(dbConnection) as unknown as DuckClient
   );
 
   const columns = await analyzeTable(tableName);

@@ -228,6 +228,9 @@ export const Duck = {
   }
 };
 
+/** What the orchestrator and pipeline operations receive: the facade itself. */
+export type DuckClient = typeof Duck;
+
 let duckInitPromise: Promise<void> | null = null;
 
 export async function initDuckDB(): Promise<void> {

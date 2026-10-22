@@ -7,15 +7,11 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '$lib/features/duckdb';
 
 const MIN_NON_EMPTY_VALUES = 2;
 const INTERNAL_COLUMNS: Set<string> = new Set([INTERNAL_COLUMN.ID]);
 const MIN_CONVERSIONS_FOR_TABLE_REWRITE = 2;
-
-interface DuckQueryClient {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
 
 interface DescribeRow {
   name?: string;
@@ -107,7 +103,7 @@ function selectEligibleConversions(
 
 export async function normalizeFormattedNumericColumns(
   tableName: string,
-  duck: DuckQueryClient
+  duck: DuckClient
 ): Promise<string[]> {
   const described = (await duck.query(
     `FROM describe_full(${sqlString(tableName)})`,

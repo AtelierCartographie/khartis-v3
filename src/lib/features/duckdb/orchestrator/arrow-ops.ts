@@ -29,6 +29,7 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 let maximumInscribedCircleSupported = true;
 
@@ -67,15 +68,6 @@ function buildGeoArrowCrs(
   return { name: normalized };
 }
 
-export interface DuckDBClientForArrow {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-  queryStreaming?(sql: string): Promise<Uint8Array>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-}
-
 interface GeoArrowMetadataOverrides {
   geometryType?: string;
 }
@@ -88,7 +80,7 @@ export interface GeomColumnInfo {
 
 async function getTableColumns(
   tableName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckClient
 ): Promise<GeomColumnInfo[]> {
   const tableInfo = await Duck.describe_table(tableName);
   return tableInfo.name.map((name: string, index: number) => ({
@@ -106,7 +98,7 @@ function findGeometryColumn(
 async function resolveGeometryTypeForTable(
   tableName: string,
   geomColumnName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckClient
 ): Promise<string> {
   const geomTypeResult = (await Duck.query(
     `SELECT DISTINCT geom_type FROM (
@@ -149,7 +141,7 @@ async function resolveGeometryTypeForTable(
 }
 
 async function executeArrowIpcQuery(
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   query: string,
   _tableName: string,
   options?: { skipStreaming?: boolean }
@@ -229,7 +221,7 @@ function getRepresentativePointExpression(
  */
 export async function fetchArrowTableWithGeometry(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null,
   targetCrs?: string | null,
   projectColumns?: readonly string[] | null,
@@ -308,7 +300,7 @@ export async function fetchArrowTableWithGeometry(
 export async function fetchArrowRepresentativePointTable(
   tableName: string,
   geometryType: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
@@ -399,7 +391,7 @@ export async function fetchArrowRepresentativePointTable(
 export async function addGeoArrowMetadataFromDuckDB(
   table: Table,
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   cachedGeoArrowMetadata?: GeoArrowMetadata,
   /** Pre-fetched geometry column info from fetchArrowTableWithGeometry — avoids redundant describe_table() call */
   prefetchedGeomColumn?: GeomColumnInfo,
@@ -520,7 +512,7 @@ export async function addGeoArrowMetadataFromDuckDB(
 
 export async function createArrowTableWithMetadata(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   extractMetadata: (table: Table) => GeoArrowMetadata | null
 ): Promise<{
   arrowTableWithMetadata: Table;
@@ -543,7 +535,7 @@ export async function createArrowTableWithMetadata(
 
 export async function getArrowTableWithCache(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   extractMetadata: (table: Table) => GeoArrowMetadata | null,
   getCachedTable: () => Table | undefined,
   setCache: (table: Table, metadata: GeoArrowMetadata | null) => void
@@ -563,7 +555,7 @@ export async function getArrowTableWithCache(
 
 export async function getArrowTableDirect(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   getCachedTable: () => Table | undefined,
   setCache: (table: Table) => void
 ): Promise<Table> {
@@ -595,7 +587,7 @@ export async function getArrowTableDirect(
 
 export async function getArrowTableReprojected(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   targetCrs: string
 ): Promise<Table> {
   const reproject = async (sourceCrs?: string) => {
@@ -641,7 +633,7 @@ export async function getArrowTableReprojected(
 export async function getRepresentativePointArrowTable(
   tableName: string,
   geometryType: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null
 ): Promise<Table> {
   const { table: baseTable, geomColumn } =

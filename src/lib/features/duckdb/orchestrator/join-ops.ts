@@ -47,12 +47,9 @@ import {
   sqlNamePart,
   sqlTempName
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export type { FinalizeJoinResult };
-
-export interface DuckDBClientForJoin {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-}
 
 /**
  * 'auto' scores the unmatched residual only while it fits in
@@ -169,7 +166,7 @@ function getSimilarityCacheTableName(
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}_${hash}`;
 }
 
-function dropTempTable(tableName: string, duck?: DuckDBClientForJoin): void {
+function dropTempTable(tableName: string, duck?: DuckClient): void {
   if (!duck) return;
   // The facade throws synchronously before init; temp tables die with the engine.
   try {
@@ -207,7 +204,7 @@ function getGradedCacheTableName(basemapId: string, gradedKey: string): string {
 
 function invalidateGradedCache(
   cacheTableName?: string,
-  duck?: DuckDBClientForJoin
+  duck?: DuckClient
 ): void {
   const prefix = cacheTableName ? `${cacheTableName}::` : '';
   for (const [key, tableName] of gradedCacheEntries) {
@@ -220,7 +217,7 @@ function invalidateGradedCache(
 /** Invalidate cached similarity rows after source-value mutations. */
 export function invalidateSimilarityCache(
   datasetTableName?: string,
-  duck?: DuckDBClientForJoin
+  duck?: DuckClient
 ): void {
   for (const [key, entry] of similarityCacheEntries) {
     if (datasetTableName && entry.tableName !== datasetTableName) continue;
@@ -275,7 +272,7 @@ function buildTargetNamesCte(candidateBasemapsCte: string): string {
 async function ensureSimilarityCached(
   dataset: DuckDBDataset,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   scope: JoinRowScope = 'filtered'
 ): Promise<string> {
   const rowFilter = resolveJoinRowFilter(dataset.tableName, scope);
@@ -535,7 +532,7 @@ async function fetchFuzzyPassEstimate(
   dataset: DuckDBDataset,
   geoColumn: string,
   cacheTableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<JoinFuzzyPassEstimate> {
   const columnKey = getColumnKey(dataset.tableName, geoColumn);
 
@@ -578,7 +575,7 @@ async function fetchFuzzyPassEstimate(
 export async function estimateJoinFuzzyPass(
   dataset: DuckDBDataset,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<JoinFuzzyPassEstimate> {
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
   return fetchFuzzyPassEstimate(dataset, geoColumn, cacheTableName, Duck);
@@ -597,7 +594,7 @@ export async function estimateJoinFuzzyPass(
 export async function runFullFuzzyPass(
   dataset: DuckDBDataset,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<void> {
   const columnKey = getColumnKey(dataset.tableName, geoColumn);
   fullFuzzyPassRequests.add(columnKey);
@@ -719,7 +716,7 @@ function buildJoinGradingCtes(
 async function ensureGradedMaterialized(
   cacheTableName: string,
   basemapId: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   excludedValues: string[]
 ): Promise<string> {
   const gradedKey = getGradedCacheKey(
@@ -792,7 +789,7 @@ async function ensureGradedMaterialized(
 async function deriveJoinQualityFromCache(
   cacheTableName: string,
   basemapId: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   excludedValues: string[]
 ): Promise<JoinQuality> {
   const gradedTable = sqlIdentifier(
@@ -921,7 +918,7 @@ export async function getJoinedEntitiesPage(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   options: JoinedEntitiesPageOptions
 ): Promise<JoinedEntity[]> {
   const basemapId = getBasemapAttributesId(basemap);
@@ -969,7 +966,7 @@ export async function getJoinedBasemapValues(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   options: JoinGradingOptions = {}
 ): Promise<string[]> {
   const basemapId = getBasemapAttributesId(basemap);
@@ -1030,7 +1027,7 @@ interface BasemapMatchTally {
  */
 async function fetchSampledBasemapRanking(
   cacheTableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<SampledBasemapRanking> {
   const sampleSizes = (await Duck.query(
     `WITH unmatched AS (
@@ -1099,7 +1096,7 @@ async function fetchSampledBasemapRanking(
 export async function computeJoinSynthesis(
   dataset: DuckDBDataset,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<JoinSynthesisResult[]> {
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
 
@@ -1185,9 +1182,7 @@ export async function computeJoinSynthesis(
     .sort((left, right) => right.shareCandidate - left.shareCandidate);
 }
 
-async function ensureBasemapAttributesLoaded(
-  Duck: DuckDBClientForJoin
-): Promise<void> {
+async function ensureBasemapAttributesLoaded(Duck: DuckClient): Promise<void> {
   const tableCheck = (await Duck.query(
     `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
     { format: 'array' }
@@ -1211,7 +1206,7 @@ async function ensureBasemapAttributesLoaded(
 
 async function getJoinColumnExcludeClause(
   tableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<string> {
   const columnsToExclude = [...JOINED_BASEMAP_COLUMNS];
   const existingColumns = (await Duck.query(
@@ -1234,7 +1229,7 @@ async function getJoinColumnExcludeClause(
 
 async function generateAttributesForBasemap(
   basemapId: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<boolean> {
   try {
     const geometryTable =
@@ -1306,7 +1301,7 @@ export async function computeJoinStats(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   options: JoinGradingOptions = {}
 ): Promise<JoinQuality> {
   const basemapId = getBasemapAttributesId(basemap);
@@ -1351,7 +1346,7 @@ export async function computeJoinStats(
 /** Ensure a basemap has generated attribute rows before matching. */
 async function ensureBasemapHasAttributes(
   basemapId: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<void> {
   await ensureBasemapAttributesLoaded(Duck);
 
@@ -1391,7 +1386,7 @@ async function ensureBasemapHasAttributes(
 /** Return manual-correction values for one basemap. */
 export async function getBasemapAttributeValues(
   basemap: BasemapMetadata,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<string[]> {
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
@@ -1465,7 +1460,7 @@ function getBasemapDisplayVariants(basemap: BasemapMetadata): string[] {
 /** Return aliases keyed by every raw value variant for manual correction. */
 export async function getBasemapAttributeAliasesByValue(
   basemap: BasemapMetadata,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<Record<string, BasemapAlias[]>> {
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
@@ -1519,7 +1514,7 @@ export async function applyJoinCorrections(
   dataset: DuckDBDataset,
   geoColumn: string,
   corrections: Record<string, string>,
-  Duck: DuckDBClientForJoin
+  Duck: DuckClient
 ): Promise<void> {
   const entries = Object.entries(corrections);
   if (entries.length === 0) return;
@@ -1560,7 +1555,7 @@ async function applyCachedJoinAssociation(
   geoColumn: string,
   basemapId: string,
   cacheTableName: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   excludedValues: string[] = []
 ): Promise<void> {
   const excludeClause = await getJoinColumnExcludeClause(
@@ -1629,7 +1624,7 @@ export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   options: FinalizeJoinOptions = {}
 ): Promise<FinalizeJoinResult> {
   if (isOSMBasemap(basemap)) {
@@ -1716,7 +1711,7 @@ function finalizeGPSJoin(
 export async function getJoinedArrowTable(
   datasetTableName: string,
   basemapId: string,
-  Duck: DuckDBClientForJoin,
+  Duck: DuckClient,
   loadGeometryIntoDuckDB: (basemapId: string) => Promise<string>,
   getArrowTableDirect: (tableName: string) => Promise<Table>
 ): Promise<Table> {

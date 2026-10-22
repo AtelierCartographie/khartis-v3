@@ -6,11 +6,11 @@ import {
 } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
-import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
 import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export interface SimplificationMetrics {
   originalVertices: number;
@@ -30,7 +30,7 @@ type SimplificationMacro =
   'simplify_and_clean' | 'simplify_and_clean_linestring' | null;
 
 async function resolveSimplificationMacro(
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   tableName: string,
   geometryColumn: string
 ): Promise<SimplificationMacro> {
@@ -62,7 +62,7 @@ async function resolveSimplificationMacro(
 }
 
 async function countVertices(
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   tableName: string,
   geometryColumn: string
 ): Promise<number> {
@@ -82,7 +82,7 @@ async function countVertices(
  * and cleans up triangle artefacts.
  */
 export async function simplifyGeometryTable(
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   sourceTable: string,
   tolerance: number,
   options: SimplificationOptions = {}

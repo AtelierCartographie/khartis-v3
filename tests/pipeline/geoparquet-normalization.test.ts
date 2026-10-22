@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeGeoParquetTable } from '$lib/features/data-pipeline/operations/geoparquet';
 import type {
@@ -41,7 +42,7 @@ describe('GeoParquet geometry normalization', () => {
       normalizeGeoParquetTable(
         'uploaded_geoparquet',
         createMetadata('multilinestring'),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).resolves.toBe(true);
 
@@ -66,7 +67,7 @@ describe('GeoParquet geometry normalization', () => {
         type: 'ProjectedCRS',
         id: { authority: 'EPSG', code: 3857 }
       }),
-      Duck
+      Duck as unknown as DuckClient
     );
 
     expect(Duck.query.mock.calls[0][0]).toContain(
@@ -84,7 +85,7 @@ describe('GeoParquet geometry normalization', () => {
           type: 'ProjectedCRS',
           id: { authority: 'EPSG', code: 2154 }
         }),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).resolves.toBe(false);
 
@@ -96,7 +97,11 @@ describe('GeoParquet geometry normalization', () => {
     const Duck = createDuck('VARCHAR');
 
     await expect(
-      normalizeGeoParquetTable('plain_parquet', {}, Duck)
+      normalizeGeoParquetTable(
+        'plain_parquet',
+        {},
+        Duck as unknown as DuckClient
+      )
     ).resolves.toBe(false);
 
     expect(Duck.describe_table).not.toHaveBeenCalled();
@@ -110,7 +115,7 @@ describe('GeoParquet geometry normalization', () => {
       normalizeGeoParquetTable(
         'invalid_geoparquet',
         createMetadata('unsupported'),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).rejects.toMatchObject({
       name: 'DataValidationError',

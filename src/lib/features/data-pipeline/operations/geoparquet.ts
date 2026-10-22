@@ -10,14 +10,7 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
-
-interface DuckDBGeoParquetClient {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-  invalidateTableCache?(tableName: string): void;
-}
+import type { DuckClient } from '$lib/features/duckdb';
 
 interface NativeGeometryEncoding {
   geoJsonType: string;
@@ -136,7 +129,7 @@ function buildGeometryExpression(
 export async function normalizeGeoParquetTable(
   tableName: string,
   metadata: GeoParquetMeta,
-  Duck: DuckDBGeoParquetClient
+  Duck: DuckClient
 ): Promise<boolean> {
   const primaryColumn = metadata.primary_column;
   const columnMetadata = primaryColumn

@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -222,7 +223,11 @@ describe('geo detection on real files', () => {
     }
     return buildGeoDetection(
       columns,
-      await matchColumnsAgainstCatalog(table, candidates, duck)
+      await matchColumnsAgainstCatalog(
+        table,
+        candidates,
+        duck as unknown as DuckClient
+      )
     );
   }
 

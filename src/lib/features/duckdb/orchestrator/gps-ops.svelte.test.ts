@@ -2,11 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Table } from 'apache-arrow/Arrow';
 import { markTableMutated } from '../cache/cache-manager';
 import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
-import {
-  getGPSArrowTable,
-  validateGPSColumns,
-  type DuckDBClientForGPS
-} from './gps-ops';
+import { getGPSArrowTable, validateGPSColumns } from './gps-ops';
+import type { DuckClient } from '../duck';
 
 function makeGpsDataset(
   tableName: string,
@@ -29,8 +26,8 @@ function makeGpsDataset(
   };
 }
 
-function makeDuckStub(): DuckDBClientForGPS {
-  return { query: vi.fn().mockResolvedValue([]) };
+function makeDuckStub(): DuckClient {
+  return { query: vi.fn().mockResolvedValue([]) } as unknown as DuckClient;
 }
 
 function makeArrowLoader() {
@@ -108,7 +105,7 @@ describe('validateGPSColumns', () => {
 
     const result = await validateGPSColumns('sites_seveso', 'lat', 'long', {
       query
-    });
+    } as unknown as DuckClient);
 
     expect(result.possibleInversion).toBe(true);
     expect(result.warning).toContain('1.55');

@@ -3,6 +3,7 @@ import {
   sqlIdentifier,
   sqlString
 } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export const CATALOG_ATTRIBUTES_TABLE = 'basemap_attributes';
 
@@ -14,10 +15,6 @@ export interface CatalogColumnMatch {
   matchedValues: number;
   /** Catalog basemaps sharing the most values with the column, best first. */
   basemaps: string[];
-}
-
-export interface DuckDBClientForGeoDetection {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
 }
 
 function toStringList(value: unknown): string[] {
@@ -38,7 +35,7 @@ function toStringList(value: unknown): string[] {
 export async function matchColumnsAgainstCatalog(
   tableName: string,
   columns: string[],
-  Duck: DuckDBClientForGeoDetection,
+  Duck: DuckClient,
   attributesTable: string = CATALOG_ATTRIBUTES_TABLE
 ): Promise<CatalogColumnMatch[]> {
   if (columns.length === 0) return [];

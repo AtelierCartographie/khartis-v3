@@ -12,8 +12,7 @@ import {
   estimateFuzzyPassMs,
   estimateJoinFuzzyPass,
   invalidateSimilarityCache,
-  runFullFuzzyPass,
-  type DuckDBClientForJoin
+  runFullFuzzyPass
 } from '$lib/features/duckdb/orchestrator/join-ops';
 import { MAX_FUZZY_AUTO_PAIRS } from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -24,9 +23,10 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 let db: TestDuckDB;
-let Duck: DuckDBClientForJoin;
+let Duck: DuckClient;
 
 const TEST_BASEMAP = 'test-budget';
 const TARGET_NAMES = 6000;
@@ -99,7 +99,7 @@ beforeAll(async () => {
       const reader = await db.connection.runAndReadAll(sql);
       return reader.getRowObjectsJson();
     }
-  };
+  } as unknown as DuckClient;
 });
 
 afterAll(async () => {

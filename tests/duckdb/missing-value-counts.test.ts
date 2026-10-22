@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   countDuplicateRows,
-  getMissingValueCountsInScope,
-  type DuckDBClientForTableData
+  getMissingValueCountsInScope
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
 import {
   createTestInstance,
@@ -11,9 +10,10 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 let db: TestDuckDB;
-let duck: DuckDBClientForTableData;
+let duck: DuckClient;
 
 beforeAll(async () => {
   db = await createTestInstance();
@@ -28,7 +28,7 @@ beforeAll(async () => {
     },
     describe_table: async () => ({ name: [], type: [] }),
     analyse: async () => []
-  };
+  } as unknown as DuckClient;
 
   await run(
     db,

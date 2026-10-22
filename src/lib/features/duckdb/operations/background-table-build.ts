@@ -2,16 +2,12 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { waitForQueryIdle } from '../core/query-activity';
 import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 // DuckDB WASM runs one query at a time: a batch only starts once the connection
 // is idle, so a foreground query waits for one short batch at most.
 const BATCH_ROW_COUNT = 1000;
 const FOREGROUND_IDLE_MS = 30;
-
-interface DuckDBClientForBackgroundBuild {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
 
 export interface BackgroundTableBuildOptions {
   sourceTable: string;
@@ -43,7 +39,7 @@ registerTableMutationCallback((table: string) => {
  * complete result: rows are written to a staging table swapped in at the end.
  */
 export function buildTableInBackground(
-  duck: DuckDBClientForBackgroundBuild,
+  duck: DuckClient,
   options: BackgroundTableBuildOptions
 ): void {
   buildCount += 1;
@@ -88,7 +84,7 @@ export function buildTableInBackground(
 }
 
 async function buildInBatches(
-  duck: DuckDBClientForBackgroundBuild,
+  duck: DuckClient,
   { sourceTable, targetTable, projection }: BackgroundTableBuildOptions,
   stagingTable: string,
   isCurrent: () => boolean
@@ -135,10 +131,7 @@ async function buildInBatches(
   return true;
 }
 
-async function dropTable(
-  duck: DuckDBClientForBackgroundBuild,
-  table: string
-): Promise<void> {
+async function dropTable(duck: DuckClient, table: string): Promise<void> {
   await duck
     .query(`DROP TABLE IF EXISTS ${sqlIdentifier(table)}`)
     .catch(() => undefined);
