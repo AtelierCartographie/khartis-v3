@@ -14,7 +14,12 @@ import {
 import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { markTableMutated } from '../cache/cache-manager';
-import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
+import {
+  DUCK_CONST,
+  EXTENSIONS,
+  LOAD_SPATIAL_SQL,
+  SQL_FUNCTIONS
+} from '../constants';
 import { executeQuery } from '../core/query';
 import { isProjectionSupported } from './reprojection';
 import type {
@@ -210,7 +215,7 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
   if (ctx.extensionsLoaded.spatial) return;
 
   try {
-    await executeQuery(ctx.connection, `LOAD ${EXTENSIONS.SPATIAL};`, {
+    await executeQuery(ctx.connection, LOAD_SPATIAL_SQL, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     ctx.extensionsLoaded.spatial = true;
@@ -223,7 +228,7 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
     try {
       await executeQuery(
         ctx.connection,
-        `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
+        `INSTALL ${EXTENSIONS.SPATIAL}; ${LOAD_SPATIAL_SQL}`,
         {
           format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
         }
