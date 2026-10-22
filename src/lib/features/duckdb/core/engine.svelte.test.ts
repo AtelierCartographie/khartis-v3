@@ -136,7 +136,7 @@ describe('DuckDB engine initialization', () => {
 
     await expect(initEngine()).resolves.toBeUndefined();
 
-    expect(getContext().extensionsLoaded.spatial).toBe(false);
+    expect(getContext().extensionLoads.has('spatial')).toBe(false);
     expect(mocks.showWarning).toHaveBeenCalledTimes(1);
   });
 

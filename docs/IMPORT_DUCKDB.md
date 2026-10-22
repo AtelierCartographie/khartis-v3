@@ -43,9 +43,12 @@ limite lève une erreur de mémoire propre et les tables existantes restent
 lisibles.
 
 Les extensions sont servies depuis `/duckdb-extensions`, où `pnpm install` les
-dépose. Si `spatial` ne se charge pas, un avertissement est affiché et les
-opérations spatiales ne sont pas disponibles. En cas d'échec, le Worker est
-terminé pour qu'une nouvelle tentative reparte de zéro.
+dépose. `ensureExtension` (`core/extensions.ts`) charge chacune une seule fois
+par moteur : `spatial` au démarrage, `json` à la première lecture JSON. Si
+`spatial` ne se charge pas au démarrage, un avertissement est affiché, et la
+première lecture géographique retente le chargement. En cas d'échec de
+l'initialisation, le Worker est terminé pour qu'une nouvelle tentative reparte
+de zéro.
 
 ## Points d'entrée
 

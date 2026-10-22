@@ -9,14 +9,14 @@ import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import { DUCK_CONST, EXTENSIONS, LOAD_SPATIAL_SQL } from '../constants';
+import { DUCK_CONST } from '../constants';
 import type {
   DescribeResult,
   DuckDBContext,
-  ExtensionLoadPromises,
-  ExtensionsLoaded,
+  ExtensionName,
   TableMetadata
 } from '../types';
+import { ensureExtension } from './extensions';
 import { executeQuery } from './query';
 import { sqlString } from '$lib/features/commons/utils/sql.utils';
 
@@ -28,11 +28,7 @@ const table_files: Map<string, string> = new Map();
 const table_metadata: Map<string, TableMetadata> = new Map();
 const describeCache: Map<string, DescribeResult> = new Map();
 const rowCountCache: Map<string, number> = new Map();
-const extensionsLoaded: ExtensionsLoaded = { spatial: false, httpfs: false };
-const extensionLoadPromises: ExtensionLoadPromises = {
-  spatial: null,
-  httpfs: null
-};
+const extensionLoads: Map<ExtensionName, Promise<void>> = new Map();
 let localExtensionRepositoryConfigured = false;
 let threadsSupported = false;
 let bundleVariant: 'eh' | 'mvp' = 'eh';
@@ -58,8 +54,7 @@ export function getContext(): DuckDBContext {
     table_metadata,
     describeCache,
     rowCountCache,
-    extensionsLoaded,
-    extensionLoadPromises,
+    extensionLoads,
     localExtensionRepositoryConfigured,
     threadsSupported,
     bundleVariant
@@ -139,18 +134,11 @@ async function warmSpatialCoordinateSystems(): Promise<void> {
   }
 }
 
-async function loadSpatialExtension(): Promise<void> {
-  if (!connection || extensionsLoaded.spatial) return;
+async function preloadSpatialExtension(): Promise<void> {
+  if (!connection) return;
 
   try {
-    await executeQuery(
-      connection,
-      `INSTALL ${EXTENSIONS.SPATIAL}; ${LOAD_SPATIAL_SQL}`,
-      {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      }
-    );
-    extensionsLoaded.spatial = true;
+    await ensureExtension({ connection, extensionLoads }, 'spatial');
   } catch (error) {
     logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, {
       error
@@ -160,10 +148,6 @@ async function loadSpatialExtension(): Promise<void> {
       m.duckdb_spatial_warning_message()
     );
   }
-}
-
-async function preloadExtensions(): Promise<void> {
-  await loadSpatialExtension();
 }
 
 async function instantiateDuckDB(
@@ -212,7 +196,7 @@ async function initializeDuckDBRuntime(
     await configureRuntimeSettings();
     await configureLocalExtensionRepository();
     await warmSpatialCoordinateSystems();
-    await preloadExtensions();
+    await preloadSpatialExtension();
   })();
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(
@@ -279,10 +263,7 @@ export async function initEngine(): Promise<void> {
       const failedDb = db;
       db = null;
       connection = null;
-      extensionsLoaded.spatial = false;
-      extensionsLoaded.httpfs = false;
-      extensionLoadPromises.spatial = null;
-      extensionLoadPromises.httpfs = null;
+      extensionLoads.clear();
       localExtensionRepositoryConfigured = false;
 
       const runtimeInitializationTimedOut =
