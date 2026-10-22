@@ -1,5 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import {
+  DEFAULT_CATEGORICAL_COLORS,
   getEnabledPrimitiveFilters,
   PrimitiveFilterType,
   type PrimitiveConfigKind,
@@ -34,6 +35,7 @@ import { resolveBreakpointLowerClassCount } from '../utils/discretization.utils'
 import { resolveValueScopeClause } from './row-scope.service';
 import {
   findPaletteById,
+  generateCategoricalColorsFromSeed,
   generatePaletteColors,
   PALETTE_TYPE,
   type Palette
@@ -468,6 +470,100 @@ export function resolveFacetFillVariable({
   return fillVariables[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath);
 }
 
+function resolveFacetFillColumns(
+  baseViz: VisualizationConfig,
+  fillSlotPath: FacetSlotPath,
+  collectionVariables: string[],
+  fillVariables: FacetFillVariables
+): string[] {
+  const baseFillVariable = getFacetSlotVariable(baseViz, fillSlotPath);
+  return [
+    ...new Set(
+      collectionVariables
+        .map((candidate) => fillVariables[candidate] ?? baseFillVariable)
+        .filter((candidate): candidate is string => Boolean(candidate))
+    )
+  ];
+}
+
+/**
+ * Every category the maps' fill columns hold, in map order, or null when
+ * the maps do not fill by categories. The base fill classification lists
+ * them, so a single aspect panel styles the categories of every map.
+ */
+export async function loadFacetFillCategoryUnion({
+  baseViz,
+  primarySlotPath,
+  collectionVariables,
+  fillVariables
+}: {
+  baseViz: VisualizationConfig;
+  primarySlotPath: FacetSlotPath;
+  collectionVariables: string[];
+  fillVariables: FacetFillVariables;
+}): Promise<string[] | null> {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (fillSlotPath !== FACET_SLOT.SYMBOL_FILL_CATEGORY) {
+    return null;
+  }
+
+  const dataset = datasetsStore.datasets.find(
+    (candidate) => candidate.id === baseViz.datasetId
+  );
+  const columns = resolveFacetFillColumns(
+    baseViz,
+    fillSlotPath,
+    collectionVariables,
+    fillVariables
+  );
+  const labelsByColumn = await Promise.all(
+    columns.map((column) => loadDistinctCategoryLabels(dataset, column))
+  );
+  return [...new Set(labelsByColumn.flat())];
+}
+
+/**
+ * Colors for `labels`: a label keeps the color it already has in
+ * `classification` unless another label took it first, the others take the
+ * palette colors still free.
+ */
+export function alignCategoryColors(
+  classification: NonNullable<VisualizationConfig['classification']>,
+  labels: string[]
+): string[] {
+  const colorByLabel = new Map(
+    (classification.labels ?? []).map((label, index) => [
+      String(label),
+      classification.colors?.[index]
+    ])
+  );
+  // Same source as the panel: the chosen palette, else the default colors.
+  const palette = classification.paletteId
+    ? findPaletteById(classification.paletteId)
+    : undefined;
+  const fresh = palette
+    ? generatePaletteColors(palette, labels.length)
+    : labels.length <= DEFAULT_CATEGORICAL_COLORS.length
+      ? DEFAULT_CATEGORICAL_COLORS.slice(0, labels.length)
+      : generateCategoricalColorsFromSeed(
+          DEFAULT_CATEGORICAL_COLORS[0],
+          labels.length
+        );
+  const used = new Set<string>();
+  const takeFree = (index: number): string | undefined =>
+    fresh.find((color) => !used.has(color)) ??
+    fresh[index % Math.max(fresh.length, 1)];
+
+  return labels.map((label, index) => {
+    const existing = colorByLabel.get(label);
+    const color = existing && !used.has(existing) ? existing : takeFree(index);
+    if (color) {
+      used.add(color);
+    }
+    return color ?? '';
+  });
+}
+
 async function buildFacetFillUpdates({
   baseViz,
   visualization,
@@ -495,32 +591,60 @@ async function buildFacetFillUpdates({
 
   const baseFillVariable = getFacetSlotVariable(baseViz, fillSlotPath);
   const fillVariable = fillVariables[variable] ?? baseFillVariable;
-  // Classes on a shared legend pool their breaks over every fill column, so
-  // a map that keeps the base column still needs new breaks.
-  const poolsBreaks =
-    !isFacetCategorySlot(fillSlotPath) && scaleMode === SCALE_MODE.SHARED;
-  if (!fillVariable || (fillVariable === baseFillVariable && !poolsBreaks)) {
+  const categories = isFacetCategorySlot(fillSlotPath);
+  // Categories: the base classification lists every map's categories, so a
+  // map that keeps the base column still needs its own. Classes on a shared
+  // legend pool their breaks over every fill column, so it needs new breaks.
+  const keepsBaseFill =
+    fillVariable === baseFillVariable &&
+    !categories &&
+    scaleMode !== SCALE_MODE.SHARED;
+  if (!fillVariable || keepsBaseFill) {
     return {};
   }
 
-  const fillCollectionVariables = [
-    ...new Set(
-      collectionVariables
-        .map((candidate) => fillVariables[candidate] ?? baseFillVariable)
-        .filter((candidate): candidate is string => Boolean(candidate))
-    )
-  ];
   // Only the symbol changes: the fill column lives there, while the mapping
   // keys a fill slot would patch carry the collection variable.
   const { symbol } = await buildFacetSlotUpdates({
     baseViz,
     visualization,
     variable: fillVariable,
-    collectionVariables: fillCollectionVariables,
+    collectionVariables: resolveFacetFillColumns(
+      baseViz,
+      fillSlotPath,
+      collectionVariables,
+      fillVariables
+    ),
     scaleMode,
     slotPath: fillSlotPath
   });
-  return { symbol };
+  const baseClassification = baseViz.symbol?.fillClassification;
+  const fillClassification = symbol?.fillClassification;
+  if (!categories || !symbol || !baseClassification || !fillClassification) {
+    return { symbol };
+  }
+
+  // A category keeps the color the aspect panel gives it on every map.
+  const baseColorByLabel = new Map(
+    (baseClassification.labels ?? []).map((label, index) => [
+      String(label),
+      baseClassification.colors?.[index]
+    ])
+  );
+  return {
+    symbol: {
+      ...symbol,
+      fillClassification: {
+        ...fillClassification,
+        colors: (fillClassification.labels ?? []).map(
+          (label, index) =>
+            baseColorByLabel.get(String(label)) ??
+            fillClassification.colors?.[index] ??
+            ''
+        )
+      }
+    }
+  };
 }
 
 export async function buildFacetVisualizationUpdates({

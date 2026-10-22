@@ -9,8 +9,10 @@ import { showInfo } from '$lib/features/commons/utils/notification.utils.svelte'
 import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
+  alignCategoryColors,
   buildFacetVisualizationUpdates,
   generateFacetVisualizations,
+  loadFacetFillCategoryUnion,
   resolveFacetFillSlotPath,
   resolveFacetPrimitiveFilter,
   type FacetFillVariables
@@ -221,6 +223,8 @@ function createFacetsStore() {
   let editedTitleVariable = $state<string | null>(null);
   let draft = $state<FacetsDraft | null>(null);
   let isRegenerating = false;
+  let fillUnionKey: string | null = null;
+  let fillUnion: string[] = [];
 
   function notifyPersistence(): void {
     persistenceRegistry.notifyChange('facets');
@@ -256,6 +260,90 @@ function createFacetsStore() {
     }
 
     visualizationStore.setVisualizationOrder(reorderedVisualizations);
+  }
+
+  // The base fill lists the categories of every map, so the aspect panel
+  // styles them all. Recomputed only when the maps' fill columns change.
+  async function refreshFillCategoryUnion(
+    baseViz: VisualizationConfig,
+    primarySlotPath: FacetSlotPath,
+    variables: string[],
+    fillVariables: FacetFillVariables
+  ): Promise<VisualizationConfig> {
+    const symbol = baseViz.symbol;
+    const fillClassification = symbol?.fillClassification;
+    if (!symbol || !fillClassification) {
+      return baseViz;
+    }
+
+    const currentLabels = (fillClassification.labels ?? []).map(String);
+    const key = JSON.stringify([
+      baseViz.id,
+      primarySlotPath,
+      symbol.fillMode,
+      symbol.fillCategoryColumn,
+      variables,
+      fillVariables
+    ]);
+    if (key !== fillUnionKey) {
+      const union = await loadFacetFillCategoryUnion({
+        baseViz,
+        primarySlotPath,
+        collectionVariables: variables,
+        fillVariables
+      });
+      fillUnionKey = key;
+      fillUnion = union ?? [];
+    }
+    if (fillUnion.length === 0 || arraysEqual(currentLabels, fillUnion)) {
+      return baseViz;
+    }
+
+    const nextSymbol = {
+      ...symbol,
+      fillClassification: {
+        ...fillClassification,
+        labels: [...fillUnion],
+        categoryValues: [...fillUnion],
+        colors: alignCategoryColors(fillClassification, fillUnion)
+      }
+    };
+    visualizationStore.updateVisualization(baseViz.id, { symbol: nextSymbol });
+    return (
+      visualizationStore.visualizations.find((v) => v.id === baseViz.id) ?? {
+        ...baseViz,
+        symbol: nextSymbol
+      }
+    );
+  }
+
+  // A single map lists the categories of its own column again: emptied
+  // labels make the panel reload them.
+  function releaseFillCategoryUnion(): void {
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    const symbol = baseViz?.symbol;
+    const fillClassification = symbol?.fillClassification;
+    const listsUnion =
+      Object.keys(state.fillVariables).length > 0 &&
+      fillUnion.length > 0 &&
+      arraysEqual((fillClassification?.labels ?? []).map(String), fillUnion);
+    fillUnionKey = null;
+    fillUnion = [];
+    if (!baseViz || !symbol || !fillClassification || !listsUnion) {
+      return;
+    }
+    visualizationStore.updateVisualization(baseViz.id, {
+      symbol: {
+        ...symbol,
+        fillClassification: {
+          ...fillClassification,
+          labels: [],
+          categoryValues: []
+        }
+      }
+    });
   }
 
   function restoreFromSerialized(data: unknown): void {
@@ -415,16 +503,22 @@ function createFacetsStore() {
         : {};
 
     try {
-      const facetConfigs = await generateFacetVisualizations(
+      const compatibleFillVariables = resolveCompatibleFillVariables(
         baseViz,
+        primarySlotPath,
+        nextFillVariables
+      );
+      const facetConfigs = await generateFacetVisualizations(
+        await refreshFillCategoryUnion(
+          baseViz,
+          primarySlotPath,
+          capped,
+          compatibleFillVariables
+        ),
         capped,
         nextScaleMode,
         primarySlotPath,
-        resolveCompatibleFillVariables(
-          baseViz,
-          primarySlotPath,
-          nextFillVariables
-        )
+        compatibleFillVariables
       );
 
       if (state.generatedVisualizationIds.length > 0) {
@@ -501,16 +595,22 @@ function createFacetsStore() {
     );
     isRegenerating = true;
     try {
-      const facetConfigs = await generateFacetVisualizations(
+      const compatibleFillVariables = resolveCompatibleFillVariables(
         baseViz,
+        state.primarySlotPath,
+        state.fillVariables
+      );
+      const facetConfigs = await generateFacetVisualizations(
+        await refreshFillCategoryUnion(
+          baseViz,
+          state.primarySlotPath,
+          compatible,
+          compatibleFillVariables
+        ),
         compatible,
         state.scaleMode,
         state.primarySlotPath,
-        resolveCompatibleFillVariables(
-          baseViz,
-          state.primarySlotPath,
-          state.fillVariables
-        )
+        compatibleFillVariables
       );
 
       if (staleGeneratedIds.length > 0) {
@@ -587,6 +687,12 @@ function createFacetsStore() {
       state.fillVariables
     );
     try {
+      const unionBaseViz = await refreshFillCategoryUnion(
+        baseViz,
+        primarySlotPath,
+        state.variables,
+        fillVariables
+      );
       for (const [index, visualization] of generatedVisualizations.entries()) {
         const variable = state.variables[index];
         if (!variable) {
@@ -594,8 +700,8 @@ function createFacetsStore() {
         }
 
         const primaryUpdates = await buildFacetVisualizationUpdates({
-          baseViz,
-          visualization: baseViz,
+          baseViz: unionBaseViz,
+          visualization: unionBaseViz,
           variable,
           collectionVariables: state.variables,
           scaleMode: state.scaleMode,
@@ -627,6 +733,7 @@ function createFacetsStore() {
     visualizationStore.removeBulkVisualizations(
       state.generatedVisualizationIds
     );
+    releaseFillCategoryUnion();
 
     state.enabled = false;
     state.baseVisualizationId = null;
@@ -824,16 +931,22 @@ function createFacetsStore() {
     try {
       const previousName = capturePreviousGeneratedName();
       const nextFillVariables = pickFillVariables(state.fillVariables, capped);
-      const newConfigs = await generateFacetVisualizations(
+      const compatibleFillVariables = resolveCompatibleFillVariables(
         baseViz,
+        primarySlotPath,
+        nextFillVariables
+      );
+      const newConfigs = await generateFacetVisualizations(
+        await refreshFillCategoryUnion(
+          baseViz,
+          primarySlotPath,
+          capped,
+          compatibleFillVariables
+        ),
         capped,
         nextScaleMode,
         primarySlotPath,
-        resolveCompatibleFillVariables(
-          baseViz,
-          primarySlotPath,
-          nextFillVariables
-        )
+        compatibleFillVariables
       );
       visualizationStore.removeBulkVisualizations(
         state.generatedVisualizationIds
