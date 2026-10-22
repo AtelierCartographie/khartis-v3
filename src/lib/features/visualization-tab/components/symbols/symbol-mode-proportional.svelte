@@ -375,14 +375,7 @@
   function handleFillModeChange(mode: FillMode) {
     runUserChange(() => {
       fillMode = mode;
-      if (fillMode === FillMode.CATEGORIES) {
-        onModesChange?.({
-          fill: FillMode.CATEGORIES,
-          symbol: SymbolMode.CATEGORIES
-        });
-      } else {
-        onModesChange?.({ fill: fillMode });
-      }
+      onModesChange?.({ fill: fillMode });
       if (fillMode === FillMode.NONE) {
         fillColor = DEFAULT_COLORS.fill;
         fillColorB = DEFAULT_COLORS.secondary;

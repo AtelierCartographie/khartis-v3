@@ -1292,12 +1292,16 @@ export function createPointLayerStack(
   const hlVersion = ctx.highlightVersion ?? 0;
   const pointConfig = viz ? getSymbolPrimitive(viz) : undefined;
   const pointValueColumn = pointConfig?.valueColumn;
-  const pointCategoryColumn = pointConfig?.categoryColumn;
+  const pointCategoryColumn =
+    pointConfig?.mode !== SymbolMode.CATEGORIES &&
+    pointConfig?.fillMode === FillMode.CATEGORIES
+      ? (pointConfig.fillCategoryColumn ?? pointConfig.categoryColumn)
+      : pointConfig?.categoryColumn;
   const pointSizeColumn = pointConfig?.sizeColumn;
   const pointStrokeValueColumn =
     pointConfig?.strokeValueColumn ?? pointValueColumn;
   const pointStrokeCategoryColumn =
-    pointConfig?.strokeCategoryColumn ?? pointCategoryColumn;
+    pointConfig?.strokeCategoryColumn ?? pointConfig?.categoryColumn;
   const {
     color: pointStrokeColor,
     width: pointStrokeWidth,
