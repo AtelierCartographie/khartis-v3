@@ -38,9 +38,11 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 import {
+  alignCategoryColors,
   buildFacetSlotUpdates,
   buildFacetVisualizationUpdates,
-  generateFacetVisualizations
+  generateFacetVisualizations,
+  loadFacetFillCategoryUnion
 } from './facet-generator.service';
 import {
   FACET_SLOT,
@@ -290,14 +292,14 @@ describe('generateFacetVisualizations', () => {
     ]);
   });
 
-  it('gives a map its own fill categories while the others keep the base fill', async () => {
-    mocks.loadDistinctCategoryLabels.mockResolvedValue(['North', 'South']);
-    const fillClassification = {
-      method: 'equal_interval',
-      colors: ['#111', '#222'],
-      labels: ['EU27', 'EFTA'],
-      categoryValues: ['EU27', 'EFTA']
+  it('should color each map fill category after the union the base lists when maps fill by different columns', async () => {
+    const labelsByColumn: Record<string, string[]> = {
+      zone: ['EU27', 'EFTA'],
+      region: ['North', 'South', 'EU27']
     };
+    mocks.loadDistinctCategoryLabels.mockImplementation(
+      async (_dataset: unknown, column: string) => labelsByColumn[column] ?? []
+    );
     const base = makeBaseViz({
       mapping: { sizeColumn: 'pop', categoryColumn: 'zone' },
       symbol: {
@@ -305,9 +307,23 @@ describe('generateFacetVisualizations', () => {
         sizeColumn: 'pop',
         fillMode: 'categories',
         fillCategoryColumn: 'zone',
-        fillClassification
+        fillClassification: {
+          method: 'equal_interval',
+          colors: ['#111', '#222', '#333', '#444'],
+          labels: ['EU27', 'EFTA', 'North', 'South'],
+          categoryValues: ['EU27', 'EFTA', 'North', 'South']
+        }
       }
     });
+
+    await expect(
+      loadFacetFillCategoryUnion({
+        baseViz: base as never,
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        collectionVariables: ['pop', 'gdp'],
+        fillVariables: { gdp: 'region' }
+      })
+    ).resolves.toEqual(['EU27', 'EFTA', 'North', 'South']);
 
     const [pop, gdp] = await generateFacetVisualizations(
       base as never,
@@ -318,11 +334,31 @@ describe('generateFacetVisualizations', () => {
     );
 
     expect(pop.symbol?.fillCategoryColumn).toBe('zone');
-    expect(pop.symbol?.fillClassification).toEqual(fillClassification);
+    expect(pop.symbol?.fillClassification?.labels).toEqual(['EU27', 'EFTA']);
+    expect(pop.symbol?.fillClassification?.colors).toEqual(['#111', '#222']);
     expect(gdp.symbol?.sizeColumn).toBe('gdp');
     expect(gdp.symbol?.fillCategoryColumn).toBe('region');
-    expect(gdp.symbol?.fillClassification?.labels).toEqual(['North', 'South']);
+    expect(gdp.symbol?.fillClassification?.colors).toEqual([
+      '#333',
+      '#444',
+      '#111'
+    ]);
     expect(gdp.mapping.categoryColumn).toBe('zone');
+  });
+
+  it('should give each union category a free color when the previous colors repeat', () => {
+    const colors = alignCategoryColors(
+      {
+        method: 'equal_interval',
+        paletteId: 'cb-wong',
+        labels: ['UE', 'AELE', 'France', 'Allemagne'],
+        colors: ['#a', '#b', '#a', '#b']
+      } as never,
+      ['UE', 'AELE', 'romane', 'slave']
+    );
+
+    expect(colors.slice(0, 2)).toEqual(['#a', '#b']);
+    expect(new Set(colors).size).toBe(colors.length);
   });
 
   it('pools fill class breaks over every map fill column on a shared legend', async () => {
