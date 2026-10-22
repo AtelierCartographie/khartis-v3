@@ -1,12 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { SCALE_MODE } from '$lib/features/commons/constants/facets.constants';
+import {
+  FACET_SLOT,
+  SCALE_MODE,
+  type FacetSlotPath
+} from '$lib/features/commons/constants/facets.constants';
 import type { LegendItem } from '../../types/legend.types';
 
 const facetsState = {
   enabled: false,
   scaleMode:
     SCALE_MODE.INDEPENDENT as (typeof SCALE_MODE)[keyof typeof SCALE_MODE],
-  generatedVisualizationIds: [] as string[]
+  generatedVisualizationIds: [] as string[],
+  fillSlotPath: null as FacetSlotPath | null,
+  mapFillVariables: [] as string[]
 };
 
 vi.mock('../facets', () => ({
@@ -20,6 +26,12 @@ vi.mock('../facets', () => ({
     },
     get generatedVisualizationIds() {
       return facetsState.generatedVisualizationIds;
+    },
+    get fillSlotPath() {
+      return facetsState.fillSlotPath;
+    },
+    get mapFillVariables() {
+      return facetsState.mapFillVariables;
     }
   }
 }));
@@ -30,8 +42,13 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 
 const { selectRenderedLegendItems } = await import('./legend-items.utils');
 
-function makeItem(id: string, variableId?: string): LegendItem {
+function makeItem(
+  id: string,
+  variableId?: string,
+  component?: LegendItem['component']
+): LegendItem {
   return {
+    ...(component ? { component } : {}),
     id,
     name: id,
     visible: true,
@@ -49,6 +66,8 @@ describe('selectRenderedLegendItems', () => {
     facetsState.enabled = false;
     facetsState.scaleMode = SCALE_MODE.INDEPENDENT;
     facetsState.generatedVisualizationIds = [];
+    facetsState.fillSlotPath = null;
+    facetsState.mapFillVariables = [];
   });
 
   it('returns every item when no collection is active', () => {
@@ -84,6 +103,32 @@ describe('selectRenderedLegendItems', () => {
     ];
 
     expect(selectRenderedLegendItems(items)).toHaveLength(1);
+  });
+
+  it('keeps each channel once on a shared scale, and every map fill when its categories differ', () => {
+    facetsState.enabled = true;
+    facetsState.scaleMode = SCALE_MODE.SHARED;
+    facetsState.generatedVisualizationIds = ['facet-a', 'facet-b'];
+    const items = [
+      makeItem('a-size', 'facet-a', 'size'),
+      makeItem('a-color', 'facet-a', 'color'),
+      makeItem('b-size', 'facet-b', 'size'),
+      makeItem('b-color', 'facet-b', 'color')
+    ];
+
+    expect(selectRenderedLegendItems(items).map((item) => item.id)).toEqual([
+      'a-size',
+      'a-color'
+    ]);
+
+    facetsState.fillSlotPath = FACET_SLOT.SYMBOL_FILL_CATEGORY;
+    facetsState.mapFillVariables = ['zone', 'region'];
+
+    expect(selectRenderedLegendItems(items).map((item) => item.id)).toEqual([
+      'a-size',
+      'a-color',
+      'b-color'
+    ]);
   });
 
   it('scopes to a single facet when a scopeVizId is given', () => {
