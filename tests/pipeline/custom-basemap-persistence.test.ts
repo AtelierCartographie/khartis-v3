@@ -73,6 +73,14 @@ vi.mock(
 
 vi.mock('$lib/features/duckdb', () => ({
   Duck: {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string) {
       const tableLookup = sql.match(/WHERE table_name = '([^']+)'/);
       if (tableLookup) {

@@ -18,7 +18,9 @@ export async function generateCustomBasemapAttributes(
     throw new DuckDBError('DuckDB not initialized');
   }
 
-  await duck.query(`
+  await duck.mutate(
+    'custom_basemap_attributes',
+    `
       CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
         raw VARCHAR,
         id VARCHAR,
@@ -27,7 +29,8 @@ export async function generateCustomBasemapAttributes(
         basemap VARCHAR,
         basemap_count INTEGER
       )
-    `);
+    `
+  );
 
   await duck.query(
     `DELETE FROM custom_basemap_attributes WHERE basemap = ${sqlString(basemapId)}`
@@ -78,8 +81,11 @@ export async function generateCustomBasemapAttributes(
       `;
   });
 
-  await duck.query(`
+  await duck.mutate(
+    'custom_basemap_attributes',
+    `
       INSERT INTO custom_basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
-    `);
+    `
+  );
 }

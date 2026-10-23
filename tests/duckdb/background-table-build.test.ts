@@ -25,6 +25,14 @@ let db: TestDuckDB;
 const statements: string[] = [];
 
 const duck = {
+  mutate(
+    this: { query: (sql: string, options?: never) => unknown },
+    _tables: unknown,
+    sql: string,
+    options?: never
+  ) {
+    return this.query(sql, options);
+  },
   query: (sql: string) => {
     statements.push(sql);
     return query(db, sql);

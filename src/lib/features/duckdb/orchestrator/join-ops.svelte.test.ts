@@ -55,6 +55,14 @@ function createDuck() {
   return {
     queries,
     duck: {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
         if (sql.includes("table_name = 'basemap_attributes'")) {
@@ -91,6 +99,14 @@ describe('join-ops error typing', () => {
 
   it('throws a DuckDBError when basemap attributes cannot be loaded', async () => {
     const duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async () => [])
     } as unknown as DuckClient;
 
@@ -131,6 +147,14 @@ describe('join-ops error typing', () => {
 
   it('throws a DataValidationError when joined geometry is unavailable', async () => {
     const duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async () => [{ column_name: 'id', data_type: 'VARCHAR' }])
     } as unknown as DuckClient;
 
@@ -162,6 +186,14 @@ describe('join-ops basemap aliases', () => {
   it('groups aliases by the provided basemap entity id', async () => {
     const queries: string[] = [];
     const duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
         if (sql.includes("table_name = 'basemap_attributes'")) {
@@ -218,6 +250,14 @@ function createSimilarityDuck() {
   const creates: string[] = [];
   const drops: string[] = [];
   const duck = {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     query: vi.fn(async (sql: string) => {
       const createMatch = sql.match(
         /CREATE OR REPLACE TEMP TABLE "(__similarity_cache__[^"]+)"/
@@ -322,6 +362,14 @@ describe('join-ops correction cleanup', () => {
     const queries: string[] = [];
     const updateError = new Error('update failed');
     const duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
         if (sql.includes('UPDATE "user_data"')) {

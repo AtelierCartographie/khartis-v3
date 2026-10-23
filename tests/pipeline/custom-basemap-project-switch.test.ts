@@ -30,6 +30,14 @@ vi.mock('$lib/features/duckdb', async () => {
       get connection() {
         return testDb.current?.connection ?? null;
       },
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: (sql: string) => helper.query(testDb.current!, sql)
     },
     duckDBOrchestrator: {

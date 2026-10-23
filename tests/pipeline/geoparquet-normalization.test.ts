@@ -8,6 +8,14 @@ import type {
 
 function createDuck(columnType: string) {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     query: vi.fn().mockResolvedValue(undefined),
     describe_table: vi.fn().mockResolvedValue({
       name: ['name', 'geom'],
@@ -53,9 +61,6 @@ describe('GeoParquet geometry normalization', () => {
     expect(sql).toContain(
       'list_transform("geom", coordinate_0 -> list_transform(coordinate_0, coordinate_1 -> [coordinate_1.x, coordinate_1.y]))'
     );
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      'uploaded_geoparquet'
-    );
   });
 
   it('should convert WKB geometry and reproject a declared source CRS', async () => {
@@ -90,7 +95,6 @@ describe('GeoParquet geometry normalization', () => {
     ).resolves.toBe(false);
 
     expect(Duck.query).not.toHaveBeenCalled();
-    expect(Duck.invalidateTableCache).not.toHaveBeenCalled();
   });
 
   it('should leave plain Parquet tables unchanged when GeoParquet metadata is absent', async () => {

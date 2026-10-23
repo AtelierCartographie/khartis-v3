@@ -54,6 +54,14 @@ let db: TestDuckDB;
  */
 function makeDuckClient(testDb: TestDuckDB): DuckClient {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string, options?: { format?: string }) {
       const reader = await testDb.connection.runAndReadAll(sql);
       if (options?.format === 'array') {
@@ -516,7 +524,7 @@ describe('exact_claimed_ids deduplication', () => {
 
     const baseDuck = makeDuckClient(db);
     const querySpy = vi.fn(baseDuck.query);
-    const Duck = { query: querySpy } as unknown as DuckClient;
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_data5', [
       { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
     ]);
@@ -547,8 +555,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded VALUES ('Lyon'), ('Saint-Colombe')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck = { query: querySpy } as unknown as DuckClient;
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded');
 
     await computeJoinStats(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
@@ -565,8 +574,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded2 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded2 VALUES ('Lyon')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck = { query: querySpy } as unknown as DuckClient;
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded2');
 
     const [page, values] = await Promise.all([
@@ -586,8 +596,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded3 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded3 VALUES ('Lyon'), ('69123')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck = { query: querySpy } as unknown as DuckClient;
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded3');
 
     const all = await computeJoinStats(
@@ -613,8 +624,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded4 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded4 VALUES ('Lyon')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck = { query: querySpy } as unknown as DuckClient;
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded4');
 
     const before = await computeJoinStats(

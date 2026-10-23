@@ -33,6 +33,14 @@ afterAll(async () => {
 
 function duckClient(): DuckClient {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string, options?: { format?: string }): Promise<unknown> {
       if (options?.format === 'array') {
         return query(db, sql);

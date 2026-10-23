@@ -153,7 +153,8 @@ export async function normalizeFormattedNumericColumns(
       )
       .join(', ');
 
-    await duck.query(
+    await duck.mutate(
+      tableName,
       `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
         SELECT * REPLACE (${replaceList})
         FROM ${sqlIdentifier(tableName)}`
@@ -161,14 +162,13 @@ export async function normalizeFormattedNumericColumns(
   } else {
     const [conversion] = conversions;
 
-    await duck.query(
+    await duck.mutate(
+      tableName,
       `ALTER TABLE ${sqlIdentifier(tableName)}
         ALTER COLUMN ${sqlIdentifier(conversion.name)} SET DATA TYPE ${conversion.targetType}
         USING ${buildConversionCastSql(conversion)}`
     );
   }
-
-  duck.invalidateTableCache?.(tableName);
 
   return conversions.map((conversion) => conversion.name);
 }

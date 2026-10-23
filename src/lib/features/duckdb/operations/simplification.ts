@@ -122,20 +122,25 @@ export async function simplifyGeometryTable(
 
   try {
     if (simplificationMacro) {
-      await Duck.query(`
+      await Duck.mutate(
+        resolvedTargetTable,
+        `
         ${createStatement} ${sqlIdentifier(resolvedTargetTable)} AS
         FROM ${simplificationMacro}(${sqlString(inputTableName)}, ${sqlString(geometryColumn)}, ${tolerance})
-      `);
+      `
+      );
     } else {
-      await Duck.query(`
+      await Duck.mutate(
+        resolvedTargetTable,
+        `
         ${createStatement} ${sqlIdentifier(resolvedTargetTable)} AS
         SELECT
           * EXCLUDE (${sqlIdentifier(geometryColumn)}),
           ${sqlIdentifier(geometryColumn)} AS geom
         FROM ${sqlIdentifier(inputTableName)}
-      `);
+      `
+      );
     }
-    Duck.invalidateTableCache?.(resolvedTargetTable);
   } catch (error) {
     logger.error(
       'Topology-preserving simplification failed; geometry left unsimplified',

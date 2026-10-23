@@ -115,7 +115,8 @@ export async function renameColumn(
   Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  await Duck.query(
+  await Duck.mutate(
+    tableName,
     `ALTER TABLE ${sqlIdentifier(tableName)} RENAME COLUMN ${sqlIdentifier(oldName)} TO ${sqlIdentifier(newName)}`
   );
 
@@ -201,7 +202,8 @@ export async function changeColumnType(
   )) as Array<{ invalidated?: number | bigint }> | undefined;
   const invalidatedCount = Number(invalidatedResult?.[0]?.invalidated ?? 0);
 
-  await Duck.query(
+  await Duck.mutate(
+    tableName,
     `ALTER TABLE ${sqlIdentifier(tableName)} ALTER COLUMN ${sqlIdentifier(columnName)} SET DATA TYPE ${normalizedType} USING ${castExpr}`
   );
 
@@ -216,7 +218,8 @@ export async function dropColumn(
   Duck: DuckClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  await Duck.query(
+  await Duck.mutate(
+    tableName,
     `ALTER TABLE ${sqlIdentifier(tableName)} DROP COLUMN ${sqlIdentifier(columnName)}`
   );
 
@@ -262,7 +265,7 @@ export async function refineColumn(
     [RefineOperation.TRIM_ALL]: `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = REGEXP_REPLACE(${sqlIdentifier(columnName)}, '\\s+', ' ', 'g')`
   };
 
-  await Duck.query(operations[operation]);
+  await Duck.mutate(tableName, operations[operation]);
 
   await maybeAnalyse(tableName, Duck, options);
 }
@@ -291,7 +294,8 @@ export async function replaceInColumn(
   const count = Number(countRow?.count) || 0;
 
   if (count > 0) {
-    await Duck.query(
+    await Duck.mutate(
+      tableName,
       `UPDATE ${sqlIdentifier(tableName)} SET ${sqlIdentifier(columnName)} = ${sqlString(replaceValue)} WHERE ${exactMatchCondition}`
     );
 
@@ -574,7 +578,8 @@ export async function addCalculatedColumn(
     );
   }
 
-  await Duck.query(
+  await Duck.mutate(
+    tableName,
     `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT *, (${expression}) AS ${sqlIdentifier(trimmedName)} FROM ${sqlIdentifier(tableName)}`
   );
 

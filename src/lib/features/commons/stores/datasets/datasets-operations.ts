@@ -241,7 +241,8 @@ export async function duplicateDataset(
     const copyBaseName = originalFile?.name ?? dataset.name;
     const copyName = `${copyBaseName}${m.copy_suffix()}`;
 
-    await Duck.query(
+    await Duck.mutate(
+      newTableName,
       `CREATE TABLE ${sqlIdentifier(newTableName)} AS SELECT * FROM ${sqlIdentifier(dataset.tableName)}`
     );
 

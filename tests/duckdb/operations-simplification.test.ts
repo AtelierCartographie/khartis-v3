@@ -6,6 +6,14 @@ import * as m from '$lib/paraglide/messages';
 describe('simplifyGeometryTable', () => {
   it('throws a DataValidationError for invalid tolerance values', async () => {
     const Duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         if (sql.includes('SUM(ST_NPoints')) {
           return [{ total_vertices: 100 }];
@@ -37,6 +45,14 @@ describe('simplifyGeometryTable', () => {
   it('throws without falling back to topology-breaking ST_Simplify when the macro fails', async () => {
     const queries: string[] = [];
     const Duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
 
@@ -71,6 +87,14 @@ describe('simplifyGeometryTable', () => {
   it('escapes quoted identifiers and string macro arguments', async () => {
     const queries: string[] = [];
     const Duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
 
@@ -139,22 +163,20 @@ describe('simplifyGeometryTable', () => {
     expect(landQuery).toContain(
       `extract_land('target'' "table"', noding_factor := 0)`
     );
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(`target' "table"`);
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      `target' "table"__land`
-    );
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      `target' "table"__innerlines`
-    );
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      `target' "table"__outerlines`
-    );
   });
 
   it('routes line geometry through the line simplification macro', async () => {
     const queries: string[] = [];
     let vertexCountCall = 0;
     const Duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
 
@@ -196,6 +218,14 @@ describe('simplifyGeometryTable', () => {
   it('preserves unsupported geometry families instead of dropping them', async () => {
     const queries: string[] = [];
     const Duck = {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
 

@@ -170,7 +170,9 @@ export async function normalizeGeoParquetTable(
     });
   }
 
-  await Duck.query(`
+  await Duck.mutate(
+    tableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT * REPLACE (
       CASE
@@ -179,8 +181,8 @@ export async function normalizeGeoParquetTable(
       END AS ${sqlIdentifier(primaryColumn)}
     )
     FROM ${sqlIdentifier(tableName)}
-  `);
-  Duck.invalidateTableCache?.(tableName);
+  `
+  );
 
   return true;
 }
