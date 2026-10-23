@@ -18,6 +18,10 @@ interface DatasetGeometrySource {
 
 const derivedBasemaps = new Map<string, BasemapMetadata>();
 
+function hasArea([minX, minY, maxX, maxY]: BasemapMetadata['bbox']): boolean {
+  return maxX > minX && maxY > minY;
+}
+
 export function isDatasetGeometryBasemap(basemapId: string | null): boolean {
   if (!basemapId) {
     return false;
@@ -100,6 +104,20 @@ export async function activateDatasetGeometryBasemap(
     isDatasetGeometryBasemap(referenceBasemapId);
 
   if (!slotIsFree) {
+    return false;
+  }
+
+  // The reference bbox frames the map, so a layer without area (a single point
+  // in a multi-layer import) never displaces another layer that has one.
+  const currentBasemap = referenceBasemapId
+    ? derivedBasemaps.get(referenceBasemapId)
+    : undefined;
+  if (
+    currentBasemap &&
+    currentBasemap !== basemap &&
+    hasArea(currentBasemap.bbox) &&
+    !hasArea(basemap.bbox)
+  ) {
     return false;
   }
 

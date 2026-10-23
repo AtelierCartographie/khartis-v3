@@ -203,10 +203,7 @@
         closeButtonDescription={m.a11y_close_notification()}
         title={m.geo_column_detected_title()}
         subtitle={m.geo_column_detected_subtitle({
-          column: enrichSuggestedColumn.columnName,
-          confidence: Math.round(
-            enrichSuggestedColumn.confidence * 100
-          ).toString()
+          column: enrichSuggestedColumn.columnName
         })}
         kind="success"
         lowContrast

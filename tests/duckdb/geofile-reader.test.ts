@@ -1,18 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DuckDBContext } from '$lib/features/duckdb/types';
 
 const {
   executeQueryMock,
   registerFilesMock,
   dropRegisteredFileMock,
-  addRowIdMock,
-  convertGeoPackageToGeoJsonFileMock
+  addRowIdMock
 } = vi.hoisted(() => ({
   executeQueryMock: vi.fn(),
   registerFilesMock: vi.fn(),
   dropRegisteredFileMock: vi.fn(),
-  addRowIdMock: vi.fn(),
-  convertGeoPackageToGeoJsonFileMock: vi.fn()
+  addRowIdMock: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -43,10 +41,6 @@ vi.mock('$lib/features/duckdb/io/reader-utils', () => ({
   dropSyntheticFeatureIdColumn: vi.fn()
 }));
 
-vi.mock('$lib/features/map/utils/geopackage-browser-fallback.utils', () => ({
-  convertGeoPackageToGeoJsonFile: convertGeoPackageToGeoJsonFileMock
-}));
-
 import { readGeofile } from '$lib/features/duckdb/io/geofile-reader';
 
 function createContext(): DuckDBContext {
@@ -62,7 +56,6 @@ function createContext(): DuckDBContext {
     extensionsLoaded: { spatial: true, httpfs: false },
     extensionLoadPromises: { spatial: null, httpfs: null },
     localExtensionRepositoryConfigured: false,
-    threadsSupported: false,
     bundleVariant: 'eh'
   };
 }
@@ -80,114 +73,6 @@ describe('readGeofile', () => {
     );
 
     addRowIdMock.mockResolvedValue(undefined);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('uses the browser GeoPackage fallback before ST_Read in mono-thread runtimes', async () => {
-    vi.stubGlobal('window', {});
-
-    const ctx = createContext();
-    const gpkgFile = new File(['gpkg'], 'compagnies-herault-l93.gpkg', {
-      type: 'application/geopackage+sqlite3'
-    });
-    const fallbackGeoJsonFile = new File(
-      ['{"type":"FeatureCollection","features":[]}'],
-      'compagnies-herault-l93.geojson',
-      { type: 'application/geo+json' }
-    );
-
-    convertGeoPackageToGeoJsonFileMock.mockResolvedValue(fallbackGeoJsonFile);
-    executeQueryMock
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'features',
-          feature_count: 11,
-          crs_code: 4326,
-          geom_name: 'geom',
-          geom_type: 'MULTIPOLYGON'
-        }
-      ])
-      .mockResolvedValueOnce(new Uint8Array());
-
-    const tableName = await readGeofile(ctx, gpkgFile, {
-      tablename: 'compagnies_table'
-    });
-
-    expect(tableName).toBe('compagnies_table');
-    expect(convertGeoPackageToGeoJsonFileMock).toHaveBeenCalledWith(gpkgFile, {
-      preferredLayer: undefined
-    });
-    expect(registerFilesMock).toHaveBeenCalledTimes(2);
-    expect(addRowIdMock).toHaveBeenCalledWith(
-      ctx.connection,
-      'compagnies_table'
-    );
-    expect(ctx.loaded_files.get('compagnies_table')).toBe(gpkgFile.name);
-    expect(
-      executeQueryMock.mock.calls.some(([_, sql]) =>
-        String(sql).includes('registered:compagnies-herault-l93.gpkg')
-      )
-    ).toBe(false);
-  });
-
-  it('falls back to browser GeoJSON conversion for GeoPackage thread errors in mono-thread runtimes', async () => {
-    const ctx = createContext();
-    const gpkgFile = new File(['gpkg'], 'ADE 4.0 GPKG GLP ED Dec 5 2025.gpkg', {
-      type: 'application/geopackage+sqlite3'
-    });
-    const fallbackGeoJsonFile = new File(
-      ['{"type":"FeatureCollection","features":[]}'],
-      'ADE 4.0 GPKG GLP ED Dec 5 2025.geojson',
-      { type: 'application/geo+json' }
-    );
-
-    convertGeoPackageToGeoJsonFileMock.mockResolvedValue(fallbackGeoJsonFile);
-
-    executeQueryMock
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'commune',
-          feature_count: 12,
-          crs_code: 5490,
-          geom_name: 'geom',
-          geom_type: 'MULTIPOLYGON'
-        }
-      ])
-      .mockRejectedValueOnce(
-        new Error('thread constructor failed: Resource temporarily unavailable')
-      )
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'commune',
-          feature_count: 12,
-          crs_code: 4326,
-          geom_name: 'geom',
-          geom_type: 'MULTIPOLYGON'
-        }
-      ])
-      .mockResolvedValueOnce(new Uint8Array());
-
-    const tableName = await readGeofile(ctx, gpkgFile, {
-      tablename: 'fx15_table'
-    });
-
-    expect(tableName).toBe('fx15_table');
-    expect(convertGeoPackageToGeoJsonFileMock).toHaveBeenCalledWith(gpkgFile, {
-      preferredLayer: 'commune'
-    });
-    expect(registerFilesMock).toHaveBeenCalledTimes(2);
-    expect(ctx.loaded_files.get('fx15_table')).toBe(gpkgFile.name);
-    expect(
-      executeQueryMock.mock.calls.some(([_, sql]) =>
-        String(sql).includes('PRAGMA threads=1')
-      )
-    ).toBe(false);
   });
 
   it('keeps shapefile handles registered and records the exact id for later cleanup', async () => {
@@ -216,37 +101,5 @@ describe('readGeofile', () => {
 
     expect(dropRegisteredFileMock).not.toHaveBeenCalled();
     expect(ctx.table_files.get('roads_table')).toBe('registered:roads.shp');
-  });
-
-  it('preserves projected geofile coordinates at ingest and skips eager reprojection', async () => {
-    const ctx = createContext();
-    const gpkgFile = new File(['gpkg'], 'test-l93.gpkg', {
-      type: 'application/geopackage+sqlite3'
-    });
-
-    executeQueryMock
-      .mockResolvedValueOnce([
-        {
-          layer_index: 1,
-          layer_name: 'companies',
-          feature_count: 11,
-          crs_code: 2154,
-          geom_name: 'geom',
-          geom_type: 'MULTIPOLYGON'
-        }
-      ])
-      .mockResolvedValueOnce(new Uint8Array());
-
-    const tableName = await readGeofile(ctx, gpkgFile, {
-      tablename: 'l93_table'
-    });
-
-    expect(tableName).toBe('l93_table');
-    expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'l93_table');
-    expect(
-      executeQueryMock.mock.calls.some(([_, sql]) =>
-        String(sql).includes('ST_Transform')
-      )
-    ).toBe(false);
   });
 });

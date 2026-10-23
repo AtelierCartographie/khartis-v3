@@ -303,6 +303,16 @@ const ID_KEYWORDS = [
   'object_id',
   'rowid'
 ];
+/** Feature keys that GIS formats number 1..N, never a geographic code. */
+const ENTITY_KEY_NAMES = [
+  'fid',
+  'ogc_fid',
+  'gid',
+  'oid',
+  'objectid',
+  'object_id',
+  'rowid'
+];
 const LAT_KEYWORDS = ['lat', 'latitude'];
 const LON_KEYWORDS = ['lon', 'long', 'lng', 'longitude'];
 const RATIO_KEYWORDS = [
@@ -383,6 +393,7 @@ const LABEL_KEYWORDS = [
 
 interface NameKeywords {
   idWords: boolean;
+  entityKey: boolean;
   geoCodeWords: boolean;
   latWords: boolean;
   lonWords: boolean;
@@ -408,6 +419,7 @@ function detectKeywordsFromName(columnName: string): NameKeywords {
     idWords:
       hasKeyword(ID_KEYWORDS) ||
       ID_KEYWORDS.some((keyword) => normalizedName === keyword),
+    entityKey: ENTITY_KEY_NAMES.includes(normalizedName),
     geoCodeWords: hasKeyword(GEO_CODE_KEYWORDS),
     latWords: hasKeyword(LAT_KEYWORDS),
     lonWords: hasKeyword(LON_KEYWORDS),
@@ -623,7 +635,11 @@ export function detectSemioType(
     best.score = 0;
   }
 
-  if (best.semioType === SEMIO_TYPES.GEOID && uniqueCount <= 1) {
+  if (
+    best.semioType === SEMIO_TYPES.GEOID &&
+    (uniqueCount <= 1 ||
+      (keywords.entityKey && typeSimple === DuckDBSimplifiedType.NUMERIC))
+  ) {
     best.score = 0;
   }
 

@@ -687,7 +687,7 @@
   "error_prefix": "Error: ",
   "no_data_available": "No data available",
   "project_duplicate_suffix": " (copy)",
-  "geo_column_detected_subtitle": "The column '{column}' will be used for the join ({confidence}% match)",
+  "geo_column_detected_subtitle": "The column '{column}' looks like a geographic identifier, so it is proposed for the join.",
   "data_tab_control": "Check",
   "data_tab_geolocate": "Geolocate",
   "data_tab_join": "Join",

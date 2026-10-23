@@ -84,6 +84,7 @@ import { getProjectionState } from '$lib/features/step-toolbar/tools/projections
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
+  isGeoArrowTableInProjectedCrs,
   shouldReprojectDatasetForActiveProjection,
   shouldUseIdentityProjectionForDatasetCrs
 } from '../utils/dataset-crs.utils';
@@ -1394,6 +1395,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
+              continue;
+            }
+            // Until the WGS84 reload lands, the source-CRS table is still the
+            // one in hand: its metres fed to a lon/lat d3 projection stall the
+            // parse for seconds and draw nothing usable.
+            if (
+              shouldReprojectDatasetForActiveProjection(
+                datasetGeometryCrs,
+                hasManualProjectionOverride
+              ) &&
+              isGeoArrowTableInProjectedCrs(geoMetadata)
+            ) {
               continue;
             }
             const geoInfo = extractGeometryInfo(table);
