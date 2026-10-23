@@ -66,7 +66,8 @@ export const GEO_CONSTANTS = {
 export const EXTENSIONS = {
   SPATIAL: 'spatial',
   HTTPFS: 'httpfs',
-  JSON: 'json'
+  JSON: 'json',
+  SQLITE: 'sqlite_scanner'
 } as const;
 
 /**

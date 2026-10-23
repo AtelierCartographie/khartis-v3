@@ -18,6 +18,5 @@ export interface DuckDBContext {
   extensionsLoaded: ExtensionsLoaded;
   extensionLoadPromises: ExtensionLoadPromises;
   localExtensionRepositoryConfigured: boolean;
-  threadsSupported: boolean;
   bundleVariant: 'eh' | 'mvp';
 }
