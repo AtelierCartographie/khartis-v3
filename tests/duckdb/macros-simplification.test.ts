@@ -1,4 +1,8 @@
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { normalizeGeometryColumnName } from '$lib/features/data-pipeline/operations/geometry-column';
 import { simplification_macros } from '$lib/features/duckdb/macros/simplification';
 import {
   createTestInstance,
@@ -280,6 +284,41 @@ describe('extract_innerlines macro', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].is_empty).toBe(false);
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
+
+  it('should derive inner borders when a GeoParquet names its geometry column geometry', async () => {
+    const parquetPath = join(
+      tmpdir(),
+      `khartis-geometry-${Date.now()}.parquet`
+    );
+    await run(
+      db,
+      `COPY (SELECT _gid, geom AS geometry FROM adjacent_polygons)
+       TO '${parquetPath}' (FORMAT parquet)`
+    );
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE geoparquet_coverage AS FROM read_parquet('${parquetPath}')`
+    );
+    rmSync(parquetPath);
+
+    await normalizeGeometryColumnName('geoparquet_coverage', {
+      query: (sql) => run(db, sql),
+      describe_table: async (tableName) => {
+        const columns = await query(db, `DESCRIBE "${tableName}"`);
+        return {
+          name: columns.map((column) => String(column.column_name)),
+          type: columns.map((column) => String(column.column_type))
+        };
+      }
+    });
+
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('geoparquet_coverage')
+       SELECT ST_Length(geom) AS length`
+    );
+    expect(Number(rows[0].length)).toBeCloseTo(10, 6);
   });
 });
 
