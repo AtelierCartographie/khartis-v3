@@ -406,25 +406,8 @@ async function ensureSimilarityCached(
       unmatched_count AS (
         SELECT COUNT(*) AS count FROM unmatched
       ),
-      -- Fuzzy similarity is meaningless between code identifiers (INSEE, NUTS,
-      -- ISO3...): '85271' ≈ '85212' is pure noise. Treat the source column as
-      -- codes when every value casts to a number, or when fixed-length values
-      -- are structurally code-like: each contains a digit, or all are uppercase
-      -- alphabetic codes of at most 3 characters (ISO2/ISO3). A shared length
-      -- alone is not enough because distinct place names can have equal lengths.
       source_code_signals AS (
-        SELECT
-          COUNT(*) FILTER (WHERE TRY_CAST(normalized_name AS DOUBLE) IS NULL) = 0 AS all_numeric,
-          (COUNT(DISTINCT length(normalized_name)) = 1
-            AND MAX(length(normalized_name)) <= 8
-            AND COUNT(DISTINCT normalized_name) >= 3
-            AND (
-              COUNT(*) FILTER (WHERE regexp_matches(original_name, '[0-9]')) = COUNT(*)
-              OR (
-                MAX(length(normalized_name)) <= 3
-                AND COUNT(*) FILTER (WHERE original_name = upper(original_name)) = COUNT(*)
-              )
-            )) AS fixed_length_codes
+        SELECT is_code_column(normalized_name, original_name) AS is_code
         FROM candidates
       ),
       candidate_basemaps AS (
@@ -441,8 +424,7 @@ async function ensureSimilarityCached(
         SELECT u.*
         FROM unmatched u, unmatched_count c, source_code_signals s
         WHERE (${fuzzyMode === 'full' ? 'TRUE' : `c.count * (SELECT COUNT(*) FROM distinct_attributes) <= ${MAX_FUZZY_AUTO_PAIRS}`})
-          AND NOT s.all_numeric
-          AND NOT s.fixed_length_codes
+          AND NOT s.is_code
       ),
       sorted_unmatched AS (
         SELECT

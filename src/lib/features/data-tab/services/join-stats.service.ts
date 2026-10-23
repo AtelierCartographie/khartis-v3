@@ -250,6 +250,8 @@ async function dropTempTable(escapedTableName: string): Promise<void> {
  * raw values, and the residual is budgeted in candidate x target pairs — the
  * same bound as the basemap join — because scoring every unmatched value of a
  * large column against every target value is quadratic in the import size.
+ * A code column gets no fuzzy phase, and a target already joined exactly is
+ * never offered again: a value left without a candidate is unrecognized.
  */
 async function fetchFuzzyMatches(
   escapedCandidatesTable: string,
@@ -264,14 +266,25 @@ async function fetchFuzzyMatches(
      unmatched_count AS (
        SELECT COUNT(*) AS count FROM unmatched
      ),
+     source_code_signals AS (
+       SELECT is_code_column(normalized_val, source_val) AS is_code
+       FROM (SELECT DISTINCT source_val, normalized_val FROM "${escapedCandidatesTable}")
+     ),
+     claimed_targets AS (
+       SELECT DISTINCT normalized_val AS normalized
+       FROM "${escapedCandidatesTable}"
+       WHERE exact_match IS NOT NULL AND duplicate_count <= 1
+     ),
      distinct_targets AS (
        SELECT DISTINCT normalized FROM "${escapedTargetCacheTable}"
+       WHERE normalized NOT IN (SELECT normalized FROM claimed_targets)
      ),
      bounded_unmatched AS (
        SELECT u.*
-       FROM unmatched u, unmatched_count c
+       FROM unmatched u, unmatched_count c, source_code_signals s
        WHERE c.count * (SELECT COUNT(*) FROM distinct_targets)
              <= ${MAX_FUZZY_AUTO_PAIRS}
+         AND NOT s.is_code
      ),
      scored AS (
        SELECT
