@@ -63,7 +63,6 @@ function createContext(): DuckDBContext {
     extensionsLoaded: { spatial: true, httpfs: false },
     extensionLoadPromises: { spatial: null, httpfs: null },
     localExtensionRepositoryConfigured: false,
-    threadsSupported: false,
     bundleVariant: 'eh'
   };
 }

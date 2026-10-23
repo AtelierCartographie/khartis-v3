@@ -44,7 +44,7 @@ vi.mock('$lib/features/duckdb/orchestrator/state.svelte', () => ({
   getFilters: () => []
 }));
 
-const { computeDatasetJoinStats } =
+const { computeDatasetJoinStats, findBestTargetColumn } =
   await import('$lib/features/data-tab/services/join-stats.service');
 
 const OPTIONS = {
@@ -116,6 +116,45 @@ describe('enrichment join bounds', () => {
     const stats = await computeDatasetJoinStats(OPTIONS);
 
     expect(stats.toVerifyCount).toBe(1);
+    const entity = stats.entities.find((e) => e.dataValue === 'Marseile');
+    expect(entity?.status).toBe(JoinStatus.TO_VERIFY);
+    expect(entity?.matches).toEqual(['Marseille']);
+  });
+
+  it('should leave unknown INSEE codes unrecognized when a near code exists', async () => {
+    // 26371 ≈ 26317 scores 0.95 in Jaro-Winkler: similarity between codes is
+    // noise, and a to-verify entity is joined, so it must never land there.
+    await seedTarget(['26317', '75056', '19224', '25534', '2A004']);
+    await seedSource(['26317', '2A004', '26371', '75115', '19223', '25533']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
+    expect(stats.joinedCount).toBe(2);
+    expect(stats.toVerifyCount).toBe(0);
+    expect(stats.unrecognizedCount).toBe(4);
+    expect(stats.entities.find((e) => e.dataValue === '26371')?.status).toBe(
+      JoinStatus.UNRECOGNIZED
+    );
+  });
+
+  it('should leave a value unrecognized when its only candidate is already joined', async () => {
+    await seedTarget(['Marseille', 'Bordeaux']);
+    await seedSource(['Marseille', 'Marseile']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
+    expect(stats.joinedCount).toBe(1);
+    expect(stats.toVerifyCount).toBe(0);
+    const entity = stats.entities.find((e) => e.dataValue === 'Marseile');
+    expect(entity?.status).toBe(JoinStatus.UNRECOGNIZED);
+  });
+
+  it('should keep a free near-miss as the match of a to-verify value', async () => {
+    await seedTarget(['Marseille', 'Bordeaux']);
+    await seedSource(['Bordeaux', 'Marseile']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
     const entity = stats.entities.find((e) => e.dataValue === 'Marseile');
     expect(entity?.status).toBe(JoinStatus.TO_VERIFY);
     expect(entity?.matches).toEqual(['Marseille']);
@@ -211,5 +250,43 @@ describe('enrichment join bounds', () => {
 
     expect(withDuplicates.duplicateLines).toHaveLength(1);
     expect(withTypo.toVerifyCount).toBe(1);
+  });
+});
+
+describe('enrichment target column suggestion', () => {
+  it('picks the target column that holds the source codes', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE target_table AS
+       SELECT * FROM (VALUES
+         ('Abergement', '01001', 'A1'),
+         ('Ambérieu', '01004', 'A4'),
+         ('Paris', '75056', '01001')
+       ) t(nom, code_insee, code_postal)`
+    );
+    await seedSource(['01001', '01004', '75056']);
+
+    const best = await findBestTargetColumn({
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      targetTableName: 'target_table',
+      targetColumns: ['nom', 'code_postal', 'code_insee']
+    });
+
+    expect(best).toBe('code_insee');
+  });
+
+  it('suggests nothing when no target column shares a value', async () => {
+    await seedTarget(['Paris', 'Lyon']);
+    await seedSource(['Berlin']);
+
+    const best = await findBestTargetColumn({
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      targetTableName: 'target_table',
+      targetColumns: ['name']
+    });
+
+    expect(best).toBeNull();
   });
 });

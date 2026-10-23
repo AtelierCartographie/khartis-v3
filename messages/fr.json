@@ -687,7 +687,7 @@
   "error_prefix": "Erreur : ",
   "no_data_available": "Aucune donnée disponible",
   "project_duplicate_suffix": " (copie)",
-  "geo_column_detected_subtitle": "La colonne « {column} » sera utilisée pour la jointure ({confidence}% de correspondance)",
+  "geo_column_detected_subtitle": "La colonne « {column} » ressemble à un identifiant géographique : elle est proposée pour la jointure.",
   "data_tab_control": "Contrôler",
   "data_tab_geolocate": "Géolocaliser",
   "data_tab_join": "Joindre",
