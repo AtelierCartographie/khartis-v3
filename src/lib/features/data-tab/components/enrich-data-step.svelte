@@ -9,6 +9,8 @@
   import { InlineNotification } from 'carbon-components-svelte';
   import { DataEnrichment } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { untrack } from 'svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import EnrichmentBasemapSelector from './enrich-data/enrichment-basemap-selector.svelte';
   import EnrichmentFileUpload from './enrich-data/enrichment-file-upload.svelte';
@@ -22,6 +24,7 @@
   import { useEnrichmentBasemap } from '../hooks/use-enrichment-basemap.svelte';
   import { useEnrichmentFile } from '../hooks/use-enrichment-file.svelte';
   import { useEnrichmentJoin } from '../hooks/use-enrichment-join.svelte';
+  import { findBestTargetColumn } from '../services/join-stats.service';
 
   import { dataTabStore } from '../stores/data-tab.store.svelte';
 
@@ -39,6 +42,10 @@
   let previousDatasetId: string | undefined = undefined;
   let hasObservedDataset = false;
   let previousEnrichmentDatasetId: string | undefined = undefined;
+  // A geo column picked by the user is kept; a suggested one follows the
+  // tabular column.
+  let isGeoFileColumnSuggested = false;
+  let targetColumnSuggestionRun = 0;
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
@@ -152,8 +159,58 @@
       );
       if (item) {
         geoFileColumnId = item.id;
+        isGeoFileColumnSuggested = false;
       }
     }
+  });
+
+  $effect(() => {
+    const sourceTableName = fileHook.enrichmentDataset?.tableName;
+    const targetTableName = selectedDataset?.tableName;
+    const sourceColumn = enrichDataFieldItems.find(
+      (field) => field.id === enrichLinkedVariableId
+    )?.columnName;
+    const candidates = geoFileColumns;
+    if (
+      hasOnlyCoordinatesValue ||
+      !sourceTableName ||
+      !targetTableName ||
+      !sourceColumn ||
+      candidates.length === 0
+    ) {
+      return;
+    }
+    if (
+      untrack(() => geoFileColumnId) !== undefined &&
+      !isGeoFileColumnSuggested
+    ) {
+      return;
+    }
+
+    const run = ++targetColumnSuggestionRun;
+    void findBestTargetColumn({
+      sourceTableName,
+      sourceColumn,
+      targetTableName,
+      targetColumns: candidates.map((field) => field.columnName)
+    })
+      .then((columnName) => {
+        if (run !== targetColumnSuggestionRun || !columnName) return;
+        if (geoFileColumnId !== undefined && !isGeoFileColumnSuggested) return;
+        const item = geoFileColumns.find(
+          (field) => field.columnName === columnName
+        );
+        if (!item) return;
+        geoFileColumnId = item.id;
+        isGeoFileColumnSuggested = true;
+      })
+      .catch((error: unknown) => {
+        logger.warn(
+          'Failed to suggest the geo file join column',
+          LogCategory.DATA,
+          error
+        );
+      });
   });
 
   $effect(() => {
@@ -195,6 +252,7 @@
     columnName?: string
   ) {
     geoFileColumnId = id;
+    isGeoFileColumnSuggested = false;
     if (columnName) {
       dataTabActions.setEnrichDataState({ targetColumn: columnName });
     }
