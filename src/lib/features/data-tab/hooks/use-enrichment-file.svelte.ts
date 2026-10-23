@@ -19,6 +19,10 @@ import * as m from '$lib/paraglide/messages';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { withGeoDetection } from '$lib/features/commons/services/geo-detection.service';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import {
+  registerTransientTable,
+  unregisterTransientTable
+} from '$lib/features/commons/components/advanced-data-table/hooks/table-hook.utils';
 
 export interface UseEnrichmentFileReturn {
   readonly enrichmentFile: File | null;
@@ -153,6 +157,8 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   ): Promise<void> {
     if (!dataset?.tableName || !Duck) return;
 
+    unregisterTransientTable(dataset.tableName);
+
     const isTrackedByDatasetsStore = datasetsStore.datasets.some(
       (trackedDataset) => trackedDataset.tableName === dataset.tableName
     );
@@ -179,6 +185,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     const previousDataset = enrichmentDataset;
     const dataset = await withGeoDetection(loadedDataset);
 
+    registerTransientTable(dataset.tableName);
     enrichmentDataset = dataset;
     enrichmentFile = file;
 
