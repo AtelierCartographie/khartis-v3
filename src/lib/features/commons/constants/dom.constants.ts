@@ -38,6 +38,7 @@ export const EVENT = {
   POINTERMOVE: 'pointermove',
   POINTERENTER: 'pointerenter',
   POINTERLEAVE: 'pointerleave',
+  POINTERCANCEL: 'pointercancel',
   TOUCHSTART: 'touchstart',
   TOUCHEND: 'touchend',
   TOUCHMOVE: 'touchmove',

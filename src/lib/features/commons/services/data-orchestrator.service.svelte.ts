@@ -74,7 +74,8 @@ import {
 import {
   findPaletteById,
   generatePaletteColors,
-  PALETTE_TYPE
+  PALETTE_TYPE,
+  resolvePaletteForType
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   getSingleClassValue,
@@ -932,7 +933,7 @@ function createDataOrchestratorService() {
           colors =
             userPalette && !isPatternPalette
               ? generatePaletteColors(
-                  userPalette,
+                  resolvePaletteForType(userPalette, paletteType),
                   actualNumClasses,
                   contrast,
                   undefined,
@@ -1373,7 +1374,8 @@ function createDataOrchestratorService() {
               format: layoutSettings.format,
               annotations: layoutSettings.annotations,
               legend: layoutSettings.legend,
-              geoIndications: layoutSettings.geoIndications
+              geoIndications: layoutSettings.geoIndications,
+              labelLayouts: layoutSettings.labels ?? {}
             });
           }
 

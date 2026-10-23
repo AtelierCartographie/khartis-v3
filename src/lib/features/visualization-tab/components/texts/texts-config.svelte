@@ -142,6 +142,7 @@
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
+  let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
 
   let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
@@ -271,6 +272,10 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+      haloOpacity = parseOpacityToSlider(
+        visualization.style.textHaloOpacity,
+        VISUALIZATION_DEFAULTS.haloOpacity
+      );
 
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
@@ -335,7 +340,8 @@
       color: textColor,
       halo,
       haloColor,
-      haloWidth
+      haloWidth,
+      haloOpacity: haloOpacity / 100
     };
 
     if (
@@ -416,6 +422,12 @@
     haloWidth = value;
     onStyleChange?.({ textHaloWidth: value });
     onSecondaryLabelsChange?.({ haloWidth: value });
+  }
+
+  function handleHaloOpacityChange(value: number) {
+    haloOpacity = value;
+    onStyleChange?.({ textHaloOpacity: value / 100 });
+    onSecondaryLabelsChange?.({ haloOpacity: value / 100 });
   }
 
   // The slider carries the whole type scale: both texts are multiplied by it so
@@ -604,68 +616,76 @@
         onToggleSecondaryFormat={toggleSecondaryFormat}
       />
 
-      <TextMissingDataSection
-        show={showMissingData}
-        label={missingDataLabel}
-        color={missingDataColor}
-        onShowChange={handleMissingDataShowChange}
-        onLabelChange={handleMissingDataLabelChange}
-        onColorChange={handleMissingDataColorChange}
-      />
+      <div
+        class="texts-config__dependent"
+        class:texts-config__dependent--disabled={!hasPrimaryField}
+        inert={!hasPrimaryField}
+      >
+        <TextMissingDataSection
+          show={showMissingData}
+          label={missingDataLabel}
+          color={missingDataColor}
+          onShowChange={handleMissingDataShowChange}
+          onLabelChange={handleMissingDataLabelChange}
+          onColorChange={handleMissingDataColorChange}
+        />
 
-      <TextSizeSection
-        sizeMode={sizeMode}
-        size={size}
-        sizeMin={TEXT_SIZE_SLIDER_MIN}
-        sizeMax={TEXT_SIZE_SLIDER_MAX}
-        sizeColumnName={valueColumnName}
-        bind:sizePickerOpen={sizePickerOpen}
-        dataFields={dataFields}
-        selectableDataFields={selectableDataFields}
-        sizeFieldSelection={valueFieldSelection}
-        facetsSelection={textFacetsSelection}
-        discretizationLabel={textSizeDiscretizationLabel}
-        onSizeModeChange={handleSizeModeChange}
-        onSizeChange={handleTextSizeChange}
-        onSizeFieldSelect={handleValueFieldSelect}
-        onOpenDiscretization={openTextSizeDiscretization}
-      />
+        <TextSizeSection
+          sizeMode={sizeMode}
+          size={size}
+          sizeMin={TEXT_SIZE_SLIDER_MIN}
+          sizeMax={TEXT_SIZE_SLIDER_MAX}
+          sizeColumnName={valueColumnName}
+          bind:sizePickerOpen={sizePickerOpen}
+          dataFields={dataFields}
+          selectableDataFields={selectableDataFields}
+          sizeFieldSelection={valueFieldSelection}
+          facetsSelection={textFacetsSelection}
+          discretizationLabel={textSizeDiscretizationLabel}
+          onSizeModeChange={handleSizeModeChange}
+          onSizeChange={handleTextSizeChange}
+          onSizeFieldSelect={handleValueFieldSelect}
+          onOpenDiscretization={openTextSizeDiscretization}
+        />
 
-      <TextAppearanceSection
-        colorMode={colorMode}
-        color={textColor}
-        opacity={textOpacity}
-        halo={halo}
-        haloColor={haloColor}
-        haloWidth={haloWidth}
-        valueColumnName={valueColumnName}
-        categoryColumnName={categoryColumnName}
-        colorDiscretizationLabel={textSizeDiscretizationLabel}
-        classification={activeDiscretizationClassification}
-        palette={currentPalette}
-        categoriesPalette={categoriesPalette}
-        categoryLabels={categoryLabels.labels}
-        categoryCount={categoryLabels.count}
-        bind:colorPickerOpen={colorPickerOpen}
-        bind:categoryPickerOpen={categoryPickerOpen}
-        bind:categoriesPopoverOpen={categoriesPopoverOpen}
-        dataFields={dataFields}
-        selectableDataFields={selectableDataFields}
-        valueFieldSelection={valueFieldSelection}
-        categoryFieldSelection={categoryFieldSelection}
-        facetsSelection={textFacetsSelection}
-        onColorModeChange={handleColorModeChange}
-        onColorChange={handleTextColorChange}
-        onOpacityChange={handleTextOpacityChange}
-        onValueFieldSelect={handleValueFieldSelect}
-        onCategoryFieldSelect={handleCategoryFieldSelect}
-        onOpenColorDiscretization={openTextColorDiscretization}
-        onClassificationChange={handleDiscretizationChange}
-        onInvertPalette={onInvertPalette}
-        onHaloToggle={handleHaloToggle}
-        onHaloColorChange={handleHaloColorChange}
-        onHaloWidthChange={handleHaloWidthChange}
-      />
+        <TextAppearanceSection
+          colorMode={colorMode}
+          color={textColor}
+          opacity={textOpacity}
+          halo={halo}
+          haloColor={haloColor}
+          haloWidth={haloWidth}
+          haloOpacity={haloOpacity}
+          valueColumnName={valueColumnName}
+          categoryColumnName={categoryColumnName}
+          colorDiscretizationLabel={textSizeDiscretizationLabel}
+          classification={activeDiscretizationClassification}
+          palette={currentPalette}
+          categoriesPalette={categoriesPalette}
+          categoryLabels={categoryLabels.labels}
+          categoryCount={categoryLabels.count}
+          bind:colorPickerOpen={colorPickerOpen}
+          bind:categoryPickerOpen={categoryPickerOpen}
+          bind:categoriesPopoverOpen={categoriesPopoverOpen}
+          dataFields={dataFields}
+          selectableDataFields={selectableDataFields}
+          valueFieldSelection={valueFieldSelection}
+          categoryFieldSelection={categoryFieldSelection}
+          facetsSelection={textFacetsSelection}
+          onColorModeChange={handleColorModeChange}
+          onColorChange={handleTextColorChange}
+          onOpacityChange={handleTextOpacityChange}
+          onValueFieldSelect={handleValueFieldSelect}
+          onCategoryFieldSelect={handleCategoryFieldSelect}
+          onOpenColorDiscretization={openTextColorDiscretization}
+          onClassificationChange={handleDiscretizationChange}
+          onInvertPalette={onInvertPalette}
+          onHaloToggle={handleHaloToggle}
+          onHaloColorChange={handleHaloColorChange}
+          onHaloWidthChange={handleHaloWidthChange}
+          onHaloOpacityChange={handleHaloOpacityChange}
+        />
+      </div>
     </div>
   </ExpandableSection>
 
@@ -726,6 +746,16 @@
     flex-direction: column;
     gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
+  }
+
+  .texts-config__dependent {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-param);
+  }
+
+  .texts-config__dependent--disabled {
+    opacity: 0.4;
   }
 
   :global(.text-input-field .bx--text-input) {

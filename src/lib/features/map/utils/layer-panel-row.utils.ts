@@ -83,8 +83,8 @@ export function shouldRenderDeckBelowTiledLabels(
 
 /**
  * The panel primitive a thematic deck layer belongs to, derived from its id
- * prefix (`createLayerId`). Both text overlays — `text-layer` and `label-layer`
- * — resolve to the TEXT row; the geometry layers resolve to their own
+ * prefix (`createLayerId`). The text overlays — `text-layer`, `label-layer` and
+ * `label-leader-layer` — resolve to the TEXT row; the geometry layers resolve to their own
  * primitive. Returns null for ids that carry no primitive (notably the GeoJSON
  * fallback), letting the render keep such a layer glued to its neighbour rather
  * than forcing it onto a row it doesn't own. This is the render-side twin of
@@ -96,7 +96,8 @@ export function classifyThematicLayerPrimitive(
 ): PrimitiveFilter | null {
   if (
     layerId.startsWith(DeckLayerId.TEXT_LAYER) ||
-    layerId.startsWith(DeckLayerId.LABEL_LAYER)
+    layerId.startsWith(DeckLayerId.LABEL_LAYER) ||
+    layerId.startsWith(DeckLayerId.LABEL_LEADER_LAYER)
   ) {
     return PrimitiveFilterType.TEXT;
   }

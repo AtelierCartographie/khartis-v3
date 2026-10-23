@@ -229,6 +229,8 @@ export interface SymbolPrimitiveConfig {
   fillValueColumn?: string;
   fillCategoryColumn?: string;
   fillClassification?: ClassificationConfig;
+  /** Positive then negative fill when the size column holds both signs. */
+  signColors?: [string, string];
   missingData?: MissingDataConfig;
   modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
 }
@@ -243,6 +245,7 @@ export interface LinePrimitiveConfig {
   opacity: number;
   dashed: boolean;
   dashedPattern?: BasemapDottedPattern;
+  capRounded?: boolean;
   valueColumn?: string;
   categoryColumn?: string;
   sizeColumn?: string;
@@ -266,6 +269,8 @@ export interface TextSecondaryLabelsConfig {
   halo: boolean;
   haloColor?: string;
   haloWidth: number;
+  /** 0 to 1. */
+  haloOpacity: number;
   collisionDetection: boolean;
   dxpMasking: boolean;
 }
@@ -285,6 +290,8 @@ export interface TextPrimitiveConfig {
   halo: boolean;
   haloColor?: string;
   haloWidth: number;
+  /** 0 to 1. */
+  haloOpacity: number;
   collisionDetection: boolean;
   dxpMasking: boolean;
   valueColumn?: string;
@@ -374,6 +381,8 @@ export interface VizDataFilter {
   secondaryValue?: string;
   limit?: number;
   primitiveType?: PrimitiveFilter;
+  /** Top filter only: each map of a collection ranks on its own variable instead of `column`. */
+  perFacet?: boolean;
 }
 
 export interface VisualizationConfig {
@@ -397,6 +406,7 @@ export interface VisualizationConfig {
     fillColor?: string | string[];
     fillColorB?: string;
     symbolFillColor?: string | string[];
+    symbolSignColors?: [string, string];
     fillOpacity?: number;
     strokeColor?: string;
     strokeWidth?: number;
@@ -409,6 +419,7 @@ export interface VisualizationConfig {
     lineOpacity?: number;
     lineDashed?: boolean;
     lineDashedPattern?: BasemapDottedPattern;
+    lineCapRounded?: boolean;
     textColor?: string | string[];
     textOpacity?: number;
     textFontFamily?: string;
@@ -419,6 +430,7 @@ export interface VisualizationConfig {
     textHalo?: boolean;
     textHaloColor?: string;
     textHaloWidth?: number;
+    textHaloOpacity?: number;
     textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
@@ -431,6 +443,7 @@ export interface VisualizationConfig {
     labelHalo?: boolean;
     labelHaloColor?: string;
     labelHaloWidth?: number;
+    labelHaloOpacity?: number;
     labelCollisionDetection?: boolean;
     labelDxpMasking?: boolean;
   };

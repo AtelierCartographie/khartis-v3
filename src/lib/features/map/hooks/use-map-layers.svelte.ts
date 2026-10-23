@@ -18,6 +18,7 @@ import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
 import {
@@ -328,8 +329,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...layers, overlay as Layer<DeckDataRow>];
   }
 
+  // A dragged label is drawn on top of the applied stack, so following the
+  // pointer never rebuilds the thematic layers.
+  function withLabelDragPreview(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const preview = untrack(() => labelLayoutStore.dragPreview);
+    const isExporting = untrack(() => globalState.isMapExporting);
+    if (!preview || preview.length === 0 || isExporting) {
+      return layers;
+    }
+    return [...layers, ...(preview as Layer<DeckDataRow>[])];
+  }
+
   $effect(() => {
     void mapHoverHighlightStore.overlay;
+    void labelLayoutStore.dragPreview;
     untrack(() => {
       if (lastAppliedLayers.length > 0) {
         setLayers(lastAppliedLayers);
@@ -338,7 +353,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   });
 
   function setLayers(stack: Layer<DeckDataRow>[]): boolean {
-    const layers = withHoverHighlight(stack);
+    const layers = withLabelDragPreview(withHoverHighlight(stack));
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
 
