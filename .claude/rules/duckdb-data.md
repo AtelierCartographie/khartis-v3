@@ -27,6 +27,7 @@ Table names, column names and values almost always come from user files. `common
 - `sqlString(value)` returns the literal with its single quotes: `WHERE table_name = ${sqlString(table)}`.
 - `sqlNamePart(value)` reduces a value to `[A-Za-z0-9_]` for a deterministic generated name (cache table, sequence); `sqlTempName(prefix, value?)` returns a name no other call of the session returns, for temp tables and views.
 - Interpolate the helper call, not a variable that holds an "escaped" form: an inline `replace(/"/g, '""')`, a hand-written `"${…}"` around a value or a raw concatenation is the bug this rule exists for.
+- A calculated-column expression is untrusted SQL: it is replayed from imported projects. `validateExpression` parses it with `json_serialize_sql` and accepts only listed node classes and functions. Extend the allowlist in `column-ops.ts` with a case in `tests/duckdb/column-ops.test.ts`; never filter the text.
 
 ## Geometry: keep the source CRS, reproject when rendering needs it
 

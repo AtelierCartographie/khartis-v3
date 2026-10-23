@@ -77,8 +77,5 @@ export const LOAD_SPATIAL_SQL = `LOAD ${EXTENSIONS.SPATIAL}; SET geometry_always
  * DuckDB SQL function names.
  */
 export const SQL_FUNCTIONS = {
-  ST_READ_META: 'ST_Read_Meta',
-  READ_CSV: 'read_csv',
-  READ_CSV_AUTO: 'read_csv_auto',
-  READ_PARQUET: 'read_parquet'
+  ST_READ_META: 'ST_Read_Meta'
 } as const;
