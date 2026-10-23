@@ -92,6 +92,35 @@ describe('GeoParquet geometry normalization', () => {
     expect(Duck.invalidateTableCache).not.toHaveBeenCalled();
   });
 
+  it('should drop the bbox covering column declared in the metadata', async () => {
+    const Duck = createDuck("GEOMETRY('EPSG:2154')");
+    Duck.describe_table.mockResolvedValue({
+      name: ['code_insee', 'geom', 'geometry_bbox'],
+      type: [
+        'VARCHAR',
+        "GEOMETRY('EPSG:2154')",
+        'STRUCT(xmin FLOAT, ymin FLOAT, xmax FLOAT, ymax FLOAT)'
+      ]
+    });
+    const metadata = createMetadata('WKB');
+    metadata.columns!.geom.covering = {
+      bbox: {
+        xmin: ['geometry_bbox', 'xmin'],
+        ymin: ['geometry_bbox', 'ymin'],
+        xmax: ['geometry_bbox', 'xmax'],
+        ymax: ['geometry_bbox', 'ymax']
+      }
+    };
+
+    await expect(
+      normalizeGeoParquetTable('covered_geoparquet', metadata, Duck)
+    ).resolves.toBe(true);
+
+    const sql = Duck.query.mock.calls[0][0] as string;
+    expect(sql).toContain('SELECT * EXCLUDE ("geometry_bbox")');
+    expect(sql).not.toContain('ST_GeomFromWKB');
+  });
+
   it('should leave plain Parquet tables unchanged when GeoParquet metadata is absent', async () => {
     const Duck = createDuck('VARCHAR');
 
