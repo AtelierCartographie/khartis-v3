@@ -121,6 +121,45 @@ describe('enrichment join bounds', () => {
     expect(entity?.matches).toEqual(['Marseille']);
   });
 
+  it('should leave unknown INSEE codes unrecognized when a near code exists', async () => {
+    // 26371 ≈ 26317 scores 0.95 in Jaro-Winkler: similarity between codes is
+    // noise, and a to-verify entity is joined, so it must never land there.
+    await seedTarget(['26317', '75056', '19224', '25534', '2A004']);
+    await seedSource(['26317', '2A004', '26371', '75115', '19223', '25533']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
+    expect(stats.joinedCount).toBe(2);
+    expect(stats.toVerifyCount).toBe(0);
+    expect(stats.unrecognizedCount).toBe(4);
+    expect(stats.entities.find((e) => e.dataValue === '26371')?.status).toBe(
+      JoinStatus.UNRECOGNIZED
+    );
+  });
+
+  it('should leave a value unrecognized when its only candidate is already joined', async () => {
+    await seedTarget(['Marseille', 'Bordeaux']);
+    await seedSource(['Marseille', 'Marseile']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
+    expect(stats.joinedCount).toBe(1);
+    expect(stats.toVerifyCount).toBe(0);
+    const entity = stats.entities.find((e) => e.dataValue === 'Marseile');
+    expect(entity?.status).toBe(JoinStatus.UNRECOGNIZED);
+  });
+
+  it('should keep a free near-miss as the match of a to-verify value', async () => {
+    await seedTarget(['Marseille', 'Bordeaux']);
+    await seedSource(['Bordeaux', 'Marseile']);
+
+    const stats = await computeDatasetJoinStats(OPTIONS);
+
+    const entity = stats.entities.find((e) => e.dataValue === 'Marseile');
+    expect(entity?.status).toBe(JoinStatus.TO_VERIFY);
+    expect(entity?.matches).toEqual(['Marseille']);
+  });
+
   it('caps the suggestions per source value', async () => {
     const homonyms = Array.from(
       { length: 12 },
