@@ -38,3 +38,25 @@ export function shouldReprojectDatasetForActiveProjection(
 ): boolean {
   return hasActiveProjection && shouldUseIdentityProjectionForDatasetCrs(crs);
 }
+
+// GeoArrow defaults to lon/lat when a table carries no `crs`.
+export function isGeoArrowTableInProjectedCrs(
+  geoMetadata: string | null | undefined
+): boolean {
+  if (!geoMetadata) {
+    return false;
+  }
+  try {
+    const metadata = JSON.parse(geoMetadata);
+    const crs = metadata.columns?.[metadata.primary_column]?.crs;
+    const crsName =
+      typeof crs === 'string'
+        ? crs
+        : crs?.id?.authority && crs?.id?.code
+          ? `${crs.id.authority}:${crs.id.code}`
+          : crs?.name;
+    return typeof crsName === 'string' && !isWgs84LikeCrs(crsName);
+  } catch {
+    return false;
+  }
+}

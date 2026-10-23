@@ -186,6 +186,17 @@ export function useMapDisplayData(
       : 'native';
   });
 
+  // Same rule as the dataset reprojection below, applied to an imported
+  // basemap drawn in a projected CRS.
+  $effect(() => {
+    const projState = getProjectionState();
+    void basemapService.setRenderInWgs84(
+      usesTiledBasemap ||
+        (projState.overrideActive === true &&
+          projState.overrideSource === 'manual')
+    );
+  });
+
   let loadGeneration = 0;
   let pendingReloadHandle: number | null = null;
 
