@@ -182,7 +182,8 @@ function mapRegistryToSerializedFormat(
       annotations: stores.annotations,
       legend: stores.legend,
       geoIndications: stores.geoIndications,
-      projection: stores.projection
+      projection: stores.projection,
+      labels: stores.labelLayouts
     } as SerializedProjectData['layoutSettings'],
     uiSettings: Object.keys(uiSettings).length > 0 ? uiSettings : undefined,
     layerOrder: Array.isArray(stores.layerOrder)
@@ -232,6 +233,7 @@ function mapSerializedFormatToRegistry(
     if (ls.legend) stores.legend = ls.legend;
     if (ls.geoIndications) stores.geoIndications = ls.geoIndications;
     if (ls.projection) stores.projection = ls.projection;
+    if (ls.labels) stores.labelLayouts = ls.labels;
   }
 
   if (data.uiSettings) {

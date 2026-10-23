@@ -22,6 +22,7 @@ import {
   type LegendSubtitlePrimitive
 } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
+import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, SCALE_MODE } from '../facets';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import { getLegendItemSlots, type LegendItemSlot } from './legend-items.utils';
@@ -118,19 +119,36 @@ function truncateAutoTitle(title: string): string {
     : title;
 }
 
+function getSharedCollectionTitle(
+  visualization: VisualizationConfig,
+  slot: LegendItemSlot
+): string | null {
+  if (!isSharedCollectionLegend(visualization, slot.primitive)) {
+    return null;
+  }
+  if (slot.component !== 'color' || !facetsStore.fillSlotPath) {
+    return joinLegendSubtitleParts(facetsStore.variables);
+  }
+  // The fill is not the collection variable: pooled classes name every fill
+  // column, categories keep one legend per map named after its own column.
+  return facetsStore.fillSlotPath === FACET_SLOT.SYMBOL_FILL_VALUE
+    ? joinLegendSubtitleParts(facetsStore.mapFillVariables)
+    : null;
+}
+
 function getDefaultLegendTitle(
   visualization: VisualizationConfig,
   slot: LegendItemSlot
 ): string {
-  const variables = isSharedCollectionLegend(visualization, slot.primitive)
-    ? joinLegendSubtitleParts(facetsStore.variables)
-    : slot.split && slot.component
+  const variables =
+    getSharedCollectionTitle(visualization, slot) ??
+    (slot.split && slot.component
       ? getComponentLegendSubtitle(
           visualization,
           slot.primitive,
           slot.component
         )
-      : getPrimitiveLegendSubtitle(visualization, slot.primitive);
+      : getPrimitiveLegendSubtitle(visualization, slot.primitive));
   return truncateAutoTitle(variables || visualization.name);
 }
 

@@ -60,6 +60,7 @@ export const buildSymbolPanelVisualization = createPanelBuilder({
       ...visualization.style,
       symbolFillColor: symbol.fillColor,
       fillColorB: symbol.fillColorB,
+      symbolSignColors: symbol.signColors,
       strokeColor: extractStrokeColor(symbol.strokeColor),
       strokeWidth: symbol.strokeWidth,
       strokeOpacity: symbol.strokeOpacity,
@@ -105,7 +106,8 @@ export const buildSymbolFillPanelVisualization = createPanelBuilder({
     style: {
       ...visualization.style,
       symbolFillColor: symbol.fillColor,
-      fillColorB: symbol.fillColorB
+      fillColorB: symbol.fillColorB,
+      symbolSignColors: symbol.signColors
     },
     mapping: {
       ...visualization.mapping,
@@ -134,7 +136,8 @@ export const buildLinePanelVisualization = createPanelBuilder({
       lineWidth: line.width,
       lineMaxWidth: line.maxWidth,
       lineDashed: line.dashed,
-      lineDashedPattern: line.dashedPattern
+      lineDashedPattern: line.dashedPattern,
+      lineCapRounded: line.capRounded
     },
     mapping: {
       ...visualization.mapping,
@@ -171,6 +174,7 @@ export const buildTextPanelVisualization = createPanelBuilder({
       textHalo: text.halo,
       textHaloColor: text.haloColor,
       textHaloWidth: text.haloWidth,
+      textHaloOpacity: text.haloOpacity,
       textCollisionDetection: text.collisionDetection,
       textDxpMasking: text.dxpMasking,
       labelColor: text.secondaryLabels.color,
@@ -183,6 +187,7 @@ export const buildTextPanelVisualization = createPanelBuilder({
       labelHalo: text.secondaryLabels.halo,
       labelHaloColor: text.secondaryLabels.haloColor,
       labelHaloWidth: text.secondaryLabels.haloWidth,
+      labelHaloOpacity: text.secondaryLabels.haloOpacity,
       labelCollisionDetection: text.secondaryLabels.collisionDetection,
       labelDxpMasking: text.secondaryLabels.dxpMasking
     },

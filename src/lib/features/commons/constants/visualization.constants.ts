@@ -205,7 +205,8 @@ export const VISUALIZATION_DEFAULTS = {
   lineWidth: 1,
   lineMaxWidth: 5,
   lineOpacity: 100,
-  haloWidth: 2
+  haloWidth: 2,
+  haloOpacity: 100
 } satisfies Record<string, number>;
 
 export const SLIDER_LIMITS = {

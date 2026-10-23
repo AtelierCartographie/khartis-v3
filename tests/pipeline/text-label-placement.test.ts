@@ -8,15 +8,12 @@ describe('resolveTextLabelPlacement', () => {
         hasPointSymbol: false,
         pointRadius: 0,
         hasSecondaryLabel: false,
-        primarySize: 24,
-        secondarySize: 12,
-        paddingY: 2
+        primaryHeight: 24,
+        secondaryHeight: 12
       })
     ).toEqual({
-      primaryAlignmentBaseline: 'center',
-      secondaryAlignmentBaseline: 'center',
       primaryPixelOffset: [0, 0],
-      secondaryPixelOffset: [0, 22]
+      secondaryPixelOffset: [0, 20]
     });
   });
 
@@ -26,15 +23,12 @@ describe('resolveTextLabelPlacement', () => {
         hasPointSymbol: true,
         pointRadius: 10,
         hasSecondaryLabel: true,
-        primarySize: 24,
-        secondarySize: 12,
-        paddingY: 2
+        primaryHeight: 24,
+        secondaryHeight: 12
       })
     ).toEqual({
-      primaryAlignmentBaseline: 'center',
-      secondaryAlignmentBaseline: 'center',
-      primaryPixelOffset: [14, -9],
-      secondaryPixelOffset: [14, 15]
+      primaryPixelOffset: [13, -7],
+      secondaryPixelOffset: [13, 13]
     });
   });
 
@@ -44,15 +38,32 @@ describe('resolveTextLabelPlacement', () => {
         hasPointSymbol: true,
         pointRadius: 10,
         hasSecondaryLabel: false,
-        primarySize: 24,
-        secondarySize: 12,
-        paddingY: 2
+        primaryHeight: 24,
+        secondaryHeight: 12
       })
     ).toEqual({
-      primaryAlignmentBaseline: 'center',
-      secondaryAlignmentBaseline: 'center',
-      primaryPixelOffset: [14, 0],
-      secondaryPixelOffset: [14, 15]
+      primaryPixelOffset: [13, 0],
+      secondaryPixelOffset: [13, 13]
     });
+  });
+
+  it('should keep the gap between the two labels when the primary label wraps on two lines', () => {
+    const gapBetweenLabels = (primaryHeight: number): number => {
+      const { primaryPixelOffset, secondaryPixelOffset } =
+        resolveTextLabelPlacement({
+          hasPointSymbol: true,
+          pointRadius: 10,
+          hasSecondaryLabel: true,
+          primaryHeight,
+          secondaryHeight: 12
+        });
+      return (
+        secondaryPixelOffset[1] -
+        6 -
+        (primaryPixelOffset[1] + primaryHeight / 2)
+      );
+    };
+
+    expect(gapBetweenLabels(48)).toBe(gapBetweenLabels(24));
   });
 });

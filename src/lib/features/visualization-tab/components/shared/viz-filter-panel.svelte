@@ -12,7 +12,13 @@
     readToolbarPanelRight,
     resolveToolbarPanelWidth
   } from '$lib/features/commons/utils/toolbar-width.utils';
-  import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
+  import {
+    visualizationStore,
+    type VizDataFilter
+  } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { facetSlotRequiresNumericVariable } from '$lib/features/commons/constants/facets.constants';
+  import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
+  import { facetsStore } from '../../adapters/facets-adapter';
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { Add, Close, Launch } from 'carbon-icons-svelte';
@@ -130,6 +136,22 @@
     dataFields.map((f) => ({ id: String(f.id), text: f.text, type: f.type }))
   );
 
+  const collectionVariable = $derived.by(() => {
+    const visualization = visualizationStore.selectedVisualization;
+    const slotPath = facetsStore.primarySlotPath;
+    if (
+      !visualization ||
+      !slotPath ||
+      !facetsStore.enabled ||
+      facetsStore.variables.length < 2 ||
+      facetsStore.baseVisualizationId !== visualization.id ||
+      !facetSlotRequiresNumericVariable(slotPath)
+    ) {
+      return undefined;
+    }
+    return getFacetSlotVariable(visualization, slotPath);
+  });
+
   const hasFilters = $derived(filters.length > 0);
   const numberLocale = $derived(resolveLocale());
 
@@ -222,6 +244,7 @@
         index={index}
         dataFields={dataFields}
         dataFieldsDropdownItems={dataFieldsDropdownItems}
+        collectionVariable={collectionVariable}
         onRemoveFilter={onRemoveFilter}
         onUpdateFilter={onUpdateFilter}
       />

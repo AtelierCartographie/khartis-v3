@@ -26,6 +26,7 @@
   import {
     useMapBasemap,
     useMapBounds,
+    useLabelEditing,
     useMapInit,
     useMapLayers,
     useMapReferenceBasemap,
@@ -40,6 +41,8 @@
   import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+  import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+  import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
@@ -1911,6 +1914,7 @@
     basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
+    labelLayoutVersion: labelLayoutStore.version,
     dataVersion,
     dataSize: `${tables.size}`,
     rowScopeVersion: rowScopeStore.version,
@@ -1999,6 +2003,18 @@
 
       isApplyingMapLibreSync = true;
       map.jumpTo({ center: sv.center, zoom: sv.zoom });
+    }
+  });
+
+  const labelEditing = useLabelEditing({
+    getContainer: () => mapContainer,
+    isEnabled: () =>
+      !isFacetCell &&
+      globalState.selectedStep === ToolbarStep.Styling &&
+      !globalState.isMapExporting,
+    pick: (x, y, radius) => {
+      const target = mapInit.deckOverlay ?? mapInit.deckInstance;
+      return target?.pickObject({ x, y, radius }) ?? null;
     }
   });
 
@@ -2096,6 +2112,7 @@
         bind:this={mapContainer}
         class="map-canvas"
         class:is-empty={isBlankCanvas}
+        class:is-over-label={labelEditing.isOverLabel}
         style={mapCanvasStyle}
       ></div>
 
@@ -2125,6 +2142,15 @@
 
     {#if showAnnotationOverlay}
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
+    {/if}
+
+    {#if labelEditing.editRequest}
+      {#key labelEditing.editRequest}
+        <LabelTextEditor
+          request={labelEditing.editRequest}
+          onclose={labelEditing.closeEditor}
+        />
+      {/key}
     {/if}
   </div>
 {/if}
@@ -2162,6 +2188,11 @@
 
   .map-canvas :global(canvas) {
     display: block;
+  }
+
+  /* Deck.gl and MapLibre rewrite the canvas cursor on every frame. */
+  .map-canvas.is-over-label :global(canvas) {
+    cursor: move !important;
   }
 
   .view-mode-loader {

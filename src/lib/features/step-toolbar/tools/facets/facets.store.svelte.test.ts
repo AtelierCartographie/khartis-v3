@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   setVisualizationOrderMock: vi.fn(),
   generateFacetVisualizationsMock: vi.fn(),
   resolveFacetPrimitiveFilterMock: vi.fn(() => 'polygon'),
+  resolveFacetFillSlotPathMock: vi.fn((): string | null => null),
   getEnabledPrimitiveFiltersMock: vi.fn(() => [] as string[]),
   showInfoMock: vi.fn()
 }));
@@ -27,7 +28,10 @@ vi.mock('$lib/features/project-management/core', () => ({
 vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
   buildFacetVisualizationUpdates: vi.fn(),
-  resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock
+  resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock,
+  resolveFacetFillSlotPath: mocks.resolveFacetFillSlotPathMock,
+  loadFacetFillCategoryUnion: vi.fn(async () => null),
+  alignCategoryColors: vi.fn(() => [])
 }));
 
 vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
@@ -68,6 +72,7 @@ describe('facetsStore', () => {
     vi.clearAllMocks();
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
     mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['polygon']);
+    mocks.resolveFacetFillSlotPathMock.mockReturnValue(null);
 
     mocks.visualizations = [
       {
@@ -207,7 +212,8 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         ['a', 'b'],
         SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
+        FACET_SLOT.POLYGON_VALUE,
+        {}
       );
     });
 
@@ -246,7 +252,8 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         ['a', 'b'],
         SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
+        FACET_SLOT.POLYGON_VALUE,
+        {}
       );
     });
 
@@ -319,7 +326,8 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         ['category', 'segment'],
         SCALE_MODE.INDEPENDENT,
-        FACET_SLOT.SYMBOL_FILL_CATEGORY
+        FACET_SLOT.SYMBOL_FILL_CATEGORY,
+        {}
       );
     });
 
@@ -358,8 +366,44 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         ['a', 'b'],
         SCALE_MODE.SHARED,
-        FACET_SLOT.SYMBOL_FILL_VALUE
+        FACET_SLOT.SYMBOL_FILL_VALUE,
+        {}
       );
+    });
+
+    it('keeps the fill column of each kept map and drops the removed ones', async () => {
+      mocks.resolveFacetFillSlotPathMock.mockReturnValue(
+        FACET_SLOT.SYMBOL_FILL_CATEGORY
+      );
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        variables: ['a', 'b', 'c'],
+        layout: { columns: 3, gap: 16 },
+        scaleMode: SCALE_MODE.SHARED,
+        generatedVisualizationIds: ['facet-a', 'facet-b', 'facet-c'],
+        fillVariables: { a: 'region', c: 'type' }
+      });
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['a', 'b'],
+        FACET_SLOT.SYMBOL_SIZE
+      );
+
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        expect.anything(),
+        ['a', 'b'],
+        SCALE_MODE.SHARED,
+        FACET_SLOT.SYMBOL_SIZE,
+        { a: 'region' }
+      );
+      expect(facetsStore.fillVariables).toEqual({ a: 'region' });
     });
 
     it('should regenerate facets when the collection is already enabled', async () => {
@@ -485,6 +529,14 @@ describe('facetsStore', () => {
       expect(facetsStore.variables).toEqual(['a', 'b']);
     });
 
+    it('keeps only non-empty string fill columns', () => {
+      facetsStore.restoreFromSerialized({
+        fillVariables: { a: 'region', b: 42, c: '', d: null }
+      });
+
+      expect(facetsStore.fillVariables).toEqual({ a: 'region' });
+    });
+
     it('should default gap to 16 if negative', () => {
       facetsStore.restoreFromSerialized({
         layout: { columns: 3, gap: -10 }
@@ -531,7 +583,8 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         ['a', 'b'],
         SCALE_MODE.SHARED,
-        FACET_SLOT.SYMBOL_SIZE
+        FACET_SLOT.SYMBOL_SIZE,
+        {}
       );
       expect(mocks.createBulkVisualizationsMock).toHaveBeenCalledWith([
         { id: 'restored-a' },
@@ -561,7 +614,8 @@ describe('facetsStore', () => {
         mocks.visualizations[0],
         expectedCapped,
         SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
+        FACET_SLOT.POLYGON_VALUE,
+        {}
       );
     });
   });

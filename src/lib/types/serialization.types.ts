@@ -18,6 +18,7 @@ import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import type { MapProjectionType } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type { LabelLayouts } from '$lib/features/map/utils/label-layout.utils';
 import type { AnnotationsState } from '$lib/features/step-toolbar/types/annotations.types';
 import type { ColorBlindnessState } from '$lib/features/step-toolbar/types/color-blindness.types';
 import type { FacetsState } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
@@ -102,6 +103,8 @@ export interface SerializedLayoutSettings {
   legend: Omit<LegendState, 'activeTab'>;
   geoIndications: GeoIndicationsState;
   projection: Omit<ProjectionState, 'suggestions'>;
+  /** Manual label positions and leader style, since schema 3.13.0. */
+  labels?: LabelLayouts;
 }
 
 export interface SerializedGlobalUiState {

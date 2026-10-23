@@ -18,6 +18,8 @@ export interface TextLayerDatum {
   secondaryText: string | null;
   isMissingData: boolean;
   rowIndex: number;
+  /** Row of the representative-point (geometry) table. */
+  featureId: number;
 }
 
 export function keepTextDataInRowScope(
@@ -99,19 +101,6 @@ export function toTextValue(value: unknown): string | null {
 export function resolveMissingTextLabel(label: string | undefined): string {
   const normalizedLabel = label?.trim();
   return normalizedLabel && normalizedLabel.length > 0 ? normalizedLabel : '•';
-}
-
-export function resolveTextDatumText(
-  datum: TextLayerDatum,
-  missingTextLabel: string
-): string {
-  if (datum.isMissingData || !datum.primaryText) {
-    return missingTextLabel;
-  }
-
-  return datum.secondaryText
-    ? `${datum.primaryText}\n${datum.secondaryText}`
-    : datum.primaryText;
 }
 
 function addTextGlyphs(glyphs: Set<string>, text: string | null): void {
@@ -215,7 +204,8 @@ export function createTextLayerDataFromBinary(
       primaryText,
       secondaryText,
       isMissingData,
-      rowIndex
+      rowIndex,
+      featureId: fid
     });
   }
 

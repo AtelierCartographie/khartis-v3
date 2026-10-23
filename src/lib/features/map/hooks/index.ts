@@ -5,3 +5,4 @@ export { useMapBounds } from './use-map-bounds.svelte';
 export { useMapInit } from './use-map-init.svelte';
 export { useMapDisplayData } from './use-map-display-data.svelte';
 export { useMapReferenceBasemap } from './use-map-reference-basemap.svelte';
+export { useLabelEditing } from './use-label-editing.svelte';

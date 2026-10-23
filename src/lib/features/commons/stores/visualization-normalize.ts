@@ -89,6 +89,12 @@ function resolveLegacyPrimitiveEnabled(
   return primitiveFilters.includes(primitive);
 }
 
+function clampHaloOpacity(haloOpacity: number | undefined): number {
+  if (haloOpacity === undefined || !Number.isFinite(haloOpacity)) return 1;
+  const opacity = haloOpacity > 1 ? haloOpacity / 100 : haloOpacity;
+  return Math.min(1, Math.max(0, opacity));
+}
+
 function clampHaloWidth(haloWidth: number | undefined): number {
   const width = haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
   if (!Number.isFinite(width)) return VISUALIZATION_DEFAULTS.haloWidth;
@@ -134,6 +140,9 @@ function buildSecondaryLabelsConfig(
       DEFAULT_COLORS.halo,
     haloWidth: clampHaloWidth(
       existing?.haloWidth ?? visualization.style.labelHaloWidth
+    ),
+    haloOpacity: clampHaloOpacity(
+      existing?.haloOpacity ?? visualization.style.labelHaloOpacity
     ),
     collisionDetection:
       existing?.collisionDetection ??
@@ -284,6 +293,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.style.symbolFillColor ??
       visualization.style.fillColor,
     fillColorB: existing?.fillColorB ?? visualization.style.fillColorB,
+    signColors: existing?.signColors ?? visualization.style.symbolSignColors,
     strokeMode:
       existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
     strokeColor:
@@ -379,6 +389,7 @@ export function buildLinePrimitiveConfig(
       existing?.dashedPattern ??
       visualization.style.lineDashedPattern ??
       BasemapDottedPattern.DOTS,
+    capRounded: existing?.capRounded ?? visualization.style.lineCapRounded,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
@@ -438,6 +449,9 @@ export function buildTextPrimitiveConfig(
       DEFAULT_COLORS.halo,
     haloWidth: clampHaloWidth(
       existing?.haloWidth ?? visualization.style.textHaloWidth
+    ),
+    haloOpacity: clampHaloOpacity(
+      existing?.haloOpacity ?? visualization.style.textHaloOpacity
     ),
     collisionDetection:
       existing?.collisionDetection ??
@@ -845,6 +859,7 @@ function normalizeLegacyLabelStyle(
     style.textHalo = style.labelHalo ?? style.textHalo;
     style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;
     style.textHaloWidth = style.labelHaloWidth ?? style.textHaloWidth;
+    style.textHaloOpacity = style.labelHaloOpacity ?? style.textHaloOpacity;
     style.textCollisionDetection =
       style.labelCollisionDetection ?? style.textCollisionDetection;
     style.textDxpMasking = style.labelDxpMasking ?? style.textDxpMasking;
