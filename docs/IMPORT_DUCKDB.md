@@ -179,6 +179,16 @@ grandeur.
   `cancelPendingQuery` ne rejette qu'à la fin du calcul. Ne pas proposer de
   bouton Annuler sur ce chemin.
 
+Une entité « à vérifier » est **jointe** : la finalisation applique le
+rapprochement retenu et la catégorie ne bloque jamais la validation. Elle existe
+par transparence et ne reçoit donc que des rapprochements de haute confiance :
+
+- pas de phase fuzzy sur une colonne de codes (macro `is_code_column`, partagée
+  par la jointure à un fond et la jointure d'enrichissement) : un code sans
+  correspondance exacte est « non reconnu » ;
+- une cible déjà jointe exactement n'est plus proposée ; une valeur sans
+  candidat disponible est « non reconnue ».
+
 ## Limites
 
 | Limite             | Valeur                                                                       |
