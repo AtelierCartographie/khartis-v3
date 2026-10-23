@@ -205,6 +205,12 @@ type GeometryQueryRow = {
 
 type QueryDuck = {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  mutate(
+    this: QueryDuck,
+    tables: unknown,
+    sql: string,
+    options?: never
+  ): unknown;
 };
 
 const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '../..');
@@ -361,6 +367,14 @@ function buildColumnAnalysis(dataset: DatasetResult): ColumnAnalysis[] {
 
 function wrapDuckConnection(connection: DuckDBConnection): QueryDuck {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string): Promise<unknown> {
       const reader = await connection.runAndReadAll(sql);
       return reader.getRowObjectsJson();

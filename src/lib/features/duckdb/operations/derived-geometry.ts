@@ -28,11 +28,14 @@ async function createEmptyGeometryTable(
   duck: DuckClient,
   tableName: string
 ): Promise<void> {
-  await duck.query(`
+  await duck.mutate(
+    tableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT NULL::GEOMETRY AS ${sqlIdentifier(INTERNAL_COLUMN.GEOM)}
     WHERE FALSE
-  `);
+  `
+  );
 }
 
 async function createDerivedTable(
@@ -88,11 +91,13 @@ async function runDerivedTableQuery(
   targetTable: string,
   select: string
 ): Promise<void> {
-  await duck.query(`
+  await duck.mutate(
+    targetTable,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(targetTable)} AS
     ${select}
-  `);
-  duck.invalidateTableCache?.(targetTable);
+  `
+  );
 }
 
 function buildLineSelect(macroCall: string): string {

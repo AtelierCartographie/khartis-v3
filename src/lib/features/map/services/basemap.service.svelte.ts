@@ -815,7 +815,8 @@ function createBasemapService() {
         );
       }
 
-      const result = await Duck.query(
+      const result = await Duck.mutate(
+        'basemap_attributes',
         `CREATE OR REPLACE TABLE basemap_attributes AS
          WITH flat AS (
            SELECT raw, id, variant, normalized, UNNEST(basemaps) AS basemap
@@ -1258,7 +1259,8 @@ function createBasemapService() {
             ? '*'
             : `* EXCLUDE (${geometryColumnName}), ${geometryColumnName} AS ${INTERNAL_COLUMN.GEOM}`;
 
-        await Duck.query(
+        await Duck.mutate(
+          tableName,
           `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT ${canonicalGeometrySelect} FROM ${sqlIdentifier(tempTableName)}`
         );
 

@@ -63,11 +63,13 @@ export function buildTableInBackground(
       );
       await dropTable(duck, stagingTable);
       if (!isCurrent()) return false;
-      await duck.query(`
+      await duck.mutate(
+        options.targetTable,
+        `
         CREATE OR REPLACE TABLE ${sqlIdentifier(options.targetTable)} AS
         SELECT ${options.projection} FROM ${sqlIdentifier(options.sourceTable)}
-      `);
-      duck.invalidateTableCache?.(options.targetTable);
+      `
+      );
       return isCurrent();
     })
     .catch((error) => {
@@ -123,11 +125,13 @@ async function buildInBatches(
     await dropTable(duck, stagingTable);
     return false;
   }
-  await duck.query(`
+  await duck.mutate(
+    [targetTable, stagingTable],
+    `
     DROP TABLE IF EXISTS ${sqlIdentifier(targetTable)};
     ALTER TABLE ${sqlIdentifier(stagingTable)} RENAME TO ${sqlIdentifier(targetTable)};
-  `);
-  duck.invalidateTableCache?.(targetTable);
+  `
+  );
   return true;
 }
 

@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import { FileType, type DuckDBDataset } from '../types';
+import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
 
 const mocks = vi.hoisted(() => ({
   analyse: vi.fn(),
@@ -13,15 +13,36 @@ const mocks = vi.hoisted(() => ({
   registerPersistence: vi.fn()
 }));
 
-vi.mock('../duck', () => ({
-  Duck: {
-    analyse: mocks.analyse,
-    describe_table: mocks.describeTable,
-    invalidateTableCache: mocks.invalidateTableCache,
-    query: mocks.query
-  },
-  initDuckDB: mocks.initDuckDB
-}));
+vi.mock('../duck', async () => {
+  const { markTableMutated } = await import('../cache/cache-manager');
+  const ctx = {
+    describeCache: new Map(),
+    rowCountCache: new Map(),
+    table_metadata: new Map()
+  } as unknown as DuckDBContext;
+  return {
+    Duck: {
+      analyse: mocks.analyse,
+      describe_table: mocks.describeTable,
+      invalidateTableCache: mocks.invalidateTableCache,
+      query: mocks.query,
+      async mutate(
+        tables: string | string[],
+        sql: string,
+        options?: Record<string, unknown>
+      ) {
+        try {
+          return await mocks.query(sql, options);
+        } finally {
+          for (const table of [tables].flat()) {
+            markTableMutated(ctx, table, options);
+          }
+        }
+      }
+    },
+    initDuckDB: mocks.initDuckDB
+  };
+});
 
 vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
   showError: vi.fn()

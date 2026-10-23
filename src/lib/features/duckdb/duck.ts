@@ -1,4 +1,8 @@
-import { getTableMetadata, markTableMutated } from './cache/cache-manager';
+import {
+  getTableMetadata,
+  markTableMutated,
+  type TableMutationOptions
+} from './cache/cache-manager';
 import {
   getContext,
   initEngine,
@@ -182,9 +186,30 @@ export const Duck = {
     return searchInTable(ctx, table, searchQuery, options);
   },
 
-  invalidateTableCache(table: string): void {
+  /**
+   * Runs a statement that changes `tables`, then invalidates every cache
+   * derived from them, even when the statement fails part-way. Reads and
+   * temporary tables that nothing caches go through `query`.
+   */
+  async mutate(
+    tables: string | readonly string[],
+    sql: string,
+    options?: QueryOptions & TableMutationOptions
+  ): Promise<unknown> {
     const ctx = getContext();
-    markTableMutated(ctx, table);
+    try {
+      return await executeQuery(ctx.connection, sql, options);
+    } finally {
+      for (const table of typeof tables === 'string' ? [tables] : tables) {
+        markTableMutated(ctx, table, options);
+      }
+    }
+  },
+
+  /** For a table changed outside `mutate`, such as by a file reader. */
+  invalidateTableCache(table: string, options?: TableMutationOptions): void {
+    const ctx = getContext();
+    markTableMutated(ctx, table, options);
   },
 
   /**

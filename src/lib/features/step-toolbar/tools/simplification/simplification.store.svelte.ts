@@ -80,7 +80,8 @@ const { actions, getState } = createToolStore<
       // The import keeps no copy of the source geometry: the first
       // simplification saves it, so every later rate and the undo start from
       // the imported geometry.
-      await Duck.query(
+      await Duck.mutate(
+        rawBasemapTableName,
         `CREATE TABLE IF NOT EXISTS ${sqlIdentifier(rawBasemapTableName)} AS SELECT * FROM ${sqlIdentifier(basemapTableName)}`
       );
 
@@ -482,7 +483,8 @@ const { actions, getState } = createToolStore<
               lastApplied.previousBasemapTableName ??
               getBasemapRawTableName(tableName);
 
-            await Duck.query(
+            await Duck.mutate(
+              tableName,
               `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT * FROM ${sqlIdentifier(rawTableName)}`
             );
 

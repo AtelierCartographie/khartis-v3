@@ -382,7 +382,9 @@ export async function deserializeProjectData(
             .filter((attribute) => attribute.basemap.length > 0)
         : [];
 
-      await Duck.query(`
+      await Duck.mutate(
+        'custom_basemap_attributes',
+        `
         CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
           raw VARCHAR,
           id VARCHAR,
@@ -391,7 +393,8 @@ export async function deserializeProjectData(
           basemap VARCHAR,
           basemap_count INTEGER
         )
-      `);
+      `
+      );
 
       await Duck.query('DELETE FROM custom_basemap_attributes');
 
@@ -403,10 +406,13 @@ export async function deserializeProjectData(
           )
           .join(',\n');
 
-        await Duck.query(`
+        await Duck.mutate(
+          'custom_basemap_attributes',
+          `
           INSERT INTO custom_basemap_attributes (raw, id, variant, normalized, basemap, basemap_count)
           VALUES ${insertValues}
-        `);
+        `
+        );
       }
     } catch (error) {
       logger.error(

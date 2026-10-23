@@ -70,7 +70,8 @@ vi.mock('$lib/features/duckdb', () => ({
   Duck: {
     analyse: vi.fn(),
     dropTable: (...args: unknown[]) => mocks.dropTableMock(...args),
-    query: (...args: unknown[]) => mocks.queryMock(...args)
+    query: (...args: unknown[]) => mocks.queryMock(...args),
+    mutate: (_tables: unknown, ...args: unknown[]) => mocks.queryMock(...args)
   }
 }));
 

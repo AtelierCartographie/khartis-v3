@@ -169,10 +169,10 @@ async function dropBasemapImportTables(tableName: string): Promise<void> {
       { format: 'array' }
     )) as Array<{ table_name: string }>;
     for (const { table_name } of rows) {
-      await Duck.query(
+      await Duck.mutate(
+        String(table_name),
         `DROP TABLE IF EXISTS ${sqlIdentifier(String(table_name))}`
       );
-      Duck.invalidateTableCache(String(table_name));
     }
   } catch (error) {
     logger.warn(
@@ -268,7 +268,8 @@ async function readAndPrepareBasemap(
   const duck = Duck;
   const read = await readFileIntoTable(file, { tableName, companionFiles });
   if (read.tableName !== tableName) {
-    await duck.query(
+    await duck.mutate(
+      [read.tableName, tableName],
       `ALTER TABLE ${sqlIdentifier(read.tableName)} RENAME TO ${sqlIdentifier(tableName)}`
     );
   }
@@ -316,13 +317,15 @@ async function normalizeGeometryColumnName(
     return;
   }
 
-  await duck.query(`
+  await duck.mutate(
+    tableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT * EXCLUDE (${sqlIdentifier(geometryColumn)}),
       ${sqlIdentifier(geometryColumn)} AS ${sqlIdentifier(INTERNAL_COLUMN.GEOM)}
     FROM ${sqlIdentifier(tableName)}
-  `);
-  duck.invalidateTableCache(tableName);
+  `
+  );
 }
 
 function isPolygonBasemapLayerType(layerType: BasemapLayerType): boolean {
@@ -483,11 +486,14 @@ async function prepareRepresentativePointTable(
     return;
   }
 
-  await duck.query(`
+  await duck.mutate(
+    centroidsTableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(centroidsTableName)} AS
     SELECT ${projection}
     FROM ${sqlIdentifier(tableName)}
-  `);
+  `
+  );
 }
 
 async function rebuildPolygonDerivedTables(
@@ -545,13 +551,16 @@ async function ensureFeatureIdColumn(
   duck: typeof Duck,
   tableName: string
 ): Promise<void> {
-  await duck.query(`
+  await duck.mutate(
+    tableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT
       (ROW_NUMBER() OVER () - 1)::BIGINT AS ${sqlIdentifier(INTERNAL_COLUMN.FEATURE_ID)},
       *
     FROM ${sqlIdentifier(tableName)}
-  `);
+  `
+  );
 }
 
 export interface DatasetGeometryBasemapOptions {

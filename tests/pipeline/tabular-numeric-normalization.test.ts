@@ -12,6 +12,14 @@ import type { DuckClient } from '$lib/features/duckdb';
 
 function wrapDuckDB(db: TestDuckDB): DuckClient {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string): Promise<unknown> {
       const reader = await db.connection.runAndReadAll(sql);
       return reader.getRowObjectsJson();
@@ -59,7 +67,6 @@ describe('normalizeFormattedNumericColumns', () => {
       duck
     );
     expect(converted).toContain('value');
-    expect(duck.invalidateTableCache).toHaveBeenCalledWith('tbl_eu_decimal');
     const type = await getColumnType('tbl_eu_decimal', 'value');
     expect(type.toLowerCase()).toContain('double');
   });
@@ -114,8 +121,6 @@ describe('normalizeFormattedNumericColumns', () => {
     const converted = await normalizeFormattedNumericColumns('tbl_multi', duck);
 
     expect(converted).toEqual(['eu_amount', 'thousands']);
-    expect(duck.invalidateTableCache).toHaveBeenCalledTimes(1);
-    expect(duck.invalidateTableCache).toHaveBeenCalledWith('tbl_multi');
 
     const columns = await query(
       db,
@@ -165,7 +170,6 @@ describe('normalizeFormattedNumericColumns', () => {
     );
 
     expect(converted).toEqual(['eu_amount']);
-    expect(duck.invalidateTableCache).toHaveBeenCalledTimes(1);
     const type = await getColumnType('tbl_single_among_many', 'eu_amount');
     expect(type.toLowerCase()).toContain('double');
   });

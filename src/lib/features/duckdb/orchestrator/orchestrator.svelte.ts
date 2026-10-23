@@ -52,6 +52,7 @@ import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import * as geoDetectionOps from './geo-detection-ops';
 import {
   sqlIdentifier,
@@ -244,27 +245,21 @@ function invalidateJoinedArrowCacheForTable(tableName: string): void {
   }
 }
 
-function invalidateDatasetCache(
-  tableName: string,
-  options?: { preserveJoinSimilarity?: boolean }
-): void {
+registerTableMutationCallback((tableName, _ctx, options) => {
   const dataset = state.getDatasetByTable(tableName);
   if (dataset) {
     dataset.arrowTableWithMetadata = undefined;
     dataset.geoArrowMetadata = undefined;
-  }
-  if (Duck) {
-    Duck.invalidateTableCache(tableName);
   }
   invalidateJoinedArrowCacheForTable(tableName);
   // Row/value mutations change which entities exist, so the cached join
   // similarity (used to grade joined/unrecognized buckets) is now stale.
   // Join finalization is the exception: it only appends __basemap_* columns
   // and leaves source values intact, so its similarity cache stays valid.
-  if (!options?.preserveJoinSimilarity) {
+  if (!options.preserveJoinSimilarity) {
     joinOps.invalidateSimilarityCache(tableName, Duck ?? undefined);
   }
-}
+});
 
 async function getRowCountInternal(tableName: string): Promise<number> {
   if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -360,7 +355,7 @@ export const duckDBOrchestrator = {
   async invalidateAndReanalyse(tableName: string): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-    invalidateDatasetCache(tableName);
+    Duck.invalidateTableCache(tableName);
     await Duck.analyse(tableName, { force: true });
     state.bumpDatasetsVersion();
   },
@@ -574,7 +569,6 @@ export const duckDBOrchestrator = {
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
-    invalidateDatasetCache(dataset.tableName);
     const columns = await Duck.analyse(dataset.tableName);
     datasetOps.updateDatasetColumns(dataset.id, columns);
   },
@@ -632,9 +626,6 @@ export const duckDBOrchestrator = {
 
           datasetOps.updateDatasetJoinInfo(currentDataset.id, result, {
             bumpVersion: false
-          });
-          invalidateDatasetCache(currentDataset.tableName, {
-            preserveJoinSimilarity: true
           });
           state.bumpDatasetsVersion();
         } catch (error) {
@@ -1153,7 +1144,6 @@ export const duckDBOrchestrator = {
     }
 
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1175,7 +1165,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
     return result;
@@ -1191,7 +1180,6 @@ export const duckDBOrchestrator = {
 
     await columnOps.dropColumn(tableName, columnName, Duck, options);
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1206,7 +1194,6 @@ export const duckDBOrchestrator = {
 
     await columnOps.dropRows(tableName, rowIds, Duck, options);
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1222,7 +1209,6 @@ export const duckDBOrchestrator = {
     if (rowIds.length === 0) return { count: 0, rowIds: [] };
 
     await columnOps.dropRows(tableName, rowIds, Duck);
-    invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
     return { count: rowIds.length, rowIds };
   },
@@ -1244,7 +1230,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1268,7 +1253,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
     return count;
@@ -1296,7 +1280,6 @@ export const duckDBOrchestrator = {
       datasetOps.updateDatasetColumns(dataset.id, updatedColumns);
     }
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },

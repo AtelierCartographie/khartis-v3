@@ -1281,10 +1281,13 @@ async function generateAttributesForBasemap(
       `;
     });
 
-    await Duck.query(`
+    await Duck.mutate(
+      'basemap_attributes',
+      `
       INSERT INTO basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
-    `);
+    `
+    );
 
     return true;
   } catch (error) {
@@ -1536,18 +1539,18 @@ export async function applyJoinCorrections(
       `INSERT INTO ${sqlIdentifier(correctionsTable)} VALUES ${valueRows}`
     );
 
-    await Duck.query(`
+    await Duck.mutate(
+      dataset.tableName,
+      `
       UPDATE ${sqlIdentifier(dataset.tableName)}
       SET ${sqlIdentifier(geoColumn)} = c.corrected
       FROM ${sqlIdentifier(correctionsTable)} c
       WHERE ${sqlIdentifier(geoColumn)} = c.original
-    `);
+    `
+    );
   } finally {
     await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(correctionsTable)}`);
   }
-
-  // Corrected source values require a fresh similarity cache.
-  invalidateSimilarityCache(dataset.tableName, Duck);
 }
 
 async function applyCachedJoinAssociation(
@@ -1567,7 +1570,9 @@ async function applyCachedJoinAssociation(
       ? `AND original_name NOT IN (${excludedValues.map(sqlString).join(', ')})`
       : '';
 
-  await Duck.query(`
+  await Duck.mutate(
+    datasetTableName,
+    `
     CREATE OR REPLACE TABLE ${sqlIdentifier(datasetTableName)} AS
     WITH all_basemap_matches AS (
       SELECT
@@ -1613,7 +1618,9 @@ async function applyCachedJoinAssociation(
     FROM ${sqlIdentifier(datasetTableName)} t
     LEFT JOIN ranked_join j
       ON t.${sqlIdentifier(geoColumn)} = j.geoname
-  `);
+  `,
+    { preserveJoinSimilarity: true }
+  );
 }
 
 export interface FinalizeJoinOptions {

@@ -397,7 +397,8 @@ export function useEnrichmentJoin(
 
       const enrichedTableName = sqlTempName(`${geoTableName}_enriched`);
 
-      await Duck.query(
+      await Duck.mutate(
+        enrichedTableName,
         `CREATE TABLE ${sqlIdentifier(enrichedTableName)} AS
          WITH enrichment_source AS (
            SELECT

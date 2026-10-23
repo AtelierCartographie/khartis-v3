@@ -45,7 +45,8 @@ Table names, column names and values almost always come from user files. `common
 
 ## Mutations invalidate caches
 
-- After a statement that changes a table (`CREATE OR REPLACE`, `DROP`, `ALTER`, `UPDATE`, `INSERT`), call `markTableMutated(ctx, table)` so cached stats and search results do not go stale.
+- A statement that changes a non-temporary table (`CREATE OR REPLACE`, `DROP`, `ALTER`, `UPDATE`, `INSERT`) goes through `Duck.mutate(tables, sql)`, which invalidates their caches even when the statement fails part-way. `Duck.query` is for reads and for temporary tables nothing caches. Readers inside the `duckdb` feature call `markTableMutated(ctx, table)` once the table is complete.
+- A cache derived from a table subscribes with `registerTableMutationCallback`; nothing else invalidates by hand. A join finalization passes `preserveJoinSimilarity`, since it leaves source values intact.
 - After a DDL that adds columns, Arrow streaming can return those columns as `NULL`. Joins, GPS and direct reads therefore skip streaming (`skipStreaming`) on purpose.
 
 ## Errors and NULLs
