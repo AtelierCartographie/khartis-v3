@@ -50,7 +50,7 @@ function buildNativeCoordinates(
   }
 
   const itemName = `coordinate_${currentDepth}`;
-  return `list_transform(${valueExpression}, ${itemName} -> ${buildNativeCoordinates(
+  return `list_transform(${valueExpression}, lambda ${itemName}: ${buildNativeCoordinates(
     itemName,
     columnType,
     listDepth,
