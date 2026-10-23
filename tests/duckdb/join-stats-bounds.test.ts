@@ -44,7 +44,7 @@ vi.mock('$lib/features/duckdb/orchestrator/state.svelte', () => ({
   getFilters: () => []
 }));
 
-const { computeDatasetJoinStats } =
+const { computeDatasetJoinStats, findBestTargetColumn } =
   await import('$lib/features/data-tab/services/join-stats.service');
 
 const OPTIONS = {
@@ -211,5 +211,43 @@ describe('enrichment join bounds', () => {
 
     expect(withDuplicates.duplicateLines).toHaveLength(1);
     expect(withTypo.toVerifyCount).toBe(1);
+  });
+});
+
+describe('enrichment target column suggestion', () => {
+  it('picks the target column that holds the source codes', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE target_table AS
+       SELECT * FROM (VALUES
+         ('Abergement', '01001', 'A1'),
+         ('Ambérieu', '01004', 'A4'),
+         ('Paris', '75056', '01001')
+       ) t(nom, code_insee, code_postal)`
+    );
+    await seedSource(['01001', '01004', '75056']);
+
+    const best = await findBestTargetColumn({
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      targetTableName: 'target_table',
+      targetColumns: ['nom', 'code_postal', 'code_insee']
+    });
+
+    expect(best).toBe('code_insee');
+  });
+
+  it('suggests nothing when no target column shares a value', async () => {
+    await seedTarget(['Paris', 'Lyon']);
+    await seedSource(['Berlin']);
+
+    const best = await findBestTargetColumn({
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      targetTableName: 'target_table',
+      targetColumns: ['name']
+    });
+
+    expect(best).toBeNull();
   });
 });
