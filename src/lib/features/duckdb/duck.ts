@@ -5,6 +5,7 @@ import {
   isInitialized,
   loadMacros
 } from './core/engine';
+import { ensureExtension } from './core/extensions';
 import { executeQuery, executeQueryStreaming } from './core/query';
 import { exportToCsv, exportToParquet } from './io/exporters';
 import { dropRegisteredFile, registerFiles } from './io/file-registry';
@@ -31,6 +32,7 @@ import type {
   AnalyseOptions,
   AnalysisResults,
   DuckDBMetadata,
+  ExtensionName,
   QueryOptions,
   ReadGeofileOptions,
   ReadTabularOptions,
@@ -77,6 +79,11 @@ export const Duck = {
   },
 
   query,
+
+  /** Loads an extension once per engine (see `ensureExtension`). */
+  async loadExtension(name: ExtensionName): Promise<void> {
+    return ensureExtension(getContext(), name);
+  },
 
   /** Execute a streaming query and return raw Arrow IPC bytes. */
   async queryStreaming(sql: string): Promise<Uint8Array> {
