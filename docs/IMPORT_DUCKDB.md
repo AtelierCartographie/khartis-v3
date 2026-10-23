@@ -80,6 +80,11 @@ JavaScript dédié (`gpx-processor.ts`).
 | KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                                                                                                                                            |
 | ZIP                   | un ou plusieurs jeux de données par archive                                                                                                                                                                          |
 
+Après lecture, la colonne géométrique s'appelle toujours `geom`. `ST_Read` et
+`read_parquet` gardent le nom de la source (`geometry` chez GDAL et
+GeoPandas) ; `normalizeGeometryColumnName()` le renomme, parce que les couches
+dérivées, la simplification et le rendu du fond lisent `geom`.
+
 Le validateur de l'interface contrôle extensions, tailles, groupes Shapefile et
 schéma d'URL (`http`/`https`). Appelé directement, le processeur distant
 télécharge la réponse entière avec un timeout, sans ces contrôles : toute
