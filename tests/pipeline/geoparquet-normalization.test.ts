@@ -59,7 +59,7 @@ describe('GeoParquet geometry normalization', () => {
     expect(sql).toContain('ST_GeomFromGeoJSON');
     expect(sql).toContain("'MultiLineString'");
     expect(sql).toContain(
-      'list_transform("geom", coordinate_0 -> list_transform(coordinate_0, coordinate_1 -> [coordinate_1.x, coordinate_1.y]))'
+      'list_transform("geom", lambda coordinate_0: list_transform(coordinate_0, lambda coordinate_1: [coordinate_1.x, coordinate_1.y]))'
     );
   });
 

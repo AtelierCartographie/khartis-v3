@@ -253,7 +253,7 @@ export async function refineColumn(
       ELSE array_to_string(
         list_transform(
           string_split(lower(${sqlIdentifier(columnName)}::VARCHAR), ' '),
-          x -> CASE
+          lambda x: CASE
             WHEN x = '' THEN x
             ELSE upper(substr(x, 1, 1)) || substr(x, 2)
           END

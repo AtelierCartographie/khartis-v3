@@ -5,8 +5,10 @@ import { tmpdir } from 'node:os';
 import {
   addCalculatedColumn,
   changeColumnType,
+  refineColumn,
   validateExpression
 } from '$lib/features/duckdb/orchestrator/column-ops';
+import { RefineOperation } from '$lib/features/duckdb/enums';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { DUCK_CONST } from '$lib/features/duckdb/constants';
 import {
@@ -310,5 +312,28 @@ describe('validateExpression', () => {
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'calc_target'`
       )
     ).toEqual([{ column_name: 'a' }]);
+  });
+});
+
+describe('refineColumn', () => {
+  it('should capitalize each word and keep NULL when converting to title case', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE "refine_title" AS
+       SELECT * FROM (VALUES ('saint-ÉTIENNE  du rouvray'), (NULL)) t(name)`
+    );
+
+    await refineColumn(
+      'refine_title',
+      'name',
+      RefineOperation.TITLECASE,
+      duckClient(),
+      { skipAnalysis: true }
+    );
+
+    expect(await query(db, 'SELECT name FROM "refine_title"')).toEqual([
+      { name: 'Saint-étienne  Du Rouvray' },
+      { name: null }
+    ]);
   });
 });
