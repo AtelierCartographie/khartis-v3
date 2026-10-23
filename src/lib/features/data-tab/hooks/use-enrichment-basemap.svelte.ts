@@ -2,7 +2,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
+import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
@@ -514,7 +514,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
             3
           );
         } catch (error) {
-          if (!cancelled && !isMissingDuckTableError(error)) {
+          if (!cancelled && !matchesDuckDBError(error, 'missing-table')) {
             logger.error(
               'Failed to compute basemap join suggestions',
               LogCategory.DATA,

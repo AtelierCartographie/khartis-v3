@@ -1,9 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
@@ -14,8 +10,10 @@ import {
 import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { markTableMutated } from '../cache/cache-manager';
-import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
+import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
+import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 import { isProjectionSupported } from './reprojection';
 import type {
   DuckDBContext,
@@ -30,6 +28,10 @@ import {
 } from './file-registry';
 import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 interface GeofileMetadata {
   crs: string | null;
@@ -37,16 +39,6 @@ interface GeofileMetadata {
   layerCount: number;
   selectedLayer: string | null;
   autoSelectedLayer: boolean;
-}
-
-function isThreadPoolError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const message = error.message.toLowerCase();
-  return (
-    message.includes('thread constructor failed') ||
-    message.includes('resource temporarily unavailable') ||
-    message.includes('pthread_create')
-  );
 }
 
 function isGeoPackageFile(filename: string): boolean {
@@ -68,12 +60,6 @@ function shouldUseGeoPackageBrowserFallback(
   );
 }
 
-function isCrsNotFoundError(error: unknown): boolean {
-  return (
-    error instanceof Error && /crs not found/i.test(error.message.toLowerCase())
-  );
-}
-
 /**
  * `ST_Read` can still fail with "crs not found" while materialising the GEOMETRY
  * type for some source CRS, even though PROJ is bundled and `ST_Transform`
@@ -83,17 +69,17 @@ function isCrsNotFoundError(error: unknown): boolean {
  * it to WGS84 when the render path actually needs it.
  */
 function buildCrsTaggedReadQuery(
-  escapedFinalTable: string,
-  escapedGeoFileId: string,
+  tableName: string,
+  fileId: string,
   selectedLayerClause: string,
   sourceCrs: string
 ): string {
-  return `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS
+  return `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT * EXCLUDE ("${INTERNAL_COLUMN.WKB_GEOMETRY}"),
-      ST_GeomFromWKB("${INTERNAL_COLUMN.WKB_GEOMETRY}")::GEOMETRY('${escapeSqlString(
+      ST_GeomFromWKB("${INTERNAL_COLUMN.WKB_GEOMETRY}")::GEOMETRY(${sqlString(
         sourceCrs
-      )}') AS "${INTERNAL_COLUMN.GEOM}"
-    FROM ST_Read('${escapedGeoFileId}', keep_wkb := true${selectedLayerClause});`;
+      )}) AS "${INTERNAL_COLUMN.GEOM}"
+    FROM ST_Read(${sqlString(fileId)}, keep_wkb := true${selectedLayerClause});`;
 }
 
 async function runGeofileRead(
@@ -151,7 +137,7 @@ async function queryGeofileLayers(
        layer.geometry_fields[1].type AS geom_type
      FROM (
        SELECT unnest(layers) AS layer
-       FROM ST_Read_Meta('${escapeSqlString(fileId)}')
+       FROM ST_Read_Meta(${sqlString(fileId)})
      )`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{
@@ -191,7 +177,7 @@ export async function listGeofileSpatialLayers(
   await registerFiles(ctx.db, ctx.registered_files, [geofile]);
   const fileId = (geofile as FileWithId).id;
   try {
-    await ensureSpatialExtension(ctx);
+    await ensureExtension(ctx, 'spatial');
     return rankSpatialLayers(await queryGeofileLayers(ctx, fileId)).map(
       (layer) => layer.layerName!
     );
@@ -203,40 +189,6 @@ export async function listGeofileSpatialLayers(
     return [];
   } finally {
     await dropRegisteredFile(ctx.db, ctx.registered_files, fileId);
-  }
-}
-
-async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
-  if (ctx.extensionsLoaded.spatial) return;
-
-  try {
-    await executeQuery(ctx.connection, `LOAD ${EXTENSIONS.SPATIAL};`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
-    ctx.extensionsLoaded.spatial = true;
-  } catch (loadError) {
-    logger.error(
-      'Failed to load spatial extension, trying install fallback',
-      LogCategory.DUCKDB,
-      loadError
-    );
-    try {
-      await executeQuery(
-        ctx.connection,
-        `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
-        {
-          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-        }
-      );
-      ctx.extensionsLoaded.spatial = true;
-    } catch (error) {
-      logger.error(
-        'Failed to load spatial extension',
-        LogCategory.DUCKDB,
-        error
-      );
-      throw error;
-    }
   }
 }
 
@@ -253,7 +205,7 @@ async function detectGeofileMetadata(
     autoSelectedLayer: false
   };
   try {
-    await ensureSpatialExtension(ctx);
+    await ensureExtension(ctx, 'spatial');
 
     const parsedLayers = await queryGeofileLayers(ctx, fileId);
 
@@ -284,7 +236,7 @@ async function detectGeofileMetadata(
          layers[1].geometry_fields[1].crs.auth_code AS crs_code,
          layers[1].geometry_fields[1].name AS geom_name,
          len(layers) AS layer_count
-       FROM ST_Read_Meta('${escapeSqlString(fileId)}')`,
+       FROM ST_Read_Meta(${sqlString(fileId)})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
     )) as ArrowTable;
     if (result && result.numRows > 0) {
@@ -332,10 +284,9 @@ export async function readGeofile(
   const geofileWithId = geofile as FileWithId;
 
   if (meta) {
-    const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
     const result = await executeQuery(
       ctx.connection,
-      `FROM ${SQL_FUNCTIONS.ST_READ_META}('${escapedFileIdMeta}')
+      `FROM ${SQL_FUNCTIONS.ST_READ_META}(${sqlString(geofileWithId.id)})
 				SELECT
 					file_name AS name,
 					driver_short_name AS format,
@@ -374,12 +325,10 @@ export async function readGeofile(
   );
 
   const finalTablename = tablename;
-  const escapedFinalTable = escapeIdentifier(finalTablename);
-  const escapedGeoFileId = escapeSqlString(geofileWithId.id);
   const selectedLayerClause = geoMeta.selectedLayer
-    ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
+    ? `, layer = ${sqlString(geoMeta.selectedLayer)}`
     : '';
-  const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
+  const readQuery = `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM ST_Read(${sqlString(geofileWithId.id)}${selectedLayerClause});`;
 
   try {
     await runGeofileRead(ctx, readQuery);
@@ -387,20 +336,23 @@ export async function readGeofile(
     const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
 
     if (
-      isCrsNotFoundError(error) &&
+      matchesDuckDBError(error, 'crs-not-found') &&
       sourceCrs &&
       isProjectionSupported(sourceCrs)
     ) {
       await runGeofileRead(
         ctx,
         buildCrsTaggedReadQuery(
-          escapedFinalTable,
-          escapedGeoFileId,
+          finalTablename,
+          geofileWithId.id,
           selectedLayerClause,
           sourceCrs
         )
       );
-    } else if (isGeoPackageFile(geofile.name) && isThreadPoolError(error)) {
+    } else if (
+      isGeoPackageFile(geofile.name) &&
+      matchesDuckDBError(error, 'thread-pool')
+    ) {
       const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
         geofile,
         {

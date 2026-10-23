@@ -5,21 +5,38 @@ export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.rowCountCache.delete(table);
 }
 
-const tableMutationListeners = new Set<
-  (table: string, ctx: DuckDBContext) => void
->();
+export interface TableMutationOptions {
+  /**
+   * The statement only appended join result columns: source values are
+   * unchanged, so the join similarity cache stays valid.
+   */
+  preserveJoinSimilarity?: boolean;
+}
 
+type TableMutationListener = (
+  table: string,
+  ctx: DuckDBContext,
+  options: TableMutationOptions
+) => void;
+
+const tableMutationListeners = new Set<TableMutationListener>();
+
+/** Every cache derived from a table subscribes here and nowhere else. */
 export function registerTableMutationCallback(
-  callback: (table: string, ctx: DuckDBContext) => void
+  callback: TableMutationListener
 ): () => void {
   tableMutationListeners.add(callback);
   return () => tableMutationListeners.delete(callback);
 }
 
-export function markTableMutated(ctx: DuckDBContext, table: string): void {
+export function markTableMutated(
+  ctx: DuckDBContext,
+  table: string,
+  options: TableMutationOptions = {}
+): void {
   invalidateTableCache(ctx, table);
   for (const listener of tableMutationListeners) {
-    listener(table, ctx);
+    listener(table, ctx, options);
   }
 }
 

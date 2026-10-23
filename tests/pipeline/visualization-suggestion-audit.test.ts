@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import {
   afterAll,
   beforeAll,
@@ -43,10 +44,6 @@ import {
 import { buildGeoDetection } from '$lib/features/commons/utils/geo-detection.utils';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import { summarizeColumn } from './semio-fixture-helper';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 
 const mocks = vi.hoisted(() => ({
   notifyChangeMock: vi.fn(),
@@ -180,6 +177,10 @@ import {
   shouldApplyLineChoropleth,
   shouldApplyProportionalSymbols
 } from '$lib/features/map/utils/data-styling.utils';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 type ImportedAuditDataset = {
   source: string;
@@ -204,6 +205,12 @@ type GeometryQueryRow = {
 
 type QueryDuck = {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  mutate(
+    this: QueryDuck,
+    tables: unknown,
+    sql: string,
+    options?: never
+  ): unknown;
 };
 
 const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '../..');
@@ -360,6 +367,14 @@ function buildColumnAnalysis(dataset: DatasetResult): ColumnAnalysis[] {
 
 function wrapDuckConnection(connection: DuckDBConnection): QueryDuck {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string): Promise<unknown> {
       const reader = await connection.runAndReadAll(sql);
       return reader.getRowObjectsJson();
@@ -407,9 +422,8 @@ function mapGeometryType(
 async function getGeometryInfo(
   tableName: string
 ): Promise<DatasetResult['geometry'] | undefined> {
-  const escapedTable = escapeIdentifier(tableName);
   const describeRows = await queryRows<DescribeRow>(
-    `DESCRIBE "${escapedTable}"`
+    `DESCRIBE ${sqlIdentifier(tableName)}`
   );
   const geometryColumn = describeRows.find((column) =>
     String(column.column_type ?? column.type ?? '')
@@ -423,15 +437,14 @@ async function getGeometryInfo(
     return undefined;
   }
 
-  const escapedGeomCol = escapeIdentifier(geometryColumnName);
   const [typeRow] = await queryRows<GeometryQueryRow>(`
-    SELECT ST_GeometryType("${escapedGeomCol}") AS geom_type
-    FROM "${escapedTable}"
-    WHERE "${escapedGeomCol}" IS NOT NULL
+    SELECT ST_GeometryType(${sqlIdentifier(geometryColumnName)}) AS geom_type
+    FROM ${sqlIdentifier(tableName)}
+    WHERE ${sqlIdentifier(geometryColumnName)} IS NOT NULL
     LIMIT 1
   `);
   const [extentRow] = await queryRows<GeometryQueryRow>(`
-    WITH agg AS (SELECT ST_Extent_Agg("${escapedGeomCol}") AS extent FROM "${escapedTable}")
+    WITH agg AS (SELECT ST_Extent_Agg(${sqlIdentifier(geometryColumnName)}) AS extent FROM ${sqlIdentifier(tableName)})
     SELECT
       ST_XMin(extent) AS minX,
       ST_YMin(extent) AS minY,
@@ -478,28 +491,26 @@ async function getGeometryInfo(
 async function analyzeTable(
   tableName: string
 ): Promise<DatasetResult['columns']> {
-  const escapedTableString = escapeSqlString(tableName);
   const describeRows = await queryRows<DescribeRow>(
-    `FROM describe_full('${escapedTableString}')`
+    `FROM describe_full(${sqlString(tableName)})`
   );
 
   const columns = await Promise.all(
     describeRows.map(async (column) => {
       const columnName = String(column.name ?? '');
-      const escapedColumnName = escapeIdentifier(columnName);
 
       const [general] = await queryRows<Record<string, unknown>>(
-        `FROM summary_general('${escapedTableString}', "${escapedColumnName}")`
+        `FROM summary_general(${sqlString(tableName)}, ${sqlIdentifier(columnName)})`
       );
 
       let specific: Record<string, unknown> = {};
       if (column.type_simple === 'numeric') {
         [specific = {}] = await queryRows<Record<string, unknown>>(
-          `FROM summary_numeric('${escapedTableString}', "${escapedColumnName}")`
+          `FROM summary_numeric(${sqlString(tableName)}, ${sqlIdentifier(columnName)})`
         );
       } else if (column.type_simple === 'date') {
         [specific = {}] = await queryRows<Record<string, unknown>>(
-          `FROM summary_date('${escapedTableString}', "${escapedColumnName}")`
+          `FROM summary_date(${sqlString(tableName)}, ${sqlIdentifier(columnName)})`
         );
       }
 
@@ -604,18 +615,16 @@ function buildDatasetResult(params: {
 async function importGeoDataset(source: string): Promise<ImportedAuditDataset> {
   const preparedSource = await prepareGeoDatasetSource(source);
   const tableName = `audit_${buildDatasetId(source).replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedSource = escapeSqlString(preparedSource);
 
-  await dbConnection.run(`DROP TABLE IF EXISTS "${escapedTable}"`);
+  await dbConnection.run(`DROP TABLE IF EXISTS ${sqlIdentifier(tableName)}`);
   await dbConnection.run(
-    `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM ST_Read('${escapedSource}')`
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS FROM ST_Read(${sqlString(preparedSource)})`
   );
 
   const columns = await analyzeTable(tableName);
   const geometry = await getGeometryInfo(tableName);
   const [{ cnt }] = await queryRows<{ cnt: number | string }>(
-    `SELECT COUNT(*) AS cnt FROM "${escapedTable}"`
+    `SELECT COUNT(*) AS cnt FROM ${sqlIdentifier(tableName)}`
   );
 
   return {
@@ -781,10 +790,8 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
   });
 
   const tableName = `audit_${buildDatasetId(source).replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedSource = escapeSqlString(source);
 
-  await dbConnection.run(`DROP TABLE IF EXISTS "${escapedTable}"`);
+  await dbConnection.run(`DROP TABLE IF EXISTS ${sqlIdentifier(tableName)}`);
 
   const buildCsvOptions = (
     retryOptions: {
@@ -829,11 +836,11 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
     retryOptions: Parameters<typeof buildCsvOptions>[0] = {}
   ): Promise<number> => {
     await dbConnection.run(
-      `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM read_csv('${escapedSource}', ${buildCsvOptions(retryOptions).join(', ')})`
+      `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS FROM read_csv(${sqlString(source)}, ${buildCsvOptions(retryOptions).join(', ')})`
     );
 
     const [{ cnt }] = await queryRows<{ cnt: number | string }>(
-      `SELECT COUNT(*) AS cnt FROM "${escapedTable}"`
+      `SELECT COUNT(*) AS cnt FROM ${sqlIdentifier(tableName)}`
     );
 
     return Number(cnt ?? 0);
@@ -861,7 +868,7 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
 
   await normalizeFormattedNumericColumns(
     tableName,
-    wrapDuckConnection(dbConnection)
+    wrapDuckConnection(dbConnection) as unknown as DuckClient
   );
 
   const columns = await analyzeTable(tableName);
@@ -1065,7 +1072,8 @@ beforeAll(async () => {
   dbInstance = await DuckDBInstance.create(':memory:', {
     threads: '2',
     autoinstall_known_extensions: 'true',
-    autoload_known_extensions: 'true'
+    autoload_known_extensions: 'true',
+    lambda_syntax: 'disable_single_arrow'
   });
   dbConnection = await dbInstance.connect();
   await dbConnection.run('INSTALL spatial');

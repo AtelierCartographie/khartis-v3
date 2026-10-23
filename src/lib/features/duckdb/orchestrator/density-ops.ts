@@ -4,10 +4,6 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import {
@@ -21,6 +17,12 @@ import {
   fetchArrowTableWithGeometry
 } from './arrow-ops';
 import { findGeometryColumnByName } from '../utils/geometry-column.utils';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlNamePart,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 const GEOMETRY_COLUMN = 'geometry';
 const DENSITY_CACHE_MAX_ENTRIES = 12;
@@ -37,7 +39,7 @@ async function getTableColumns(
 ): Promise<GeometryColumnInfo[]> {
   return (await Duck.query(
     `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(tableName)}'`,
+     WHERE table_name = ${sqlString(tableName)}`,
     { format: 'array', useProxy: false }
   )) as GeometryColumnInfo[];
 }
@@ -52,10 +54,6 @@ function findJoinColumn(columns: GeometryColumnInfo[]): string | null {
     (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
   );
   return nativeIdColumn?.column_name ?? null;
-}
-
-function getSafeTempName(prefix: string, tableName: string): string {
-  return `${prefix}_${tableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 }
 
 function buildDensityCacheKey(
@@ -126,10 +124,8 @@ export async function computeDensityLevels(
   columnName: string,
   maxPoints: number = 100000
 ): Promise<DensityLevelOption[]> {
-  const safeTable = escapeSqlString(tableName);
-  const safeColumn = escapeIdentifier(columnName);
   const rows = (await Duck.query(
-    `FROM get_density_levels('${safeTable}', "${safeColumn}", max_points := ${maxPoints})
+    `FROM get_density_levels(${sqlString(tableName)}, ${sqlIdentifier(columnName)}, max_points := ${maxPoints})
      SELECT level, ratio`,
     { format: 'array', useProxy: false }
   )) as Array<{ level: string; ratio: number }>;
@@ -156,10 +152,6 @@ export async function generateDotDensityArrow(
   ratio: number,
   options: { seed?: number } = {}
 ): Promise<ArrowTable> {
-  const safeTable = escapeSqlString(tableName);
-  const safeGeom = escapeIdentifier(geomColumn);
-  const safeData = escapeIdentifier(dataColumn);
-
   if (typeof options.seed === 'number') {
     const seed = Number(options.seed);
     if (Number.isFinite(seed)) {
@@ -167,11 +159,11 @@ export async function generateDotDensityArrow(
     }
   }
 
-  const tempName = `dd_out_${tableName.replace(/[^a-zA-Z0-9_]/g, '_')}_${Date.now()}`;
+  const tempName = sqlTempName('dd_out', tableName);
 
   await Duck.query(
-    `CREATE OR REPLACE TEMP TABLE "${tempName}" AS
-     FROM generate_dot_density('${safeTable}', "${safeGeom}", "${safeData}", ${Math.floor(ratio)})
+    `CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(tempName)} AS
+     FROM generate_dot_density(${sqlString(tableName)}, ${sqlIdentifier(geomColumn)}, ${sqlIdentifier(dataColumn)}, ${Math.floor(ratio)})
      SELECT geometry AS ${GEOMETRY_COLUMN}`,
     { useProxy: false }
   );
@@ -189,7 +181,9 @@ export async function generateDotDensityArrow(
       geomColumn
     );
   } finally {
-    await Duck.query(`DROP TABLE IF EXISTS "${tempName}"`, { useProxy: false });
+    await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(tempName)}`, {
+      useProxy: false
+    });
   }
 }
 
@@ -237,22 +231,16 @@ export async function generateDotDensityFromJoin(
   const cached = densityCache.get(cacheKey);
   if (cached) return cached;
 
-  const viewName = getSafeTempName('density_src', datasetTableName);
-  const escapedDataset = escapeIdentifier(datasetTableName);
-  const escapedGeometry = escapeIdentifier(geometryTableName);
-  const escapedJoinCol = escapeIdentifier(joinColumn);
-  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
-  const escapedDataCol = escapeIdentifier(dataColumn);
-  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
+  const viewName = `density_src_${sqlNamePart(datasetTableName)}`;
 
   await Duck.query(`
-    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
-    SELECT g."${escapedGeomCol}" AS geom, d."${escapedDataCol}" AS value
-    FROM "${escapedDataset}" d
-    INNER JOIN "${escapedGeometry}" g
-      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
-    WHERE g."${escapedGeomCol}" IS NOT NULL
-      AND d."${escapedDataCol}" IS NOT NULL
+    CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(viewName)} AS
+    SELECT g.${sqlIdentifier(geometryColumn.column_name)} AS geom, d.${sqlIdentifier(dataColumn)} AS value
+    FROM ${sqlIdentifier(datasetTableName)} d
+    INNER JOIN ${sqlIdentifier(geometryTableName)} g
+      ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(g.${sqlIdentifier(joinColumn)} AS VARCHAR)
+    WHERE g.${sqlIdentifier(geometryColumn.column_name)} IS NOT NULL
+      AND d.${sqlIdentifier(dataColumn)} IS NOT NULL
   `);
 
   try {
@@ -266,7 +254,9 @@ export async function generateDotDensityFromJoin(
     setDensityCacheEntry(cacheTableId, cacheKey, arrow);
     return arrow;
   } finally {
-    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+    await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
+      useProxy: false
+    });
   }
 }
 
@@ -288,34 +278,26 @@ async function createGpsDensitySourceView(
     );
   }
 
-  const escapedView = escapeIdentifier(viewName);
-  const escapedDataset = escapeIdentifier(datasetTableName);
-  const escapedGeometry = escapeIdentifier(geometryTableName);
-  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
-  const escapedDataCol = escapeIdentifier(dataColumn);
-  const escapedLatCol = escapeIdentifier(latColumn);
-  const escapedLonCol = escapeIdentifier(lonColumn);
-
   await Duck.query(`
-    CREATE OR REPLACE TEMP VIEW "${escapedView}" AS
+    CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(viewName)} AS
     WITH points AS (
       SELECT
         ST_Point(
-          TRY_CAST("${escapedLonCol}" AS DOUBLE),
-          TRY_CAST("${escapedLatCol}" AS DOUBLE)
+          TRY_CAST(${sqlIdentifier(lonColumn)} AS DOUBLE),
+          TRY_CAST(${sqlIdentifier(latColumn)} AS DOUBLE)
         ) AS point_geom,
-        COALESCE(TRY_CAST("${escapedDataCol}" AS DOUBLE), 1.0) AS point_value
-      FROM "${escapedDataset}"
-      WHERE "${escapedDataCol}" IS NOT NULL
-        AND TRY_CAST("${escapedLatCol}" AS DOUBLE) BETWEEN -90 AND 90
-        AND TRY_CAST("${escapedLonCol}" AS DOUBLE) BETWEEN -180 AND 180
+        COALESCE(TRY_CAST(${sqlIdentifier(dataColumn)} AS DOUBLE), 1.0) AS point_value
+      FROM ${sqlIdentifier(datasetTableName)}
+      WHERE ${sqlIdentifier(dataColumn)} IS NOT NULL
+        AND TRY_CAST(${sqlIdentifier(latColumn)} AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST(${sqlIdentifier(lonColumn)} AS DOUBLE) BETWEEN -180 AND 180
     ),
     geometry_rows AS (
       SELECT
         ROW_NUMBER() OVER () AS feature_key,
-        "${escapedGeomCol}" AS geom
-      FROM "${escapedGeometry}"
-      WHERE "${escapedGeomCol}" IS NOT NULL
+        ${sqlIdentifier(geometryColumn.column_name)} AS geom
+      FROM ${sqlIdentifier(geometryTableName)}
+      WHERE ${sqlIdentifier(geometryColumn.column_name)} IS NOT NULL
     )
     SELECT
       g.geom AS geom,
@@ -349,7 +331,7 @@ export async function generateDotDensityFromGpsJoin(
   const cached = densityCache.get(cacheKey);
   if (cached) return cached;
 
-  const viewName = getSafeTempName('density_gps_src', datasetTableName);
+  const viewName = `density_gps_src_${sqlNamePart(datasetTableName)}`;
   await createGpsDensitySourceView(
     viewName,
     geometryTableName,
@@ -370,7 +352,9 @@ export async function generateDotDensityFromGpsJoin(
     setDensityCacheEntry(cacheTableId, cacheKey, arrow);
     return arrow;
   } finally {
-    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+    await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
+      useProxy: false
+    });
   }
 }
 
@@ -390,26 +374,23 @@ export async function computeDensityLevelsFromJoin(
     return computeDensityLevels(datasetTableName, dataColumn, maxPoints);
   }
 
-  const viewName = getSafeTempName('density_levels', datasetTableName);
-  const escapedDataset = escapeIdentifier(datasetTableName);
-  const escapedGeometry = escapeIdentifier(geometryTableName);
-  const escapedJoinCol = escapeIdentifier(joinColumn);
-  const escapedDataCol = escapeIdentifier(dataColumn);
-  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
+  const viewName = `density_levels_${sqlNamePart(datasetTableName)}`;
 
   await Duck.query(`
-    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
-    SELECT d."${escapedDataCol}" AS value
-    FROM "${escapedDataset}" d
-    INNER JOIN "${escapedGeometry}" g
-      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
-    WHERE d."${escapedDataCol}" IS NOT NULL
+    CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(viewName)} AS
+    SELECT d.${sqlIdentifier(dataColumn)} AS value
+    FROM ${sqlIdentifier(datasetTableName)} d
+    INNER JOIN ${sqlIdentifier(geometryTableName)} g
+      ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(g.${sqlIdentifier(joinColumn)} AS VARCHAR)
+    WHERE d.${sqlIdentifier(dataColumn)} IS NOT NULL
   `);
 
   try {
     return await computeDensityLevels(viewName, 'value', maxPoints);
   } finally {
-    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+    await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
+      useProxy: false
+    });
   }
 }
 
@@ -421,7 +402,7 @@ export async function computeDensityLevelsFromGpsJoin(
   lonColumn: string,
   maxPoints: number = 100000
 ): Promise<DensityLevelOption[]> {
-  const viewName = getSafeTempName('density_gps_levels', datasetTableName);
+  const viewName = `density_gps_levels_${sqlNamePart(datasetTableName)}`;
   await createGpsDensitySourceView(
     viewName,
     geometryTableName,
@@ -434,7 +415,9 @@ export async function computeDensityLevelsFromGpsJoin(
   try {
     return await computeDensityLevels(viewName, 'value', maxPoints);
   } finally {
-    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+    await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
+      useProxy: false
+    });
   }
 }
 

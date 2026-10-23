@@ -1,6 +1,5 @@
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
 import {
   bumpDatasetsVersion,
@@ -9,16 +8,8 @@ import {
   setCurrentTableName,
   updateDatasets
 } from './state.svelte';
-
-export interface DuckDBClientForDataset {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  dropTable(tableName: string): Promise<void>;
-  analyse(
-    tableName: string,
-    options?: { force?: boolean }
-  ): Promise<AnalysisResult[]>;
-  cleanupTableResources?(tableName: string): void;
-}
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export interface DatasetCallbacks {
   getRowCount: (tableName: string) => Promise<number>;
@@ -47,7 +38,7 @@ export async function registerExistingTable(
   tableName: string,
   sourceFileId: string,
   fileName: string,
-  Duck: DuckDBClientForDataset,
+  Duck: DuckClient,
   callbacks: DatasetCallbacks,
   options?: {
     geoDetection?: GeoDetectionResult;
@@ -56,9 +47,8 @@ export async function registerExistingTable(
   }
 ): Promise<DuckDBDataset | null> {
   try {
-    const escapedTableNameForCheck = escapeSqlString(tableName);
     const tableCheck = (await Duck.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableNameForCheck}'`,
+      `SELECT table_name FROM information_schema.tables WHERE table_name = ${sqlString(tableName)}`,
       { format: 'array' }
     )) as Array<{ table_name: string }>;
 
@@ -120,7 +110,7 @@ export async function registerExistingTable(
 
 export async function dropTable(
   tableName: string,
-  Duck: DuckDBClientForDataset
+  Duck: DuckClient
 ): Promise<void> {
   const state = getState();
 
@@ -147,7 +137,7 @@ export async function dropTable(
     }
 
     // Clear cached metadata for the dropped table (prevents reference leaks)
-    Duck.cleanupTableResources?.(tableName);
+    Duck.cleanupTableResources(tableName);
   } catch (error) {
     logger.error(
       '[duckDBOrchestrator:dropTable] ERROR',
@@ -242,7 +232,7 @@ function areGpsColumnsEqual(
 export async function updateDatasetTableName(
   sourceFileId: string,
   newTableName: string,
-  Duck: DuckDBClientForDataset,
+  Duck: DuckClient,
   callbacks: DatasetCallbacks
 ): Promise<DuckDBDataset | null> {
   const existing = findDatasetByIdOrSourceFile(sourceFileId);

@@ -25,10 +25,7 @@ export type {
   SearchStats
 } from './types/dataset.types';
 
-export type {
-  ExtensionsLoaded,
-  ExtensionLoadPromises
-} from './types/extension.types';
+export type { ExtensionName } from './types/extension.types';
 
 export type {
   AnalyseOptions,

@@ -1,13 +1,14 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { markTableMutated } from '../cache/cache-manager';
-import { DUCK_CONST, EXTENSIONS } from '../constants';
+import { DUCK_CONST } from '../constants';
+import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { addRowId } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 interface FileWithId extends File {
   id?: string;
@@ -25,15 +26,11 @@ export async function readJsonTabular(
   const { tablename } = options;
   const fileid = (file as FileWithId).id ?? file.name;
 
-  await executeQuery(
-    ctx.connection,
-    `INSTALL ${EXTENSIONS.JSON}; LOAD ${EXTENSIONS.JSON};`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  );
+  await ensureExtension(ctx, 'json');
 
   await executeQuery(
     ctx.connection,
-    `CREATE OR REPLACE TABLE "${escapeIdentifier(tablename)}" AS FROM read_json_auto('${escapeSqlString(fileid)}');`,
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(tablename)} AS FROM read_json_auto(${sqlString(fileid)});`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 

@@ -45,7 +45,7 @@ function createContext(): DuckDBContext {
   return {
     connection: db.connection,
     registered_files: new Set(),
-    extensionsLoaded: { spatial: false }
+    extensionLoads: new Map()
   } as unknown as DuckDBContext;
 }
 

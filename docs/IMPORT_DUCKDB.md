@@ -43,9 +43,12 @@ limite lève une erreur de mémoire propre et les tables existantes restent
 lisibles.
 
 Les extensions sont servies depuis `/duckdb-extensions`, où `pnpm install` les
-dépose. Si `spatial` ne se charge pas, un avertissement est affiché et les
-opérations spatiales ne sont pas disponibles. En cas d'échec, le Worker est
-terminé pour qu'une nouvelle tentative reparte de zéro.
+dépose. `ensureExtension` (`core/extensions.ts`) charge chacune une seule fois
+par moteur : `spatial` au démarrage, `json` à la première lecture JSON. Si
+`spatial` ne se charge pas au démarrage, un avertissement est affiché, et la
+première lecture géographique retente le chargement. En cas d'échec de
+l'initialisation, le Worker est terminé pour qu'une nouvelle tentative reparte
+de zéro.
 
 ## Points d'entrée
 
@@ -144,12 +147,19 @@ les deux CRS sont pris en charge. Elle est distincte de la projection de rendu
 
 | Niveau                 | Contenu                                                        | Invalidation                                         |
 | ---------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
-| Métadonnées DuckDB     | description, nombre de lignes, analyse de colonnes             | `markTableMutated()` et mutateurs de l'orchestrateur |
+| Métadonnées DuckDB     | description, nombre de lignes, analyse de colonnes             | `Duck.mutate()` ou `markTableMutated()`              |
 | Table Arrow du dataset | référence Arrow conservée dans l'état du dataset               | recréation ou mutation de la table ou de ses filtres |
 | Jointure               | tables Arrow jointes, cache de similarité, gradings (LRU de 4) | mutation, correction de jointure                     |
 | Rendu                  | caches indexés par identité de table et de projection          | nouvelle référence Arrow ou nouvelle projection      |
 
-Toute mutation passe par l'orchestrateur ou invalide explicitement ces caches.
+Toute instruction qui modifie une table non temporaire passe par
+`Duck.mutate(tables, sql)`, qui appelle `markTableMutated` pour chaque table
+nommée, même si l'instruction échoue en cours de route. Chaque cache dérivé
+s'abonne à `registerTableMutationCallback` : analyse, recherche, tableau,
+GPS, densité, construction en arrière-plan, et l'orchestrateur pour la table
+Arrow du dataset, les tables jointes et la similarité de jointure. Aucun
+appelant n'invalide à la main. Une finalisation de jointure passe
+`preserveJoinSimilarity`, puisqu'elle laisse les valeurs source intactes.
 
 Le grading de jointure (joint / à vérifier / non unique / non reconnu) est
 matérialisé dans des tables dérivées, **clés sur le cache de similarité** qui

@@ -1,10 +1,7 @@
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
 import { NULL_VALUE_TOKENS } from '$lib/features/commons/constants/detection.constants';
 
-function formatDuckDBStringLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
-}
-
-const DUCKDB_NULL_VALUES = `[${NULL_VALUE_TOKENS.map(formatDuckDBStringLiteral).join(', ')}]`;
+const DUCKDB_NULL_VALUES = `[${NULL_VALUE_TOKENS.map(sqlString).join(', ')}]`;
 
 /**
  * DuckDB configuration constants.
@@ -65,16 +62,20 @@ export const GEO_CONSTANTS = {
  */
 export const EXTENSIONS = {
   SPATIAL: 'spatial',
-  HTTPFS: 'httpfs',
   JSON: 'json'
 } as const;
+
+/**
+ * Loads spatial with coordinates read as [x, y] (lon/lat) whatever the CRS
+ * authority says. Spatial 2.0 rejects ST_Transform and the spheroid functions
+ * when the axis order is left unset. The setting only exists once spatial is
+ * loaded.
+ */
+export const LOAD_SPATIAL_SQL = `LOAD ${EXTENSIONS.SPATIAL}; SET geometry_always_xy = true;`;
 
 /**
  * DuckDB SQL function names.
  */
 export const SQL_FUNCTIONS = {
-  ST_READ_META: 'ST_Read_Meta',
-  READ_CSV: 'read_csv',
-  READ_CSV_AUTO: 'read_csv_auto',
-  READ_PARQUET: 'read_parquet'
+  ST_READ_META: 'ST_Read_Meta'
 } as const;

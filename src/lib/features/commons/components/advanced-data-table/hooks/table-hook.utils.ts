@@ -1,5 +1,5 @@
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
+import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { datasetsStore } from '../../../stores/datasets.store.svelte';
 
 export type HookValue<T> = T | (() => T);
@@ -29,7 +29,7 @@ export function isMissingRequestedTableError(
 ): boolean {
   return (
     Boolean(tableName) &&
-    isMissingDuckTableError(error) &&
+    matchesDuckDBError(error, 'missing-table') &&
     !isRequestedTableAvailable(tableName)
   );
 }

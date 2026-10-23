@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
   import Button from '$lib/features/commons/components/button-native.svelte';
   import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
@@ -15,7 +16,6 @@
   import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/types/create-project.types';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
   import {
     readCarbonStringValue,
     type CarbonValueEvent
@@ -85,7 +85,7 @@
   const autocompleteSuggestions = $derived.by((): Suggestion[] => {
     const variableSuggestions: Suggestion[] = columns.map((col) => ({
       label: col.name,
-      value: escapeIdentifier(col.name),
+      value: sqlIdentifier(col.name),
       type: 'variable' as const,
       description: col.type || m.calculator_column_description()
     }));
@@ -204,7 +204,7 @@
 
   function insertVariable() {
     if (!selectedVariable) return;
-    formula += `"${escapeIdentifier(selectedVariable)}"`;
+    formula += sqlIdentifier(selectedVariable);
     dataToolsStore.setCalculatorFormula(formula);
   }
 
@@ -219,7 +219,7 @@
     if (!fn) return;
 
     const col = selectedVariable || m.calc_column_default();
-    const template = fn.template.replace('{col}', `"${escapeIdentifier(col)}"`);
+    const template = fn.template.replace('{col}', sqlIdentifier(col));
     formula += template;
     dataToolsStore.setCalculatorFormula(formula);
   }

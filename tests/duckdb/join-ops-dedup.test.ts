@@ -23,8 +23,7 @@ import {
   finalizeJoin,
   getJoinedBasemapValues,
   getJoinedEntitiesPage,
-  invalidateSimilarityCache,
-  type DuckDBClientForJoin
+  invalidateSimilarityCache
 } from '$lib/features/duckdb/orchestrator/join-ops';
 import {
   JOINED_BASEMAP_COLUMN,
@@ -46,14 +45,23 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 let db: TestDuckDB;
 
 /**
- * Minimal DuckDBClientForJoin adapter wrapping @duckdb/node-api for tests.
+ * Minimal DuckClient adapter wrapping @duckdb/node-api for tests.
  */
-function makeDuckClient(testDb: TestDuckDB): DuckDBClientForJoin {
+function makeDuckClient(testDb: TestDuckDB): DuckClient {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string, options?: { format?: string }) {
       const reader = await testDb.connection.runAndReadAll(sql);
       if (options?.format === 'array') {
@@ -61,7 +69,7 @@ function makeDuckClient(testDb: TestDuckDB): DuckDBClientForJoin {
       }
       return reader.getRowObjectsJson();
     }
-  };
+  } as unknown as DuckClient;
 }
 
 const TEST_BASEMAP = 'test-communes';
@@ -516,7 +524,7 @@ describe('exact_claimed_ids deduplication', () => {
 
     const baseDuck = makeDuckClient(db);
     const querySpy = vi.fn(baseDuck.query);
-    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_data5', [
       { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
     ]);
@@ -547,8 +555,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded VALUES ('Lyon'), ('Saint-Colombe')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded');
 
     await computeJoinStats(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
@@ -565,8 +574,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded2 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded2 VALUES ('Lyon')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded2');
 
     const [page, values] = await Promise.all([
@@ -586,8 +596,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded3 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded3 VALUES ('Lyon'), ('69123')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded3');
 
     const all = await computeJoinStats(
@@ -613,8 +624,9 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded4 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded4 VALUES ('Lyon')`);
 
-    const querySpy = vi.fn(makeDuckClient(db).query);
-    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck = { ...baseDuck, query: querySpy } as unknown as DuckClient;
     const dataset = makeDataset('user_graded4');
 
     const before = await computeJoinStats(
@@ -650,16 +662,16 @@ describe('exact_claimed_ids deduplication', () => {
 
     const baseDuck = makeDuckClient(db);
     const querySpy = vi.fn(baseDuck.query);
-    const Duck: DuckDBClientForJoin = {
+    const Duck = {
       ...baseDuck,
       query: querySpy
     };
     const dataset = makeDataset('user_data3');
 
     const [first, second, third] = await Promise.all([
-      computeJoinSynthesis(dataset, 'geo', Duck),
-      computeJoinSynthesis(dataset, 'geo', Duck),
-      computeJoinSynthesis(dataset, 'geo', Duck)
+      computeJoinSynthesis(dataset, 'geo', Duck as unknown as DuckClient),
+      computeJoinSynthesis(dataset, 'geo', Duck as unknown as DuckClient),
+      computeJoinSynthesis(dataset, 'geo', Duck as unknown as DuckClient)
     ]);
 
     expect(second).toEqual(first);

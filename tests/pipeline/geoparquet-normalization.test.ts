@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { describe, expect, it, vi } from 'vitest';
 import { normalizeGeoParquetTable } from '$lib/features/data-pipeline/operations/geoparquet';
 import type {
@@ -7,6 +8,14 @@ import type {
 
 function createDuck(columnType: string) {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     query: vi.fn().mockResolvedValue(undefined),
     describe_table: vi.fn().mockResolvedValue({
       name: ['name', 'geom'],
@@ -41,7 +50,7 @@ describe('GeoParquet geometry normalization', () => {
       normalizeGeoParquetTable(
         'uploaded_geoparquet',
         createMetadata('multilinestring'),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).resolves.toBe(true);
 
@@ -50,10 +59,7 @@ describe('GeoParquet geometry normalization', () => {
     expect(sql).toContain('ST_GeomFromGeoJSON');
     expect(sql).toContain("'MultiLineString'");
     expect(sql).toContain(
-      'list_transform("geom", coordinate_0 -> list_transform(coordinate_0, coordinate_1 -> [coordinate_1.x, coordinate_1.y]))'
-    );
-    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      'uploaded_geoparquet'
+      'list_transform("geom", lambda coordinate_0: list_transform(coordinate_0, lambda coordinate_1: [coordinate_1.x, coordinate_1.y]))'
     );
   });
 
@@ -66,7 +72,7 @@ describe('GeoParquet geometry normalization', () => {
         type: 'ProjectedCRS',
         id: { authority: 'EPSG', code: 3857 }
       }),
-      Duck
+      Duck as unknown as DuckClient
     );
 
     expect(Duck.query.mock.calls[0][0]).toContain(
@@ -84,19 +90,22 @@ describe('GeoParquet geometry normalization', () => {
           type: 'ProjectedCRS',
           id: { authority: 'EPSG', code: 2154 }
         }),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).resolves.toBe(false);
 
     expect(Duck.query).not.toHaveBeenCalled();
-    expect(Duck.invalidateTableCache).not.toHaveBeenCalled();
   });
 
   it('should leave plain Parquet tables unchanged when GeoParquet metadata is absent', async () => {
     const Duck = createDuck('VARCHAR');
 
     await expect(
-      normalizeGeoParquetTable('plain_parquet', {}, Duck)
+      normalizeGeoParquetTable(
+        'plain_parquet',
+        {},
+        Duck as unknown as DuckClient
+      )
     ).resolves.toBe(false);
 
     expect(Duck.describe_table).not.toHaveBeenCalled();
@@ -110,7 +119,7 @@ describe('GeoParquet geometry normalization', () => {
       normalizeGeoParquetTable(
         'invalid_geoparquet',
         createMetadata('unsupported'),
-        Duck
+        Duck as unknown as DuckClient
       )
     ).rejects.toMatchObject({
       name: 'DataValidationError',

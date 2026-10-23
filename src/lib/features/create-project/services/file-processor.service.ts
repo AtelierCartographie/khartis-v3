@@ -38,6 +38,10 @@ import {
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
+import {
+  getCsvErrorLine,
+  matchesDuckDBError
+} from '$lib/features/duckdb/utils/duckdb-error.utils';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
 
@@ -113,36 +117,20 @@ export function getReadableErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  const errorMessage = error instanceof Error ? error.message : String(error);
-
-  if (
-    errorMessage.includes('Multiple layers') ||
-    errorMessage.includes('more than one layer')
-  ) {
+  if (matchesDuckDBError(error, 'multiple-layers')) {
     return m.pipeline_error_geopackage_multiple_layers();
   }
 
-  if (
-    errorMessage.includes('Could not open file') ||
-    errorMessage.includes('Invalid file') ||
-    errorMessage.includes('not a valid')
-  ) {
+  if (matchesDuckDBError(error, 'file-unreadable')) {
     return m.pipeline_error_file_unreadable();
   }
 
-  if (
-    errorMessage.includes('read_csv') ||
-    errorMessage.includes('CSV') ||
-    errorMessage.includes('delimiter') ||
-    errorMessage.includes('column count')
-  ) {
+  if (matchesDuckDBError(error, 'csv')) {
     // The raw DuckDB message is English, names the temporary file and quotes
     // the offending row ("Original Line"), so only the line number is kept.
-    const line = /CSV Error on Line: (\d+)/.exec(errorMessage)?.[1];
-    return line
-      ? m.pipeline_error_csv_read_failed_at_line({
-          line: formatValue(Number(line))
-        })
+    const line = getCsvErrorLine(error);
+    return line !== null
+      ? m.pipeline_error_csv_read_failed_at_line({ line: formatValue(line) })
       : m.pipeline_error_csv_read_failed();
   }
 

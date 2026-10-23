@@ -21,11 +21,13 @@ All data work (import, typing, summary stats, sort, search, filter, calculator, 
 
 ## SQL: escape everything derived from user files
 
-Table names, column names and values almost always come from user files (`sanitize.utils.ts`):
+Table names, column names and values almost always come from user files. `commons/utils/sql.utils.ts` is the only place that renders them:
 
-- Identifiers go in double quotes through `escapeIdentifier()`: `"${escapeIdentifier(col)}"`.
-- String values go in single quotes through `escapeSqlString()`: `'${escapeSqlString(value)}'`.
-- An inline `table.replace(/"/g, '""')` or a raw concatenation is the bug this rule exists for.
+- `sqlIdentifier(col)` returns the identifier with its double quotes: `SELECT ${sqlIdentifier(col)} FROM ${sqlIdentifier(table)}`.
+- `sqlString(value)` returns the literal with its single quotes: `WHERE table_name = ${sqlString(table)}`.
+- `sqlNamePart(value)` reduces a value to `[A-Za-z0-9_]` for a deterministic generated name (cache table, sequence); `sqlTempName(prefix, value?)` returns a name no other call of the session returns, for temp tables and views.
+- Interpolate the helper call, not a variable that holds an "escaped" form: an inline `replace(/"/g, '""')`, a hand-written `"${…}"` around a value or a raw concatenation is the bug this rule exists for.
+- A calculated-column expression is untrusted SQL: it is replayed from imported projects. `validateExpression` parses it with `json_serialize_sql` and accepts only listed node classes and functions. Extend the allowlist in `column-ops.ts` with a case in `tests/duckdb/column-ops.test.ts`; never filter the text.
 
 ## Geometry: keep the source CRS, reproject when rendering needs it
 
@@ -43,12 +45,14 @@ Table names, column names and values almost always come from user files (`saniti
 
 ## Mutations invalidate caches
 
-- After a statement that changes a table (`CREATE OR REPLACE`, `DROP`, `ALTER`, `UPDATE`, `INSERT`), call `markTableMutated(ctx, table)` so cached stats and search results do not go stale.
+- A statement that changes a non-temporary table (`CREATE OR REPLACE`, `DROP`, `ALTER`, `UPDATE`, `INSERT`) goes through `Duck.mutate(tables, sql)`, which invalidates their caches even when the statement fails part-way. `Duck.query` is for reads and for temporary tables nothing caches. Readers inside the `duckdb` feature call `markTableMutated(ctx, table)` once the table is complete.
+- A cache derived from a table subscribes with `registerTableMutationCallback`; nothing else invalidates by hand. A join finalization passes `preserveJoinSimilarity`, since it leaves source values intact.
 - After a DDL that adds columns, Arrow streaming can return those columns as `NULL`. Joins, GPS and direct reads therefore skip streaming (`skipStreaming`) on purpose.
 
 ## Errors and NULLs
 
 - Throw `PipelineError` subclasses (for example `DuckDBError`) and surface them with `showError` or `showWarning`, localized through Paraglide. A swallowed query error or a bare `console.error` hides the failure from the user.
+- Tell DuckDB failures apart with `matchesDuckDBError(error, kind)` (`duckdb/utils/duckdb-error.utils.ts`), never with a local `message.includes(...)`: the engine words its errors in English only, and an upgrade rewords them. A new kind gets a case in `tests/duckdb/duckdb-error.test.ts` that triggers it on the real engine.
 - Which tokens mean "missing" is configured per project. Rely on that NULL set instead of testing only `''` or `null`.
 
 ## Tests

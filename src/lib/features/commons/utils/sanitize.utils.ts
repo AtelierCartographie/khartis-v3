@@ -29,11 +29,3 @@ export function sanitizeTextInput(
 
   return boundedInput.substring(0, 500);
 }
-
-export function escapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
-
-export function escapeIdentifier(identifier: string): string {
-  return identifier.replace(/"/g, '""');
-}

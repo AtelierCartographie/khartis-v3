@@ -52,8 +52,7 @@ function createContext(): DuckDBContext {
     table_metadata: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
-    extensionsLoaded: { spatial: true, httpfs: false },
-    extensionLoadPromises: { spatial: null, httpfs: null },
+    extensionLoads: new Map([['spatial', Promise.resolve()]]),
     localExtensionRepositoryConfigured: false,
     threadsSupported: false,
     bundleVariant: 'eh'
@@ -93,7 +92,7 @@ describe('readTabular', () => {
 
     expect(importQuery).toContain('CREATE OR REPLACE TABLE "table""name"');
     expect(importQuery).toContain("read_csv('registered:quoted.csv''suffix'");
-    expect(importQuery).toContain('decimal_separator="."');
+    expect(importQuery).toContain("decimal_separator='.'");
     expect(importQuery).toContain("delim='|'");
     expect(importQuery).not.toContain('thousands=');
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'table"name');

@@ -12,8 +12,7 @@ import { search_macros } from '$lib/features/duckdb/macros/search';
 import {
   getColumnDomainsInScope,
   getRowIdsInScope,
-  getScopedRowStats,
-  type DuckDBClientForTableData
+  getScopedRowStats
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
 import {
   clearFiltersForTable,
@@ -30,6 +29,7 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 const TABLE = 'communes';
 
@@ -51,13 +51,13 @@ function scopeClause(
   ]);
 }
 
-function duckClient(): DuckDBClientForTableData {
+function duckClient(): DuckClient {
   return {
     query: async (sql: string) => {
       const rows = await query(db, sql);
       return { numRows: rows.length, get: (index: number) => rows[index] };
     }
-  } as unknown as DuckDBClientForTableData;
+  } as unknown as DuckClient;
 }
 
 async function namesInScope(clause: string | null): Promise<string[]> {

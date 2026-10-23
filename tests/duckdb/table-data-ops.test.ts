@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
@@ -35,7 +36,7 @@ describe('getTableData', () => {
   it('orders text-like columns with the stripped HTML projection', async () => {
     const duck = createDuck();
 
-    await getTableData('places', duck, {
+    await getTableData('places', duck as unknown as DuckClient, {
       offset: 5,
       limit: 10,
       orderBy: 'description',
@@ -56,7 +57,7 @@ describe('getRowPosition', () => {
   it('uses the stripped HTML projection in sorted row positioning', async () => {
     const duck = createDuck({ position: 3 });
 
-    await getRowPosition('places', 42, duck, {
+    await getRowPosition('places', 42, duck as unknown as DuckClient, {
       orderBy: 'description',
       orderByType: 'text',
       order: 'DESC'
@@ -84,7 +85,7 @@ describe('getRowPosition', () => {
 
     setFilters('places', filters);
 
-    await getRowPosition('places', 7, duck, {
+    await getRowPosition('places', 7, duck as unknown as DuckClient, {
       orderBy: 'description',
       orderByType: 'text',
       order: 'ASC'

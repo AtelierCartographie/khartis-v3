@@ -1,6 +1,6 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
+import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -203,7 +203,7 @@ export function useMapDisplayData(
       return true;
     }
 
-    if (!tableName || !isMissingDuckTableError(error)) {
+    if (!tableName || !matchesDuckDBError(error, 'missing-table')) {
       return false;
     }
 
@@ -671,15 +671,15 @@ export function useMapDisplayData(
             datasetTableName
           )) ||
         (!isDatasetExpectedForDisplay(datasetId) &&
-          isMissingDuckTableError(error)) ||
+          matchesDuckDBError(error, 'missing-table')) ||
         (datasetTableName &&
-          isMissingDuckTableError(error) &&
+          matchesDuckDBError(error, 'missing-table') &&
           !duckDBOrchestrator.getDatasetByTable(datasetTableName))
       ) {
         return;
       }
 
-      if (isMissingDuckTableError(error)) {
+      if (matchesDuckDBError(error, 'missing-table')) {
         removeDatasetFromDisplay(datasetId);
         return;
       }

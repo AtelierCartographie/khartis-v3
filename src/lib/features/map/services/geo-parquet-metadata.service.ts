@@ -1,4 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '$lib/features/duckdb';
 
 export interface GeoParquetCrsMetadata {
   type?: string;
@@ -21,25 +23,18 @@ export interface GeoParquetMeta {
   columns?: Record<string, GeoParquetColumnMeta>;
 }
 
-interface GeoParquetMetadataReader {
-  query(
-    sql: string,
-    options: { format: 'array'; useProxy?: boolean }
-  ): Promise<unknown>;
-}
-
 function decodeGeoParquetMetadataValue(value: string | Uint8Array): string {
   return value instanceof Uint8Array ? new TextDecoder().decode(value) : value;
 }
 
 export async function readGeoParquetMetadataFromDuck(
-  duck: GeoParquetMetadataReader,
-  escapedFileId: string,
+  duck: DuckClient,
+  fileId: string,
   failureMessage = 'Failed to read GeoParquet metadata'
 ): Promise<GeoParquetMeta | null> {
   try {
     const result = (await duck.query(
-      `SELECT value FROM parquet_kv_metadata('${escapedFileId}') WHERE key = 'geo'`,
+      `SELECT value FROM parquet_kv_metadata(${sqlString(fileId)}) WHERE key = 'geo'`,
       { format: 'array', useProxy: false }
     )) as Array<{ value?: string | Uint8Array }>;
 

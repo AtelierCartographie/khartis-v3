@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { describe, expect, it, vi } from 'vitest';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import {
@@ -5,6 +6,7 @@ import {
   getArrowTableDirect,
   getArrowTableReprojected
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
 function toIpcBuffer(table: ReturnType<typeof tableFromArrays>): Uint8Array {
   const ipc = tableToIPC(table);
@@ -25,7 +27,7 @@ describe('getArrowTableReprojected', () => {
       }),
       queryStreaming: vi.fn().mockResolvedValue(toIpcBuffer(transformedTable)),
       query: vi.fn()
-    };
+    } as unknown as DuckClient;
 
     const { geomColumn } = await fetchArrowTableWithGeometry(
       'projected_dataset',
@@ -55,7 +57,7 @@ describe('getArrowTableReprojected', () => {
       }),
       queryStreaming: vi.fn().mockResolvedValue(toIpcBuffer(transformedTable)),
       query: vi.fn()
-    };
+    } as unknown as DuckClient;
 
     await fetchArrowTableWithGeometry('table"one', Duck, null, 'EPSG:4326', [
       'label"col'
@@ -97,7 +99,7 @@ describe('getArrowTableReprojected', () => {
         }
         throw new Error(`Unexpected SQL: ${sql}`);
       })
-    };
+    } as unknown as DuckClient;
 
     const table = await getArrowTableReprojected(
       'projected_dataset',
@@ -122,11 +124,28 @@ describe('getArrowTableReprojected', () => {
       }),
       queryStreaming: vi.fn().mockRejectedValue(new Error('crs not found')),
       query: vi.fn()
-    };
+    } as unknown as DuckClient;
 
     await expect(
       getArrowTableReprojected('projected_dataset', Duck, 'EPSG:4326')
     ).rejects.toThrow('crs not found');
+  });
+
+  it('should refuse without querying when the geometry carries no CRS', async () => {
+    const Duck = {
+      describe_table: vi.fn().mockResolvedValue({
+        name: ['geom'],
+        type: ['GEOMETRY']
+      }),
+      queryStreaming: vi.fn(),
+      query: vi.fn()
+    } as unknown as DuckClient;
+
+    await expect(
+      getArrowTableReprojected('crs_less_dataset', Duck, 'EPSG:4326')
+    ).rejects.toBeInstanceOf(DuckDBError);
+    expect(Duck.queryStreaming).not.toHaveBeenCalled();
+    expect(Duck.query).not.toHaveBeenCalled();
   });
 });
 
@@ -146,7 +165,7 @@ describe('getArrowTableDirect', () => {
         .fn()
         .mockResolvedValue(toIpcBuffer(tableFromArrays({ stale: [] }))),
       query: vi.fn().mockResolvedValue(toIpcBuffer(table))
-    };
+    } as unknown as DuckClient;
     const setCache = vi.fn();
 
     const result = await getArrowTableDirect(
