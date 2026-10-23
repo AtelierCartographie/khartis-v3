@@ -134,6 +134,21 @@ function buildGeometryExpression(
   return applyCrsTransform(geometryExpression, columnMetadata);
 }
 
+/** GeoParquet 1.1 bbox covering columns, declared in the `geo` metadata. */
+function findCoveringColumns(
+  metadata: GeoParquetMeta,
+  tableColumns: string[]
+): string[] {
+  const columns = new Set<string>();
+  for (const columnMetadata of Object.values(metadata.columns ?? {})) {
+    for (const path of Object.values(columnMetadata.covering?.bbox ?? {})) {
+      const column = path[0];
+      if (column && tableColumns.includes(column)) columns.add(column);
+    }
+  }
+  return [...columns];
+}
+
 export async function normalizeGeoParquetTable(
   tableName: string,
   metadata: GeoParquetMeta,
@@ -161,16 +176,11 @@ export async function normalizeGeoParquetTable(
   }
 
   const columnType = tableDescription.type[columnIndex];
-  if (isGeometryColumnType(columnType)) {
-    return false;
-  }
-
-  const geometryExpression = buildGeometryExpression(
-    primaryColumn,
-    columnType,
-    columnMetadata
-  );
-  if (!geometryExpression) {
+  const isDecoded = isGeometryColumnType(columnType);
+  const geometryExpression = isDecoded
+    ? null
+    : buildGeometryExpression(primaryColumn, columnType, columnMetadata);
+  if (!isDecoded && !geometryExpression) {
     throw new DataValidationError(m.pipeline_error_generic(), primaryColumn, {
       tableName,
       encoding: columnMetadata.encoding,
@@ -178,16 +188,32 @@ export async function normalizeGeoParquetTable(
     });
   }
 
+  const coveringColumns = findCoveringColumns(
+    metadata,
+    tableDescription.name
+  ).filter((column) => column !== primaryColumn);
+  if (!geometryExpression && coveringColumns.length === 0) {
+    return false;
+  }
+
   const escapedTable = escapeIdentifier(tableName);
   const escapedColumn = escapeIdentifier(primaryColumn);
-  await Duck.query(`
-    CREATE OR REPLACE TABLE "${escapedTable}" AS
-    SELECT * REPLACE (
+  const exclude = coveringColumns.length
+    ? ` EXCLUDE (${coveringColumns
+        .map((column) => `"${escapeIdentifier(column)}"`)
+        .join(', ')})`
+    : '';
+  const replace = geometryExpression
+    ? ` REPLACE (
       CASE
         WHEN "${escapedColumn}" IS NULL THEN NULL
         ELSE ${geometryExpression}
       END AS "${escapedColumn}"
-    )
+    )`
+    : '';
+  await Duck.query(`
+    CREATE OR REPLACE TABLE "${escapedTable}" AS
+    SELECT *${exclude}${replace}
     FROM "${escapedTable}"
   `);
   Duck.invalidateTableCache?.(tableName);
