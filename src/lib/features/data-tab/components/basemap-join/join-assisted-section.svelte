@@ -524,6 +524,13 @@
         suggestedItems.push(buildBasemapComboBoxItem(displayedSuggestion));
       }
     }
+    // Grading only keeps unclaimed candidates, so a suggestion hidden here
+    // collides with a joined alias: the row still shows the match it joins on.
+    if (suggestedItems.length === 0 && suggestions.length > 0) {
+      const displayedSuggestion = resolveDisplayedBasemapValue(suggestions[0]);
+      suggestedValues.add(displayedSuggestion);
+      suggestedItems.push(buildBasemapComboBoxItem(displayedSuggestion));
+    }
     if (suggestedItems.length === 0) {
       return basemapComboBoxItems;
     }
@@ -620,8 +627,9 @@
   let ignoredExpanded = $state(false);
   let footerDismissed = $state(false);
 
+  // To-verify entities are joined: the bucket shows the match, it never blocks.
   const hasBlockingErrors = $derived(
-    toVerifyCount > 0 || unrecognizedCount > 0 || duplicateCount > 0
+    unrecognizedCount > 0 || duplicateCount > 0
   );
   const showSuccessNotification = $derived(
     !hasBlockingErrors && joinedCount > 0 && joinFinalized

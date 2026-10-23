@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { describe, expect, it } from 'vitest';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import {
   exportGeoPackageLayers,
   type GeoPackageExportOptions,
   type GeoPackageFeatureRow
 } from './geopackage-export.utils';
-import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 
 function exportSingleLayer(
   features: GeoPackageFeatureRow[],
@@ -58,6 +56,17 @@ async function selectGeoPackageRows<T extends Record<string, unknown>>(
   }
 }
 
+// Point coordinates sit after the 8-byte GeoPackage header, its envelope and
+// the 5-byte WKB prefix.
+function readGeoPackagePoint(geometry: Uint8Array): [number, number] {
+  const envelopeBytes = [0, 32, 48, 48, 64][(geometry[3] >> 1) & 7];
+  const view = new DataView(
+    geometry.buffer,
+    geometry.byteOffset + 8 + envelopeBytes + 5
+  );
+  return [view.getFloat64(0, true), view.getFloat64(8, true)];
+}
+
 describe('GeoPackage export utils', () => {
   it('creates a readable GeoPackage feature layer from WKB rows', async () => {
     const blob = await exportSingleLayer(
@@ -76,24 +85,19 @@ describe('GeoPackage export utils', () => {
       }
     );
 
-    const file = new File([blob], 'khartis_export.gpkg', {
-      type: 'application/geopackage+sqlite3'
-    });
-    const geojsonFile = await convertGeoPackageToGeoJsonFile(file);
-    const geojson = JSON.parse(await geojsonFile.text()) as {
-      features: Array<{
-        geometry: { type: string; coordinates: [number, number] };
-        properties: Record<string, unknown>;
-      }>;
-    };
+    const rows = await selectGeoPackageRows<{
+      name: string;
+      value: number;
+      geom: Uint8Array;
+    }>(blob, 'SELECT name, value, geom FROM khartis_export');
 
     expect(blob.size).toBeGreaterThan(0);
-    expect(geojson.features).toHaveLength(1);
-    expect(geojson.features[0].geometry.type).toBe('Point');
-    expect(geojson.features[0].geometry.coordinates[0]).toBeCloseTo(2.3522);
-    expect(geojson.features[0].geometry.coordinates[1]).toBeCloseTo(48.8566);
-    expect(geojson.features[0].properties.name).toBe('Paris');
-    expect(geojson.features[0].properties.value).toBe(42);
+    expect(rows).toHaveLength(1);
+    const [x, y] = readGeoPackagePoint(rows[0].geom);
+    expect(x).toBeCloseTo(2.3522);
+    expect(y).toBeCloseTo(48.8566);
+    expect(rows[0].name).toBe('Paris');
+    expect(rows[0].value).toBe(42);
   });
 
   it('keeps safe DuckDB bigint properties as GeoPackage integers', async () => {
@@ -165,19 +169,14 @@ describe('GeoPackage export utils', () => {
       }
     );
 
-    const file = new File([blob], 'reserved_columns.gpkg', {
-      type: 'application/geopackage+sqlite3'
-    });
-    const geojsonFile = await convertGeoPackageToGeoJsonFile(file);
-    const geojson = JSON.parse(await geojsonFile.text()) as {
-      features: Array<{ properties: Record<string, unknown> }>;
-    };
-
-    expect(geojson.features[0].properties.fid_property).toBe(99);
-    expect(geojson.features[0].properties.geom_property).toBe(
-      'raw geometry label'
+    const rows = await selectGeoPackageRows<Record<string, unknown>>(
+      blob,
+      'SELECT fid_property, geom_property, name FROM reserved_columns'
     );
-    expect(geojson.features[0].properties.name).toBe('Reserved columns');
+
+    expect(rows[0].fid_property).toBe(99);
+    expect(rows[0].geom_property).toBe('raw geometry label');
+    expect(rows[0].name).toBe('Reserved columns');
   });
 
   it('declares a generic geometry type when one layer contains mixed WKB types', async () => {
@@ -250,28 +249,6 @@ describe('GeoPackage export utils', () => {
       { table_name: 'Cities', geometry_type_name: 'POINT', srs_id: 4326 },
       { table_name: 'Routes', geometry_type_name: 'LINESTRING', srs_id: -1 }
     ]);
-
-    const warn = vi.spyOn(logger, 'warn');
-    try {
-      const routeFile = await convertGeoPackageToGeoJsonFile(
-        new File([blob], 'layers.gpkg', {
-          type: 'application/geopackage+sqlite3'
-        }),
-        { preferredLayer: 'Routes' }
-      );
-      const routeGeojson = JSON.parse(await routeFile.text()) as {
-        features: Array<{ geometry: { type: string } }>;
-      };
-
-      expect(routeGeojson.features[0].geometry.type).toBe('LineString');
-      expect(warn).not.toHaveBeenCalledWith(
-        'Failed to register GeoPackage projection definition',
-        expect.anything(),
-        expect.anything()
-      );
-    } finally {
-      warn.mockRestore();
-    }
   });
 
   it('writes known non-WGS84 EPSG definitions as projection WKT', async () => {
@@ -303,50 +280,5 @@ describe('GeoPackage export utils', () => {
     expect(rows[0].organization).toBe('EPSG');
     expect(rows[0].organization_coordsys_id).toBe(2154);
     expect(rows[0].definition).toContain('Lambert_Conformal_Conic_2SP');
-  });
-
-  it('warns when browser GeoPackage fallback cannot reproject coordinates', async () => {
-    const blob = await exportSingleLayer(
-      [
-        {
-          properties: { name: 'Unknown CRS point' },
-          wkb: createPointWkb(700000, 6600000)
-        }
-      ],
-      {
-        layerName: 'unsupported_crs',
-        sourceCrs: 'EPSG:99999'
-      }
-    );
-    const warn = vi.spyOn(logger, 'warn');
-
-    try {
-      const geojsonFile = await convertGeoPackageToGeoJsonFile(
-        new File([blob], 'unsupported-crs.gpkg', {
-          type: 'application/geopackage+sqlite3'
-        })
-      );
-      const geojson = JSON.parse(await geojsonFile.text()) as {
-        features: Array<{
-          geometry: { type: string; coordinates: [number, number] };
-        }>;
-      };
-
-      expect(geojson.features[0].geometry.coordinates).toEqual([
-        700000, 6600000
-      ]);
-      expect(warn).toHaveBeenCalledWith(
-        'Failed to reproject GeoPackage coordinates',
-        LogCategory.MAP,
-        expect.objectContaining({
-          fileName: 'unsupported-crs.gpkg',
-          layerName: 'unsupported_crs',
-          sourceCrs: 'EPSG:99999',
-          failedCoordinateCount: 1
-        })
-      );
-    } finally {
-      warn.mockRestore();
-    }
   });
 });

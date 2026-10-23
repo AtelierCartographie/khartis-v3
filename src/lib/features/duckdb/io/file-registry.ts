@@ -212,6 +212,26 @@ export async function registerFiles(
   }
 }
 
+const SQLITE_SIDECAR_SUFFIXES = ['-journal', '-wal'] as const;
+
+/**
+ * The sqlite extension refuses a registered database whose `-journal` it
+ * cannot read as empty, so each sidecar is registered as an empty buffer.
+ * Returns the sidecar ids, to drop with the database.
+ */
+export async function registerSqliteSidecars(
+  db: AsyncDuckDB,
+  registered_files: Set<string>,
+  fileId: string
+): Promise<string[]> {
+  const sidecarIds = SQLITE_SIDECAR_SUFFIXES.map((suffix) => fileId + suffix);
+  for (const sidecarId of sidecarIds) {
+    await db.registerFileBuffer(sidecarId, new Uint8Array(0));
+    registered_files.add(sidecarId);
+  }
+  return sidecarIds;
+}
+
 export async function dropRegisteredFile(
   db: AsyncDuckDB | null,
   registered_files: Set<string>,

@@ -180,6 +180,61 @@ export async function computeDatasetJoinStats(
   }
 }
 
+export interface RankTargetColumnsOptions {
+  sourceTableName: string;
+  sourceColumn: string;
+  targetTableName: string;
+  targetColumns: string[];
+}
+
+const TARGET_COLUMN_RANKING_SAMPLE = 500;
+
+/**
+ * The target column holding the most sampled source values once normalized
+ * like the join itself, or null when none holds any.
+ */
+export async function findBestTargetColumn(
+  options: RankTargetColumnsOptions
+): Promise<string | null> {
+  const { sourceTableName, sourceColumn, targetTableName, targetColumns } =
+    options;
+  if (targetColumns.length === 0) return null;
+
+  const escapedSourceCol = escapeIdentifier(sourceColumn);
+  const escapedSourceTable = escapeIdentifier(sourceTableName);
+  const escapedTargetTable = escapeIdentifier(targetTableName);
+
+  const perColumn = targetColumns
+    .map(
+      (column, position) => `
+      SELECT ${position} AS position, COUNT(*) AS matched
+      FROM sampled
+      WHERE normalized IN (
+        SELECT normalize_text_join(CAST("${escapeIdentifier(column)}" AS VARCHAR))
+        FROM "${escapedTargetTable}"
+      )`
+    )
+    .join('\n      UNION ALL');
+
+  const rows = (await Duck.query(
+    `WITH sampled AS (
+       SELECT DISTINCT normalize_text_join(CAST("${escapedSourceCol}" AS VARCHAR)) AS normalized
+       FROM "${escapedSourceTable}"
+       WHERE "${escapedSourceCol}" IS NOT NULL
+       ORDER BY normalized
+       LIMIT ${TARGET_COLUMN_RANKING_SAMPLE}
+     )
+     ${perColumn}
+     ORDER BY matched DESC, position
+     LIMIT 1`,
+    { format: 'array' }
+  )) as Array<{ position: number; matched: number }>;
+
+  const best = rows[0];
+  if (!best || Number(best.matched) === 0) return null;
+  return targetColumns[Number(best.position)] ?? null;
+}
+
 /** Cleanup must never replace the error that triggered it. */
 async function dropTempTable(escapedTableName: string): Promise<void> {
   try {
@@ -195,6 +250,8 @@ async function dropTempTable(escapedTableName: string): Promise<void> {
  * raw values, and the residual is budgeted in candidate x target pairs — the
  * same bound as the basemap join — because scoring every unmatched value of a
  * large column against every target value is quadratic in the import size.
+ * A code column gets no fuzzy phase, and a target already joined exactly is
+ * never offered again: a value left without a candidate is unrecognized.
  */
 async function fetchFuzzyMatches(
   escapedCandidatesTable: string,
@@ -209,14 +266,25 @@ async function fetchFuzzyMatches(
      unmatched_count AS (
        SELECT COUNT(*) AS count FROM unmatched
      ),
+     source_code_signals AS (
+       SELECT is_code_column(normalized_val, source_val) AS is_code
+       FROM (SELECT DISTINCT source_val, normalized_val FROM "${escapedCandidatesTable}")
+     ),
+     claimed_targets AS (
+       SELECT DISTINCT normalized_val AS normalized
+       FROM "${escapedCandidatesTable}"
+       WHERE exact_match IS NOT NULL AND duplicate_count <= 1
+     ),
      distinct_targets AS (
        SELECT DISTINCT normalized FROM "${escapedTargetCacheTable}"
+       WHERE normalized NOT IN (SELECT normalized FROM claimed_targets)
      ),
      bounded_unmatched AS (
        SELECT u.*
-       FROM unmatched u, unmatched_count c
+       FROM unmatched u, unmatched_count c, source_code_signals s
        WHERE c.count * (SELECT COUNT(*) FROM distinct_targets)
              <= ${MAX_FUZZY_AUTO_PAIRS}
+         AND NOT s.is_code
      ),
      scored AS (
        SELECT

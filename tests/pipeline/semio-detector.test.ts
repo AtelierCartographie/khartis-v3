@@ -293,6 +293,26 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioType).toBe('QL');
   });
 
+  it('does not read a numeric feature key (fid) as a geographic reference, unlike a code', () => {
+    const sequence = {
+      count: 34953,
+      uniques: 34953,
+      nulls: 0,
+      min: 1,
+      max: 34953,
+      share_integers: 1.0,
+      share_floats: 0,
+      share_rank_interval: 1,
+      extent_magnitude: 4.54
+    };
+    const fid = detectSemioType(analysis('fid', NUMERIC, sequence) as never);
+    const code = detectSemioType(analysis('code', NUMERIC, sequence) as never);
+
+    expect(fid.semioScore).toBe(0);
+    expect(code.semioType).toBe('geoid');
+    expect(code.semioScore).toBeGreaterThan(0.45);
+  });
+
   it('does NOT classify as GEOID when id-keyword column has only 1 unique value', () => {
     const result = detectSemioType(
       analysis('code', STRING, {

@@ -34,6 +34,7 @@ import {
   projectionStore as mapRenderProjectionStore
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
+import { getNativeCrsEpsg } from './native-projection.utils';
 import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 const DEFAULT_PROJECTION = 'mercator';
@@ -393,6 +394,18 @@ const { actions, getState } = createToolStore<
         if (
           !supportsProjectionSuggestions(getProjectionAvailabilityContext())
         ) {
+          return;
+        }
+
+        // The file is already drawn in this projection: going back to the
+        // native rendering is exact, whereas a d3 or proj4 rebuild would pass
+        // the geometry through WGS84 for nothing.
+        if (
+          suggestion.epsg &&
+          suggestion.epsg ===
+            getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
+        ) {
+          clearSelectedInternal(true);
           return;
         }
 
