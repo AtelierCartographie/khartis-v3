@@ -42,6 +42,10 @@
   } from './projection-label.utils';
   import { getThumbnailPaths } from './projection-thumbnail';
   import {
+    findNativeSuggestion,
+    getNativeCrsEpsg
+  } from './native-projection.utils';
+  import {
     getWorldLandGeometrySync,
     loadWorldLandGeometry
   } from '$lib/features/commons/utils/world-land-geometry';
@@ -228,12 +232,18 @@
       .filter((group) => group.suggestions.length > 0)
   );
   const viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
+  const nativeSuggestion = $derived(
+    findNativeSuggestion(
+      projectionState.suggestions,
+      getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
+    )
+  );
   function isSuggestionSelected(suggestion: ProjectionSuggestion) {
     if (
       projectionState.overrideActive !== true ||
       projectionState.overrideSource !== 'manual'
     ) {
-      return false;
+      return suggestion.id === nativeSuggestion?.id;
     }
 
     // When a suggestion is actively applied, match ONLY by its id: distinct
