@@ -166,11 +166,13 @@ export async function scoreProjectGeoBasemapOptions(input: {
 export interface ScoredBasemap {
   basemap: BasemapMetadata;
   score: number;
+  matchesData: boolean;
 }
 
 /**
  * Ranks the project geo files with the catalog suggestions on one scale. A
- * project file wins a tie: the user brought it for this data.
+ * suggestion resting on the data comes before one scored on its metadata
+ * alone, and a project file wins a tie: the user brought it for this data.
  */
 export function mergeProjectGeoSuggestions(
   catalogSuggestions: readonly ScoredBasemap[],
@@ -197,6 +199,8 @@ export function mergeProjectGeoSuggestions(
   return ranked
     .sort(
       (left, right) =>
+        Number(right.suggestion.matchesData) -
+          Number(left.suggestion.matchesData) ||
         right.suggestion.score - left.suggestion.score ||
         Number(right.isProject) - Number(left.isProject)
     )

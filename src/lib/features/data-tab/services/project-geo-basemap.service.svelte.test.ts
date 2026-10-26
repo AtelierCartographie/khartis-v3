@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import { mergeProjectGeoSuggestions } from './project-geo-basemap.service';
+import {
+  mergeProjectGeoSuggestions,
+  type ScoredBasemap
+} from './project-geo-basemap.service';
 
 function basemap(file: string): BasemapMetadata {
   return {
@@ -16,58 +19,59 @@ function basemap(file: string): BasemapMetadata {
   };
 }
 
+function scored(
+  file: string,
+  score: number,
+  matchesData = true
+): ScoredBasemap {
+  return { basemap: basemap(file), score, matchesData };
+}
+
+function files(suggestions: ScoredBasemap[]): string[] {
+  return suggestions.map((suggestion) => suggestion.basemap.file);
+}
+
 describe('mergeProjectGeoSuggestions', () => {
   it('should rank a project file first when it ties with a catalog basemap', () => {
     const merged = mergeProjectGeoSuggestions(
-      [
-        { basemap: basemap('world'), score: 100 },
-        { basemap: basemap('europe'), score: 40 }
-      ],
-      [{ basemap: basemap('project'), score: 100 }],
+      [scored('world', 100), scored('europe', 40)],
+      [scored('project', 100)],
       3
     );
 
-    expect(merged.map((item) => item.basemap.file)).toEqual([
-      'project',
-      'world',
-      'europe'
-    ]);
+    expect(files(merged)).toEqual(['project', 'world', 'europe']);
+  });
+
+  it('should rank a data match above a higher score from metadata alone', () => {
+    const merged = mergeProjectGeoSuggestions(
+      [scored('world', 30, false)],
+      [scored('project', 20)],
+      3
+    );
+
+    expect(files(merged)).toEqual(['project', 'world']);
   });
 
   it('should list a project file once when the catalog ranking also returns it', () => {
     const merged = mergeProjectGeoSuggestions(
-      [
-        { basemap: basemap('custom_basemap_1'), score: 60 },
-        { basemap: basemap('world'), score: 30 }
-      ],
-      [{ basemap: basemap('custom_basemap_1'), score: 100 }],
+      [scored('custom_basemap_1', 60), scored('world', 30)],
+      [scored('custom_basemap_1', 100)],
       3
     );
 
     expect(merged).toEqual([
-      { basemap: basemap('custom_basemap_1'), score: 100 },
-      { basemap: basemap('world'), score: 30 }
+      scored('custom_basemap_1', 100),
+      scored('world', 30)
     ]);
   });
 
   it('should drop a project file that matches nothing and keep the limit', () => {
     const merged = mergeProjectGeoSuggestions(
-      [
-        { basemap: basemap('a'), score: 30 },
-        { basemap: basemap('b'), score: 20 },
-        { basemap: basemap('c'), score: 10 }
-      ],
-      [
-        { basemap: basemap('unmatched'), score: 0 },
-        { basemap: basemap('project'), score: 25 }
-      ],
+      [scored('a', 30), scored('b', 20), scored('c', 10)],
+      [scored('unmatched', 0), scored('project', 25)],
       3
     );
 
-    expect(merged.map((item) => item.basemap.file)).toEqual([
-      'a',
-      'project',
-      'b'
-    ]);
+    expect(files(merged)).toEqual(['a', 'project', 'b']);
   });
 });
