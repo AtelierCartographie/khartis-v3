@@ -1122,6 +1122,7 @@
   "column_warning_nulls_detailed": "{percent}% de valeurs nulles ({count})",
   "column_warning_label": "Alerte qualité des données",
   "column_origin_label": "Colonne jointe depuis « {file} »",
+  "table_joined_entity_column": "Entité du fond",
   "column_menu_options": "Options pour la colonne {column}",
   "column_type_badge_label": "{column} – {type}",
   "column_type_numeric_tooltip": "Colonne numérique (entiers ou décimaux)",
