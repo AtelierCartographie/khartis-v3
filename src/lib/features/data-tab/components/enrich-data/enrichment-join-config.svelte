@@ -20,7 +20,7 @@
 
   interface Props {
     enrichmentDataset: DatasetResult;
-    enrichmentFile: File | null;
+    enrichmentSourceName: string | null;
     geoFileColumns: GeoFileColumnItem[];
     enrichDataFieldItems: EnrichDataFieldItem[];
     enrichLinkedVariableId: number | undefined;
@@ -54,7 +54,7 @@
 
   let {
     enrichmentDataset,
-    enrichmentFile,
+    enrichmentSourceName,
     geoFileColumns,
     enrichDataFieldItems,
     enrichLinkedVariableId,
@@ -157,7 +157,7 @@
     <span class="file-label">{m.enrich_file_imported()}</span>
     <div class="file-row">
       <span class="file-name"
-        >{enrichmentFile?.name || m.dataset_pasted_name()}</span
+        >{enrichmentSourceName || m.dataset_pasted_name()}</span
       >
       <Button
         class="file-remove"

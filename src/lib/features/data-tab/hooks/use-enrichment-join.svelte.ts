@@ -9,6 +9,7 @@ import { computeDatasetJoinStats } from '../services/join-stats.service';
 import { persistEnrichedSourceFile } from '../services/source-file-state.service';
 import { canFinalizeJoin } from '../utils/join-validation.utils';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -364,13 +365,18 @@ export function useEnrichmentJoin(
 
     try {
       // A geographic enrichment file brings its attributes, not a second
-      // geometry for the target dataset.
+      // geometry for the target dataset; a project table already joined to a
+      // basemap brings its data, not the columns that join wrote.
       const enrichmentColumns = enrichmentDataset.columns
         .filter(
           (col) =>
             col.name !== enrichCol.columnName &&
             col.name !== '__id' &&
-            col.name !== enrichmentDataset.geometry?.columnName
+            col.name !== enrichmentDataset.geometry?.columnName &&
+            !(
+              enrichmentDataset.joinedBasemap &&
+              JOINED_BASEMAP_COLUMNS.includes(col.name)
+            )
         )
         .map((col) => col.name);
 
