@@ -86,6 +86,7 @@
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { getLegendState } from '../legend';
+  import { rowScopeStore } from '$lib/features/map/stores/row-scope.store.svelte';
   import { legendTitleFontSize } from '$lib/features/commons/components/legend';
   import { resolveFontFamilyStack } from '$lib/features/step-toolbar/fonts.constants';
 
@@ -766,6 +767,18 @@
 
   $effect(() => {
     void labelLayoutStore.version;
+    untrack(() => {
+      if (isRendererLoaded) {
+        mapLayers.updateLayers(tables, splitData, densityTables);
+      }
+    });
+  });
+
+  // Primitive filters (a top 5 on the texts…) resolve their rows
+  // asynchronously: on reopening a project the layers are built first, so they
+  // are rebuilt once the rows land, as the single map does.
+  $effect(() => {
+    void rowScopeStore.version;
     untrack(() => {
       if (isRendererLoaded) {
         mapLayers.updateLayers(tables, splitData, densityTables);
