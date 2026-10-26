@@ -43,8 +43,6 @@ export const FUZZY_PASS_OVERHEAD_MS = 90;
 // subsets permute, and it costs ~0.9 s against the whole catalog.
 export const MAX_FUZZY_RANKING_SAMPLE = 300;
 
-export const MAX_FUZZY_MATCHES_PER_VALUE = 5;
-
 export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN
 ) as readonly string[];

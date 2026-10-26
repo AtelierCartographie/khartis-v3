@@ -24,7 +24,7 @@
   import { useEnrichmentBasemap } from '../hooks/use-enrichment-basemap.svelte';
   import { useEnrichmentFile } from '../hooks/use-enrichment-file.svelte';
   import { useEnrichmentJoin } from '../hooks/use-enrichment-join.svelte';
-  import { findBestTargetColumn } from '../services/join-stats.service';
+  import { findBestTargetColumn } from '../services/target-column-ranking.service';
 
   import { dataTabStore } from '../stores/data-tab.store.svelte';
 
@@ -349,8 +349,16 @@
             geoFileColumnId={geoFileColumnId}
             enrichSuggestedColumn={enrichSuggestedColumn}
             hasOnlyCoordinates={hasOnlyCoordinatesValue}
-            joinStats={joinHook.joinStats}
+            view={joinHook.view}
             targetOptions={joinHook.targetOptions}
+            fuzzyPassEstimate={joinHook.fuzzyPassEstimate}
+            fuzzyPassRunning={joinHook.fuzzyPassRunning}
+            joinedPage={joinHook.joinedPage}
+            joinedPageRows={joinHook.joinedPageRows}
+            joinedTargetValues={joinHook.joinedTargetValues}
+            onRunFullFuzzyPass={joinHook.runFullFuzzyPass}
+            onJoinedPageChange={joinHook.loadJoinedPage}
+            onRequestJoinedEntities={joinHook.requestJoinedEntities}
             isComputingJoin={joinHook.isComputingJoin}
             isFinalizingJoin={joinHook.isFinalizingJoin}
             onRemoveFile={handleRemoveFile}
