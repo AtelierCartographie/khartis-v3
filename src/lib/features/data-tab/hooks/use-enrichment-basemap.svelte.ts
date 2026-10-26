@@ -53,6 +53,7 @@ import { projectStore } from '$lib/features/commons/stores/project.store.svelte'
 export interface BasemapSuggestionItem {
   basemap: BasemapMetadata;
   score: number;
+  matchesData: boolean;
 }
 
 export function pickAutoLinkedGeoColumn(
@@ -546,7 +547,8 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       const mappedSuggestions = suggestions.map((suggestion) => ({
         basemap:
           basemapCatalogService.getBasemapById(suggestion.file) ?? suggestion,
-        score: suggestion.matchScore
+        score: suggestion.matchScore,
+        matchesData: suggestion.matchesData
       }));
 
       suggestedBasemaps = mappedSuggestions;
@@ -560,6 +562,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         shouldAutoSelectSuggestedBasemap({
           hasDismissedSuggestedBasemap,
           suggestionCount: mappedSuggestions.length,
+          topSuggestionMatchesData: mappedSuggestions[0]?.matchesData ?? false,
           isOSMActive: osmBasemapStore.isActive,
           hasDatasetGeometry: Boolean(selectedDataset.geometry),
           persistedBasemapId: runtimePersistedBasemap?.id,

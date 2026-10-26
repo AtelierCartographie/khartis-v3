@@ -3,6 +3,7 @@ import type { ColumnTransformation } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { getSourceFileIndex } from './project-files';
 import { markDirtyAndSave } from './project-persistence';
+import { detachTablesFrom } from '../../utils/dataset-attachment.utils';
 
 export async function addColumnTransformation(
   container: ProjectStateContainer,
@@ -45,12 +46,14 @@ export async function clearColumnTransformations(
   if (fileIndex === -1) return;
 
   const project = container._state.currentProject!;
-  const updatedFiles = [...project.data.sourceFiles];
+  // Resetting a geo file undoes its enrichments, so its tables detach.
+  const updatedFiles = detachTablesFrom(project.data.sourceFiles, fileId);
   updatedFiles[fileIndex] = {
     ...updatedFiles[fileIndex],
     columnTransformations: [],
     deletedRowIds: [],
     enrichmentSnapshot: undefined,
+    joinedColumnOrigins: undefined,
     ...(options?.duckdbTableName
       ? { duckdbTableName: options.duckdbTableName }
       : {}),

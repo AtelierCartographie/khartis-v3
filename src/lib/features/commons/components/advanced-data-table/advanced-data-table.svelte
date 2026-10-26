@@ -7,6 +7,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
+  import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
   import {
     formatValue,
     isSingularCount
@@ -85,6 +86,8 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     activeJoinColumn?: string;
+    /** File each joined column came from, by column name. */
+    columnOrigins?: Record<string, string>;
     initialSortColumn?: string | null;
     initialSortOrder?: 'ASC' | 'DESC' | null;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
@@ -109,6 +112,7 @@
     isReadOnly = false,
     datasetVersion,
     activeJoinColumn,
+    columnOrigins,
     initialSortColumn = null,
     initialSortOrder = null,
     onSelectionChange,
@@ -148,6 +152,11 @@
   const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
   const isEditMode = $derived(!!tableName && !isReadOnly);
+
+  // Written by a basemap join: shown, never edited.
+  function isJoinedEntityColumn(columnName: string): boolean {
+    return columnName === JOINED_BASEMAP_COLUMN.NAME;
+  }
 
   function recordTransformation(summary: string) {
     if (!dataset?.id) return;
@@ -848,8 +857,12 @@
                   sortColumn={sort.sortColumn}
                   sortOrder={sort.sortOrder}
                   showSummaryPlots={effectiveShowSummaryPlots}
-                  isEditMode={isEditMode}
+                  isEditMode={isEditMode && !isJoinedEntityColumn(column.name)}
                   isHidden={columnOps.isColumnHidden(column.name)}
+                  origin={columnOrigins?.[column.name]}
+                  displayName={isJoinedEntityColumn(column.name)
+                    ? m.table_joined_entity_column()
+                    : undefined}
                   onSort={handleSort}
                   onRefine={handleRefine}
                   onRename={columnOps.handleRename}

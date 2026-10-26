@@ -202,6 +202,8 @@ export interface SerializedUploadedFile {
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
   enrichmentSnapshot?: AssetRef;
+  joinedColumnOrigins?: Record<string, string>;
+  attachedTo?: { sourceFileId: string; datasetName: string };
   uploadProgress?: number;
   statistics?: unknown;
   columnTransformations?: ColumnTransformation[];
