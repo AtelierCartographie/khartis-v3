@@ -21,7 +21,8 @@ import {
   sqrtScale,
   type CommonLegendTextOptions,
   type LegendSvgDefinition,
-  type ScaleFn
+  type ScaleFn,
+  legendTitleFontSize
 } from './utils';
 
 export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';
@@ -81,7 +82,7 @@ export function draw_symbols_legend(
   const bar_width =
     type === 'spike' ? Math.round(initial_bar_width * 1.5) : initial_bar_width;
   const resolvedFontFamily = resolveLegendFontFamily(fontFamily);
-  const titleSize = title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
   const noteSize = note ? Math.round(fontSize * 0.92) : 0;
   let values_array: number[] = Array.isArray(data) ? data : Array.from(data);

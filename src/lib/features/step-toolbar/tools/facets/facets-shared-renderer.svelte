@@ -86,6 +86,8 @@
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { getLegendState } from '../legend';
+  import { legendTitleFontSize } from '$lib/features/commons/components/legend';
+  import { resolveFontFamilyStack } from '$lib/features/step-toolbar/fonts.constants';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -127,13 +129,27 @@
       ? null
       : mapInstanceStore.measureFramingScale()
   );
+  // Map titles are set like the legend titles: same size, font and weight,
+  // scaled with the page as the legend is.
+  const facetTitleFontSize = $derived(
+    legendTitleFontSize(getLegendState().style.fontSize) *
+      Math.max(globalState.zoom.pageZoomScale, 0.1)
+  );
+  const facetTitleFontFamily = $derived(
+    resolveFontFamilyStack(getLegendState().style.fontFamily)
+  );
+  // The title band keeps its usual height and only grows for a large title.
+  const facetTitleHeight = $derived(
+    Math.max(FACET_TITLE_HEIGHT, Math.ceil(facetTitleFontSize * 1.25 + 8))
+  );
   const descriptors = $derived(
     buildFacetRenderDescriptors({
       visualizations,
       layout,
       containerWidth,
       containerHeight,
-      primarySlotPath: facetsStore.primarySlotPath
+      primarySlotPath: facetsStore.primarySlotPath,
+      titleHeight: facetTitleHeight
     })
   );
   // Scale anchored legends to facet cells while keeping a legible floor.
@@ -916,13 +932,15 @@
         <div
           class="facet-cell"
           style:left="{descriptor.frame.x}px"
-          style:top="{descriptor.frame.y - FACET_TITLE_HEIGHT}px"
+          style:top="{descriptor.frame.y - facetTitleHeight}px"
           style:width="{descriptor.frame.width}px"
         >
           <h4
             class="facet-title"
-            style:height="{FACET_TITLE_HEIGHT}px"
+            style:height="{facetTitleHeight}px"
             style:color={facetTitleColor}
+            style:font-size="{facetTitleFontSize}px"
+            style:font-family={facetTitleFontFamily}
           >
             {#if isTitleEditable}
               <span
@@ -1009,12 +1027,11 @@
   }
 
   .facet-title {
-    font-size: 13px;
-    font-weight: 500;
+    font-weight: 700;
     text-align: center;
     margin: 0;
     padding: 2px 8px;
-    line-height: 20px;
+    line-height: 1.25;
     display: flex;
     align-items: center;
     justify-content: center;

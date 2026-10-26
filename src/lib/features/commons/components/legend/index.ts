@@ -30,6 +30,7 @@ export {
   classLegendEntry,
   createLegendSvg,
   LEGEND_ENTRY_ATTRIBUTE,
+  legendTitleFontSize,
   MAX_LEGEND_CATEGORIES,
   MISSING_LEGEND_ENTRY,
   type CommonLegendTextOptions,
