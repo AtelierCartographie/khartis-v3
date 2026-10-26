@@ -324,6 +324,8 @@
   "enrich_step_description": "Add new variables or an additional basemap to the geographic file.",
   "enrich_join_tabular_title": "Join tabular data",
   "enrich_join_tabular_description": "Add attributes to the geographic file by joining a data table to it.",
+  "enrich_join_tabular_joined": "Joined table: {names}. To undo the join, restore the file’s original data in the “Check data” step.",
+  "enrich_join_tabular_joined_unnamed": "A table is joined. To undo the join, restore the file’s original data in the “Check data” step.",
   "enrich_overlay_basemap_title": "Overlay on a basemap",
   "enrich_overlay_basemap_description": "Add a basemap beneath the geographic file.",
   "enrich_import_section_title": "Import data",

@@ -308,6 +308,14 @@
   const activeBasemapOrigin = $derived(
     activeBasemap ? resolveActiveBasemapOrigin(activeBasemap) : null
   );
+  // The Import tab already shows the imported basemap's card.
+  const showActiveBasemapBanner = $derived(
+    activeBasemap !== null &&
+      !(
+        activeBasemapOrigin === 'import' &&
+        dataTabState.basemapJoin.basemapSource === BasemapSource.IMPORT
+      )
+  );
   // Shown from the persisted selection, so it survives a tab switch or reload.
   const activeImportedBasemap = $derived(
     activeBasemapOrigin === 'import' ? activeBasemap : null
@@ -2207,7 +2215,9 @@
       catalogContent={catalogContent}
       importContent={importContent}
       osmContent={osmContent}
-      activeBasemapBanner={activeBasemap ? activeBasemapBanner : undefined}
+      activeBasemapBanner={showActiveBasemapBanner
+        ? activeBasemapBanner
+        : undefined}
       joinSection={joinSection}
       showJoinSection={!!basemapSelected && !isGPSModeActive}
     />
