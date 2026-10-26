@@ -19,6 +19,7 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { ColumnInfo, ColumnType } from '../types';
   import Portal from './portal.svelte';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import { tick } from 'svelte';
 
   interface Props {
@@ -266,7 +267,6 @@
 
   let originTooltipOpen = $state(false);
   let originBadgeRef = $state<HTMLElement | null>(null);
-  let originTooltipPosition = $state({ top: 0, left: 0 });
 
   let typeTooltipOpen = $state(false);
   let pillRef = $state<HTMLButtonElement | undefined>(undefined);
@@ -317,17 +317,6 @@
       warningTooltipPosition = position;
     },
     getAnchor: () => warningBadgeRef
-  } satisfies TooltipController;
-
-  const originTooltip = {
-    isOpen: () => originTooltipOpen,
-    setOpen: (open) => {
-      originTooltipOpen = open;
-    },
-    setPosition: (position) => {
-      originTooltipPosition = position;
-    },
-    getAnchor: () => originBadgeRef
   } satisfies TooltipController;
 
   const typeTooltip = {
@@ -626,26 +615,20 @@
           type="button"
           class="origin-badge"
           bind:this={originBadgeRef}
-          onclick={() => toggleTooltip(originTooltip)}
-          onmouseenter={() => showTooltip(originTooltip)}
-          onmouseleave={() => hideTooltip(originTooltip)}
-          onfocus={() => showTooltip(originTooltip)}
-          onblur={() => hideTooltip(originTooltip)}
+          onclick={() => (originTooltipOpen = !originTooltipOpen)}
+          onmouseenter={() => (originTooltipOpen = true)}
+          onmouseleave={() => (originTooltipOpen = false)}
+          onfocus={() => (originTooltipOpen = true)}
+          onblur={() => (originTooltipOpen = false)}
           aria-label={m.column_origin_label({ file: origin })}
         >
           <DataTable size={16} />
         </button>
         {#if originTooltipOpen}
-          <Portal>
-            <div
-              class="simple-tooltip"
-              style="top: {originTooltipPosition.top}px; left: {originTooltipPosition.left}px;"
-              role="tooltip"
-            >
-              <div class="simple-tooltip-arrow"></div>
-              {m.column_origin_label({ file: origin })}
-            </div>
-          </Portal>
+          <TooltipBubble
+            text={m.column_origin_label({ file: origin })}
+            trigger={originBadgeRef}
+          />
         {/if}
       {/if}
 

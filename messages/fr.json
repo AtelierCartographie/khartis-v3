@@ -324,6 +324,8 @@
   "enrich_step_description": "Ajouter de nouvelles variables ou un fond de carte supplémentaire au fichier géographique.",
   "enrich_join_tabular_title": "Joindre des données tabulaires",
   "enrich_join_tabular_description": "Compléter le fichier géographique en y joignant un tableau de données.",
+  "enrich_join_tabular_joined": "Tableau joint : {names}. Pour annuler la jointure, restaurez les données d’origine du fichier à l’étape « Contrôler les données ».",
+  "enrich_join_tabular_joined_unnamed": "Un tableau est joint. Pour annuler la jointure, restaurez les données d’origine du fichier à l’étape « Contrôler les données ».",
   "enrich_overlay_basemap_title": "Superposer à un fond de carte",
   "enrich_overlay_basemap_description": "Ajouter un fond de carte sous le fichier géographique.",
   "enrich_import_section_title": "Importer des données",

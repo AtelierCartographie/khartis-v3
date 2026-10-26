@@ -53,8 +53,20 @@
       }))
   );
 
+  const selectedSourceFile = $derived(
+    projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === selectedDataset?.sourceFileId
+    )
+  );
+  const hasJoinedTable = $derived(
+    Boolean(selectedSourceFile?.enrichmentSnapshot)
+  );
+  const joinedTableNames = $derived([
+    ...new Set(Object.values(selectedSourceFile?.joinedColumnOrigins ?? {}))
+  ]);
+  // A joined table is undone through the file reset, not the toggle.
   const joinTabularEnabled = $derived(
-    dataTabState.enrichData.joinTabularEnabled
+    hasJoinedTable || dataTabState.enrichData.joinTabularEnabled
   );
   const joinTabularOpen = $derived(
     joinTabularEnabled && dataTabState.uiPanels.enrichJoinTabularOpen
@@ -285,16 +297,10 @@
 
   // Enriching is optional: the step is done once a table was joined or a
   // basemap laid under the file, not merely because the file has geometry.
-  const hasEnrichment = $derived.by(() => {
-    const sourceFileId = selectedDataset?.sourceFileId;
-    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
-      (file) => file.id === sourceFileId
-    );
-    return (
-      Boolean(sourceFile?.enrichmentSnapshot) ||
+  const hasEnrichment = $derived(
+    hasJoinedTable ||
       (overlayBasemapEnabled && Boolean(basemapHook.selectedBasemapId))
-    );
-  });
+  );
 
   $effect(() => {
     if (hasEnrichment) {
@@ -483,6 +489,7 @@
       showToggle={true}
       open={joinTabularOpen}
       toggleChecked={joinTabularEnabled}
+      toggleDisabled={hasJoinedTable}
       onToggle={(expanded) =>
         dataTabActions.setUiPanelsState({
           enrichJoinTabularOpen: expanded
@@ -490,6 +497,15 @@
       onToggleChange={handleJoinTabularToggle}
     >
       <div class="section-content">
+        {#if hasJoinedTable && !fileHook.enrichmentDataset}
+          <p class="kh-help">
+            {joinedTableNames.length > 0
+              ? m.enrich_join_tabular_joined({
+                  names: joinedTableNames.join(', ')
+                })
+              : m.enrich_join_tabular_joined_unnamed()}
+          </p>
+        {/if}
         {#if !fileHook.enrichmentDataset}
           <EnrichmentFileUpload
             projectTables={projectTables}
