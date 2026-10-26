@@ -13,7 +13,10 @@ import type {
 } from '$lib/features/commons/types/data-tab.types';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
-import { persistEnrichedSourceFile } from '../services/source-file-state.service';
+import {
+  markSourceFileAttached,
+  persistEnrichedSourceFile
+} from '../services/source-file-state.service';
 import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -441,6 +444,15 @@ export function useEnrichmentJoin(
         enrichedTableName,
         { force: true }
       );
+      const isProjectTable = datasetsStore.datasets.some(
+        (dataset) => dataset.id === enrichmentDataset.id
+      );
+      if (isProjectTable && geoDataset.sourceFileId) {
+        markSourceFileAttached(enrichmentDataset.sourceFileId, {
+          sourceFileId: geoDataset.sourceFileId,
+          datasetName: geoDataset.name
+        });
+      }
       if (geoDataset.sourceFileId) {
         await persistEnrichedSourceFile({
           sourceFileId: geoDataset.sourceFileId,

@@ -1,4 +1,7 @@
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import type {
+  DatasetAttachment,
+  UploadedFile
+} from '$lib/features/commons/types/create-project.types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import {
   buildStatisticsSnapshot,
@@ -76,6 +79,22 @@ export async function persistSourceFileState(input: {
   );
 
   await projectStore.saveCurrentProject();
+}
+
+/**
+ * Marks a project table as part of the geo file it enriched. Saved with the
+ * enrichment that follows.
+ */
+export function markSourceFileAttached(
+  tableSourceFileId: string,
+  attachment: DatasetAttachment
+): void {
+  const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+    (file) => file.id === tableSourceFileId
+  );
+  if (sourceFile) {
+    sourceFile.attachedTo = attachment;
+  }
 }
 
 export async function persistEnrichedSourceFile(input: {

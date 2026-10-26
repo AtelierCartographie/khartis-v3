@@ -137,13 +137,6 @@ export interface BasemapMetadata {
   // basemap: it must not be persisted or offered in the basemap catalog.
   isDatasetGeometry?: boolean;
   sourceAsset?: AssetRef;
-  // Copied from a geo dataset of the project instead of uploaded.
-  projectSource?: ProjectGeoBasemapSource;
-}
-
-export interface ProjectGeoBasemapSource {
-  sourceFileId: string;
-  datasetName: string;
 }
 
 export interface BasemapSuggestion extends BasemapMetadata {

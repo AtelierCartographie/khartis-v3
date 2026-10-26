@@ -52,19 +52,6 @@ describe('mergeProjectGeoSuggestions', () => {
     expect(files(merged)).toEqual(['project', 'world']);
   });
 
-  it('should list a project file once when the catalog ranking also returns it', () => {
-    const merged = mergeProjectGeoSuggestions(
-      [scored('custom_basemap_1', 60), scored('world', 30)],
-      [scored('custom_basemap_1', 100)],
-      3
-    );
-
-    expect(merged).toEqual([
-      scored('custom_basemap_1', 100),
-      scored('world', 30)
-    ]);
-  });
-
   it('should drop a project file that matches nothing and keep the limit', () => {
     const merged = mergeProjectGeoSuggestions(
       [scored('a', 30), scored('b', 20), scored('c', 10)],

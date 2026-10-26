@@ -24,8 +24,7 @@
   import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
     BasemapMetadata,
-    BasemapSuggestion,
-    ProjectGeoBasemapSource
+    BasemapSuggestion
   } from '$lib/features/map/types/basemap.types';
   import {
     createOSMBasemap,
@@ -66,12 +65,17 @@
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistSourceFileState } from '../services/source-file-state.service';
   import {
-    createProjectGeoBasemapFile,
     listProjectGeoBasemapOptions,
     mergeProjectGeoSuggestions,
     scoreProjectGeoBasemapOptions,
-    toProjectGeoBasemapSource
+    type ProjectGeoMatch
   } from '../services/project-geo-basemap.service';
+  import { openDatasetTab } from '../services/dataset-navigation.service';
+  import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
+  import {
+    InlineNotification,
+    NotificationActionButton
+  } from 'carbon-components-svelte';
   import {
     SavePriority,
     persistenceRegistry
@@ -360,19 +364,15 @@
   });
   const isGPSModeActive = $derived(hasGPSCoordinates);
 
-  let projectGeoScores = $state.raw(new Map<string, number>());
+  let projectGeoScores = $state.raw(new Map<string, ProjectGeoMatch>());
   const projectGeoOptions = $derived(
-    listProjectGeoBasemapOptions(
-      datasetsStore.datasets,
-      selectedDataset?.id,
-      allBasemapsForLookup
-    )
+    listProjectGeoBasemapOptions(datasetsStore.datasets, selectedDataset?.id)
   );
   const projectGeoBasemapCards = $derived(
     projectGeoOptions
       .map((option) => ({
         basemap: option.basemap,
-        score: projectGeoScores.get(option.dataset.id)
+        score: projectGeoScores.get(option.dataset.id)?.score
       }))
       .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
   );
@@ -437,13 +437,18 @@
     });
   }
 
+  // Joining a project geo file opens its tab, so it is offered rather than
+  // preselected: an automatic tab switch would lose the user.
+  const proposedProjectGeoOption = $derived.by(() => {
+    const first = suggestedBasemaps[0]?.basemap;
+    return first ? findProjectGeoOption(first) : undefined;
+  });
+
   async function autoSelectFirstSuggestedBasemap(): Promise<void> {
     const firstSuggestion = suggestedBasemaps[0]?.basemap;
-    if (!firstSuggestion) return;
+    if (!firstSuggestion || findProjectGeoOption(firstSuggestion)) return;
 
-    await handleSelectSuggestedBasemap(firstSuggestion, {
-      allowToggleOff: false
-    });
+    await handleSelectBasemap(firstSuggestion, { allowToggleOff: false });
   }
 
   function findProjectGeoOption(basemap: BasemapMetadata) {
@@ -453,45 +458,31 @@
   }
 
   async function handleSelectSuggestedBasemap(
-    basemap: BasemapMetadata,
-    options: { allowToggleOff?: boolean } = {}
+    basemap: BasemapMetadata
   ): Promise<void> {
     if (findProjectGeoOption(basemap)) {
-      await handleSelectProjectGeoBasemap(basemap, options);
+      handleSelectProjectGeoBasemap(basemap);
       return;
     }
-    await handleSelectBasemap(basemap, options);
+    await handleSelectBasemap(basemap);
   }
 
-  async function handleSelectProjectGeoBasemap(
-    basemap: BasemapMetadata,
-    options: { allowToggleOff?: boolean } = {}
-  ): Promise<void> {
+  /**
+   * The table joins a geo file of the project by enriching it: the join is
+   * checked and validated in the tab of that file, which then holds both.
+   */
+  function handleSelectProjectGeoBasemap(basemap: BasemapMetadata): void {
     const option = findProjectGeoOption(basemap);
-    if (!option || importUploading) return;
+    const table = selectedDataset;
+    if (!option || !table) return;
 
-    if (option.isBuilt) {
-      await handleSelectBasemap(option.basemap, {
-        ...options,
-        source: BasemapSource.IMPORT
-      });
-      return;
-    }
-
-    importUploading = true;
-    importError = null;
-    try {
-      importFiles = [await createProjectGeoBasemapFile(option.dataset)];
-    } catch (err) {
-      logger.error('Error copying a project geo file', LogCategory.MAP, err);
-      importError =
-        err instanceof Error ? err.message : m.basemap_custom_error();
-      importUploading = false;
-      return;
-    }
-    await handleImportFile({
-      projectSource: toProjectGeoBasemapSource(option.dataset)
+    enrichmentRequestStore.request({
+      geoDatasetId: option.dataset.id,
+      tableDatasetId: table.id,
+      sourceColumn: dataTabState.geolocation.linkedVariableName || undefined,
+      targetColumn: projectGeoScores.get(option.dataset.id)?.targetColumn
     });
+    openDatasetTab(option.dataset.id);
   }
 
   function isDatasetNotFoundError(
@@ -1049,9 +1040,7 @@
     }
   }
 
-  async function handleImportFile(
-    options: { projectSource?: ProjectGeoBasemapSource } = {}
-  ) {
+  async function handleImportFile() {
     if (importFiles.length === 0) {
       importError = m.basemap_import_modal_error_select_file();
       return;
@@ -1078,13 +1067,10 @@
 
       if (abortSignal.aborted) return;
 
-      const persistedBasemap = await persistCustomBasemapSource(
+      const customBasemap = await persistCustomBasemapSource(
         processedBasemap,
         file
       );
-      const customBasemap: BasemapMetadata = options.projectSource
-        ? { ...persistedBasemap, projectSource: options.projectSource }
-        : persistedBasemap;
 
       if (abortSignal.aborted) return;
 
@@ -1614,7 +1600,7 @@
         }
       }
 
-      let projectScores = new Map<string, number>();
+      let projectScores = new Map<string, ProjectGeoMatch>();
       const sourceTableName =
         getCurrentDuckDataset(resolvedDatasetId)?.tableName;
       if (
@@ -2196,6 +2182,25 @@
   <p class="kh-help">{m.basemap_step_description()}</p>
 
   <div class="step-content">
+    {#if proposedProjectGeoOption && !basemapSelected}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        title={m.basemap_project_file_proposal_title({
+          name: proposedProjectGeoOption.basemap.title_fr
+        })}
+        subtitle={m.basemap_project_file_proposal_subtitle()}
+      >
+        <NotificationActionButton
+          slot="actions"
+          on:click={() =>
+            handleSelectProjectGeoBasemap(proposedProjectGeoOption.basemap)}
+        >
+          {m.basemap_project_file_proposal_action()}
+        </NotificationActionButton>
+      </InlineNotification>
+    {/if}
     <BasemapPanelContent
       selectedSource={dataTabState.basemapJoin.basemapSource}
       onSourceChange={handleBasemapSourceChange}

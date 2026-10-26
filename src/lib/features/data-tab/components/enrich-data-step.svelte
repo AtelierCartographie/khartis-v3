@@ -35,6 +35,7 @@
   } from '../services/target-column-ranking.service';
 
   import { dataTabStore } from '../stores/data-tab.store.svelte';
+  import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const projectTables = $derived(
@@ -371,28 +372,55 @@
     });
   });
 
+  /** Opens the join of a project table, with the column pair when known. */
+  async function startProjectTableJoin(join: {
+    datasetId: string;
+    sourceColumn?: string;
+    targetColumn?: string;
+  }): Promise<void> {
+    handleJoinTabularToggle(true);
+    await fileHook.handleSelectProjectDataset(join.datasetId);
+    // Selecting a table resets both columns: the matched pair is set after.
+    await tick();
+    const enrichItem = enrichDataFieldItems.find(
+      (field) => field.columnName === join.sourceColumn
+    );
+    const geoItem = geoFileColumns.find(
+      (field) => field.columnName === join.targetColumn
+    );
+    if (enrichItem) enrichLinkedVariableId = enrichItem.id;
+    if (geoItem) {
+      geoFileColumnId = geoItem.id;
+      isGeoFileColumnSuggested = false;
+    }
+    dataTabActions.setEnrichDataState({
+      enrichmentColumn: enrichItem?.columnName,
+      targetColumn: geoItem?.columnName
+    });
+  }
+
   async function acceptTableProposal(): Promise<void> {
     const proposal = tableProposal;
     if (!proposal) return;
     dismissedProposalKey = tableProposalKey;
-    handleJoinTabularToggle(true);
-    await fileHook.handleSelectProjectDataset(proposal.datasetId);
-    // Selecting a table resets both columns: the matched pair is set after.
-    await tick();
-    const enrichItem = enrichDataFieldItems.find(
-      (field) => field.columnName === proposal.sourceColumn
-    );
-    const geoItem = geoFileColumns.find(
-      (field) => field.columnName === proposal.targetColumn
-    );
-    enrichLinkedVariableId = enrichItem?.id;
-    geoFileColumnId = geoItem?.id;
-    isGeoFileColumnSuggested = false;
-    dataTabActions.setEnrichDataState({
-      enrichmentColumn: proposal.sourceColumn,
-      targetColumn: proposal.targetColumn
-    });
+    await startProjectTableJoin(proposal);
   }
+
+  // A join asked for from the tab of a table lands here, in the tab of the
+  // geo file it enriches.
+  $effect(() => {
+    const geoDatasetId = selectedDataset?.id;
+    if (!geoDatasetId || !enrichmentRequestStore.pending) return;
+    const request = enrichmentRequestStore.take(geoDatasetId);
+    if (!request) return;
+    void untrack(() =>
+      startProjectTableJoin({
+        datasetId: request.tableDatasetId,
+        sourceColumn: request.sourceColumn,
+        targetColumn: request.targetColumn
+      })
+    );
+  });
 
   function handleJoinTabularToggle(checked: boolean): void {
     dataTabActions.setEnrichDataState({ joinTabularEnabled: checked });
