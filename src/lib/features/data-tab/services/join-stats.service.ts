@@ -187,6 +187,12 @@ export interface RankTargetColumnsOptions {
   targetColumns: string[];
 }
 
+export interface BestTargetColumn {
+  column: string;
+  /** Percentage of the sampled distinct source values the column holds. */
+  matchShare: number;
+}
+
 const TARGET_COLUMN_RANKING_SAMPLE = 500;
 
 /**
@@ -195,7 +201,7 @@ const TARGET_COLUMN_RANKING_SAMPLE = 500;
  */
 export async function findBestTargetColumn(
   options: RankTargetColumnsOptions
-): Promise<string | null> {
+): Promise<BestTargetColumn | null> {
   const { sourceTableName, sourceColumn, targetTableName, targetColumns } =
     options;
   if (targetColumns.length === 0) return null;
@@ -207,7 +213,8 @@ export async function findBestTargetColumn(
   const perColumn = targetColumns
     .map(
       (column, position) => `
-      SELECT ${position} AS position, COUNT(*) AS matched
+      SELECT ${position} AS position, COUNT(*) AS matched,
+        (SELECT COUNT(*) FROM sampled) AS sampled_count
       FROM sampled
       WHERE normalized IN (
         SELECT normalize_text_join(CAST("${escapeIdentifier(column)}" AS VARCHAR))
@@ -228,11 +235,16 @@ export async function findBestTargetColumn(
      ORDER BY matched DESC, position
      LIMIT 1`,
     { format: 'array' }
-  )) as Array<{ position: number; matched: number }>;
+  )) as Array<{ position: number; matched: number; sampled_count: number }>;
 
   const best = rows[0];
-  if (!best || Number(best.matched) === 0) return null;
-  return targetColumns[Number(best.position)] ?? null;
+  const matched = Number(best?.matched ?? 0);
+  const column = best ? targetColumns[Number(best.position)] : undefined;
+  if (!column || matched === 0) return null;
+  return {
+    column,
+    matchShare: (matched / Number(best.sampled_count)) * 100
+  };
 }
 
 /** Cleanup must never replace the error that triggered it. */

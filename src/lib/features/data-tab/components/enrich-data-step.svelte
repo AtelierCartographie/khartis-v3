@@ -194,7 +194,8 @@
       targetTableName,
       targetColumns: candidates.map((field) => field.columnName)
     })
-      .then((columnName) => {
+      .then((best) => {
+        const columnName = best?.column;
         if (run !== targetColumnSuggestionRun || !columnName) return;
         if (geoFileColumnId !== undefined && !isGeoFileColumnSuggested) return;
         const item = geoFileColumns.find(
