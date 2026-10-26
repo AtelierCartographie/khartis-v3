@@ -273,7 +273,21 @@ describe('enrichment target column suggestion', () => {
       targetColumns: ['nom', 'code_postal', 'code_insee']
     });
 
-    expect(best).toBe('code_insee');
+    expect(best?.column).toBe('code_insee');
+  });
+
+  it('should score the share of distinct source values the best column holds', async () => {
+    await seedTarget(['Paris', 'Lyon', 'Marseille']);
+    await seedSource(['PARIS', 'Lyon', 'Lyon', 'Berlin', 'Madrid']);
+
+    const best = await findBestTargetColumn({
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      targetTableName: 'target_table',
+      targetColumns: ['name']
+    });
+
+    expect(best).toEqual({ column: 'name', matchShare: 50 });
   });
 
   it('suggests nothing when no target column shares a value', async () => {
