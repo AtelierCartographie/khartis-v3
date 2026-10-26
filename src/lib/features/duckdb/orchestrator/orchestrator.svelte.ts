@@ -557,6 +557,118 @@ export const duckDBOrchestrator = {
     return joinOps.runFullFuzzyPass(dataset, geoColumn, Duck);
   },
 
+  /** Target of a table-to-table join; rebuild it when its table changes. */
+  async prepareTableJoinTarget(
+    input: joinOps.TableJoinTargetInput
+  ): Promise<joinOps.JoinTarget> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.prepareTableJoinTarget(Duck, input);
+  },
+
+  async computeTableJoinStats(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options?: joinOps.JoinGradingOptions
+  ): Promise<JoinQuality> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.computeTargetJoinStats(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinedEntitiesPage(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options: joinOps.JoinedEntitiesPageOptions
+  ): Promise<JoinedEntity[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getTargetJoinedEntitiesPage(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinedTargetValues(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options?: joinOps.JoinGradingOptions
+  ): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getTargetJoinedValues(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinTargetValues(
+    target: joinOps.JoinTarget
+  ): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getJoinTargetValues(Duck, target);
+  },
+
+  async estimateTableJoinFuzzyPass(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget
+  ): Promise<joinOps.JoinFuzzyPassEstimate> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.estimateJoinFuzzyPass(
+      { tableName: sourceTableName },
+      sourceColumn,
+      Duck,
+      target.attributesTable
+    );
+  },
+
+  async runTableFullFuzzyPass(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget
+  ): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.runFullFuzzyPass(
+      { tableName: sourceTableName },
+      sourceColumn,
+      Duck,
+      target.attributesTable
+    );
+  },
+
+  async createEnrichedTable(input: joinOps.EnrichedTableInput): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    await joinOps.createEnrichedTable(Duck, input);
+  },
+
   async applyJoinCorrections(
     datasetId: string,
     geoColumn: string,

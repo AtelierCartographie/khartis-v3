@@ -45,6 +45,7 @@ import type {
 import { detectGPSColumns } from './gps-ops';
 import { isGeometryColumnName } from '../utils/geometry-column.utils';
 import { selectBasemapJoinKeyColumns } from '../utils/basemap-join-key-columns.utils';
+import { CATALOG_ATTRIBUTES_TABLE } from './geo-detection-ops';
 
 export type { FinalizeJoinResult };
 
@@ -90,6 +91,27 @@ export function getBasemapAttributesId(basemap: BasemapMetadata): string {
   return basemap.file.replace(/\.(parquet|geojson)$/i, '');
 }
 
+/**
+ * What a column is joined to: the rows of `attributesTable` whose `basemap`
+ * column equals `id`. The catalog keeps every basemap in `basemap_attributes`;
+ * a table-to-table join builds its own table of the same shape, so both are
+ * graded by the same SQL.
+ */
+export interface JoinTarget {
+  attributesTable: string;
+  id: string;
+}
+
+/** Only the table is read from the joined dataset. */
+type JoinSource = Pick<DuckDBDataset, 'tableName'>;
+
+function toCatalogJoinTarget(basemap: BasemapMetadata): JoinTarget {
+  return {
+    attributesTable: CATALOG_ATTRIBUTES_TABLE,
+    id: getBasemapAttributesId(basemap)
+  };
+}
+
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 const GRADED_CACHE_PREFIX = '__join_graded__';
 const MAX_SIMILARITY_CACHE_ENTRIES = 4;
@@ -100,6 +122,7 @@ const FUZZY_SCORE_CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
 interface SimilarityCacheEntry {
   tableName: string;
   geoColumn: string;
+  attributesTable: string;
   cacheTableName: string;
   fuzzyMode: FuzzyPassMode;
 }
@@ -119,8 +142,15 @@ const pendingSimilarityCacheBuilds = new Map<
  */
 const fullFuzzyPassRequests = new Set<string>();
 
-function getColumnKey(datasetTable: string, geoColumn: string): string {
-  return `${datasetTable}::${geoColumn}`;
+function getColumnKey(
+  datasetTable: string,
+  geoColumn: string,
+  attributesTable: string = CATALOG_ATTRIBUTES_TABLE
+): string {
+  const columnKey = `${datasetTable}::${geoColumn}`;
+  return attributesTable === CATALOG_ATTRIBUTES_TABLE
+    ? columnKey
+    : `${columnKey}::${attributesTable}`;
 }
 
 /**
@@ -142,9 +172,10 @@ function resolveJoinRowFilter(
 function getSimilarityCacheBuildKey(
   datasetTable: string,
   geoColumn: string,
-  rowFilter: string | null
+  rowFilter: string | null,
+  attributesTable: string
 ): string {
-  const columnKey = getColumnKey(datasetTable, geoColumn);
+  const columnKey = getColumnKey(datasetTable, geoColumn, attributesTable);
   return rowFilter ? `${columnKey}::${rowFilter}` : columnKey;
 }
 
@@ -217,6 +248,19 @@ function invalidateGradedCache(
   }
 }
 
+/** Drop the similarity rows built against a target table about to change. */
+function invalidateJoinTargetCaches(
+  attributesTable: string,
+  duck: DuckDBClientForJoin
+): void {
+  for (const [key, entry] of similarityCacheEntries) {
+    if (entry.attributesTable !== attributesTable) continue;
+    similarityCacheEntries.delete(key);
+    invalidateGradedCache(entry.cacheTableName, duck);
+    dropTempTable(entry.cacheTableName, duck);
+  }
+}
+
 /** Invalidate cached similarity rows after source-value mutations. */
 export function invalidateSimilarityCache(
   datasetTableName?: string,
@@ -259,13 +303,16 @@ function buildFuzzyScoreExpression(
  * Scoring distinct normalized values and re-expanding to attribute rows is
  * lossless and ~4x smaller.
  */
-function buildTargetNamesCte(candidateBasemapsCte: string): string {
+function buildTargetNamesCte(
+  candidateBasemapsCte: string,
+  attributesTable: string = CATALOG_ATTRIBUTES_TABLE
+): string {
   return `SELECT
       normalized,
       array_to_string(list_sort(string_split(normalized, ' ')), ' ') AS normalized_sorted
     FROM (
       SELECT DISTINCT ba.normalized
-      FROM basemap_attributes ba
+      FROM "${escapeIdentifier(attributesTable)}" ba
       WHERE NOT EXISTS (SELECT 1 FROM ${candidateBasemapsCte})
          OR ba.basemap IN (SELECT basemap FROM ${candidateBasemapsCte})
     )`;
@@ -273,16 +320,18 @@ function buildTargetNamesCte(candidateBasemapsCte: string): string {
 
 /** Build or reuse the cross-basemap similarity temp table. */
 async function ensureSimilarityCached(
-  dataset: DuckDBDataset,
+  dataset: JoinSource,
   geoColumn: string,
   Duck: DuckDBClientForJoin,
-  scope: JoinRowScope = 'filtered'
+  scope: JoinRowScope = 'filtered',
+  attributesTable: string = CATALOG_ATTRIBUTES_TABLE
 ): Promise<string> {
   const rowFilter = resolveJoinRowFilter(dataset.tableName, scope);
   const buildKey = getSimilarityCacheBuildKey(
     dataset.tableName,
     geoColumn,
-    rowFilter
+    rowFilter,
+    attributesTable
   );
   const cacheTableName = getSimilarityCacheTableName(
     dataset.tableName,
@@ -290,7 +339,7 @@ async function ensureSimilarityCached(
     buildKey
   );
   const fuzzyMode: FuzzyPassMode = fullFuzzyPassRequests.has(
-    getColumnKey(dataset.tableName, geoColumn)
+    getColumnKey(dataset.tableName, geoColumn, attributesTable)
   )
     ? 'full'
     : 'auto';
@@ -328,10 +377,13 @@ async function ensureSimilarityCached(
 
   const buildPromise = (async () => {
     perfMark(PERF_PHASE.SIMILARITY_CACHE);
-    await ensureBasemapAttributesLoaded(Duck);
+    if (attributesTable === CATALOG_ATTRIBUTES_TABLE) {
+      await ensureBasemapAttributesLoaded(Duck);
+    }
 
     const escapedGeoCol = escapeIdentifier(geoColumn);
     const escapedCacheTable = escapeIdentifier(cacheTableName);
+    const escapedAttributesTable = escapeIdentifier(attributesTable);
 
     // Build the similarity cache in two phases:
     // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
@@ -379,7 +431,7 @@ async function ensureSimilarityCached(
             ORDER BY ba.id
           ) AS exact_rank
         FROM candidates c
-        JOIN basemap_attributes ba ON c.normalized_name = ba.normalized
+        JOIN "${escapedAttributesTable}" ba ON c.normalized_name = ba.normalized
       ),
       exact_matches AS (
         SELECT
@@ -414,7 +466,7 @@ async function ensureSimilarityCached(
         SELECT DISTINCT match_basemap AS basemap FROM exact_matches
       ),
       distinct_attributes AS (
-        ${buildTargetNamesCte('candidate_basemaps')}
+        ${buildTargetNamesCte('candidate_basemaps', attributesTable)}
       ),
       -- The budget is on candidates x target names, not candidates: scoring is
       -- a cross join, so a fixed candidate cap would make this step slower as
@@ -452,7 +504,7 @@ async function ensureSimilarityCached(
           ba.basemap AS match_basemap,
           ba.basemap_count AS match_basemap_count
         FROM fuzzy_scored f
-        JOIN basemap_attributes ba ON ba.normalized = f.normalized
+        JOIN "${escapedAttributesTable}" ba ON ba.normalized = f.normalized
         WHERE f.match_score > 0
       ),
       all_matches AS (
@@ -478,6 +530,7 @@ async function ensureSimilarityCached(
     similarityCacheEntries.set(buildKey, {
       tableName: dataset.tableName,
       geoColumn,
+      attributesTable,
       cacheTableName,
       fuzzyMode
     });
@@ -517,12 +570,13 @@ async function ensureSimilarityCached(
  * cheap enough to call on every stats refresh.
  */
 async function fetchFuzzyPassEstimate(
-  dataset: DuckDBDataset,
+  dataset: JoinSource,
   geoColumn: string,
   cacheTableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  attributesTable: string
 ): Promise<JoinFuzzyPassEstimate> {
-  const columnKey = getColumnKey(dataset.tableName, geoColumn);
+  const columnKey = getColumnKey(dataset.tableName, geoColumn, attributesTable);
   const escapedCache = escapeIdentifier(cacheTableName);
 
   const rows = (await Duck.query(
@@ -540,7 +594,7 @@ async function fetchFuzzyPassEstimate(
      SELECT
        (SELECT COUNT(*) FROM unmatched) AS candidates,
        (SELECT COUNT(DISTINCT ba.normalized)
-        FROM basemap_attributes ba
+        FROM "${escapeIdentifier(attributesTable)}" ba
         WHERE NOT EXISTS (SELECT 1 FROM candidate_basemaps)
            OR ba.basemap IN (SELECT basemap FROM candidate_basemaps)
        ) AS target_names`,
@@ -562,12 +616,25 @@ async function fetchFuzzyPassEstimate(
 }
 
 export async function estimateJoinFuzzyPass(
-  dataset: DuckDBDataset,
+  dataset: JoinSource,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  attributesTable: string = CATALOG_ATTRIBUTES_TABLE
 ): Promise<JoinFuzzyPassEstimate> {
-  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  return fetchFuzzyPassEstimate(dataset, geoColumn, cacheTableName, Duck);
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'filtered',
+    attributesTable
+  );
+  return fetchFuzzyPassEstimate(
+    dataset,
+    geoColumn,
+    cacheTableName,
+    Duck,
+    attributesTable
+  );
 }
 
 /**
@@ -581,14 +648,21 @@ export async function estimateJoinFuzzyPass(
  * paid for, so the pass runs to completion and keeps its result.
  */
 export async function runFullFuzzyPass(
-  dataset: DuckDBDataset,
+  dataset: JoinSource,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  attributesTable: string = CATALOG_ATTRIBUTES_TABLE
 ): Promise<void> {
-  const columnKey = getColumnKey(dataset.tableName, geoColumn);
+  const columnKey = getColumnKey(dataset.tableName, geoColumn, attributesTable);
   fullFuzzyPassRequests.add(columnKey);
   try {
-    await ensureSimilarityCached(dataset, geoColumn, Duck);
+    await ensureSimilarityCached(
+      dataset,
+      geoColumn,
+      Duck,
+      'filtered',
+      attributesTable
+    );
   } catch (error) {
     // A failed pass leaves no suggestions, so the request must not stick or
     // every later refresh would silently pay for the unbounded scope.
@@ -915,13 +989,50 @@ export async function getJoinedEntitiesPage(
   Duck: DuckDBClientForJoin,
   options: JoinedEntitiesPageOptions
 ): Promise<JoinedEntity[]> {
-  const basemapId = getBasemapAttributesId(basemap);
-  await ensureBasemapHasAttributes(basemapId, Duck);
-  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+  await ensureBasemapHasAttributes(getBasemapAttributesId(basemap), Duck);
+  return getTargetJoinedEntitiesPage(
+    dataset,
+    toCatalogJoinTarget(basemap),
+    geoColumn,
+    Duck,
+    options
+  );
+}
+
+async function resolveGradedTable(
+  dataset: JoinSource,
+  target: JoinTarget,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin,
+  excludedValues: string[]
+): Promise<string> {
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'filtered',
+    target.attributesTable
+  );
+  return ensureGradedMaterialized(
+    cacheTableName,
+    target.id,
+    Duck,
+    excludedValues
+  );
+}
+
+export async function getTargetJoinedEntitiesPage(
+  dataset: JoinSource,
+  target: JoinTarget,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin,
+  options: JoinedEntitiesPageOptions
+): Promise<JoinedEntity[]> {
   const gradedTable = escapeIdentifier(
-    await ensureGradedMaterialized(
-      cacheTableName,
-      basemapId,
+    await resolveGradedTable(
+      dataset,
+      target,
+      geoColumn,
       Duck,
       options.excludedValues ?? []
     )
@@ -963,13 +1074,28 @@ export async function getJoinedBasemapValues(
   Duck: DuckDBClientForJoin,
   options: JoinGradingOptions = {}
 ): Promise<string[]> {
-  const basemapId = getBasemapAttributesId(basemap);
-  await ensureBasemapHasAttributes(basemapId, Duck);
-  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+  await ensureBasemapHasAttributes(getBasemapAttributesId(basemap), Duck);
+  return getTargetJoinedValues(
+    dataset,
+    toCatalogJoinTarget(basemap),
+    geoColumn,
+    Duck,
+    options
+  );
+}
+
+export async function getTargetJoinedValues(
+  dataset: JoinSource,
+  target: JoinTarget,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin,
+  options: JoinGradingOptions = {}
+): Promise<string[]> {
   const gradedTable = escapeIdentifier(
-    await ensureGradedMaterialized(
-      cacheTableName,
-      basemapId,
+    await resolveGradedTable(
+      dataset,
+      target,
+      geoColumn,
       Duck,
       options.excludedValues ?? []
     )
@@ -1136,7 +1262,8 @@ export async function computeJoinSynthesis(
     dataset,
     geoColumn,
     cacheTableName,
-    Duck
+    Duck,
+    CATALOG_ATTRIBUTES_TABLE
   );
 
   if (!estimate.withinBudget && estimate.candidates > 0) {
@@ -1307,17 +1434,37 @@ export async function computeJoinStats(
   Duck: DuckDBClientForJoin,
   options: JoinGradingOptions = {}
 ): Promise<JoinQuality> {
-  const basemapId = getBasemapAttributesId(basemap);
-
   // Generate basemap attributes when needed.
-  await ensureBasemapHasAttributes(basemapId, Duck);
+  await ensureBasemapHasAttributes(getBasemapAttributesId(basemap), Duck);
 
-  // One similarity cache covers all basemaps.
-  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+  return computeTargetJoinStats(
+    dataset,
+    toCatalogJoinTarget(basemap),
+    geoColumn,
+    Duck,
+    options
+  );
+}
+
+export async function computeTargetJoinStats(
+  dataset: JoinSource,
+  target: JoinTarget,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin,
+  options: JoinGradingOptions = {}
+): Promise<JoinQuality> {
+  // One similarity cache covers every target of the attributes table.
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'filtered',
+    target.attributesTable
+  );
 
   const quality = await deriveJoinQualityFromCache(
     cacheTableName,
-    basemapId,
+    target.id,
     Duck,
     options.excludedValues ?? []
   );
@@ -1348,6 +1495,131 @@ export async function computeJoinStats(
   }
 
   return quality;
+}
+
+const TABLE_JOIN_TARGET_PREFIX = '__join_target__';
+
+export interface TableJoinTargetInput {
+  targetTableName: string;
+  targetColumn: string;
+}
+
+/**
+ * Attributes of a table-to-table join, built from one column of the target
+ * table. Every distinct value is both the name and the id, so two spellings
+ * that normalize alike are graded ambiguous, as two catalog ids would be.
+ * Rebuilding drops the similarity rows scored against the previous content.
+ */
+export async function prepareTableJoinTarget(
+  Duck: DuckDBClientForJoin,
+  input: TableJoinTargetInput
+): Promise<JoinTarget> {
+  const id = `${input.targetTableName}::${input.targetColumn}`;
+  const attributesTable = `${TABLE_JOIN_TARGET_PREFIX}${hashSimilarityCacheKey(id)}`;
+  const escapedColumn = escapeIdentifier(input.targetColumn);
+
+  invalidateJoinTargetCaches(attributesTable, Duck);
+  await Duck.query(`
+    CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(attributesTable)}" AS
+    WITH target_values AS (
+      SELECT DISTINCT CAST("${escapedColumn}" AS VARCHAR) AS raw
+      FROM "${escapeIdentifier(input.targetTableName)}"
+      WHERE "${escapedColumn}" IS NOT NULL
+    )
+    SELECT
+      raw,
+      raw AS id,
+      '${escapeSqlString(input.targetColumn)}' AS variant,
+      normalize_text_join(raw) AS normalized,
+      '${escapeSqlString(id)}' AS basemap,
+      (SELECT COUNT(*) FROM target_values) AS basemap_count
+    FROM target_values
+  `);
+
+  return { attributesTable, id };
+}
+
+/** Every value of the target, for manual correction. */
+export async function getJoinTargetValues(
+  Duck: DuckDBClientForJoin,
+  target: JoinTarget
+): Promise<string[]> {
+  const rows = (await Duck.query(
+    `SELECT DISTINCT raw
+     FROM "${escapeIdentifier(target.attributesTable)}"
+     WHERE basemap = '${escapeSqlString(target.id)}'
+     ORDER BY raw`,
+    { format: 'array' }
+  )) as Array<{ raw: string }>;
+  return rows.map((row) => row.raw);
+}
+
+export interface EnrichedTableInput extends TableJoinTargetInput {
+  sourceTableName: string;
+  sourceColumn: string;
+  /** Source columns copied onto the target rows. */
+  sourceColumns: string[];
+  /** Source value replaced by the target value it is joined to. */
+  corrections: Record<string, string>;
+  /** Source values left out of the join. */
+  excludedValues: string[];
+  enrichedTableName: string;
+}
+
+/**
+ * Copy of the target table with the source columns joined on, one source row
+ * per normalized value. Corrections and exclusions apply to the source value
+ * only, so the source table is never rewritten.
+ */
+export async function createEnrichedTable(
+  Duck: DuckDBClientForJoin,
+  input: EnrichedTableInput
+): Promise<void> {
+  const sourceValue = `CAST(e."${escapeIdentifier(input.sourceColumn)}" AS VARCHAR)`;
+  const corrections = Object.entries(input.corrections);
+  const correctedValue =
+    corrections.length === 0
+      ? sourceValue
+      : `CASE
+          ${corrections
+            .map(
+              ([original, corrected]) =>
+                `WHEN ${sourceValue} = '${escapeSqlString(original)}' THEN '${escapeSqlString(corrected)}'`
+            )
+            .join('\n          ')}
+          ELSE ${sourceValue}
+        END`;
+  const exclusion =
+    input.excludedValues.length === 0
+      ? ''
+      : `WHERE ${sourceValue} NOT IN (${input.excludedValues
+          .map((value) => `'${escapeSqlString(value)}'`)
+          .join(', ')})`;
+  const columns = input.sourceColumns.map(
+    (column) => `"${escapeIdentifier(column)}"`
+  );
+
+  await Duck.query(`
+    CREATE TABLE "${escapeIdentifier(input.enrichedTableName)}" AS
+    WITH enrichment_source AS (
+      SELECT
+        ${correctedValue} AS __khartis_join_value,
+        ${columns.map((column) => `e.${column} AS ${column}`).join(',\n        ')}
+      FROM "${escapeIdentifier(input.sourceTableName)}" e
+      ${exclusion}
+    ),
+    enrichment_unique AS (
+      SELECT
+        normalize_text_join(__khartis_join_value) AS join_key,
+        ${columns.map((column) => `any_value(source.${column}) AS ${column}`).join(',\n        ')}
+      FROM enrichment_source source
+      GROUP BY 1
+    )
+    SELECT g.*, ${columns.map((column) => `e.${column}`).join(', ')}
+    FROM "${escapeIdentifier(input.targetTableName)}" g
+    LEFT JOIN enrichment_unique e
+    ON normalize_text_join(CAST(g."${escapeIdentifier(input.targetColumn)}" AS VARCHAR)) = e.join_key
+  `);
 }
 
 /** Ensure a basemap has generated attribute rows before matching. */

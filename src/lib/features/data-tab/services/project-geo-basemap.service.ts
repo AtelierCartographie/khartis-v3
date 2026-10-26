@@ -11,7 +11,7 @@ import type {
 } from '$lib/features/map/types/basemap.types';
 import * as m from '$lib/paraglide/messages';
 import { ACCEPTED_BASEMAP_EXTENSIONS } from '../utils/enrichment.utils';
-import { findBestTargetColumn } from './join-stats.service';
+import { findBestTargetColumn } from './target-column-ranking.service';
 
 const PROJECT_GEO_CARD_PREFIX = 'project-geo:';
 const INTERNAL_COLUMNS = new Set<string>([

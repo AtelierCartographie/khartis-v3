@@ -1,15 +1,18 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import {
-    GeoreferenceType,
-    JoinStatus
-  } from '$lib/features/commons/constants/ui.constants';
+  import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
-  import { GeocodeSettings, type JoinStats } from '../index';
+  import { GeocodeSettings } from '../index';
+  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
+  import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
+  import {
+    ENRICHMENT_JOINED_PAGE_SIZE,
+    type EnrichmentJoinView
+  } from '../../hooks/use-enrichment-join.svelte';
   import JoinAssistedSection from '../basemap-join/join-assisted-section.svelte';
   import type {
     EnrichDataFieldItem,
@@ -27,8 +30,16 @@
     geoFileColumnId: number | undefined;
     enrichSuggestedColumn: EnrichDataFieldItem | undefined;
     hasOnlyCoordinates: boolean;
-    joinStats: JoinStats | null;
+    view: EnrichmentJoinView | null;
     targetOptions?: string[];
+    fuzzyPassEstimate: JoinFuzzyPassEstimate | null;
+    fuzzyPassRunning: boolean;
+    joinedPage: number;
+    joinedPageRows: JoinedEntity[];
+    joinedTargetValues: string[];
+    onRunFullFuzzyPass: () => void;
+    onJoinedPageChange: (page: number) => void;
+    onRequestJoinedEntities: () => void;
     isComputingJoin: boolean;
     isFinalizingJoin: boolean;
     onRemoveFile: () => void;
@@ -61,8 +72,16 @@
     geoFileColumnId,
     enrichSuggestedColumn,
     hasOnlyCoordinates,
-    joinStats,
+    view,
     targetOptions = [],
+    fuzzyPassEstimate,
+    fuzzyPassRunning,
+    joinedPage,
+    joinedPageRows,
+    joinedTargetValues,
+    onRunFullFuzzyPass,
+    onJoinedPageChange,
+    onRequestJoinedEntities,
     isComputingJoin,
     isFinalizingJoin,
     onRemoveFile,
@@ -102,53 +121,6 @@
   const linkedVariableName = $derived(
     enrichDataFieldItems.find((i) => i.id === enrichLinkedVariableId)
       ?.columnName
-  );
-
-  const joinedEntitiesList = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.JOINED)
-      .map((entity) => {
-        const targetValue =
-          entity.basemapValue ??
-          entity.geoValue ??
-          entity.selectedMapping ??
-          entity.matches?.[0] ??
-          entity.dataValue;
-        return {
-          dataValue: entity.dataValue,
-          basemapValue: targetValue,
-          otherIdentifiers:
-            entity.matches?.filter((match) => match !== targetValue) ?? []
-        };
-      })
-  );
-
-  const toVerifyRows = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.TO_VERIFY)
-      .map((entity) => ({
-        dataValue: entity.dataValue,
-        selectedMapping: entity.selectedMapping ?? entity.matches?.[0] ?? '',
-        basemapOptions: entity.basemapOptions ?? entity.matches ?? []
-      }))
-  );
-
-  const duplicateEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.DUPLICATE)
-      .map((entity) => entity.dataValue)
-  );
-
-  const unrecognizedEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.UNRECOGNIZED)
-      .map((entity) => entity.dataValue)
-  );
-
-  const ignoredEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.IGNORED)
-      .map((entity) => ({ dataValue: entity.dataValue, lines: [] }))
   );
 </script>
 
@@ -244,25 +216,35 @@
     <div class="join-assisted-section">
       <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
 
-      {#if joinStats || isComputingJoin}
+      {#if view || isComputingJoin}
         {#if isComputingJoin}
           <div class="computing-join">
             <span>{m.enrich_computing_join()}</span>
           </div>
-        {:else if joinStats}
+        {:else if view}
           <JoinAssistedSection
-            joinRows={toVerifyRows}
-            duplicates={duplicateEntities}
-            unknowns={unrecognizedEntities}
-            joinedCount={joinStats.joinedCount}
-            toVerifyCount={joinStats.toVerifyCount}
+            joinRows={view.joinRows}
+            duplicates={view.duplicates}
+            unknowns={view.unknowns}
+            joinedCount={view.joinedCount}
+            toVerifyCount={view.toVerifyCount}
+            duplicateTotal={view.duplicateTotal}
+            unrecognizedTotal={view.unrecognizedTotal}
+            fuzzyPassEstimate={fuzzyPassEstimate}
+            fuzzyPassRunning={fuzzyPassRunning}
+            onRunFullFuzzyPass={onRunFullFuzzyPass}
             linkedVariableName={linkedVariableName}
             basemapValues={targetOptions}
             loading={isFinalizingJoin}
             joinFinalized={false}
-            joinedEntitiesList={joinedEntitiesList}
-            duplicateLines={joinStats.duplicateLines}
-            ignoredEntities={ignoredEntities}
+            joinedEntitiesList={joinedPageRows}
+            joinedPage={joinedPage}
+            joinedPageSize={ENRICHMENT_JOINED_PAGE_SIZE}
+            joinedBasemapValues={joinedTargetValues}
+            onJoinedPageChange={onJoinedPageChange}
+            onRequestJoinedEntities={onRequestJoinedEntities}
+            duplicateLines={view.duplicateLines}
+            ignoredEntities={view.ignoredEntities}
             onMappingChange={onMappingChange}
             onFinalizeJoin={onFinalizeJoin}
             onManualCorrection={onManualCorrection}

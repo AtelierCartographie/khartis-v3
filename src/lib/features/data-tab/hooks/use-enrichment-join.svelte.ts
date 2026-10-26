@@ -1,23 +1,26 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { Duck } from '$lib/features/duckdb';
+import {
+  Duck,
+  type JoinFuzzyPassEstimate,
+  type JoinTarget
+} from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { SvelteMap } from 'svelte/reactivity';
-import type { JoinStats } from '../components/index';
+import type { JoinQuality } from '$lib/features/map/types/basemap.types';
+import type {
+  JoinedEntity,
+  JoinMapping
+} from '$lib/features/commons/types/data-tab.types';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
-import { computeDatasetJoinStats } from '../services/join-stats.service';
 import { persistEnrichedSourceFile } from '../services/source-file-state.service';
-import { canFinalizeJoin } from '../utils/join-validation.utils';
-import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+
+export const ENRICHMENT_JOINED_PAGE_SIZE = 100;
 
 export interface UseEnrichmentJoinProps {
   getEnrichmentDataset: () => DatasetResult | null;
@@ -29,12 +32,29 @@ export interface UseEnrichmentJoinProps {
   onJoinFinalized: () => void;
 }
 
+/** What the assisted join section shows, corrections and exclusions applied. */
+export interface EnrichmentJoinView {
+  joinRows: JoinMapping[];
+  duplicates: string[];
+  unknowns: string[];
+  joinedCount: number;
+  toVerifyCount: number;
+  duplicateTotal: number;
+  unrecognizedTotal: number;
+  duplicateLines: JoinQuality['duplicateLines'];
+  ignoredEntities: Array<{ dataValue: string; lines: number[] }>;
+}
+
 export interface UseEnrichmentJoinReturn {
-  readonly joinStats: JoinStats | null;
+  readonly view: EnrichmentJoinView | null;
   readonly isComputingJoin: boolean;
   readonly isFinalizingJoin: boolean;
   readonly targetOptions: string[];
-  readonly joinMappings: SvelteMap<number, string>;
+  readonly fuzzyPassEstimate: JoinFuzzyPassEstimate | null;
+  readonly fuzzyPassRunning: boolean;
+  readonly joinedPage: number;
+  readonly joinedPageRows: JoinedEntity[];
+  readonly joinedTargetValues: string[];
   computeEnrichmentJoinStats: () => Promise<void>;
   handleMappingChange: (index: number, value: string) => void;
   handleFinalizeEnrichment: () => Promise<void>;
@@ -42,7 +62,17 @@ export interface UseEnrichmentJoinReturn {
   validateEntity: (dataValue: string, targetValue: string) => void;
   ignoreEntity: (dataValue: string) => void;
   restoreEntity: (dataValue: string) => void;
+  runFullFuzzyPass: () => Promise<void>;
+  loadJoinedPage: (page: number) => void;
+  requestJoinedEntities: () => void;
   resetJoinState: () => void;
+}
+
+interface JoinColumns {
+  sourceTableName: string;
+  sourceColumn: string;
+  targetTableName: string;
+  targetColumn: string;
 }
 
 export function useEnrichmentJoin(
@@ -58,243 +88,260 @@ export function useEnrichmentJoin(
     onJoinFinalized
   } = props;
 
-  let joinStats = $state<JoinStats | null>(null);
+  let target: JoinTarget | null = null;
+  let quality = $state.raw<JoinQuality | null>(null);
   let isComputingJoin = $state(false);
   let isFinalizingJoin = $state(false);
-  let targetOptions = $state<string[]>([]);
-  let joinMappings = new SvelteMap<number, string>();
-  let ignoredDataValues = $state(new Set<string>());
-  let manualCorrections = new SvelteMap<string, string>();
+  let targetOptions = $state.raw<string[]>([]);
+  let fuzzyPassEstimate = $state.raw<JoinFuzzyPassEstimate | null>(null);
+  let fuzzyPassRunning = $state(false);
+  let joinedPage = $state(1);
+  let joinedPageRows = $state.raw<JoinedEntity[]>([]);
+  let joinedTargetValues = $state.raw<string[]>([]);
+  const mappingOverrides = new SvelteMap<string, string>();
+  const manualCorrections = new SvelteMap<string, string>();
+  const ignoredValues = new SvelteSet<string>();
   // Only the latest run may publish: an earlier one can finish last.
-  let latestJoinStatsRun = 0;
-
-  function applyIgnoredEntities(stats: JoinStats): JoinStats {
-    if (ignoredDataValues.size === 0) {
-      return { ...stats, ignoredCount: 0 };
-    }
-    let unrecognizedDelta = 0;
-    let toVerifyDelta = 0;
-    const updatedEntities = stats.entities.map((entity) => {
-      if (!ignoredDataValues.has(entity.dataValue)) return entity;
-      if (entity.status === JoinStatus.UNRECOGNIZED) unrecognizedDelta++;
-      if (entity.status === JoinStatus.TO_VERIFY) toVerifyDelta++;
-      return { ...entity, status: JoinStatus.IGNORED };
-    });
-    return {
-      ...stats,
-      entities: updatedEntities,
-      unrecognizedCount: Math.max(
-        0,
-        stats.unrecognizedCount - unrecognizedDelta
-      ),
-      toVerifyCount: Math.max(0, stats.toVerifyCount - toVerifyDelta),
-      ignoredCount: ignoredDataValues.size
-    };
-  }
-
-  function collectEffectiveCorrections(): Record<string, string> {
-    const corrections: Record<string, string> = {};
-
-    if (joinStats) {
-      for (const entity of joinStats.entities) {
-        if (
-          entity.status === JoinStatus.TO_VERIFY &&
-          entity.selectedMapping &&
-          entity.selectedMapping !== entity.dataValue
-        ) {
-          corrections[entity.dataValue] = entity.selectedMapping;
-        }
-      }
-    }
-
-    for (const [dataValue, targetValue] of manualCorrections.entries()) {
-      if (targetValue && targetValue !== dataValue) {
-        corrections[dataValue] = targetValue;
-      }
-    }
-
-    return corrections;
-  }
-
-  function resolveCorrectedJoinExpression(columnExpression: string): string {
-    const corrections = collectEffectiveCorrections();
-    const entries = Object.entries(corrections);
-    if (entries.length === 0) return columnExpression;
-
-    const cases = entries
-      .map(
-        ([original, corrected]) =>
-          `WHEN ${columnExpression} = '${escapeSqlString(original)}' THEN '${escapeSqlString(corrected)}'`
-      )
-      .join('\n               ');
-
-    return `CASE
-               ${cases}
-               ELSE ${columnExpression}
-             END`;
-  }
-
-  function buildIgnoredWhereClause(columnExpression: string): string {
-    if (ignoredDataValues.size === 0) return '';
-    const ignoredValues = [...ignoredDataValues]
-      .map((value) => `'${escapeSqlString(value)}'`)
-      .join(', ');
-    return `WHERE ${columnExpression} NOT IN (${ignoredValues})`;
-  }
+  let latestRun = 0;
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
-  function getGeoTableName(): string | null {
-    if (!selectedDataset) return null;
-    return selectedDataset.tableName || null;
+  function resolveJoinColumns(): JoinColumns | null {
+    const enrichmentDataset = getEnrichmentDataset();
+    const targetTableName = selectedDataset?.tableName;
+    const sourceColumn = getEnrichDataFieldItems().find(
+      (item) => item.id === getEnrichLinkedVariableId()
+    )?.columnName;
+    const targetColumn = getGeoFileColumns().find(
+      (item) => item.id === getGeoFileColumnId()
+    )?.columnName;
+    if (
+      !enrichmentDataset ||
+      !targetTableName ||
+      !sourceColumn ||
+      !targetColumn
+    )
+      return null;
+    return {
+      sourceTableName: enrichmentDataset.tableName,
+      sourceColumn,
+      targetTableName,
+      targetColumn
+    };
+  }
+
+  // Corrected values are graded joined by hand, so the SQL grading leaves them
+  // out along with the ignored ones.
+  function getExcludedValues(): string[] {
+    return [...ignoredValues, ...manualCorrections.keys()];
+  }
+
+  function clearJoinedView(): void {
+    joinedPage = 1;
+    joinedPageRows = [];
+    joinedTargetValues = [];
+  }
+
+  async function refreshQuality(run: number): Promise<void> {
+    const columns = resolveJoinColumns();
+    if (!columns || !target) return;
+
+    const nextQuality = await duckDBOrchestrator.computeTableJoinStats(
+      columns.sourceTableName,
+      columns.sourceColumn,
+      target,
+      { excludedValues: getExcludedValues() }
+    );
+    if (run !== latestRun) return;
+    quality = nextQuality;
+    clearJoinedView();
+  }
+
+  async function refreshFuzzyPassEstimate(run: number): Promise<void> {
+    const columns = resolveJoinColumns();
+    if (!columns || !target) return;
+    try {
+      const estimate = await duckDBOrchestrator.estimateTableJoinFuzzyPass(
+        columns.sourceTableName,
+        columns.sourceColumn,
+        target
+      );
+      if (run === latestRun) fuzzyPassEstimate = estimate;
+    } catch (error) {
+      // The estimate only drives an optional call to action.
+      if (run === latestRun) fuzzyPassEstimate = null;
+      logger.warn('Failed to estimate the fuzzy join pass', LogCategory.DATA, {
+        error
+      });
+    }
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
-    const run = ++latestJoinStatsRun;
+    const run = ++latestRun;
     isComputingJoin = false;
-    if (isJoinBlocked()) {
-      joinStats = null;
+    const columns = isJoinBlocked() ? null : resolveJoinColumns();
+    if (!columns) {
+      quality = null;
       targetOptions = [];
-      return;
-    }
-
-    const enrichmentDataset = getEnrichmentDataset();
-    if (!enrichmentDataset || !selectedDataset) return;
-
-    const enrichCol = getEnrichDataFieldItems().find(
-      (item) => item.id === getEnrichLinkedVariableId()
-    );
-    const geoCol = getGeoFileColumns().find(
-      (item) => item.id === getGeoFileColumnId()
-    );
-
-    if (!enrichCol || !geoCol) {
-      joinStats = null;
-      targetOptions = [];
+      fuzzyPassEstimate = null;
+      clearJoinedView();
       return;
     }
 
     isComputingJoin = true;
-
     try {
-      const geoTableName = getGeoTableName();
-      if (!geoTableName) return;
-      const escapedGeoTableName = escapeIdentifier(geoTableName);
-      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
-
-      const stats = await computeDatasetJoinStats({
-        sourceTableName: enrichmentDataset.tableName,
-        sourceColumn: enrichCol.columnName,
-        targetTableName: geoTableName,
-        targetColumn: geoCol.columnName
+      // The target table can change between two gradings (another enrichment,
+      // a calculated column), so it is rebuilt on every column change.
+      target = await duckDBOrchestrator.prepareTableJoinTarget({
+        targetTableName: columns.targetTableName,
+        targetColumn: columns.targetColumn
       });
-      if (run !== latestJoinStatsRun) return;
+      if (run !== latestRun) return;
 
-      const targetValues = (await Duck.query(
-        `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
-         FROM "${escapedGeoTableName}"
-         WHERE "${escapedGeoColumn}" IS NOT NULL
-         ORDER BY val`,
-        { format: 'array' }
-      )) as Array<{ val: string }>;
-      if (run !== latestJoinStatsRun) return;
+      const options = await duckDBOrchestrator.getTableJoinTargetValues(target);
+      if (run !== latestRun) return;
+      targetOptions = options;
 
-      const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
-      targetOptions = allTargetOptions;
-
-      stats.entities = stats.entities.map((entity) => {
-        if (entity.status === JoinStatus.TO_VERIFY) {
-          return {
-            ...entity,
-            basemapOptions: entity.matches?.length
-              ? entity.matches
-              : allTargetOptions.slice(0, 20),
-            selectedMapping: entity.matches?.[0] || undefined
-          };
-        }
-        return entity;
-      });
-
-      joinStats = applyIgnoredEntities(stats);
+      await refreshQuality(run);
+      await refreshFuzzyPassEstimate(run);
     } catch (error) {
-      if (run !== latestJoinStatsRun) return;
+      if (run !== latestRun) return;
       logger.error(
         'Failed to compute enrichment join stats',
         LogCategory.DATA,
         error
       );
-      joinStats = null;
+      quality = null;
       targetOptions = [];
       showError(m.join_error_title(), m.join_error_message());
     } finally {
-      if (run === latestJoinStatsRun) {
+      if (run === latestRun) {
         isComputingJoin = false;
       }
     }
   }
 
-  function ignoreEntity(dataValue: string): void {
-    if (!dataValue || ignoredDataValues.has(dataValue)) return;
-    ignoredDataValues = new Set([...ignoredDataValues, dataValue]);
-    manualCorrections.delete(dataValue);
-    if (joinStats) {
-      joinStats = applyIgnoredEntities({
-        ...joinStats,
-        entities: joinStats.entities.map((entity) =>
-          entity.status === JoinStatus.IGNORED && entity.dataValue !== dataValue
-            ? entity
-            : entity.dataValue === dataValue
-              ? entity
-              : entity
-        ),
-        unrecognizedCount: joinStats.unrecognizedCount,
-        toVerifyCount: joinStats.toVerifyCount,
-        ignoredCount: 0
-      });
+  async function regrade(): Promise<void> {
+    const run = ++latestRun;
+    try {
+      await refreshQuality(run);
+    } catch (error) {
+      if (run !== latestRun) return;
+      logger.error(
+        'Failed to regrade enrichment join',
+        LogCategory.DATA,
+        error
+      );
+      showError(m.join_error_title(), m.join_error_message());
     }
   }
 
-  function restoreEntity(dataValue: string): void {
-    if (!ignoredDataValues.has(dataValue)) return;
-    const next = new Set(ignoredDataValues);
-    next.delete(dataValue);
-    ignoredDataValues = next;
-    if (joinStats) {
-      const restoredEntities = joinStats.entities.map((entity) =>
-        entity.dataValue === dataValue
-          ? { ...entity, status: JoinStatus.UNRECOGNIZED }
-          : entity
+  async function runFullFuzzyPass(): Promise<void> {
+    const columns = resolveJoinColumns();
+    if (!columns || !target || fuzzyPassRunning) return;
+    const run = ++latestRun;
+    fuzzyPassRunning = true;
+    try {
+      await duckDBOrchestrator.runTableFullFuzzyPass(
+        columns.sourceTableName,
+        columns.sourceColumn,
+        target
       );
-      joinStats = applyIgnoredEntities({
-        ...joinStats,
-        entities: restoredEntities,
-        unrecognizedCount: joinStats.unrecognizedCount + 1,
-        ignoredCount: 0
-      });
+      if (run !== latestRun) return;
+      await refreshQuality(run);
+      await refreshFuzzyPassEstimate(run);
+    } catch (error) {
+      logger.error(
+        'Failed to run the full fuzzy pass',
+        LogCategory.DATA,
+        error
+      );
+      showError(m.join_error_title(), m.join_error_message());
+    } finally {
+      fuzzyPassRunning = false;
+    }
+  }
+
+  const view = $derived.by((): EnrichmentJoinView | null => {
+    if (!quality) return null;
+    return {
+      joinRows: quality.joinMappings.map((mapping) => {
+        const override = mappingOverrides.get(mapping.dataValue);
+        return override === undefined
+          ? mapping
+          : { ...mapping, selectedMapping: override };
+      }),
+      duplicates: quality.duplicateEntities,
+      unknowns: quality.unrecognizedEntities,
+      joinedCount: quality.joinedCount + manualCorrections.size,
+      toVerifyCount: quality.toVerifyCount,
+      duplicateTotal: quality.duplicateCount,
+      unrecognizedTotal: quality.unrecognizedCount,
+      duplicateLines: quality.duplicateLines,
+      ignoredEntities: [...ignoredValues].map((dataValue) => ({
+        dataValue,
+        lines: []
+      }))
+    };
+  });
+
+  /**
+   * Hand-corrected values lead the joined bucket, the graded ones follow, so a
+   * page is a slice of that concatenation.
+   */
+  async function loadJoinedPage(page: number): Promise<void> {
+    const columns = resolveJoinColumns();
+    if (!columns || !target) return;
+    const run = latestRun;
+    const corrected: JoinedEntity[] = [...manualCorrections].map(
+      ([dataValue, basemapValue]) => ({ dataValue, basemapValue })
+    );
+    const start = (page - 1) * ENRICHMENT_JOINED_PAGE_SIZE;
+    const end = start + ENRICHMENT_JOINED_PAGE_SIZE;
+    const gradedOffset = Math.max(0, start - corrected.length);
+    const gradedLimit = Math.max(0, end - Math.max(start, corrected.length));
+    const excludedValues = getExcludedValues();
+
+    try {
+      const [rows, values] = await Promise.all([
+        gradedLimit > 0
+          ? duckDBOrchestrator.getTableJoinedEntitiesPage(
+              columns.sourceTableName,
+              columns.sourceColumn,
+              target,
+              { offset: gradedOffset, limit: gradedLimit, excludedValues }
+            )
+          : Promise.resolve([]),
+        duckDBOrchestrator.getTableJoinedTargetValues(
+          columns.sourceTableName,
+          columns.sourceColumn,
+          target,
+          { excludedValues }
+        )
+      ]);
+      if (run !== latestRun) return;
+      joinedPage = page;
+      joinedPageRows = [...corrected.slice(start, end), ...rows];
+      joinedTargetValues = [...values, ...manualCorrections.values()];
+    } catch (error) {
+      logger.error(
+        'Failed to load joined enrichment entities',
+        LogCategory.DATA,
+        error
+      );
+    }
+  }
+
+  function requestJoinedEntities(): void {
+    if ((view?.joinedCount ?? 0) > 0 && joinedPageRows.length === 0) {
+      void loadJoinedPage(1);
     }
   }
 
   function handleMappingChange(index: number, value: string): void {
-    joinMappings.set(index, value);
-
-    if (joinStats) {
-      let toVerifyIndex = 0;
-      const updatedEntities = joinStats.entities.map((entity) => {
-        if (entity.status === JoinStatus.TO_VERIFY) {
-          if (toVerifyIndex === index) {
-            toVerifyIndex++;
-            return { ...entity, selectedMapping: value };
-          }
-          toVerifyIndex++;
-        }
-        return entity;
-      });
-
-      joinStats = {
-        ...joinStats,
-        entities: updatedEntities
-      };
-    }
+    const mapping = quality?.joinMappings[index];
+    if (!mapping) return;
+    mappingOverrides.set(mapping.dataValue, value);
   }
 
   function handleManualCorrection(
@@ -303,164 +350,107 @@ export function useEnrichmentJoin(
   ): void {
     if (!dataValue || !targetValue) return;
     manualCorrections.set(dataValue, targetValue);
-
-    if (!joinStats) return;
-
-    const updatedEntities = joinStats.entities.map((entity) =>
-      entity.dataValue === dataValue
-        ? {
-            ...entity,
-            status: JoinStatus.JOINED,
-            geoValue: targetValue,
-            basemapValue: targetValue,
-            selectedMapping: targetValue
-          }
-        : entity
-    );
-
-    joinStats = applyIgnoredEntities({
-      ...joinStats,
-      entities: updatedEntities,
-      joinedCount: updatedEntities.filter(
-        (entity) => entity.status === JoinStatus.JOINED
-      ).length,
-      toVerifyCount: updatedEntities.filter(
-        (entity) => entity.status === JoinStatus.TO_VERIFY
-      ).length,
-      unrecognizedCount: updatedEntities.filter(
-        (entity) => entity.status === JoinStatus.UNRECOGNIZED
-      ).length
-    });
+    ignoredValues.delete(dataValue);
+    void regrade();
   }
 
   function validateEntity(dataValue: string, targetValue: string): void {
     handleManualCorrection(dataValue, targetValue);
   }
 
-  async function handleFinalizeEnrichment(): Promise<void> {
-    if (isJoinBlocked()) {
-      return;
+  function ignoreEntity(dataValue: string): void {
+    if (!dataValue || ignoredValues.has(dataValue)) return;
+    ignoredValues.add(dataValue);
+    manualCorrections.delete(dataValue);
+    void regrade();
+  }
+
+  function restoreEntity(dataValue: string): void {
+    if (!ignoredValues.delete(dataValue)) return;
+    void regrade();
+  }
+
+  /**
+   * Hand corrections, then the selected suggestion of every value left to
+   * verify: the join applies what the section shows.
+   */
+  function collectCorrections(): Record<string, string> {
+    const corrections: Record<string, string> = {};
+    for (const mapping of view?.joinRows ?? []) {
+      if (
+        mapping.selectedMapping &&
+        mapping.selectedMapping !== mapping.dataValue
+      ) {
+        corrections[mapping.dataValue] = mapping.selectedMapping;
+      }
     }
+    for (const [dataValue, targetValue] of manualCorrections) {
+      if (targetValue !== dataValue) {
+        corrections[dataValue] = targetValue;
+      }
+    }
+    return corrections;
+  }
+
+  async function handleFinalizeEnrichment(): Promise<void> {
+    if (isJoinBlocked()) return;
 
     const enrichmentDataset = getEnrichmentDataset();
-    if (!enrichmentDataset || !selectedDataset || !joinStats) return;
+    const columns = resolveJoinColumns();
+    const geoDataset = selectedDataset;
+    if (!enrichmentDataset || !columns || !geoDataset || !view) return;
+    if (view.joinedCount === 0) return;
 
-    const enrichCol = getEnrichDataFieldItems().find(
-      (item) => item.id === getEnrichLinkedVariableId()
-    );
-    const geoCol = getGeoFileColumns().find(
-      (item) => item.id === getGeoFileColumnId()
-    );
-
-    if (!enrichCol || !geoCol) return;
-
-    if (!canFinalizeJoin(joinStats)) {
-      return;
-    }
-
-    const geoTableName = getGeoTableName();
-    if (!geoTableName) return;
+    // A geographic enrichment file brings its attributes, not a second
+    // geometry for the target dataset; a project table already joined to a
+    // basemap brings its data, not the columns that join wrote.
+    const sourceColumns = enrichmentDataset.columns
+      .filter(
+        (col) =>
+          col.name !== columns.sourceColumn &&
+          col.name !== '__id' &&
+          col.name !== enrichmentDataset.geometry?.columnName &&
+          !(
+            enrichmentDataset.joinedBasemap &&
+            JOINED_BASEMAP_COLUMNS.includes(col.name)
+          )
+      )
+      .map((col) => col.name);
+    if (sourceColumns.length === 0) return;
 
     isFinalizingJoin = true;
+    const oldTableName = columns.targetTableName;
+    const enrichedTableName = `${oldTableName}_enriched_${Date.now()}`;
 
     try {
-      // A geographic enrichment file brings its attributes, not a second
-      // geometry for the target dataset; a project table already joined to a
-      // basemap brings its data, not the columns that join wrote.
-      const enrichmentColumns = enrichmentDataset.columns
-        .filter(
-          (col) =>
-            col.name !== enrichCol.columnName &&
-            col.name !== '__id' &&
-            col.name !== enrichmentDataset.geometry?.columnName &&
-            !(
-              enrichmentDataset.joinedBasemap &&
-              JOINED_BASEMAP_COLUMNS.includes(col.name)
-            )
-        )
-        .map((col) => col.name);
+      await duckDBOrchestrator.createEnrichedTable({
+        ...columns,
+        sourceColumns,
+        corrections: collectCorrections(),
+        excludedValues: [...ignoredValues],
+        enrichedTableName
+      });
 
-      if (enrichmentColumns.length === 0) {
-        isFinalizingJoin = false;
-        return;
-      }
-
-      const oldTableName = geoTableName;
-      const escapedGeoTableName = escapeIdentifier(geoTableName);
-      const escapedEnrichmentTableName = escapeIdentifier(
-        enrichmentDataset.tableName
-      );
-      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
-      const escapedEnrichmentColumn = escapeIdentifier(enrichCol.columnName);
-
-      const enrichColsSelect = enrichmentColumns
-        .map((col) => `e."${escapeIdentifier(col)}"`)
-        .join(', ');
-      const enrichColsDedupSelect = enrichmentColumns
-        .map(
-          (col) =>
-            `any_value(source."${escapeIdentifier(col)}") AS "${escapeIdentifier(col)}"`
-        )
-        .join(',\n            ');
-      const enrichmentJoinValueExpression = `CAST(e."${escapedEnrichmentColumn}" AS VARCHAR)`;
-      const correctedJoinValueExpression = resolveCorrectedJoinExpression(
-        enrichmentJoinValueExpression
-      );
-      const ignoredWhereClause = buildIgnoredWhereClause(
-        enrichmentJoinValueExpression
-      );
-
-      const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
-      const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
-
-      await Duck.query(
-        `CREATE TABLE "${escapedEnrichedTableName}" AS
-         WITH enrichment_source AS (
-           SELECT
-             ${correctedJoinValueExpression} AS __khartis_join_value,
-             ${enrichmentColumns
-               .map(
-                 (col) =>
-                   `e."${escapeIdentifier(col)}" AS "${escapeIdentifier(col)}"`
-               )
-               .join(',\n             ')}
-           FROM "${escapedEnrichmentTableName}" e
-           ${ignoredWhereClause}
-         ),
-         enrichment_unique AS (
-           SELECT
-             normalize_text_join(__khartis_join_value) AS join_key,
-             ${enrichColsDedupSelect}
-           FROM enrichment_source source
-           GROUP BY 1
-         )
-         SELECT g.*, ${enrichColsSelect}
-         FROM "${escapedGeoTableName}" g
-         LEFT JOIN enrichment_unique e
-         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = e.join_key`,
-        { format: 'array' }
-      );
-
-      datasetsStore.updateDataset(selectedDataset.id, {
+      datasetsStore.updateDataset(geoDataset.id, {
         tableName: enrichedTableName
       });
       const snapshot = await refreshDatasetMetadata(
-        selectedDataset.id,
+        geoDataset.id,
         enrichedTableName,
         { force: true }
       );
-      if (selectedDataset.sourceFileId) {
+      if (geoDataset.sourceFileId) {
         await persistEnrichedSourceFile({
-          sourceFileId: selectedDataset.sourceFileId,
+          sourceFileId: geoDataset.sourceFileId,
           tableName: enrichedTableName,
           duckColumns: snapshot.duckColumns,
-          geometry: selectedDataset.geometry
+          geometry: geoDataset.geometry
         });
       }
 
       try {
         await duckDBOrchestrator.updateDatasetTableName(
-          selectedDataset.sourceFileId || selectedDataset.id,
+          geoDataset.sourceFileId || geoDataset.id,
           enrichedTableName
         );
       } catch (updateError) {
@@ -471,16 +461,14 @@ export function useEnrichmentJoin(
         );
       }
 
-      if (oldTableName !== enrichedTableName) {
-        try {
-          await Duck.dropTable(oldTableName);
-        } catch (dropError) {
-          logger.error(
-            'Failed to drop previous enrichment table',
-            LogCategory.DATA,
-            dropError
-          );
-        }
+      try {
+        await Duck.dropTable(oldTableName);
+      } catch (dropError) {
+        logger.error(
+          'Failed to drop previous enrichment table',
+          LogCategory.DATA,
+          dropError
+        );
       }
 
       resetJoinState();
@@ -501,18 +489,22 @@ export function useEnrichmentJoin(
   }
 
   function resetJoinState(): void {
-    latestJoinStatsRun += 1;
+    latestRun += 1;
+    target = null;
     isComputingJoin = false;
-    joinStats = null;
+    quality = null;
     targetOptions = [];
-    joinMappings = new SvelteMap<number, string>();
-    ignoredDataValues = new Set();
-    manualCorrections = new SvelteMap<string, string>();
+    fuzzyPassEstimate = null;
+    fuzzyPassRunning = false;
+    clearJoinedView();
+    mappingOverrides.clear();
+    manualCorrections.clear();
+    ignoredValues.clear();
   }
 
   return {
-    get joinStats() {
-      return joinStats;
+    get view() {
+      return view;
     },
     get isComputingJoin() {
       return isComputingJoin;
@@ -523,8 +515,20 @@ export function useEnrichmentJoin(
     get targetOptions() {
       return targetOptions;
     },
-    get joinMappings() {
-      return joinMappings;
+    get fuzzyPassEstimate() {
+      return fuzzyPassEstimate;
+    },
+    get fuzzyPassRunning() {
+      return fuzzyPassRunning;
+    },
+    get joinedPage() {
+      return joinedPage;
+    },
+    get joinedPageRows() {
+      return joinedPageRows;
+    },
+    get joinedTargetValues() {
+      return joinedTargetValues;
     },
     computeEnrichmentJoinStats,
     handleMappingChange,
@@ -533,6 +537,9 @@ export function useEnrichmentJoin(
     validateEntity,
     ignoreEntity,
     restoreEntity,
+    runFullFuzzyPass,
+    loadJoinedPage: (page: number) => void loadJoinedPage(page),
+    requestJoinedEntities,
     resetJoinState
   };
 }
