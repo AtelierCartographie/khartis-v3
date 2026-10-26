@@ -383,14 +383,17 @@
         basemap: allBasemapsForLookup.find(
           (b: BasemapMetadata) => b.file === s.file
         ),
-        score: s.matchScore
+        score: s.matchScore,
+        matchesData: s.matchesData
       }))
       .filter((item) => item.basemap !== undefined) as {
       basemap: BasemapMetadata;
       score: number;
+      matchesData: boolean;
     }[];
     const projectSuggestions = projectGeoBasemapCards.flatMap(
-      ({ basemap, score }) => (score === undefined ? [] : [{ basemap, score }])
+      ({ basemap, score }) =>
+        score === undefined ? [] : [{ basemap, score, matchesData: true }]
     );
     return mergeProjectGeoSuggestions(
       catalogSuggestions,
@@ -1641,6 +1644,7 @@
       const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
         hasDismissedSuggestedBasemap,
         suggestionCount: suggestedBasemaps.length,
+        topSuggestionMatchesData: suggestedBasemaps[0]?.matchesData ?? false,
         isOSMActive: osmBasemapStore.isActive,
         hasDatasetGeometry,
         persistedBasemapId,
@@ -1893,6 +1897,7 @@
     const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
       hasDismissedSuggestedBasemap,
       suggestionCount: suggestedBasemaps.length,
+      topSuggestionMatchesData: suggestedBasemaps[0]?.matchesData ?? false,
       isOSMActive: osmBasemapStore.isActive,
       hasDatasetGeometry: Boolean(selectedDataset?.geometry),
       persistedBasemapId: runtimePersistedBasemap?.id,
