@@ -29,6 +29,9 @@
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
   import { Visualization as VizualisationTab } from '$lib/features/visualization-tab';
   import { mainToolbarActions } from './stores/main-toolbar.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
 
   let toolbarContent = $state<HTMLElement | null>(null);
 
@@ -70,6 +73,16 @@
     return willExpandToolbar ? m.toolbar_expand() : m.toolbar_compact();
   });
 
+  // A table joined into a geo file has nothing left to geolocate or join: it
+  // is visualized from that file.
+  const isAttachedTable = $derived(
+    Boolean(
+      findDatasetAttachment(
+        projectStore.currentProject?.data?.sourceFiles,
+        datasetsStore.selectedDataset
+      )
+    )
+  );
   const totalSteps = $derived(dataTabStore.isGeographicMode ? 2 : 3);
 
   const currentStepLabel = $derived.by(() => {
@@ -169,7 +182,8 @@
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
-    {@const canVisualizeNow = dataTabStore.isReadyForVisualization}
+    {@const canVisualizeNow =
+      dataTabStore.isReadyForVisualization || isAttachedTable}
 
     <footer
       class={clsx(
@@ -219,7 +233,13 @@
               : m.data_step_status_clean()}
           />
 
-          {#if isGeographicMode}
+          {#if isAttachedTable}
+            <ProgressStep
+              complete
+              label={m.data_tab_attached()}
+              description={m.attached_table_step_title()}
+            />
+          {:else if isGeographicMode}
             <ProgressStep
               complete={dataTabStore.hasCompletedStep[1]}
               disabled={!dataTabStore.canNavigateToStep[1]}

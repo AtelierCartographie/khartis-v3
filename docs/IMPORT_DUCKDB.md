@@ -174,6 +174,15 @@ matérialisé dans des tables dérivées, **clés sur le cache de similarité** 
 les a produites : invalider ce cache fait tomber les gradings. Des appels
 concurrents partagent un même calcul.
 
+La jointure à un fond et la jointure d'enrichissement (un tableau joint à un
+fichier géographique) passent par ce même moteur (`join-ops.ts`). Elles ne
+diffèrent que par leur **cible** (`JoinTarget`) : la table `basemap_attributes`
+pour le catalogue, ou une table de même forme construite à partir de la colonne
+choisie du fichier géographique (`prepareTableJoinTarget`), reconstruite à
+chaque changement de colonne. L'enrichissement ne réécrit jamais le tableau
+source : corrections et exclusions s'appliquent à la construction de la table
+enrichie (`createEnrichedTable`).
+
 Après une DDL qui ajoute des colonnes, une lecture Arrow en streaming peut
 renvoyer ces colonnes à `NULL`. Jointures, GPS et lecture directe se font donc
 sans streaming (`skipStreaming`) ; ne pas « optimiser » ce choix sans test de schéma
@@ -201,9 +210,8 @@ Une entité « à vérifier » est **jointe** : la finalisation applique le
 rapprochement retenu et la catégorie ne bloque jamais la validation. Elle existe
 par transparence et ne reçoit donc que des rapprochements de haute confiance :
 
-- pas de phase fuzzy sur une colonne de codes (macro `is_code_column`, partagée
-  par la jointure à un fond et la jointure d'enrichissement) : un code sans
-  correspondance exacte est « non reconnu » ;
+- pas de phase fuzzy sur une colonne de codes (macro `is_code_column`) : un
+  code sans correspondance exacte est « non reconnu » ;
 - une cible déjà jointe exactement n'est plus proposée ; une valeur sans
   candidat disponible est « non reconnue ».
 

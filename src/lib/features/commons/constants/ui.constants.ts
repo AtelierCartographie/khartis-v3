@@ -92,14 +92,6 @@ export enum BasemapLayerType {
   SPHERE = 'sphere'
 }
 
-export enum JoinStatus {
-  JOINED = 'joined',
-  TO_VERIFY = 'to_verify',
-  DUPLICATE = 'duplicate',
-  UNRECOGNIZED = 'unrecognized',
-  IGNORED = 'ignored'
-}
-
 export enum OrientationIndicatorStyle {
   ARROW = 'arrow',
   COMPASS = 'compass'

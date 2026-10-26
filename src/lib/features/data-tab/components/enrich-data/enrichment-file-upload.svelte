@@ -7,9 +7,21 @@
     TextArea,
     TextInput
   } from 'carbon-components-svelte';
-  import { CloudDownload } from 'carbon-icons-svelte';
+  import { CloudDownload, DataTable } from 'carbon-icons-svelte';
+  import {
+    isSingularCount,
+    resolveLocale
+  } from '$lib/features/commons/utils/format.utils';
+
+  interface ProjectTable {
+    id: string;
+    name: string;
+    rowCount: number;
+  }
 
   interface Props {
+    projectTables: ProjectTable[];
+    onSelectProjectTable: (datasetId: string) => void;
     isUploading: boolean;
     pastedDataValue: string;
     onlineUrlValue: string;
@@ -26,6 +38,8 @@
   };
 
   let {
+    projectTables,
+    onSelectProjectTable,
     isUploading,
     pastedDataValue,
     onlineUrlValue,
@@ -44,9 +58,37 @@
       ? event.detail
       : (target?.value ?? '');
   }
+
+  function formatRowCount(rowCount: number): string {
+    const count = new Intl.NumberFormat(resolveLocale()).format(rowCount);
+    return isSingularCount(rowCount)
+      ? m.enrich_project_table_row({ count })
+      : m.enrich_project_table_rows({ count });
+  }
 </script>
 
 <div class="import-section">
+  {#if projectTables.length > 0}
+    <h4 class="section-title">{m.enrich_project_tables_title()}</h4>
+    <p class="section-help">{m.enrich_project_tables_description()}</p>
+    <div class="project-tables">
+      {#each projectTables as table (table.id)}
+        <Button
+          kind="tertiary"
+          size="field"
+          icon={DataTable}
+          disabled={isUploading}
+          on:click={() => onSelectProjectTable(table.id)}
+        >
+          {table.name}
+          <span class="project-table-rows"
+            >{formatRowCount(table.rowCount)}</span
+          >
+        </Button>
+      {/each}
+    </div>
+  {/if}
+
   <h4 class="section-title">{m.enrich_import_section_title()}</h4>
 
   <div class="import-grid">
@@ -115,6 +157,29 @@
     font-weight: 600;
     color: var(--cds-text-01);
     margin-top: var(--cds-spacing-03);
+  }
+
+  .section-help {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--cds-text-02);
+  }
+
+  .project-tables {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .project-tables :global(.bx--btn) {
+    max-width: none;
+    width: 100%;
+  }
+
+  .project-table-rows {
+    margin-left: var(--cds-spacing-03);
+    color: var(--cds-text-02);
+    font-weight: 400;
   }
 
   .import-grid {

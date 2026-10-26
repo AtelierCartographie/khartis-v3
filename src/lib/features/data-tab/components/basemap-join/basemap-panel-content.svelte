@@ -11,6 +11,7 @@
     catalogContent: Snippet;
     importContent: Snippet;
     osmContent: Snippet;
+    activeBasemapBanner?: Snippet;
     joinSection?: Snippet;
     showJoinSection?: boolean;
   }
@@ -21,6 +22,7 @@
     catalogContent,
     importContent,
     osmContent,
+    activeBasemapBanner,
     joinSection,
     showJoinSection = false
   }: Props = $props();
@@ -70,8 +72,15 @@
     {/if}
   </div>
 
-  {#if showJoinSection && joinSection}
+  {#if activeBasemapBanner || (showJoinSection && joinSection)}
     <hr class="join-separator" />
+  {/if}
+  {#if activeBasemapBanner}
+    <div class="active-basemap-slot">
+      {@render activeBasemapBanner()}
+    </div>
+  {/if}
+  {#if showJoinSection && joinSection}
     {@render joinSection()}
   {/if}
 </div>
@@ -99,6 +108,10 @@
   .basemap-panel-content :global(.section-body) {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .active-basemap-slot {
+    padding-top: var(--cds-spacing-05);
   }
 
   .join-separator {
