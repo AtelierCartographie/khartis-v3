@@ -12,6 +12,8 @@ export const CANONICAL_ID_COLUMN = 'id' as const;
 export const JOINED_BASEMAP_COLUMN = {
   ID: 'basemap_id',
   LABEL: 'basemap_label',
+  // Display name of the joined entity, in the language of the interface.
+  NAME: 'basemap_name',
   TYPO_MATCH: 'typo_match'
 } as const;
 

@@ -1885,7 +1885,8 @@ async function applyCachedJoinAssociation(
   basemapId: string,
   cacheTableName: string,
   Duck: DuckDBClientForJoin,
-  excludedValues: string[] = []
+  excludedValues: string[] = [],
+  displayVariants: string[] = []
 ): Promise<void> {
   const escapedDatasetTable = escapeIdentifier(datasetTableName);
   const escapedGeoColumn = escapeIdentifier(geoColumn);
@@ -1901,10 +1902,31 @@ async function applyCachedJoinAssociation(
           .map((value) => `'${escapeSqlString(value)}'`)
           .join(', ')})`
       : '';
+  // The display variant names the entity whatever value matched it (a code,
+  // an alias); a basemap without one keeps the matched value.
+  const displayRank =
+    displayVariants.length > 0
+      ? `CASE ${displayVariants
+          .map(
+            (variant, index) =>
+              `WHEN variant = '${escapeSqlString(variant)}' THEN ${index}`
+          )
+          .join(' ')} END`
+      : 'NULL';
 
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
-    WITH all_basemap_matches AS (
+    WITH display_names AS (
+      SELECT id, raw
+      FROM (
+        SELECT id, raw, ${displayRank} AS display_rank
+        FROM basemap_attributes
+        WHERE basemap = '${escapedBasemapId}' AND raw IS NOT NULL
+      )
+      WHERE display_rank IS NOT NULL
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY display_rank, raw) = 1
+    ),
+    all_basemap_matches AS (
       SELECT
         original_name AS geoname,
         match_id AS id,
@@ -1944,10 +1966,13 @@ async function applyCachedJoinAssociation(
       t.* ${excludeClause},
       j.id AS "${JOINED_BASEMAP_COLUMN.ID}",
       j.label AS "${JOINED_BASEMAP_COLUMN.LABEL}",
-      j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}"
+      j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}",
+      COALESCE(d.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME}"
     FROM "${escapedDatasetTable}" t
     LEFT JOIN ranked_join j
       ON t."${escapedGeoColumn}" = j.geoname
+    LEFT JOIN display_names d
+      ON d.id = j.id
   `);
 }
 
@@ -2006,7 +2031,8 @@ export async function finalizeJoin(
     basemapId,
     cacheTableName,
     Duck,
-    options.excludedValues ?? []
+    options.excludedValues ?? [],
+    getBasemapDisplayVariants(basemap)
   );
 
   perfMeasure(PERF_PHASE.JOIN_FINALIZE);

@@ -31,6 +31,8 @@
     isHidden?: boolean;
     /** File the column was joined from, for a column an enrichment added. */
     origin?: string;
+    /** Shown instead of the column name, for a column Khartis wrote. */
+    displayName?: string;
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
     onRename?: (columnName: string) => void;
@@ -48,6 +50,7 @@
     isEditMode,
     isHidden = false,
     origin,
+    displayName,
     onSort,
     onRefine,
     onRename,
@@ -593,7 +596,7 @@
   <div class="col-header">
     <div class="col-title-row">
       <VariableBadge
-        label={column.name}
+        label={displayName ?? column.name}
         type={badgeType}
         bind:element={pillRef}
         onmouseenter={() => showTooltip(typeTooltip)}
@@ -601,7 +604,7 @@
         onfocus={() => showTooltip(typeTooltip)}
         onblur={() => hideTooltip(typeTooltip)}
         ariaLabel={m.column_type_badge_label({
-          column: column.name,
+          column: displayName ?? column.name,
           type: typeTooltipMessage
         })}
       />

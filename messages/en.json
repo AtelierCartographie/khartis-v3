@@ -1122,6 +1122,7 @@
   "column_warning_nulls_detailed": "{percent}% null values ({count})",
   "column_warning_label": "Data quality alert",
   "column_origin_label": "Column joined from “{file}”",
+  "table_joined_entity_column": "Basemap entity",
   "column_menu_options": "Options for column {column}",
   "column_type_badge_label": "{column} – {type}",
   "column_type_numeric_tooltip": "Numeric column (integers or decimals)",
