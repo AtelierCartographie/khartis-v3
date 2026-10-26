@@ -38,6 +38,7 @@
   import BasemapCatalogTab from './basemap-join/basemap-catalog-tab.svelte';
   import BasemapImportTab from './basemap-join/basemap-import-tab.svelte';
   import BasemapPanelContent from './basemap-join/basemap-panel-content.svelte';
+  import ActiveBasemapBanner from './basemap-join/active-basemap-banner.svelte';
   import JoinAssistedSection from './basemap-join/join-assisted-section.svelte';
   import OSMBasemapSelector from './osm-basemap-selector.svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
@@ -57,6 +58,10 @@
     type PersistedProjectBasemap
   } from '../services/persisted-basemap.service';
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
+  import {
+    getBasemapOriginSource,
+    resolveActiveBasemapOrigin
+  } from '../utils/active-basemap.utils';
   import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistSourceFileState } from '../services/source-file-state.service';
@@ -289,6 +294,20 @@
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
+  const activeBasemap = $derived(
+    basemapSelected
+      ? (allBasemapsForLookup.find(
+          (basemap) => basemap.file === basemapSelected
+        ) ?? null)
+      : null
+  );
+  const activeBasemapOrigin = $derived(
+    activeBasemap ? resolveActiveBasemapOrigin(activeBasemap) : null
+  );
+  // Shown from the persisted selection, so it survives a tab switch or reload.
+  const activeImportedBasemap = $derived(
+    activeBasemapOrigin === 'import' ? activeBasemap : null
+  );
   const projectBasemap = $derived(
     (projectStore.currentProject?.data?.basemap as
       PersistedProjectBasemap | undefined) ?? undefined
@@ -323,7 +342,6 @@
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
   let importError = $state<string | null>(null);
-  let importedBasemap = $state<BasemapMetadata | null>(null);
   let joinLoading = $state(false);
   let joinLoadingRequestId = 0;
   let suggestionsDatasetIdentity = $state<string | null>(null);
@@ -1076,9 +1094,6 @@
       });
       await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
-      // A project geo file stays selected among the project files, not shown
-      // as an upload.
-      importedBasemap = options.projectSource ? null : customBasemap;
 
       projectStore.updateProjectData({
         basemap: {
@@ -2077,7 +2092,6 @@
       });
       basemapStyleStore.setReferenceBasemap(null);
       dataTabStore.resetStepCompletion(basemapStepIndex);
-      importedBasemap = null;
       importError = null;
       projectGeoScores = new Map();
       previousJoinContext = null;
@@ -2105,7 +2119,7 @@
     projectGeoBasemaps={projectGeoBasemapCards}
     basemapSelected={basemapSelected}
     onSelectProjectGeoBasemap={handleSelectProjectGeoBasemap}
-    importedBasemap={importedBasemap}
+    importedBasemap={activeImportedBasemap}
     importError={importError}
     importUploading={importUploading}
     onFileDrop={handleFileDrop}
@@ -2122,6 +2136,18 @@
     onSelectOSM={handleSelectOSM}
     onGoToVisualize={handleGoToVisualize}
   />
+{/snippet}
+
+{#snippet activeBasemapBanner()}
+  {#if activeBasemap && activeBasemapOrigin}
+    {@const originSource = getBasemapOriginSource(activeBasemapOrigin)}
+    <ActiveBasemapBanner
+      basemap={activeBasemap}
+      origin={activeBasemapOrigin}
+      isSourceShown={dataTabState.basemapJoin.basemapSource === originSource}
+      onShowSource={() => handleBasemapSourceChange(originSource)}
+    />
+  {/if}
 {/snippet}
 
 {#snippet joinSection()}
@@ -2171,6 +2197,7 @@
       catalogContent={catalogContent}
       importContent={importContent}
       osmContent={osmContent}
+      activeBasemapBanner={activeBasemap ? activeBasemapBanner : undefined}
       joinSection={joinSection}
       showJoinSection={!!basemapSelected && !isGPSModeActive}
     />
