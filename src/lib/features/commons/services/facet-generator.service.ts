@@ -113,6 +113,31 @@ function resolveQualitativePalette(
   };
 }
 
+/**
+ * Index of each raw category value in `classification`: its display label
+ * (renamed by the reader) and its color sit at the same index.
+ */
+function indexByCategoryValue(
+  classification: NonNullable<VisualizationConfig['classification']>
+): Map<string, number> {
+  const values = classification.categoryValues ?? classification.labels ?? [];
+  return new Map(values.map((value, index) => [String(value), index]));
+}
+
+/** Display labels for raw `values`: a category renamed in `classification` keeps its name. */
+export function resolveCategoryDisplayLabels(
+  classification: NonNullable<VisualizationConfig['classification']>,
+  values: string[]
+): string[] {
+  const indexByValue = indexByCategoryValue(classification);
+  return values.map((value) => {
+    const index = indexByValue.get(value);
+    const label =
+      index === undefined ? undefined : classification.labels?.[index];
+    return label === undefined ? value : String(label);
+  });
+}
+
 async function buildCategoricalFacetClassification(
   baseViz: VisualizationConfig,
   variable: string,
@@ -131,7 +156,10 @@ async function buildCategoricalFacetClassification(
 
   return {
     ...baseClassification,
-    labels: labels.length > 0 ? labels : (baseClassification.labels ?? []),
+    labels:
+      labels.length > 0
+        ? resolveCategoryDisplayLabels(baseClassification, labels)
+        : (baseClassification.labels ?? []),
     categoryValues:
       labels.length > 0
         ? labels
@@ -531,12 +559,7 @@ export function alignCategoryColors(
   classification: NonNullable<VisualizationConfig['classification']>,
   labels: string[]
 ): string[] {
-  const colorByLabel = new Map(
-    (classification.labels ?? []).map((label, index) => [
-      String(label),
-      classification.colors?.[index]
-    ])
-  );
+  const indexByValue = indexByCategoryValue(classification);
   // Same source as the panel: the chosen palette, else the default colors.
   const palette = classification.paletteId
     ? findPaletteById(classification.paletteId)
@@ -555,7 +578,11 @@ export function alignCategoryColors(
     fresh[index % Math.max(fresh.length, 1)];
 
   return labels.map((label, index) => {
-    const existing = colorByLabel.get(label);
+    const existingIndex = indexByValue.get(label);
+    const existing =
+      existingIndex === undefined
+        ? undefined
+        : classification.colors?.[existingIndex];
     const color = existing && !used.has(existing) ? existing : takeFree(index);
     if (color) {
       used.add(color);
@@ -624,24 +651,30 @@ async function buildFacetFillUpdates({
     return { symbol };
   }
 
-  // A category keeps the color the aspect panel gives it on every map.
-  const baseColorByLabel = new Map(
-    (baseClassification.labels ?? []).map((label, index) => [
-      String(label),
-      baseClassification.colors?.[index]
-    ])
-  );
+  // A category keeps the name and the color the aspect panel gives it on
+  // every map, matched by its raw value.
+  const baseIndexByValue = indexByCategoryValue(baseClassification);
+  const values = (
+    fillClassification.categoryValues ??
+    fillClassification.labels ??
+    []
+  ).map(String);
   return {
     symbol: {
       ...symbol,
       fillClassification: {
         ...fillClassification,
-        colors: (fillClassification.labels ?? []).map(
-          (label, index) =>
-            baseColorByLabel.get(String(label)) ??
+        labels: resolveCategoryDisplayLabels(baseClassification, values),
+        colors: values.map((value, index) => {
+          const baseIndex = baseIndexByValue.get(value);
+          return (
+            (baseIndex === undefined
+              ? undefined
+              : baseClassification.colors?.[baseIndex]) ??
             fillClassification.colors?.[index] ??
             ''
-        )
+          );
+        })
       }
     }
   };
