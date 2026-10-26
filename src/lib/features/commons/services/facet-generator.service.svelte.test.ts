@@ -346,6 +346,70 @@ describe('generateFacetVisualizations', () => {
     expect(gdp.mapping.categoryColumn).toBe('zone');
   });
 
+  it('keeps renamed fill categories on every map, matched by their raw value', async () => {
+    const labelsByColumn: Record<string, string[]> = {
+      charbon_evol: ['negative', 'positive'],
+      gaz_evol: ['positive', 'negative']
+    };
+    mocks.loadDistinctCategoryLabels.mockImplementation(
+      async (_dataset: unknown, column: string) => labelsByColumn[column] ?? []
+    );
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'charbon' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'charbon',
+        fillMode: 'categories',
+        fillCategoryColumn: 'charbon_evol',
+        fillClassification: {
+          method: 'equal_interval',
+          colors: ['#blue', '#orange'],
+          labels: ['En baisse', 'En hausse'],
+          categoryValues: ['negative', 'positive']
+        }
+      }
+    });
+
+    const [charbon, gaz] = await generateFacetVisualizations(
+      base as never,
+      ['charbon', 'gaz'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { charbon: 'charbon_evol', gaz: 'gaz_evol' }
+    );
+
+    expect(charbon.symbol?.fillClassification?.labels).toEqual([
+      'En baisse',
+      'En hausse'
+    ]);
+    expect(gaz.symbol?.fillClassification?.categoryValues).toEqual([
+      'positive',
+      'negative'
+    ]);
+    expect(gaz.symbol?.fillClassification?.labels).toEqual([
+      'En hausse',
+      'En baisse'
+    ]);
+    expect(gaz.symbol?.fillClassification?.colors).toEqual([
+      '#orange',
+      '#blue'
+    ]);
+  });
+
+  it('keeps the color of a renamed category when the union is realigned', () => {
+    const colors = alignCategoryColors(
+      {
+        method: 'equal_interval',
+        labels: ['En baisse', 'En hausse'],
+        categoryValues: ['negative', 'positive'],
+        colors: ['#blue', '#orange']
+      } as never,
+      ['positive', 'negative']
+    );
+
+    expect(colors).toEqual(['#orange', '#blue']);
+  });
+
   it('should give each union category a free color when the previous colors repeat', () => {
     const colors = alignCategoryColors(
       {
