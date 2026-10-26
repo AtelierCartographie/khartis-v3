@@ -8,6 +8,7 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import {
@@ -29,6 +30,7 @@
     Copy,
     DataTable,
     Edit,
+    Link,
     Map as MapIcon,
     OverflowMenuVertical,
     TrashCan
@@ -91,6 +93,15 @@
   ): { id: string; name: string } | undefined {
     const datasets = getDatasetsForTab(sourceFileId);
     return datasets.find((d) => d.isSelected) ?? datasets[0];
+  }
+
+  function getTabAttachment(sourceFileId: string) {
+    return findDatasetAttachment(
+      projectStore.currentProject?.data?.sourceFiles,
+      {
+        sourceFileId
+      }
+    );
   }
 
   function isGeographicTab(sourceFileId: string): boolean {
@@ -758,9 +769,12 @@
             ? selectedDataset.name
             : fileInfo.name}
         {@const isGeographic = isGeographicTab(dataButton.id)}
+        {@const attachment = getTabAttachment(dataButton.id)}
         {@const kindLabel = isGeographic
           ? m.toolbar_tab_kind_geographic()
-          : m.toolbar_tab_kind_tabular()}
+          : attachment
+            ? m.toolbar_tab_kind_attached({ name: attachment.datasetName })
+            : m.toolbar_tab_kind_tabular()}
         <div
           class="tab-button-wrapper with-menu"
           class:selected={dataButton.isSelected}
@@ -778,6 +792,8 @@
             <div class="tab-content">
               {#if isGeographic}
                 <MapIcon size={16} aria-hidden="true" class="tab-kind-icon" />
+              {:else if attachment}
+                <Link size={16} aria-hidden="true" class="tab-kind-icon" />
               {:else}
                 <DataTable size={16} aria-hidden="true" class="tab-kind-icon" />
               {/if}

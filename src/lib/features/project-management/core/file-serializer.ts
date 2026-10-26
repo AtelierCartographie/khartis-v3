@@ -31,6 +31,10 @@ export function serializeUploadedFile(
     serialized.joinedColumnOrigins = file.joinedColumnOrigins;
   }
 
+  if (file.attachedTo) {
+    serialized.attachedTo = file.attachedTo;
+  }
+
   if (file.statistics) {
     serialized.statistics = file.statistics;
   }
@@ -74,6 +78,16 @@ function parseJoinedColumnOrigins(
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
+function parseDatasetAttachment(
+  value: unknown
+): UploadedFile['attachedTo'] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { sourceFileId, datasetName } = value as Record<string, unknown>;
+  return typeof sourceFileId === 'string' && typeof datasetName === 'string'
+    ? { sourceFileId, datasetName }
+    : undefined;
+}
+
 export function deserializeUploadedFile(
   data: SerializedUploadedFile
 ): UploadedFile {
@@ -102,6 +116,11 @@ export function deserializeUploadedFile(
   );
   if (joinedColumnOrigins) {
     file.joinedColumnOrigins = joinedColumnOrigins;
+  }
+
+  const attachedTo = parseDatasetAttachment(data.attachedTo);
+  if (attachedTo) {
+    file.attachedTo = attachedTo;
   }
 
   if (data.statistics) {

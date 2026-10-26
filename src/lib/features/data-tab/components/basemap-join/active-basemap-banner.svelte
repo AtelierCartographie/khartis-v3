@@ -32,8 +32,6 @@
     switch (origin) {
       case 'osm':
         return m.basemap_osm();
-      case 'project':
-        return m.basemap_project_file_source();
       case 'import':
         return m.basemap_import_file_imported();
       case 'catalog':

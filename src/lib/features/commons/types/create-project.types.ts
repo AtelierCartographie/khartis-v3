@@ -70,6 +70,11 @@ export interface SourceCsvOptions {
   delimiter?: string;
 }
 
+export interface DatasetAttachment {
+  sourceFileId: string;
+  datasetName: string;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -95,6 +100,9 @@ export interface UploadedFile {
   enrichmentSnapshot?: AssetRef;
   // File each column an enrichment join added came from, by column name.
   joinedColumnOrigins?: Record<string, string>;
+  // Set on a table once it enriched a geo file of the project: the table is
+  // then a source of that file rather than a dataset of its own.
+  attachedTo?: DatasetAttachment;
   uploadProgress?: number;
   rowCount?: number;
   columnCount?: number;

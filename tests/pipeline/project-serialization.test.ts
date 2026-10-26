@@ -96,6 +96,25 @@ describe('serializeUploadedFile — optional fields', () => {
     expect(restored.joinedColumnOrigins).toEqual(origins);
   });
 
+  it('should restore the geo file a table is attached to', () => {
+    const attachedTo = { sourceFileId: 'geo-1', datasetName: 'communes' };
+
+    const restored = deserializeUploadedFile(
+      serializeUploadedFile(minimalFile({ attachedTo }))
+    );
+
+    expect(restored.attachedTo).toEqual(attachedTo);
+  });
+
+  it('should drop a malformed attachment', () => {
+    const restored = deserializeUploadedFile({
+      ...serializeUploadedFile(minimalFile()),
+      attachedTo: { sourceFileId: 42 }
+    } as never);
+
+    expect(restored.attachedTo).toBeUndefined();
+  });
+
   it('should keep only the well-formed entries of a column origin map', () => {
     const restored = deserializeUploadedFile({
       ...serializeUploadedFile(minimalFile()),

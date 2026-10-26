@@ -1,14 +1,8 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { FILE_EXTENSION_GROUPS } from '$lib/features/commons/constants/file-types.constants';
-import { MIME } from '$lib/features/commons/constants/mime.constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import { Duck } from '$lib/features/duckdb';
-import type {
-  BasemapMetadata,
-  ProjectGeoBasemapSource
-} from '$lib/features/map/types/basemap.types';
+import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import * as m from '$lib/paraglide/messages';
 import { ACCEPTED_BASEMAP_EXTENSIONS } from '../utils/enrichment.utils';
 import { findBestTargetColumn } from './target-column-ranking.service';
@@ -24,28 +18,20 @@ type ProjectGeoDataset = Pick<
   'id' | 'name' | 'sourceFileId' | 'tableName' | 'columns' | 'geometry'
 >;
 
+/**
+ * A geo file of the project offered to a table. Joining them enriches the geo
+ * file, so the card only stands for it among the basemaps.
+ */
 export interface ProjectGeoBasemapOption {
   dataset: ProjectGeoDataset;
-  /** The basemap already built from the dataset, or a card standing for it. */
   basemap: BasemapMetadata;
-  isBuilt: boolean;
 }
 
-export function toProjectGeoBasemapSource(
-  dataset: ProjectGeoDataset
-): ProjectGeoBasemapSource {
-  return { sourceFileId: dataset.sourceFileId, datasetName: dataset.name };
-}
-
-function isBuiltFromDataset(
-  basemap: BasemapMetadata,
-  dataset: ProjectGeoDataset
-): boolean {
-  return (
-    basemap.isCustom === true &&
-    basemap.projectSource?.sourceFileId === dataset.sourceFileId &&
-    basemap.projectSource.datasetName === dataset.name
-  );
+export interface ProjectGeoMatch {
+  /** Share of the source values found, on the catalog suggestion scale. */
+  score: number;
+  /** The geo file column holding them. */
+  targetColumn: string;
 }
 
 function getDatasetTitle(dataset: ProjectGeoDataset): string {
@@ -71,14 +57,10 @@ function toPlaceholderBasemap(dataset: ProjectGeoDataset): BasemapMetadata {
   };
 }
 
-/**
- * The datasets of the project that carry their own geometry, offered as a
- * basemap for the selected tabular dataset without importing the file again.
- */
+/** The datasets of the project that carry their own geometry. */
 export function listProjectGeoBasemapOptions(
   datasets: readonly ProjectGeoDataset[],
-  selectedDatasetId: string | undefined,
-  basemaps: readonly BasemapMetadata[]
+  selectedDatasetId: string | undefined
 ): ProjectGeoBasemapOption[] {
   return datasets
     .filter(
@@ -87,16 +69,7 @@ export function listProjectGeoBasemapOptions(
         Boolean(dataset.geometry) &&
         Boolean(dataset.tableName)
     )
-    .map((dataset) => {
-      const built = basemaps.find((basemap) =>
-        isBuiltFromDataset(basemap, dataset)
-      );
-      return {
-        dataset,
-        basemap: built ?? toPlaceholderBasemap(dataset),
-        isBuilt: built !== undefined
-      };
-    });
+    .map((dataset) => ({ dataset, basemap: toPlaceholderBasemap(dataset) }));
 }
 
 function listUserColumns(dataset: ProjectGeoDataset): string[] {
@@ -111,46 +84,26 @@ function listUserColumns(dataset: ProjectGeoDataset): string[] {
     .map((column) => column.name);
 }
 
-/**
- * Copies the dataset table as GeoParquet, so the basemap goes through the same
- * import, persistence and restore path as a file the user uploads.
- */
-export async function createProjectGeoBasemapFile(
-  dataset: ProjectGeoDataset
-): Promise<File> {
-  const { name: tableColumns } = await Duck.describe_table(dataset.tableName);
-  const columns = tableColumns.filter(
-    (column) => !INTERNAL_COLUMNS.has(column)
-  );
-  const bytes = await Duck.copy_to_parquet_bytes(dataset.tableName, columns);
-  return new File(
-    [bytes as Uint8Array<ArrayBuffer>],
-    `${getDatasetTitle(dataset)}${FILE_EXTENSION_GROUPS.PARQUET[0]}`,
-    { type: MIME.GEOPARQUET }
-  );
-}
-
-/**
- * Share of the source values each project geo dataset holds in its best
- * column, on the scale of the catalog suggestions (0 to 100).
- */
+/** How well each project geo file holds the values of a table column. */
 export async function scoreProjectGeoBasemapOptions(input: {
   sourceTableName: string;
   sourceColumn: string;
   options: readonly ProjectGeoBasemapOption[];
-}): Promise<Map<string, number>> {
-  const scores = new Map<string, number>();
+}): Promise<Map<string, ProjectGeoMatch>> {
+  const matches = new Map<string, ProjectGeoMatch>();
   for (const option of input.options) {
-    const targetColumns = listUserColumns(option.dataset);
     try {
       const best = await findBestTargetColumn({
         sourceTableName: input.sourceTableName,
         sourceColumn: input.sourceColumn,
         targetTableName: option.dataset.tableName,
-        targetColumns
+        targetColumns: listUserColumns(option.dataset)
       });
       if (best) {
-        scores.set(option.dataset.id, best.matchShare);
+        matches.set(option.dataset.id, {
+          score: best.matchShare,
+          targetColumn: best.column
+        });
       }
     } catch (error) {
       logger.warn(
@@ -160,7 +113,7 @@ export async function scoreProjectGeoBasemapOptions(input: {
       );
     }
   }
-  return scores;
+  return matches;
 }
 
 export interface ScoredBasemap {
@@ -179,22 +132,14 @@ export function mergeProjectGeoSuggestions(
   projectSuggestions: readonly ScoredBasemap[],
   limit: number
 ): ScoredBasemap[] {
-  const scoredProjectSuggestions = projectSuggestions.filter(
-    (suggestion) => suggestion.score > 0
-  );
-  // A project file already turned into a basemap is also a custom basemap the
-  // catalog ranking can return: it is listed once, as a project file.
-  const projectFiles = new Set(
-    scoredProjectSuggestions.map((suggestion) => suggestion.basemap.file)
-  );
   const ranked = [
-    ...scoredProjectSuggestions.map((suggestion) => ({
+    ...projectSuggestions
+      .filter((suggestion) => suggestion.score > 0)
+      .map((suggestion) => ({ suggestion, isProject: true })),
+    ...catalogSuggestions.map((suggestion) => ({
       suggestion,
-      isProject: true
-    })),
-    ...catalogSuggestions
-      .filter((suggestion) => !projectFiles.has(suggestion.basemap.file))
-      .map((suggestion) => ({ suggestion, isProject: false }))
+      isProject: false
+    }))
   ];
   return ranked
     .sort(
