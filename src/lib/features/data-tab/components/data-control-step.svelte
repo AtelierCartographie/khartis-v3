@@ -184,6 +184,7 @@
       ) || null
     );
   });
+  const columnOrigins = $derived(sourceFile?.joinedColumnOrigins);
 
   // An archive layer's asset is a Parquet snapshot, not the CSV it came from.
   function hasReimportableSourceAsset(file: UploadedFile): boolean {
@@ -892,6 +893,7 @@
           highlightedRowIds={searchHighlight.highlightedRowIds}
           activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
             undefined}
+          columnOrigins={columnOrigins}
           isExpanded={false}
           isSelectable={isDeleteMode}
           initialSortColumn={tableSortColumn}
@@ -970,6 +972,7 @@
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
     isSelectable={isDeleteMode}
+    columnOrigins={columnOrigins}
     onTableMutation={handleTableMutation}
     onSelectionChange={handleSelectionChange}
     onSortChange={handleSortChange}

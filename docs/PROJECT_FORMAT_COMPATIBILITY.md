@@ -12,7 +12,7 @@ Contrat de compatibilité des projets Khartis. Il porte sur deux versions qui
 | Archive exportée | v2       | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`    |
 | Archives lues    | v2       | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` |
 | Schéma baseline  | `3.9.0`  | `PROJECT_CONST.SCHEMA_BASELINE_VERSION`    |
-| Schéma courant   | `3.14.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
+| Schéma courant   | `3.15.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
 
 Les archives v1 et les schémas antérieurs à `3.9.0` datent du développement et
 ne sont pas supportés.
@@ -24,6 +24,7 @@ ne sont pas supportés.
 | `3.11.0` → `3.12.0` | Aucune transformation. Une couche enrichie par un tableau a désormais un instantané Parquet de sa table (`enrichmentSnapshot`), relu au rechargement à la place de la source. Le changement de version empêche un build antérieur de réenregistrer le projet sans cet asset.                                                                                                                      |
 | `3.12.0` → `3.13.0` | Aucune transformation. Les positions manuelles des étiquettes et les textes saisis à la place des valeurs des données sont enregistrés dans `layoutSettings.labels`, par visualisation puis par entité. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces positions.                                                                                        |
 | `3.13.0` → `3.14.0` | Aucune transformation. Dans une collection de cartes, la variable de fond choisie pour chaque carte est enregistrée dans `uiSettings.facets.fillVariables`, par variable de la collection, et les couleurs des valeurs positives et négatives d'un symbole proportionnel dans `symbol.signColors`. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces choix. |
+| `3.14.0` → `3.15.0` | Aucune transformation. Le fichier source d'une couche enrichie enregistre le fichier d'origine de chaque colonne ajoutée par la jointure (`sourceFiles[].joinedColumnOrigins`), affiché dans la table. Le changement de version empêche un build antérieur de réenregistrer le projet sans cette origine.                                                                                         |
 
 Avant toute restauration d'asset, l'import rejette explicitement une version
 absente, inconnue, future, ou ancienne sans migration. Une version inconnue

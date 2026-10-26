@@ -24,6 +24,13 @@ export function serializeUploadedFile(
     serialized.enrichmentSnapshot = file.enrichmentSnapshot;
   }
 
+  if (
+    file.joinedColumnOrigins &&
+    Object.keys(file.joinedColumnOrigins).length > 0
+  ) {
+    serialized.joinedColumnOrigins = file.joinedColumnOrigins;
+  }
+
   if (file.statistics) {
     serialized.statistics = file.statistics;
   }
@@ -55,6 +62,18 @@ export function serializeUploadedFile(
   return serialized;
 }
 
+function parseJoinedColumnOrigins(
+  value: unknown
+): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string'
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 export function deserializeUploadedFile(
   data: SerializedUploadedFile
 ): UploadedFile {
@@ -76,6 +95,13 @@ export function deserializeUploadedFile(
 
   if (data.enrichmentSnapshot) {
     file.enrichmentSnapshot = data.enrichmentSnapshot;
+  }
+
+  const joinedColumnOrigins = parseJoinedColumnOrigins(
+    data.joinedColumnOrigins
+  );
+  if (joinedColumnOrigins) {
+    file.joinedColumnOrigins = joinedColumnOrigins;
   }
 
   if (data.statistics) {

@@ -51,6 +51,7 @@ export async function clearColumnTransformations(
     columnTransformations: [],
     deletedRowIds: [],
     enrichmentSnapshot: undefined,
+    joinedColumnOrigins: undefined,
     ...(options?.duckdbTableName
       ? { duckdbTableName: options.duckdbTableName }
       : {}),

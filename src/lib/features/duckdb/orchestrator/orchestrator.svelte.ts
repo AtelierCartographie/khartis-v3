@@ -662,11 +662,13 @@ export const duckDBOrchestrator = {
     );
   },
 
-  async createEnrichedTable(input: joinOps.EnrichedTableInput): Promise<void> {
+  async createEnrichedTable(
+    input: joinOps.EnrichedTableInput
+  ): Promise<joinOps.JoinedColumnName[]> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
-    await joinOps.createEnrichedTable(Duck, input);
+    return joinOps.createEnrichedTable(Duck, input);
   },
 
   async applyJoinCorrections(

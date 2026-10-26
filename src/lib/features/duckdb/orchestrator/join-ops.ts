@@ -1559,6 +1559,8 @@ export interface EnrichedTableInput extends TableJoinTargetInput {
   sourceColumn: string;
   /** Source columns copied onto the target rows. */
   sourceColumns: string[];
+  /** Names a copied column that collides with a target column. */
+  sourceLabel: string;
   /** Source value replaced by the target value it is joined to. */
   corrections: Record<string, string>;
   /** Source values left out of the join. */
@@ -1566,15 +1568,55 @@ export interface EnrichedTableInput extends TableJoinTargetInput {
   enrichedTableName: string;
 }
 
+export interface JoinedColumnName {
+  column: string;
+  alias: string;
+}
+
+/**
+ * A copied column keeps its name unless the target already has it, in which
+ * case it is named after its file. DuckDB compares identifiers without case.
+ */
+export function resolveJoinedColumnNames(
+  targetColumns: readonly string[],
+  sourceColumns: readonly string[],
+  sourceLabel: string
+): JoinedColumnName[] {
+  const taken = new Set(targetColumns.map((column) => column.toLowerCase()));
+  return sourceColumns.map((column) => {
+    let alias = column;
+    if (taken.has(alias.toLowerCase())) {
+      const base = `${column} (${sourceLabel})`;
+      alias = base;
+      for (let index = 2; taken.has(alias.toLowerCase()); index++) {
+        alias = `${base} ${index}`;
+      }
+    }
+    taken.add(alias.toLowerCase());
+    return { column, alias };
+  });
+}
+
 /**
  * Copy of the target table with the source columns joined on, one source row
  * per normalized value. Corrections and exclusions apply to the source value
- * only, so the source table is never rewritten.
+ * only, so the source table is never rewritten. Returns the name each copied
+ * column got.
  */
 export async function createEnrichedTable(
   Duck: DuckDBClientForJoin,
   input: EnrichedTableInput
-): Promise<void> {
+): Promise<JoinedColumnName[]> {
+  const targetColumns = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(input.targetTableName)}'`,
+    { format: 'array' }
+  )) as Array<{ column_name: string }>;
+  const names = resolveJoinedColumnNames(
+    targetColumns.map((row) => row.column_name),
+    input.sourceColumns,
+    input.sourceLabel
+  );
   const sourceValue = `CAST(e."${escapeIdentifier(input.sourceColumn)}" AS VARCHAR)`;
   const corrections = Object.entries(input.corrections);
   const correctedValue =
@@ -1595,31 +1637,34 @@ export async function createEnrichedTable(
       : `WHERE ${sourceValue} NOT IN (${input.excludedValues
           .map((value) => `'${escapeSqlString(value)}'`)
           .join(', ')})`;
-  const columns = input.sourceColumns.map(
-    (column) => `"${escapeIdentifier(column)}"`
-  );
+  const columns = names.map(({ column, alias }) => ({
+    source: `"${escapeIdentifier(column)}"`,
+    alias: `"${escapeIdentifier(alias)}"`
+  }));
 
   await Duck.query(`
     CREATE TABLE "${escapeIdentifier(input.enrichedTableName)}" AS
     WITH enrichment_source AS (
       SELECT
         ${correctedValue} AS __khartis_join_value,
-        ${columns.map((column) => `e.${column} AS ${column}`).join(',\n        ')}
+        ${columns.map(({ source, alias }) => `e.${source} AS ${alias}`).join(',\n        ')}
       FROM "${escapeIdentifier(input.sourceTableName)}" e
       ${exclusion}
     ),
     enrichment_unique AS (
       SELECT
         normalize_text_join(__khartis_join_value) AS join_key,
-        ${columns.map((column) => `any_value(source.${column}) AS ${column}`).join(',\n        ')}
+        ${columns.map(({ alias }) => `any_value(source.${alias}) AS ${alias}`).join(',\n        ')}
       FROM enrichment_source source
       GROUP BY 1
     )
-    SELECT g.*, ${columns.map((column) => `e.${column}`).join(', ')}
+    SELECT g.*, ${columns.map(({ alias }) => `e.${alias}`).join(', ')}
     FROM "${escapeIdentifier(input.targetTableName)}" g
     LEFT JOIN enrichment_unique e
     ON normalize_text_join(CAST(g."${escapeIdentifier(input.targetColumn)}" AS VARCHAR)) = e.join_key
   `);
+
+  return names;
 }
 
 /** Ensure a basemap has generated attribute rows before matching. */

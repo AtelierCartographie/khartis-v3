@@ -271,6 +271,7 @@ describe('enriched table', () => {
       sourceTableName: 'src_table',
       sourceColumn: 'city',
       sourceColumns: ['population'],
+      sourceLabel: 'recensement',
       corrections,
       excludedValues,
       enrichedTableName: 'enriched'
@@ -284,6 +285,39 @@ describe('enriched table', () => {
     const rows = await enrich({ Betta: 'Beta' });
 
     expect(rows.map((row) => row.population)).toEqual([120, 80, 160]);
+  });
+
+  it('should name a joined column after its file when the target has one of that name', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE src_table AS
+       SELECT * FROM (VALUES ('Alpha', 'Alpha FR', 1)) t(city, name, population)`
+    );
+    await run(
+      db,
+      `ALTER TABLE target_table ADD COLUMN "name (recensement)" VARCHAR`
+    );
+    await run(db, 'DROP TABLE IF EXISTS enriched');
+
+    const columns = await createEnrichedTable(Duck, {
+      ...TARGET,
+      sourceTableName: 'src_table',
+      sourceColumn: 'city',
+      sourceColumns: ['name', 'population'],
+      sourceLabel: 'recensement',
+      corrections: {},
+      excludedValues: [],
+      enrichedTableName: 'enriched'
+    });
+
+    expect(columns).toEqual([
+      { column: 'name', alias: 'name (recensement) 2' },
+      { column: 'population', alias: 'population' }
+    ]);
+    const rows = (await query(
+      `SELECT name, "name (recensement) 2" AS joined FROM enriched WHERE code = 'A'`
+    )) as Array<{ name: string; joined: string }>;
+    expect(rows).toEqual([{ name: 'Alpha', joined: 'Alpha FR' }]);
   });
 
   it('should keep every target row and leave an excluded value unjoined', async () => {

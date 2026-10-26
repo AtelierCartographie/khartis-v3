@@ -423,9 +423,11 @@ export function useEnrichmentJoin(
     const enrichedTableName = `${oldTableName}_enriched_${Date.now()}`;
 
     try {
-      await duckDBOrchestrator.createEnrichedTable({
+      const sourceName = enrichmentDataset.name;
+      const joinedColumns = await duckDBOrchestrator.createEnrichedTable({
         ...columns,
         sourceColumns,
+        sourceLabel: sourceName.replace(/\.[^.]+$/u, ''),
         corrections: collectCorrections(),
         excludedValues: [...ignoredValues],
         enrichedTableName
@@ -444,7 +446,10 @@ export function useEnrichmentJoin(
           sourceFileId: geoDataset.sourceFileId,
           tableName: enrichedTableName,
           duckColumns: snapshot.duckColumns,
-          geometry: geoDataset.geometry
+          geometry: geoDataset.geometry,
+          joinedColumnOrigins: Object.fromEntries(
+            joinedColumns.map(({ alias }) => [alias, sourceName])
+          )
         });
       }
 
