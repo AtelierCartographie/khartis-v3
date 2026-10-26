@@ -82,6 +82,36 @@ describe('serializeUploadedFile — optional fields', () => {
     );
     expect(serialized.duckdbTableName).toBe('tbl_xyz');
   });
+
+  it('should restore the file each joined column came from', () => {
+    const origins = {
+      population: 'recensement.csv',
+      'name (recensement)': 'recensement.csv'
+    };
+
+    const restored = deserializeUploadedFile(
+      serializeUploadedFile(minimalFile({ joinedColumnOrigins: origins }))
+    );
+
+    expect(restored.joinedColumnOrigins).toEqual(origins);
+  });
+
+  it('should keep only the well-formed entries of a column origin map', () => {
+    const restored = deserializeUploadedFile({
+      ...serializeUploadedFile(minimalFile()),
+      joinedColumnOrigins: { population: 'recensement.csv', broken: 42 }
+    } as never);
+
+    expect(restored.joinedColumnOrigins).toEqual({
+      population: 'recensement.csv'
+    });
+    expect(
+      deserializeUploadedFile({
+        ...serializeUploadedFile(minimalFile()),
+        joinedColumnOrigins: ['population']
+      } as never).joinedColumnOrigins
+    ).toBeUndefined();
+  });
 });
 
 describe('deserializeUploadedFile — asset ref round-trip', () => {

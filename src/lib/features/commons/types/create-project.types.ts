@@ -93,6 +93,8 @@ export interface UploadedFile {
   // Parquet copy of the table after an enrichment join: the enrichment file
   // itself is not kept, so reloads read this instead of assetRef.
   enrichmentSnapshot?: AssetRef;
+  // File each column an enrichment join added came from, by column name.
+  joinedColumnOrigins?: Record<string, string>;
   uploadProgress?: number;
   rowCount?: number;
   columnCount?: number;

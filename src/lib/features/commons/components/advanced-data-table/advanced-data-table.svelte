@@ -85,6 +85,8 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     activeJoinColumn?: string;
+    /** File each joined column came from, by column name. */
+    columnOrigins?: Record<string, string>;
     initialSortColumn?: string | null;
     initialSortOrder?: 'ASC' | 'DESC' | null;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
@@ -109,6 +111,7 @@
     isReadOnly = false,
     datasetVersion,
     activeJoinColumn,
+    columnOrigins,
     initialSortColumn = null,
     initialSortOrder = null,
     onSelectionChange,
@@ -850,6 +853,7 @@
                   showSummaryPlots={effectiveShowSummaryPlots}
                   isEditMode={isEditMode}
                   isHidden={columnOps.isColumnHidden(column.name)}
+                  origin={columnOrigins?.[column.name]}
                   onSort={handleSort}
                   onRefine={handleRefine}
                   onRename={columnOps.handleRename}

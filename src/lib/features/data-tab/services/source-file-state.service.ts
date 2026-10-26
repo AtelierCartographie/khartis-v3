@@ -83,6 +83,8 @@ export async function persistEnrichedSourceFile(input: {
   tableName: string;
   duckColumns: AnalysisResult[];
   geometry?: GeometryInfo;
+  /** Columns this enrichment added, with the file each came from. */
+  joinedColumnOrigins: Record<string, string>;
 }): Promise<void> {
   const { sourceFileId, tableName, duckColumns, geometry } = input;
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
@@ -107,6 +109,10 @@ export async function persistEnrichedSourceFile(input: {
   // with the original row ids, so only later ones are replayed on reload.
   sourceFile.columnTransformations = [];
   sourceFile.deletedRowIds = [];
+  sourceFile.joinedColumnOrigins = {
+    ...sourceFile.joinedColumnOrigins,
+    ...input.joinedColumnOrigins
+  };
 
   applySourceFileState(
     sourceFile,

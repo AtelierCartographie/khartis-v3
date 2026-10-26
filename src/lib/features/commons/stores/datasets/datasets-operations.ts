@@ -272,6 +272,9 @@ export async function duplicateDataset(
       relatedFilesData: cloneRelatedFilesData(originalFile?.relatedFilesData),
       archiveLayerSnapshot: originalFile?.archiveLayerSnapshot,
       enrichmentSnapshot: originalFile?.enrichmentSnapshot,
+      joinedColumnOrigins: originalFile?.joinedColumnOrigins
+        ? { ...originalFile.joinedColumnOrigins }
+        : undefined,
       geometry: originalFile?.geometry
         ? clonePlainValue(originalFile.geometry)
         : undefined,

@@ -12,6 +12,7 @@
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
+  import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -28,6 +29,8 @@
     showSummaryPlots: boolean;
     isEditMode: boolean;
     isHidden?: boolean;
+    /** File the column was joined from, for a column an enrichment added. */
+    origin?: string;
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
     onRename?: (columnName: string) => void;
@@ -44,6 +47,7 @@
     showSummaryPlots,
     isEditMode,
     isHidden = false,
+    origin,
     onSort,
     onRefine,
     onRename,
@@ -257,6 +261,10 @@
   let warningBadgeRef = $state<HTMLElement | null>(null);
   let warningTooltipPosition = $state({ top: 0, left: 0 });
 
+  let originTooltipOpen = $state(false);
+  let originBadgeRef = $state<HTMLElement | null>(null);
+  let originTooltipPosition = $state({ top: 0, left: 0 });
+
   let typeTooltipOpen = $state(false);
   let pillRef = $state<HTMLButtonElement | undefined>(undefined);
   let typeTooltipPosition = $state({ top: 0, left: 0 });
@@ -306,6 +314,17 @@
       warningTooltipPosition = position;
     },
     getAnchor: () => warningBadgeRef
+  } satisfies TooltipController;
+
+  const originTooltip = {
+    isOpen: () => originTooltipOpen,
+    setOpen: (open) => {
+      originTooltipOpen = open;
+    },
+    setPosition: (position) => {
+      originTooltipPosition = position;
+    },
+    getAnchor: () => originBadgeRef
   } satisfies TooltipController;
 
   const typeTooltip = {
@@ -597,6 +616,34 @@
             {typeTooltipMessage}
           </div>
         </Portal>
+      {/if}
+
+      {#if origin}
+        <button
+          type="button"
+          class="origin-badge"
+          bind:this={originBadgeRef}
+          onclick={() => toggleTooltip(originTooltip)}
+          onmouseenter={() => showTooltip(originTooltip)}
+          onmouseleave={() => hideTooltip(originTooltip)}
+          onfocus={() => showTooltip(originTooltip)}
+          onblur={() => hideTooltip(originTooltip)}
+          aria-label={m.column_origin_label({ file: origin })}
+        >
+          <DataTable size={16} />
+        </button>
+        {#if originTooltipOpen}
+          <Portal>
+            <div
+              class="simple-tooltip"
+              style="top: {originTooltipPosition.top}px; left: {originTooltipPosition.left}px;"
+              role="tooltip"
+            >
+              <div class="simple-tooltip-arrow"></div>
+              {m.column_origin_label({ file: origin })}
+            </div>
+          </Portal>
+        {/if}
       {/if}
 
       {#if columnWarnings.length > 0}
@@ -1434,6 +1481,25 @@
     font-size: 12px;
     line-height: 16px;
     color: var(--cds-text-02, #525252);
+  }
+
+  .origin-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cds-icon-02, #525252);
+    cursor: pointer;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 1px;
+    border-radius: 2px;
+  }
+
+  .origin-badge:hover,
+  .origin-badge:focus-visible {
+    color: var(--cds-icon-01, #161616);
+    background-color: var(--cds-hover-ui);
   }
 
   .warning-badge {
