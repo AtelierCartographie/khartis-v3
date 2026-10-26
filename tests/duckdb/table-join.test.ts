@@ -48,7 +48,7 @@ vi.mock('$lib/features/duckdb', async (importOriginal) => ({
   Duck: { query }
 }));
 
-const { findBestTargetColumn } =
+const { findBestColumnPair, findBestTargetColumn } =
   await import('$lib/features/data-tab/services/target-column-ranking.service');
 
 const TARGET = { targetTableName: 'target_table', targetColumn: 'name' };
@@ -329,6 +329,34 @@ describe('enrichment target column suggestion', () => {
     });
 
     expect(best).toEqual({ column: 'name', matchShare: 50 });
+  });
+
+  it('should pick the source and target columns that share the most values', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE target_table AS
+       SELECT * FROM (VALUES ('A', 'Alpha'), ('B', 'Beta'), ('C', 'Gamma'))
+       t(code, name)`
+    );
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE src_table AS
+       SELECT * FROM (VALUES ('Alpha', 'x'), ('Beta', 'y'), ('Delta', 'z'))
+       t(nom, other)`
+    );
+
+    const pair = await findBestColumnPair({
+      sourceTableName: 'src_table',
+      sourceColumns: ['other', 'nom'],
+      targetTableName: 'target_table',
+      targetColumns: ['code', 'name']
+    });
+
+    expect(pair).toEqual({
+      sourceColumn: 'nom',
+      targetColumn: 'name',
+      matchShare: (2 / 3) * 100
+    });
   });
 
   it('suggests nothing when no target column shares a value', async () => {

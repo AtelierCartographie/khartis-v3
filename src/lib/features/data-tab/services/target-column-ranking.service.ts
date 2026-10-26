@@ -67,3 +67,35 @@ export async function findBestTargetColumn(
     matchShare: (matched / Number(best.sampled_count)) * 100
   };
 }
+
+export interface ColumnPairMatch {
+  sourceColumn: string;
+  targetColumn: string;
+  matchShare: number;
+}
+
+/** The source and target columns that share the most values, if any. */
+export async function findBestColumnPair(options: {
+  sourceTableName: string;
+  sourceColumns: string[];
+  targetTableName: string;
+  targetColumns: string[];
+}): Promise<ColumnPairMatch | null> {
+  let best: ColumnPairMatch | null = null;
+  for (const sourceColumn of options.sourceColumns) {
+    const match = await findBestTargetColumn({
+      sourceTableName: options.sourceTableName,
+      sourceColumn,
+      targetTableName: options.targetTableName,
+      targetColumns: options.targetColumns
+    });
+    if (match && (!best || match.matchShare > best.matchShare)) {
+      best = {
+        sourceColumn,
+        targetColumn: match.column,
+        matchShare: match.matchShare
+      };
+    }
+  }
+  return best;
+}
