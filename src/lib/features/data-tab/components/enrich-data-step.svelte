@@ -29,6 +29,20 @@
   import { dataTabStore } from '../stores/data-tab.store.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const projectTables = $derived(
+    datasetsStore.datasets
+      .filter(
+        (dataset) =>
+          !dataset.geometry &&
+          dataset.id !== selectedDataset?.id &&
+          Boolean(dataset.tableName)
+      )
+      .map((dataset) => ({
+        id: dataset.id,
+        name: dataset.name,
+        rowCount: dataset.rowCount
+      }))
+  );
 
   const joinTabularEnabled = $derived(
     dataTabState.enrichData.joinTabularEnabled
@@ -314,6 +328,8 @@
       <div class="section-content">
         {#if !fileHook.enrichmentDataset}
           <EnrichmentFileUpload
+            projectTables={projectTables}
+            onSelectProjectTable={fileHook.handleSelectProjectDataset}
             isUploading={fileHook.isUploading}
             pastedDataValue={fileHook.pastedDataValue}
             onlineUrlValue={fileHook.onlineUrlValue}
@@ -326,7 +342,7 @@
         {:else}
           <EnrichmentJoinConfig
             enrichmentDataset={fileHook.enrichmentDataset}
-            enrichmentFile={fileHook.enrichmentFile}
+            enrichmentSourceName={fileHook.enrichmentSourceName}
             geoFileColumns={geoFileColumns}
             enrichDataFieldItems={enrichDataFieldItems}
             enrichLinkedVariableId={enrichLinkedVariableId}
