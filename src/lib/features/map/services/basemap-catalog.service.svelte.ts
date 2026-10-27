@@ -276,7 +276,8 @@ export function rankBasemapsByGPSBbox(
       matchScore: metrics.coverageScore,
       matchReason: metrics.fullyContainsData
         ? 'GPS bbox containment'
-        : 'GPS bbox overlap'
+        : 'GPS bbox overlap',
+      matchesData: true
     }));
 }
 
@@ -354,7 +355,8 @@ export function rankBasemapsByJoinSynthesis(
     .map(({ basemap, shareCandidate }) => ({
       ...basemap,
       matchScore: shareCandidate,
-      matchReason: 'Join synthesis coverage'
+      matchReason: 'Join synthesis coverage',
+      matchesData: true
     }));
 }
 
@@ -378,7 +380,7 @@ export function calculateGeoColumnBasemapMatchScore(
   geoColumnName: string,
   basemap: BasemapMetadata,
   catalogBasemaps: readonly string[] = []
-): { score: number; reason: string } {
+): { score: number; reason: string; matchesData: boolean } {
   let score = 0;
   const reasons: string[] = [];
 
@@ -394,7 +396,10 @@ export function calculateGeoColumnBasemapMatchScore(
     searchText.includes('pays');
 
   const family = basemapFamily(basemap.file);
-  if (catalogBasemaps.some((file) => basemapFamily(file) === family)) {
+  const matchesData = catalogBasemaps.some(
+    (file) => basemapFamily(file) === family
+  );
+  if (matchesData) {
     score += 60;
     reasons.push('Catalog values match');
   }
@@ -454,7 +459,8 @@ export function calculateGeoColumnBasemapMatchScore(
 
   return {
     score: Math.min(score, 100),
-    reason: reasons.join(', ') || 'Generic match'
+    reason: reasons.join(', ') || 'Generic match',
+    matchesData
   };
 }
 
@@ -486,16 +492,18 @@ export function rankBasemapsByGeoColumn(
 
   return basemaps
     .map((basemap) => {
-      const { score, reason } = calculateGeoColumnBasemapMatchScore(
-        geoColumn!.name,
-        basemap,
-        catalogBasemaps
-      );
+      const { score, reason, matchesData } =
+        calculateGeoColumnBasemapMatchScore(
+          geoColumn!.name,
+          basemap,
+          catalogBasemaps
+        );
 
       return {
         ...basemap,
         matchScore: score,
-        matchReason: reason
+        matchReason: reason,
+        matchesData
       };
     })
     .filter((suggestion) => suggestion.matchScore > 0)

@@ -227,11 +227,7 @@ describe('geo detection on real files', () => {
   }
 
   it('should pick the ISO code of a world table', async () => {
-    await loadCsv(
-      db,
-      '../../static/examples/data/world-population-2023.csv',
-      'world'
-    );
+    await loadCsv(db, 'world-population-2023.csv', 'world');
     const detection = await detect('world');
 
     expect(detection.suggestedPrimaryGeoColumn?.columnName).toBe(

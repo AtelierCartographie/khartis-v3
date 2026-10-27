@@ -15,7 +15,8 @@ import {
   splitLegendOverflow,
   wrapLegendEntry,
   type CommonLegendTextOptions,
-  type LegendSvgDefinition
+  type LegendSvgDefinition,
+  legendTitleFontSize
 } from './utils';
 
 export type CategoricalShapeType = 'box' | 'line' | 'symbol';
@@ -81,7 +82,7 @@ export function draw_categorical_legend(
     ...(options.footerItems ?? [])
   ];
   const footerType = options.footerType ?? type;
-  const titleSize = title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
   const noteSize = note ? Math.round(fontSize * 0.92) : 0;
   const line_height = fontSize * 1.2;

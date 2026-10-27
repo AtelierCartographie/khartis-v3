@@ -13,6 +13,7 @@ import {
   buildFacetVisualizationUpdates,
   generateFacetVisualizations,
   loadFacetFillCategoryUnion,
+  resolveCategoryDisplayLabels,
   resolveFacetFillSlotPath,
   resolveFacetPrimitiveFilter,
   type FacetFillVariables
@@ -276,7 +277,12 @@ function createFacetsStore() {
       return baseViz;
     }
 
-    const currentLabels = (fillClassification.labels ?? []).map(String);
+    // Raw values, not the display labels: a renamed category is still the same one.
+    const currentValues = (
+      fillClassification.categoryValues ??
+      fillClassification.labels ??
+      []
+    ).map(String);
     const key = JSON.stringify([
       baseViz.id,
       primarySlotPath,
@@ -295,7 +301,7 @@ function createFacetsStore() {
       fillUnionKey = key;
       fillUnion = union ?? [];
     }
-    if (fillUnion.length === 0 || arraysEqual(currentLabels, fillUnion)) {
+    if (fillUnion.length === 0 || arraysEqual(currentValues, fillUnion)) {
       return baseViz;
     }
 
@@ -303,7 +309,7 @@ function createFacetsStore() {
       ...symbol,
       fillClassification: {
         ...fillClassification,
-        labels: [...fillUnion],
+        labels: resolveCategoryDisplayLabels(fillClassification, fillUnion),
         categoryValues: [...fillUnion],
         colors: alignCategoryColors(fillClassification, fillUnion)
       }
@@ -328,7 +334,14 @@ function createFacetsStore() {
     const listsUnion =
       Object.keys(state.fillVariables).length > 0 &&
       fillUnion.length > 0 &&
-      arraysEqual((fillClassification?.labels ?? []).map(String), fillUnion);
+      arraysEqual(
+        (
+          fillClassification?.categoryValues ??
+          fillClassification?.labels ??
+          []
+        ).map(String),
+        fillUnion
+      );
     fillUnionKey = null;
     fillUnion = [];
     if (!baseViz || !symbol || !fillClassification || !listsUnion) {

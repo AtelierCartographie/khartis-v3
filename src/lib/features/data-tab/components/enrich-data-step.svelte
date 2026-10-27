@@ -6,11 +6,16 @@
   } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { InlineNotification } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    NotificationActionButton
+  } from 'carbon-components-svelte';
+  import { ColumnType } from '$lib/features/data-pipeline';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { DataEnrichment } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import EnrichmentBasemapSelector from './enrich-data/enrichment-basemap-selector.svelte';
   import EnrichmentFileUpload from './enrich-data/enrichment-file-upload.svelte';
@@ -24,14 +29,44 @@
   import { useEnrichmentBasemap } from '../hooks/use-enrichment-basemap.svelte';
   import { useEnrichmentFile } from '../hooks/use-enrichment-file.svelte';
   import { useEnrichmentJoin } from '../hooks/use-enrichment-join.svelte';
-  import { findBestTargetColumn } from '../services/join-stats.service';
+  import {
+    findBestColumnPair,
+    findBestTargetColumn
+  } from '../services/target-column-ranking.service';
 
   import { dataTabStore } from '../stores/data-tab.store.svelte';
+  import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const projectTables = $derived(
+    datasetsStore.datasets
+      .filter(
+        (dataset) =>
+          !dataset.geometry &&
+          dataset.id !== selectedDataset?.id &&
+          Boolean(dataset.tableName)
+      )
+      .map((dataset) => ({
+        id: dataset.id,
+        name: dataset.name,
+        rowCount: dataset.rowCount
+      }))
+  );
 
+  const selectedSourceFile = $derived(
+    projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === selectedDataset?.sourceFileId
+    )
+  );
+  const hasJoinedTable = $derived(
+    Boolean(selectedSourceFile?.enrichmentSnapshot)
+  );
+  const joinedTableNames = $derived([
+    ...new Set(Object.values(selectedSourceFile?.joinedColumnOrigins ?? {}))
+  ]);
+  // A joined table is undone through the file reset, not the toggle.
   const joinTabularEnabled = $derived(
-    dataTabState.enrichData.joinTabularEnabled
+    hasJoinedTable || dataTabState.enrichData.joinTabularEnabled
   );
   const joinTabularOpen = $derived(
     joinTabularEnabled && dataTabState.uiPanels.enrichJoinTabularOpen
@@ -80,6 +115,7 @@
     getGeoFileColumns: () => geoFileColumns,
     isJoinBlocked: () => hasOnlyCoordinatesValue,
     onJoinFinalized: () => {
+      dataTabStore.markStepComplete(1);
       dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       dataTabActions.setUiPanelsState({ enrichJoinTabularOpen: false });
       fileHook.handleRemoveFile();
@@ -194,7 +230,8 @@
       targetTableName,
       targetColumns: candidates.map((field) => field.columnName)
     })
-      .then((columnName) => {
+      .then((best) => {
+        const columnName = best?.column;
         if (run !== targetColumnSuggestionRun || !columnName) return;
         if (geoFileColumnId !== undefined && !isGeoFileColumnSuggested) return;
         const item = geoFileColumns.find(
@@ -258,12 +295,137 @@
     }
   }
 
+  // Enriching is optional: the step is done once a table was joined or a
+  // basemap laid under the file, not merely because the file has geometry.
+  const hasEnrichment = $derived(
+    hasJoinedTable ||
+      (overlayBasemapEnabled && Boolean(basemapHook.selectedBasemapId))
+  );
+
   $effect(() => {
-    if (selectedDataset && selectedDataset.geometry) {
+    if (hasEnrichment) {
       dataTabStore.markStepComplete(1);
-    } else {
-      dataTabStore.resetStepCompletion(1);
     }
+  });
+
+  const PROJECT_TABLE_PROPOSAL_MIN_SHARE = 50;
+
+  interface ProjectTableProposal {
+    datasetId: string;
+    name: string;
+    sourceColumn: string;
+    targetColumn: string;
+    matchShare: number;
+  }
+
+  let tableProposal = $state<ProjectTableProposal | null>(null);
+  let dismissedProposalKey = $state<string | null>(null);
+  let tableProposalRun = 0;
+
+  const tableProposalKey = $derived(
+    tableProposal && selectedDataset
+      ? `${selectedDataset.id}::${tableProposal.datasetId}`
+      : null
+  );
+
+  // A project table holding most of the values of a geo column is offered as
+  // the table to join, before the user opens the section, unless the file is
+  // already enriched.
+  $effect(() => {
+    const geoTableName = selectedDataset?.tableName;
+    const targetColumns = geoFileColumns.map((field) => field.columnName);
+    const candidates = datasetsStore.datasets.filter((dataset) =>
+      projectTables.some((table) => table.id === dataset.id)
+    );
+    const run = ++tableProposalRun;
+    tableProposal = null;
+    if (
+      !geoTableName ||
+      targetColumns.length === 0 ||
+      candidates.length === 0 ||
+      hasEnrichment ||
+      untrack(() => fileHook.enrichmentDataset)
+    ) {
+      return;
+    }
+
+    void (async () => {
+      let best: ProjectTableProposal | null = null;
+      for (const dataset of candidates) {
+        const pair = await findBestColumnPair({
+          sourceTableName: dataset.tableName,
+          sourceColumns: dataset.columns
+            .filter((column) => column.type === ColumnType.TEXT)
+            .map((column) => column.name),
+          targetTableName: geoTableName,
+          targetColumns
+        });
+        if (pair && (!best || pair.matchShare > best.matchShare)) {
+          best = { datasetId: dataset.id, name: dataset.name, ...pair };
+        }
+      }
+      if (run !== tableProposalRun) return;
+      tableProposal =
+        best && best.matchShare >= PROJECT_TABLE_PROPOSAL_MIN_SHARE
+          ? best
+          : null;
+    })().catch((error: unknown) => {
+      logger.warn(
+        'Failed to look for a project table to join',
+        LogCategory.DATA,
+        error
+      );
+    });
+  });
+
+  /** Opens the join of a project table, with the column pair when known. */
+  async function startProjectTableJoin(join: {
+    datasetId: string;
+    sourceColumn?: string;
+    targetColumn?: string;
+  }): Promise<void> {
+    handleJoinTabularToggle(true);
+    await fileHook.handleSelectProjectDataset(join.datasetId);
+    // Selecting a table resets both columns: the matched pair is set after.
+    await tick();
+    const enrichItem = enrichDataFieldItems.find(
+      (field) => field.columnName === join.sourceColumn
+    );
+    const geoItem = geoFileColumns.find(
+      (field) => field.columnName === join.targetColumn
+    );
+    if (enrichItem) enrichLinkedVariableId = enrichItem.id;
+    if (geoItem) {
+      geoFileColumnId = geoItem.id;
+      isGeoFileColumnSuggested = false;
+    }
+    dataTabActions.setEnrichDataState({
+      enrichmentColumn: enrichItem?.columnName,
+      targetColumn: geoItem?.columnName
+    });
+  }
+
+  async function acceptTableProposal(): Promise<void> {
+    const proposal = tableProposal;
+    if (!proposal) return;
+    dismissedProposalKey = tableProposalKey;
+    await startProjectTableJoin(proposal);
+  }
+
+  // A join asked for from the tab of a table lands here, in the tab of the
+  // geo file it enriches.
+  $effect(() => {
+    const geoDatasetId = selectedDataset?.id;
+    if (!geoDatasetId || !enrichmentRequestStore.pending) return;
+    const request = enrichmentRequestStore.take(geoDatasetId);
+    if (!request) return;
+    void untrack(() =>
+      startProjectTableJoin({
+        datasetId: request.tableDatasetId,
+        sourceColumn: request.sourceColumn,
+        targetColumn: request.targetColumn
+      })
+    );
   });
 
   function handleJoinTabularToggle(checked: boolean): void {
@@ -297,6 +459,29 @@
     <InfoPopover text={m.enrich_step_info()} />
   </p>
 
+  {#if tableProposal && !fileHook.enrichmentDataset && tableProposalKey !== dismissedProposalKey}
+    <InlineNotification
+      kind="info"
+      lowContrast
+      title={m.enrich_table_proposal_title()}
+      subtitle={m.enrich_table_proposal_subtitle({
+        name: tableProposal.name,
+        share: Math.round(tableProposal.matchShare),
+        column: tableProposal.sourceColumn,
+        target: tableProposal.targetColumn
+      })}
+      closeButtonDescription={m.a11y_close_notification()}
+      on:close={() => (dismissedProposalKey = tableProposalKey)}
+    >
+      <NotificationActionButton
+        slot="actions"
+        on:click={() => void acceptTableProposal()}
+      >
+        {m.enrich_table_proposal_action()}
+      </NotificationActionButton>
+    </InlineNotification>
+  {/if}
+
   <div class="enrich-sections">
     <ExpandableSection
       title={m.enrich_join_tabular_title()}
@@ -304,6 +489,7 @@
       showToggle={true}
       open={joinTabularOpen}
       toggleChecked={joinTabularEnabled}
+      toggleDisabled={hasJoinedTable}
       onToggle={(expanded) =>
         dataTabActions.setUiPanelsState({
           enrichJoinTabularOpen: expanded
@@ -311,8 +497,19 @@
       onToggleChange={handleJoinTabularToggle}
     >
       <div class="section-content">
+        {#if hasJoinedTable && !fileHook.enrichmentDataset}
+          <p class="kh-help">
+            {joinedTableNames.length > 0
+              ? m.enrich_join_tabular_joined({
+                  names: joinedTableNames.join(', ')
+                })
+              : m.enrich_join_tabular_joined_unnamed()}
+          </p>
+        {/if}
         {#if !fileHook.enrichmentDataset}
           <EnrichmentFileUpload
+            projectTables={projectTables}
+            onSelectProjectTable={fileHook.handleSelectProjectDataset}
             isUploading={fileHook.isUploading}
             pastedDataValue={fileHook.pastedDataValue}
             onlineUrlValue={fileHook.onlineUrlValue}
@@ -325,15 +522,23 @@
         {:else}
           <EnrichmentJoinConfig
             enrichmentDataset={fileHook.enrichmentDataset}
-            enrichmentFile={fileHook.enrichmentFile}
+            enrichmentSourceName={fileHook.enrichmentSourceName}
             geoFileColumns={geoFileColumns}
             enrichDataFieldItems={enrichDataFieldItems}
             enrichLinkedVariableId={enrichLinkedVariableId}
             geoFileColumnId={geoFileColumnId}
             enrichSuggestedColumn={enrichSuggestedColumn}
             hasOnlyCoordinates={hasOnlyCoordinatesValue}
-            joinStats={joinHook.joinStats}
+            view={joinHook.view}
             targetOptions={joinHook.targetOptions}
+            fuzzyPassEstimate={joinHook.fuzzyPassEstimate}
+            fuzzyPassRunning={joinHook.fuzzyPassRunning}
+            joinedPage={joinHook.joinedPage}
+            joinedPageRows={joinHook.joinedPageRows}
+            joinedTargetValues={joinHook.joinedTargetValues}
+            onRunFullFuzzyPass={joinHook.runFullFuzzyPass}
+            onJoinedPageChange={joinHook.loadJoinedPage}
+            onRequestJoinedEntities={joinHook.requestJoinedEntities}
             isComputingJoin={joinHook.isComputingJoin}
             isFinalizingJoin={joinHook.isFinalizingJoin}
             onRemoveFile={handleRemoveFile}

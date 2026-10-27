@@ -31,7 +31,8 @@ vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock,
   resolveFacetFillSlotPath: mocks.resolveFacetFillSlotPathMock,
   loadFacetFillCategoryUnion: vi.fn(async () => null),
-  alignCategoryColors: vi.fn(() => [])
+  alignCategoryColors: vi.fn(() => []),
+  resolveCategoryDisplayLabels: vi.fn((_classification, values) => values)
 }));
 
 vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({

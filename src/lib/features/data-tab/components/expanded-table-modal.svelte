@@ -22,6 +22,7 @@
     currentCell?: { rowId: number; columnName: string } | null;
     highlightedRowIds?: number[];
     isSelectable?: boolean;
+    columnOrigins?: Record<string, string>;
     onSelectionChange?: (ids: number[], count: number) => void;
     onSortChange?: (
       column: string | null,
@@ -44,6 +45,7 @@
     currentCell = null,
     highlightedRowIds = [],
     isSelectable = false,
+    columnOrigins,
     onSelectionChange,
     onSortChange,
     onColumnDeleted,
@@ -212,6 +214,7 @@
             highlightedRowIds={highlightedRowIds}
             isExpanded={true}
             isSelectable={isSelectable}
+            columnOrigins={columnOrigins}
             onColumnDeleted={onColumnDeleted}
             onTableMutation={onTableMutation}
             onSelectionChange={onSelectionChange}

@@ -27,7 +27,12 @@
   } from '$lib/features/data-pipeline';
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    INTERNAL_COLUMN,
+    JOINED_BASEMAP_COLUMN
+  } from '$lib/features/commons/constants/data.constants';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { getLocale } from '$lib/paraglide/runtime';
   import {
     formatValue,
     isSingularCount
@@ -184,6 +189,28 @@
       ) || null
     );
   });
+  // A basemap join names its entities in a column of its own: the badge says
+  // which basemap they come from.
+  const joinedBasemapTitle = $derived.by(() => {
+    const basemapId = selectedDataset?.joinedBasemap;
+    if (!basemapId) return undefined;
+    const basemap = basemapCatalogService.getBasemapById(basemapId);
+    if (!basemap) return undefined;
+    const isFrench = getLocale() === 'fr';
+    const title = isFrench ? basemap.title_fr : basemap.title_en;
+    const subtitle = (
+      isFrench ? basemap.subtitle_fr : basemap.subtitle_en
+    )?.trim();
+    return subtitle ? `${title}${m.aria_label_separator()}${subtitle}` : title;
+  });
+  const columnOrigins = $derived(
+    joinedBasemapTitle
+      ? {
+          ...sourceFile?.joinedColumnOrigins,
+          [JOINED_BASEMAP_COLUMN.NAME]: joinedBasemapTitle
+        }
+      : sourceFile?.joinedColumnOrigins
+  );
 
   // An archive layer's asset is a Parquet snapshot, not the CSV it came from.
   function hasReimportableSourceAsset(file: UploadedFile): boolean {
@@ -892,6 +919,7 @@
           highlightedRowIds={searchHighlight.highlightedRowIds}
           activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
             undefined}
+          columnOrigins={columnOrigins}
           isExpanded={false}
           isSelectable={isDeleteMode}
           initialSortColumn={tableSortColumn}
@@ -970,6 +998,7 @@
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
     isSelectable={isDeleteMode}
+    columnOrigins={columnOrigins}
     onTableMutation={handleTableMutation}
     onSelectionChange={handleSelectionChange}
     onSortChange={handleSortChange}
