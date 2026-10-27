@@ -25,6 +25,8 @@ const OPTIONS: AutoLabelPlacementOptions = {
   bounds: [0, 0, 400, 400],
   obstacles: [],
   lines: [],
+  land: [],
+  spacing: 0,
   align: 'none',
   gap: 2,
   symbolGap: 3,
@@ -126,6 +128,58 @@ describe('placeLabelBlocks', () => {
 
     expect(block?.layout).toBe(1);
     expect(block?.center).toEqual([0, 0]);
+  });
+});
+
+describe('placeLabelBlocks on land and with spacing', () => {
+  it('should send a coastal label to the sea side when the land is given', () => {
+    // Land on the right of x = 205; the town on the shore.
+    const land: LabelOffset[][] = [
+      [
+        [205, 0],
+        [400, 0],
+        [400, 400],
+        [205, 400]
+      ]
+    ];
+    const town: AutoLabelEntry = {
+      ...ENTRY,
+      anchor: [208, 200],
+      symbolRadius: 3
+    };
+    const right = placeLabelBlocks('viz-shore', [town], OPTIONS).get(town.id);
+    expect(right!.center[0]).toBeGreaterThan(0);
+    const sea = placeLabelBlocks('viz-sea', [town], { ...OPTIONS, land }).get(
+      town.id
+    );
+    expect(sea!.center[0]).toBeLessThan(0);
+  });
+
+  it('should keep clear space between two labels', () => {
+    const a: AutoLabelEntry = { ...ENTRY, id: 1, anchor: [150, 200] };
+    const b: AutoLabelEntry = {
+      ...ENTRY,
+      id: 2,
+      anchor: [150, 222],
+      priority: 0
+    };
+    const blocks = placeLabelBlocks('viz-spacing', [a, b], {
+      ...OPTIONS,
+      spacing: 8
+    });
+    const box = (e: AutoLabelEntry): Box => {
+      const [cx, cy] = blocks.get(e.id)!.center;
+      const [x, y] = [e.anchor[0] + cx, e.anchor[1] + cy];
+      return [
+        x - e.halfSize[0],
+        y - e.halfSize[1],
+        x + e.halfSize[0],
+        y + e.halfSize[1]
+      ];
+    };
+    const [p, q] = [box(a), box(b)];
+    const gap = Math.max(p[0] - q[2], q[0] - p[2], p[1] - q[3], q[1] - p[3]);
+    expect(gap).toBeGreaterThanOrEqual(8 - 1e-9);
   });
 });
 
