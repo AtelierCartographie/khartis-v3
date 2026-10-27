@@ -196,7 +196,8 @@ describe('shouldPreferTextBasemapRefinementForGPS', () => {
               bbox: [-61.81, -21.39, 55.83, 51.09]
             }),
             matchScore: 100,
-            matchReason: 'GPS bbox containment'
+            matchReason: 'GPS bbox containment',
+            matchesData: true
           }
         ],
         96
@@ -218,7 +219,8 @@ describe('shouldPreferTextBasemapRefinementForGPS', () => {
               bbox: [-180, -90, 180, 90]
             }),
             matchScore: 54,
-            matchReason: 'GPS bbox overlap'
+            matchReason: 'GPS bbox overlap',
+            matchesData: true
           }
         ],
         96

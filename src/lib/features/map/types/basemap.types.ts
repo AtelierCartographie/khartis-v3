@@ -142,4 +142,9 @@ export interface BasemapMetadata {
 export interface BasemapSuggestion extends BasemapMetadata {
   matchScore: number;
   matchReason: string;
+  /**
+   * The score rests on the data (values found, points covered), not only on
+   * the basemap name and year: only such a suggestion is preselected.
+   */
+  matchesData: boolean;
 }

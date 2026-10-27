@@ -37,7 +37,8 @@ Table names, column names and values almost always come from user files (`saniti
 ## Joins: exact first, then a bounded fuzzy phase
 
 - A table-to-basemap join matches normalized values exactly, then compares only the unmatched values with Jaro-Winkler. The fuzzy phase is bounded by a pair budget (`MAX_FUZZY_AUTO_PAIRS`); past it, suggestions are computed on demand.
-- Rows are graded with `JoinStatus` (joined, to verify, duplicate, unrecognized, ignored). Every bucket is shown with its count; unmatched rows are never dropped silently.
+- Rows are graded in SQL by `join-ops.ts` (`matched`, `check` and `ambiguous` shown as to verify, `duplicate`, `not_found`), and ignored values are excluded from the grading. Every bucket is shown with its count; unmatched rows are never dropped silently.
+- A basemap join and an enrichment join (a table joined to a geo file) share that engine and differ only by their `JoinTarget`: `basemap_attributes`, or a table of the same shape built from one column (`prepareTableJoinTarget`).
 - The grading cutoff `FUZZY_SEARCH.SCORE_CUTOFF` comes from a calibration on a labelled corpus of name pairs and is locked by `tests/duckdb/macros-join.test.ts`. It changes only with a new calibration.
 - The on-demand fuzzy pass cannot be cancelled: DuckDB WASM is single-threaded and `cancelPendingQuery` rejects only when the computation ends. A Cancel button on that path would lie.
 

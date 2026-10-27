@@ -25,8 +25,9 @@ import {
 } from '$lib/features/commons/components/advanced-data-table/hooks/table-hook.utils';
 
 export interface UseEnrichmentFileReturn {
-  readonly enrichmentFile: File | null;
   readonly enrichmentDataset: DatasetResult | null;
+  /** Name shown for the joined table: the file, or the project dataset. */
+  readonly enrichmentSourceName: string | null;
   readonly isUploading: boolean;
   readonly uploadError: string | null;
   readonly pastedDataValue: string;
@@ -34,13 +35,14 @@ export interface UseEnrichmentFileReturn {
   handleFileUpload: (files: readonly File[]) => Promise<void>;
   handlePasteData: () => Promise<void>;
   handleLoadOnlineFile: () => Promise<void>;
+  handleSelectProjectDataset: (datasetId: string) => Promise<void>;
   handleRemoveFile: () => void;
   setPastedDataValue: (value: string) => void;
   setOnlineUrlValue: (value: string) => void;
 }
 
-let enrichmentFile = $state<File | null>(null);
 let enrichmentDataset = $state<DatasetResult | null>(null);
+let enrichmentSourceName = $state<string | null>(null);
 let isUploading = $state(false);
 let uploadError = $state<string | null>(null);
 let pastedDataValue = $state('');
@@ -180,14 +182,20 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
 
   async function replaceEnrichmentDataset(
     loadedDataset: DatasetResult,
-    file: File | null
+    file: File | null,
+    options: { isProjectDataset?: boolean } = {}
   ): Promise<void> {
     const previousDataset = enrichmentDataset;
     const dataset = await withGeoDetection(loadedDataset);
 
-    registerTransientTable(dataset.tableName);
+    // A project dataset keeps its own table: it is not a temporary one.
+    if (!options.isProjectDataset) {
+      registerTransientTable(dataset.tableName);
+    }
     enrichmentDataset = dataset;
-    enrichmentFile = file;
+    enrichmentSourceName = options.isProjectDataset
+      ? dataset.name
+      : (file?.name ?? null);
 
     dataTabActions.setEnrichDataState({
       enrichmentDatasetId: dataset.id,
@@ -215,6 +223,30 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       await replaceEnrichmentDataset(dataset, file);
     } catch (error) {
       logger.error('Failed to load enrichment file', LogCategory.DATA, error);
+      uploadError =
+        error instanceof Error ? error.message : m.error_loading_default();
+    } finally {
+      isUploading = false;
+    }
+  }
+
+  async function handleSelectProjectDataset(datasetId: string): Promise<void> {
+    const dataset = datasetsStore.datasets.find(
+      (candidate) => candidate.id === datasetId
+    );
+    if (!dataset || dataset.id === enrichmentDataset?.id) return;
+
+    isUploading = true;
+    uploadError = null;
+
+    try {
+      await replaceEnrichmentDataset(dataset, null, { isProjectDataset: true });
+    } catch (error) {
+      logger.error(
+        'Failed to use a project dataset for enrichment',
+        LogCategory.DATA,
+        error
+      );
       uploadError =
         error instanceof Error ? error.message : m.error_loading_default();
     } finally {
@@ -278,7 +310,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   function handleRemoveFile(): void {
     const previousDataset = enrichmentDataset;
     enrichmentDataset = null;
-    enrichmentFile = null;
+    enrichmentSourceName = null;
     uploadError = null;
     pastedDataValue = '';
     onlineUrlValue = '';
@@ -316,15 +348,19 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     }
 
     enrichmentDataset = restoredDataset;
-    enrichmentFile = null;
+    enrichmentSourceName = datasetsStore.datasets.some(
+      (dataset) => dataset.id === restoredDataset.id
+    )
+      ? restoredDataset.name
+      : null;
   });
 
   return {
-    get enrichmentFile() {
-      return enrichmentFile;
-    },
     get enrichmentDataset() {
       return enrichmentDataset;
+    },
+    get enrichmentSourceName() {
+      return enrichmentSourceName;
     },
     get isUploading() {
       return isUploading;
@@ -341,6 +377,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     handleFileUpload,
     handlePasteData,
     handleLoadOnlineFile,
+    handleSelectProjectDataset,
     handleRemoveFile,
     setPastedDataValue,
     setOnlineUrlValue

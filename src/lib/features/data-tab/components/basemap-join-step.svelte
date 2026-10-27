@@ -37,6 +37,7 @@
   import BasemapCatalogTab from './basemap-join/basemap-catalog-tab.svelte';
   import BasemapImportTab from './basemap-join/basemap-import-tab.svelte';
   import BasemapPanelContent from './basemap-join/basemap-panel-content.svelte';
+  import ActiveBasemapBanner from './basemap-join/active-basemap-banner.svelte';
   import JoinAssistedSection from './basemap-join/join-assisted-section.svelte';
   import OSMBasemapSelector from './osm-basemap-selector.svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
@@ -56,9 +57,22 @@
     type PersistedProjectBasemap
   } from '../services/persisted-basemap.service';
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
+  import { resolveActiveBasemapOrigin } from '../utils/active-basemap.utils';
   import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistSourceFileState } from '../services/source-file-state.service';
+  import {
+    listProjectGeoBasemapOptions,
+    mergeProjectGeoSuggestions,
+    scoreProjectGeoBasemapOptions,
+    type ProjectGeoMatch
+  } from '../services/project-geo-basemap.service';
+  import { openDatasetTab } from '../services/dataset-navigation.service';
+  import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
+  import {
+    InlineNotification,
+    NotificationActionButton
+  } from 'carbon-components-svelte';
   import {
     SavePriority,
     persistenceRegistry
@@ -79,6 +93,8 @@
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
+
+  const BASEMAP_SUGGESTION_LIMIT = 3;
 
   function handleBasemapSourceChange(source: BasemapSource): void {
     dataTabActions.setBasemapSource(source);
@@ -279,6 +295,28 @@
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
+  const activeBasemap = $derived(
+    basemapSelected
+      ? (allBasemapsForLookup.find(
+          (basemap) => basemap.file === basemapSelected
+        ) ?? null)
+      : null
+  );
+  const activeBasemapOrigin = $derived(
+    activeBasemap ? resolveActiveBasemapOrigin(activeBasemap) : null
+  );
+  // The Import tab already shows the imported basemap's card.
+  const showActiveBasemapBanner = $derived(
+    activeBasemap !== null &&
+      !(
+        activeBasemapOrigin === 'import' &&
+        dataTabState.basemapJoin.basemapSource === BasemapSource.IMPORT
+      )
+  );
+  // Shown from the persisted selection, so it survives a tab switch or reload.
+  const activeImportedBasemap = $derived(
+    activeBasemapOrigin === 'import' ? activeBasemap : null
+  );
   const projectBasemap = $derived(
     (projectStore.currentProject?.data?.basemap as
       PersistedProjectBasemap | undefined) ?? undefined
@@ -313,7 +351,6 @@
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
   let importError = $state<string | null>(null);
-  let importedBasemap = $state<BasemapMetadata | null>(null);
   let joinLoading = $state(false);
   let joinLoadingRequestId = 0;
   let suggestionsDatasetIdentity = $state<string | null>(null);
@@ -332,18 +369,42 @@
   });
   const isGPSModeActive = $derived(hasGPSCoordinates);
 
+  let projectGeoScores = $state.raw(new Map<string, ProjectGeoMatch>());
+  const projectGeoOptions = $derived(
+    listProjectGeoBasemapOptions(datasetsStore.datasets, selectedDataset?.id)
+  );
+  const projectGeoBasemapCards = $derived(
+    projectGeoOptions
+      .map((option) => ({
+        basemap: option.basemap,
+        score: projectGeoScores.get(option.dataset.id)?.score
+      }))
+      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
+  );
+
   const suggestedBasemaps = $derived.by(() => {
-    return basemapSuggestions
+    const catalogSuggestions = basemapSuggestions
       .map((s: BasemapSuggestion) => ({
         basemap: allBasemapsForLookup.find(
           (b: BasemapMetadata) => b.file === s.file
         ),
-        score: s.matchScore
+        score: s.matchScore,
+        matchesData: s.matchesData
       }))
       .filter((item) => item.basemap !== undefined) as {
       basemap: BasemapMetadata;
       score: number;
+      matchesData: boolean;
     }[];
+    const projectSuggestions = projectGeoBasemapCards.flatMap(
+      ({ basemap, score }) =>
+        score === undefined ? [] : [{ basemap, score, matchesData: true }]
+    );
+    return mergeProjectGeoSuggestions(
+      catalogSuggestions,
+      projectSuggestions,
+      BASEMAP_SUGGESTION_LIMIT
+    );
   });
 
   const stepTitle = $derived.by(() => {
@@ -381,16 +442,52 @@
     });
   }
 
+  // Joining a project geo file opens its tab, so it is offered rather than
+  // preselected: an automatic tab switch would lose the user.
+  const proposedProjectGeoOption = $derived.by(() => {
+    const first = suggestedBasemaps[0]?.basemap;
+    return first ? findProjectGeoOption(first) : undefined;
+  });
+
   async function autoSelectFirstSuggestedBasemap(): Promise<void> {
-    if (basemapSuggestions.length === 0) return;
-
-    const firstSuggestion = allBasemapsForLookup.find(
-      (basemap) => basemap.file === basemapSuggestions[0]?.file
-    );
-
-    if (!firstSuggestion) return;
+    const firstSuggestion = suggestedBasemaps[0]?.basemap;
+    if (!firstSuggestion || findProjectGeoOption(firstSuggestion)) return;
 
     await handleSelectBasemap(firstSuggestion, { allowToggleOff: false });
+  }
+
+  function findProjectGeoOption(basemap: BasemapMetadata) {
+    return projectGeoOptions.find(
+      (option) => option.basemap.file === basemap.file
+    );
+  }
+
+  async function handleSelectSuggestedBasemap(
+    basemap: BasemapMetadata
+  ): Promise<void> {
+    if (findProjectGeoOption(basemap)) {
+      handleSelectProjectGeoBasemap(basemap);
+      return;
+    }
+    await handleSelectBasemap(basemap);
+  }
+
+  /**
+   * The table joins a geo file of the project by enriching it: the join is
+   * checked and validated in the tab of that file, which then holds both.
+   */
+  function handleSelectProjectGeoBasemap(basemap: BasemapMetadata): void {
+    const option = findProjectGeoOption(basemap);
+    const table = selectedDataset;
+    if (!option || !table) return;
+
+    enrichmentRequestStore.request({
+      geoDatasetId: option.dataset.id,
+      tableDatasetId: table.id,
+      sourceColumn: dataTabState.geolocation.linkedVariableName || undefined,
+      targetColumn: projectGeoScores.get(option.dataset.id)?.targetColumn
+    });
+    openDatasetTab(option.dataset.id);
   }
 
   function isDatasetNotFoundError(
@@ -772,7 +869,7 @@
 
   async function handleSelectBasemap(
     basemap: BasemapMetadata,
-    options: { allowToggleOff?: boolean } = {}
+    options: { allowToggleOff?: boolean; source?: BasemapSource } = {}
   ) {
     const resolvedDatasetId = datasetIdForOrchestrator;
     const sourceSnapshot = resolveSourceSnapshot();
@@ -813,7 +910,7 @@
     dataTabStore.resetStepCompletion(stepIndex);
     dataTabActions.setBasemapJoinState({
       selectedBasemap: basemap.file,
-      basemapSource: BasemapSource.CATALOG
+      basemapSource: options.source ?? BasemapSource.CATALOG
     });
 
     // Non-blocking prefetch: fetch the basemap geometry while the join
@@ -991,7 +1088,6 @@
       });
       await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
-      importedBasemap = customBasemap;
 
       projectStore.updateProjectData({
         basemap: {
@@ -1455,7 +1551,7 @@
             const ranked = rankBasemapsByJoinSynthesis(
               basemapCatalogService.basemaps,
               synthesis,
-              3
+              BASEMAP_SUGGESTION_LIMIT
             );
             const topScore = ranked[0]?.matchScore ?? 0;
 
@@ -1491,7 +1587,7 @@
             suggestions = rankBasemapsByJoinSynthesis(
               basemapCatalogService.basemaps,
               synthesis,
-              3
+              BASEMAP_SUGGESTION_LIMIT
             );
           } catch (err) {
             if (isDatasetNotFoundError(err)) {
@@ -1503,15 +1599,32 @@
         if (suggestions.length === 0) {
           suggestions = basemapCatalogService.getSuggestions(
             processedDataset,
-            3,
+            BASEMAP_SUGGESTION_LIMIT,
             geoColumn
           );
         }
       }
 
+      let projectScores = new Map<string, ProjectGeoMatch>();
+      const sourceTableName =
+        getCurrentDuckDataset(resolvedDatasetId)?.tableName;
+      if (
+        !hasGPSMode &&
+        geoColumn &&
+        sourceTableName &&
+        projectGeoOptions.length > 0
+      ) {
+        projectScores = await scoreProjectGeoBasemapOptions({
+          sourceTableName,
+          sourceColumn: geoColumn,
+          options: projectGeoOptions
+        });
+      }
+
       if (controller.signal.aborted) return;
 
       basemapSuggestions = suggestions;
+      projectGeoScores = projectScores;
       suggestionsGeoColumn = geoColumn ?? null;
       suggestionsTableFilterKey = requestedTableFilterKey;
 
@@ -1521,7 +1634,8 @@
 
       const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
         hasDismissedSuggestedBasemap,
-        suggestionCount: suggestions.length,
+        suggestionCount: suggestedBasemaps.length,
+        topSuggestionMatchesData: suggestedBasemaps[0]?.matchesData ?? false,
         isOSMActive: osmBasemapStore.isActive,
         hasDatasetGeometry,
         persistedBasemapId,
@@ -1768,12 +1882,13 @@
   });
 
   $effect(() => {
-    void basemapSuggestions.length;
+    void suggestedBasemaps.length;
     void basemapSelected;
 
     const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
       hasDismissedSuggestedBasemap,
-      suggestionCount: basemapSuggestions.length,
+      suggestionCount: suggestedBasemaps.length,
+      topSuggestionMatchesData: suggestedBasemaps[0]?.matchesData ?? false,
       isOSMActive: osmBasemapStore.isActive,
       hasDatasetGeometry: Boolean(selectedDataset?.geometry),
       persistedBasemapId: runtimePersistedBasemap?.id,
@@ -1973,8 +2088,8 @@
       });
       basemapStyleStore.setReferenceBasemap(null);
       dataTabStore.resetStepCompletion(basemapStepIndex);
-      importedBasemap = null;
       importError = null;
+      projectGeoScores = new Map();
       previousJoinContext = null;
       previousLinkedVariableName = null;
       hasDismissedSuggestedBasemap = false;
@@ -1991,13 +2106,16 @@
     suggestedBasemaps={suggestedBasemaps}
     allBasemaps={allBasemaps}
     basemapSelected={basemapSelected}
-    onSelectBasemap={handleSelectBasemap}
+    onSelectBasemap={handleSelectSuggestedBasemap}
   />
 {/snippet}
 
 {#snippet importContent()}
   <BasemapImportTab
-    importedBasemap={importedBasemap}
+    projectGeoBasemaps={projectGeoBasemapCards}
+    basemapSelected={basemapSelected}
+    onSelectProjectGeoBasemap={handleSelectProjectGeoBasemap}
+    importedBasemap={activeImportedBasemap}
     importError={importError}
     importUploading={importUploading}
     onFileDrop={handleFileDrop}
@@ -2014,6 +2132,12 @@
     onSelectOSM={handleSelectOSM}
     onGoToVisualize={handleGoToVisualize}
   />
+{/snippet}
+
+{#snippet activeBasemapBanner()}
+  {#if activeBasemap && activeBasemapOrigin}
+    <ActiveBasemapBanner basemap={activeBasemap} origin={activeBasemapOrigin} />
+  {/if}
 {/snippet}
 
 {#snippet joinSection()}
@@ -2057,12 +2181,34 @@
   <p class="kh-help">{m.basemap_step_description()}</p>
 
   <div class="step-content">
+    {#if proposedProjectGeoOption && !basemapSelected}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        title={m.basemap_project_file_proposal_title({
+          name: proposedProjectGeoOption.basemap.title_fr
+        })}
+        subtitle={m.basemap_project_file_proposal_subtitle()}
+      >
+        <NotificationActionButton
+          slot="actions"
+          on:click={() =>
+            handleSelectProjectGeoBasemap(proposedProjectGeoOption.basemap)}
+        >
+          {m.basemap_project_file_proposal_action()}
+        </NotificationActionButton>
+      </InlineNotification>
+    {/if}
     <BasemapPanelContent
       selectedSource={dataTabState.basemapJoin.basemapSource}
       onSourceChange={handleBasemapSourceChange}
       catalogContent={catalogContent}
       importContent={importContent}
       osmContent={osmContent}
+      activeBasemapBanner={showActiveBasemapBanner
+        ? activeBasemapBanner
+        : undefined}
       joinSection={joinSection}
       showJoinSection={!!basemapSelected && !isGPSModeActive}
     />

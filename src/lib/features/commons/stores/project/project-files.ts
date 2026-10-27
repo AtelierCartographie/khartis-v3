@@ -5,6 +5,7 @@ import { LogCategory, logger } from '../../utils/logger';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { markDirtyAndSave } from './project-persistence';
+import { detachTablesFrom } from '../../utils/dataset-attachment.utils';
 
 export function getSourceFileIndex(
   container: ProjectStateContainer,
@@ -38,6 +39,8 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     assetRef: file.assetRef,
     companionAssetRefs: file.companionAssetRefs,
     enrichmentSnapshot: file.enrichmentSnapshot,
+    joinedColumnOrigins: file.joinedColumnOrigins,
+    attachedTo: file.attachedTo,
     relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
     deletedRowIds: file.deletedRowIds,
@@ -147,9 +150,10 @@ export async function removeFileFromProject(
     ...container._state.currentProject,
     data: {
       ...container._state.currentProject.data,
-      sourceFiles: container._state.currentProject.data.sourceFiles.filter(
-        (f) => f.id !== fileId
-      )
+      sourceFiles: detachTablesFrom(
+        container._state.currentProject.data.sourceFiles,
+        fileId
+      ).filter((f) => f.id !== fileId)
     }
   };
 

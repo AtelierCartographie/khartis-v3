@@ -35,6 +35,29 @@ describe('project schema compatibility', () => {
     expect(() => assertCurrentProjectSchema(project)).not.toThrow();
   });
 
+  it('should migrate a 3.14.0 project to the current schema without touching its data', () => {
+    const data = {
+      sourceFiles: [
+        {
+          id: 'geo',
+          name: 'communes.geojson',
+          enrichmentSnapshot: { assetId: 'asset-enriched', kind: 'primary' }
+        }
+      ]
+    };
+
+    const migrated = migrateIfNeeded({
+      manifest: { version: '3.14.0', name: 'Enriched project' },
+      data
+    });
+
+    expect(migrated.manifest).toEqual({
+      version: PROJECT_CONST.SCHEMA_VERSION,
+      name: 'Enriched project'
+    });
+    expect(migrated.data).toEqual(data);
+  });
+
   it('should reject a pre-production schema without silently restamping it', () => {
     expect(() =>
       migrateIfNeeded({

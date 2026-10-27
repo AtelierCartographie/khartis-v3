@@ -39,6 +39,7 @@
   interface SuggestedBasemap {
     basemap: BasemapMetadata;
     score: number;
+    matchesData: boolean;
   }
 
   interface SearchComboBoxItem {
@@ -354,10 +355,11 @@
         </p>
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
-            {#each suggestedBasemaps as { basemap, score } (basemap.file)}
+            {#each suggestedBasemaps as { basemap, score, matchesData } (basemap.file)}
               <BasemapCardVertical
                 basemap={basemap}
                 matchScore={score}
+                showMatchScore={matchesData}
                 selected={basemap.file === basemapSelected}
                 onclick={() => onSelectBasemap(basemap)}
               />

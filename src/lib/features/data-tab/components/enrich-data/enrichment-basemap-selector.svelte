@@ -8,6 +8,7 @@
   interface BasemapSuggestionItem {
     basemap: BasemapMetadata;
     score: number;
+    matchesData: boolean;
   }
 
   interface Props {

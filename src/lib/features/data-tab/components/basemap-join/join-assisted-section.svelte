@@ -627,26 +627,27 @@
   let ignoredExpanded = $state(false);
   let footerDismissed = $state(false);
 
-  // To-verify entities are joined: the bucket shows the match, it never blocks.
-  const hasBlockingErrors = $derived(
-    unrecognizedCount > 0 || duplicateCount > 0
-  );
-  const showSuccessNotification = $derived(
-    !hasBlockingErrors && joinedCount > 0 && joinFinalized
-  );
+  // The buckets are feedback, never a gate: on every join screen a join is
+  // valid as soon as one entity is joined. To-verify entities are joined;
+  // unrecognized and duplicate ones are only left out.
+  const unresolvedCount = $derived(unrecognizedCount + duplicateCount);
+  const showSuccessNotification = $derived(joinedCount > 0 && joinFinalized);
   const showValidationNotification = $derived(
-    !hasBlockingErrors && joinedCount > 0 && !joinFinalized
+    joinedCount > 0 && !joinFinalized
   );
-  const showAttentionFooter = $derived(hasBlockingErrors && !footerDismissed);
+  // The validation banner already says what is left out.
+  const showUnresolvedNotice = $derived(
+    unresolvedCount > 0 && !footerDismissed && !showValidationNotification
+  );
 
   interface NotificationSnapshot {
-    hasBlockingErrors: boolean;
+    unresolvedCount: number;
     showSuccessNotification: boolean;
     showValidationNotification: boolean;
   }
 
   const currentNotificationState = $derived<NotificationSnapshot>({
-    hasBlockingErrors,
+    unresolvedCount,
     showSuccessNotification,
     showValidationNotification
   });
@@ -694,7 +695,7 @@
 
   let hasInitializedExpanded = $state(false);
   let notificationSnapshot = $state<NotificationSnapshot>({
-    hasBlockingErrors: false,
+    unresolvedCount: 0,
     showSuccessNotification: false,
     showValidationNotification: false
   });
@@ -722,10 +723,10 @@
     }
   });
 
+  // A dismissed notice comes back when the unresolved set changes.
   $effect(() => {
-    if (hasBlockingErrors) {
-      footerDismissed = false;
-    }
+    void unresolvedCount;
+    footerDismissed = false;
   });
 
   let ariaLiveMessage = $state('');
@@ -893,6 +894,7 @@
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
+                              {...{ title: row.basemapValue }}
                               labelText={m.join_select_label_joined({
                                 entity: row.dataValue
                               })}
@@ -1088,6 +1090,10 @@
                             selectedId={resolveDisplayedBasemapValue(
                               selectedMapping
                             )}
+                            {...{
+                              title:
+                                resolveDisplayedBasemapValue(selectedMapping)
+                            }}
                             labelText={m.join_select_label_to_verify({
                               entity: row.dataValue
                             })}
@@ -1512,18 +1518,25 @@
         <div class="notification-validation">
           <div class="notification-title">{m.join_validation_title()}</div>
           <p class="notification-message">
-            {m.join_validation_desc()}
+            {displayedNotificationState.unresolvedCount > 0
+              ? m.join_validation_desc_partial()
+              : m.join_validation_desc()}
           </p>
           <Button kind="primary" size="small" on:click={onFinalizeJoin}
             >{m.join_validation_button()}</Button
           >
         </div>
-      {:else if showAttentionFooter}
+      {/if}
+      {#if showUnresolvedNotice}
         <InlineNotification
           closeButtonDescription={m.a11y_close_notification()}
-          title={m.join_error_detected_title()}
-          subtitle={m.join_error_detected_subtitle()}
-          kind="warning"
+          title={joinedCount > 0
+            ? m.join_unresolved_title()
+            : m.join_error_detected_title()}
+          subtitle={joinedCount > 0
+            ? m.join_unresolved_subtitle()
+            : m.join_error_detected_subtitle()}
+          kind={joinedCount > 0 ? 'info' : 'warning'}
           lowContrast
           on:close={() => (footerDismissed = true)}
         />
@@ -1950,6 +1963,15 @@
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    text-overflow: ellipsis;
+  }
+
+  /* Carbon adds a clear button next to the chevron once a value is selected. */
+  .cell-select
+    :global(
+      .bx--list-box__field:has(.bx--list-box__selection) .bx--text-input
+    ) {
+    padding-right: 4rem;
   }
 
   .cell-select :global(.bx--select__arrow) {

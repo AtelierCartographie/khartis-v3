@@ -279,6 +279,31 @@ describe('exact_claimed_ids deduplication', () => {
     expect(joined[0].label).toBe(candidates[0].name);
   });
 
+  it('should name the joined entity after its display variant when matched by code', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_by_code (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_by_code VALUES ('69123'), ('00000')`);
+
+    const Duck = makeDuckClient(db);
+    await finalizeJoin(
+      makeDataset('user_by_code', [
+        { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+      ] as DuckDBDataset['columns']),
+      { ...FAKE_BASEMAP_METADATA, display_id_fr: 'nom', display_id_en: 'nom' },
+      'geo',
+      Duck
+    );
+
+    const joined = (await Duck.query(
+      `SELECT geo, "${JOINED_BASEMAP_COLUMN.NAME}" AS name
+       FROM user_by_code ORDER BY geo`,
+      { format: 'array' }
+    )) as Array<{ geo: string; name: string | null }>;
+    expect(joined).toEqual([
+      { geo: '00000', name: null },
+      { geo: '69123', name: 'Lyon' }
+    ]);
+  });
+
   it('disables fuzzy suggestions when the source column holds numeric codes', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_codes (geo VARCHAR)`);
     await run(
