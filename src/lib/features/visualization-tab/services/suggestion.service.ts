@@ -21,7 +21,6 @@ import {
   type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
-  type VisualizationAppliedSuggestionState,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
   ClassificationMethod,
@@ -1262,16 +1261,6 @@ function createVisualizationRestoreState(
   };
 }
 
-function createVisualizationAppliedSuggestionState(
-  visualization: VisualizationConfig,
-  suggestionKey: string
-): VisualizationAppliedSuggestionState {
-  return {
-    suggestionKey,
-    visualization: createVisualizationRestoreSnapshot(visualization)
-  };
-}
-
 export function buildSuggestionOrigin(
   visualization: VisualizationConfig,
   origin: VisualizationOrigin
@@ -1298,38 +1287,6 @@ export function buildSuggestionOrigin(
     restoreState:
       existingRestoreState ?? createVisualizationRestoreState(visualization)
   };
-}
-
-export function rememberAppliedSuggestionState(
-  vizId: string,
-  suggestionKey: string
-): void {
-  const visualization = visualizationStore.visualizations.find(
-    (item) => item.id === vizId
-  );
-  if (!visualization) {
-    return;
-  }
-
-  visualizationStore.updateVisualization(
-    vizId,
-    {
-      origin: {
-        mode: getVisualizationOriginMode(visualization),
-        ...(visualization.origin?.suggestionKey
-          ? { suggestionKey: visualization.origin.suggestionKey }
-          : { suggestionKey }),
-        ...(visualization.origin?.restoreState
-          ? { restoreState: deepClone(visualization.origin.restoreState) }
-          : {}),
-        appliedSuggestionState: createVisualizationAppliedSuggestionState(
-          visualization,
-          suggestionKey
-        )
-      }
-    },
-    SavePriority.IMMEDIATE
-  );
 }
 
 export function restoreVisualizationFromSuggestion(vizId: string): boolean {
