@@ -20,9 +20,9 @@ import type { LabelOffset } from './label-layout.utils';
  * Only the most important labels may move away with a leader line: the first
  * quarter of the named symbols, 300 at most. With leaders for all, most names
  * of a dense map hang on one (33 of 58 on the départements); with a quarter,
- * a third as many leaders for one name less. Area labels get none: with a
- * leader, an area label lands in a neighbouring area, where it reads as the
- * neighbour's name.
+ * a third as many leaders for one name less. Area labels with their outline
+ * count too: their leader runs into the area up to its anchor, so it does not
+ * point at the neighbour across the border.
  */
 const AUTO_LEADER_MAX_LABELS = 300;
 const AUTO_LEADER_SHARE = 0.25;
@@ -420,7 +420,9 @@ export function placeLabelBlocks(
   const obstaclesKey = options.obstacles.flat().join(',');
 
   const named = entries.filter(
-    (entry) => entry.symbolRadius > 0 && entry.halfSize[0] > 0
+    (entry) =>
+      (entry.symbolRadius > 0 || entry.rings !== undefined) &&
+      entry.halfSize[0] > 0
   );
   const mayUseLeader = new Set(
     named

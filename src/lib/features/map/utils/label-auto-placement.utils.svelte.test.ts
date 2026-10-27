@@ -104,6 +104,45 @@ describe('placeLabelBlocks', () => {
     expect(block?.areaLeader).toBeNull();
   });
 
+  it('should run the leader of an area label into its area, up to its anchor', () => {
+    const small: LabelOffset[] = [
+      [190, 190],
+      [210, 190],
+      [210, 210],
+      [190, 210],
+      [190, 190]
+    ];
+    // Enclosed in a neighbour: next to its outline, its name would read as the
+    // neighbour's; with a leader it may sit there.
+    const neighbour: LabelOffset[][] = [
+      [
+        [100, 100],
+        [300, 100],
+        [300, 300],
+        [100, 300],
+        [100, 100]
+      ],
+      small
+    ];
+    const block = placeLabelBlocks(
+      'viz-area-leader',
+      [
+        // The more important: only the first quarter may take a leader.
+        { ...ENTRY, symbolRadius: 0, rings: [small], priority: 2 },
+        {
+          ...ENTRY,
+          id: 2,
+          anchor: [200, 130],
+          symbolRadius: 0,
+          rings: neighbour
+        }
+      ],
+      OPTIONS
+    ).get(ENTRY.id);
+
+    expect(block?.areaLeader?.[0]).toEqual([0, 0]);
+  });
+
   it('should set an area label on two lines when one line does not fit inside', () => {
     const narrow: LabelOffset[] = [
       [170, 170],

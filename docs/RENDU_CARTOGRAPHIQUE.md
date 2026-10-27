@@ -176,10 +176,12 @@ empilement, filets et export SVG suivent sans chemin propre.
   son entité, projeté en pixels de page et allégé comme les contours du fond :
   elle se place entièrement dedans ou entièrement dehors, jamais à cheval sur
   le contour, et hors des autres polygones. Points représentatifs et polygones
-  sont appariés par identifiant d'entité en rendu scindé, par ligne sinon. Une
-  étiquette de polygone ne prend pas de filet (elle tomberait chez un voisin)
-  et ne garde qu'un pixel de marge autour du texte au lieu du fond de sécurité,
-  sauf masque visible.
+  sont appariés par identifiant d'entité en rendu scindé, par ligne sinon. Les
+  plus importantes peuvent prendre un filet, comme celles des symboles : il
+  entre dans la surface jusqu'à son point représentatif, au lieu de s'arrêter
+  sur un contour que le voisin partage. Une étiquette de polygone ne garde
+  qu'un pixel de marge autour du texte au lieu du fond de sécurité, sauf masque
+  visible.
 - Un texte d'une ligne qui peut se couper en deux lignes équilibrées
   (`wrapLabelTextInTwoLines`) est proposé au moteur sous cette seconde forme,
   à un léger surcoût ; le texte est dessiné dans la forme retenue.

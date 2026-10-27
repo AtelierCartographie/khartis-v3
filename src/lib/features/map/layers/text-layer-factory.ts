@@ -987,8 +987,9 @@ export function createTextOverlayLayers(
     datum: TextLayerDatum,
     center: LabelOffset
   ): LabelLeaderSegment[] => {
-    // An area label's leader starts on its outline, which only the engine
-    // knows; it holds while the block stays where the engine set it.
+    // An area label's leader runs from its anchor out through its outline,
+    // which only the engine knows; it holds while the block stays where the
+    // engine set it.
     const placed = autoBlocks?.get(datum.featureId);
     const points =
       placed?.areaLeader !== undefined &&
