@@ -43,7 +43,10 @@ import {
 } from '../utils/data-styling.utils';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
-import { wrapLabelText } from '../utils/label-wrap.utils';
+import {
+  wrapLabelText,
+  wrapLabelTextInTwoLines
+} from '../utils/label-wrap.utils';
 import {
   computeLabelLeader,
   resolveLabelAlignment,
@@ -52,10 +55,15 @@ import {
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
   placeLabelBlocks,
+  projectFeatureRings,
   projectOutlineLines,
   resolveLabelPlacementFrame,
-  type AutoLabelEntry
+  ringsSurround,
+  type AutoLabelEntry,
+  type AutoPlacedBlock,
+  type LabelPlacementFrame
 } from '../utils/label-auto-placement.utils';
+import { resolvePathParser } from './layer-geometry-parsers';
 import {
   resolveLabelStack,
   resolveManualLabelPlacement,
@@ -126,6 +134,9 @@ const LABEL_LEADER_WIDTH_PX = 0.75;
 const LABEL_LEADER_MIN_GAP_PX = 6;
 const LABEL_LEADER_MIN_GAP_EM = 0.5;
 const LABEL_LEADER_SYMBOL_GAP_PX = 3;
+// Clear space an area label keeps around its text, in page pixels. The safe
+// background padding would keep most names out of their area.
+const AREA_LABEL_MARGIN_PX = 1;
 // No glyph is wider than an em, so a label this short never wraps at
 // LABEL_MAX_WIDTH_EM and its lines need no measuring.
 const LABEL_SINGLE_LINE_MAX_CHARACTERS = LABEL_MAX_WIDTH_EM;
@@ -179,17 +190,23 @@ function isSingleLineLabel(text: string): boolean {
 
 // Khartis wraps labels itself rather than through deck's word-break, so a
 // long name breaks after a hyphen instead of mid-word, and the measured lines
-// are exactly the drawn ones.
+// are exactly the drawn ones. `twoLines` breaks a one-line label in two
+// balanced lines, the other layout the automatic placement may pick.
 function measureLabelText(
   text: string,
   size: number,
   fontFamily: string,
-  fontWeight: string | number
+  fontWeight: string | number,
+  twoLines: boolean
 ): LabelTextMetrics {
   const weight = String(fontWeight);
   const measure = (line: string): number =>
     measureTextWidth(line, size, fontFamily, weight);
   const lines = wrapLabelText(text, LABEL_MAX_WIDTH_EM * size, measure);
+  if (twoLines && lines.length === 1) {
+    const balanced = wrapLabelTextInTwoLines(text, measure);
+    if (balanced) lines.splice(0, 1, ...balanced);
+  }
   return {
     lines: lines.length,
     width: Math.max(0, ...lines.map(measure)),
@@ -368,6 +385,50 @@ export function createTextOverlayLayers(
   const isDraggedDatum = (datum: TextLayerDatum): boolean =>
     draggedFeatureKey !== null &&
     resolveFeatureKey(datum) === draggedFeatureKey;
+
+  // Area labels go to the engine with their outline. Text points and polygons
+  // are matched by feature id in split rendering, by row otherwise, as the
+  // attributes are.
+  const isPolygonLayer =
+    geometryInfo.type === GeometryType.POLYGON ||
+    geometryInfo.type === GeometryType.MULTIPOLYGON;
+  const resolveLabelledRings = (
+    frame: LabelPlacementFrame
+  ): Map<number, LabelOffset[][]> => {
+    if (!isPolygonLayer || !representativePointSource || !textLayerData)
+      return new Map();
+    const polygonIdColumn = geometryFeatureIdVector
+      ? resolveSplitMappingFeatureIdColumn(jsTable, ctx.splitFeatureIdColumn)
+      : undefined;
+    const polygonIdVector = polygonIdColumn
+      ? jsTable.getChild(polygonIdColumn)
+      : null;
+    if (geometryFeatureIdVector && !polygonIdVector) return new Map();
+    const featureByKey = new Map<string, number>();
+    for (const datum of textLayerData) {
+      const key = geometryFeatureIdVector
+        ? geometryFeatureIdVector.get(datum.featureId)
+        : datum.featureId;
+      if (key !== null && key !== undefined)
+        featureByKey.set(String(key), datum.featureId);
+    }
+    const featureByRow = new Map<number, number>();
+    for (let row = 0; row < jsTable.numRows; row++) {
+      const key = polygonIdVector ? polygonIdVector.get(row) : row;
+      if (key === null || key === undefined) continue;
+      const feature = featureByKey.get(String(key));
+      if (feature !== undefined) featureByRow.set(row, feature);
+    }
+    if (featureByRow.size === 0) return new Map();
+    const ringsByRow = projectFeatureRings(
+      resolvePathParser(ctx.customProjection)(jsTable),
+      new Set(featureByRow.keys()),
+      frame
+    );
+    return new Map(
+      [...ringsByRow].map(([row, rings]) => [featureByRow.get(row)!, rings])
+    );
+  };
 
   const layers: ThematicLayer[] = [];
   const labelColor = resolveStyleColor(
@@ -717,19 +778,34 @@ export function createTextOverlayLayers(
     size: number,
     fontFamily: string,
     fontWeight: string | number,
-    needsWidth: boolean
+    needsWidth: boolean,
+    twoLines = false
   ): LabelTextMetrics => {
-    if (!needsWidth && isSingleLineLabel(text)) {
+    if (!needsWidth && !twoLines && isSingleLineLabel(text)) {
       return { lines: 1, width: 0, wrapped: text };
     }
-    const key = `${fontFamily}|${fontWeight}|${size}|${text}`;
+    const key = `${fontFamily}|${fontWeight}|${size}|${twoLines ? 2 : 1}|${text}`;
     const cached = textMetricsCache.get(key);
     if (cached) return cached;
-    const metrics = measureLabelText(text, size, fontFamily, fontWeight);
+    const metrics = measureLabelText(
+      text,
+      size,
+      fontFamily,
+      fontWeight,
+      twoLines
+    );
     textMetricsCache.set(key, metrics);
     return metrics;
   };
-  const resolveTextMetrics = (datum: TextLayerDatum, needsWidth: boolean) => {
+  let autoBlocks: Map<number, AutoPlacedBlock | null> | null = null;
+  /** 1 when the automatic placement set the primary text on two lines. */
+  const resolvePlacedLayout = (datum: TextLayerDatum): number =>
+    autoBlocks?.get(datum.featureId)?.layout ?? 0;
+  const resolveTextMetrics = (
+    datum: TextLayerDatum,
+    needsWidth: boolean,
+    layout = resolvePlacedLayout(datum)
+  ) => {
     const primarySize = resolveAccessorValue(textSizeAccessor, datum);
     const secondarySize = resolveAccessorValue(labelSizeAccessor, datum);
     const secondaryText = resolveSecondaryLabelText(datum);
@@ -739,7 +815,8 @@ export function createTextOverlayLayers(
         primarySize,
         primaryFontFamily,
         primaryFontWeight,
-        needsWidth
+        needsWidth,
+        layout === 1
       ),
       primarySize,
       secondary: secondaryText
@@ -754,11 +831,15 @@ export function createTextOverlayLayers(
       secondarySize
     };
   };
-  const stackParamsByRow = new Map<number, LabelStackParams>();
-  const resolveLabelStackParams = (datum: TextLayerDatum): LabelStackParams => {
-    const cached = stackParamsByRow.get(datum.rowIndex);
+  const stackParamsByRow = new Map<string, LabelStackParams>();
+  const resolveLabelStackParams = (
+    datum: TextLayerDatum,
+    layout = resolvePlacedLayout(datum)
+  ): LabelStackParams => {
+    const key = `${datum.rowIndex}:${layout}`;
+    const cached = stackParamsByRow.get(key);
     if (cached) return cached;
-    const metrics = resolveTextMetrics(datum, false);
+    const metrics = resolveTextMetrics(datum, false, layout);
     const params: LabelStackParams = {
       hasSecondaryLabel: metrics.secondary !== null,
       primaryHeight:
@@ -769,7 +850,7 @@ export function createTextOverlayLayers(
           DEFAULT_TEXT_LINE_HEIGHT
         : 0
     };
-    stackParamsByRow.set(datum.rowIndex, params);
+    stackParamsByRow.set(key, params);
     return params;
   };
   const resolveDefaultPlacement = (datum: TextLayerDatum) =>
@@ -780,16 +861,31 @@ export function createTextOverlayLayers(
     });
   const resolvePrimaryTextWidth = (datum: TextLayerDatum): number =>
     shouldRenderTextLayer ? resolveTextMetrics(datum, true).primary.width : 0;
-  const resolveBlockHalfSize = (datum: TextLayerDatum): LabelOffset => {
-    const metrics = resolveTextMetrics(datum, true);
+  const resolveBlockHalfSize = (
+    datum: TextLayerDatum,
+    layout = resolvePlacedLayout(datum)
+  ): LabelOffset => {
+    const metrics = resolveTextMetrics(datum, true, layout);
     const textWidth = Math.max(
       shouldRenderTextLayer ? metrics.primary.width : 0,
       metrics.secondary?.width ?? 0
     );
     return [
       textWidth / 2 + (sharedBackgroundPadding[0] ?? 0),
-      resolveLabelStack(resolveLabelStackParams(datum)).halfHeight + paddingY
+      resolveLabelStack(resolveLabelStackParams(datum, layout)).halfHeight +
+        paddingY
     ];
+  };
+  /** A one-line primary text broken in two balanced lines, as a layout. */
+  const resolveBlockLayouts = (
+    datum: TextLayerDatum
+  ): LabelOffset[] | undefined => {
+    if (!shouldRenderTextLayer) return undefined;
+    if (resolveTextMetrics(datum, true, 0).primary.lines !== 1)
+      return undefined;
+    return resolveTextMetrics(datum, true, 1).primary.lines === 2
+      ? [resolveBlockHalfSize(datum, 1)]
+      : undefined;
   };
   const placeManualLabel = (datum: TextLayerDatum, center: LabelOffset) => {
     const halfSize = resolveBlockHalfSize(datum);
@@ -854,8 +950,9 @@ export function createTextOverlayLayers(
         )
       : null;
   // Labels a Texts filter kept are the ones the user asked for: never hidden.
-  const placementMode =
-    scopedTextTable || scopedTextRowIds ? 'required' : 'optional';
+  // Split rendering always has a scoped attribute table, filter or not, so
+  // only the filter's row ids tell.
+  const placementMode = resolveScopedRowIds(ctx) ? 'required' : 'optional';
   const resolvePlacementPriority = (datum: TextLayerDatum): number => {
     const value = Number(thematicValueVector?.get(datum.rowIndex));
     const valueMax = getAbsoluteDomainMax(
@@ -870,16 +967,15 @@ export function createTextOverlayLayers(
       valueShare * 99
     );
   };
-  let autoCenters: Map<number, LabelOffset | null> | null = null;
   /** Where a moved or automatically placed label block sits, if not at its default. */
   const resolvePlacedCenter = (
     datum: TextLayerDatum
   ): LabelOffset | undefined =>
     resolveManualCenter(datum) ??
-    autoCenters?.get(datum.featureId) ??
+    autoBlocks?.get(datum.featureId)?.center ??
     undefined;
   const isHiddenByPlacement = (datum: TextLayerDatum): boolean =>
-    autoCenters?.get(datum.featureId) === null &&
+    autoBlocks?.get(datum.featureId) === null &&
     resolveManualCenter(datum) === undefined;
 
   const leaderColorAccessor = createTextColorAccessor(textColor, textOpacity);
@@ -887,13 +983,21 @@ export function createTextOverlayLayers(
     datum: TextLayerDatum,
     center: LabelOffset
   ): LabelLeaderSegment[] => {
-    const points = computeLabelLeader({
-      center,
-      halfSize: resolveBlockHalfSize(datum),
-      symbolRadius: resolvePointRadiusForDatum(datum),
-      symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
-      minGap: resolveLeaderMinGap(datum)
-    });
+    // An area label's leader starts on its outline, which only the engine
+    // knows; it holds while the block stays where the engine set it.
+    const placed = autoBlocks?.get(datum.featureId);
+    const points =
+      placed?.areaLeader !== undefined &&
+      placed.center[0] === center[0] &&
+      placed.center[1] === center[1]
+        ? placed.areaLeader
+        : computeLabelLeader({
+            center,
+            halfSize: resolveBlockHalfSize(datum),
+            symbolRadius: resolvePointRadiusForDatum(datum),
+            symbolGap: LABEL_LEADER_SYMBOL_GAP_PX,
+            minGap: resolveLeaderMinGap(datum)
+          });
     if (!points) return [];
     const color = toLeaderColor(
       datum.isMissingData
@@ -983,6 +1087,15 @@ export function createTextOverlayLayers(
   };
 
   if (placementFrame) {
+    const ringsByFeature = resolveLabelledRings(placementFrame);
+    // A visible mask needs its whole padding; otherwise an area label keeps a
+    // thin margin only, so that it fits inside its area more often.
+    const areaLabelInset: LabelOffset = textConfig.dxpMasking
+      ? [0, 0]
+      : [
+          Math.max(0, (sharedBackgroundPadding[0] ?? 0) - AREA_LABEL_MARGIN_PX),
+          Math.max(0, paddingY - AREA_LABEL_MARGIN_PX)
+        ];
     const entries: AutoLabelEntry[] = [];
     const leaderMinGaps: number[] = [];
     for (const datum of textLayerData) {
@@ -990,14 +1103,28 @@ export function createTextOverlayLayers(
       const anchor = placementFrame.toPagePx(datum.position);
       if (!anchor) continue;
       const center = resolveManualCenter(datum);
+      const symbolRadius = resolvePointRadiusForDatum(datum);
+      const featureRings =
+        symbolRadius > 0 ? undefined : ringsByFeature.get(datum.featureId);
+      const rings =
+        featureRings && ringsSurround(featureRings, anchor)
+          ? featureRings
+          : undefined;
+      const inset = rings ? areaLabelInset : ([0, 0] as LabelOffset);
+      const shrink = ([hw, hh]: LabelOffset): LabelOffset => [
+        hw - inset[0],
+        hh - inset[1]
+      ];
       entries.push({
         id: datum.featureId,
         anchor,
-        halfSize: resolveBlockHalfSize(datum),
-        symbolRadius: resolvePointRadiusForDatum(datum),
+        halfSize: shrink(resolveBlockHalfSize(datum, 0)),
+        symbolRadius,
         priority: resolvePlacementPriority(datum),
         mode: center ? 'pinned' : placementMode,
-        center
+        center,
+        rings,
+        layouts: center ? undefined : resolveBlockLayouts(datum)?.map(shrink)
       });
       leaderMinGaps.push(resolveLeaderMinGap(datum));
     }
@@ -1030,7 +1157,7 @@ export function createTextOverlayLayers(
         });
       }
     }
-    autoCenters = placeLabelBlocks(vizId, entries, {
+    autoBlocks = placeLabelBlocks(vizId, entries, {
       bounds: placementFrame.bounds,
       obstacles: placementFrame.toObstacles(pageItemObstaclesStore.boxes),
       lines: projectOutlineLines(
@@ -1047,7 +1174,7 @@ export function createTextOverlayLayers(
         : LABEL_LEADER_MIN_GAP_PX
     });
   }
-  if (labelLayout || autoCenters) {
+  if (labelLayout || autoBlocks) {
     const leaderSegments = textLayerData.flatMap((datum) => {
       const center = resolvePlacedCenter(datum);
       if (!center || isDraggedDatum(datum)) return [];
@@ -1077,7 +1204,7 @@ export function createTextOverlayLayers(
     labelBaseSize,
     sharedBackgroundPadding,
     pageDisplayScale,
-    autoCenters,
+    autoBlocks,
     textConfig.labelColumn,
     textConfig.fontFamily,
     textConfig.bold,
@@ -1277,7 +1404,8 @@ export function createTextOverlayLayers(
             resolveAccessorValue(textSizeAccessor, d),
             primaryFontFamily,
             primaryFontWeight,
-            false
+            false,
+            resolvePlacedLayout(d) === 1
           ).wrapped,
         getColor: textColorAccessor,
         getSize: textSizeAccessor,
@@ -1318,6 +1446,7 @@ export function createTextOverlayLayers(
         updateTriggers: {
           getText: [
             labelLayout,
+            autoBlocks,
             textConfig.labelColumn,
             textConfig.missingData?.show,
             textConfig.missingData?.label,

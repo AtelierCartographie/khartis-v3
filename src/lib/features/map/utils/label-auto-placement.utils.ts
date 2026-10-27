@@ -16,7 +16,11 @@ import type { BasemapFrameExtent } from './basemap-frame.utils';
 import { parsePathsWithProjection } from './geoarrow-stream-bridge.utils';
 import type { LabelOffset } from './label-layout.utils';
 
-/** Only the most important labels may move away with a leader line. */
+/**
+ * Only the most important labels may move away with a leader line, and only
+ * those of a symbol: an area label with a leader lands in a neighbouring area,
+ * where it reads as the neighbour's name.
+ */
 const AUTO_LEADER_MAX_LABELS = 300;
 
 /** A label block to place, in page pixels. */
@@ -29,6 +33,26 @@ export interface AutoLabelEntry {
   mode: LabelMode;
   /** Block centre of a pinned label, relative to its anchor. */
   center?: LabelOffset;
+  /**
+   * Outline of the area the label names, in page pixels: the label goes
+   * wholly inside it or wholly outside, never across it.
+   */
+  rings?: LabelOffset[][];
+  /** Half sizes of other measured layouts of the block, such as two lines. */
+  layouts?: LabelOffset[];
+}
+
+/** Where the engine set a label block. */
+export interface AutoPlacedBlock {
+  /** Block centre relative to the anchor, in page pixels. */
+  center: LabelOffset;
+  /** 0 for the main layout, k for `layouts[k - 1]`. */
+  layout: number;
+  /**
+   * For an entry with `rings`, the engine's leader relative to the anchor, or
+   * null without one: it starts on the outline, which the caller does not know.
+   */
+  areaLeader?: LabelOffset[] | null;
 }
 
 export interface AutoLabelPlacementOptions {
@@ -157,6 +181,57 @@ export function resolveLabelPlacementFrame(
 /** Outline vertices closer than this, in page pixels, are merged. */
 const OUTLINE_MIN_STEP_PX = 1.5;
 
+/** Appends a page-pixel vertex unless it is too close to the last one. */
+function pushThinned(line: LabelOffset[], point: LabelOffset): void {
+  const last = line[line.length - 1];
+  if (
+    !last ||
+    Math.abs(point[0] - last[0]) + Math.abs(point[1] - last[1]) >=
+      OUTLINE_MIN_STEP_PX
+  )
+    line.push(point);
+}
+
+interface ProjectedPaths {
+  readonly length: number;
+  readonly positions: ArrayLike<number>;
+  readonly startIndices: ArrayLike<number>;
+  readonly featureIds: ArrayLike<number>;
+}
+
+/**
+ * The rings of the given polygon rows in page pixels, thinned like the
+ * basemap outlines, by row. Rings are not cut to the bounds: the engine
+ * needs the whole outline to tell inside from outside.
+ */
+export function projectFeatureRings(
+  paths: ProjectedPaths,
+  rows: Set<number>,
+  frame: LabelPlacementFrame
+): Map<number, LabelOffset[][]> {
+  const ringsByRow = new Map<number, LabelOffset[][]>();
+  const vertexCount = paths.positions.length / 2;
+  for (let path = 0; path < paths.length; path++) {
+    const row = paths.featureIds[path];
+    if (!rows.has(row)) continue;
+    const end =
+      path + 1 < paths.length ? paths.startIndices[path + 1] : vertexCount;
+    const ring: LabelOffset[] = [];
+    for (let v = paths.startIndices[path]; v < end; v++) {
+      const point = frame.toPagePx([
+        paths.positions[v * 2],
+        paths.positions[v * 2 + 1]
+      ]);
+      if (point) pushThinned(ring, point);
+    }
+    if (ring.length < 3) continue;
+    const rings = ringsByRow.get(row);
+    if (rings) rings.push(ring);
+    else ringsByRow.set(row, [ring]);
+  }
+  return ringsByRow;
+}
+
 /**
  * The outlines of the basemap land layers as page-pixel polylines, cut to the
  * placement bounds and thinned to about one vertex per page pixel and a half.
@@ -188,18 +263,34 @@ export function projectOutlineLines(
           current = [];
           continue;
         }
-        const last = current[current.length - 1];
-        if (
-          !last ||
-          Math.abs(point[0] - last[0]) + Math.abs(point[1] - last[1]) >=
-            OUTLINE_MIN_STEP_PX
-        )
-          current.push(point);
+        pushThinned(current, point);
       }
       if (current.length > 1) lines.push(current);
     }
   }
   return lines;
+}
+
+/**
+ * Whether the anchor lies within the extent of the rings, a guard against
+ * rings matched to the wrong label.
+ */
+export function ringsSurround(
+  rings: LabelOffset[][],
+  [x, y]: LabelOffset
+): boolean {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const ring of rings)
+    for (const [px, py] of ring) {
+      x0 = Math.min(x0, px);
+      y0 = Math.min(y0, py);
+      x1 = Math.max(x1, px);
+      y1 = Math.max(y1, py);
+    }
+  return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
 function hashPlacementInput(
@@ -239,6 +330,17 @@ function hashPlacementInput(
       mix(entry.center[0]);
       mix(entry.center[1]);
     }
+    for (const [hw, hh] of entry.layouts ?? []) {
+      mix(hw);
+      mix(hh);
+    }
+    for (const ring of entry.rings ?? []) {
+      mix(ring.length);
+      for (const [x, y] of ring) {
+        mix(x);
+        mix(y);
+      }
+    }
   }
   return `${entries.length}:${hash >>> 0}`;
 }
@@ -247,15 +349,14 @@ interface CachedPlacement {
   key: string;
   obstaclesKey: string;
   result: PlacementResult;
-  centers: Map<number, LabelOffset | null>;
+  blocks: Map<number, AutoPlacedBlock | null>;
 }
 
 const placementByVisualization = new Map<string, CachedPlacement>();
 
 /**
- * Places the label blocks of a visualization and returns, by entry id, the
- * block centre relative to its anchor, or null for a label hidden for lack of
- * room. The previous result of the visualization keeps labels where they were
+ * Places the label blocks of a visualization and returns, by entry id, where
+ * each block went, or null for a label hidden for lack of room. The previous result of the visualization keeps labels where they were
  * while their spot stays free, so a zoom does not reshuffle the map. A page
  * item that moves drops it, so labels it pushed aside come back once it leaves.
  */
@@ -263,10 +364,10 @@ export function placeLabelBlocks(
   vizId: string,
   entries: AutoLabelEntry[],
   options: AutoLabelPlacementOptions
-): Map<number, LabelOffset | null> {
+): Map<number, AutoPlacedBlock | null> {
   const key = hashPlacementInput(entries, options);
   const cached = placementByVisualization.get(vizId);
-  if (cached?.key === key) return cached.centers;
+  if (cached?.key === key) return cached.blocks;
   const obstaclesKey = options.obstacles.flat().join(',');
 
   const mayUseLeader = new Set(
@@ -282,10 +383,16 @@ export function placeLabelBlocks(
     y: entry.anchor[1],
     width: entry.halfSize[0] * 2,
     height: entry.halfSize[1] * 2,
+    layouts: entry.layouts?.map(([hw, hh]) => ({
+      width: hw * 2,
+      height: hh * 2
+    })),
     symbol:
       entry.symbolRadius > 0
         ? { type: 'circle', radius: entry.symbolRadius }
-        : { type: 'area', inscribedRadius: 0 },
+        : entry.rings
+          ? { type: 'polygon', rings: entry.rings }
+          : { type: 'area', inscribedRadius: 0 },
     priority: entry.priority,
     mode: entry.mode,
     offset: entry.center,
@@ -324,19 +431,28 @@ export function placeLabelBlocks(
       ([x0, y0, x1, y1]) =>
         box[0] < x1 && x0 < box[2] && box[1] < y1 && y0 < box[3]
     );
-  const centers = new Map<number, LabelOffset | null>();
+  const blocks = new Map<number, AutoPlacedBlock | null>();
   result.labels.forEach((placed, index) => {
     const entry = entries[index];
-    centers.set(
+    const [ax, ay] = entry.anchor;
+    blocks.set(
       entry.id,
       placed.box && (entry.mode === 'pinned' || !isUnderPageItem(placed.box))
-        ? [
-            (placed.box[0] + placed.box[2]) / 2 - entry.anchor[0],
-            (placed.box[1] + placed.box[3]) / 2 - entry.anchor[1]
-          ]
+        ? {
+            center: [
+              (placed.box[0] + placed.box[2]) / 2 - ax,
+              (placed.box[1] + placed.box[3]) / 2 - ay
+            ],
+            layout: placed.layout,
+            ...(entry.rings && {
+              areaLeader:
+                placed.leader?.map(([x, y]): LabelOffset => [x - ax, y - ay]) ??
+                null
+            })
+          }
         : null
     );
   });
-  placementByVisualization.set(vizId, { key, obstaclesKey, result, centers });
-  return centers;
+  placementByVisualization.set(vizId, { key, obstaclesKey, result, blocks });
+  return blocks;
 }
