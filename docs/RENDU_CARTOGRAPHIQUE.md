@@ -155,14 +155,27 @@ primitif texte) confie le placement au paquet `@ateliercartographie/label-placer
 (`utils/label-auto-placement.utils.ts`). La fabrique projette chaque ancrage en
 pixels de page à travers le viewport deck courant, mesure le bloc d'étiquettes et
 le rayon du symbole, puis le moteur choisit pour chaque bloc une position autour
-du symbole (ordre d'Imhof), dans le symbole s'il y tient, ou plus loin avec un
+du symbole (pratique de l'Atelier), dans le symbole s'il y tient, ou plus loin avec un
 filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferrage,
 empilement, filets et export SVG suivent sans chemin propre.
 
 - Les étiquettes retenues par un filtre Textes sont requises : jamais masquées,
   en chevauchement en dernier recours. Sans filtre, celles qui ne trouvent pas
   de place sont masquées, des moins importantes aux plus importantes (rayon du
-  symbole, puis taille du texte, puis valeur).
+  symbole, puis taille du texte, puis valeur). Le filtre se lit dans ses
+  identifiants de lignes : en rendu scindé, la table d'attributs est toujours
+  restreinte, filtre ou non.
+- Sans symbole, l'étiquette d'un polygone passe au moteur avec le contour de
+  son entité, projeté en pixels de page et allégé comme les contours du fond :
+  elle se place entièrement dedans ou entièrement dehors, jamais à cheval sur
+  le contour, et hors des autres polygones. Points représentatifs et polygones
+  sont appariés par identifiant d'entité en rendu scindé, par ligne sinon. Une
+  étiquette de polygone ne prend pas de filet (elle tomberait chez un voisin)
+  et ne garde qu'un pixel de marge autour du texte au lieu du fond de sécurité,
+  sauf masque visible.
+- Un texte d'une ligne qui peut se couper en deux lignes équilibrées
+  (`wrapLabelTextInTwoLines`) est proposé au moteur sous cette seconde forme,
+  à un léger surcoût ; le texte est dessiné dans la forme retenue.
 - Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
   autres.
 - Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
