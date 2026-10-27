@@ -894,6 +894,7 @@
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
+                              {...{ title: row.basemapValue }}
                               labelText={m.join_select_label_joined({
                                 entity: row.dataValue
                               })}
@@ -1089,6 +1090,10 @@
                             selectedId={resolveDisplayedBasemapValue(
                               selectedMapping
                             )}
+                            {...{
+                              title:
+                                resolveDisplayedBasemapValue(selectedMapping)
+                            }}
                             labelText={m.join_select_label_to_verify({
                               entity: row.dataValue
                             })}
@@ -1958,6 +1963,15 @@
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    text-overflow: ellipsis;
+  }
+
+  /* Carbon adds a clear button next to the chevron once a value is selected. */
+  .cell-select
+    :global(
+      .bx--list-box__field:has(.bx--list-box__selection) .bx--text-input
+    ) {
+    padding-right: 4rem;
   }
 
   .cell-select :global(.bx--select__arrow) {
