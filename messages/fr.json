@@ -397,8 +397,6 @@
   "basemap_project_file_proposal_subtitle": "Joindre ce tableau à ce fichier géographique réunit leurs variables dans un seul jeu de données. La jointure se vérifie dans l'onglet du fichier.",
   "basemap_project_file_proposal_action": "Joindre au fichier géographique",
   "basemap_active_label": "Fond joint",
-  "basemap_active_show_source": "Afficher",
-  "basemap_active_show_source_aria": "Afficher l'onglet {tab}",
   "basemap_import_modal_error_select_file": "Veuillez sélectionner un fichier à importer",
   "basemap_import_error_single_source": "Sélectionnez un seul fond de carte : un fichier, ou l'ensemble des composants d'un même Shapefile (.shp, .shx, .dbf…)",
   "basemap_import_modal_error_invalid_geometry": "Le fichier ne contient pas de géométrie valide ou la colonne de géométrie est manquante",
