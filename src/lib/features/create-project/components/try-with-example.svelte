@@ -1,49 +1,22 @@
 <script lang="ts">
-  import {
-    BasemapSource,
-    ExampleCategory,
-    FileStatus,
-    GeoreferenceType
-  } from '$lib/features/commons/constants/ui.constants';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
   import {
     EXAMPLE_CATEGORIES,
     EXAMPLE_PROJECTS,
     getExamplesByCategory,
-    loadExampleData
+    loadExampleArchive
   } from '$lib/features/commons/constants/examples.data';
   import { SvelteMap } from 'svelte/reactivity';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import { m } from '$lib/paraglide/messages';
-  import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-  import {
-    DataValidationError,
-    PipelineError
-  } from '$lib/features/commons/pipeline.errors';
+  import { DataValidationError } from '$lib/features/commons/pipeline.errors';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { InlineNotification, Tag } from 'carbon-components-svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
-  import {
-    createProjectActions,
-    createProjectState
-  } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-  import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { basemapCatalogService } from '$lib/features/map';
-  import { detectGPSColumns, duckDBOrchestrator } from '$lib/features/duckdb';
-  import {
-    dataTabStore,
-    PERSISTED_BASEMAP_TYPE,
-    persistSourceFileState
-  } from '$lib/features/data-tab';
-  import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
   import { projectRepository } from '$lib/features/project-management';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
-  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
   interface Props {
     onClose?: () => void;
@@ -75,235 +48,26 @@
 
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
 
-  const DEFAULT_DATA_FILENAME = 'example-data.csv';
-
-  function getExampleMimeType(dataUrl?: string): string {
-    if (!dataUrl) {
-      return 'text/csv';
-    }
-
-    if (dataUrl.endsWith('.geojson') || dataUrl.endsWith('.json')) {
-      return 'application/geo+json';
-    }
-
-    if (dataUrl.endsWith('.tsv')) {
-      return 'text/tab-separated-values';
-    }
-
-    return 'text/csv';
-  }
-
   const CATEGORY_LABELS: Record<string, () => string> = {
     try_example_all: m.try_example_all,
     try_example_symbols: m.try_example_symbols,
     try_example_polygons: m.try_example_polygons,
     try_example_lines: m.try_example_lines,
     try_example_texts: m.try_example_texts,
-    try_example_hybrids: m.try_example_hybrids
+    try_example_hybrids: m.try_example_hybrids,
+    try_example_collection: m.try_example_collection
   };
 
   function getCategoryLabel(label: string): string {
     return CATEGORY_LABELS[label]?.() ?? label;
   }
 
-  function applyReferenceBasemapToProject(
-    basemap: BasemapMetadata,
-    options: { syncJoinState?: boolean } = {}
-  ): void {
-    if (options.syncJoinState ?? true) {
-      dataTabActions.setBasemapJoinState({
-        selectedBasemap: basemap.file,
-        basemapSource: BasemapSource.CATALOG
-      });
-    }
-    basemapStyleStore.setReferenceBasemap(basemap.file);
-    projectStore.updateProjectData({
-      basemap: {
-        id: basemap.file,
-        type: basemap.isCustom
-          ? PERSISTED_BASEMAP_TYPE.CUSTOM
-          : PERSISTED_BASEMAP_TYPE.CATALOG,
-        data: basemap.isCustom ? { ...basemap } : undefined
-      }
-    });
-  }
-
-  async function applyExamplePreset(
-    example: ExampleProject,
-    file: UploadedFile
-  ): Promise<void> {
-    if (!example.baseMapId) {
-      return;
-    }
-
-    await basemapCatalogService.loadCatalog();
-    const basemap = basemapCatalogService.getBasemapById(example.baseMapId);
-    if (!basemap) {
-      return;
-    }
-
-    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-    if (!dataset) {
-      return;
-    }
-
-    const geoColumn =
-      dataset.geoDetection?.suggestedPrimaryGeoColumn?.columnName ?? '';
-
-    try {
-      await duckDBOrchestrator.finalizeJoin(dataset.id, basemap, geoColumn);
-      datasetsStore.updateDatasetJoinBasemap(dataset.id, basemap.file);
-      applyReferenceBasemapToProject(basemap);
-      syncGeolocationStateForCatalogJoin(dataset, geoColumn);
-
-      const duckColumns = await duckDBOrchestrator.getFullAnalysis(
-        dataset.tableName,
-        true
-      );
-      await persistSourceFileState({
-        sourceFileId: file.id,
-        tableName: dataset.tableName,
-        duckColumns,
-        joinState: {
-          joinedBasemap: basemap.file,
-          geoColumn,
-          gpsMode: false,
-          gpsColumns: undefined
-        }
-      });
-
-      const basemapStepIndex = dataTabStore.basemapStepIndex;
-      for (let i = 0; i <= basemapStepIndex; i++) {
-        dataTabStore.markStepComplete(i);
-      }
-    } catch (error) {
-      logger.error(
-        'Failed to finalize example basemap join',
-        LogCategory.PROJECT,
-        error
-      );
-      showWarning(
-        m.try_example_auto_setup_warning_title(),
-        m.try_example_auto_setup_warning_message()
-      );
-      return;
-    }
-  }
-
-  function syncGeolocationStateForCatalogJoin(
-    dataset: { columns?: Array<{ name: string }> } | null | undefined,
-    geoColumn: string
-  ): void {
-    if (!geoColumn) {
-      return;
-    }
-    const linkedVariable =
-      dataset?.columns
-        ?.filter(
-          (col) =>
-            col.name !== INTERNAL_COLUMN.GEOMETRY &&
-            col.name !== INTERNAL_COLUMN.ID
-        )
-        .findIndex((col) => col.name === geoColumn) ?? -1;
-
-    dataTabActions.setGeolocationState({
-      geoReference: GeoreferenceType.ENTITIES,
-      linkedVariable: linkedVariable >= 0 ? linkedVariable : null,
-      linkedVariableName: geoColumn,
-      latitudeColumn: undefined,
-      longitudeColumn: undefined,
-      autoDetected: false
-    });
-  }
-
-  async function applyExampleReferenceBasemap(
-    example: ExampleProject
-  ): Promise<void> {
-    if (!example.referenceBasemapId) {
-      return;
-    }
-
-    await basemapCatalogService.loadCatalog();
-    const basemap = basemapCatalogService.getBasemapById(
-      example.referenceBasemapId
-    );
-    if (!basemap) {
-      return;
-    }
-
-    applyReferenceBasemapToProject(basemap, {
-      syncJoinState: !example.baseMapId
-    });
-  }
-
-  async function applyExampleGPSPreset(file: UploadedFile): Promise<void> {
-    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-    if (!dataset) {
-      return;
-    }
-
-    const duckDataset =
-      duckDBOrchestrator.getDatasetBySourceFile(file.id) ??
-      duckDBOrchestrator.getDataset(dataset.id);
-    if (!duckDataset) {
-      return;
-    }
-
-    const gpsColumns = detectGPSColumns(
-      duckDataset.columns,
-      duckDataset.geoDetection
-    );
-    if (!gpsColumns) {
-      return;
-    }
-
-    dataTabActions.setGeolocationState({
-      geoReference: GeoreferenceType.COORDINATES,
-      linkedVariable: null,
-      linkedVariableName: '',
-      latitudeColumn: gpsColumns.lat,
-      longitudeColumn: gpsColumns.lon,
-      autoDetected: false
-    });
-    duckDBOrchestrator.updateDatasetJoinInfo(duckDataset.id, {
-      joinedBasemap: undefined,
-      geoColumn: undefined,
-      gpsMode: true,
-      gpsColumns
-    });
-
-    const duckColumns = await duckDBOrchestrator.getFullAnalysis(
-      dataset.tableName,
-      true
-    );
-    await persistSourceFileState({
-      sourceFileId: file.id,
-      tableName: dataset.tableName,
-      duckColumns,
-      joinState: {
-        joinedBasemap: undefined,
-        geoColumn: undefined,
-        gpsMode: true,
-        gpsColumns
-      }
-    });
-
-    const basemapStepIndex = dataTabStore.basemapStepIndex;
-    for (let i = 0; i <= basemapStepIndex; i++) {
-      dataTabStore.markStepComplete(i);
-    }
-  }
-
-  async function applyExampleVisualizations(
-    example: ExampleProject,
-    file: UploadedFile
-  ): Promise<void> {
-    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-    if (!dataset) {
-      return;
-    }
-
-    await applyExampleVisualizationPresets(example, dataset);
+  function getExampleCategoriesLabel(example: ExampleProject): string {
+    return EXAMPLE_CATEGORIES.filter((category) =>
+      example.categories.includes(category.id)
+    )
+      .map((category) => getCategoryLabel(category.label))
+      .join(m.separator_bullet_space());
   }
 
   function selectCategory(category: ExampleCategory) {
@@ -338,49 +102,9 @@
         );
       }
 
-      const data = await loadExampleData(example);
-      const previousFileIds = new Set(
-        createProjectState.newProject.uploadedFiles.map((file) => file.id)
-      );
-
-      const fileName = example.dataUrl
-        ? example.dataUrl.split('/').pop()
-        : DEFAULT_DATA_FILENAME;
-      const fileContent = data;
-      const file = new File([fileContent], fileName || DEFAULT_DATA_FILENAME, {
-        type: getExampleMimeType(example.dataUrl)
-      });
-
-      await createProjectActions.processFiles([file]);
-      const processedExampleFile = Array.from(
-        createProjectState.newProject.uploadedFiles
-      )
-        .reverse()
-        .find(
-          (uploadedFile) =>
-            !previousFileIds.has(uploadedFile.id) &&
-            uploadedFile.name === file.name &&
-            uploadedFile.status === FileStatus.COMPLETE
-        );
-
-      if (!processedExampleFile) {
-        throw new PipelineError(
-          createProjectState.newProject.error ?? m.error_example_load_failed(),
-          'EXAMPLE_FILE_PROCESSING_FAILED',
-          { exampleId, fileName: file.name }
-        );
-      }
-
-      createProjectActions.setProjectName(example.title);
-
-      await projectStore.createProject(example.title, [processedExampleFile]);
-      createProjectActions.handOverUploadedFiles([processedExampleFile]);
-      await applyExamplePreset(example, processedExampleFile);
-      if (!example.baseMapId) {
-        await applyExampleGPSPreset(processedExampleFile);
-      }
-      await applyExampleVisualizations(example, processedExampleFile);
-      await applyExampleReferenceBasemap(example);
+      const archive = await loadExampleArchive(example);
+      await projectStore.importProject(archive);
+      projectStore.updateProjectName(example.title);
       await projectStore.saveCurrentProject({
         fallbackThumbnail: example.thumbnail,
         exampleId: example.id
@@ -448,7 +172,7 @@
         <div class="example-project-card">
           <ProjectCard
             title={example.title}
-            subtitle={example.subtitle}
+            subtitle={getExampleCategoriesLabel(example)}
             thumbnail={savedExampleThumbnails.get(example.id) ??
               example.thumbnail}
             variant="gray"
@@ -458,7 +182,7 @@
           >
             {#snippet footer()}
               <span class="example-tags text-xs text-grey"
-                >{example.tags?.join(m.separator_bullet_space()) || ''}</span
+                >{getExampleCategoriesLabel(example)}</span
               >
             {/snippet}
           </ProjectCard>

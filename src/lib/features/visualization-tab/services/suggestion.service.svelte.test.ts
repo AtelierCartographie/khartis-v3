@@ -1,19 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  computeClassificationBreaksMock: vi.fn(),
   notifyChangeMock: vi.fn(),
   updateLegendItemMock: vi.fn(),
   datasets: [] as Array<unknown>,
   selectedDatasetId: undefined as string | undefined
 }));
-
-vi.mock(
-  '$lib/features/visualization-tab/hooks/use-classification-breaks.svelte',
-  () => ({
-    computeClassificationBreaks: mocks.computeClassificationBreaksMock
-  })
-);
 
 vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
@@ -57,10 +49,6 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/services/row-scope.service', () => ({
-  resolveValueScopeClause: () => null
-}));
-
 vi.mock('$lib/features/step-toolbar/tools/legend/legend.store.svelte', () => ({
   getLegendState: () => ({ items: [] }),
   legendActions: {
@@ -90,15 +78,10 @@ import {
   resolveBlankVisualizationType,
   isVisualizationBlank,
   isVisualizationMatchingSuggestion,
-  rememberAppliedSuggestionState,
   resolveDatasetGeometryType,
   restoreVisualizationFromSuggestion
 } from './suggestion.service';
 import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
-import { applyExampleVisualizationPresets } from '$lib/features/create-project/services/example-visualization-preset.service';
-import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
-import { resolveDisplayedSuggestionKey } from '../utils/suggestion-selection.utils';
-import type { DatasetResult } from '$lib/features/data-pipeline';
 
 type SuggestionTestDataset = Parameters<
   typeof isVisualizationMatchingSuggestion
@@ -298,84 +281,11 @@ function createSuggestionById(
 describe('suggestion.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.computeClassificationBreaksMock.mockResolvedValue({
-      normalizedMethod: ClassificationMethod.QUANTILES,
-      requestedClassCount: 5,
-      actualClassCount: 5,
-      result: {
-        breaks: [10, 20, 30, 40, 50],
-        counts: [2, 2, 2, 2, 2]
-      },
-      colors: ['#e4e6e7', '#b1c4d9', '#7fa3ca', '#4f81bb', '#1b5eaa']
-    });
     visualizationStore.clear();
 
     const dataset = createPointDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
-  });
-
-  it('keeps example choropleth presets selected after declared overrides', async () => {
-    const dataset = {
-      ...createPolygonDataset(),
-      columns: [
-        { name: 'geometry', type: 'geometry', stats: {}, values: [] },
-        { name: 'name', type: 'string', stats: {}, values: [] },
-        { name: 'population_2023', type: 'number', stats: {}, values: [] }
-      ]
-    } as unknown as DatasetResult;
-    mocks.datasets = [dataset];
-    mocks.selectedDatasetId = dataset.id;
-
-    await applyExampleVisualizationPresets(
-      {
-        id: 'world-population',
-        title: 'Population Europe 2023',
-        subtitle: '',
-        description: '',
-        category: ExampleCategory.POLYGONS,
-        visualizations: [
-          {
-            type: 'choropleth',
-            variable: 'Population 2023',
-            classification: 'quantile',
-            classes: 5,
-            palette: 'Blues'
-          }
-        ]
-      },
-      dataset
-    );
-
-    const [visualization] = visualizationStore.visualizations;
-    expect(visualization).toBeDefined();
-    expect(visualization.origin?.mode).toBe('manual-suggestion');
-    expect(visualization.origin?.suggestionKey).toBe(
-      'choropleth::1::population_2023::polygon::QTR'
-    );
-    expect(visualization.origin?.restoreState?.origin.mode).toBe(
-      'manual-blank'
-    );
-    expect(visualization.origin?.appliedSuggestionState?.suggestionKey).toBe(
-      visualization.origin?.suggestionKey
-    );
-    expect(visualization.polygon?.classification?.breaks).toEqual([
-      10, 20, 30, 40, 50
-    ]);
-    expect(visualization.polygon?.classification?.colors).toEqual([
-      '#e4e6e7',
-      '#b1c4d9',
-      '#7fa3ca',
-      '#4f81bb',
-      '#1b5eaa'
-    ]);
-    expect(
-      resolveDisplayedSuggestionKey({
-        persistedSuggestionKey: visualization.origin?.suggestionKey,
-        matchedSuggestionKey: undefined,
-        originMode: visualization.origin?.mode
-      })
-    ).toBe(visualization.origin?.suggestionKey);
   });
 
   it('recognizes a qualitative point suggestion right after it is applied', () => {
@@ -947,68 +857,6 @@ describe('suggestion.service', () => {
     expect(restoredVisualization?.style.fillOpacity).toBe(0.42);
     expect(restoredVisualization?.style.strokeWidth).toBe(2);
     expect(restoredVisualization?.classification).toBeUndefined();
-  });
-
-  it('re-applies remembered example overrides after suggestion deselection', () => {
-    const dataset = createPointDataset();
-    const visualization = visualizationStore.createVisualization(
-      VisualizationType.PROPORTIONAL,
-      dataset.id
-    );
-    const suggestion = createSuggestionById('symbols_proportional', 'point');
-    const suggestionKey =
-      'symbols_proportional::1::population_total::point::QTA';
-
-    applySuggestionToVisualization(visualization.id, suggestion, {
-      origin: buildSuggestionOrigin(visualization, {
-        mode: 'custom',
-        suggestionKey
-      })
-    });
-
-    const suggestedVisualization = visualizationStore.visualizations.find(
-      (item) => item.id === visualization.id
-    )!;
-    visualizationStore.updateVisualization(visualization.id, {
-      origin: suggestedVisualization.origin,
-      style: {
-        ...suggestedVisualization.style,
-        symbolFillColor: '#E6142D'
-      },
-      symbol: suggestedVisualization.symbol
-        ? {
-            ...suggestedVisualization.symbol,
-            fillColor: '#E6142D',
-            minSize: 5,
-            maxSize: 50
-          }
-        : undefined
-    });
-    rememberAppliedSuggestionState(visualization.id, suggestionKey);
-
-    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
-
-    const restoredVisualization = visualizationStore.visualizations.find(
-      (item) => item.id === visualization.id
-    )!;
-    expect(restoredVisualization.origin?.suggestionKey).toBe(suggestionKey);
-    expect(restoredVisualization.origin?.appliedSuggestionState).toBeDefined();
-
-    applySuggestionToVisualization(visualization.id, suggestion, {
-      origin: buildSuggestionOrigin(restoredVisualization, {
-        mode: 'manual-suggestion',
-        suggestionKey
-      })
-    });
-
-    const reappliedVisualization = visualizationStore.visualizations.find(
-      (item) => item.id === visualization.id
-    );
-
-    expect(reappliedVisualization?.style.symbolFillColor).toBe('#E6142D');
-    expect(reappliedVisualization?.symbol?.fillColor).toBe('#E6142D');
-    expect(reappliedVisualization?.symbol?.minSize).toBe(5);
-    expect(reappliedVisualization?.symbol?.maxSize).toBe(50);
   });
 
   it('restores the manual visualization even after the suggestion has drifted to custom', () => {

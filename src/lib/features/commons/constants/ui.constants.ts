@@ -32,7 +32,8 @@ export enum ExampleCategory {
   POLYGONS = 'polygons',
   LINES = 'lines',
   TEXTS = 'texts',
-  HYBRIDS = 'hybrids'
+  HYBRIDS = 'hybrids',
+  COLLECTION = 'collection'
 }
 
 export const PAGE_PRESETS = {
