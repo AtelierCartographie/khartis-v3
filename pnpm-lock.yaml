@@ -34,8 +34,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@deck.gl/layers@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.2)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.2.0))(apache-arrow@21.2.0)
       '@ateliercartographie/label-placer':
-        specifier: github:AtelierCartographie/label-placer#8519722aa90af675e808ef436eaae436aaa5c9b4
-        version: git+https://git@github.com:AtelierCartographie/label-placer.git#8519722aa90af675e808ef436eaae436aaa5c9b4
+        specifier: github:AtelierCartographie/label-placer#8588e272c3ef68c352d7d43b4875d551f2942fed
+        version: git+https://git@github.com:AtelierCartographie/label-placer.git#8588e272c3ef68c352d7d43b4875d551f2942fed
       '@ateliercartographie/motif.js':
         specifier: ^0.1.5
         version: 0.1.5
@@ -347,8 +347,8 @@ packages:
       '@geoarrow/geoarrow-js': '>=0.3.0'
       apache-arrow: '>=21.0.0'
 
-  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#8519722aa90af675e808ef436eaae436aaa5c9b4':
-    resolution: {commit: 8519722aa90af675e808ef436eaae436aaa5c9b4, repo: git@github.com:AtelierCartographie/label-placer.git, type: git}
+  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#8588e272c3ef68c352d7d43b4875d551f2942fed':
+    resolution: {commit: 8588e272c3ef68c352d7d43b4875d551f2942fed, repo: git@github.com:AtelierCartographie/label-placer.git, type: git}
     version: 0.0.0
     engines: {node: '>=22.18'}
 
@@ -6512,7 +6512,7 @@ snapshots:
       d3-geo: 3.1.1
       earcut: 3.2.4
 
-  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#8519722aa90af675e808ef436eaae436aaa5c9b4': {}
+  '@ateliercartographie/label-placer@git+https://git@github.com:AtelierCartographie/label-placer.git#8588e272c3ef68c352d7d43b4875d551f2942fed': {}
 
   '@ateliercartographie/motif.js@0.1.5':
     dependencies:

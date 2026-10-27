@@ -17,11 +17,15 @@ import { parsePathsWithProjection } from './geoarrow-stream-bridge.utils';
 import type { LabelOffset } from './label-layout.utils';
 
 /**
- * Only the most important labels may move away with a leader line, and only
- * those of a symbol: an area label with a leader lands in a neighbouring area,
- * where it reads as the neighbour's name.
+ * Only the most important labels may move away with a leader line: the first
+ * quarter of the named symbols, 300 at most. With leaders for all, most names
+ * of a dense map hang on one (33 of 58 on the départements); with a quarter,
+ * a third as many leaders for one name less. Area labels get none: with a
+ * leader, an area label lands in a neighbouring area, where it reads as the
+ * neighbour's name.
  */
 const AUTO_LEADER_MAX_LABELS = 300;
+const AUTO_LEADER_SHARE = 0.25;
 
 /** A label block to place, in page pixels. */
 export interface AutoLabelEntry {
@@ -64,6 +68,13 @@ export interface AutoLabelPlacementOptions {
    * coastlines and borders where another spot is as good. Leaders may cross.
    */
   lines: LabelOffset[][];
+  /**
+   * The same land as filled rings in page pixels: a soft polygon, so that the names of
+   * coastal places take the sea side when it is as good. Empty to leave it out.
+   */
+  land: LabelOffset[][];
+  /** Clear space kept between labels, and between leaders and labels, in page pixels. */
+  spacing: number;
   /** `columns` stacks the labels of dense clusters in columns beside them. */
   align: 'none' | 'columns';
   gap: number;
@@ -177,6 +188,12 @@ export function resolveLabelPlacementFrame(
     ? { bounds, toPagePx, toObstacles }
     : null;
 }
+
+/**
+ * Cost of a label wholly on land, in position-rank units: above 2, right on land loses to left
+ * at sea (rank 2), while a name inland keeps its order of positions.
+ */
+const LAND_COST = 2.5;
 
 /** Outline vertices closer than this, in page pixels, are merged. */
 const OUTLINE_MIN_STEP_PX = 1.5;
@@ -293,6 +310,36 @@ export function ringsSurround(
   return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
+/**
+ * The basemap land layers as whole rings in page pixels, thinned like the outlines but not cut
+ * to the bounds: filling them needs every ring closed.
+ */
+export function projectLandRings(
+  tables: ArrowTable[],
+  projection: ProjectionLike | undefined,
+  frame: LabelPlacementFrame
+): LabelOffset[][] {
+  if (!projection) return [];
+  const rings: LabelOffset[][] = [];
+  for (const table of tables) {
+    const { positions, startIndices, length } = parsePathsWithProjection(
+      table,
+      projection
+    );
+    const vertexCount = positions.length / 2;
+    for (let path = 0; path < length; path++) {
+      const end = path + 1 < length ? startIndices[path + 1] : vertexCount;
+      const ring: LabelOffset[] = [];
+      for (let v = startIndices[path]; v < end; v++) {
+        const point = frame.toPagePx([positions[v * 2], positions[v * 2 + 1]]);
+        if (point) pushThinned(ring, point);
+      }
+      if (ring.length >= 3) rings.push(ring);
+    }
+  }
+  return rings;
+}
+
 function hashPlacementInput(
   entries: AutoLabelEntry[],
   options: AutoLabelPlacementOptions
@@ -309,10 +356,12 @@ function hashPlacementInput(
     options.obstacles.length,
     ...options.obstacles.flat(),
     options.align === 'columns' ? 1 : 0,
-    options.lines.length
+    options.spacing,
+    options.lines.length,
+    options.land.length
   ])
     mix(value);
-  for (const line of options.lines)
+  for (const line of [...options.lines, ...options.land])
     for (const [x, y] of line) {
       mix(x);
       mix(y);
@@ -370,11 +419,19 @@ export function placeLabelBlocks(
   if (cached?.key === key) return cached.blocks;
   const obstaclesKey = options.obstacles.flat().join(',');
 
+  const named = entries.filter(
+    (entry) => entry.symbolRadius > 0 && entry.halfSize[0] > 0
+  );
   const mayUseLeader = new Set(
-    entries
-      .filter((entry) => entry.symbolRadius > 0)
+    named
       .sort((a, b) => b.priority - a.priority)
-      .slice(0, AUTO_LEADER_MAX_LABELS)
+      .slice(
+        0,
+        Math.min(
+          AUTO_LEADER_MAX_LABELS,
+          Math.ceil(named.length * AUTO_LEADER_SHARE)
+        )
+      )
       .map((entry) => entry.id)
   );
   const labels: LabelInput[] = entries.map((entry) => ({
@@ -414,9 +471,20 @@ export function placeLabelBlocks(
         type: 'line' as const,
         points,
         soft: true
-      }))
+      })),
+      ...(options.land.length
+        ? [
+            {
+              type: 'polygon' as const,
+              rings: options.land,
+              soft: true,
+              cost: LAND_COST
+            }
+          ]
+        : [])
     ],
     align: options.align,
+    spacing: options.spacing,
     gap: options.gap,
     leader: { symbolGap: options.symbolGap, minGap: options.minGap },
     // Without a symbol the label names an area or a bare point: centred first.

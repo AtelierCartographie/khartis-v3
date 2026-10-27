@@ -165,6 +165,13 @@ empilement, filets et export SVG suivent sans chemin propre.
   symbole, puis taille du texte, puis valeur). Le filtre se lit dans ses
   identifiants de lignes : en rendu scindé, la table d'attributs est toujours
   restreinte, filtre ou non.
+- Sans filtre, les étiquettes gardent entre elles un espace libre d'une
+  demi-hauteur d'étiquette médiane (`spacing` du moteur), filets compris : les
+  zones denses s'éclaircissent d'abord. Avec un filtre, aucun espace n'est
+  imposé.
+- Seul le premier quart des étiquettes de symboles, par importance, peut
+  prendre un filet (300 au plus) : avec des filets pour toutes, la plupart des
+  noms d'une carte dense en portaient un.
 - Sans symbole, l'étiquette d'un polygone passe au moteur avec le contour de
   son entité, projeté en pixels de page et allégé comme les contours du fond :
   elle se place entièrement dedans ou entièrement dehors, jamais à cheval sur
@@ -189,6 +196,10 @@ empilement, filets et export SVG suivent sans chemin propre.
   orthographique seulement) est un obstacle souple : une étiquette évite de
   chevaucher une côte ou une frontière extérieure quand une autre position la
   vaut. Ces couches sont fusionnées en une géométrie, donc sans limites internes.
+- Ces mêmes couches, remplies, sont un polygone souple (coût 2,5 pour une
+  étiquette entièrement sur la terre) : le nom d'un lieu côtier passe du côté
+  de la mer quand cette position vaut presque l'autre. Pas pour les étiquettes
+  de polygones, qui sont sur la terre dans leur contour : elles iraient en mer.
 - L'option « Aligner en colonnes » (`labelColumns`, champ optionnel du primitif
   texte) range les étiquettes des groupes serrés en colonne à côté du groupe.
 - Le placement est recalculé une fois la vue stabilisée

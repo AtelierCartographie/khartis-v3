@@ -56,6 +56,7 @@ import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
   placeLabelBlocks,
   projectFeatureRings,
+  projectLandRings,
   projectOutlineLines,
   resolveLabelPlacementFrame,
   ringsSurround,
@@ -137,6 +138,9 @@ const LABEL_LEADER_SYMBOL_GAP_PX = 3;
 // Clear space an area label keeps around its text, in page pixels. The safe
 // background padding would keep most names out of their area.
 const AREA_LABEL_MARGIN_PX = 1;
+// Clear space between labels with no Texts filter, in median label heights: it thins the
+// dense areas first, where names touched. A filter asks for its labels, so none then.
+const LABEL_SPACING_EM = 0.5;
 // No glyph is wider than an em, so a label this short never wraps at
 // LABEL_MAX_WIDTH_EM and its lines need no measuring.
 const LABEL_SINGLE_LINE_MAX_CHARACTERS = LABEL_MAX_WIDTH_EM;
@@ -1157,6 +1161,12 @@ export function createTextOverlayLayers(
         });
       }
     }
+    const heights = entries
+      .filter((entry) => entry.halfSize[1] > 0)
+      .map((entry) => entry.halfSize[1] * 2)
+      .sort((a, b) => a - b);
+    // Area labels sit on land inside their outline: the land must not push them out to sea.
+    const hasAreaLabels = entries.some((entry) => entry.rings);
     autoBlocks = placeLabelBlocks(vizId, entries, {
       bounds: placementFrame.bounds,
       obstacles: placementFrame.toObstacles(pageItemObstaclesStore.boxes),
@@ -1165,6 +1175,17 @@ export function createTextOverlayLayers(
         ctx.customProjection,
         placementFrame
       ),
+      land: hasAreaLabels
+        ? []
+        : projectLandRings(
+            ctx.labelOutlineTables ?? [],
+            ctx.customProjection,
+            placementFrame
+          ),
+      spacing:
+        placementMode === 'optional' && heights.length
+          ? LABEL_SPACING_EM * heights[heights.length >> 1]
+          : 0,
 
       align: textConfig.labelColumns ? 'columns' : 'none',
       gap: TEXT_SYMBOL_GAP_PX,
