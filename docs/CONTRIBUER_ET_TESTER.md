@@ -138,6 +138,9 @@ les deux workflows. Elle lance six contrôles en parallèle :
 - `release.yml` l'appelle à chaque push sur `staging` ou `main`, puis lance
   `semantic-release` : prérelease `vX.Y.Z-pprd.N` depuis `staging`, release
   stable `vX.Y.Z` depuis `main`.
+- `sync-staging.yml` fusionne dans `staging` le commit de `main` qui vient
+  d'être publié, après chaque run de release réussi sur `main` (voir
+  [Numéros de version](#numéros-de-version)).
 
 **Un arbre n'est validé qu'une fois.** Une pull request, le push qui la
 fusionne, la pull request de promotion vers `main` et le push sur `main`
@@ -157,6 +160,82 @@ Les contrôles ne récupèrent pas tout le dépôt : les géométries des fonds
 `tests-datasets/shp` et `tests-datasets/gpkg` ne le sont que par les tests
 moteur. Un test qui aurait besoin d'un de ces fichiers échouerait en CI sur un
 fichier manquant : adapter alors les motifs `SPARSE_*` de `validate.yml`.
+
+## Numéros de version
+
+Le numéro affiché dans le menu (`Khartis vX.Y.Z`) est le tag déployé, transmis
+au build par `VITE_APP_VERSION`. Le champ `version` de `package.json` n'est lu
+par rien et reste à `0.0.0-semantically-released`. La version de l'application
+est indépendante de celle des fichiers projet (archive `.kh` v2, schéma
+`3.9.0`).
+
+semantic-release calcule la prérelease suivante à partir du tag le plus haut
+**atteignable depuis `staging`**, stable ou `pprd`. Or la promotion
+`staging` → `main` se fait par une pull request fusionnée avec un commit de
+fusion, et le tag stable est posé sur ce commit, que `staging` ne contient pas.
+Sans retour de `main` dans `staging`, la préprod reste bloquée sur l'ancienne
+base : c'est ce qui l'a laissée en `1.16.0-pprd.55` alors que la prod était en
+`1.28.0`. `sync-staging.yml` fait ce retour automatiquement : il fusionne le
+commit publié dans `staging` par l'API GitHub. Cette fusion, poussée avec le
+jeton de la CI, ne déclenche pas de run de release sur `staging` ; la
+prérelease suivante sort au prochain push. En cas de conflit, le run échoue et
+la fusion se fait à la main (étape 3 ci-dessous).
+
+### Alignement sur Khartis V3 (une seule fois)
+
+Le produit s'appelle Khartis V3, mais ses versions ont commencé à 1.0.0. Le
+mainteneur aligne la numérotation en posant `v3.0.0` sur le dernier commit
+publié de `main`, sans nouveau code. Poser le tag **avant** de fusionner `main`
+dans `staging` : dans l'ordre inverse, si `staging` porte des `feat:` ou
+`fix:` non publiés, le push de la fusion publierait encore une `1.x.y-pprd.1`.
+
+1. Repérer le dernier tag stable de `main` et vérifier qu'il est bien sur le
+   dernier commit de release :
+
+   ```bash
+   git fetch origin --tags
+   git describe --tags --abbrev=0 --exclude '*-*' origin/main
+   ```
+
+2. Poser le tag annoté sur ce commit, le pousser, puis créer la release GitHub.
+   Pousser un tag ne déclenche aucun workflow.
+
+   ```bash
+   LAST=$(git describe --tags --abbrev=0 --exclude '*-*' origin/main)
+   git tag -a v3.0.0 -m "Khartis V3 : alignement de la numérotation sur le nom du produit" "$LAST^{commit}"
+   git push origin v3.0.0
+   gh release create v3.0.0 --verify-tag --latest --title "v3.0.0" \
+     --notes "Khartis V3 aligne son numéro de version sur le nom du produit. Cette version contient exactement le même code que $LAST : les versions 1.x étaient déjà celles de Khartis V3. Les fichiers projet ne changent pas (archive .kh v2, schéma 3.9.0) : les projets enregistrés s'ouvrent comme avant. Khartis V2 reste disponible séparément, en version obsolète."
+   ```
+
+3. Fusionner `main` dans `staging`, si `sync-staging.yml` ne l'a pas déjà fait
+   (`git merge` répond alors `Already up to date`) :
+
+   ```bash
+   git switch staging
+   git pull --ff-only origin staging
+   git merge --no-edit origin/main
+   git push origin staging
+   ```
+
+4. Vérifier que `v3.0.0` est atteignable depuis `staging` et simuler la
+   prochaine release sans rien publier :
+
+   ```bash
+   git describe --tags --abbrev=0 --exclude '*-*' origin/staging
+   GITHUB_ACTIONS= pnpm exec semantic-release --dry-run --no-ci --plugins @semantic-release/commit-analyzer,@semantic-release/release-notes-generator
+   ```
+
+   La première commande doit afficher `v3.0.0`. La seconde, lancée depuis
+   `staging` à jour, annonce `Found git tag v3.0.0` puis `3.1.0-pprd.1` (un
+   `feat:` depuis le tag), `3.0.1-pprd.1` (seulement des `fix:`) ou « no
+   relevant changes » (rien de publiable depuis le tag). Après le prochain push
+   publiable sur `staging`, `gh release list --limit 3` doit montrer cette
+   `3.x.y-pprd.1`.
+
+5. Redéployer la prod pour afficher `Khartis v3.0.0` : `pnpm deploy:prod` prend
+   le tag stable le plus haut, donc `v3.0.0`. La préprod suit au prochain
+   `pnpm deploy:pprd`, une fois la `3.x.y-pprd.1` publiée.
 
 ## Hooks git
 
