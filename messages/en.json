@@ -397,8 +397,6 @@
   "basemap_project_file_proposal_subtitle": "Joining this table to the geographic file brings their variables together in one dataset. The join is checked in the tab of the file.",
   "basemap_project_file_proposal_action": "Join to the geographic file",
   "basemap_active_label": "Joined basemap",
-  "basemap_active_show_source": "Show",
-  "basemap_active_show_source_aria": "Show the {tab} tab",
   "basemap_import_modal_error_select_file": "Please select a file to import",
   "basemap_import_error_single_source": "Select a single basemap: one file, or all the components of the same Shapefile (.shp, .shx, .dbf…)",
   "basemap_import_modal_error_invalid_geometry": "The file does not contain a valid geometry or the geometry column is missing",
