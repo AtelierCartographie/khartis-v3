@@ -57,10 +57,7 @@
     type PersistedProjectBasemap
   } from '../services/persisted-basemap.service';
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
-  import {
-    getBasemapOriginSource,
-    resolveActiveBasemapOrigin
-  } from '../utils/active-basemap.utils';
+  import { resolveActiveBasemapOrigin } from '../utils/active-basemap.utils';
   import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistSourceFileState } from '../services/source-file-state.service';
@@ -2139,13 +2136,7 @@
 
 {#snippet activeBasemapBanner()}
   {#if activeBasemap && activeBasemapOrigin}
-    {@const originSource = getBasemapOriginSource(activeBasemapOrigin)}
-    <ActiveBasemapBanner
-      basemap={activeBasemap}
-      origin={activeBasemapOrigin}
-      isSourceShown={dataTabState.basemapJoin.basemapSource === originSource}
-      onShowSource={() => handleBasemapSourceChange(originSource)}
-    />
+    <ActiveBasemapBanner basemap={activeBasemap} origin={activeBasemapOrigin} />
   {/if}
 {/snippet}
 
