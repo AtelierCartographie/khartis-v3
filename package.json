@@ -1,7 +1,7 @@
 {
   "name": "khartis-v3",
   "private": true,
-  "version": "1.6.0-staging.29",
+  "version": "0.0.0-semantically-released",
   "license": "MIT",
   "description": "Client-side thematic mapping application: import tabular or geographic data, join it to a basemap, classify it and export publication-ready maps, entirely in the browser.",
   "keywords": [
