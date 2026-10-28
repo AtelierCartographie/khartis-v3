@@ -34,6 +34,16 @@
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
 
   let toolbarContent = $state<HTMLElement | null>(null);
+  let toolbarContentWidth = $state(0);
+
+  // In a wide panel a dropdown is no wider than a field of the two-column
+  // layout (coordinates in geocode-settings): the field column sits inside
+  // three padded containers and the two columns are 12px apart.
+  const dropdownMaxWidth = $derived(
+    globalState.toolbarState === ToolbarState.Full && toolbarContentWidth > 0
+      ? `calc((${toolbarContentWidth}px - 6 * var(--kh-pad-panel) - 12px) / 2)`
+      : undefined
+  );
 
   function setToolbar(state: ToolbarState) {
     globalActions.setToolbarState(state);
@@ -149,6 +159,7 @@
 <nav
   id="khartis-main-toolbar"
   hidden={globalState.selectedStep === ToolbarStep.Styling}
+  style:--khartis-dropdown-max-width={dropdownMaxWidth}
   class={clsx('app-shadow scrollbar-hidden', globalState.toolbarState, {
     'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
   })}
@@ -167,6 +178,7 @@
 
   <article
     bind:this={toolbarContent}
+    bind:clientWidth={toolbarContentWidth}
     class={clsx(
       'toolbar-content scrollbar-hidden',
       globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
@@ -331,6 +343,11 @@
 
   nav.compact {
     width: var(--kh-panel-w);
+  }
+
+  .toolbar-content :global(.bx--list-box),
+  .toolbar-content :global(.bx--select-input__wrapper) {
+    max-width: var(--khartis-dropdown-max-width, none);
   }
 
   nav.collapsed {
