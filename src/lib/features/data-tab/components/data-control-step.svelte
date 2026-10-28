@@ -948,43 +948,45 @@
     {/if}
   </div>
 
-  {#if processedDataset && !variableTypesNotificationDismissed}
-    <InlineNotification
-      closeButtonDescription={m.a11y_close_notification()}
-      title={m.data_control_variable_types_title()}
-      subtitle={m.data_control_variable_types_subtitle()}
-      kind="info"
-      lowContrast
-      hideCloseButton={false}
-      on:close={() => (variableTypesNotificationDismissed = true)}
-    />
-  {/if}
+  <div class="kh-notification-stack data-control-notifications">
+    {#if processedDataset && !variableTypesNotificationDismissed}
+      <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
+        title={m.data_control_variable_types_title()}
+        subtitle={m.data_control_variable_types_subtitle()}
+        kind="info"
+        lowContrast
+        hideCloseButton={false}
+        on:close={() => (variableTypesNotificationDismissed = true)}
+      />
+    {/if}
 
-  {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
-    <InlineNotification
-      closeButtonDescription={m.a11y_close_notification()}
-      title={m.data_control_duplicate_rows_title()}
-      subtitle={duplicateRowCount === 1
-        ? m.data_control_duplicate_rows_subtitle_one()
-        : m.data_control_duplicate_rows_subtitle({
-            count: formatValue(duplicateRowCount)
-          })}
-      kind="warning"
-      lowContrast
-      hideCloseButton={false}
-      on:close={() => (duplicateRowsNotificationDismissed = true)}
-    />
-  {/if}
+    {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
+      <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
+        title={m.data_control_duplicate_rows_title()}
+        subtitle={duplicateRowCount === 1
+          ? m.data_control_duplicate_rows_subtitle_one()
+          : m.data_control_duplicate_rows_subtitle({
+              count: formatValue(duplicateRowCount)
+            })}
+        kind="warning"
+        lowContrast
+        hideCloseButton={false}
+        on:close={() => (duplicateRowsNotificationDismissed = true)}
+      />
+    {/if}
 
-  {#if isDeleteMode}
-    <InlineNotification
-      title={m.data_control_delete_mode_title()}
-      subtitle={m.data_control_delete_mode_subtitle()}
-      kind="info"
-      lowContrast
-      hideCloseButton
-    />
-  {/if}
+    {#if isDeleteMode}
+      <InlineNotification
+        title={m.data_control_delete_mode_title()}
+        subtitle={m.data_control_delete_mode_subtitle()}
+        kind="info"
+        lowContrast
+        hideCloseButton
+      />
+    {/if}
+  </div>
 
   <ExpandedTableModal
     bind:open={isModalOpen}
@@ -1012,6 +1014,10 @@
     flex-direction: column;
     position: relative;
     min-height: 0;
+  }
+
+  .data-control-notifications {
+    margin-block: 1rem;
   }
 
   .content-area {
