@@ -2286,16 +2286,6 @@
     width: var(--join-combo-icon-width);
   }
 
-  .cell-select :global(.bx--list-box__selection::after) {
-    content: '';
-    position: absolute;
-    top: 25%;
-    right: 0;
-    width: 1px;
-    height: 50%;
-    background-color: var(--cds-border-subtle-01, #c6c6c6);
-  }
-
   /* Carbon adds a clear button next to the chevron once a value is selected. */
   .cell-select
     :global(

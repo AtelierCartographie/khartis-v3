@@ -187,6 +187,7 @@
 
   .combobox-with-badge {
     position: relative;
+    max-width: var(--khartis-dropdown-max-width, none);
   }
 
   .badge-overlay {

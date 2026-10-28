@@ -206,6 +206,43 @@
   box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.1);
 }
 
+/* Carbon v10 sets list chevrons 1rem from the field edge. They sit 0.5rem
+   away here, with the clear button against them and a divider in between,
+   which leaves more room for the value. */
+.bx--list-box__menu-icon {
+  right: 0.5rem;
+}
+
+.bx--list-box__selection {
+  right: 2rem;
+}
+
+.bx--list-box__field .bx--text-input {
+  padding-right: 4rem;
+}
+
+.bx--list-box__field .bx--text-input--empty {
+  padding-right: 2.5rem;
+}
+
+.bx--combo-box .bx--list-box__selection::after {
+  content: '';
+  position: absolute;
+  top: 25%;
+  right: 0;
+  width: 1px;
+  height: 50%;
+  background-color: var(--cds-border-subtle-01, #c6c6c6);
+}
+
+.bx--select__arrow {
+  right: 0.5rem;
+}
+
+.bx--select-input {
+  padding-right: 2.5rem;
+}
+
 html[theme='g100'] .app-shadow {
   box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.5);
 }
