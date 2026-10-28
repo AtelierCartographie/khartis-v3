@@ -243,6 +243,22 @@
   padding-right: 2.5rem;
 }
 
+/* Inline notifications shown one after another: one even gap between them
+   instead of Carbon's 1rem margins, which add up differently per container. */
+.kh-notification-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kh-gap-inline);
+}
+
+.kh-notification-stack:not(:has(.bx--inline-notification)) {
+  display: none;
+}
+
+.kh-notification-stack > .bx--inline-notification {
+  margin: 0;
+}
+
 html[theme='g100'] .app-shadow {
   box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.5);
 }
