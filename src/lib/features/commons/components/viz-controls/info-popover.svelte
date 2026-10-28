@@ -7,12 +7,19 @@
 
   interface Props {
     text: string;
+    title?: string;
     align?: 'top' | 'bottom';
     tags?: string[];
     disabled?: boolean;
   }
 
-  let { text, align = 'bottom', tags = [], disabled = false }: Props = $props();
+  let {
+    text,
+    title,
+    align = 'bottom',
+    tags = [],
+    disabled = false
+  }: Props = $props();
 
   let open = $state(false);
   let pinned = $state(false);
@@ -162,6 +169,9 @@
       onmouseleave={handleTooltipMouseLeave}
     >
       <div class="info-tooltip-arrow"></div>
+      {#if title}
+        <p class="info-tooltip-title">{title}</p>
+      {/if}
       {#if tags.length > 0}
         <div class="info-tooltip-tags">
           {#each tags as tag (tag)}
@@ -264,6 +274,13 @@
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
     border-top: 6px solid var(--cds-inverse-01, #393939);
+  }
+
+  :global(.info-tooltip-title) {
+    margin: 0 0 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
   }
 
   :global(.info-tooltip-text) {

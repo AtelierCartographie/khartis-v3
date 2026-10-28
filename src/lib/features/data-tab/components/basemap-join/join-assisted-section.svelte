@@ -23,20 +23,33 @@
     CheckmarkFilled,
     ChevronDown,
     ChevronUp,
+    Error as NotAllowed,
     ErrorFilled,
     MagicWandFilled,
-    Misuse,
-    Renew,
+    Reset,
     WarningAltFilled,
     WarningFilled
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
   import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
-  import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
+  import type {
+    EntityValidation,
+    IgnoredEntity,
+    JoinCandidate
+  } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
-  type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
+  type HeaderSlot =
+    | 'info'
+    | null
+    | {
+        kind: 'ignore' | 'validate' | 'restore';
+        label: string;
+        onclick: () => void;
+        disabled?: boolean;
+      };
 
   interface JoinRow {
     dataValue: string;
@@ -112,13 +125,9 @@
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
     onMappingChange?: (index: number, basemapValue: string) => void;
-    onIgnoreEntity?: (
-      dataValue: string,
-      source: IgnoreSource,
-      basemapValue?: string
-    ) => void;
-    onRestoreEntity?: (dataValue: string) => void;
-    onValidateEntity?: (dataValue: string, basemapValue: string) => void;
+    onIgnoreEntities?: (entries: IgnoredEntity[]) => void;
+    onRestoreEntities?: (dataValues: string[]) => void;
+    onValidateEntities?: (entries: EntityValidation[]) => void;
   }
 
   let {
@@ -149,9 +158,9 @@
     onFinalizeJoin,
     onManualCorrection,
     onMappingChange,
-    onIgnoreEntity,
-    onRestoreEntity,
-    onValidateEntity
+    onIgnoreEntities,
+    onRestoreEntities,
+    onValidateEntities
   }: Props = $props();
 
   // Plain Sets are deliberate here and below: these are wholesale-replaced
@@ -317,6 +326,7 @@
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const ownVariants = new Set<string>();
     ownVariants.add(currentBasemapValue);
+    ownVariants.add(resolveDisplayedBasemapValue(currentBasemapValue));
     const aliases = basemapAliasesByValue?.[currentBasemapValue];
     if (aliases) {
       for (const alias of aliases) {
@@ -487,6 +497,80 @@
   $effect(() => attachVirtualizer(joinedVirt, joinedScrollEl));
   $effect(() => attachVirtualizer(toVerifyVirt, toVerifyScrollEl));
   $effect(() => attachVirtualizer(unrecognizedVirt, unrecognizedScrollEl));
+
+  // Below this width the basemap field moves under the entity name. The
+  // class, not a container query, also reaches the portalled combo menus.
+  const NARROW_SECTION_WIDTH = 480;
+  let sectionWidth = $state(0);
+  const isNarrow = $derived(
+    sectionWidth > 0 && sectionWidth <= NARROW_SECTION_WIDTH
+  );
+  const comboIdPrefix = $derived(isNarrow ? 'join-sm' : 'join');
+
+  const clearedJoinedRows = new SvelteSet<string>();
+
+  let actionTooltipTrigger = $state<HTMLElement | null>(null);
+  const actionTooltipText = $derived(
+    actionTooltipTrigger?.dataset.tooltip ?? ''
+  );
+
+  // One Carbon tooltip for every row and header action, shown on hover or
+  // focus of any element carrying data-tooltip.
+  function actionTooltips(node: HTMLElement) {
+    const show = (event: Event) => {
+      const target = (event.target as Element | null)?.closest<HTMLElement>(
+        '[data-tooltip]'
+      );
+      if (target && node.contains(target)) actionTooltipTrigger = target;
+    };
+    const hide = (event: Event) => {
+      const next = (event as MouseEvent | FocusEvent).relatedTarget;
+      if (next instanceof Node && actionTooltipTrigger?.contains(next)) return;
+      actionTooltipTrigger = null;
+    };
+    const close = () => {
+      actionTooltipTrigger = null;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    node.addEventListener('mouseover', show);
+    node.addEventListener('focusin', show);
+    node.addEventListener('mouseout', hide);
+    node.addEventListener('focusout', hide);
+    node.addEventListener('click', close);
+    node.addEventListener('keydown', closeOnEscape);
+    return {
+      destroy() {
+        node.removeEventListener('mouseover', show);
+        node.removeEventListener('focusin', show);
+        node.removeEventListener('mouseout', hide);
+        node.removeEventListener('focusout', hide);
+        node.removeEventListener('click', close);
+        node.removeEventListener('keydown', closeOnEscape);
+      }
+    };
+  }
+
+  // Carbon titles only the chevron's 16px SVG; the whole toggle area gets it
+  // here so hovering anywhere on it names the action.
+  function titleMenuToggle(node: HTMLElement) {
+    const sync = () => {
+      const toggle = node.querySelector<HTMLElement>(
+        '.bx--list-box__menu-icon'
+      );
+      const label = toggle?.querySelector('title')?.textContent;
+      if (toggle && label && toggle.title !== label) toggle.title = label;
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(node, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+    return { destroy: () => observer.disconnect() };
+  }
 
   const pendingUnrecognizedSelections = new SvelteMap<string, string>();
 
@@ -747,33 +831,104 @@
     }, 50);
   }
 
-  function handleIgnore(
-    dataValue: string,
-    source: IgnoreSource,
-    basemapValue?: string
-  ): void {
-    const nextIgnoredCount = ignoredCount + 1;
-    onIgnoreEntity?.(dataValue, source, basemapValue);
+  function handleIgnore(entries: IgnoredEntity[]): void {
+    if (entries.length === 0) return;
+    const nextIgnoredCount = ignoredCount + entries.length;
+    onIgnoreEntities?.(entries);
+    if (entries.length > 1) {
+      announce(
+        m.join_announce_ignored_many({ count: formatValue(entries.length) })
+      );
+      return;
+    }
+    const entity = entries[0].dataValue;
     announce(
       nextIgnoredCount === 1
-        ? m.join_announce_ignored_one({ entity: dataValue })
+        ? m.join_announce_ignored_one({ entity })
         : m.join_announce_ignored({
-            entity: dataValue,
+            entity,
             count: formatValue(nextIgnoredCount)
           })
     );
   }
 
-  function handleRestore(dataValue: string): void {
-    onRestoreEntity?.(dataValue);
-    announce(m.join_announce_restored({ entity: dataValue }));
+  function handleRestore(dataValues: string[]): void {
+    if (dataValues.length === 0) return;
+    onRestoreEntities?.(dataValues);
+    announce(
+      dataValues.length === 1
+        ? m.join_announce_restored({ entity: dataValues[0] })
+        : m.join_announce_restored_many({
+            count: formatValue(dataValues.length)
+          })
+    );
   }
 
-  function handleValidate(dataValue: string, basemapValue: string): void {
-    if (!basemapValue) return;
-    onValidateEntity?.(dataValue, basemapValue);
-    announce(m.join_announce_validated({ entity: dataValue }));
+  function handleValidate(entries: EntityValidation[]): void {
+    const validEntries = entries.filter((entry) => entry.basemapValue);
+    if (validEntries.length === 0) return;
+    onValidateEntities?.(validEntries);
+    announce(
+      validEntries.length === 1
+        ? m.join_announce_validated({ entity: validEntries[0].dataValue })
+        : m.join_announce_validated_many({
+            count: formatValue(validEntries.length)
+          })
+    );
   }
+
+  const toVerifyEntries = $derived<EntityValidation[]>(
+    deduplicatedJoinRows.map((row, index) => ({
+      dataValue: row.dataValue,
+      basemapValue: getToVerifySelectedMapping(
+        getToVerifyRowKey(index),
+        row.selectedMapping
+      )
+    }))
+  );
+
+  // The joined list is paginated in SQL, so the client never holds every
+  // joined entity: no bulk action there.
+  const joinedHeaderSlots: HeaderSlot[] = ['info', null, null];
+
+  const toVerifyHeaderSlots = $derived<HeaderSlot[]>([
+    'info',
+    {
+      kind: 'ignore',
+      label: m.join_action_ignore_all(),
+      onclick: () =>
+        handleIgnore(
+          toVerifyEntries.map((entry) => ({ ...entry, source: 'to_verify' }))
+        )
+    },
+    {
+      kind: 'validate',
+      label: m.join_action_validate_all(),
+      onclick: () => handleValidate(toVerifyEntries),
+      disabled: !toVerifyEntries.some((entry) => entry.basemapValue)
+    }
+  ]);
+
+  const unrecognizedHeaderSlots = $derived<HeaderSlot[]>([
+    'info',
+    {
+      kind: 'ignore',
+      label: m.join_action_ignore_all(),
+      onclick: () =>
+        handleIgnore(
+          unknowns.map((dataValue) => ({ dataValue, source: 'unrecognized' }))
+        )
+    },
+    null
+  ]);
+
+  const ignoredHeaderSlots = $derived<HeaderSlot[]>([
+    {
+      kind: 'restore',
+      label: m.join_action_restore_all(),
+      onclick: () => handleRestore(ignoredEntities.map((e) => e.dataValue))
+    }
+  ]);
 </script>
 
 {#snippet comboItemContent(comboItem: ComboBoxItem, query: string)}
@@ -801,7 +956,65 @@
   {/if}
 {/snippet}
 
-<div class="join-assisted-section">
+{#snippet tableHeader(
+  valueLabel: string,
+  slots: HeaderSlot[] | null,
+  relation: '=' | '≈' | null
+)}
+  <div class="table-header">
+    <div class="table-header-data">
+      <span class="table-header-label">{m.join_data_column()}</span>
+      {#if linkedVariableName}
+        <VariableBadge label={linkedVariableName} type="geo-ref" />
+      {/if}
+    </div>
+    {#if relation}
+      <span
+        class="table-cell cell-equals header-relation"
+        class:cell-equals-approx={relation === '≈'}
+        aria-hidden="true">{relation}</span
+      >
+    {/if}
+    <span class="table-header-label table-header-value">{valueLabel}</span>
+    {#if slots}
+      <div class="row-actions">
+        {#each slots as slot, slotIndex (slotIndex)}
+          {#if slot === 'info'}
+            <span class="row-action row-action-info" aria-hidden="true"></span>
+          {:else if slot === null}
+            <span class="row-action" aria-hidden="true"></span>
+          {:else}
+            <button
+              type="button"
+              class="row-action"
+              class:row-action-disabled={slot.disabled}
+              aria-label={slot.label}
+              aria-disabled={slot.disabled || undefined}
+              data-tooltip={slot.label}
+              onclick={() => {
+                if (!slot.disabled) slot.onclick();
+              }}
+            >
+              {#if slot.kind === 'ignore'}
+                <NotAllowed size={20} />
+              {:else if slot.kind === 'validate'}
+                <CheckmarkFilled size={20} />
+              {:else}
+                <Reset size={20} />
+              {/if}
+            </button>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+<div
+  class="join-assisted-section"
+  class:is-narrow={isNarrow}
+  bind:clientWidth={sectionWidth}
+>
   <div
     class="visually-hidden"
     role="status"
@@ -818,7 +1031,11 @@
     <InfoPopover text={m.join_assisted_info()} />
   </div>
 
-  <div class="join-assisted-content" class:is-loading={loading}>
+  <div
+    class="join-assisted-content"
+    class:is-loading={loading}
+    use:actionTooltips
+  >
     <div class="category-rows">
       <div class="category-row category-row-joined">
         <button
@@ -850,36 +1067,28 @@
           <div class="category-body">
             {#if joinedEntitiesList.length > 0}
               <div class="join-table join-table-success">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
-                    {/if}
-                  </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_basemap_column()}</span
-                    >
-                  </div>
-                </div>
+                {@render tableHeader(
+                  m.join_basemap_column(),
+                  joinedHeaderSlots,
+                  '='
+                )}
                 <div class="join-table-scroll" bind:this={joinedScrollEl}>
                   {#each joinedEntitiesList as row, joinedIndex (row.dataValue)}
-                    {@const joinedTooltip = buildRowTooltip(
-                      row.basemapValue,
-                      row.otherIdentifiers
+                    {@const joinedDisplayedValue = resolveDisplayedBasemapValue(
+                      row.basemapValue
                     )}
+                    {@const joinedCleared = clearedJoinedRows.has(
+                      row.dataValue
+                    )}
+                    {@const joinedTooltip = joinedCleared
+                      ? buildRowTooltip(undefined)
+                      : buildRowTooltip(row.basemapValue, row.otherIdentifiers)}
                     <div class="table-row" use:observeRow={row.dataValue}>
                       <div class="table-cell cell-data" title={row.dataValue}>
                         {row.dataValue}
                       </div>
                       <div class="table-cell cell-equals">=</div>
-                      <div class="table-cell cell-select">
+                      <div class="table-cell cell-select" use:titleMenuToggle>
                         {#if visibleJoinedRows.has(row.dataValue)}
                           {@const joinedRowOptions = buildJoinedRowOptions(
                             row.basemapValue
@@ -890,11 +1099,13 @@
                               translateWithIdSelection={translateCarbonId}
                               portalMenu
                               autoHighlight="first-match"
-                              id={`join-joined-${joinedIndex}`}
+                              id={`${comboIdPrefix}-joined-${joinedIndex}`}
                               items={joinedRowOptions}
-                              selectedId={row.basemapValue}
-                              placeholder={row.basemapValue}
-                              {...{ title: row.basemapValue }}
+                              selectedId={joinedCleared
+                                ? undefined
+                                : joinedDisplayedValue}
+                              placeholder={m.join_unrecognized_correction_placeholder()}
+                              {...{ title: joinedDisplayedValue }}
                               labelText={m.join_select_label_joined({
                                 entity: row.dataValue
                               })}
@@ -911,9 +1122,12 @@
                                 const item = e.detail.selectedItem as
                                   ComboBoxItem | undefined;
                                 const nextValue = item?.text;
+                                if (nextValue) {
+                                  clearedJoinedRows.delete(row.dataValue);
+                                }
                                 if (
                                   nextValue &&
-                                  nextValue !== row.basemapValue &&
+                                  nextValue !== joinedDisplayedValue &&
                                   onManualCorrection
                                 ) {
                                   onManualCorrection(row.dataValue, nextValue);
@@ -924,6 +1138,8 @@
                                   );
                                 }
                               }}
+                              on:clear={() =>
+                                clearedJoinedRows.add(row.dataValue)}
                               let:item
                             >
                               {@render comboItemContent(
@@ -934,7 +1150,7 @@
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
-                            {row.basemapValue}
+                            {joinedDisplayedValue}
                           </div>
                         {/if}
                       </div>
@@ -944,27 +1160,31 @@
                             text={joinedTooltip.text}
                             tags={joinedTooltip.tags}
                             disabled={joinedTooltip.disabled}
+                            title={m.join_info_basemap_title()}
                           />
                         </span>
                         <button
                           type="button"
                           class="row-action"
                           aria-label={m.join_action_ignore()}
+                          data-tooltip={m.join_action_ignore()}
                           onclick={() =>
-                            handleIgnore(
-                              row.dataValue,
-                              'joined',
-                              row.basemapValue
-                            )}
+                            handleIgnore([
+                              {
+                                dataValue: row.dataValue,
+                                source: 'joined',
+                                basemapValue: row.basemapValue
+                              }
+                            ])}
                         >
-                          <Misuse size={20} />
+                          <NotAllowed size={20} />
                         </button>
                         <button
                           type="button"
                           class="row-action row-action-validate row-action-disabled"
                           aria-label={m.join_action_validated()}
-                          title={m.join_action_validated()}
-                          disabled
+                          aria-disabled="true"
+                          data-tooltip={m.join_action_validated()}
                         >
                           <CheckmarkFilled size={20} />
                         </button>
@@ -1038,19 +1258,11 @@
         {#if toVerifyExpanded}
           <div class="category-body">
             <div class="join-table join-table-warning">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label"
-                    >{m.join_basemap_column()}</span
-                  >
-                </div>
-              </div>
+              {@render tableHeader(
+                m.join_basemap_column(),
+                toVerifyHeaderSlots,
+                '≈'
+              )}
               <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
                 {#each deduplicatedJoinRows as row, i (i)}
                   {@const rowKey = getToVerifyRowKey(i)}
@@ -1067,14 +1279,16 @@
                     selectedCandidate
                   )}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
-                    <div class="table-cell cell-data">{row.dataValue}</div>
+                    <div class="table-cell cell-data" title={row.dataValue}>
+                      {row.dataValue}
+                    </div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
                       aria-label={m.join_approximate_indicator()}
                     >
                       <span class="approx-symbol" aria-hidden="true">≈</span>
                     </div>
-                    <div class="table-cell cell-select">
+                    <div class="table-cell cell-select" use:titleMenuToggle>
                       {#if visibleToVerifyRows.has(rowKey)}
                         {@const toVerifyItems = buildToVerifyItems(
                           row.basemapOptions
@@ -1085,15 +1299,16 @@
                             translateWithIdSelection={translateCarbonId}
                             portalMenu
                             autoHighlight="first-match"
-                            id={`join-${i}`}
+                            id={`${comboIdPrefix}-${i}`}
                             items={toVerifyItems}
-                            selectedId={resolveDisplayedBasemapValue(
-                              selectedMapping
-                            )}
+                            selectedId={selectedMapping
+                              ? resolveDisplayedBasemapValue(selectedMapping)
+                              : undefined}
                             {...{
                               title:
                                 resolveDisplayedBasemapValue(selectedMapping)
                             }}
+                            placeholder={m.join_unrecognized_correction_placeholder()}
                             labelText={m.join_select_label_to_verify({
                               entity: row.dataValue
                             })}
@@ -1114,13 +1329,10 @@
                                     ComboBoxItem | undefined
                                 )?.id
                               )}
-                            on:clear={() =>
-                              handleToVerifyMappingChange(
-                                rowKey,
-                                i,
-                                row.selectedMapping,
-                                undefined
-                              )}
+                            on:clear={() => {
+                              activeComboQuery = null;
+                              toVerifySelectedMappings[rowKey] = '';
+                            }}
                             let:item
                           >
                             {@render comboItemContent(
@@ -1141,28 +1353,41 @@
                           text={verifyTooltip.text}
                           tags={verifyTooltip.tags}
                           disabled={verifyTooltip.disabled}
+                          title={m.join_info_basemap_title()}
                         />
                       </span>
                       <button
                         type="button"
                         class="row-action"
                         aria-label={m.join_action_ignore()}
+                        data-tooltip={m.join_action_ignore()}
                         onclick={() =>
-                          handleIgnore(
-                            row.dataValue,
-                            'to_verify',
-                            selectedMapping
-                          )}
+                          handleIgnore([
+                            {
+                              dataValue: row.dataValue,
+                              source: 'to_verify',
+                              basemapValue: selectedMapping
+                            }
+                          ])}
                       >
-                        <Misuse size={20} />
+                        <NotAllowed size={20} />
                       </button>
                       <button
                         type="button"
                         class="row-action row-action-validate"
+                        class:row-action-disabled={!selectedMapping}
                         aria-label={m.join_action_validate()}
-                        disabled={!selectedMapping}
+                        aria-disabled={!selectedMapping || undefined}
+                        data-tooltip={selectedMapping
+                          ? m.join_action_validate()
+                          : m.join_action_validate_disabled()}
                         onclick={() =>
-                          handleValidate(row.dataValue, selectedMapping)}
+                          handleValidate([
+                            {
+                              dataValue: row.dataValue,
+                              basemapValue: selectedMapping
+                            }
+                          ])}
                       >
                         <CheckmarkFilled size={20} />
                       </button>
@@ -1234,19 +1459,11 @@
         {#if unrecognizedExpanded && unrecognizedCount > 0}
           <div class="category-body">
             <div class="join-table join-table-error">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label"
-                    >{m.join_basemap_column()}</span
-                  >
-                </div>
-              </div>
+              {@render tableHeader(
+                m.join_basemap_column(),
+                unrecognizedHeaderSlots,
+                '='
+              )}
               <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
                 {#each unknowns as entity, unknownIndex (entity)}
                   {@const hasPendingSelection =
@@ -1255,9 +1472,11 @@
                     pendingUnrecognizedSelections.get(entity)
                   )}
                   <div class="table-row" use:observeUnrecognizedRow={entity}>
-                    <div class="table-cell cell-data">{entity}</div>
+                    <div class="table-cell cell-data" title={entity}>
+                      {entity}
+                    </div>
                     <div class="table-cell cell-equals">=</div>
-                    <div class="table-cell cell-select">
+                    <div class="table-cell cell-select" use:titleMenuToggle>
                       {#if visibleUnrecognizedRows.has(entity)}
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
                           {#key basemapComboBoxItems}
@@ -1266,7 +1485,7 @@
                               translateWithIdSelection={translateCarbonId}
                               portalMenu
                               autoHighlight="first-match"
-                              id={`join-unrecognized-${unknownIndex}`}
+                              id={`${comboIdPrefix}-unrecognized-${unknownIndex}`}
                               items={basemapComboBoxItems}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
@@ -1286,6 +1505,8 @@
                                   e.detail.selectedItem as
                                     ComboBoxItem | undefined
                                 )}
+                              on:clear={() =>
+                                handleUnrecognizedSelect(entity, undefined)}
                               let:item
                             >
                               {@render comboItemContent(
@@ -1323,25 +1544,30 @@
                           text={unrecognizedTooltip.text}
                           tags={unrecognizedTooltip.tags}
                           disabled={unrecognizedTooltip.disabled}
+                          title={m.join_info_basemap_title()}
                         />
                       </span>
                       <button
                         type="button"
                         class="row-action"
                         aria-label={m.join_action_ignore()}
-                        onclick={() => handleIgnore(entity, 'unrecognized')}
+                        data-tooltip={m.join_action_ignore()}
+                        onclick={() =>
+                          handleIgnore([
+                            { dataValue: entity, source: 'unrecognized' }
+                          ])}
                       >
-                        <Misuse size={20} />
+                        <NotAllowed size={20} />
                       </button>
                       <button
                         type="button"
                         class="row-action row-action-validate"
                         class:row-action-disabled={!hasPendingSelection}
                         aria-label={m.join_action_validate()}
-                        title={hasPendingSelection
+                        aria-disabled={!hasPendingSelection || undefined}
+                        data-tooltip={hasPendingSelection
                           ? m.join_action_validate()
                           : m.join_action_validate_disabled()}
-                        disabled={!hasPendingSelection}
                         onclick={() => handleUnrecognizedValidate(entity)}
                       >
                         <CheckmarkFilled size={20} />
@@ -1388,27 +1614,12 @@
                 {m.join_duplicates_explanation()}
               </div>
               <div class="join-table join-table-error">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
-                    {/if}
-                  </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_lines_column()}</span
-                    >
-                  </div>
-                </div>
+                {@render tableHeader(m.join_lines_column(), null, null)}
                 {#each duplicates as entity (entity)}
                   <div class="table-row table-row-lines">
-                    <div class="table-cell cell-data">{entity}</div>
+                    <div class="table-cell cell-data" title={entity}>
+                      {entity}
+                    </div>
                     <div class="table-cell cell-lines">
                       {#if duplicateLinesByValue[entity]?.length}
                         {duplicateLinesByValue[entity].join(', ')}
@@ -1433,7 +1644,7 @@
             aria-expanded={ignoredExpanded}
           >
             <span class="category-icon icon-ignored">
-              <Misuse size={20} />
+              <NotAllowed size={20} />
             </span>
             <div class="category-count count-ignored">
               {formatValue(ignoredCount)}
@@ -1457,27 +1668,16 @@
                 {m.join_ignored_explanation()}
               </div>
               <div class="join-table join-table-info">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
-                    {/if}
-                  </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_line_column()}</span
-                    >
-                  </div>
-                </div>
+                {@render tableHeader(
+                  m.join_line_column(),
+                  ignoredHeaderSlots,
+                  null
+                )}
                 {#each ignoredEntities as entry (entry.dataValue)}
                   <div class="table-row table-row-lines">
-                    <div class="table-cell cell-data">{entry.dataValue}</div>
+                    <div class="table-cell cell-data" title={entry.dataValue}>
+                      {entry.dataValue}
+                    </div>
                     <div class="table-cell cell-lines">
                       {#if entry.lines.length}
                         {entry.lines.join(', ')}
@@ -1490,9 +1690,10 @@
                         type="button"
                         class="row-action"
                         aria-label={m.join_action_restore()}
-                        onclick={() => handleRestore(entry.dataValue)}
+                        data-tooltip={m.join_action_restore()}
+                        onclick={() => handleRestore([entry.dataValue])}
                       >
-                        <Renew size={20} />
+                        <Reset size={20} />
                       </button>
                     </div>
                   </div>
@@ -1545,6 +1746,10 @@
   </div>
 </div>
 
+{#if actionTooltipTrigger && actionTooltipText}
+  <TooltipBubble text={actionTooltipText} trigger={actionTooltipTrigger} />
+{/if}
+
 <style>
   .fuzzy-pass-offer {
     display: flex;
@@ -1559,6 +1764,40 @@
   }
 
   .join-assisted-section {
+    --join-font: var(--kh-font-body);
+    --join-col-gap: var(--kh-gap-inline);
+    --join-row-padding: var(--kh-gap-inline);
+    --join-equals-width: var(--kh-size-xs);
+    --join-control-height: var(--kh-size-sm);
+    /* rem follows the compact density, which scales the root font down. */
+    --join-action-size: var(--kh-size-xs);
+    --join-icon-size: 1rem;
+    --join-info-icon-size: 0.875rem;
+    --join-combo-icon-width: 1.5rem;
+    --join-combo-icon-right: 0.5rem;
+
+    --join-text: #161616;
+    --join-text-secondary: #525252;
+    --join-label: #00539a;
+    --join-row-bg: #f4f4f4;
+    --join-row-border: #c6c6c6;
+    --join-header-hover: #f4f4f4;
+    --join-divider: #e0e0e0;
+    --join-action-hover: rgba(0, 0, 0, 0.05);
+    --join-icon-disabled: rgba(22, 22, 22, 0.25);
+    --join-success: #24a148;
+    --join-success-bg: #defbe6;
+    --join-success-line: rgba(36, 161, 72, 0.3);
+    --join-success-text: #044317;
+    --join-warning: #f1c21b;
+    --join-warning-bg: #fcf4d6;
+    --join-warning-line: rgba(241, 194, 27, 0.3);
+    --join-error: #da1e28;
+    --join-error-bg: #fff1f1;
+    --join-error-line: rgba(218, 30, 40, 0.3);
+    --join-info: #0043ce;
+    --join-info-bg: #edf5ff;
+    --join-info-line: rgba(0, 67, 206, 0.3);
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -1638,7 +1877,7 @@
   }
 
   .category-row-header:hover {
-    background-color: #f4f4f4;
+    background-color: var(--join-header-hover);
   }
 
   .category-row-header:focus-visible {
@@ -1653,23 +1892,23 @@
   }
 
   .icon-success :global(svg) {
-    fill: #24a148;
+    fill: var(--join-success);
   }
 
   .icon-warning :global(svg) {
-    fill: #f1c21b;
+    fill: var(--join-warning);
   }
 
   .icon-warning-alt :global(svg) {
-    fill: #da1e28;
+    fill: var(--join-error);
   }
 
   .icon-error :global(svg) {
-    fill: #da1e28;
+    fill: var(--join-error);
   }
 
   .icon-ignored :global(svg) {
-    fill: #525252;
+    fill: var(--join-text-secondary);
   }
 
   .category-count {
@@ -1681,26 +1920,26 @@
     font-weight: 600;
     font-size: 1rem;
     line-height: var(--kh-line-primitive);
-    color: #161616;
+    color: var(--join-text);
     border-bottom: 1px solid;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
   }
 
   .count-success {
-    background-color: #defbe6;
-    border-bottom-color: #24a148;
+    background-color: var(--join-success-bg);
+    border-bottom-color: var(--join-success);
   }
 
   .count-warning {
-    background-color: #fcf4d6;
-    border-bottom-color: #f1c21b;
+    background-color: var(--join-warning-bg);
+    border-bottom-color: var(--join-warning);
   }
 
   .count-warning-alt,
   .count-error {
-    background-color: #fff1f1;
-    border-bottom-color: #da1e28;
+    background-color: var(--join-error-bg);
+    border-bottom-color: var(--join-error);
   }
 
   .count-ignored {
@@ -1713,7 +1952,7 @@
     font-weight: 400;
     font-size: 0.875rem;
     line-height: var(--kh-line-primitive);
-    color: #00539a;
+    color: var(--join-label);
   }
 
   .label-success,
@@ -1721,14 +1960,14 @@
   .label-warning-alt,
   .label-error,
   .label-ignored {
-    color: #00539a;
+    color: var(--join-label);
   }
 
   .category-chevron {
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    color: #161616;
+    color: var(--join-text);
   }
 
   .category-body {
@@ -1741,7 +1980,7 @@
   .category-body-text {
     font-size: 0.8125rem;
     line-height: 1.25rem;
-    color: #525252;
+    color: var(--join-text-secondary);
     margin: 0;
   }
 
@@ -1754,15 +1993,15 @@
   }
 
   .inline-banner-error {
-    background-color: #fff1f1;
-    border-left-color: #da1e28;
-    color: #161616;
+    background-color: var(--join-error-bg);
+    border-left-color: var(--join-error);
+    color: var(--join-text);
   }
 
   .inline-banner-info {
-    background-color: #edf5ff;
-    border-left-color: #0043ce;
-    color: #161616;
+    background-color: var(--join-info-bg);
+    border-left-color: var(--join-info);
+    color: var(--join-text);
   }
 
   .join-table {
@@ -1779,119 +2018,152 @@
   }
 
   .join-table-success .table-header {
-    background-color: #defbe6;
-    border-bottom: 1px solid rgba(36, 161, 72, 0.3);
+    background-color: var(--join-success-bg);
+    border-bottom: 1px solid var(--join-success-line);
   }
   .join-table-warning .table-header {
-    background-color: #fcf4d6;
-    border-bottom: 1px solid rgba(241, 194, 27, 0.3);
+    background-color: var(--join-warning-bg);
+    border-bottom: 1px solid var(--join-warning-line);
   }
   .join-table-error .table-header {
-    background-color: #fff1f1;
-    border-bottom: 1px solid rgba(218, 30, 40, 0.3);
+    background-color: var(--join-error-bg);
+    border-bottom: 1px solid var(--join-error-line);
   }
   .join-table-info .table-header {
-    background-color: #edf5ff;
-    border-bottom: 1px solid rgba(0, 67, 206, 0.3);
+    background-color: var(--join-info-bg);
+    border-bottom: 1px solid var(--join-info-line);
   }
 
   .join-table .table-row {
-    background-color: #f4f4f4;
-    border-bottom: 1px solid #c6c6c6;
+    background-color: var(--join-row-bg);
+    border-bottom: 1px solid var(--join-row-border);
   }
   .join-table .table-row:last-child {
     border-bottom: none;
   }
 
+  /* Header and rows share one column grid, so every header label sits above
+     the cell it names and every bulk action above its row actions. */
+  .table-header,
+  .table-row {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1fr) var(--join-equals-width) minmax(0, 1fr)
+      auto;
+    grid-template-areas: 'data equals value actions';
+    align-items: center;
+    column-gap: var(--join-col-gap);
+    padding: var(--join-row-padding);
+    box-sizing: border-box;
+  }
+
+  /* Top-aligned cells, each at least one action tall: a single-line header
+     looks centred, a wrapped one keeps its first line level with the rest. */
   .table-header {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
+    align-items: start;
     min-height: var(--kh-size-md);
   }
 
-  .table-header-left,
-  .table-header-right {
-    padding: var(--kh-gap-inline);
+  .table-header-data,
+  .table-header-value,
+  .table-header .header-relation {
+    min-height: var(--join-action-size);
   }
 
-  .table-header-left {
+  .table-header-data {
+    grid-area: data;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--kh-gap-inline);
-    flex: 1;
+    gap: var(--kh-gap-label) var(--kh-gap-inline);
+    min-width: 0;
+    max-width: 100%;
   }
 
-  .table-header-right {
+  .table-header-data :global(.variable-badge) {
+    flex: 0 1 auto;
+  }
+
+  .table-header .header-relation {
+    display: none;
+  }
+
+  .table-header-value {
+    grid-area: value;
     display: flex;
     align-items: center;
-    flex: 1;
+  }
+
+  .table-header .row-actions {
+    grid-area: actions;
+  }
+
+  .table-header .row-action.row-action-info {
+    border-right-color: transparent;
   }
 
   .table-header-label {
     font-weight: 600;
-    font-size: var(--kh-font-body);
+    font-size: var(--join-font);
     line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
-    color: #161616;
+    color: var(--join-text);
   }
 
   .table-row {
-    display: flex;
-    align-items: center;
-    padding: var(--kh-gap-inline);
     min-height: var(--kh-size-lg);
-    gap: var(--kh-gap-inline);
-    box-sizing: border-box;
   }
 
   .table-row-lines {
     min-height: var(--kh-size-md);
   }
 
+  .table-row .row-actions {
+    grid-area: actions;
+  }
+
   .table-cell {
     font-weight: 400;
-    font-size: var(--kh-font-body);
+    font-size: var(--join-font);
     line-height: var(--kh-line-body);
     letter-spacing: 0.16px;
-    color: #161616;
+    color: var(--join-text);
   }
 
   .cell-data {
-    flex: 1;
+    grid-area: data;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .cell-equals {
-    flex-shrink: 0;
+    grid-area: equals;
     font-weight: 700;
     font-size: 1rem;
     line-height: 1;
     color: var(--cds-text-secondary, #525252);
-    width: var(--kh-size-xs);
+    width: var(--join-equals-width);
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
   .join-table-success .cell-equals {
-    color: #24a148;
+    color: var(--join-success);
   }
   .join-table-warning .cell-equals {
-    color: #f1c21b;
+    color: var(--join-warning);
   }
   .join-table-error .cell-equals {
-    color: #da1e28;
+    color: var(--join-error);
   }
 
   .cell-equals-approx {
-    color: #f1c21b;
-    flex-direction: column;
-    width: auto;
-    min-width: var(--kh-size-xs);
-    gap: 1px;
+    color: var(--join-warning);
   }
 
   .combo-item {
@@ -1936,7 +2208,7 @@
   .combo-separator::after {
     content: '';
     flex: 1;
-    border-top: 1px solid #d1d1d1;
+    border-top: 1px solid var(--join-divider);
   }
 
   :global([data-floating-portal] [id^='menu-join-'].bx--list-box__menu) {
@@ -1945,8 +2217,29 @@
     max-width: 26rem;
   }
 
+  :global(
+    [data-floating-portal] [id^='menu-join-'] .bx--list-box__menu-item__option
+  ) {
+    font-size: var(--kh-font-body);
+  }
+
+  :global(
+    [data-floating-portal] [id^='menu-join-sm-'] .bx--list-box__menu-item
+  ) {
+    height: 1.75rem;
+  }
+
+  :global(
+    [data-floating-portal]
+      [id^='menu-join-sm-']
+      .bx--list-box__menu-item__option
+  ) {
+    font-size: 0.75rem;
+    padding-block: 0.25rem;
+  }
+
   .cell-select {
-    flex: 1;
+    grid-area: value;
     overflow: visible;
     min-width: 0;
   }
@@ -1958,12 +2251,49 @@
 
   .cell-select :global(.bx--select-input),
   .cell-select :global(.bx--text-input) {
-    height: var(--kh-size-sm);
-    padding: 0 2rem 0 0.75rem;
-    font-size: 0.875rem;
-    background-color: var(--cds-field-01, #ffffff);
-    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    height: var(--join-control-height);
+    padding: 0
+      calc(var(--join-combo-icon-right) + var(--join-combo-icon-width) + 4px) 0
+      0.75rem;
+    font-size: var(--join-font);
+    background-color: var(--cds-field-02, #ffffff);
     text-overflow: ellipsis;
+  }
+
+  /* The list box draws the only bottom border; the input inside it has none,
+     otherwise a shorter input shows a second line. */
+  .cell-select :global(.bx--select-input) {
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+  }
+
+  .cell-select :global(.bx--list-box) {
+    height: var(--join-control-height);
+    max-height: none;
+    background-color: var(--cds-field-02, #ffffff);
+  }
+
+  .cell-select :global(.bx--combo-box .bx--text-input) {
+    border-bottom: none;
+  }
+
+  .cell-select :global(.bx--list-box__menu-icon) {
+    right: var(--join-combo-icon-right);
+    width: var(--join-combo-icon-width);
+  }
+
+  .cell-select :global(.bx--list-box__selection) {
+    right: calc(var(--join-combo-icon-right) + var(--join-combo-icon-width));
+    width: var(--join-combo-icon-width);
+  }
+
+  .cell-select :global(.bx--list-box__selection::after) {
+    content: '';
+    position: absolute;
+    top: 25%;
+    right: 0;
+    width: 1px;
+    height: 50%;
+    background-color: var(--cds-border-subtle-01, #c6c6c6);
   }
 
   /* Carbon adds a clear button next to the chevron once a value is selected. */
@@ -1971,11 +2301,13 @@
     :global(
       .bx--list-box__field:has(.bx--list-box__selection) .bx--text-input
     ) {
-    padding-right: 4rem;
+    padding-right: calc(
+      var(--join-combo-icon-right) + 2 * var(--join-combo-icon-width) + 4px
+    );
   }
 
   .cell-select :global(.bx--select__arrow) {
-    height: var(--kh-size-sm);
+    height: var(--join-control-height);
   }
 
   .cell-select :global(.bx--label) {
@@ -1983,10 +2315,10 @@
   }
 
   .select-placeholder {
-    height: var(--kh-size-sm);
+    height: var(--join-control-height);
     padding: 0 2rem 0 0.75rem;
-    font-size: 0.875rem;
-    background-color: var(--cds-field-01, #ffffff);
+    font-size: var(--join-font);
+    background-color: var(--cds-field-02, #ffffff);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     display: flex;
     align-items: center;
@@ -1997,17 +2329,15 @@
   }
 
   .cell-lines {
-    flex: 1;
+    grid-area: value;
     font-variant-numeric: tabular-nums;
-    color: #525252;
+    color: var(--join-text-secondary);
   }
 
   .row-actions {
     display: inline-flex;
     align-items: center;
     gap: var(--kh-gap-label);
-    flex-shrink: 0;
-    margin-left: var(--kh-gap-inline);
   }
 
   .row-actions-compact {
@@ -2015,8 +2345,8 @@
   }
 
   .row-action {
-    width: var(--kh-size-sm);
-    height: var(--kh-size-sm);
+    width: var(--join-action-size);
+    height: var(--join-action-size);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2029,17 +2359,21 @@
     transition: background-color 0.15s;
   }
 
+  .row-action :global(svg) {
+    width: var(--join-icon-size);
+    height: var(--join-icon-size);
+  }
+
   .row-action.row-action-info {
+    box-sizing: content-box;
     margin-right: var(--kh-gap-label);
-    padding-right: var(--kh-gap-inline);
-    width: auto;
-    min-width: var(--kh-size-sm);
-    border-right: 1px solid #e0e0e0;
+    padding-right: var(--join-col-gap);
+    border-right: 1px solid var(--join-divider);
     border-radius: 0;
   }
 
   .row-action:hover:not(.row-action-disabled) {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--join-action-hover);
   }
 
   .row-action:focus-visible {
@@ -2054,34 +2388,26 @@
   .row-action-info :global(.info-btn) {
     width: 100%;
     height: 100%;
-    color: var(--cds-icon-primary, #161616);
+    min-width: 0;
+    min-height: 0;
   }
 
-  .row-action-info :global(.info-btn svg) {
-    width: 20px;
-    height: 20px;
+  .row-action.row-action-info :global(svg) {
+    width: var(--join-info-icon-size);
+    height: var(--join-info-icon-size);
   }
 
   .row-action-validate {
-    color: #161616;
-  }
-
-  .row-action[disabled] {
-    color: var(--cds-icon-on-color-disabled, #c6c6c6);
-    cursor: not-allowed;
-  }
-
-  .row-action[disabled] :global(svg) {
-    fill: var(--cds-icon-on-color-disabled, #c6c6c6);
+    color: var(--join-text);
   }
 
   .row-action-disabled {
-    color: var(--cds-icon-on-color-disabled, #c6c6c6);
+    color: var(--join-icon-disabled);
     cursor: not-allowed;
   }
 
   .row-action-disabled :global(svg) {
-    fill: var(--cds-icon-on-color-disabled, #c6c6c6);
+    fill: var(--join-icon-disabled);
   }
 
   .join-status-zone {
@@ -2102,32 +2428,32 @@
     align-items: center;
     gap: var(--kh-gap-inline);
     padding: var(--kh-pad-panel);
-    background-color: #defbe6;
-    border-left: 3px solid #24a148;
+    background-color: var(--join-success-bg);
+    border-left: 3px solid var(--join-success);
   }
 
   .notification-success-icon :global(svg) {
-    fill: #198038;
+    fill: var(--join-success);
   }
 
   .notification-success-text {
     font-weight: 600;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    color: #044317;
+    color: var(--join-success-text);
   }
 
   .notification-validation {
     padding: var(--kh-pad-panel);
-    background-color: #defbe6;
-    border-left: 3px solid #24a148;
+    background-color: var(--join-success-bg);
+    border-left: 3px solid var(--join-success);
   }
 
   .notification-title {
     font-weight: 600;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    color: #161616;
+    color: var(--join-text);
     margin-bottom: 4px;
   }
 
@@ -2135,7 +2461,88 @@
     font-weight: 400;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    color: #525252;
+    color: var(--join-text-secondary);
     margin-bottom: 8px;
+  }
+
+  /* Carbon g100 counterparts of the light palette above. */
+  :global(html[theme='g100']) .join-assisted-section {
+    --join-text: #f4f4f4;
+    --join-text-secondary: #c6c6c6;
+    --join-label: #78a9ff;
+    --join-row-bg: #262626;
+    --join-row-border: #393939;
+    --join-header-hover: #262626;
+    --join-divider: #525252;
+    --join-action-hover: rgba(255, 255, 255, 0.1);
+    --join-icon-disabled: rgba(244, 244, 244, 0.25);
+    --join-success: #42be65;
+    --join-success-bg: #022d0d;
+    --join-success-line: rgba(66, 190, 101, 0.4);
+    --join-success-text: #a7f0ba;
+    --join-warning-bg: #302400;
+    --join-warning-line: rgba(241, 194, 27, 0.4);
+    --join-error: #fa4d56;
+    --join-error-bg: #2d0709;
+    --join-error-line: rgba(250, 77, 86, 0.4);
+    --join-info: #4589ff;
+    --join-info-bg: #001141;
+    --join-info-line: rgba(69, 137, 255, 0.4);
+  }
+
+  /* A panel this narrow leaves no room beside the entity name, so the
+     basemap field moves under it. */
+  .is-narrow .join-assisted-content {
+    --join-font: 0.75rem;
+    --join-col-gap: 4px;
+    --join-row-padding: 8px 6px;
+    --join-equals-width: 0.75rem;
+    --join-control-height: 1.5rem;
+    --join-action-size: 1.25rem;
+    --join-icon-size: 0.875rem;
+    --join-info-icon-size: 0.75rem;
+    --join-combo-icon-width: 1.25rem;
+    --join-combo-icon-right: 0.125rem;
+  }
+
+  .is-narrow .table-header,
+  .is-narrow .table-row {
+    grid-template-columns: var(--join-equals-width) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'data data data'
+      'equals value actions';
+    row-gap: 4px;
+  }
+
+  .is-narrow .table-header {
+    grid-template-areas:
+      'data data actions'
+      'equals value .';
+  }
+
+  .is-narrow .table-header .header-relation {
+    display: inline-flex;
+  }
+
+  .is-narrow .table-header-data {
+    flex-wrap: nowrap;
+  }
+
+  .is-narrow .table-header-data .table-header-label {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .is-narrow .table-header-data :global(.variable-badge) {
+    min-width: 0;
+  }
+
+  .is-narrow .table-row-lines {
+    grid-template-areas: 'data data data' '. value actions';
+  }
+
+  .is-narrow .cell-select :global(.bx--text-input),
+  .is-narrow .select-placeholder {
+    padding-left: 0.5rem;
   }
 </style>

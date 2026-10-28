@@ -8,6 +8,8 @@ import {
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { JoinQuality } from '$lib/features/map/types/basemap.types';
 import type {
+  EntityValidation,
+  IgnoredEntity,
   JoinedEntity,
   JoinMapping
 } from '$lib/features/commons/types/data-tab.types';
@@ -62,9 +64,9 @@ export interface UseEnrichmentJoinReturn {
   handleMappingChange: (index: number, value: string) => void;
   handleFinalizeEnrichment: () => Promise<void>;
   handleManualCorrection: (dataValue: string, targetValue: string) => void;
-  validateEntity: (dataValue: string, targetValue: string) => void;
-  ignoreEntity: (dataValue: string) => void;
-  restoreEntity: (dataValue: string) => void;
+  validateEntities: (entries: EntityValidation[]) => void;
+  ignoreEntities: (entries: IgnoredEntity[]) => void;
+  restoreEntities: (dataValues: string[]) => void;
   runFullFuzzyPass: () => Promise<void>;
   loadJoinedPage: (page: number) => void;
   requestJoinedEntities: () => void;
@@ -357,20 +359,34 @@ export function useEnrichmentJoin(
     void regrade();
   }
 
-  function validateEntity(dataValue: string, targetValue: string): void {
-    handleManualCorrection(dataValue, targetValue);
+  function validateEntities(entries: EntityValidation[]): void {
+    let changed = false;
+    for (const { dataValue, basemapValue } of entries) {
+      if (!dataValue || !basemapValue) continue;
+      manualCorrections.set(dataValue, basemapValue);
+      ignoredValues.delete(dataValue);
+      changed = true;
+    }
+    if (changed) void regrade();
   }
 
-  function ignoreEntity(dataValue: string): void {
-    if (!dataValue || ignoredValues.has(dataValue)) return;
-    ignoredValues.add(dataValue);
-    manualCorrections.delete(dataValue);
-    void regrade();
+  function ignoreEntities(entries: IgnoredEntity[]): void {
+    let changed = false;
+    for (const { dataValue } of entries) {
+      if (!dataValue || ignoredValues.has(dataValue)) continue;
+      ignoredValues.add(dataValue);
+      manualCorrections.delete(dataValue);
+      changed = true;
+    }
+    if (changed) void regrade();
   }
 
-  function restoreEntity(dataValue: string): void {
-    if (!ignoredValues.delete(dataValue)) return;
-    void regrade();
+  function restoreEntities(dataValues: string[]): void {
+    let changed = false;
+    for (const dataValue of dataValues) {
+      if (ignoredValues.delete(dataValue)) changed = true;
+    }
+    if (changed) void regrade();
   }
 
   /**
@@ -551,9 +567,9 @@ export function useEnrichmentJoin(
     handleMappingChange,
     handleFinalizeEnrichment,
     handleManualCorrection,
-    validateEntity,
-    ignoreEntity,
-    restoreEntity,
+    validateEntities,
+    ignoreEntities,
+    restoreEntities,
     runFullFuzzyPass,
     loadJoinedPage: (page: number) => void loadJoinedPage(page),
     requestJoinedEntities,
