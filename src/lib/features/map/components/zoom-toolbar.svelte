@@ -606,29 +606,18 @@
     line-height: 1.3;
   }
 
+  /* A folded tab is one zoom cell wide, so the Page tab sits over the +
+     button below. */
   #khartis-zoom-toolbar :global(.zoom-mode-tabs) {
+    --toggle-tab-size: var(--_zoom-cell);
+    --toggle-tab-height: var(--kh-size-md);
+    --toggle-tab-expanded-padding: 12px;
     border-color: var(--cds-ui-03, #c6c6c6);
     border-radius: 0;
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab) {
-    gap: var(--kh-gap-inline);
     border-radius: 0;
-    transition:
-      width 0.15s ease,
-      padding 0.15s ease;
-  }
-
-  #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab.full-width) {
-    width: calc(100% - var(--_zoom-cell));
-    padding: 0 12px;
-    justify-content: flex-start;
-  }
-
-  #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab:not(.full-width)) {
-    width: var(--_zoom-cell);
-    padding: 0;
-    justify-content: center;
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab span) {
@@ -754,13 +743,9 @@
       display: none;
     }
 
-    #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab.full-width) {
-      padding-inline: 10px;
-    }
-
-    #khartis-zoom-toolbar
-      :global(.zoom-mode-tabs .toggle-tab:not(.full-width)) {
-      width: 50px;
+    #khartis-zoom-toolbar :global(.zoom-mode-tabs) {
+      --toggle-tab-size: 50px;
+      --toggle-tab-expanded-padding: 10px;
     }
 
     .zoom-section {
