@@ -1,5 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
-import { rebuildDerivedGeometryTables } from '$lib/features/duckdb/operations/derived-geometry';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  isMeshTooFineForInnerLimits,
+  rebuildDerivedGeometryTables
+} from '$lib/features/duckdb/operations/derived-geometry';
+import {
+  createTestInstance,
+  destroyTestInstance,
+  query,
+  run,
+  type TestDuckDB
+} from '../pipeline/duckdb-node-helper';
 
 type DuckMock = Parameters<typeof rebuildDerivedGeometryTables>[0];
 
@@ -102,5 +112,42 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(emptyTableQuery).toContain(
       'CREATE OR REPLACE TABLE "regions__innerlines"'
     );
+  });
+});
+
+describe('isMeshTooFineForInnerLimits', () => {
+  let db: TestDuckDB;
+  const duck = {
+    query: (sql: string) => query(db, sql)
+  } as unknown as DuckMock;
+
+  beforeAll(async () => {
+    db = await createTestInstance();
+    await run(db, 'LOAD spatial');
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  async function createStripOfCells(tableName: string, cellCount: number) {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE ${tableName} AS
+       SELECT ST_MakeEnvelope(i, 0, i + 1, 1) AS geom
+       FROM range(${cellCount}) t(i)`
+    );
+  }
+
+  it('should skip the inner limits when the mean cell is finer than 1/500 of the extent', async () => {
+    await createStripOfCells('fine_grid', 1000);
+
+    expect(await isMeshTooFineForInnerLimits(duck, 'fine_grid')).toBe(true);
+  });
+
+  it('should keep the inner limits when the cells stay readable across the extent', async () => {
+    await createStripOfCells('coarse_grid', 100);
+
+    expect(await isMeshTooFineForInnerLimits(duck, 'coarse_grid')).toBe(false);
   });
 });
