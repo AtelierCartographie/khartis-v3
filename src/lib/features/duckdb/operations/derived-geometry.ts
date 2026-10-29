@@ -181,15 +181,15 @@ export async function rebuildDerivedGeometryTables(
   ]);
   if (!isCurrent()) return;
 
-  await createDerivedTable(
-    duck,
-    getDerivedOuterlinesTableName(sourceTable),
-    withNodingRetry((noding) =>
-      buildLineSelect(
-        `extract_outerlines('${escapeSqlString(landTable)}', ${noding})`
-      )
+  const escapedLand = escapeSqlString(landTable);
+  await createDerivedTable(duck, getDerivedOuterlinesTableName(sourceTable), [
+    ...(coverageIsValid
+      ? [buildLineSelect(`extract_coverage_outerlines('${escapedLand}')`)]
+      : []),
+    ...withNodingRetry((noding) =>
+      buildLineSelect(`extract_outerlines('${escapedLand}', ${noding})`)
     )
-  );
+  ]);
 
   if (!isCurrent()) return;
 
