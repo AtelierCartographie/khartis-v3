@@ -3,6 +3,7 @@ import {
   isAutoFacetDataColumn,
   filterVisualizableDataColumns,
   findLatestYearNumericColumn,
+  findPreferredNumericColumn,
   isAutoFacetNumericColumn,
   isVisualizableDataColumn
 } from './visualization-columns.utils';
@@ -72,5 +73,24 @@ describe('visualization column helpers', () => {
 
     expect(findLatestYearNumericColumn(columns)).toBe('_2020');
     expect(findLatestYearNumericColumn(columns, ['_2020'])).toBe('_1960');
+  });
+
+  it('should skip a 0/1 flag when a numeric column with a real range follows it', () => {
+    const columns = [
+      { name: 'Idcarreau', type: 'text', stats: { uniques: 374479 } },
+      { name: 'secrt_car', type: 'number', stats: { uniques: 2 } },
+      { name: 'pop', type: 'number', stats: { uniques: 301077 } }
+    ];
+
+    expect(findPreferredNumericColumn(columns)).toBe('pop');
+  });
+
+  it('should still pick a 0/1 flag when it is the only numeric column', () => {
+    const columns = [
+      { name: 'name', type: 'text', stats: { uniques: 10 } },
+      { name: 'is_capital', type: 'number', stats: { uniques: 2 } }
+    ];
+
+    expect(findPreferredNumericColumn(columns)).toBe('is_capital');
   });
 });

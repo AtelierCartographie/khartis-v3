@@ -220,6 +220,16 @@ const extract_coverage_land_macro = `CREATE OR REPLACE MACRO extract_coverage_la
     WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
 );`;
 
+// The territory of a coverage is a single valid union, so its outline is its
+// boundary: a second dissolve finds the same lines in seconds instead of ms.
+const extract_coverage_outerlines_macro = `CREATE OR REPLACE MACRO extract_coverage_outerlines(
+    land_table
+) AS TABLE (
+    FROM query_table(land_table)
+    SELECT ST_LineMerge(ST_CollectionExtract(ST_Boundary(geom), 2)) AS geom
+    WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+);`;
+
 const extract_coverage_innerlines_macro = `CREATE OR REPLACE MACRO extract_coverage_innerlines(
     input_table
 ) AS TABLE (
@@ -391,6 +401,7 @@ export const simplification_macros =
   is_valid_polygon_coverage_macro +
   extract_coverage_land_macro +
   extract_coverage_innerlines_macro +
+  extract_coverage_outerlines_macro +
   extract_outerlines_macro +
   simplify_and_clean_macro +
   snap_linestring_normalized_macro +

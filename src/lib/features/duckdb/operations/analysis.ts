@@ -91,7 +91,7 @@ interface HistogramSpec {
 const HISTOGRAM_STRUCT_FIELDS: Record<HistogramMacro, readonly string[]> = {
   histogram_numeric: ['bin', 'count'],
   histogram_date: ['bin', 'count'],
-  histogram_categorical: ['category', 'count', 'percent']
+  histogram_categorical: ['category', 'count', 'percent', 'other_categories']
 };
 
 function columnBatches<T>(items: T[], size: number): T[][] {

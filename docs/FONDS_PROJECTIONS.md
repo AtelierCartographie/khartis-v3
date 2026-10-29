@@ -110,8 +110,20 @@ tables sœurs :
 | `…__outerlines` | `extract_outerlines` | contour extérieur, calculé à partir de `__land` |
 | `…__innerlines` | `extract_innerlines` | limites internes partagées                      |
 
-La dérivation est relancée après une simplification. Un fond linéaire ne reçoit
-qu'une table de points représentatifs.
+Sur une couverture valide, `extract_coverage_land` et
+`extract_coverage_innerlines` évitent la dissolution, et le contour est le bord
+du territoire (`extract_coverage_outerlines`).
+
+Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
+arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
+connexion, puis les `__centroids` par lots : la création du projet ouvre
+l'étape Données sans les attendre, et le rendu dessine chaque couche quand sa
+table est prête (`waitForTableBuild`). Une requête lancée pendant une étape de
+la dérivation attend sa fin, DuckDB WASM ne l'interrompt pas.
+
+La dérivation est relancée après une simplification, qui attend d'abord une
+dérivation en cours. Un fond linéaire ne reçoit qu'une table de points
+représentatifs.
 
 - **Elle n'est jamais destructrice** : la table source reste intacte.
 - **GEOS WASM est plus strict que le natif** et refuse de dissoudre certaines

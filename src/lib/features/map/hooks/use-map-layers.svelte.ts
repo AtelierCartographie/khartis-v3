@@ -8,7 +8,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   Duck,
   duckDBOrchestrator,
-  isBuiltTableFresh
+  isBuiltTableFresh,
+  isTableBuildPending
 } from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -17,6 +18,7 @@ import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
@@ -55,6 +57,7 @@ import type {
 } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   selectRowsByIndices,
   selectRowsInScope
@@ -215,6 +218,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const DATA_PREVIEW_FILL_OPACITY = 0.9;
   const DATA_PREVIEW_STROKE_WIDTH = 1;
   const DATA_PREVIEW_STROKE_OPACITY = 1;
+  const DATA_PREVIEW_TERRITORY_FILL_COLOR: [number, number, number] = [
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[0],
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[1],
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[2]
+  ];
 
   function referenceBasemapDrawsPolygons(
     basemapId: string | null | undefined
@@ -447,6 +455,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
+  let isWaitingForRepresentativePoints = false;
   const matchedSplitTableCache = new WeakMap<
     ArrowTable,
     WeakMap<ArrowTable, Map<string, ArrowTable>>
@@ -735,7 +744,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           error
         );
         representativePointLoadFailures.add(sourceTable);
-        representativePointNotifyOnReady.delete(sourceTable);
+        if (representativePointNotifyOnReady.has(sourceTable)) {
+          representativePointNotifyOnReady.delete(sourceTable);
+          onRepresentativePointTablesLoaded?.();
+        }
       })
       .finally(() => {
         representativePointLoadPromises.delete(sourceTable);
@@ -798,6 +810,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       joinedBasemapId,
       true
     );
+    isWaitingForRepresentativePoints ||=
+      representativePointLoadPromises.has(sourceTable);
     return null;
   }
 
@@ -1140,6 +1154,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
       let hasPendingBasemapLayerSource = false;
+      let isBuildingBasemapLayer = false;
+      isWaitingForRepresentativePoints = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
@@ -1216,6 +1232,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               )
               .reverse();
 
+            const drawnLayerTypes = new Set(getRequestedMetadataLayerTypes());
             for (const layerKey of metadataLayerKeys) {
               const entry = metadataLayerByKey.get(layerKey);
               if (!entry) continue;
@@ -1229,11 +1246,24 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               ) {
                 continue;
               }
-              const table = layer.file
+              let table = layer.file
                 ? basemapService.currentLayers.get(layer.file)
                 : currentMetadata.isCustom
                   ? null
                   : worldBaseTable;
+              if (
+                !table &&
+                layer.file &&
+                drawnLayerTypes.has(layer.type) &&
+                isTableBuildPending(layer.file)
+              ) {
+                isBuildingBasemapLayer = true;
+                // A territory is its cells dissolved: until it is built, the
+                // cells filled alike draw the same shape.
+                if (layer.type === BasemapLayerType.LAND) {
+                  table = basemapService.currentGeometryTable;
+                }
+              }
               if (!table) {
                 hasPendingBasemapLayerSource = true;
                 continue;
@@ -1537,6 +1567,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             continue;
           }
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
+          // The dataset's own basemap replaces this preview with its territory:
+          // drawn in the territory fill, the swap does not show.
+          if (
+            datasetHasOwnGeometry &&
+            !datasetJoinedBasemap &&
+            hasPolygonGeometry
+          ) {
+            fallbackCtx.fillColor = DATA_PREVIEW_TERRITORY_FILL_COLOR;
+            fallbackCtx.fillOpacity = 1;
+            fallbackCtx.strokeWidth = 0;
+          }
           const datasetProjectionMetadata = getDatasetProjectionMetadata(
             datasetId,
             currentMetadata
@@ -1745,6 +1786,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // holding it is a visible layer whose table has not loaded yet.
       const hasPendingBasemapLayers =
         shouldKeepOrthographicBasemapLayers && hasPendingBasemapLayerSource;
+      mapLoadingStore.setPreparingLayers(
+        (shouldKeepOrthographicBasemapLayers && isBuildingBasemapLayer) ||
+          isWaitingForRepresentativePoints
+      );
       const hasExpectedVisibleLayers =
         hasExpectedActiveViz ||
         hasExpectedDatasetFallbacks ||

@@ -7,6 +7,7 @@ import {
 import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
+import { SvelteSet } from 'svelte/reactivity';
 import {
   DataValidationError,
   DuckDBError,
@@ -754,6 +755,7 @@ function createBasemapService() {
   let currentBasemap: LoadedBasemap | null = $state(null);
   let simplificationVersion = $state(0);
   let registrationVersion = $state(0);
+  const emptyLayerFiles = new SvelteSet<string>();
   let attributesLoaded = false;
   let attributesLoadPromise: Promise<void> | null = null;
   let projectionPresetsData: ProjectionPresets | null = $state(null);
@@ -1090,14 +1092,27 @@ function createBasemapService() {
     const projectColumns = shouldReadFromDuck
       ? await resolveCustomBasemapGeometryProjectColumns(Duck, layerFile)
       : null;
-    return shouldReadFromDuck
-      ? loadGeometryFromDuckTable(
+    const table = shouldReadFromDuck
+      ? await loadGeometryFromDuckTable(
           layerFile,
           projectColumns,
           getCustomBasemapLayerGeometryTypeOverride(customLayerType),
           wgs84SourceCrsByMetadata.get(metadata)
         )
-      : loadGeometryFromParquet(layerFile);
+      : await loadGeometryFromParquet(layerFile);
+    recordLayerTableEmptiness(layerFile, table);
+    return table;
+  }
+
+  function recordLayerTableEmptiness(
+    layerFile: string,
+    table: ArrowTable
+  ): void {
+    if (table.numRows === 0) {
+      emptyLayerFiles.add(layerFile);
+    } else {
+      emptyLayerFiles.delete(layerFile);
+    }
   }
 
   function getProjectedSourceCrs(
@@ -1609,7 +1624,9 @@ function createBasemapService() {
         continue;
       }
 
-      layerTables.set(layerFile, await loadGeometryFromDuckTable(layerFile));
+      const table = await loadGeometryFromDuckTable(layerFile);
+      recordLayerTableEmptiness(layerFile, table);
+      layerTables.set(layerFile, table);
     }
 
     loadedBasemap.geometryTable = geometryTable;
@@ -1985,6 +2002,10 @@ function createBasemapService() {
     },
     get currentLayers(): Map<string, ArrowTable> {
       return getResolvedLayerTables(currentBasemap);
+    },
+    /** True once the layer's table is loaded and holds no geometry. */
+    isLayerEmpty(layerFile: string): boolean {
+      return emptyLayerFiles.has(layerFile);
     },
     getResolvedVariantData,
     getLayerTableByType,
