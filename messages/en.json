@@ -920,6 +920,7 @@
   "join_announce_validated": "{entity} has been confirmed and moved to joined entities.",
   "join_announce_remapped": "Match changed for {entity}.",
   "basemap_suggestions_desc": "They are based on the geographic dimensions detected in the loaded data.",
+  "basemap_suggestions_extent_desc": "They are ranked by the extent of the geographic file.",
   "basemap_no_suggestions_title": "No suggestions available",
   "basemap_no_suggestions_subtitle": "To get basemap suggestions, select a geographic column in the 'Geolocate' step.",
   "basemap_suggest_button": "Suggest a basemap",
