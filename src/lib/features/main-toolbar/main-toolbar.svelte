@@ -22,7 +22,7 @@
     OpenPanelFilledRight
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import OpenPanelFilledRightWide from './components/open-panel-filled-right-wide.svelte';
@@ -41,6 +41,54 @@
   } from '$lib/features/commons/utils/step-transition.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
+  let panelElement = $state<HTMLElement | null>(null);
+
+  const PANEL_MOTION_MS = 300;
+  const PANEL_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
+
+  // Habillage slides the panel out. It keeps the width it had, rather than
+  // the collapsed state the step sets, so that it does not shrink first.
+  const isPanelHidden = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
+  let shownToolbarState = $state(untrack(() => globalState.toolbarState));
+
+  $effect.pre(() => {
+    const toolbarState = globalState.toolbarState;
+    if (!isPanelHidden) {
+      shownToolbarState = toolbarState;
+    }
+  });
+
+  // A width change snaps the panel to its new width, then slides its edge
+  // from where it was: only a transform runs on each frame.
+  let panelLeftBefore: number | null = null;
+  let panelSlide: Animation | null = null;
+
+  $effect.pre(() => {
+    void shownToolbarState;
+    untrack(() => {
+      panelLeftBefore = panelElement?.getBoundingClientRect().left ?? null;
+    });
+  });
+
+  $effect(() => {
+    void shownToolbarState;
+    untrack(() => {
+      const from = panelLeftBefore;
+      panelLeftBefore = null;
+      if (from === null || !panelElement) return;
+      panelSlide?.cancel();
+      const shift = from - panelElement.getBoundingClientRect().left;
+      if (Math.abs(shift) < 1 || motionDuration(PANEL_MOTION_MS) === 0) {
+        return;
+      }
+      panelSlide = panelElement.animate(
+        [{ transform: `translateX(${shift}px)` }, { transform: 'none' }],
+        { duration: PANEL_MOTION_MS, easing: PANEL_EASING }
+      );
+    });
+  });
 
   // The content of a step leaves towards the step left behind and the next
   // one arrives from the other side, along the order of the steps.
@@ -170,11 +218,13 @@
 </script>
 
 <nav
+  bind:this={panelElement}
   id="khartis-main-toolbar"
-  hidden={globalState.selectedStep === ToolbarStep.Styling}
+  inert={isPanelHidden}
   style:--khartis-dropdown-max-width={dropdownMaxWidth}
-  class={clsx('app-shadow scrollbar-hidden', globalState.toolbarState, {
-    'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
+  class={clsx('app-shadow scrollbar-hidden', shownToolbarState, {
+    'collapsed-toolbar': shownToolbarState === ToolbarState.Collapsed,
+    'panel-hidden': isPanelHidden
   })}
 >
   <header class="flex sticky z-1000 border-b main-toolbar-header">
@@ -338,12 +388,41 @@
 </nav>
 
 <style>
-  #khartis-main-toolbar[hidden] {
-    display: none !important;
+  /* Floats over the right edge of <main>, which keeps its room
+     (+layout.svelte). The second shadow paints the panel's colour past its
+     right edge, so a narrowing panel shows no gap while it slides. */
+  #khartis-main-toolbar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background-color: var(--cds-ui-01);
+    box-shadow:
+      0 2px 6px 0 rgba(0, 0, 0, 0.1),
+      800px 0 0 0 var(--cds-ui-01);
+    transition:
+      transform 300ms cubic-bezier(0.2, 0, 0.38, 0.9),
+      visibility 0s;
   }
 
-  #khartis-main-toolbar {
-    background-color: var(--cds-ui-01);
+  :global(html[theme='g100']) #khartis-main-toolbar {
+    box-shadow:
+      0 2px 6px 0 rgba(0, 0, 0, 0.5),
+      800px 0 0 0 var(--cds-ui-01);
+  }
+
+  #khartis-main-toolbar.panel-hidden {
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform 300ms cubic-bezier(0.2, 0, 0.38, 0.9),
+      visibility 0s linear 300ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #khartis-main-toolbar,
+    #khartis-main-toolbar.panel-hidden {
+      transition: none;
+    }
   }
 
   nav {
@@ -351,14 +430,9 @@
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
     z-index: var(--z-main-toolbar);
-    will-change: width;
-    transition:
-      width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
     height: calc(100dvh - var(--cds-header-height));
     overflow: hidden;
-    position: relative;
-    flex-shrink: 0;
   }
 
   .scrollbar-hidden {
@@ -371,9 +445,7 @@
   }
 
   nav.full {
-    width: 50%;
-    min-width: 400px;
-    max-width: 800px;
+    width: var(--kh-side-panel-full-width);
   }
 
   nav.compact {
@@ -386,8 +458,7 @@
   }
 
   nav.collapsed {
-    width: 50px;
-    min-width: 50px;
+    width: var(--kh-side-panel-collapsed-width);
     padding: 0;
     height: calc(100dvh - var(--cds-header-height));
     overflow: hidden;
