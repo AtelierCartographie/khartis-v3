@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/button-native.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     canUseThousandsSeparator,
@@ -7,12 +8,7 @@
     type ThousandsSeparatorSelectValue
   } from '$lib/features/data-tab/utils/csv-options.utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    InlineLoading,
-    Modal,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
+  import { InlineLoading, Select, SelectItem } from 'carbon-components-svelte';
   import {
     readCarbonStringValue,
     type CarbonValueEvent
@@ -26,13 +22,12 @@
   }
 
   interface Props {
-    open: boolean;
     currentOptions: CsvOptions;
     onClose: () => void;
     onApply: (options: CsvOptions) => Promise<void>;
   }
 
-  let { open, currentOptions, onClose, onApply }: Props = $props();
+  let { currentOptions, onClose, onApply }: Props = $props();
 
   let header = $state(true);
   let decimalSeparator = $state('.');
@@ -41,15 +36,23 @@
   let isApplying = $state(false);
 
   $effect(() => {
-    if (open) {
-      header = currentOptions.header;
-      decimalSeparator = currentOptions.decimalSeparator;
-      thousandsSeparator = toThousandsSeparatorSelectValue(
-        currentOptions.thousandsSeparator
-      );
-      delimiter = currentOptions.delimiter || 'auto';
-    }
+    header = currentOptions.header;
+    decimalSeparator = currentOptions.decimalSeparator;
+    thousandsSeparator = toThousandsSeparatorSelectValue(
+      currentOptions.thousandsSeparator
+    );
+    delimiter = currentOptions.delimiter || 'auto';
   });
+
+  // Applying reloads the file: nothing to apply until an option changes.
+  const hasChanges = $derived(
+    header !== currentOptions.header ||
+      decimalSeparator !== currentOptions.decimalSeparator ||
+      fromThousandsSeparatorSelectValue(thousandsSeparator) !==
+        currentOptions.thousandsSeparator ||
+      (delimiter === 'auto' ? undefined : delimiter) !==
+        currentOptions.delimiter
+  );
 
   $effect(() => {
     if (!filteredThousandsOptions.some((o) => o.value === thousandsSeparator)) {
@@ -126,101 +129,83 @@
   }
 </script>
 
-<Modal
-  iconDescription={m.a11y_close_dialog()}
-  bind:open={open}
-  modalHeading={m.csv_options_title()}
-  primaryButtonText={m.csv_options_apply()}
-  secondaryButtonText={m.csv_options_cancel()}
-  primaryButtonDisabled={isApplying}
-  on:click:button--secondary={onClose}
-  on:click:button--primary={handleApply}
-  on:close={onClose}
-  size="sm"
->
-  <div class="csv-options">
-    <p class="description">{m.csv_options_description()}</p>
+<div class="csv-options">
+  <p class="kh-help">{m.csv_options_description()}</p>
 
-    <div class="option-group">
-      <Switch
-        labelText={m.csv_options_header()}
-        bind:toggled={header}
-        disabled={isApplying}
-        labelA={m.no()}
-        labelB={m.yes()}
-        showStateLabel
-      />
-    </div>
+  <Switch
+    labelText={m.csv_options_header()}
+    bind:toggled={header}
+    disabled={isApplying}
+    labelA={m.no()}
+    labelB={m.yes()}
+    showStateLabel
+  />
 
-    <div class="option-group">
-      <Select
-        size="sm"
-        labelText={m.csv_options_delimiter()}
-        selected={delimiter}
-        disabled={isApplying}
-        onchange={handleDelimiterChange}
-      >
-        {#each delimiterOptions as opt (opt.value)}
-          <SelectItem value={opt.value} text={opt.label} />
-        {/each}
-      </Select>
-    </div>
+  <Select
+    size="sm"
+    labelText={m.csv_options_delimiter()}
+    selected={delimiter}
+    disabled={isApplying}
+    onchange={handleDelimiterChange}
+  >
+    {#each delimiterOptions as opt (opt.value)}
+      <SelectItem value={opt.value} text={opt.label} />
+    {/each}
+  </Select>
 
-    <div class="option-group">
-      <Select
-        size="sm"
-        labelText={m.csv_options_decimal_separator()}
-        selected={decimalSeparator}
-        disabled={isApplying}
-        onchange={handleDecimalSeparatorChange}
-      >
-        {#each decimalOptions as opt (opt.value)}
-          <SelectItem value={opt.value} text={opt.label} />
-        {/each}
-      </Select>
-    </div>
+  <Select
+    size="sm"
+    labelText={m.csv_options_decimal_separator()}
+    selected={decimalSeparator}
+    disabled={isApplying}
+    onchange={handleDecimalSeparatorChange}
+  >
+    {#each decimalOptions as opt (opt.value)}
+      <SelectItem value={opt.value} text={opt.label} />
+    {/each}
+  </Select>
 
-    <div class="option-group">
-      <Select
-        size="sm"
-        labelText={m.csv_options_thousands_separator()}
-        selected={thousandsSeparator}
-        disabled={isApplying}
-        onchange={handleThousandsSeparatorChange}
-      >
-        {#each filteredThousandsOptions as opt (opt.value)}
-          <SelectItem value={opt.value} text={opt.label} />
-        {/each}
-      </Select>
-    </div>
+  <Select
+    size="sm"
+    labelText={m.csv_options_thousands_separator()}
+    selected={thousandsSeparator}
+    disabled={isApplying}
+    onchange={handleThousandsSeparatorChange}
+  >
+    {#each filteredThousandsOptions as opt (opt.value)}
+      <SelectItem value={opt.value} text={opt.label} />
+    {/each}
+  </Select>
 
-    {#if isApplying}
-      <div class="loading">
-        <InlineLoading description={m.csv_options_reloading()} />
-      </div>
-    {/if}
+  {#if isApplying}
+    <InlineLoading description={m.csv_options_reloading()} />
+  {/if}
+
+  <div class="actions">
+    <Button kind="ghost" size="small" disabled={isApplying} onclick={onClose}>
+      {m.csv_options_cancel()}
+    </Button>
+    <Button
+      kind="primary"
+      size="small"
+      disabled={isApplying || !hasChanges}
+      onclick={handleApply}
+    >
+      {m.button_apply()}
+    </Button>
   </div>
-</Modal>
+</div>
 
 <style>
   .csv-options {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-param);
   }
 
-  .description {
-    color: var(--cds-text-02);
-    font-size: 0.875rem;
-    margin-bottom: var(--cds-spacing-03);
-  }
-
-  .option-group {
+  .actions {
     display: flex;
-    flex-direction: column;
-  }
-
-  .loading {
-    margin-top: var(--cds-spacing-03);
+    gap: var(--cds-spacing-03);
+    padding-top: var(--cds-spacing-03);
   }
 </style>
