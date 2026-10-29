@@ -154,11 +154,13 @@ function buildLineSelect(macroCall: string): string {
  */
 export async function rebuildDerivedGeometryTables(
   duck: DuckDBClientForDerivedGeometry,
-  sourceTable: string
+  sourceTable: string,
+  { isCurrent = () => true }: { isCurrent?: () => boolean } = {}
 ): Promise<void> {
   const escapedSource = escapeSqlString(sourceTable);
   const landTable = getDerivedLandTableName(sourceTable);
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
+  if (!isCurrent()) return;
   const landSelect = (macroCall: string) => `
     SELECT geom
     FROM ${macroCall}
@@ -177,6 +179,7 @@ export async function rebuildDerivedGeometryTables(
       landSelect(`extract_land('${escapedSource}', ${noding})`)
     )
   ]);
+  if (!isCurrent()) return;
 
   await createDerivedTable(
     duck,
@@ -187,6 +190,8 @@ export async function rebuildDerivedGeometryTables(
       )
     )
   );
+
+  if (!isCurrent()) return;
 
   const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
   if (await isMeshTooFineForInnerLimits(duck, sourceTable)) {

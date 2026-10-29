@@ -19,6 +19,7 @@ export {
   buildTableInBackground,
   isBuiltTableFresh,
   isTableBuildPending,
+  runTableBuildInBackground,
   waitForTableBuild
 } from './operations/background-table-build';
 export {
