@@ -149,8 +149,12 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         lastSelectedBasemapSource ??
         BasemapSource.CATALOG
     });
-    basemapStyleStore.setReferenceBasemap(null);
     projectStore.updateProjectData({ basemap: undefined });
+    // Re-registering the dataset's own basemap re-reads its whole geometry.
+    if (isDatasetGeometryBasemap(basemapStyleStore.referenceBasemapId)) {
+      return;
+    }
+    basemapStyleStore.setReferenceBasemap(null);
     void activateDatasetGeometryBasemap();
   }
 
