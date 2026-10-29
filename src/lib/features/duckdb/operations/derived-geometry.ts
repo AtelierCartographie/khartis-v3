@@ -11,6 +11,11 @@ import {
 // moving vertices well below the pixel.
 const NODING_REPAIR_FACTOR = 0.000001;
 
+// Past this many mean cells across its extent, a mesh drawn whole on a map a
+// thousand pixels wide has cells under two pixels: its shared borders, at any
+// stroke width, paint over the fill they separate (a 1 km grid of France).
+const MAX_MESH_CELLS_ACROSS_EXTENT = 500;
+
 interface DuckDBClientForDerivedGeometry {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
   invalidateTableCache?(tableName: string): void;
@@ -37,6 +42,7 @@ async function createEmptyGeometryTable(
     SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
     WHERE FALSE
   `);
+  duck.invalidateTableCache?.(tableName);
 }
 
 async function createDerivedTable(
@@ -80,6 +86,33 @@ async function isValidPolygonCoverage(
   } catch (error) {
     logger.warn(
       `Could not validate the coverage of ${sourceTable}`,
+      LogCategory.DUCKDB,
+      error
+    );
+    return false;
+  }
+}
+
+export async function isMeshTooFineForInnerLimits(
+  duck: DuckDBClientForDerivedGeometry,
+  sourceTable: string
+): Promise<boolean> {
+  const geom = `"${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`;
+  try {
+    const rows = (await duck.query(
+      `SELECT sqrt(sum(ST_Area(${geom})) / count(*)) * ${MAX_MESH_CELLS_ACROSS_EXTENT}
+          < greatest(
+              max(ST_XMax(${geom})) - min(ST_XMin(${geom})),
+              max(ST_YMax(${geom})) - min(ST_YMin(${geom}))
+            ) AS too_fine
+       FROM "${escapeIdentifier(sourceTable)}"
+       WHERE ${geom} IS NOT NULL`,
+      { format: 'array' }
+    )) as Array<{ too_fine: boolean | null }>;
+    return rows[0]?.too_fine === true;
+  } catch (error) {
+    logger.warn(
+      `Could not measure the mesh of ${sourceTable}`,
       LogCategory.DUCKDB,
       error
     );
@@ -155,7 +188,13 @@ export async function rebuildDerivedGeometryTables(
     )
   );
 
-  await createDerivedTable(duck, getDerivedInnerlinesTableName(sourceTable), [
+  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
+  if (await isMeshTooFineForInnerLimits(duck, sourceTable)) {
+    await createEmptyGeometryTable(duck, innerlinesTable);
+    return;
+  }
+
+  await createDerivedTable(duck, innerlinesTable, [
     ...(coverageIsValid
       ? [buildLineSelect(`extract_coverage_innerlines('${escapedSource}')`)]
       : []),
