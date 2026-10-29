@@ -455,6 +455,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
+  let isWaitingForRepresentativePoints = false;
   const matchedSplitTableCache = new WeakMap<
     ArrowTable,
     WeakMap<ArrowTable, Map<string, ArrowTable>>
@@ -743,7 +744,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           error
         );
         representativePointLoadFailures.add(sourceTable);
-        representativePointNotifyOnReady.delete(sourceTable);
+        if (representativePointNotifyOnReady.has(sourceTable)) {
+          representativePointNotifyOnReady.delete(sourceTable);
+          onRepresentativePointTablesLoaded?.();
+        }
       })
       .finally(() => {
         representativePointLoadPromises.delete(sourceTable);
@@ -806,6 +810,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       joinedBasemapId,
       true
     );
+    isWaitingForRepresentativePoints ||=
+      representativePointLoadPromises.has(sourceTable);
     return null;
   }
 
@@ -1149,6 +1155,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       let hasPendingBasemapLayerSource = false;
       let isBuildingBasemapLayer = false;
+      isWaitingForRepresentativePoints = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
@@ -1779,8 +1786,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // holding it is a visible layer whose table has not loaded yet.
       const hasPendingBasemapLayers =
         shouldKeepOrthographicBasemapLayers && hasPendingBasemapLayerSource;
-      mapLoadingStore.setBuildingBasemapLayers(
-        shouldKeepOrthographicBasemapLayers && isBuildingBasemapLayer
+      mapLoadingStore.setPreparingLayers(
+        (shouldKeepOrthographicBasemapLayers && isBuildingBasemapLayer) ||
+          isWaitingForRepresentativePoints
       );
       const hasExpectedVisibleLayers =
         hasExpectedActiveViz ||

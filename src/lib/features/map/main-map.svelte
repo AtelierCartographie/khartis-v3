@@ -73,10 +73,12 @@
     isLoading: () => boolean,
     setVisible: (visible: boolean) => void
   ): () => void {
+    // Read here, not only in the timer, so the effect tracks the loading state.
     // Hiding waits as long as showing, so a loading state that hands over to
     // the next one (a table build, then its parse) keeps a steady loader.
+    const loading = isLoading();
     const timer = setTimeout(() => {
-      setVisible(isLoading());
+      setVisible(loading);
     }, MAP_STATUS_LOADER_DELAY_MS);
 
     return () => clearTimeout(timer);
@@ -100,7 +102,7 @@
   });
   $effect(() => {
     return scheduleDelayedMapStatusLoader(
-      () => mapLoadingStore.isBuildingBasemapLayers || hasPendingWorkerParse(),
+      () => mapLoadingStore.isPreparingLayers || hasPendingWorkerParse(),
       (visible) => {
         showGeometryRenderingLoader = visible;
       }
@@ -115,7 +117,7 @@
     showReferenceBasemapLoader
       ? m.basemap_loading()
       : showGeometryRenderingLoader
-        ? m.map_geometry_rendering()
+        ? m.map_rendering()
         : m.density_loading()
   );
   const shouldHideMapOutput = $derived(

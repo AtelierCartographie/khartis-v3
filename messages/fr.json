@@ -288,7 +288,7 @@
   "density_layer_warning_title": "Visualisation en densité indisponible",
   "density_layer_warning_message": "La visualisation en densité de points n'a pas pu être affichée.",
   "basemap_loading": "Chargement du fond de carte…",
-  "map_geometry_rendering": "Rendu de la géométrie en cours…",
+  "map_rendering": "Rendu de la carte en cours…",
   "fill": "Fond",
   "discretization": "Discrétisation",
   "color_palette": "Palette de couleurs",

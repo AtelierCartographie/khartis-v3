@@ -288,7 +288,7 @@
   "density_layer_warning_title": "Density visualization unavailable",
   "density_layer_warning_message": "The dot-density visualization could not be displayed.",
   "basemap_loading": "Loading basemap...",
-  "map_geometry_rendering": "Rendering the geometry...",
+  "map_rendering": "Rendering the map...",
   "fill": "Fill",
   "discretization": "Classification",
   "color_palette": "Color palette",
