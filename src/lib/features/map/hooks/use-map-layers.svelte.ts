@@ -57,6 +57,7 @@ import type {
 } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   selectRowsByIndices,
   selectRowsInScope
@@ -217,6 +218,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const DATA_PREVIEW_FILL_OPACITY = 0.9;
   const DATA_PREVIEW_STROKE_WIDTH = 1;
   const DATA_PREVIEW_STROKE_OPACITY = 1;
+  const DATA_PREVIEW_TERRITORY_FILL_COLOR: [number, number, number] = [
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[0],
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[1],
+    NEUTRAL_CARTOGRAPHY_RGBA_COLORS.land[2]
+  ];
 
   function referenceBasemapDrawsPolygons(
     basemapId: string | null | undefined
@@ -1554,6 +1560,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             continue;
           }
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
+          // The dataset's own basemap replaces this preview with its territory:
+          // drawn in the territory fill, the swap does not show.
+          if (
+            datasetHasOwnGeometry &&
+            !datasetJoinedBasemap &&
+            hasPolygonGeometry
+          ) {
+            fallbackCtx.fillColor = DATA_PREVIEW_TERRITORY_FILL_COLOR;
+            fallbackCtx.fillOpacity = 1;
+            fallbackCtx.strokeWidth = 0;
+          }
           const datasetProjectionMetadata = getDatasetProjectionMetadata(
             datasetId,
             currentMetadata
