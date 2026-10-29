@@ -32,6 +32,7 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
 
   let toolbarContent = $state<HTMLElement | null>(null);
   let toolbarContentWidth = $state(0);
@@ -176,20 +177,25 @@
     {/if}
   </header>
 
-  <article
-    bind:this={toolbarContent}
-    bind:clientWidth={toolbarContentWidth}
+  <div
     class={clsx(
-      'toolbar-content scrollbar-hidden',
+      'kh-scroll-area',
       globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
     )}
   >
-    {#if globalState.selectedStep === ToolbarStep.Data}
-      <DataTab />
-    {:else if globalState.selectedStep === ToolbarStep.Visualizations}
-      <VizualisationTab />
-    {/if}
-  </article>
+    <article
+      bind:this={toolbarContent}
+      bind:clientWidth={toolbarContentWidth}
+      class="toolbar-content"
+      use:scrollShadows
+    >
+      {#if globalState.selectedStep === ToolbarStep.Data}
+        <DataTab />
+      {:else if globalState.selectedStep === ToolbarStep.Visualizations}
+        <VizualisationTab />
+      {/if}
+    </article>
+  </div>
 
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
