@@ -1,6 +1,7 @@
 function createMapLoadingStore() {
   const state = $state({
     isUpdatingLayers: false,
+    isBuildingBasemapLayers: false,
     referenceBasemapLoadingCount: 0,
     isHoldingPreviewForSuggestedBasemap: false,
     shouldReleaseSuggestedPreviewAfterProcessing: false,
@@ -73,6 +74,12 @@ function createMapLoadingStore() {
     tryReleaseSuggestedPreviewHold();
   }
 
+  function setBuildingBasemapLayers(value: boolean): void {
+    if (state.isBuildingBasemapLayers !== value) {
+      state.isBuildingBasemapLayers = value;
+    }
+  }
+
   function beginReferenceBasemapLoading(): void {
     state.referenceBasemapLoadingCount += 1;
   }
@@ -119,6 +126,10 @@ function createMapLoadingStore() {
     get isUpdatingLayers(): boolean {
       return state.isUpdatingLayers;
     },
+    /** A visible basemap layer waits on a table still derived in the background. */
+    get isBuildingBasemapLayers(): boolean {
+      return state.isBuildingBasemapLayers;
+    },
     get isReferenceBasemapLoading(): boolean {
       return state.referenceBasemapLoadingCount > 0;
     },
@@ -126,6 +137,7 @@ function createMapLoadingStore() {
       return state.isHoldingPreviewForSuggestedBasemap;
     },
     setUpdatingLayers,
+    setBuildingBasemapLayers,
     beginReferenceBasemapLoading,
     endReferenceBasemapLoading,
     setHoldingPreviewForSuggestedBasemap,

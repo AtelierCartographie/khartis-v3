@@ -24,6 +24,7 @@
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
   import { densityLoadingStore } from './stores/density-loading.store.svelte';
   import { mapLoadingStore } from './stores/map-loading.store.svelte';
+  import { hasPendingWorkerParse } from './utils/worker-parse.svelte';
   import { MAP_TIMING } from './constants/timing.constants';
   import { useMapDisplayData } from './hooks';
   import { useBackgroundClassificationRefresh } from '$lib/features/visualization-tab';
@@ -67,15 +68,13 @@
 
   let showDensityLoader = $state(false);
   let showReferenceBasemapLoader = $state(false);
+  let showGeometryRenderingLoader = $state(false);
   function scheduleDelayedMapStatusLoader(
     isLoading: () => boolean,
     setVisible: (visible: boolean) => void
-  ): (() => void) | undefined {
-    if (!isLoading()) {
-      setVisible(false);
-      return undefined;
-    }
-
+  ): () => void {
+    // Hiding waits as long as showing, so a loading state that hands over to
+    // the next one (a table build, then its parse) keeps a steady loader.
     const timer = setTimeout(() => {
       setVisible(isLoading());
     }, MAP_STATUS_LOADER_DELAY_MS);
@@ -99,11 +98,25 @@
       }
     );
   });
+  $effect(() => {
+    return scheduleDelayedMapStatusLoader(
+      () => mapLoadingStore.isBuildingBasemapLayers || hasPendingWorkerParse(),
+      (visible) => {
+        showGeometryRenderingLoader = visible;
+      }
+    );
+  });
   const showMapStatusLoader = $derived(
-    showReferenceBasemapLoader || showDensityLoader
+    showReferenceBasemapLoader ||
+      showGeometryRenderingLoader ||
+      showDensityLoader
   );
   const mapStatusLoaderText = $derived(
-    showReferenceBasemapLoader ? m.basemap_loading() : m.density_loading()
+    showReferenceBasemapLoader
+      ? m.basemap_loading()
+      : showGeometryRenderingLoader
+        ? m.map_geometry_rendering()
+        : m.density_loading()
   );
   const shouldHideMapOutput = $derived(
     mapLoadingStore.isHoldingPreviewForSuggestedBasemap
