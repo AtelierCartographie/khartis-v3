@@ -920,6 +920,7 @@
   "join_announce_validated": "{entity} a été validée et déplacée vers les entités jointes.",
   "join_announce_remapped": "Correspondance modifiée pour {entity}.",
   "basemap_suggestions_desc": "Elles s'appuient sur les dimensions géographiques détectées dans les données chargées.",
+  "basemap_suggestions_extent_desc": "Elles sont classées selon l'emprise du fichier géographique.",
   "basemap_no_suggestions_title": "Aucune suggestion disponible",
   "basemap_no_suggestions_subtitle": "Pour obtenir des suggestions de fonds de carte, sélectionnez une colonne géographique à l'étape « Géolocaliser ».",
   "basemap_suggest_button": "Suggérer un fond de carte",

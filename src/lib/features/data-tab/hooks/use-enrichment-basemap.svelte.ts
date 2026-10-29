@@ -6,8 +6,7 @@ import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error
 import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
-  rankBasemapsByJoinSynthesis,
-  shouldPreferTextBasemapRefinementForGPS
+  rankBasemapsByJoinSynthesis
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import {
@@ -492,13 +491,18 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         !cancelled &&
         duckDBOrchestrator.findDatasetByIdOrSourceFile(datasetId)
       );
+      // A catalog basemap can only be laid over a dataset that carries its own
+      // geometry, never joined to it: its extent alone ranks the suggestions,
+      // and no score claims a match with the data.
+      const hasOwnGeometry = Boolean(selectedDataset.geometry);
       const geometryExtentSuggestions =
-        isDatasetAvailable && datasetId && selectedDataset.geometry
+        isDatasetAvailable && datasetId && hasOwnGeometry
           ? await rankBasemapsByGeometryExtent(datasetId)
           : [];
       let joinSuggestions: BasemapSuggestion[] = [];
 
       if (
+        !hasOwnGeometry &&
         isDatasetAvailable &&
         datasetId &&
         geoColumnName &&
@@ -525,16 +529,11 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         }
       }
 
-      let suggestions =
-        geometryExtentSuggestions.length > 0 &&
-        !shouldPreferTextBasemapRefinementForGPS(
-          geometryExtentSuggestions,
-          joinSuggestions[0]?.matchScore ?? 0
-        )
-          ? geometryExtentSuggestions
-          : joinSuggestions;
+      let suggestions = hasOwnGeometry
+        ? geometryExtentSuggestions
+        : joinSuggestions;
 
-      if (suggestions.length === 0) {
+      if (suggestions.length === 0 && !hasOwnGeometry) {
         suggestions = basemapCatalogService.getSuggestions(
           processedDataset,
           3,
@@ -548,7 +547,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         basemap:
           basemapCatalogService.getBasemapById(suggestion.file) ?? suggestion,
         score: suggestion.matchScore,
-        matchesData: suggestion.matchesData
+        matchesData: !hasOwnGeometry && suggestion.matchesData
       }));
 
       suggestedBasemaps = mappedSuggestions;
