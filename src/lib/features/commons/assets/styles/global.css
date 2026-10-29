@@ -263,6 +263,57 @@ html[theme='g100'] .app-shadow {
   box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.5);
 }
 
+/* A wrapper around one scroller, sized like it (see scroll-shadows.ts): a
+   thin scrollbar, and a shade on each edge where content is hidden. */
+.kh-scroll-area {
+  --_scroll-shade: rgba(0, 0, 0, 0.14);
+  --_scroll-shade-size: var(--cds-spacing-04);
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+html[theme='g100'] .kh-scroll-area {
+  --_scroll-shade: rgba(0, 0, 0, 0.9);
+  --_scroll-shade-size: var(--cds-spacing-07);
+}
+
+.kh-scroll-area > * {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cds-border-strong-01, #8d8d8d) transparent;
+}
+
+.kh-scroll-area::before,
+.kh-scroll-area::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 6;
+  height: var(--_scroll-shade-size);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.kh-scroll-area::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--_scroll-shade), transparent);
+}
+
+.kh-scroll-area::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--_scroll-shade), transparent);
+}
+
+.kh-scroll-area--top::before,
+.kh-scroll-area--bottom::after {
+  opacity: 1;
+}
+
 html,
 body {
   height: 100%;

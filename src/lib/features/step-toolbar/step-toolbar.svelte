@@ -18,7 +18,8 @@
     DOM_IDS,
     CSS_CLASSES,
     TEST_IDS,
-    POPOVER_DIMENSIONS
+    POPOVER_DIMENSIONS,
+    FILL_HEIGHT_TOOLS
   } from './step-toolbar.constants';
   import ToolPopover from './tool-popover.svelte';
   import StylingTools from './tools-list/styling-tools.svelte';
@@ -176,6 +177,9 @@
     viewMode={popoverViewMode}
     listWidth={POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}
     gridWidth={POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH}
+    sizing={FILL_HEIGHT_TOOLS.has(globalState.selectedTool ?? '')
+      ? 'fill'
+      : 'fit'}
   >
     {#snippet content()}
       <ToolContainer />
