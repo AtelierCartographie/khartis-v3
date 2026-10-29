@@ -12,7 +12,8 @@
   import {
     DOM_IDS,
     CSS_CLASSES,
-    POPOVER_DIMENSIONS
+    POPOVER_DIMENSIONS,
+    type ToolPopoverSizing
   } from './step-toolbar.constants';
   import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
   import { shouldBlockToolClose } from './tools/tool-close-guard';
@@ -38,6 +39,7 @@
       | 'right-top',
     listWidth = 320,
     gridWidth = '50vw',
+    sizing = 'fit' as ToolPopoverSizing,
     content
   } = $props();
 
@@ -48,32 +50,62 @@
       getAnnotationsState().creationMode !== 'idle'
   );
   let popoverRoot: HTMLDivElement | null = null;
-  let computedTopOffset = $state(0);
+  let topOffset = $state(0);
+  let availableHeight = $state<number | null>(null);
 
-  function syncCenteredOffset(): void {
-    if (!open || align !== 'right-top') {
-      computedTopOffset = 0;
-      return;
-    }
-
+  // The window sits in the free area of the map view, above the zoom
+  // toolbar. It moves only when that area changes, never with its content:
+  // a 'fill' tool takes the whole area (capped and centred on the toolbar on
+  // tall screens), a 'fit' tool hangs from the step toolbar and grows
+  // downwards.
+  function syncGeometry(): void {
     const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const popover = popoverRoot?.querySelector('.bx--popover');
 
     if (
+      !open ||
+      globalState.isMobileView ||
+      align !== 'right-top' ||
       !(toolbar instanceof HTMLElement) ||
       !(popover instanceof HTMLElement)
     ) {
-      computedTopOffset = 0;
+      topOffset = 0;
+      availableHeight = null;
       return;
     }
 
+    const margin = POPOVER_DIMENSIONS.VIEWPORT_MARGIN;
     const toolbarRect = toolbar.getBoundingClientRect();
+    const toolbarTop = toolbarRect.top;
     const popoverRect = popover.getBoundingClientRect();
+    const viewRect = (
+      toolbar.offsetParent ?? document.documentElement
+    ).getBoundingClientRect();
+    const zoomRect = document
+      .getElementById(DOM_IDS.ZOOM_TOOLBAR)
+      ?.getBoundingClientRect();
+    const zoomBelow =
+      zoomRect !== undefined &&
+      zoomRect.width > 0 &&
+      zoomRect.left < popoverRect.right &&
+      zoomRect.right > popoverRect.left;
 
-    computedTopOffset = Math.min(
-      0,
-      Math.round((toolbarRect.height - popoverRect.height) / 2)
-    );
+    const areaTop = viewRect.top + margin;
+    const areaBottom = (zoomBelow ? zoomRect.top : viewRect.bottom) - margin;
+    const areaHeight = Math.max(0, areaBottom - areaTop);
+
+    if (sizing === 'fill') {
+      const height = Math.min(areaHeight, POPOVER_DIMENSIONS.FILL_MAX_HEIGHT);
+      const centredTop = toolbarTop + toolbarRect.height / 2 - height / 2;
+      const top = Math.min(Math.max(centredTop, areaTop), areaBottom - height);
+      topOffset = Math.round(top - toolbarTop);
+      availableHeight = Math.round(height);
+      return;
+    }
+
+    const top = Math.max(areaTop, toolbarTop);
+    topOffset = Math.round(top - toolbarTop);
+    availableHeight = Math.max(0, Math.round(areaBottom - top));
   }
 
   function handleOutsideClick(event: CustomEvent) {
@@ -142,35 +174,28 @@
   $effect(() => {
     void open;
     void widthCss;
+    void sizing;
+    void globalState.isMobileView;
 
     if (!open) {
-      computedTopOffset = 0;
+      topOffset = 0;
+      availableHeight = null;
       return;
     }
 
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
-    const handleWindowResize = () => syncCenteredOffset();
+    const handleWindowResize = () => syncGeometry();
 
     void tick().then(() => {
       if (cancelled) return;
 
-      syncCenteredOffset();
-
-      resizeObserver = new ResizeObserver(() => syncCenteredOffset());
+      syncGeometry();
 
       const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
-      const popover = popoverRoot?.querySelector('.bx--popover');
-      const contents = popoverRoot?.querySelector('.bx--popover-contents');
-
       if (toolbar instanceof HTMLElement) {
+        resizeObserver = new ResizeObserver(() => syncGeometry());
         resizeObserver.observe(toolbar);
-      }
-      if (popover instanceof HTMLElement) {
-        resizeObserver.observe(popover);
-      }
-      if (contents instanceof HTMLElement) {
-        resizeObserver.observe(contents);
       }
 
       window.addEventListener('resize', handleWindowResize);
@@ -182,6 +207,14 @@
       window.removeEventListener('resize', handleWindowResize);
     };
   });
+
+  const geometryStyle = $derived(
+    availableHeight === null
+      ? ''
+      : `--tool-popover-max-height:${availableHeight}px;${
+          sizing === 'fill' ? `--tool-popover-height:${availableHeight}px;` : ''
+        }`
+  );
 </script>
 
 <div
@@ -206,10 +239,10 @@
     align={align}
     light={light}
     class={CSS_CLASSES.TOOL_POPOVER}
-    style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${computedTopOffset}px;--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
+    style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${topOffset}px;--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};${geometryStyle}`}
   >
     {#key globalState.selectedTool}
-      <div class={CSS_CLASSES.POPOVER_SCROLL}>
+      <div class={CSS_CLASSES.POPOVER_FRAME}>
         {@render (content as Snippet | undefined)?.()}
       </div>
     {/key}
@@ -239,9 +272,12 @@
   }
 
   :global(#khartis-tool-popover .bx--popover-contents) {
+    display: flex;
+    flex-direction: column;
     width: var(--tool-popover-width) !important;
     max-width: var(--tool-popover-width) !important;
-    max-height: var(--popover-max-height);
+    height: var(--tool-popover-height, auto);
+    max-height: var(--tool-popover-max-height, 80vh);
     overflow: visible;
     background: var(--khartis-control-surface-background);
     padding: 0;
@@ -277,28 +313,20 @@
     :global(#khartis-tool-popover .bx--popover-contents) {
       width: 100vw !important;
       max-width: 100vw !important;
+      height: auto;
       max-height: 70vh;
       border-radius: 8px 8px 0 0;
       box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
     }
-
-    .popover-scroll {
-      max-height: 70vh;
-    }
   }
 
-  .popover-scroll {
-    max-height: var(--popover-max-height);
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    padding-bottom: 0;
-  }
-
-  .popover-scroll::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
+  /* The tool body scrolls inside; the frame only passes the height on. */
+  .popover-frame {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {
