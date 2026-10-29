@@ -1468,6 +1468,8 @@
   "carte_facile_group_cadastre": "Cadastre",
   "carte_facile_layers_title": "Layers",
   "primitive_unavailable": "Unavailable for this visualization",
+  "basemap_layer_empty": "Unavailable for this basemap",
+  "basemap_layer_empty_reason": "This basemap holds no geometry for this layer. Inner limits are not drawn when the cells are too fine to stay legible at the scale of the whole map.",
   "primitive_unavailable_reason": "This primitive is not compatible with the data geometry or the selected visualization type.",
   "basemap_layer_terre": "Land",
   "basemap_layer_mers": "Seas/Oceans",
