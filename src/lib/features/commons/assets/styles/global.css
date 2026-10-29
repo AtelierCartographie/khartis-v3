@@ -263,6 +263,17 @@ html[theme='g100'] .app-shadow {
   box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.5);
 }
 
+/* Floating windows opened from the side panel stay below the app header,
+   with the same 16px margin as the toolbar tool windows. */
+:root {
+  --kh-floating-window-center: calc(
+    var(--cds-header-height) + (100dvh - var(--cds-header-height)) / 2
+  );
+  --kh-floating-window-max-height: calc(
+    100dvh - var(--cds-header-height) - 2 * var(--cds-spacing-05)
+  );
+}
+
 /* A wrapper around one scroller, sized like it (see scroll-shadows.ts): a
    thin scrollbar, and a shade on each edge where content is hidden. */
 .kh-scroll-area {
