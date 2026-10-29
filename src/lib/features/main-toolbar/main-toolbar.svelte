@@ -23,6 +23,8 @@
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { tick } from 'svelte';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { fly } from 'svelte/transition';
   import OpenPanelFilledRightWide from './components/open-panel-filled-right-wide.svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
@@ -33,8 +35,18 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
+  import {
+    motionDuration,
+    trackStepDirection
+  } from '$lib/features/commons/utils/step-transition.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
+
+  // The content of a step leaves towards the step left behind and the next
+  // one arrives from the other side, along the order of the steps.
+  const stepDirection = trackStepDirection();
+  const PANE_SHIFT = 24;
+  const paneShift = $derived(PANE_SHIFT * stepDirection.current);
   let toolbarContentWidth = $state(0);
 
   // In a wide panel a dropdown is no wider than a field of the two-column
@@ -189,11 +201,28 @@
       class="toolbar-content"
       use:scrollShadows
     >
-      {#if globalState.selectedStep === ToolbarStep.Data}
-        <DataTab />
-      {:else if globalState.selectedStep === ToolbarStep.Visualizations}
-        <VizualisationTab />
-      {/if}
+      {#key globalState.selectedStep}
+        <div
+          class="step-pane"
+          in:fly={{
+            x: paneShift,
+            duration: motionDuration(220),
+            delay: motionDuration(90),
+            easing: cubicOut
+          }}
+          out:fly={{
+            x: -paneShift,
+            duration: motionDuration(90),
+            easing: cubicIn
+          }}
+        >
+          {#if globalState.selectedStep === ToolbarStep.Data}
+            <DataTab />
+          {:else if globalState.selectedStep === ToolbarStep.Visualizations}
+            <VizualisationTab />
+          {/if}
+        </div>
+      {/key}
     </article>
   </div>
 
@@ -375,12 +404,20 @@
     border-color: var(--cds-border-subtle-00);
   }
 
+  /* The leaving and arriving steps share one cell while they swap. */
   .toolbar-content {
     position: relative;
+    display: grid;
+    align-content: start;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+  }
+
+  .step-pane {
+    grid-area: 1 / 1;
+    min-width: 0;
   }
 
   .toolbar-footer {
