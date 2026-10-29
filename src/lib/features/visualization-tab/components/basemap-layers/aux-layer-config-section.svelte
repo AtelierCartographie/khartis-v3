@@ -100,6 +100,10 @@
     return isVisible();
   });
 
+  const isEmpty = $derived(
+    layer.file ? basemapService.isLayerEmpty(layer.file) : false
+  );
+
   // Land/limit sections keep per-file overrides because legacy shared config couples levels.
   const isLandLayer = $derived(
     legacyId === 'terre' && layer.type === BasemapLayerType.LAND
@@ -331,7 +335,10 @@
   title={title}
   showToggle={true}
   toggleVariant="suggestions"
-  toggleChecked={visible}
+  toggleChecked={visible && !isEmpty}
+  description={isEmpty ? m.basemap_layer_empty() : undefined}
+  disabled={isEmpty}
+  disabledReason={isEmpty ? m.basemap_layer_empty_reason() : undefined}
   open={open}
   onToggle={onToggle}
   onToggleChange={handleToggle}
