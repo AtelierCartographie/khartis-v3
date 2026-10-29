@@ -69,7 +69,7 @@ beforeEach(() => {
 
 describe('createBasemapFromGeometryTable', () => {
   it('should expose the territory, outer limit and inner limits of a polygon coverage', async () => {
-    const { basemap } = await createBasemapFromGeometryTable(
+    const basemap = await createBasemapFromGeometryTable(
       Duck,
       'regions_geojson',
       { title: 'regions.geojson' }

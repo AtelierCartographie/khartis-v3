@@ -595,6 +595,7 @@
         onSelectOSM={basemapHook.handleSelectOSM}
         suggestionsOpen={dataTabState.uiPanels.enrichBasemapSuggestionsOpen}
         catalogOpen={dataTabState.uiPanels.enrichBasemapCatalogOpen}
+        rankedByExtent={Boolean(selectedDataset?.geometry)}
         onSuggestionsToggle={(expanded) =>
           dataTabActions.setUiPanelsState({
             enrichBasemapSuggestionsOpen: expanded
