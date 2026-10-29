@@ -1139,6 +1139,7 @@
   "summary_plot_unique_values_one": "{count} valeur unique",
   "summary_plot_categories": "{count} catégories",
   "summary_plot_categories_one": "{count} catégorie",
+  "summary_plot_other_categories": "{count} autres catégories",
   "error_loading_title": "Erreur de chargement",
   "error_loading_subtitle": "Une erreur est survenue lors du chargement de la carte",
   "geo_scale_bar_aria": "Barre d'échelle",

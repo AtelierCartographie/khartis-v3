@@ -1139,6 +1139,7 @@
   "summary_plot_unique_values_one": "{count} unique value",
   "summary_plot_categories": "{count} categories",
   "summary_plot_categories_one": "{count} category",
+  "summary_plot_other_categories": "{count} other categories",
   "error_loading_title": "Loading error",
   "error_loading_subtitle": "An error occurred while loading the map",
   "geo_scale_bar_aria": "Scale bar",

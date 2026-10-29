@@ -388,3 +388,46 @@ describe('analyse output parity with per-column macro queries', () => {
     }
   });
 });
+
+describe('histogram_categorical', () => {
+  beforeAll(async () => {
+    await run(
+      db,
+      `CREATE TABLE categories AS SELECT
+        'k' || (i % 100) AS hundred,
+        'k' || (i % 101) AS hundred_one,
+        CASE WHEN i < 2 THEN 'single_' || i ELSE 'k' || (i % 52) END AS fifty_two
+      FROM range(1010) t(i)`
+    );
+  });
+
+  async function histogram(column: string): Promise<Record<string, unknown>[]> {
+    return query(db, `FROM histogram_categorical('categories', "${column}")`);
+  }
+
+  it('should give every repeated category its bar when there are up to 100', async () => {
+    const rows = await histogram('hundred');
+
+    expect(rows).toHaveLength(100);
+    expect(rows.every((row) => row.other_categories === null)).toBe(true);
+  });
+
+  it('should group all but the 50 most frequent categories when there are more than 100', async () => {
+    const rows = await histogram('hundred_one');
+
+    expect(rows).toHaveLength(51);
+    expect(rows[50].category).toBeNull();
+    expect(Number(rows[50].other_categories)).toBe(51);
+    const total = rows.reduce((sum, row) => sum + Number(row.count), 0);
+    expect(total).toBe(1010);
+  });
+
+  it('should keep the values occurring once in a last bar of their own', async () => {
+    const rows = await histogram('fifty_two');
+
+    expect(rows).toHaveLength(53);
+    expect(rows.at(-1)?.category).toBe('unique');
+    expect(Number(rows.at(-1)?.count)).toBe(2);
+    expect(rows.every((row) => row.other_categories === null)).toBe(true);
+  });
+});
