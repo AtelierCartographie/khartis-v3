@@ -605,7 +605,7 @@ export async function createBasemapFromGeometryTable(
   duck: typeof Duck,
   tableName: string,
   options: DatasetGeometryBasemapOptions
-): Promise<BasemapImportResult> {
+): Promise<BasemapMetadata> {
   const geometryColumn = options.geometryColumn ?? INTERNAL_COLUMN.GEOM;
   const layerType = await queryGeometryType(duck, tableName, geometryColumn);
 
@@ -613,16 +613,13 @@ export async function createBasemapFromGeometryTable(
     inBackground: true
   });
 
-  const basemap = await describeGeometryBasemap(duck, tableName, {
+  return describeGeometryBasemap(duck, tableName, {
     title: options.title,
     geometryColumn,
     layerType,
     crs: options.crs,
     isDatasetGeometry: true
   });
-  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
-
-  return { basemap, tableName, geometryTable };
 }
 
 interface GeometryBasemapDescription {

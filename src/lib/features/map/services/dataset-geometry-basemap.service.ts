@@ -56,13 +56,11 @@ export async function ensureDatasetGeometryBasemap(
     const cached = derivedBasemaps.get(dataset.tableName);
     const basemap =
       cached ??
-      (
-        await createBasemapFromGeometryTable(Duck, dataset.tableName, {
-          title: dataset.name,
-          geometryColumn: dataset.geometry.columnName ?? undefined,
-          crs: dataset.geometry.crs ?? undefined
-        })
-      ).basemap;
+      (await createBasemapFromGeometryTable(Duck, dataset.tableName, {
+        title: dataset.name,
+        geometryColumn: dataset.geometry.columnName ?? undefined,
+        crs: dataset.geometry.crs ?? undefined
+      }));
 
     derivedBasemaps.set(dataset.tableName, basemap);
     basemapCatalogService.addCustomBasemap(basemap);
