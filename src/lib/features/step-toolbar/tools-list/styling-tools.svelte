@@ -21,7 +21,6 @@
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { selectTool } from './tool-list.utils.svelte';
-  import ToolsListContainer from './tools-list-container.svelte';
   import { CSS_CLASSES } from '../step-toolbar.constants';
 
   const colorBlindnessState = $derived(getColorBlindnessState());
@@ -51,100 +50,97 @@
   }
 </script>
 
-<ToolsListContainer>
-  <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
-    <Row>
-      <Column>
+<Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
+  <Row>
+    <Column>
+      <IconButton
+        tooltipPosition="right"
+        kind="ghost"
+        iconDescription={m.tool_format()}
+        icon={Crop}
+        size="small"
+        isSelected={globalState.selectedTool === StylingTools.Format}
+        onclick={() => selectTool(StylingTools.Format)}
+      />
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
         <IconButton
           tooltipPosition="right"
           kind="ghost"
-          iconDescription={m.tool_format()}
-          icon={Crop}
+          iconDescription={m.tool_legend()}
+          icon={Legend}
           size="small"
-          isSelected={globalState.selectedTool === StylingTools.Format}
-          onclick={() => selectTool(StylingTools.Format)}
+          isSelected={globalState.selectedTool === StylingTools.Legend}
+          onclick={handleLegendClick}
+          aria-describedby={showLegendBadge ? 'legend-tool-badge' : undefined}
         />
-      </Column>
-    </Row>
+        {#if showLegendBadge}
+          <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
+            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+            ></span
+          >
+        {/if}
+      </div>
+    </Column>
+  </Row>
 
-    <Row>
-      <Column>
-        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <IconButton
-            tooltipPosition="right"
-            kind="ghost"
-            iconDescription={m.tool_legend()}
-            icon={Legend}
-            size="small"
-            isSelected={globalState.selectedTool === StylingTools.Legend}
-            onclick={handleLegendClick}
-            aria-describedby={showLegendBadge ? 'legend-tool-badge' : undefined}
-          />
-          {#if showLegendBadge}
-            <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
-              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-              ></span
-            >
-          {/if}
-        </div>
-      </Column>
-    </Row>
+  <Row>
+    <Column>
+      <IconButton
+        tooltipPosition="right"
+        kind="ghost"
+        iconDescription={m.tool_geo_indications()}
+        icon={Compass}
+        size="small"
+        isSelected={globalState.selectedTool === StylingTools.GeoIndications}
+        onclick={() => selectTool(StylingTools.GeoIndications)}
+      />
+    </Column>
+  </Row>
 
-    <Row>
-      <Column>
+  <Row>
+    <Column>
+      <IconButton
+        tooltipPosition="right"
+        kind="ghost"
+        iconDescription={m.tool_annotations()}
+        icon={WatsonHealthTextAnnotationToggle}
+        size="small"
+        isSelected={globalState.selectedTool === StylingTools.Annotations}
+        onclick={handleAnnotationsClick}
+      />
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
         <IconButton
           tooltipPosition="right"
           kind="ghost"
-          iconDescription={m.tool_geo_indications()}
-          icon={Compass}
+          iconDescription={m.tool_color_blindness()}
+          icon={SettingsView}
           size="small"
-          isSelected={globalState.selectedTool === StylingTools.GeoIndications}
-          onclick={() => selectTool(StylingTools.GeoIndications)}
+          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
+          onclick={() => selectTool(StylingTools.ColorBlindness)}
+          aria-describedby={showColorBlindnessBadge
+            ? 'color-blindness-tool-badge'
+            : undefined}
         />
-      </Column>
-    </Row>
-
-    <Row>
-      <Column>
-        <IconButton
-          tooltipPosition="right"
-          kind="ghost"
-          iconDescription={m.tool_annotations()}
-          icon={WatsonHealthTextAnnotationToggle}
-          size="small"
-          isSelected={globalState.selectedTool === StylingTools.Annotations}
-          onclick={handleAnnotationsClick}
-        />
-      </Column>
-    </Row>
-
-    <Row>
-      <Column>
-        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <IconButton
-            tooltipPosition="right"
-            kind="ghost"
-            iconDescription={m.tool_color_blindness()}
-            icon={SettingsView}
-            size="small"
-            isSelected={globalState.selectedTool ===
-              StylingTools.ColorBlindness}
-            onclick={() => selectTool(StylingTools.ColorBlindness)}
-            aria-describedby={showColorBlindnessBadge
-              ? 'color-blindness-tool-badge'
-              : undefined}
-          />
-          {#if showColorBlindnessBadge}
-            <span
-              id="color-blindness-tool-badge"
-              class={CSS_CLASSES.NOTIFICATION_BADGE}
-              ><span class="bx--visually-hidden"
-                >{m.a11y_tool_badge_active()}</span
-              ></span
-            >
-          {/if}
-        </div>
-      </Column>
-    </Row>
-  </Grid>
-</ToolsListContainer>
+        {#if showColorBlindnessBadge}
+          <span
+            id="color-blindness-tool-badge"
+            class={CSS_CLASSES.NOTIFICATION_BADGE}
+            ><span class="bx--visually-hidden"
+              >{m.a11y_tool_badge_active()}</span
+            ></span
+          >
+        {/if}
+      </div>
+    </Column>
+  </Row>
+</Grid>

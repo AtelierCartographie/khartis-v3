@@ -14,6 +14,12 @@
   import clsx from 'clsx';
   import { tick, untrack } from 'svelte';
   import type { Component } from 'svelte';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { fly, slide } from 'svelte/transition';
+  import {
+    motionDuration,
+    trackStepDirection
+  } from '$lib/features/commons/utils/step-transition.svelte';
   import {
     DOM_IDS,
     CSS_CLASSES,
@@ -25,6 +31,7 @@
   import StylingTools from './tools-list/styling-tools.svelte';
   import VisualizationTools from './tools-list/visualization-tools.svelte';
   import ToolContainer from './tools/tool-container.svelte';
+  import ToolsListContainer from './tools-list/tools-list-container.svelte';
   import ColorBlindnessNotification from './tools/color-blindness/color-blindness-notification.svelte';
   import {
     colorBlindnessActions,
@@ -103,6 +110,38 @@
   const isStepSelected = (step: ToolbarStep): boolean => {
     return globalState.selectedStep === step;
   };
+
+  // The selection is one block that slides from step to step, rather than
+  // a background that jumps from one button to the next.
+  let stepContainer = $state<HTMLDivElement | null>(null);
+  const stepButtons = $state<Partial<Record<ToolbarStep, HTMLButtonElement>>>(
+    {}
+  );
+  let indicator = $state<{ top: number; height: number } | null>(null);
+
+  function measureIndicator(): void {
+    const button = stepButtons[globalState.selectedStep];
+    indicator = button
+      ? { top: button.offsetTop, height: button.offsetHeight }
+      : null;
+  }
+
+  $effect(() => {
+    void globalState.selectedStep;
+    measureIndicator();
+  });
+
+  $effect(() => {
+    if (!stepContainer) return;
+    const observer = new ResizeObserver(() => measureIndicator());
+    observer.observe(stepContainer);
+    return () => observer.disconnect();
+  });
+
+  // Tools leave towards the previous step and arrive from the next one.
+  const stepDirection = trackStepDirection();
+  const TOOLS_SHIFT = 12;
+  const toolsShift = $derived(TOOLS_SHIFT * stepDirection.current);
 </script>
 
 <nav
@@ -118,11 +157,22 @@
     </header>
 
     <div
+      bind:this={stepContainer}
       class={CSS_CLASSES.STEP_CONTAINER}
       role="group"
       aria-label={m.toolbar_step_selection_aria()}
     >
+      {#if indicator}
+        <span
+          class="step-indicator"
+          style:height="{indicator.height}px"
+          style:transform="translateY({indicator.top}px)"
+          aria-hidden="true"
+        ></span>
+      {/if}
+
       <button
+        bind:this={stepButtons[ToolbarStep.Data]}
         type="button"
         data-testid={TEST_IDS.STEP_DATA}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
@@ -137,6 +187,7 @@
       </button>
 
       <button
+        bind:this={stepButtons[ToolbarStep.Visualizations]}
         type="button"
         data-testid={TEST_IDS.STEP_VISUALIZATIONS}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
@@ -151,6 +202,7 @@
       </button>
 
       <button
+        bind:this={stepButtons[ToolbarStep.Styling]}
         type="button"
         data-testid={TEST_IDS.STEP_STYLING}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
@@ -166,7 +218,27 @@
     </div>
 
     {#if SelectedList}
-      <SelectedList />
+      <div
+        class="tools-reveal"
+        transition:slide={{ duration: motionDuration(240), easing: cubicOut }}
+      >
+        <ToolsListContainer>
+          <div class="tools-stack" style:--_tools-shift="{toolsShift}px">
+            {#key globalState.selectedStep}
+              <div
+                class="tools-set"
+                out:fly={{
+                  x: -toolsShift,
+                  duration: motionDuration(120),
+                  easing: cubicIn
+                }}
+              >
+                <SelectedList />
+              </div>
+            {/key}
+          </div>
+        </ToolsListContainer>
+      </div>
     {/if}
   </div>
 
@@ -249,7 +321,25 @@
     color: var(--cds-text-01);
   }
 
+  .step-container {
+    --_step-motion: 240ms cubic-bezier(0.2, 0, 0.38, 0.9);
+    position: relative;
+  }
+
+  .step-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--cds-border-subtle-01);
+    pointer-events: none;
+    transition:
+      transform var(--_step-motion),
+      height var(--_step-motion);
+  }
+
   .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -259,6 +349,11 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-04);
     border: none;
     cursor: pointer;
+    transition: background-color 110ms ease;
+  }
+
+  .nav-item:hover:not(.selected) {
+    background-color: var(--cds-layer-hover-01);
   }
 
   .nav-item:focus-visible {
@@ -272,17 +367,68 @@
     fill: var(--cds-text-01);
   }
 
-  .nav-item.selected {
-    background-color: var(--cds-border-subtle-01);
-    border-left: 3px solid var(--cds-border-subtle-01);
-  }
-
   .nav-item span {
     font-size: var(--kh-font-label);
   }
 
   :global(#khartis-step-toolbar .tools-grid) {
     padding: var(--cds-spacing-03) var(--cds-spacing-02);
+  }
+
+  /* The outgoing and incoming tool sets share one cell while they swap, so
+     the bar does not grow by a second list. */
+  .tools-stack {
+    display: grid;
+    overflow: hidden;
+  }
+
+  /* A flex column, so the Carbon grid's auto margins centre the tools. */
+  .tools-set {
+    display: flex;
+    flex-direction: column;
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+
+  /* Incoming tools arrive one after the other, once the previous set has
+     started to leave. */
+  .tools-set :global(.tools-grid > .bx--row) {
+    animation: tool-arrive 220ms cubic-bezier(0, 0, 0.38, 0.9) both;
+    animation-delay: calc(80ms + var(--_tool-index, 0) * 35ms);
+  }
+
+  .tools-set :global(.tools-grid > .bx--row:nth-child(2)) {
+    --_tool-index: 1;
+  }
+
+  .tools-set :global(.tools-grid > .bx--row:nth-child(3)) {
+    --_tool-index: 2;
+  }
+
+  .tools-set :global(.tools-grid > .bx--row:nth-child(4)) {
+    --_tool-index: 3;
+  }
+
+  .tools-set :global(.tools-grid > .bx--row:nth-child(n + 5)) {
+    --_tool-index: 4;
+  }
+
+  @keyframes tool-arrive {
+    from {
+      opacity: 0;
+      transform: translateX(var(--_tools-shift, 12px));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .step-indicator,
+    .nav-item {
+      transition: none;
+    }
+
+    .tools-set :global(.tools-grid > .bx--row) {
+      animation: none;
+    }
   }
 
   :global(#khartis-tool-popover .bx--popover) {
