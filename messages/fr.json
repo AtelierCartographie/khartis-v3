@@ -1468,6 +1468,8 @@
   "carte_facile_group_cadastre": "Cadastre",
   "carte_facile_layers_title": "Calques",
   "primitive_unavailable": "Indisponible pour cette visualisation",
+  "basemap_layer_empty": "Indisponible pour ce fond de carte",
+  "basemap_layer_empty_reason": "Ce fond de carte ne contient aucun tracé pour cette couche. Les limites intérieures ne sont pas dessinées quand les mailles sont trop fines pour rester lisibles à l'échelle de la carte entière.",
   "primitive_unavailable_reason": "Cette primitive n'est pas compatible avec la géométrie des données ou le type de visualisation sélectionné.",
   "basemap_layer_terre": "Terre",
   "basemap_layer_mers": "Mers/Océans",
