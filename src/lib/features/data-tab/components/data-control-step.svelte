@@ -48,7 +48,7 @@
   import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import CalculatorPanel from './calculator-panel.svelte';
-  import CsvOptionsModal, { type CsvOptions } from './csv-options-modal.svelte';
+  import CsvOptionsPanel, { type CsvOptions } from './csv-options-panel.svelte';
   import DataToolPanel from './data-tool-panel.svelte';
   import DataToolsBar from './data-tools-bar.svelte';
   import ExpandedTableModal from './expanded-table-modal.svelte';
@@ -148,7 +148,6 @@
     };
   });
 
-  let csvOptionsModalOpen = $state(false);
   let currentCsvOptions = $state<CsvOptions>({
     header: true,
     decimalSeparator: '.',
@@ -260,10 +259,6 @@
 
   function handleOpenReset() {
     resetModalOpen = true;
-  }
-
-  function handleOpenCsvOptions() {
-    csvOptionsModalOpen = true;
   }
 
   function handleShowHiddenColumns() {
@@ -830,6 +825,14 @@
           onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
       </DataToolPanel>
+    {:else if activeTool === DataToolType.CsvOptions && canReimportCsv}
+      <DataToolPanel title={m.csv_options_title()}>
+        <CsvOptionsPanel
+          currentOptions={currentCsvOptions}
+          onClose={() => dataToolsStore.closeTool()}
+          onApply={handleApplyCsvOptions}
+        />
+      </DataToolPanel>
     {/if}
   {/if}
 
@@ -857,13 +860,6 @@
     />
 
     {#if isCsvFile}
-      <CsvOptionsModal
-        open={csvOptionsModalOpen}
-        currentOptions={currentCsvOptions}
-        onClose={() => (csvOptionsModalOpen = false)}
-        onApply={handleApplyCsvOptions}
-      />
-
       <Modal
         iconDescription={m.a11y_close_dialog()}
         bind:open={confirmReimportOpen}
@@ -890,7 +886,6 @@
       onDelete={handleDeleteAction}
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
-      onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() =>
         dataTabActions.setDataControlState({
           showSummaryPlots: !showSummaryPlots
