@@ -209,10 +209,13 @@ export function hasModifications(
       )
     : undefined;
 
+  // An enrichment folds earlier changes into its snapshot: resetting is what
+  // undoes it.
   return Boolean(
     sourceFile &&
     ((sourceFile.columnTransformations?.length ?? 0) > 0 ||
-      (sourceFile.deletedRowIds?.length ?? 0) > 0)
+      (sourceFile.deletedRowIds?.length ?? 0) > 0 ||
+      sourceFile.enrichmentSnapshot)
   );
 }
 

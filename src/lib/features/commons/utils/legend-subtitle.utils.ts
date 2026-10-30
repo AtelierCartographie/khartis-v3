@@ -8,6 +8,7 @@ import {
   SymbolMode,
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
+import { isSignedProportionalSymbol } from './symbol-sign.utils';
 
 export function joinLegendSubtitleParts(
   parts: Array<string | null | undefined>
@@ -232,13 +233,17 @@ function getPointLegendSubtitleParts(
     parts.push(symbol.valueColumn ?? visualization.mapping.valueColumn);
   }
 
-  if (symbol.fillMode === FillMode.CATEGORIES) {
+  // A sign fill reads the size column, already named above.
+  const fillMode = isSignedProportionalSymbol(visualization)
+    ? undefined
+    : symbol.fillMode;
+  if (fillMode === FillMode.CATEGORIES) {
     parts.unshift(
       symbol.fillCategoryColumn ??
         visualization.mapping.colorColumn ??
         visualization.mapping.categoryColumn
     );
-  } else if (symbol.fillMode === FillMode.CLASSES) {
+  } else if (fillMode === FillMode.CLASSES) {
     parts.push(
       symbol.fillValueColumn ??
         visualization.mapping.colorColumn ??
@@ -333,17 +338,21 @@ function getComponentColumns(
             : undefined
         ];
       }
+      // A sign fill is drawn by the size legend's + and − boxes.
+      const fillMode = isSignedProportionalSymbol(visualization)
+        ? undefined
+        : symbol?.fillMode;
       if (symbol?.mode === SymbolMode.CATEGORIES) {
         columns.color = [symbol.categoryColumn ?? mapping.categoryColumn];
-      } else if (symbol?.fillMode === FillMode.CATEGORIES) {
+      } else if (fillMode === FillMode.CATEGORIES) {
         columns.color = [
-          symbol.fillCategoryColumn ??
+          symbol?.fillCategoryColumn ??
             mapping.colorColumn ??
             mapping.categoryColumn
         ];
-      } else if (symbol?.fillMode === FillMode.CLASSES) {
+      } else if (fillMode === FillMode.CLASSES) {
         columns.color = [
-          symbol.fillValueColumn ?? mapping.colorColumn ?? mapping.valueColumn
+          symbol?.fillValueColumn ?? mapping.colorColumn ?? mapping.valueColumn
         ];
       }
       if (CLASSED_OR_CATEGORICAL_STROKE.has(symbol?.strokeMode)) {

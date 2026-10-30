@@ -41,12 +41,15 @@ export function buildFacetsGridMetrics({
   mapCount,
   layout,
   containerWidth,
-  containerHeight
+  containerHeight,
+  titleHeight = FACET_TITLE_HEIGHT
 }: {
   mapCount: number;
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
+  /** Height of the title band above each map, which grows with the title text. */
+  titleHeight?: number;
 }): FacetsGridMetrics {
   const totalMaps = Math.max(0, mapCount);
   const columns = Math.max(1, Math.min(layout.columns, totalMaps || 1));
@@ -62,7 +65,7 @@ export function buildFacetsGridMetrics({
   );
   const availableWidth = contentWidth - (columns - 1) * layout.gap;
   const availableHeight =
-    contentHeight - (rows - 1) * layout.gap - FACET_TITLE_HEIGHT * rows;
+    contentHeight - (rows - 1) * layout.gap - titleHeight * rows;
 
   // Cells fill the frame like a single map does: each facet fits its map to
   // its own cell, so a forced aspect ratio only leaves bands of empty frame.
@@ -76,7 +79,7 @@ export function buildFacetsGridMetrics({
   );
   const gridWidth = columns * cellWidth + (columns - 1) * layout.gap;
   const gridHeight =
-    rows * (cellHeight + FACET_TITLE_HEIGHT) + (rows - 1) * layout.gap;
+    rows * (cellHeight + titleHeight) + (rows - 1) * layout.gap;
 
   return {
     cellWidth,
@@ -97,19 +100,22 @@ export function buildFacetRenderDescriptors({
   layout,
   containerWidth,
   containerHeight,
-  primarySlotPath
+  primarySlotPath,
+  titleHeight = FACET_TITLE_HEIGHT
 }: {
   visualizations: VisualizationConfig[];
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
   primarySlotPath: FacetSlotPath | null;
+  titleHeight?: number;
 }): FacetRenderDescriptor[] {
   const metrics = buildFacetsGridMetrics({
     mapCount: visualizations.length,
     layout,
     containerWidth,
-    containerHeight
+    containerHeight,
+    titleHeight
   });
 
   return visualizations.map((visualization, index) => {
@@ -121,9 +127,9 @@ export function buildFacetRenderDescriptors({
     );
     const y = clampToPositiveInteger(
       metrics.originY +
-        row * (metrics.cellHeight + FACET_TITLE_HEIGHT + layout.gap) +
-        FACET_TITLE_HEIGHT,
-      metrics.originY + FACET_TITLE_HEIGHT
+        row * (metrics.cellHeight + titleHeight + layout.gap) +
+        titleHeight,
+      metrics.originY + titleHeight
     );
 
     // The facet title must follow the variable actually shown in the collection

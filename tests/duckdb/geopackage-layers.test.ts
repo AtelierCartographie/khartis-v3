@@ -3,6 +3,7 @@ import type { DuckDBContext } from '$lib/features/duckdb/types';
 import {
   createTestInstance,
   destroyTestInstance,
+  query,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
 
@@ -31,10 +32,14 @@ vi.mock('$lib/features/duckdb/io/file-registry', () => ({
     }
   ),
   dropRegisteredFile: vi.fn(),
-  generateUniqueTableName: vi.fn()
+  generateUniqueTableName: vi.fn(),
+  registerSqliteSidecars: vi.fn(async () => [])
 }));
 
-import { listGeofileSpatialLayers } from '$lib/features/duckdb/io/geofile-reader';
+import {
+  listGeofileSpatialLayers,
+  readGeofile
+} from '$lib/features/duckdb/io/geofile-reader';
 
 const ADMIN_EXPRESS_GPKG =
   'tests-datasets/gpkg/ADMIN-EXPRESS_4-0__GPKG_RGAF09UTM20_GLP_2025-12-05/ADE_4-0_GPKG_RGAF09UTM20_GLP-ED2025-12-05.gpkg';
@@ -44,8 +49,13 @@ let db: TestDuckDB;
 function createContext(): DuckDBContext {
   return {
     connection: db.connection,
+    loaded_files: new Map(),
     registered_files: new Set(),
-    extensionsLoaded: { spatial: false }
+    table_files: new Map(),
+    table_metadata: new Map(),
+    describeCache: new Map(),
+    rowCountCache: new Map(),
+    extensionsLoaded: { spatial: false, httpfs: false }
   } as unknown as DuckDBContext;
 }
 
@@ -79,5 +89,53 @@ describe('listGeofileSpatialLayers', () => {
     );
 
     expect(layers).toHaveLength(1);
+  });
+});
+
+// GDAL streams these layers from a worker thread in DuckDB WASM (the file has
+// no gpkg_ogr_contents), so the reader decodes them from SQLite instead. Native
+// ST_Read, which has threads, is the reference.
+describe('readGeofile on a GeoPackage', () => {
+  beforeAll(async () => {
+    db = await createTestInstance();
+    hoisted.connection = db.connection;
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  it.each([
+    ['commune', 'with an xy envelope'],
+    ['chef_lieu_de_commune', 'without an envelope']
+  ])('should decode the %s layer %s in its source CRS', async (layer) => {
+    const tableName = `gpkg_${layer}`;
+    await readGeofile(createContext(), new File([], ADMIN_EXPRESS_GPKG), {
+      tablename: tableName,
+      layer
+    });
+
+    const [read] = await query(
+      db,
+      `SELECT count(*) AS n, any_value(typeof(geom)) AS geometry_type,
+                min(ST_XMin(geom)) AS min_x, count(nom_officiel) AS names,
+                any_value(typeof(fid)) AS fid_type
+         FROM "${tableName}"`
+    );
+    expect(Number(read.n)).toBe(32);
+    expect(Number(read.names)).toBe(32);
+    expect(read.geometry_type).toBe("GEOMETRY('EPSG:5490')");
+    expect(Number(read.min_x)).toBeGreaterThan(100_000);
+    expect(read.fid_type).toBe('BIGINT');
+
+    const [diff] = await query(
+      db,
+      `SELECT count(*) AS n
+         FROM "${tableName}" t
+         JOIN ST_Read('${ADMIN_EXPRESS_GPKG}', layer = '${layer}') r
+           ON r.fid = t.fid
+         WHERE NOT ST_Equals(t.geom, r.geometrie)`
+    );
+    expect(Number(diff.n)).toBe(0);
   });
 });

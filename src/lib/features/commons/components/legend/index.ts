@@ -20,12 +20,17 @@ export {
   draw_quanti_color_legend,
   type QuantiColorSwatch
 } from './quantitative';
-export { draw_symbols_legend, type SymbolType } from './symbols';
+export {
+  draw_symbols_legend,
+  type LegendColorSwatch,
+  type SymbolType
+} from './symbols';
 export {
   categoryLegendEntry,
   classLegendEntry,
   createLegendSvg,
   LEGEND_ENTRY_ATTRIBUTE,
+  legendTitleFontSize,
   MAX_LEGEND_CATEGORIES,
   MISSING_LEGEND_ENTRY,
   type CommonLegendTextOptions,

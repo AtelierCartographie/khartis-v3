@@ -1,7 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import {
-    ANNOTATION_ROLE,
     isShapeAspectRatioLocked,
     SHAPE_TYPE
   } from '$lib/features/commons/constants';
@@ -18,7 +17,7 @@
   import {
     annotationsActions,
     getAnnotationsState,
-    getKnownPageElementDefaultContents,
+    isPageElementPlaceholder,
     stackBottomRightPageElements
   } from '$lib/features/step-toolbar/tools/annotations';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
@@ -105,20 +104,6 @@
 
   function hasArrowHead(content: unknown): boolean {
     return content === SHAPE_TYPE.ARROW;
-  }
-
-  function isExportPlaceholderPageElement(item: Annotation): boolean {
-    if (
-      !item.role ||
-      item.role === ANNOTATION_ROLE.CREDIT ||
-      typeof item.content !== 'string'
-    ) {
-      return false;
-    }
-
-    return getKnownPageElementDefaultContents(item.role, '', true).has(
-      item.content
-    );
   }
 
   function getVectorPoints(item: Annotation): VectorPoint[] {
@@ -1373,13 +1358,23 @@
         event.currentTarget instanceof HTMLElement
           ? event.currentTarget.closest<HTMLElement>('.annotation-item')
           : null;
+      // A caption sits at its text's width inside a wider box: the resize
+      // starts from the text, where the handles are.
+      const textBox =
+        event.currentTarget instanceof HTMLElement
+          ? event.currentTarget.closest<HTMLElement>('.annotation-text-box')
+          : null;
       const position = getLocalRenderedPosition(item);
       resizeState = {
         id: item.id,
         handle,
-        startAnnotationX: position.x,
+        startAnnotationX: position.x + (textBox?.offsetLeft ?? 0),
         startAnnotationY: position.y,
-        startW: itemElement?.offsetWidth ?? item.style?.shapeWidth ?? 0,
+        startW:
+          textBox?.offsetWidth ??
+          itemElement?.offsetWidth ??
+          item.style?.shapeWidth ??
+          0,
         startH: itemElement?.offsetHeight ?? 0,
         startPointerX: event.clientX,
         startPointerY: event.clientY
@@ -1941,7 +1936,7 @@
       const height = measuredItemHeights[item.id] ?? 0;
       if (
         getAnnotationScope(item) !== 'page' ||
-        isExportPlaceholderPageElement(item) ||
+        isPageElementPlaceholder(item) ||
         width <= 0 ||
         height <= 0
       ) {
@@ -2006,6 +2001,7 @@
   class:drawing-mode={isDrawingMode}
   class:hidden={hidden}
   class:non-interactive={!interactive}
+  style:--kh-page-caption-width="{formatState.width / 2}px"
   bind:this={overlayElement}
 >
   <div
@@ -2280,7 +2276,10 @@
       class:has-text-width={item.type === AnnotationKind.TEXT &&
         !!item.style?.shapeWidth}
       data-annotation-role={item.role}
-      data-khartis-export-placeholder={isExportPlaceholderPageElement(item)
+      data-text-align={item.type === AnnotationKind.TEXT
+        ? (item.style?.textAlign ?? 'left')
+        : undefined}
+      data-khartis-export-placeholder={isPageElementPlaceholder(item)
         ? 'true'
         : undefined}
       data-workspace-pan-ignore="true"
@@ -2299,21 +2298,23 @@
       bind:offsetWidth={measuredItemWidths[item.id]}
     >
       {#if item.type === AnnotationKind.TEXT}
-        <div class="annotation-text" style={getTextStyle(item)}>
-          {item.content || ''}
+        <div class="annotation-text-box">
+          <div class="annotation-text" style={getTextStyle(item)}>
+            {item.content || ''}
+          </div>
+          {#if interactive && isAnnotationEditing && selectedId === item.id}
+            {#each ['w', 'e'] as edge (edge)}
+              <div
+                class="text-resize-edge text-resize-{edge}"
+                role="button"
+                tabindex="-1"
+                aria-label={m.annotations_text_resize_handle()}
+                onpointerdown={(e: PointerEvent) =>
+                  handleResizePointerDown(e, item, edge)}
+              ></div>
+            {/each}
+          {/if}
         </div>
-        {#if interactive && isAnnotationEditing && selectedId === item.id}
-          {#each ['w', 'e'] as edge (edge)}
-            <div
-              class="text-resize-edge text-resize-{edge}"
-              role="button"
-              tabindex="-1"
-              aria-label={m.annotations_text_resize_handle()}
-              onpointerdown={(e: PointerEvent) =>
-                handleResizePointerDown(e, item, edge)}
-            ></div>
-          {/each}
-        {/if}
       {:else if item.type === AnnotationKind.SHAPE}
         {#if isVectorShapeItem(item)}
           {@const vectorPoints = getVectorPoints(item)}
@@ -2759,12 +2760,96 @@
     min-width: 24px;
   }
 
-  .annotation-item[data-annotation-role='source'],
-  .annotation-item[data-annotation-role='basemap_source'],
-  .annotation-item[data-annotation-role='signature'],
-  .annotation-item[data-annotation-role='credit'],
-  .annotation-item[data-annotation-role='note'] {
-    width: 216px;
+  /* Page captions get a box half the page wide, where their text sits at its
+     own width. The text box alone catches the pointer and carries the
+     outline and the resize handles, so the map around a short caption stays
+     reachable and the outline hugs the text, as on every other text. */
+  .annotation-item:is(
+    [data-annotation-role='source'],
+    [data-annotation-role='basemap_source'],
+    [data-annotation-role='signature'],
+    [data-annotation-role='credit'],
+    [data-annotation-role='note']
+  ) {
+    width: var(--kh-page-caption-width, 216px);
+    pointer-events: none;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    )
+    .annotation-text-box {
+    pointer-events: auto;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    ):not(.has-text-width)
+    .annotation-text-box {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    )[data-text-align='right']:not(.has-text-width)
+    .annotation-text-box {
+    margin-left: auto;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    )[data-text-align='center']:not(.has-text-width)
+    .annotation-text-box {
+    margin-inline: auto;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    ):is(:hover, :focus-visible, .selected) {
+    outline: none;
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    ):hover
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+  }
+
+  .annotation-item:is(
+      [data-annotation-role='source'],
+      [data-annotation-role='basemap_source'],
+      [data-annotation-role='signature'],
+      [data-annotation-role='credit'],
+      [data-annotation-role='note']
+    ):is(:focus-visible, .selected)
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
   }
 
   .annotation-text {
@@ -2774,9 +2859,20 @@
     white-space: pre-wrap;
   }
 
+  /* Default page texts are optional: until written, they read as greyed
+     placeholders (and exports leave them out). A filter, because the text
+     carries its own colour and opacity inline. */
+  .annotation-item[data-khartis-export-placeholder='true'] .annotation-text {
+    filter: grayscale(1) opacity(0.45);
+  }
+
   .annotation-item.has-text-width .annotation-text {
     width: 100%;
     max-width: none;
+  }
+
+  .annotation-text-box {
+    position: relative;
   }
 
   .text-resize-edge {
@@ -2794,6 +2890,21 @@
 
   .text-resize-e {
     right: -4px;
+  }
+
+  /* The width handles of a selected text read as the shape handles do. */
+  .text-resize-edge::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    box-sizing: border-box;
+    background: white;
+    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border-radius: 2px;
+    content: '';
+    transform: translate(-50%, -50%);
   }
 
   .annotation-shape,

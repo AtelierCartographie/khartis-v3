@@ -23,6 +23,10 @@
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import {
+    clearLegendItemFocus,
+    getPendingLegendItemFocus
+  } from './legend-focus.svelte';
+  import {
     resolveLegendItemLayout,
     selectRenderedLegendItems
   } from './legend-items.utils';
@@ -114,6 +118,18 @@
     ) {
       expandedItemIds = nextExpandedItemIds;
     }
+  });
+
+  $effect(() => {
+    const focusItemId = getPendingLegendItemFocus();
+    if (!focusItemId) return;
+
+    untrack(() => {
+      clearLegendItemFocus();
+      if (!items.some((item) => item.id === focusItemId)) return;
+      legendActions.setActiveTab(LegendTab.CONTENT);
+      expandedItemIds = [focusItemId];
+    });
   });
 
   const backgroundEnabled = $derived(legendState.style.background.enabled);
@@ -229,7 +245,7 @@
         return;
       }
 
-      expandedItemIds = [...expandedItemIds, id];
+      expandedItemIds = [id];
       return;
     }
 
@@ -318,6 +334,7 @@
             showToggle={true}
             toggleChecked={item.visible}
             open={isItemExpanded(item.id)}
+            scrollIntoViewOnOpen
             onToggle={(expanded) => setItemExpanded(item.id, expanded)}
             onToggleChange={(checked) =>
               handleItemVisibilityChange(item, checked)}

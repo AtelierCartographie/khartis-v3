@@ -293,6 +293,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.style.symbolFillColor ??
       visualization.style.fillColor,
     fillColorB: existing?.fillColorB ?? visualization.style.fillColorB,
+    signColors: existing?.signColors ?? visualization.style.symbolSignColors,
     strokeMode:
       existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
     strokeColor:
@@ -388,6 +389,7 @@ export function buildLinePrimitiveConfig(
       existing?.dashedPattern ??
       visualization.style.lineDashedPattern ??
       BasemapDottedPattern.DOTS,
+    capRounded: existing?.capRounded ?? visualization.style.lineCapRounded,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,

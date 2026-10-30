@@ -13,7 +13,15 @@
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
 
+  interface ProjectGeoBasemapCard {
+    basemap: BasemapMetadata;
+    score?: number;
+  }
+
   interface Props {
+    projectGeoBasemaps: ProjectGeoBasemapCard[];
+    basemapSelected: string;
+    onSelectProjectGeoBasemap: (basemap: BasemapMetadata) => void;
     importedBasemap: BasemapMetadata | null;
     importError: string | null;
     importUploading: boolean;
@@ -23,6 +31,9 @@
   }
 
   let {
+    projectGeoBasemaps,
+    basemapSelected,
+    onSelectProjectGeoBasemap,
     importedBasemap,
     importError,
     importUploading,
@@ -49,6 +60,27 @@
 </script>
 
 <div class="tab-content">
+  {#if projectGeoBasemaps.length > 0}
+    <div class="project-files-section">
+      <h4 class="import-title">{m.basemap_project_files_title()}</h4>
+      <p class="kh-help">{m.basemap_project_files_description()}</p>
+      <div class="project-files-cards">
+        {#each projectGeoBasemaps as { basemap, score } (basemap.file)}
+          <BasemapCardVertical
+            basemap={basemap}
+            selected={basemap.file === basemapSelected}
+            matchScore={score}
+            showMatchScore={score !== undefined}
+            showMetadata={false}
+            variant="gray"
+            disabled={importUploading}
+            onclick={() => onSelectProjectGeoBasemap(basemap)}
+          />
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <h4 class="import-title">{m.basemap_import_modal_title()}</h4>
   <p class="kh-help">
     {m.basemap_import_modal_description()}
@@ -213,6 +245,14 @@
     flex: 1;
   }
 
+  .project-files-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cds-spacing-03);
+    --basemap-card-width: var(--kh-card-w);
+  }
+
+  .project-files-section,
   .imported-basemap-section {
     display: flex;
     flex-direction: column;

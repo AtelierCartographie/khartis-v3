@@ -39,6 +39,7 @@
   interface SuggestedBasemap {
     basemap: BasemapMetadata;
     score: number;
+    matchesData: boolean;
   }
 
   interface SearchComboBoxItem {
@@ -56,6 +57,8 @@
     catalogOpen?: boolean;
     onSuggestionsToggle?: (expanded: boolean) => void;
     onCatalogToggle?: (expanded: boolean) => void;
+    /** The suggestions follow the extent of a geographic file, not its values. */
+    rankedByExtent?: boolean;
   }
 
   let {
@@ -66,7 +69,8 @@
     suggestionsOpen,
     catalogOpen,
     onSuggestionsToggle,
-    onCatalogToggle
+    onCatalogToggle,
+    rankedByExtent = false
   }: Props = $props();
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
@@ -350,14 +354,17 @@
       {/snippet}
       {#if suggestedBasemaps.length > 0}
         <p class="section-subtitle">
-          {m.basemap_suggestions_desc()}
+          {rankedByExtent
+            ? m.basemap_suggestions_extent_desc()
+            : m.basemap_suggestions_desc()}
         </p>
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
-            {#each suggestedBasemaps as { basemap, score } (basemap.file)}
+            {#each suggestedBasemaps as { basemap, score, matchesData } (basemap.file)}
               <BasemapCardVertical
                 basemap={basemap}
                 matchScore={score}
+                showMatchScore={matchesData}
                 selected={basemap.file === basemapSelected}
                 onclick={() => onSelectBasemap(basemap)}
               />

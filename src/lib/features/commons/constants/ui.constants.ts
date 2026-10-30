@@ -32,7 +32,8 @@ export enum ExampleCategory {
   POLYGONS = 'polygons',
   LINES = 'lines',
   TEXTS = 'texts',
-  HYBRIDS = 'hybrids'
+  HYBRIDS = 'hybrids',
+  COLLECTION = 'collection'
 }
 
 export const PAGE_PRESETS = {
@@ -90,14 +91,6 @@ export enum BasemapLayerType {
   GRATICULE = 'graticule',
   GEOGRAPHIC_LINES = 'geographic-lines',
   SPHERE = 'sphere'
-}
-
-export enum JoinStatus {
-  JOINED = 'joined',
-  TO_VERIFY = 'to_verify',
-  DUPLICATE = 'duplicate',
-  UNRECOGNIZED = 'unrecognized',
-  IGNORED = 'ignored'
 }
 
 export enum OrientationIndicatorStyle {

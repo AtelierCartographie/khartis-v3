@@ -1,4 +1,5 @@
 import { facetsStore, type FacetSlotPath } from '../adapters/facets-adapter';
+import { NONE_FIELD_ID } from './use-field-selection.svelte';
 
 interface DataFieldOption {
   id: number;
@@ -10,6 +11,12 @@ interface FacetsVariableSelectionOptions {
   getDataFields: () => DataFieldOption[];
 }
 
+export interface FacetMapFill {
+  variable: string;
+  title: string;
+  fieldId: number;
+}
+
 export interface FacetsVariableSelection {
   getSelectedFieldIds(slotPath: FacetSlotPath | undefined): number[];
   isActiveForSlot(slotPath: FacetSlotPath | undefined): boolean;
@@ -19,6 +26,9 @@ export interface FacetsVariableSelection {
     fieldIds: number[]
   ): Promise<void>;
   toggle(slotPath: FacetSlotPath | undefined, enabled: boolean): void;
+  /** One entry per map when the collection lets each map set this fill slot apart. */
+  getMapFills(slotPath: FacetSlotPath | undefined): FacetMapFill[];
+  selectMapFill(variable: string, fieldId: number): void;
 }
 
 export function useFacetsVariableSelection({
@@ -95,9 +105,42 @@ export function useFacetsVariableSelection({
     }
   }
 
+  function getMapFills(slotPath: FacetSlotPath | undefined): FacetMapFill[] {
+    const visualizationId = getVisualizationId();
+    if (
+      !slotPath ||
+      !visualizationId ||
+      !facetsStore.enabled ||
+      facetsStore.baseVisualizationId !== visualizationId ||
+      facetsStore.fillSlotPath !== slotPath
+    ) {
+      return [];
+    }
+
+    const fields = getDataFields();
+    return facetsStore.variables.map((variable) => {
+      const column = facetsStore.getFillVariable(variable);
+      return {
+        variable,
+        title: facetsStore.getFacetTitle(variable) ?? variable,
+        fieldId:
+          fields.find((field) => field.text === column)?.id ?? NONE_FIELD_ID
+      };
+    });
+  }
+
+  function selectMapFill(variable: string, fieldId: number): void {
+    const column = getFieldNames([fieldId])[0];
+    if (column) {
+      void facetsStore.setFillVariable(variable, column);
+    }
+  }
+
   return {
+    getMapFills,
     getSelectedFieldIds,
     isActiveForSlot,
+    selectMapFill,
     toggle,
     updateVariables
   };

@@ -18,6 +18,10 @@ interface DatasetGeometrySource {
 
 const derivedBasemaps = new Map<string, BasemapMetadata>();
 
+function hasArea([minX, minY, maxX, maxY]: BasemapMetadata['bbox']): boolean {
+  return maxX > minX && maxY > minY;
+}
+
 export function isDatasetGeometryBasemap(basemapId: string | null): boolean {
   if (!basemapId) {
     return false;
@@ -52,13 +56,11 @@ export async function ensureDatasetGeometryBasemap(
     const cached = derivedBasemaps.get(dataset.tableName);
     const basemap =
       cached ??
-      (
-        await createBasemapFromGeometryTable(Duck, dataset.tableName, {
-          title: dataset.name,
-          geometryColumn: dataset.geometry.columnName ?? undefined,
-          crs: dataset.geometry.crs ?? undefined
-        })
-      ).basemap;
+      (await createBasemapFromGeometryTable(Duck, dataset.tableName, {
+        title: dataset.name,
+        geometryColumn: dataset.geometry.columnName ?? undefined,
+        crs: dataset.geometry.crs ?? undefined
+      }));
 
     derivedBasemaps.set(dataset.tableName, basemap);
     basemapCatalogService.addCustomBasemap(basemap);
@@ -100,6 +102,20 @@ export async function activateDatasetGeometryBasemap(
     isDatasetGeometryBasemap(referenceBasemapId);
 
   if (!slotIsFree) {
+    return false;
+  }
+
+  // The reference bbox frames the map, so a layer without area (a single point
+  // in a multi-layer import) never displaces another layer that has one.
+  const currentBasemap = referenceBasemapId
+    ? derivedBasemaps.get(referenceBasemapId)
+    : undefined;
+  if (
+    currentBasemap &&
+    currentBasemap !== basemap &&
+    hasArea(currentBasemap.bbox) &&
+    !hasArea(basemap.bbox)
+  ) {
     return false;
   }
 

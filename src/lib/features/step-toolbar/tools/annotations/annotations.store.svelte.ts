@@ -51,7 +51,12 @@ import {
 } from './annotations-page-layout.utils';
 import {
   getKnownPageElementDefaultContents,
-  getPageElementDefaultContent
+  getPageElementDefaultContent,
+  getSourcePrefix,
+  hasPageElementDefaultWording,
+  isLegacyPageElementContent,
+  isSourcePrefixOnly,
+  resolveMapYear
 } from './annotations-placeholders.utils';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
@@ -514,6 +519,19 @@ const { actions, getState } = createToolStore<
       clearCreationState(s);
       s.selectedId = id;
       if (id) {
+        const sourcePlaceholder = s.items.find(
+          (i) =>
+            i.id === id &&
+            i.role === ANNOTATION_ROLE.SOURCE &&
+            hasPageElementDefaultWording(i)
+        );
+        // « Ajouter une source » turns into « Source : », ready to complete.
+        if (sourcePlaceholder) {
+          s.items = s.items.map((i) =>
+            i.id === id ? { ...i, content: getSourcePrefix() } : i
+          );
+        }
+
         const item = s.items.find((i) => i.id === id);
         if (item) {
           s.activeType = item.type;
@@ -770,12 +788,21 @@ const { actions, getState } = createToolStore<
       const visible = options?.visible ?? true;
       const layout = resolvePageLayout();
       const basemapSource = resolveBasemapSourceText();
+      const year = resolveMapYear();
 
       const hasPageElements = s.items.some((item) =>
         isPageElementRole(item.role)
       );
       if (hasPageElements) {
-        s.items = s.items.map((item) => {
+        // Older projects keep an untouched note, now dropped, and their
+        // texts in the wording of the time: « Réalisé avec Khartis », and
+        // the basemap source without its « Fond de carte : » lead-in.
+        const keptItems = s.items.filter(
+          (item) =>
+            item.role !== ANNOTATION_ROLE.SIGNATURE ||
+            !isLegacyPageElementContent(item.role, item.content)
+        );
+        s.items = keptItems.map((item) => {
           if (!isPageElementRole(item.role)) {
             return item;
           }
@@ -783,8 +810,15 @@ const { actions, getState } = createToolStore<
           const defaultContent = getPageElementDefaultContent(
             item.role,
             basemapSource,
-            withPlaceholders
+            withPlaceholders,
+            getLocale(),
+            year
           );
+          const isOutdatedContent =
+            isLegacyPageElementContent(item.role, item.content) ||
+            (item.role === ANNOTATION_ROLE.BASEMAP_SOURCE &&
+              !!basemapSource &&
+              item.content === basemapSource);
           const positionMode = item.positionMode ?? 'auto';
           const position =
             positionMode === 'manual'
@@ -808,7 +842,8 @@ const { actions, getState } = createToolStore<
             position,
             style,
             content:
-              withPlaceholders && isEmptyContent(item.content)
+              isOutdatedContent ||
+              (withPlaceholders && isEmptyContent(item.content))
                 ? defaultContent
                 : item.content
           };
@@ -856,14 +891,6 @@ const { actions, getState } = createToolStore<
           }
         },
         {
-          role: ANNOTATION_ROLE.SIGNATURE,
-          style: {
-            ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize,
-            textAlign: TextAlign.Right
-          }
-        },
-        {
           role: ANNOTATION_ROLE.CREDIT,
           style: {
             ...PREDEFINED_STYLES.caption,
@@ -881,7 +908,9 @@ const { actions, getState } = createToolStore<
         content: getPageElementDefaultContent(
           el.role,
           basemapSource,
-          withPlaceholders
+          withPlaceholders,
+          getLocale(),
+          year
         ),
         position: clampPageElementPosition(
           getPageElementPosition(el.role, layout),
@@ -900,16 +929,25 @@ const { actions, getState } = createToolStore<
     refreshPageElementPlaceholders: () => {
       const basemapSource = resolveBasemapSourceText();
       const locale = getLocale();
+      const year = resolveMapYear();
 
       s.items = s.items.map((item) => {
         if (!isPageElementRole(item.role) || typeof item.content !== 'string') {
           return item;
         }
 
+        if (
+          item.role === ANNOTATION_ROLE.SOURCE &&
+          isSourcePrefixOnly(item.content)
+        ) {
+          return { ...item, content: getSourcePrefix(locale) };
+        }
+
         const knownContents = getKnownPageElementDefaultContents(
           item.role,
           basemapSource,
-          true
+          true,
+          year
         );
 
         if (!knownContents.has(item.content)) {
@@ -922,7 +960,8 @@ const { actions, getState } = createToolStore<
             item.role,
             basemapSource,
             true,
-            locale
+            locale,
+            year
           )
         };
       });

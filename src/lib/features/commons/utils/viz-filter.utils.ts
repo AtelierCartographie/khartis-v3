@@ -3,12 +3,16 @@ import type {
   VizDataFilter
 } from '../stores/visualization.types';
 
+export function isTopVizFilter(filter: VizDataFilter): boolean {
+  return filter.operator === 'top_asc' || filter.operator === 'top_desc';
+}
+
 export function isVizFilterComplete(filter: VizDataFilter): boolean {
   if (filter.operator === 'empty' || filter.operator === 'not_empty') {
     return true;
   }
 
-  if (filter.operator === 'top_asc' || filter.operator === 'top_desc') {
+  if (isTopVizFilter(filter)) {
     const limit = filter.limit ?? Number(filter.value);
     return Number.isFinite(limit) && limit > 0;
   }
@@ -37,5 +41,16 @@ export function selectVizFiltersForPrimitive(
       (!primitive ||
         !filter.primitiveType ||
         filter.primitiveType === primitive)
+  );
+}
+
+export function resolveFacetDataFilters(
+  filters: VizDataFilter[] | undefined,
+  facetVariable: string
+): VizDataFilter[] | undefined {
+  return filters?.map((filter) =>
+    filter.perFacet && isTopVizFilter(filter)
+      ? { ...filter, column: facetVariable }
+      : { ...filter }
   );
 }

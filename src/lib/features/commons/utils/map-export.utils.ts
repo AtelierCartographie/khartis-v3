@@ -1745,8 +1745,8 @@ function serializePathLayer(
         fill="none"
         ${colorAttributes('stroke', group.color)}
         stroke-width="${roundSvgValue(group.width)}"
-        stroke-linecap="${escapeXml(String(props.lineCap ?? 'round'))}"
-        stroke-linejoin="${escapeXml(String(props.lineJoin ?? 'round'))}"
+        stroke-linecap="${props.capRounded === false ? 'butt' : 'round'}"
+        stroke-linejoin="${props.jointRounded === false ? 'miter' : 'round'}"
         ${group.dashAttribute}
       />
     `

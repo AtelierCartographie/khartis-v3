@@ -25,6 +25,7 @@ import {
   resolveOrthographicReferenceBbox
 } from './orthographic-reference.utils';
 import {
+  isGeoArrowTableInProjectedCrs,
   shouldReprojectDatasetForActiveProjection,
   shouldUseIdentityProjectionForDatasetCrs
 } from './dataset-crs.utils';
@@ -138,7 +139,8 @@ interface ResolveOrthographicRenderedDatasetBoundsOptions {
 
 // When a manual projection is active on a non-WGS84 dataset, the rendered
 // table is reprojected to WGS84 — the persisted source-CRS bounds must never
-// feed the lon/lat projection fit, so measure the rendered table instead.
+// feed the lon/lat projection fit, so measure the rendered table instead, and
+// not the source-CRS table still in hand while the WGS84 one loads.
 export function resolveOrthographicRenderedDatasetBounds({
   dataset,
   renderedTable,
@@ -150,7 +152,8 @@ export function resolveOrthographicRenderedDatasetBounds({
       hasManualProjectionOverride
     )
   ) {
-    return renderedTable
+    return renderedTable &&
+      !isGeoArrowTableInProjectedCrs(renderedTable.schema.metadata?.get('geo'))
       ? toOrthographicBounds(calculateBoundsFromGeoArrow(renderedTable))
       : null;
   }

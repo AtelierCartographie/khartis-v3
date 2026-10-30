@@ -1,12 +1,12 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
     StylingTools,
     VisualizationTools
   } from '$lib/features/commons/types/global';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { m } from '$lib/paraglide/messages';
-  import { Close } from 'carbon-icons-svelte';
   import type { Component } from 'svelte';
   import { closeSelectedToolPanel } from '../tools-list/tool-list.utils.svelte';
   import Annotations from './annotations/annotations.svelte';
@@ -64,8 +64,8 @@
 
   let toolBody = $state<HTMLDivElement | null>(null);
 
-  // Panels scroll with a hidden scrollbar, so a notification added below the
-  // fold looks clipped. Bring each new one fully into view.
+  // A notification added below the fold would go unnoticed. Bring each new
+  // one fully into view.
   $effect(() => {
     if (!toolBody) return;
 
@@ -99,72 +99,40 @@
 </script>
 
 <aside class="tool-container">
-  <header class="tool-header">
-    <p class="tool-title">{title}</p>
+  <PanelHeader title={title} closeLabel={m.close()} onclose={handleClose} />
 
-    <IconButton
-      kind="ghost"
-      size="small"
-      iconDescription={m.close()}
-      icon={Close}
-      onclick={handleClose}
-    />
-  </header>
-
-  <div class="tool-body" bind:this={toolBody}>
-    {#if SelectedComponent}
-      <SelectedComponent />
-    {/if}
+  <div class="kh-scroll-area">
+    <div class="tool-body" bind:this={toolBody} use:scrollShadows>
+      <div class="tool-content">
+        {#if SelectedComponent}
+          <SelectedComponent />
+        {/if}
+      </div>
+    </div>
   </div>
 </aside>
 
 <style>
+  /* Only the body scrolls: the title and the close button stay in view. */
   .tool-container {
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     background-color: var(--cds-background, white);
   }
 
-  .tool-header {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-05) var(--cds-spacing-02) var(--cds-spacing-04)
-      var(--cds-spacing-05);
-    position: sticky;
-    top: 0;
-    box-sizing: border-box;
-    width: 100%;
-    isolation: isolate;
-    background: var(--cds-background, white);
-    box-shadow:
-      0 1px 0 var(--cds-border-subtle-01, #e0e0e0),
-      0 -1px 0 var(--cds-background, white);
-    z-index: 4;
-  }
-
-  .tool-header::before {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: var(--cds-background, white);
-    content: '';
-    pointer-events: none;
-  }
-
-  .tool-title {
-    flex: 1 0 0;
-    margin: 0;
-    font-size: var(--kh-font-primitive);
-    font-weight: var(--kh-weight-primitive);
-    line-height: var(--kh-line-primitive);
-    color: var(--cds-text-01, #161616);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .tool-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
     background-color: inherit;
+  }
+
+  /* Padding on the scroller would keep sticky section headers below its
+     top edge, with content showing above them. */
+  .tool-content {
     padding: var(--cds-spacing-05);
   }
 

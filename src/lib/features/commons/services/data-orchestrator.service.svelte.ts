@@ -7,7 +7,8 @@ import {
 import {
   Duck,
   RefineOperation,
-  duckDBOrchestrator
+  duckDBOrchestrator,
+  waitForQueryIdle
 } from '$lib/features/duckdb';
 import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
 import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
@@ -74,7 +75,8 @@ import {
 import {
   findPaletteById,
   generatePaletteColors,
-  PALETTE_TYPE
+  PALETTE_TYPE,
+  resolvePaletteForType
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   getSingleClassValue,
@@ -89,6 +91,10 @@ export interface ProjectChangeOptions {
   isProjectCreation?: boolean;
   signal?: AbortSignal;
 }
+
+// Shorter than the idle delay of the derived geometry build, so the panel's
+// suggestion is ready before the territory and limits take the connection.
+const PROJECTION_SUGGESTION_IDLE_MS = 300;
 
 function throwIfProjectChangeAborted(signal?: AbortSignal): void {
   if (!signal?.aborted) {
@@ -323,7 +329,11 @@ function createDataOrchestratorService() {
         options?.suggestProjection !== false &&
         (dataset.geometry || dataset.geoDetection)
       ) {
-        projectionActions.suggestProjectionForCurrentData();
+        // Only the Projection panel reads the suggestion, and it computes it
+        // itself when missing: it waits for the import queries to drain.
+        void waitForQueryIdle(PROJECTION_SUGGESTION_IDLE_MS).then(() =>
+          projectionActions.suggestProjectionForCurrentData()
+        );
       }
 
       layersActions.syncWithVisualizations();
@@ -932,7 +942,7 @@ function createDataOrchestratorService() {
           colors =
             userPalette && !isPatternPalette
               ? generatePaletteColors(
-                  userPalette,
+                  resolvePaletteForType(userPalette, paletteType),
                   actualNumClasses,
                   contrast,
                   undefined,

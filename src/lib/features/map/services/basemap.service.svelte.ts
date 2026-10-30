@@ -1,11 +1,13 @@
 import {
   Duck,
+  GEO_CONSTANTS,
   isTableBuildPending,
   waitForTableBuild
 } from '$lib/features/duckdb';
 import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
+import { SvelteSet } from 'svelte/reactivity';
 import {
   DataValidationError,
   DuckDBError,
@@ -27,6 +29,8 @@ import {
   escapeSqlString
 } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
+import { calculateBoundsFromGeoArrow } from '../core';
+import { isWgs84LikeCrs } from '../utils/dataset-crs.utils';
 import type {
   BasemapGeometryPack,
   BasemapMetadata,
@@ -751,11 +755,19 @@ function createBasemapService() {
   let currentBasemap: LoadedBasemap | null = $state(null);
   let simplificationVersion = $state(0);
   let registrationVersion = $state(0);
+  const emptyLayerFiles = new SvelteSet<string>();
   let attributesLoaded = false;
   let attributesLoadPromise: Promise<void> | null = null;
   let projectionPresetsData: ProjectionPresets | null = $state(null);
   let stylePresetsData: StylePresets | null = $state(null);
   const basemapCache = new Map<string, LoadedBasemap>();
+  // An imported basemap in a projected CRS renders in its own units until a d3
+  // projection or the tiled engine needs lon/lat. Its WGS84 variant holds the
+  // same tables reprojected by DuckDB, so every consumer keeps reading
+  // metadata, bbox and tables that describe one space.
+  let renderInWgs84 = false;
+  const wgs84Variants = new Map<string, LoadedBasemapVariantState>();
+  const wgs84SourceCrsByMetadata = new WeakMap<BasemapMetadata, string>();
   const geometryTablesInDuckDB = new Set<string>();
   const loadingBasemaps = new Map<string, Promise<LoadedBasemap | null>>();
   let basemapCacheGeneration = 0;
@@ -1042,7 +1054,8 @@ function createBasemapService() {
   async function loadGeometryFromDuckTable(
     tableName: string,
     projectColumns?: readonly string[] | null,
-    geometryTypeOverride?: string
+    geometryTypeOverride?: string,
+    reprojectFromCrs?: string
   ): Promise<ArrowTable> {
     if (!Duck.db) {
       throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -1050,7 +1063,8 @@ function createBasemapService() {
 
     return createCustomBasemapGeometryTableFromDuck(Duck, tableName, {
       projectColumns,
-      geometryTypeOverride
+      geometryTypeOverride,
+      reprojectFromCrs
     });
   }
 
@@ -1078,13 +1092,153 @@ function createBasemapService() {
     const projectColumns = shouldReadFromDuck
       ? await resolveCustomBasemapGeometryProjectColumns(Duck, layerFile)
       : null;
-    return shouldReadFromDuck
-      ? loadGeometryFromDuckTable(
+    const table = shouldReadFromDuck
+      ? await loadGeometryFromDuckTable(
           layerFile,
           projectColumns,
-          getCustomBasemapLayerGeometryTypeOverride(customLayerType)
+          getCustomBasemapLayerGeometryTypeOverride(customLayerType),
+          wgs84SourceCrsByMetadata.get(metadata)
         )
-      : loadGeometryFromParquet(layerFile);
+      : await loadGeometryFromParquet(layerFile);
+    recordLayerTableEmptiness(layerFile, table);
+    return table;
+  }
+
+  function recordLayerTableEmptiness(
+    layerFile: string,
+    table: ArrowTable
+  ): void {
+    if (table.numRows === 0) {
+      emptyLayerFiles.add(layerFile);
+    } else {
+      emptyLayerFiles.delete(layerFile);
+    }
+  }
+
+  function getProjectedSourceCrs(
+    metadata: BasemapMetadata
+  ): string | undefined {
+    const sourceCrs = metadata.proj_source;
+    return metadata.isCustom &&
+      metadata.proj_to?.type === 'identity' &&
+      sourceCrs &&
+      !isWgs84LikeCrs(sourceCrs)
+      ? sourceCrs
+      : undefined;
+  }
+
+  async function buildWgs84Variant(
+    loadedBasemap: LoadedBasemap,
+    sourceCrs: string
+  ): Promise<LoadedBasemapVariantState | null> {
+    const { metadata } = loadedBasemap;
+    const projectColumns = await resolveCustomBasemapGeometryProjectColumns(
+      Duck,
+      metadata.file
+    );
+    const geometryTable = await loadGeometryFromDuckTable(
+      metadata.file,
+      projectColumns,
+      undefined,
+      sourceCrs
+    );
+    const bounds = calculateBoundsFromGeoArrow(geometryTable);
+    if (
+      !Array.isArray(bounds) ||
+      !Array.isArray(bounds[0]) ||
+      !Array.isArray(bounds[1])
+    ) {
+      return null;
+    }
+
+    const [[minX, minY], [maxX, maxY]] = bounds;
+    const variantMetadata: BasemapMetadata = {
+      ...metadata,
+      bbox: [minX, minY, maxX, maxY],
+      proj_source: GEO_CONSTANTS.WGS84_CRS
+    };
+    wgs84SourceCrsByMetadata.set(variantMetadata, sourceCrs);
+    const variant = createLoadedBasemapVariant(
+      variantMetadata,
+      geometryTable,
+      new Map()
+    );
+    for (const layerFile of loadedBasemap.layerTables.keys()) {
+      variant.layerTables.set(
+        layerFile,
+        await loadBasemapLayerTable(variantMetadata, layerFile)
+      );
+    }
+    return variant;
+  }
+
+  async function ensureWgs84Variant(
+    loadedBasemap: LoadedBasemap | null
+  ): Promise<boolean> {
+    if (!renderInWgs84 || !loadedBasemap) {
+      return false;
+    }
+    const basemapId = loadedBasemap.metadata.file;
+    const sourceCrs = getProjectedSourceCrs(loadedBasemap.metadata);
+    if (!sourceCrs || wgs84Variants.has(basemapId)) {
+      return false;
+    }
+
+    try {
+      const variant = await buildWgs84Variant(loadedBasemap, sourceCrs);
+      if (!variant || basemapCache.get(basemapId) !== loadedBasemap) {
+        return false;
+      }
+      wgs84Variants.set(basemapId, variant);
+      return true;
+    } catch (error) {
+      logger.error(
+        'Failed to reproject custom basemap to WGS84',
+        LogCategory.MAP,
+        error,
+        { extra: { basemapId, sourceCrs } }
+      );
+      return false;
+    }
+  }
+
+  async function setRenderInWgs84(enabled: boolean): Promise<void> {
+    if (renderInWgs84 === enabled) {
+      return;
+    }
+    renderInWgs84 = enabled;
+    const target = currentBasemap
+      ? (basemapCache.get(currentBasemap.metadata.file) ?? null)
+      : null;
+    await ensureWgs84Variant(target);
+    if (
+      target &&
+      renderInWgs84 === enabled &&
+      getProjectedSourceCrs(target.metadata)
+    ) {
+      registrationVersion += 1;
+    }
+  }
+
+  function resolveVariant(
+    loadedBasemap: LoadedBasemap | null,
+    level?: SimplificationLevel
+  ): LoadedBasemapVariantData | null {
+    const wgs84Variant =
+      renderInWgs84 && loadedBasemap
+        ? wgs84Variants.get(loadedBasemap.metadata.file)
+        : undefined;
+    return wgs84Variant ?? getResolvedBasemapVariant(loadedBasemap, level);
+  }
+
+  function resolveVariantState(
+    loadedBasemap: LoadedBasemap | null
+  ): LoadedBasemapVariantState | null {
+    const wgs84Variant =
+      renderInWgs84 && loadedBasemap
+        ? wgs84Variants.get(loadedBasemap.metadata.file)
+        : undefined;
+    return wgs84Variant ?? getResolvedBasemapVariantState(loadedBasemap);
   }
 
   function updateProjectionFromTable(geometryTable: ArrowTable): void {
@@ -1351,12 +1505,16 @@ function createBasemapService() {
     }
 
     const generation = basemapCacheGeneration;
-    const promise = loadBasemapInternal(resolvedBasemapId).then((loaded) => {
-      if (loaded && generation === basemapCacheGeneration) {
-        basemapCache.set(resolvedBasemapId, loaded);
+    const promise = loadBasemapInternal(resolvedBasemapId).then(
+      async (loaded) => {
+        if (loaded && generation === basemapCacheGeneration) {
+          basemapCache.set(resolvedBasemapId, loaded);
+          wgs84Variants.delete(resolvedBasemapId);
+          await ensureWgs84Variant(loaded);
+        }
+        return loaded;
       }
-      return loaded;
-    });
+    );
     loadingBasemaps.set(resolvedBasemapId, promise);
 
     try {
@@ -1409,6 +1567,8 @@ function createBasemapService() {
       layerTables
     );
     basemapCache.set(metadata.file, loaded);
+    wgs84Variants.delete(metadata.file);
+    await ensureWgs84Variant(loaded);
     basemapActivationRequestId += 1;
     activateLoadedBasemap(loaded);
     registrationVersion += 1;
@@ -1464,13 +1624,17 @@ function createBasemapService() {
         continue;
       }
 
-      layerTables.set(layerFile, await loadGeometryFromDuckTable(layerFile));
+      const table = await loadGeometryFromDuckTable(layerFile);
+      recordLayerTableEmptiness(layerFile, table);
+      layerTables.set(layerFile, table);
     }
 
     loadedBasemap.geometryTable = geometryTable;
     loadedBasemap.layerTables = layerTables;
     loadedBasemap.activeSimplificationLevel = null;
     loadedBasemap.simplifiedVariants?.clear();
+    wgs84Variants.delete(basemapId);
+    await ensureWgs84Variant(loadedBasemap);
 
     if (currentBasemap?.metadata.file === basemapId) {
       activateLoadedBasemap(loadedBasemap);
@@ -1482,29 +1646,26 @@ function createBasemapService() {
   function getResolvedLayerTables(
     loadedBasemap: LoadedBasemap | null
   ): Map<string, ArrowTable> {
-    return getResolvedBasemapVariant(loadedBasemap)?.layerTables ?? new Map();
+    return resolveVariant(loadedBasemap)?.layerTables ?? new Map();
   }
 
   function getResolvedGeometryTable(
     loadedBasemap: LoadedBasemap | null
   ): ArrowTable | null {
-    return getResolvedBasemapVariant(loadedBasemap)?.geometryTable ?? null;
+    return resolveVariant(loadedBasemap)?.geometryTable ?? null;
   }
 
   function getResolvedMetadata(
     loadedBasemap: LoadedBasemap | null
   ): BasemapMetadata | null {
-    return getResolvedBasemapVariant(loadedBasemap)?.metadata ?? null;
+    return resolveVariant(loadedBasemap)?.metadata ?? null;
   }
 
   function getResolvedVariantData(
     basemapId: string,
     level?: SimplificationLevel
   ): LoadedBasemapVariantData | null {
-    return getResolvedBasemapVariant(
-      basemapCache.get(basemapId) ?? null,
-      level
-    );
+    return resolveVariant(basemapCache.get(basemapId) ?? null, level);
   }
 
   async function getBasemapGeometryArrow(
@@ -1520,7 +1681,7 @@ function createBasemapService() {
     );
     const cached = basemapCache.get(resolvedBasemapId);
     if (cached) {
-      const variant = getResolvedBasemapVariant(cached);
+      const variant = resolveVariant(cached);
       const geometryTable = variant?.geometryTable ?? cached.geometryTable;
       if (geometryTable) {
         return geometryTable;
@@ -1528,7 +1689,7 @@ function createBasemapService() {
     }
     const loaded = await loadBasemapData(basemapId);
     if (!loaded) return null;
-    const variant = getResolvedBasemapVariant(loaded);
+    const variant = resolveVariant(loaded);
     return variant?.geometryTable ?? loaded.geometryTable ?? null;
   }
 
@@ -1667,7 +1828,7 @@ function createBasemapService() {
       return false;
     }
 
-    const resolvedVariant = getResolvedBasemapVariantState(currentBasemap);
+    const resolvedVariant = resolveVariantState(currentBasemap);
     if (!resolvedVariant) {
       return false;
     }
@@ -1684,7 +1845,7 @@ function createBasemapService() {
       return false;
     }
 
-    const resolvedVariant = getResolvedBasemapVariantState(loadedBasemap);
+    const resolvedVariant = resolveVariantState(loadedBasemap);
     if (!resolvedVariant) {
       return false;
     }
@@ -1768,6 +1929,7 @@ function createBasemapService() {
   function clearCache(): void {
     invalidateBasemapLoads();
     basemapCache.clear();
+    wgs84Variants.clear();
     geometryTablesInDuckDB.clear();
   }
 
@@ -1841,6 +2003,10 @@ function createBasemapService() {
     get currentLayers(): Map<string, ArrowTable> {
       return getResolvedLayerTables(currentBasemap);
     },
+    /** True once the layer's table is loaded and holds no geometry. */
+    isLayerEmpty(layerFile: string): boolean {
+      return emptyLayerFiles.has(layerFile);
+    },
     getResolvedVariantData,
     getLayerTableByType,
     getBasemapLayerTableByType,
@@ -1855,6 +2021,7 @@ function createBasemapService() {
     },
     loadVariant,
     refreshCustomBasemap,
+    setRenderInWgs84,
     reset,
     clearCache
   };
