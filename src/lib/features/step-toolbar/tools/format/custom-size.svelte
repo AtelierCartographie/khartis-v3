@@ -70,7 +70,6 @@
   .size-input {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-label);
     min-width: 0;
   }
 

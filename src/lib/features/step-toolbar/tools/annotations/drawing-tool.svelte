@@ -17,12 +17,13 @@
     { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
     { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
   ]);
-  import { Add, TrashCan } from 'carbon-icons-svelte';
+  import { Add } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
+  import SelectionHeader from './_shared/selection-header.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -33,6 +34,22 @@
   const selectedDrawing = $derived(selectedAnnotation.selected);
 
   const effectiveStyle = $derived(selectedDrawing?.style ?? defaultStyle);
+
+  const selectedDrawingName = $derived(
+    selectedDrawing
+      ? (drawingTypeOptions.find(
+          (option) =>
+            option.value ===
+            (selectedDrawing.style?.drawingType ?? DrawingType.LINE)
+        )?.labelText ?? m.annotations_drawing())
+      : undefined
+  );
+
+  function deleteSelectedDrawing(): void {
+    if (selectedDrawing) {
+      annotationsActions.removeAnnotation(selectedDrawing.id);
+    }
+  }
 
   type StrokeColorDescriptor = {
     hue?: number;
@@ -221,6 +238,21 @@
   <Row>
     <Column>
       <div class="section">
+        <SelectionHeader
+          title={selectedDrawing
+            ? m.annotations_selected_drawing()
+            : m.annotations_new_drawing()}
+          name={selectedDrawingName}
+          deleteLabel={m.annotations_delete_drawing()}
+          ondelete={selectedDrawing ? deleteSelectedDrawing : undefined}
+        />
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
         <Slider
           labelText={m.thickness()}
           value={effectiveStyle.strokeWidth || 2}
@@ -362,34 +394,6 @@
           minLabel=""
           maxLabel=""
         />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        {#if annotationsState.selectedId}
-          {@const selected = annotationsState.items.find(
-            (i) => i.id === annotationsState.selectedId
-          )}
-          <Button
-            size="field"
-            kind="danger-tertiary"
-            icon={TrashCan}
-            disabled={!selected || selected.type !== AnnotationKind.DRAWING}
-            onclick={() =>
-              selected &&
-              selected.type === AnnotationKind.DRAWING &&
-              annotationsActions.removeAnnotation(selected.id)}
-          >
-            {m.annotations_delete_drawing()}
-          </Button>
-        {:else}
-          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled
-            >{m.annotations_delete_drawing()}</Button
-          >
-        {/if}
       </div>
     </Column>
   </Row>

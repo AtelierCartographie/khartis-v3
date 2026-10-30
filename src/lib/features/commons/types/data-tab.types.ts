@@ -44,6 +44,11 @@ export interface IgnoredEntity {
   lines?: number[];
 }
 
+export interface EntityValidation {
+  dataValue: string;
+  basemapValue: string;
+}
+
 export interface JoinMapping {
   dataValue: string;
   basemapOptions: string[];

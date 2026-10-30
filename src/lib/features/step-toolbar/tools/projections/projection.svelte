@@ -59,6 +59,7 @@
       title={title}
       defaultOpen={true}
       titleClass="projection-suggestions-title"
+      scrollIntoViewOnOpen
     >
       {#snippet icon()}
         <MagicWandFilled size={20} />
@@ -66,7 +67,7 @@
       <ProjectionMain />
     </ExpandableSection>
 
-    <ExpandableSection title={m.projection_other_title()}>
+    <ExpandableSection title={m.projection_other_title()} scrollIntoViewOnOpen>
       {#snippet icon()}
         <Catalog size={20} />
       {/snippet}
@@ -90,6 +91,7 @@
       title={m.projection_settings_title()}
       open={settingsOpen}
       onToggle={(expanded) => (settingsOpen = expanded)}
+      scrollIntoViewOnOpen
     >
       {#snippet icon()}
         <SettingsAdjust size={20} />

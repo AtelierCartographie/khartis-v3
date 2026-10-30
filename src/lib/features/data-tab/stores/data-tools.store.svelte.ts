@@ -11,7 +11,8 @@ export enum DataToolType {
   None = 'none',
   Search = 'search',
   Filters = 'filters',
-  Calculator = 'calculator'
+  Calculator = 'calculator',
+  CsvOptions = 'csv-options'
 }
 
 export interface DataToolsState {

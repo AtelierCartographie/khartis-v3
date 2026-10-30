@@ -38,15 +38,21 @@ type PageFrame = {
   height: number;
 };
 
-const PAGE_ELEMENT_WIDTHS: Record<PageElementRole, number> = {
-  [ANNOTATION_ROLE.TITLE]: 324,
-  [ANNOTATION_ROLE.SUBTITLE]: 324,
-  [ANNOTATION_ROLE.SOURCE]: 216,
-  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 216,
-  [ANNOTATION_ROLE.SIGNATURE]: 216,
-  [ANNOTATION_ROLE.CREDIT]: 216,
-  [ANNOTATION_ROLE.NOTE]: 216
-};
+const HEADING_WIDTH = 324;
+
+/**
+ * Titles keep a fixed box. The other page texts (source, basemap source,
+ * credit, notes) get half the page width: their text, right-aligned, only
+ * wraps past it (annotation-overlay.svelte).
+ */
+export function getPageElementWidth(
+  role: PageElementRole,
+  layout: Pick<PageLayout, 'width'>
+): number {
+  return role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
+    ? HEADING_WIDTH
+    : layout.width / 2;
+}
 
 const PAGE_ELEMENT_HEIGHTS: Record<PageElementRole, number> = {
   [ANNOTATION_ROLE.TITLE]: 24,
@@ -58,11 +64,13 @@ const PAGE_ELEMENT_HEIGHTS: Record<PageElementRole, number> = {
   [ANNOTATION_ROLE.NOTE]: 24
 };
 
+// The note (signature) is no longer created: only older projects where it
+// was written keep one, on top of the stack.
 const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
   ANNOTATION_ROLE.CREDIT,
   ANNOTATION_ROLE.BASEMAP_SOURCE,
-  ANNOTATION_ROLE.SIGNATURE,
-  ANNOTATION_ROLE.SOURCE
+  ANNOTATION_ROLE.SOURCE,
+  ANNOTATION_ROLE.SIGNATURE
 ];
 const TOP_LEFT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const RIGHT_COLUMN_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 2;
@@ -148,7 +156,10 @@ export function remapPageElementPosition(
 ): { x: number; y: number } {
   return remapPointToResizedArea(
     position,
-    { width: PAGE_ELEMENT_WIDTHS[role], height: PAGE_ELEMENT_HEIGHTS[role] },
+    {
+      width: getPageElementWidth(role, from),
+      height: PAGE_ELEMENT_HEIGHTS[role]
+    },
     from,
     to
   );
@@ -295,7 +306,7 @@ export function getPageNoteSpawnPosition(
   layout: PageLayout
 ): { x: number; y: number } {
   const frame = resolveMapFrame(layout);
-  const noteWidth = PAGE_ELEMENT_WIDTHS[ANNOTATION_ROLE.NOTE];
+  const noteWidth = getPageElementWidth(ANNOTATION_ROLE.NOTE, layout);
   const baseY = frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET;
 
   return clampPageElementPosition(
@@ -313,7 +324,7 @@ export function getPageElementPosition(
   layout: PageLayout
 ): { x: number; y: number } {
   const frame = resolveMapFrame(layout);
-  const roleWidth = PAGE_ELEMENT_WIDTHS[role];
+  const roleWidth = getPageElementWidth(role, layout);
   const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
   const minX = frame.left;
   const maxX = Math.max(minX, frame.right - roleWidth);
