@@ -22,6 +22,10 @@
   import { zoomModeStore } from '../../commons/stores/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
   import {
+    detectApplePlatform,
+    getZoomShortcutModifiers
+  } from '../../commons/utils/keyboard-shortcuts.utils';
+  import {
     MAP_ZOOM_INPUT_STEP,
     MAX_MAP_ZOOM_PERCENT,
     MIN_MAP_ZOOM_PERCENT
@@ -50,6 +54,8 @@
     warn: m.deck_debug_metric_gpu_state_warn,
     bad: m.deck_debug_metric_gpu_state_bad
   };
+
+  const zoomShortcutModifiers = getZoomShortcutModifiers(detectApplePlatform());
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
   const showDeckDebugPanel = $derived(isDeckDebugEnabled());
@@ -119,7 +125,7 @@
 
   function tabTitle(index: number, isActive: boolean): string | undefined {
     if (!isActive) return undefined;
-    return m.zoom_tab_double_click_hint();
+    return m.zoom_tab_double_click_hint(zoomShortcutModifiers);
   }
 
   const currentZoomValue = $derived(
@@ -342,7 +348,7 @@
       hideInactiveLabel={true}
     />
 
-    <div class="zoom-section" title={m.zoom_reset_title()}>
+    <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
       <div class="zoom-value">
         <input
           id="khartis-zoom-toolbar-input"
