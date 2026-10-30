@@ -155,7 +155,7 @@ describe('annotations store', () => {
     expect(byId.has('note')).toBe(false);
     expect(byId.get('written-note')?.content).toBe('Atelier de cartographie');
     expect(byId.get('credit')?.content).toBe(
-      `Réalisation\u00a0: (préciser l'auteur·rice), avec Khartis, ${year}.`
+      `Ajouter l'auteur·rice, ${year}. Réalisé avec Khartis.`
     );
   });
 
