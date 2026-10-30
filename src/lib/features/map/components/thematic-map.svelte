@@ -24,6 +24,7 @@
   import { ViewMode } from '../constants/map.constants';
   import { MAP_TIMING } from '../constants/timing.constants';
   import {
+    syncDeckCanvasSize,
     useMapBasemap,
     useMapBounds,
     useLabelEditing,
@@ -1465,8 +1466,10 @@
           }
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           // The resized canvas is redrawn on the next frame, with the
-          // rescaled view: its layers must carry the new page scale by then,
-          // or that frame shows the map misplaced over the page (a flash).
+          // rescaled view: its drawing buffer and its layers must carry the
+          // new size and page scale by then, or that frame shows the map
+          // misplaced over the page (a flash, a jump).
+          syncDeckCanvasSize(mapInit.deckInstance);
           scheduleLayerUpdate('effect:canvasResize', { immediate: true });
           if (mapInstanceStore.hasPendingOrthographicRestore) {
             mapInstanceStore.fitToOrthographicBounds();
