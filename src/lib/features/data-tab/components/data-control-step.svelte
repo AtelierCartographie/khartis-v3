@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
   import { FileType } from '$lib/features/commons/types/create-project.types';
@@ -761,6 +762,17 @@
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
   const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
+
+  // Opening another tool ends row deletion; only the tool change triggers
+  // this, so deletion can still start while a tool window is open.
+  $effect(() => {
+    if (activeTool === DataToolType.None) return;
+    untrack(() => {
+      if (!isDeleteMode) return;
+      isDeleteMode = false;
+      selectedRowIds = [];
+    });
+  });
 
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
