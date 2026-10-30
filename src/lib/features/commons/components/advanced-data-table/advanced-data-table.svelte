@@ -263,6 +263,14 @@
   );
   const isSelectionMode = $derived(isSelectable && isEditMode);
 
+  // Rows picked for a selection that has ended are not picked for the next.
+  $effect(() => {
+    if (isSelectionMode) return;
+    untrack(() => {
+      if (rowSelection.hasSelection) rowSelection.clearSelection();
+    });
+  });
+
   const safeVisibleColumns = $derived.by(() =>
     columnOps.visibleColumns.filter(
       (column): column is { name: string; type: string } =>
