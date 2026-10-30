@@ -112,82 +112,99 @@
     </p>
   {/if}
 
-  {#if showResults}
-    <div class="results-navigation">
-      {#if searchState.isSearching}
-        <span class="results-text results-text--disabled"
-          >{m.search_loading()}</span
-        >
-      {:else if noResults}
-        <span class="results-text results-text--disabled"
-          >{m.search_no_results()}</span
-        >
-      {:else}
-        <span class="results-text">
-          {m.search_results_count({
+  <div class="results-area">
+    {#if showResults}
+      <div class="results-navigation">
+        {#if searchState.isSearching}
+          <span class="results-text results-text--disabled"
+            >{m.search_loading()}</span
+          >
+        {:else if noResults}
+          <span class="results-text results-text--disabled"
+            >{m.search_no_results()}</span
+          >
+        {:else}
+          <span class="results-text">
+            {m.search_results_count({
+              current: currentResultIndex + 1,
+              total: results.length
+            })}
+          </span>
+        {/if}
+
+        <div class="results-buttons">
+          <IconButton
+            kind="ghost"
+            size="small"
+            iconDescription={m.search_previous()}
+            icon={ChevronLeft}
+            disabled={noResults || searchState.isSearching}
+            onclick={() => navigateResults('prev')}
+          />
+          <IconButton
+            kind="ghost"
+            size="small"
+            iconDescription={m.search_next()}
+            icon={ChevronRight}
+            disabled={noResults || searchState.isSearching}
+            onclick={() => navigateResults('next')}
+          />
+        </div>
+      </div>
+
+      {#if hasResults}
+        <ul
+          bind:this={resultsListEl}
+          class="results-list"
+          role="listbox"
+          aria-label={m.search_results_count({
             current: currentResultIndex + 1,
             total: results.length
           })}
-        </span>
+        >
+          {#each results as result, i (result.rowId + '-' + result.columnName)}
+            <li
+              class="results-list__item"
+              class:results-list__item--selected={i === currentResultIndex}
+              role="option"
+              aria-selected={i === currentResultIndex}
+              tabindex="0"
+              onclick={() => searchActions.goToResult(i)}
+              onkeydown={(e: KeyboardEvent) =>
+                e.key === 'Enter' && searchActions.goToResult(i)}
+            >
+              <span class="results-list__column">{result.columnName}</span>
+              <span class="results-list__value">
+                {result.value || m.search_no_value()}
+              </span>
+            </li>
+          {/each}
+        </ul>
       {/if}
-
-      <div class="results-buttons">
-        <IconButton
-          kind="ghost"
-          size="small"
-          iconDescription={m.search_previous()}
-          icon={ChevronLeft}
-          disabled={noResults || searchState.isSearching}
-          onclick={() => navigateResults('prev')}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          iconDescription={m.search_next()}
-          icon={ChevronRight}
-          disabled={noResults || searchState.isSearching}
-          onclick={() => navigateResults('next')}
-        />
-      </div>
-    </div>
-
-    {#if hasResults}
-      <ul
-        bind:this={resultsListEl}
-        class="results-list"
-        role="listbox"
-        aria-label={m.search_results_count({
-          current: currentResultIndex + 1,
-          total: results.length
-        })}
-      >
-        {#each results as result, i (result.rowId + '-' + result.columnName)}
-          <li
-            class="results-list__item"
-            class:results-list__item--selected={i === currentResultIndex}
-            role="option"
-            aria-selected={i === currentResultIndex}
-            tabindex="0"
-            onclick={() => searchActions.goToResult(i)}
-            onkeydown={(e: KeyboardEvent) =>
-              e.key === 'Enter' && searchActions.goToResult(i)}
-          >
-            <span class="results-list__column">{result.columnName}</span>
-            <span class="results-list__value">
-              {result.value || m.search_no_value()}
-            </span>
-          </li>
-        {/each}
-      </ul>
     {/if}
-  {/if}
+  </div>
 </div>
 
 <style lang="scss">
   #khartis-search-tool {
+    --_result-height: calc(
+      2 * var(--cds-spacing-03) + 1rem + var(--cds-spacing-01) + 1.25rem
+    );
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-param);
+  }
+
+  /* Room for the navigation and two results is kept from the start, so the
+     window does not grow while the user types; more results scroll. */
+  .results-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-param);
+    min-height: calc(
+      var(--cds-spacing-07) + var(--kh-gap-param) + 2 * var(--_result-height) +
+        2px
+    );
   }
 
   .helper-text {
@@ -249,8 +266,11 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    max-height: 12rem;
+    max-height: calc(2 * var(--_result-height) + 2px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cds-border-strong-01, #8d8d8d) transparent;
     border: 1px solid var(--cds-border-subtle-01);
   }
 

@@ -117,12 +117,12 @@
           });
         }
 
+        // Only an element that failed to load names a resource: an error
+        // thrown by application code also carries the chunk it ran in as
+        // its filename, and is no stale asset.
         function isCriticalResourceError(event) {
           var target = event && event.target;
-          var resourceUrl =
-            (target && (target.src || target.href)) ||
-            (event && event.filename) ||
-            '';
+          var resourceUrl = (target && (target.src || target.href)) || '';
           var normalizedUrl = String(resourceUrl).toLowerCase();
           return CRITICAL_RESOURCE_PATTERNS.some(function (pattern) {
             return normalizedUrl.indexOf(pattern) !== -1;

@@ -43,7 +43,11 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import { dataTabStore } from '../stores/data-tab.store.svelte';
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-  import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
+  import type {
+    EntityValidation,
+    IgnoredEntity,
+    JoinedEntity
+  } from '$lib/features/commons/types/data-tab.types';
   import { resolveSuggestedBasemapAutoSelectionTarget } from '../utils/basemap-auto-selection.utils';
   import {
     getDatasetIdentity,
@@ -1253,9 +1257,15 @@
     return merged;
   }
 
-  async function handleManualCorrection(
+  function handleManualCorrection(
     dataValue: string,
     basemapValue: string
+  ): Promise<void> {
+    return applyManualCorrections({ [dataValue]: basemapValue });
+  }
+
+  async function applyManualCorrections(
+    correction: Record<string, string>
   ): Promise<void> {
     const resolvedDatasetId = datasetIdForOrchestrator;
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
@@ -1269,7 +1279,6 @@
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
 
-    const correction: Record<string, string> = { [dataValue]: basemapValue };
     const existingSourceFile = getSourceFileForSnapshot(sourceSnapshot);
     const persistedCorrections = mergeJoinCorrections(
       existingSourceFile?.joinCorrections,
@@ -1360,18 +1369,16 @@
     return dataTabState.basemapJoin.ignoredEntities.map((e) => e.dataValue);
   }
 
-  async function handleIgnoreEntity(
-    dataValue: string,
-    source: 'joined' | 'to_verify' | 'unrecognized',
-    basemapValue?: string
-  ): Promise<void> {
-    dataTabActions.ignoreEntity({ dataValue, source, basemapValue });
+  async function handleIgnoreEntities(entries: IgnoredEntity[]): Promise<void> {
+    if (entries.length === 0) return;
+    for (const entry of entries) dataTabActions.ignoreEntity(entry);
     await tick();
     await handleFinalizeJoin();
   }
 
-  async function handleRestoreEntity(dataValue: string): Promise<void> {
-    dataTabActions.restoreEntity(dataValue);
+  async function handleRestoreEntities(dataValues: string[]): Promise<void> {
+    if (dataValues.length === 0) return;
+    for (const dataValue of dataValues) dataTabActions.restoreEntity(dataValue);
     await tick();
     const basemap = allBasemapsForLookup.find(
       (b) => b.file === basemapSelected
@@ -1385,14 +1392,20 @@
     );
   }
 
-  async function handleValidateEntity(
-    dataValue: string,
-    basemapValue: string
+  async function handleValidateEntities(
+    entries: EntityValidation[]
   ): Promise<void> {
-    if (!basemapValue) return;
-    dataTabActions.promoteToJoined(dataValue);
-    if (dataValue !== basemapValue) {
-      await handleManualCorrection(dataValue, basemapValue);
+    const corrections: Record<string, string> = {};
+    let validatedCount = 0;
+    for (const { dataValue, basemapValue } of entries) {
+      if (!basemapValue) continue;
+      dataTabActions.promoteToJoined(dataValue);
+      validatedCount++;
+      if (dataValue !== basemapValue) corrections[dataValue] = basemapValue;
+    }
+    if (validatedCount === 0) return;
+    if (Object.keys(corrections).length > 0) {
+      await applyManualCorrections(corrections);
       return;
     }
     await handleFinalizeJoin();
@@ -2169,9 +2182,9 @@
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}
     onMappingChange={dataTabActions.updateJoinMapping}
-    onIgnoreEntity={handleIgnoreEntity}
-    onRestoreEntity={handleRestoreEntity}
-    onValidateEntity={handleValidateEntity}
+    onIgnoreEntities={handleIgnoreEntities}
+    onRestoreEntities={handleRestoreEntities}
+    onValidateEntities={handleValidateEntities}
   />
 {/snippet}
 

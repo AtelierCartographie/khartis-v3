@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, type Snippet } from 'svelte';
+  import { onMount, tick, untrack, type Snippet } from 'svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     globalActions,
@@ -15,6 +15,7 @@
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
 
   interface Props {
     children: Snippet;
@@ -59,6 +60,110 @@
 
   const isPageMode = $derived(zoomModeStore.isPageMode);
 
+  // When the step, the side panel or the zoom mode changes, the page is laid
+  // out and drawn once at its new size, then carried there from where it was
+  // with a transform, in step with the side panel. Layout can settle over a
+  // few frames (Habillage also switches the zoom mode): each resize holds the
+  // page where it was seen, and the move starts once resizes have stopped.
+  const PAGE_MOTION_MS = 300;
+  const PAGE_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
+  const PAGE_MOVE_WINDOW_MS = 600;
+  let pageScaleLayer = $state<HTMLDivElement | null>(null);
+  let pageMoveFrom: DOMRect | null = null;
+  let pageMoveTimer: ReturnType<typeof setTimeout> | undefined;
+  let pageMoveFrame = 0;
+  let pageMove: Animation | null = null;
+
+  $effect.pre(() => {
+    void globalState.selectedStep;
+    void globalState.toolbarState;
+    void zoomModeStore.mode;
+    untrack(() => {
+      if (pageMoveFrom || pageMove) return;
+      const page = getPageContainerElement();
+      if (!page || globalState.isMobileView) return;
+      if (motionDuration(PAGE_MOTION_MS) === 0) return;
+      pageMoveFrom = page.getBoundingClientRect();
+      clearTimeout(pageMoveTimer);
+      pageMoveTimer = setTimeout(() => {
+        if (!pageScaleLayer?.style.transform) pageMoveFrom = null;
+      }, PAGE_MOVE_WINDOW_MS);
+    });
+  });
+
+  function resolvePageInverse(
+    from: DOMRect,
+    to: DOMRect,
+    layer: HTMLElement
+  ): string | null {
+    if (to.width === 0 || to.height === 0) return null;
+    const scaleX = from.width / to.width;
+    const scaleY = from.height / to.height;
+    const origin = layer.getBoundingClientRect();
+    const translateX =
+      from.left - origin.left - scaleX * (to.left - origin.left);
+    const translateY = from.top - origin.top - scaleY * (to.top - origin.top);
+    if (
+      Math.abs(translateX) < 1 &&
+      Math.abs(translateY) < 1 &&
+      Math.abs(scaleX - 1) < 0.005 &&
+      Math.abs(scaleY - 1) < 0.005
+    ) {
+      return null;
+    }
+    return `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
+  }
+
+  function holdPageWhereSeen(): void {
+    const page = getPageContainerElement();
+    const layer = pageScaleLayer;
+    if (!page || !layer) return;
+
+    if (pageMove) {
+      pageMoveFrom = page.getBoundingClientRect();
+      pageMove.cancel();
+      pageMove = null;
+    }
+    if (!pageMoveFrom) return;
+
+    layer.style.transform = '';
+    const inverse = resolvePageInverse(
+      pageMoveFrom,
+      page.getBoundingClientRect(),
+      layer
+    );
+    if (!inverse) {
+      pageMoveFrom = null;
+      return;
+    }
+    layer.style.transformOrigin = '0 0';
+    layer.style.transform = inverse;
+
+    cancelAnimationFrame(pageMoveFrame);
+    pageMoveFrame = requestAnimationFrame(() => {
+      pageMoveFrame = requestAnimationFrame(movePageToItsPlace);
+    });
+  }
+
+  function movePageToItsPlace(): void {
+    const layer = pageScaleLayer;
+    const transform = layer?.style.transform;
+    pageMoveFrom = null;
+    if (!layer || !transform) return;
+
+    layer.style.transform = '';
+    pageMove = layer.animate(
+      [
+        { transformOrigin: '0 0', transform },
+        { transformOrigin: '0 0', transform: 'none' }
+      ],
+      { duration: PAGE_MOTION_MS, easing: PAGE_EASING }
+    );
+    pageMove.onfinish = () => {
+      pageMove = null;
+    };
+  }
+
   $effect(() => {
     const element = workspaceViewportElement;
     mapInstanceStore.setWorkspaceViewportElement(element);
@@ -73,9 +178,12 @@
   onMount(() => {
     pageResizeObserver = new ResizeObserver(() => {
       updateWorkspaceViewportState();
+      holdPageWhereSeen();
     });
+    // The page also moves without resizing when its height bounds it.
     workspaceResizeObserver = new ResizeObserver(() => {
       updateWorkspaceViewportState();
+      holdPageWhereSeen();
     });
     pageMutationObserver = new MutationObserver(() => {
       refreshObservedPageElement(pageResizeObserver);
@@ -100,6 +208,9 @@
       pageResizeObserver?.disconnect();
       pageMutationObserver?.disconnect();
       stepToolbarResizeObserver?.disconnect();
+      clearTimeout(pageMoveTimer);
+      cancelAnimationFrame(pageMoveFrame);
+      pageMove?.cancel();
       workspaceResizeObserver = null;
       pageResizeObserver = null;
       pageMutationObserver = null;
@@ -376,7 +487,7 @@
     class:has-overflow={hasWorkspaceOverflow}
   >
     <div class="workspace-camera" style={workspaceCameraStyle}>
-      <div class="page-scale-layer">
+      <div bind:this={pageScaleLayer} class="page-scale-layer">
         <div class="page-content-wrapper">
           {@render children()}
         </div>

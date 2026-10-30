@@ -1,12 +1,13 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import * as m from '$lib/paraglide/messages';
   import { untrack } from 'svelte';
-  import { ArrowRight, Close } from 'carbon-icons-svelte';
+  import { ArrowRight } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import {
     createExclusiveContextualSurfaceId,
@@ -277,43 +278,40 @@
       }}
       onoutsideclick={handlePopoverOutsideClick}
     >
-      <header class="popover-header">
-        <h3>{popoverTitle}</h3>
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Close}
-          iconDescription={m.button_cancel()}
-          on:click={handleClose}
-        />
-      </header>
+      <PanelHeader
+        title={popoverTitle}
+        closeLabel={m.button_cancel()}
+        onclose={handleClose}
+      />
 
-      <div class="popover-content">
-        <PaletteSuggestions
-          paletteType={draftType}
-          selectedPaletteId={draftPaletteId}
-          selectedColor={draftColors[0]}
-          numClasses={numClasses}
-          divergingSplit={divergingSplit}
-          onSelect={handlePaletteSelect}
-          onColorSelect={handleQualitativeColorSelect}
-          onPaletteSelect={handleQualitativePaletteSelect}
-          onIntensitySelect={handleQualitativeColorSelect}
-          onQualitativePresetChange={handleQualitativePresetChange}
-        />
+      <div class="kh-scroll-area">
+        <div class="popover-content" use:scrollShadows>
+          <PaletteSuggestions
+            paletteType={draftType}
+            selectedPaletteId={draftPaletteId}
+            selectedColor={draftColors[0]}
+            numClasses={numClasses}
+            divergingSplit={divergingSplit}
+            onSelect={handlePaletteSelect}
+            onColorSelect={handleQualitativeColorSelect}
+            onPaletteSelect={handleQualitativePaletteSelect}
+            onIntensitySelect={handleQualitativeColorSelect}
+            onQualitativePresetChange={handleQualitativePresetChange}
+          />
 
-        <PaletteCustom
-          paletteType={draftType}
-          numClasses={numClasses}
-          currentColors={draftColors}
-          divergingSplit={divergingSplit}
-          allowPattern={allowPattern}
-          inverted={draftInverted}
-          patternPaletteConfig={draftPatternPaletteConfig}
-          onColorsChange={handleCustomColorsChange}
-          onPatternPaletteChange={handlePatternPaletteChange}
-          onInvertToggle={handleInvertToggle}
-        />
+          <PaletteCustom
+            paletteType={draftType}
+            numClasses={numClasses}
+            currentColors={draftColors}
+            divergingSplit={divergingSplit}
+            allowPattern={allowPattern}
+            inverted={draftInverted}
+            patternPaletteConfig={draftPatternPaletteConfig}
+            onColorsChange={handleCustomColorsChange}
+            onPatternPaletteChange={handlePatternPaletteChange}
+            onInvertToggle={handleInvertToggle}
+          />
+        </div>
       </div>
 
       <div class="popover-preview-wrap">
@@ -366,10 +364,10 @@
   :global(.palette-popover) {
     position: fixed;
     right: 50vw;
-    top: 50%;
+    top: var(--kh-floating-window-center);
     transform: translateY(-50%);
     width: 320px;
-    max-height: calc(100vh - 32px);
+    max-height: var(--kh-floating-window-max-height);
     display: flex;
     flex-direction: column;
     background: var(--cds-background, #ffffff);
@@ -402,32 +400,10 @@
     }
   }
 
-  .popover-header {
-    display: flex;
-    align-items: center;
-    gap: var(--kh-gap-label);
-    padding: 0 var(--kh-gap-label) var(--kh-gap-inline) var(--kh-pad-panel);
-    flex-shrink: 0;
-    background: var(--cds-background, #ffffff);
-
-    h3 {
-      flex: 1;
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: var(--kh-font-primitive);
-      font-weight: 600;
-      line-height: var(--kh-line-primitive);
-      color: var(--cds-text-primary, #161616);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
   .popover-content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 var(--kh-pad-panel) var(--kh-gap-inline) var(--kh-pad-panel);
+    padding: var(--kh-pad-panel) var(--kh-pad-panel) var(--kh-gap-inline);
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-section);

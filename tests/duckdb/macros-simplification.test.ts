@@ -510,6 +510,19 @@ describe('coverage macros', () => {
         9
       );
       expect(lines[0].same_lines).toBe(true);
+
+      await run(
+        db,
+        `CREATE OR REPLACE TABLE ${table}__land AS
+         FROM extract_coverage_land('${table}')`
+      );
+      const outlines = await query(
+        db,
+        `SELECT ST_Equals(c.geom, d.geom) AS same_outline
+         FROM extract_coverage_outerlines('${table}__land') c,
+              extract_outerlines('${table}__land') d`
+      );
+      expect(outlines[0].same_outline).toBe(true);
     }
   );
 });
