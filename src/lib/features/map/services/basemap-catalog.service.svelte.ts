@@ -24,6 +24,10 @@ import type {
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_CATALOG_FETCH_ERROR_CODE = 'BASEMAP_CATALOG_FETCH_FAILED';
 const GPS_SCORE_EPSILON = 1e-9;
+// Catalog bboxes are rounded to the hundredth of a degree, so a basemap drawn
+// over the whole data can miss a sliver of its extent: 99.96 % of a 1 km grid
+// of France against a cantons bbox. Within this many points, coverages tie.
+const BBOX_COVERAGE_TOLERANCE = 1;
 const GPS_TEXT_REFINEMENT_MIN_SCORE = 80;
 const GPS_AUTO_SELECTION_FAMILY_PRIORITY = [
   'france-region-',
@@ -224,6 +228,10 @@ export function getGPSBboxMatchMetrics(
   };
 }
 
+function nearlyContainsData(metrics: GPSBboxMatchMetrics): boolean {
+  return metrics.coverageScore >= 100 - BBOX_COVERAGE_TOLERANCE;
+}
+
 export function rankBasemapsByGPSBbox(
   basemaps: BasemapMetadata[],
   gpsBounds: GPSBounds,
@@ -238,11 +246,14 @@ export function rankBasemapsByGPSBbox(
     .sort((left, right) => {
       const scoreDelta =
         right.metrics.coverageScore - left.metrics.coverageScore;
-      if (Math.abs(scoreDelta) > GPS_SCORE_EPSILON) {
+      if (Math.abs(scoreDelta) > BBOX_COVERAGE_TOLERANCE) {
         return scoreDelta;
       }
 
-      if (left.metrics.fullyContainsData && right.metrics.fullyContainsData) {
+      if (
+        nearlyContainsData(left.metrics) &&
+        nearlyContainsData(right.metrics)
+      ) {
         const areaDelta = left.metrics.basemapArea - right.metrics.basemapArea;
         if (Math.abs(areaDelta) > GPS_SCORE_EPSILON) {
           return areaDelta;

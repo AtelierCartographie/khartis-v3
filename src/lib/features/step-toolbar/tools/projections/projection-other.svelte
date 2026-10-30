@@ -413,7 +413,7 @@
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
-    padding: 6px 12px;
+    padding-block: 6px;
     min-height: var(--kh-size-sm);
   }
 

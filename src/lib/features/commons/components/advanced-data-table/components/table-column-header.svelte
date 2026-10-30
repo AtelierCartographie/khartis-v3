@@ -99,6 +99,8 @@
     category: string | null;
     count: number;
     percent: number;
+    /** Set on the bar that groups the least frequent categories. */
+    otherCategories: number | null;
   }
   interface HistogramLike {
     toArray(): unknown[];
@@ -163,13 +165,17 @@
     const typeSimple = analysis.type_simple;
 
     if (typeSimple === 'string') {
-      const items = (analysis.histogram.toArray() as CategoryItem[]).map(
-        (item) => ({
-          category: item.category,
-          count: toNum(item.count),
-          percent: item.percent
-        })
-      );
+      const items = (
+        analysis.histogram.toArray() as Array<
+          Omit<CategoryItem, 'otherCategories'> & { other_categories?: unknown }
+        >
+      ).map((item) => ({
+        category: item.category,
+        count: toNum(item.count),
+        percent: item.percent,
+        otherCategories:
+          item.other_categories == null ? null : toNum(item.other_categories)
+      }));
       const isAllUnique = items.length === 1 && items[0]?.category === 'unique';
       return {
         kind: 'categorical' as const,
@@ -331,7 +337,9 @@
   } satisfies TooltipController;
 
   // `unique` is the categorical SQL sentinel for values occurring once.
-  function catColor(category: string | null): string {
+  function catColor(item: CategoryItem): string {
+    const { category } = item;
+    if (item.otherCategories !== null) return '#6f6f6f';
     if (category === null) return '#ff832b';
     if (category === 'unique') return '#005d5d';
     return '#9f1853';
@@ -345,7 +353,14 @@
     )({ count: formatValue(count) });
   }
 
+  function otherCategoriesLabel(count: number): string {
+    return m.summary_plot_other_categories({ count: formatValue(count) });
+  }
+
   function catLabel(item: CategoryItem): string {
+    if (item.otherCategories !== null) {
+      return otherCategoriesLabel(item.otherCategories);
+    }
     if (item.category === null) return '⌀';
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
     return item.category;
@@ -353,7 +368,10 @@
 
   function catTooltipText(item: CategoryItem): string {
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
-    const name = item.category ?? m.column_null_label();
+    const name =
+      item.otherCategories !== null
+        ? otherCategoriesLabel(item.otherCategories)
+        : (item.category ?? m.column_null_label());
     return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
 
@@ -940,13 +958,13 @@
               <div class="hist-spacer"></div>
             {:else}
               <div class="hist-cat-bars">
-                {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
+                {#each histogramData.items as item, i (item.otherCategories !== null ? `other-${i}` : (item.category ?? `null-${i}`))}
                   <div
                     class="hist-cat-bar"
                     class:first={i === 0}
                     class:last={i === histogramData.items.length - 1}
                     style="flex-grow: {item.count}; background-color: {catColor(
-                      item.category
+                      item
                     )};"
                     role="img"
                     aria-label={catTooltipText(item)}

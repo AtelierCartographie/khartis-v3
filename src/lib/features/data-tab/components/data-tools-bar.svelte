@@ -23,7 +23,6 @@
     onDelete?: () => void;
     onReset?: () => void;
     onExpand?: () => void;
-    onCsvOptions?: () => void;
     onShowHiddenColumns?: () => void;
     onToggleSummaryPlots?: () => void;
     deleteDisabled?: boolean;
@@ -39,7 +38,6 @@
     onDelete,
     onReset,
     onExpand,
-    onCsvOptions,
     onShowHiddenColumns,
     onToggleSummaryPlots,
     deleteDisabled = true,
@@ -63,6 +61,9 @@
   const hasActiveFilters = $derived(dataToolsStore.hasActiveFilters);
   const isCalculatorActive = $derived(
     dataToolsStore.activeTool === DataToolType.Calculator
+  );
+  const isCsvOptionsActive = $derived(
+    dataToolsStore.activeTool === DataToolType.CsvOptions
   );
 </script>
 
@@ -141,7 +142,8 @@
         icon={Settings}
         iconDescription={m.csv_options_button()}
         tooltipPosition="bottom"
-        on:click={() => onCsvOptions?.()}
+        class={isCsvOptionsActive ? 'active' : ''}
+        on:click={() => dataToolsStore.toggleTool(DataToolType.CsvOptions)}
       />
     {/if}
     <IconButton

@@ -1,4 +1,5 @@
 export { Duck, initDuckDB } from './duck';
+export { waitForQueryIdle } from './core/query-activity';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 export { detectGPSColumns, validateGPSColumns } from './orchestrator/gps-ops';
 export {
@@ -19,6 +20,7 @@ export {
   buildTableInBackground,
   isBuiltTableFresh,
   isTableBuildPending,
+  runTableBuildInBackground,
   waitForTableBuild
 } from './operations/background-table-build';
 export {
