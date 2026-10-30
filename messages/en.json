@@ -1232,7 +1232,7 @@
   "annotations_placeholder_subtitle": "Add a subtitle",
   "annotations_placeholder_source": "Add a source",
   "annotations_placeholder_note": "Add a note",
-  "annotations_placeholder_credit": "Made by (author name), with Khartis, {year}.",
+  "annotations_placeholder_credit": "Add the author, {year}. Made with Khartis.",
   "annotations_source_prefix": "Source: ",
   "annotations_basemap_source_text": "Basemap: {source}",
   "annotations_import_image": "Import an image",

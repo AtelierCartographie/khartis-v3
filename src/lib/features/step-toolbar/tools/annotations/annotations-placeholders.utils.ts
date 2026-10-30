@@ -132,7 +132,7 @@ export function getKnownPageElementDefaultContents(
 
 const YEAR_MARK = '\u0000';
 
-/** The credit still reads « (préciser l'auteur·rice) », whatever its year. */
+/** The credit still asks for its author, whatever its year. */
 function isCreditTemplate(content: string): boolean {
   return getBundles().some((bundle) => {
     const [before, after] = bundle

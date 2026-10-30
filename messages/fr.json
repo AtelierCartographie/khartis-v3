@@ -1232,7 +1232,7 @@
   "annotations_placeholder_subtitle": "Ajouter un sous-titre",
   "annotations_placeholder_source": "Ajouter une source",
   "annotations_placeholder_note": "Ajouter une note",
-  "annotations_placeholder_credit": "Réalisation : (préciser l'auteur·rice), avec Khartis, {year}.",
+  "annotations_placeholder_credit": "Ajouter l'auteur·rice, {year}. Réalisé avec Khartis.",
   "annotations_source_prefix": "Source : ",
   "annotations_basemap_source_text": "Fond de carte : {source}",
   "annotations_import_image": "Importer une image",
