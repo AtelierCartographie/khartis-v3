@@ -457,6 +457,8 @@ export function buildTextPrimitiveConfig(
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??
       true,
+    labelColumns:
+      existing?.labelColumns ?? visualization.style.textLabelColumns ?? false,
     dxpMasking:
       existing?.dxpMasking ?? visualization.style.textDxpMasking ?? false,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,

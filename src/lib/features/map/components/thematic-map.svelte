@@ -20,7 +20,10 @@
   } from '../../commons/stores/map-instance.store.svelte';
   import { datasetsStore } from '../../commons/stores/datasets.store.svelte';
   import { projectStore } from '../../commons/stores/project.store.svelte';
-  import { visualizationStore } from '../../commons/stores/visualization.store.svelte';
+  import {
+    getTextPrimitive,
+    visualizationStore
+  } from '../../commons/stores/visualization.store.svelte';
   import { ViewMode } from '../constants/map.constants';
   import { MAP_TIMING } from '../constants/timing.constants';
   import {
@@ -43,6 +46,8 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
+  import { labelPlacementViewStore } from '../stores/label-placement-view.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
@@ -1933,12 +1938,59 @@
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
     labelLayoutVersion: labelLayoutStore.version,
+    labelPlacementViewVersion: labelPlacementViewStore.version,
     dataVersion,
     dataSize: `${tables.size}`,
     rowScopeVersion: rowScopeStore.version,
     projectionVersion: projectionRenderTrigger,
     selectedStep: globalState.selectedStep,
     isMapExporting: globalState.isMapExporting
+  });
+
+  const hasAutomaticLabelPlacement = $derived(
+    visualizationStore.activeVisualizations.some(
+      (viz) => getTextPrimitive(viz)?.collisionDetection === true
+    )
+  );
+
+  // Automatic label placement depends on the view: run it again once a zoom
+  // or a pan has settled, in both render engines.
+  $effect(() => {
+    if (!hasAutomaticLabelPlacement) return;
+    void mapInstanceStore.deckViewState;
+    untrack(() => labelPlacementViewStore.scheduleRefresh());
+  });
+
+  // Moving, resizing or toggling a legend, a geo indication or an annotation
+  // frees or covers labels: place them again once the item has settled.
+  $effect(() => {
+    if (!hasAutomaticLabelPlacement) return;
+    void pageItemObstaclesStore.version;
+    untrack(() => labelPlacementViewStore.scheduleRefresh());
+  });
+
+  // Switching to the page view or zooming the page resizes the canvas without
+  // moving the view: the placement runs again on the resized viewport.
+  $effect(() => {
+    const canvas = mapInstanceStore.deckInstance?.getCanvas();
+    if (!canvas || !hasAutomaticLabelPlacement) return;
+    const observer = new ResizeObserver(() =>
+      labelPlacementViewStore.scheduleRefresh()
+    );
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    const map = mapInstanceStore.map;
+    if (!map || !hasAutomaticLabelPlacement) return;
+    const refresh = () => labelPlacementViewStore.scheduleRefresh();
+    map.on('moveend', refresh);
+    map.on('resize', refresh);
+    return () => {
+      map.off('moveend', refresh);
+      map.off('resize', refresh);
+    };
   });
 
   $effect(() => {

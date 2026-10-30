@@ -293,6 +293,8 @@ export interface TextPrimitiveConfig {
   /** 0 to 1. */
   haloOpacity: number;
   collisionDetection: boolean;
+  /** With automatic placement, stack the labels of dense clusters in columns. */
+  labelColumns?: boolean;
   dxpMasking: boolean;
   valueColumn?: string;
   categoryColumn?: string;
@@ -432,6 +434,7 @@ export interface VisualizationConfig {
     textHaloWidth?: number;
     textHaloOpacity?: number;
     textCollisionDetection?: boolean;
+    textLabelColumns?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;

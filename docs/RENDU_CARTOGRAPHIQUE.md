@@ -129,7 +129,8 @@ Pendant le glisser, l'étiquette est retirée des couches thématiques et un ape
 est posé au-dessus de la pile, comme le surlignage au survol : suivre le
 pointeur ne reconstruit pas les couches.
 
-Le filet (`computeLabelLeader`) part d'une zone tampon autour du symbole et ne
+Le filet (`computeLabelLeader`, qui délègue à `leaderGeometry` du paquet
+`@ateliercartographie/label-placer`) part d'une zone tampon autour du symbole et ne
 suit que trois directions : une branche à 45° qui quitte le symbole, puis une
 branche horizontale vers le milieu du côté de l'étiquette qui lui fait face, ou
 verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
@@ -146,6 +147,69 @@ réelle, lignes renvoyées comprises, avec un interligne fixe.
 `LabelLeaderLayer` ancre ses deux
 extrémités sur l'entité et les décale en pixels dans le shader, comme le
 `getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
+
+### Placement automatique des étiquettes
+
+L'option « Placement automatique » du panneau Textes (`collisionDetection` du
+primitif texte) confie le placement au paquet `@ateliercartographie/label-placer`
+(`utils/label-auto-placement.utils.ts`). La fabrique projette chaque ancrage en
+pixels de page à travers le viewport deck courant, mesure le bloc d'étiquettes et
+le rayon du symbole, puis le moteur choisit pour chaque bloc une position autour
+du symbole (pratique de l'Atelier), dans le symbole s'il y tient, ou plus loin avec un
+filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferrage,
+empilement, filets et export SVG suivent sans chemin propre.
+
+- Les étiquettes retenues par un filtre Textes sont requises : jamais masquées,
+  en chevauchement en dernier recours. Sans filtre, celles qui ne trouvent pas
+  de place sont masquées, des moins importantes aux plus importantes (rayon du
+  symbole, puis taille du texte, puis valeur). Le filtre se lit dans ses
+  identifiants de lignes : en rendu scindé, la table d'attributs est toujours
+  restreinte, filtre ou non.
+- Sans filtre, les étiquettes gardent entre elles un espace libre d'une
+  demi-hauteur d'étiquette médiane (`spacing` du moteur), filets compris : les
+  zones denses s'éclaircissent d'abord. Avec un filtre, aucun espace n'est
+  imposé.
+- Seul le premier quart des étiquettes de symboles, par importance, peut
+  prendre un filet (300 au plus) : avec des filets pour toutes, la plupart des
+  noms d'une carte dense en portaient un.
+- Sans symbole, l'étiquette d'un polygone passe au moteur avec le contour de
+  son entité, projeté en pixels de page et allégé comme les contours du fond :
+  elle se place entièrement dedans ou entièrement dehors, jamais à cheval sur
+  le contour, et hors des autres polygones. Points représentatifs et polygones
+  sont appariés par identifiant d'entité en rendu scindé, par ligne sinon. Les
+  plus importantes peuvent prendre un filet, comme celles des symboles : il
+  entre dans la surface jusqu'à son point représentatif, au lieu de s'arrêter
+  sur un contour que le voisin partage. Une étiquette de polygone ne garde
+  qu'un pixel de marge autour du texte au lieu du fond de sécurité, sauf masque
+  visible.
+- Un texte d'une ligne qui peut se couper en deux lignes équilibrées
+  (`wrapLabelTextInTwoLines`) est proposé au moteur sous cette seconde forme,
+  à un léger surcoût ; le texte est dessiné dans la forme retenue.
+- Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
+  autres.
+- Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
+  passent au moteur comme symboles seuls, des obstacles pour les étiquettes. En
+  rendu scindé (jeu joint à un fond), leurs attributs ne sont lus que dans le
+  périmètre des Textes, et ils ne sont pas transmis.
+- Les bornes sont le cadre du fond de carte quand la projection en a un, sinon
+  le canvas. Les éléments de page (légende, indications géographiques,
+  annotations) sont des obstacles (`pageItemObstaclesStore`).
+- Le contour des couches « Territoire » visibles (`ctx.labelOutlineTables`,
+  orthographique seulement) est un obstacle souple : une étiquette évite de
+  chevaucher une côte ou une frontière extérieure quand une autre position la
+  vaut. Ces couches sont fusionnées en une géométrie, donc sans limites internes.
+- Ces mêmes couches, remplies, sont un polygone souple (coût 2,5 pour une
+  étiquette entièrement sur la terre) : le nom d'un lieu côtier passe du côté
+  de la mer quand cette position vaut presque l'autre. Pas pour les étiquettes
+  de polygones, qui sont sur la terre dans leur contour : elles iraient en mer.
+- L'option « Aligner en colonnes » (`labelColumns`, champ optionnel du primitif
+  texte) range les étiquettes des groupes serrés en colonne à côté du groupe.
+- Le placement est recalculé une fois la vue stabilisée
+  (`labelPlacementViewStore`, 250 ms après un zoom, un déplacement ou un
+  redimensionnement du canvas) et réutilise le résultat précédent pour que les
+  étiquettes restent en place. Il est mis en cache par visualisation.
+- Il ne s'applique pas aux collections de cartes, dont les cellules ont leur
+  propre vue.
 
 Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
 placent derrière ou devant les couches thématiques ; l'ordre affiché dans le

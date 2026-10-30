@@ -14,6 +14,7 @@
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -79,10 +80,15 @@
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
+    getDefaultInsetAnchor,
     getDefaultInsetStyle,
     getDefaultGeoIndicationTransformOrigin,
+    getDefaultOrientationAnchor,
     getDefaultOrientationStyle,
-    getDefaultScaleStyle
+    getDefaultScaleAnchor,
+    getDefaultScaleStyle,
+    resolveAnchoredBox,
+    type GeoIndicationAnchor
   } from '../utils/geo-indications-default-placement.utils';
 
   // In the 40 × 50 viewBox of the indicator, so the letter keeps its
@@ -1426,7 +1432,83 @@
     startDrag(event, 'inset', insetMapElement);
   }
 
+  let figureSizeRevision = $state(0);
+
+  $effect(() => {
+    const figures = [scaleElement, orientationElement, insetMapElement].filter(
+      (element): element is HTMLDivElement => Boolean(element)
+    );
+    if (figures.length === 0 || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      figureSizeRevision += 1;
+    });
+    for (const figure of figures) {
+      observer.observe(figure);
+    }
+
+    return () => observer.disconnect();
+  });
+
+  // Labels placed automatically keep clear of the scale, the orientation and
+  // the inset map.
+  $effect(() => {
+    void figureSizeRevision;
+    const area = {
+      width:
+        formatState.width -
+        formatState.margins.left -
+        formatState.margins.right,
+      height:
+        formatState.height -
+        formatState.margins.top -
+        formatState.margins.bottom
+    };
+    const figures: [
+      HTMLDivElement | null,
+      { x: number; y: number } | null,
+      GeoIndicationAnchor
+    ][] = [
+      [
+        scaleElement,
+        geoIndicationsState.scale.dragPosition,
+        getDefaultScaleAnchor(placementContext)
+      ],
+      [
+        orientationElement,
+        geoIndicationsState.orientation.dragPosition,
+        getDefaultOrientationAnchor(placementContext)
+      ],
+      [
+        insetMapElement,
+        geoIndicationsState.insetMap.dragPosition,
+        getDefaultInsetAnchor(placementContext)
+      ]
+    ];
+    const boxes = figures.flatMap(([element, dragPosition, anchor]) => {
+      if (!element || element.offsetWidth <= 0 || element.offsetHeight <= 0) {
+        return [];
+      }
+
+      const size = { width: element.offsetWidth, height: element.offsetHeight };
+      return [
+        dragPosition
+          ? ([
+              dragPosition.x,
+              dragPosition.y,
+              dragPosition.x + size.width,
+              dragPosition.y + size.height
+            ] as [number, number, number, number])
+          : resolveAnchoredBox(anchor, size, area)
+      ];
+    });
+    pageItemObstaclesStore.setBoxes('geo-indications', boxes);
+  });
+
   onDestroy(() => {
+    pageItemObstaclesStore.setBoxes('geo-indications', []);
     worldFeaturesLoadGeneration += 1;
     centeredGeoTarget = null;
     clearSuppressedGeoIndicationsClick();

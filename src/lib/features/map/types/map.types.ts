@@ -112,6 +112,8 @@ export interface LayerContext {
   textRepresentativePointGeometryInfo?: GeometryInfo;
 
   customProjection?: ProjectionLike;
+  /** Visible basemap land layers, whose outline labels keep clear of. */
+  labelOutlineTables?: ArrowTable[];
 
   primitiveOrder?: PrimitiveFilter[];
   densityTable?: ArrowTable;

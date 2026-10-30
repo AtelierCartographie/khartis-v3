@@ -66,3 +66,37 @@ export function wrapLabelText(
     .split('\n')
     .flatMap((paragraph) => wrapParagraph(paragraph, maxWidth, measure));
 }
+
+/**
+ * A one-line label broken in two lines of balanced width, at the space or
+ * hyphen that makes the wider line narrowest, or null when it has no break
+ * that leaves more than a few letters on each line.
+ */
+export function wrapLabelTextInTwoLines(
+  text: string,
+  measure: (text: string) => number
+): [string, string] | null {
+  if (text.includes('\n')) return null;
+  const pieces = splitPieces(text);
+  const join = (part: LabelPiece[]): string =>
+    part
+      .map((piece, index) => (index ? piece.joiner : '') + piece.text)
+      .join('');
+  let best: [string, string] | null = null;
+  let bestWidth = Infinity;
+  for (let split = 1; split < pieces.length; split++) {
+    const first = join(pieces.slice(0, split));
+    const second = join(pieces.slice(split));
+    if (
+      first.length <= ORPHAN_MAX_CHARACTERS ||
+      second.length <= ORPHAN_MAX_CHARACTERS
+    )
+      continue;
+    const width = Math.max(measure(first), measure(second));
+    if (width < bestWidth) {
+      best = [first, second];
+      bestWidth = width;
+    }
+  }
+  return best;
+}
