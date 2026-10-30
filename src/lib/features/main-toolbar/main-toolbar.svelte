@@ -425,12 +425,13 @@
     }
   }
 
+  /* No transform or will-change at rest: either would make the panel the
+     containing block of the data tools' fixed windows, which it clips. */
   nav {
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
     z-index: var(--z-main-toolbar);
-    will-change: transform;
     height: calc(100dvh - var(--cds-header-height));
     overflow: hidden;
   }
