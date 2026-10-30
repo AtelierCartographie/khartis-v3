@@ -1,5 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import {
+  DEFAULT_CATEGORICAL_COLORS,
   getEnabledPrimitiveFilters,
   PrimitiveFilterType,
   type PrimitiveConfigKind,
@@ -16,8 +17,16 @@ import {
   type FacetSlotPath,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
-import { DEFAULT_CLASSIFICATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
-import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
+import {
+  DEFAULT_CLASSIFICATION_CLASS_COUNT,
+  FillMode,
+  ProportionalType,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
+import {
+  applyFacetVariablePatch,
+  getFacetSlotVariable
+} from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   calculateBreaks,
   calculateDivergingBreaks
@@ -26,12 +35,15 @@ import { resolveBreakpointLowerClassCount } from '../utils/discretization.utils'
 import { resolveValueScopeClause } from './row-scope.service';
 import {
   findPaletteById,
+  generateCategoricalColorsFromSeed,
   generatePaletteColors,
   PALETTE_TYPE,
   type Palette
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { DataValidationError } from '../pipeline.errors';
 import { loadDistinctCategoryLabels } from '$lib/features/commons/utils/category-labels.utils';
+import { isSignedProportionalSymbol } from '$lib/features/commons/utils/symbol-sign.utils';
+import { resolveFacetDataFilters } from '../utils/viz-filter.utils';
 
 function resolveFacetClassification(
   visualization: VisualizationConfig,
@@ -101,6 +113,31 @@ function resolveQualitativePalette(
   };
 }
 
+/**
+ * Index of each raw category value in `classification`: its display label
+ * (renamed by the reader) and its color sit at the same index.
+ */
+function indexByCategoryValue(
+  classification: NonNullable<VisualizationConfig['classification']>
+): Map<string, number> {
+  const values = classification.categoryValues ?? classification.labels ?? [];
+  return new Map(values.map((value, index) => [String(value), index]));
+}
+
+/** Display labels for raw `values`: a category renamed in `classification` keeps its name. */
+export function resolveCategoryDisplayLabels(
+  classification: NonNullable<VisualizationConfig['classification']>,
+  values: string[]
+): string[] {
+  const indexByValue = indexByCategoryValue(classification);
+  return values.map((value) => {
+    const index = indexByValue.get(value);
+    const label =
+      index === undefined ? undefined : classification.labels?.[index];
+    return label === undefined ? value : String(label);
+  });
+}
+
 async function buildCategoricalFacetClassification(
   baseViz: VisualizationConfig,
   variable: string,
@@ -119,7 +156,10 @@ async function buildCategoricalFacetClassification(
 
   return {
     ...baseClassification,
-    labels: labels.length > 0 ? labels : (baseClassification.labels ?? []),
+    labels:
+      labels.length > 0
+        ? resolveCategoryDisplayLabels(baseClassification, labels)
+        : (baseClassification.labels ?? []),
     categoryValues:
       labels.length > 0
         ? labels
@@ -274,7 +314,7 @@ async function buildFacetClassification(
     method: baseClassification.method,
     rowScopeClause: resolveValueScopeClause({
       datasetId: datasetSourceFileId,
-      vizFilters: baseViz.dataFilters,
+      vizFilters: resolveFacetDataFilters(baseViz.dataFilters, variable),
       primitive: resolveFacetPrimitiveFilter(slotPath)
     }),
     pooledColumnNames:
@@ -403,13 +443,162 @@ export async function buildFacetSlotUpdates({
   };
 }
 
-export async function buildFacetVisualizationUpdates({
+/** Fill column chosen per map of a collection, keyed by the map's collection variable. */
+export type FacetFillVariables = Record<string, string>;
+
+/**
+ * The symbol fill slot each map of a collection can set apart, or null when
+ * the fill is the collection variable itself or is not drawn from the data.
+ */
+export function resolveFacetFillSlotPath(
+  baseViz: VisualizationConfig,
+  primarySlotPath: FacetSlotPath
+): FacetSlotPath | null {
+  const symbol = baseViz.symbol;
+  if (
+    !symbol ||
+    resolveFacetPrimitiveFilter(primarySlotPath) !== PrimitiveFilterType.POINT
+  ) {
+    return null;
+  }
+
+  const drawsFill =
+    symbol.mode === SymbolMode.CLASSES ||
+    (symbol.mode === SymbolMode.PROPORTIONAL &&
+      symbol.proportionalType !== ProportionalType.DOUBLE);
+  if (!drawsFill || isSignedProportionalSymbol(baseViz)) {
+    return null;
+  }
+
+  const fillSlotPath =
+    symbol.fillMode === FillMode.CATEGORIES
+      ? FACET_SLOT.SYMBOL_FILL_CATEGORY
+      : symbol.fillMode === FillMode.CLASSES
+        ? FACET_SLOT.SYMBOL_FILL_VALUE
+        : null;
+
+  return fillSlotPath === primarySlotPath ? null : fillSlotPath;
+}
+
+export function resolveFacetFillVariable({
+  baseViz,
+  primarySlotPath,
+  fillVariables,
+  variable
+}: {
+  baseViz: VisualizationConfig;
+  primarySlotPath: FacetSlotPath;
+  fillVariables: FacetFillVariables;
+  variable: string;
+}): string | undefined {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (!fillSlotPath) {
+    return undefined;
+  }
+  return fillVariables[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath);
+}
+
+function resolveFacetFillColumns(
+  baseViz: VisualizationConfig,
+  fillSlotPath: FacetSlotPath,
+  collectionVariables: string[],
+  fillVariables: FacetFillVariables
+): string[] {
+  const baseFillVariable = getFacetSlotVariable(baseViz, fillSlotPath);
+  return [
+    ...new Set(
+      collectionVariables
+        .map((candidate) => fillVariables[candidate] ?? baseFillVariable)
+        .filter((candidate): candidate is string => Boolean(candidate))
+    )
+  ];
+}
+
+/**
+ * Every category the maps' fill columns hold, in map order, or null when
+ * the maps do not fill by categories. The base fill classification lists
+ * them, so a single aspect panel styles the categories of every map.
+ */
+export async function loadFacetFillCategoryUnion({
+  baseViz,
+  primarySlotPath,
+  collectionVariables,
+  fillVariables
+}: {
+  baseViz: VisualizationConfig;
+  primarySlotPath: FacetSlotPath;
+  collectionVariables: string[];
+  fillVariables: FacetFillVariables;
+}): Promise<string[] | null> {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (fillSlotPath !== FACET_SLOT.SYMBOL_FILL_CATEGORY) {
+    return null;
+  }
+
+  const dataset = datasetsStore.datasets.find(
+    (candidate) => candidate.id === baseViz.datasetId
+  );
+  const columns = resolveFacetFillColumns(
+    baseViz,
+    fillSlotPath,
+    collectionVariables,
+    fillVariables
+  );
+  const labelsByColumn = await Promise.all(
+    columns.map((column) => loadDistinctCategoryLabels(dataset, column))
+  );
+  return [...new Set(labelsByColumn.flat())];
+}
+
+/**
+ * Colors for `labels`: a label keeps the color it already has in
+ * `classification` unless another label took it first, the others take the
+ * palette colors still free.
+ */
+export function alignCategoryColors(
+  classification: NonNullable<VisualizationConfig['classification']>,
+  labels: string[]
+): string[] {
+  const indexByValue = indexByCategoryValue(classification);
+  // Same source as the panel: the chosen palette, else the default colors.
+  const palette = classification.paletteId
+    ? findPaletteById(classification.paletteId)
+    : undefined;
+  const fresh = palette
+    ? generatePaletteColors(palette, labels.length)
+    : labels.length <= DEFAULT_CATEGORICAL_COLORS.length
+      ? DEFAULT_CATEGORICAL_COLORS.slice(0, labels.length)
+      : generateCategoricalColorsFromSeed(
+          DEFAULT_CATEGORICAL_COLORS[0],
+          labels.length
+        );
+  const used = new Set<string>();
+  const takeFree = (index: number): string | undefined =>
+    fresh.find((color) => !used.has(color)) ??
+    fresh[index % Math.max(fresh.length, 1)];
+
+  return labels.map((label, index) => {
+    const existingIndex = indexByValue.get(label);
+    const existing =
+      existingIndex === undefined
+        ? undefined
+        : classification.colors?.[existingIndex];
+    const color = existing && !used.has(existing) ? existing : takeFree(index);
+    if (color) {
+      used.add(color);
+    }
+    return color ?? '';
+  });
+}
+
+async function buildFacetFillUpdates({
   baseViz,
   visualization,
   variable,
   collectionVariables,
   scaleMode,
-  primarySlotPath
+  primarySlotPath,
+  fillVariables
 }: {
   baseViz: VisualizationConfig;
   visualization: VisualizationConfig;
@@ -417,6 +606,96 @@ export async function buildFacetVisualizationUpdates({
   collectionVariables: string[];
   scaleMode: ScaleMode;
   primarySlotPath: FacetSlotPath;
+  fillVariables: FacetFillVariables;
+}): Promise<Partial<VisualizationConfig>> {
+  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
+  if (
+    !fillSlotPath ||
+    !collectionVariables.some((candidate) => fillVariables[candidate])
+  ) {
+    return {};
+  }
+
+  const baseFillVariable = getFacetSlotVariable(baseViz, fillSlotPath);
+  const fillVariable = fillVariables[variable] ?? baseFillVariable;
+  const categories = isFacetCategorySlot(fillSlotPath);
+  // Categories: the base classification lists every map's categories, so a
+  // map that keeps the base column still needs its own. Classes on a shared
+  // legend pool their breaks over every fill column, so it needs new breaks.
+  const keepsBaseFill =
+    fillVariable === baseFillVariable &&
+    !categories &&
+    scaleMode !== SCALE_MODE.SHARED;
+  if (!fillVariable || keepsBaseFill) {
+    return {};
+  }
+
+  // Only the symbol changes: the fill column lives there, while the mapping
+  // keys a fill slot would patch carry the collection variable.
+  const { symbol } = await buildFacetSlotUpdates({
+    baseViz,
+    visualization,
+    variable: fillVariable,
+    collectionVariables: resolveFacetFillColumns(
+      baseViz,
+      fillSlotPath,
+      collectionVariables,
+      fillVariables
+    ),
+    scaleMode,
+    slotPath: fillSlotPath
+  });
+  const baseClassification = baseViz.symbol?.fillClassification;
+  const fillClassification = symbol?.fillClassification;
+  if (!categories || !symbol || !baseClassification || !fillClassification) {
+    return { symbol };
+  }
+
+  // A category keeps the name and the color the aspect panel gives it on
+  // every map, matched by its raw value.
+  const baseIndexByValue = indexByCategoryValue(baseClassification);
+  const values = (
+    fillClassification.categoryValues ??
+    fillClassification.labels ??
+    []
+  ).map(String);
+  return {
+    symbol: {
+      ...symbol,
+      fillClassification: {
+        ...fillClassification,
+        labels: resolveCategoryDisplayLabels(baseClassification, values),
+        colors: values.map((value, index) => {
+          const baseIndex = baseIndexByValue.get(value);
+          return (
+            (baseIndex === undefined
+              ? undefined
+              : baseClassification.colors?.[baseIndex]) ??
+            fillClassification.colors?.[index] ??
+            ''
+          );
+        })
+      }
+    }
+  };
+}
+
+export async function buildFacetVisualizationUpdates({
+  baseViz,
+  visualization,
+  variable,
+  collectionVariables,
+  scaleMode,
+  primarySlotPath,
+  fillVariables = {}
+}: {
+  baseViz: VisualizationConfig;
+  visualization: VisualizationConfig;
+  variable: string;
+  collectionVariables: string[];
+  scaleMode: ScaleMode;
+  primarySlotPath: FacetSlotPath;
+  fillVariables?: FacetFillVariables;
 }): Promise<Partial<VisualizationConfig>> {
   const slotUpdates = await buildFacetSlotUpdates({
     baseViz,
@@ -426,11 +705,22 @@ export async function buildFacetVisualizationUpdates({
     scaleMode,
     slotPath: primarySlotPath
   });
+  const fillUpdates = await buildFacetFillUpdates({
+    baseViz,
+    visualization: { ...visualization, ...slotUpdates },
+    variable,
+    collectionVariables,
+    scaleMode,
+    primarySlotPath,
+    fillVariables
+  });
 
   return {
     ...slotUpdates,
+    ...fillUpdates,
     name: variable,
     primitiveFilters: getEnabledPrimitiveFilters(baseViz),
+    dataFilters: resolveFacetDataFilters(baseViz.dataFilters, variable),
     facet: {
       baseVisualizationId: baseViz.id
     }
@@ -451,7 +741,8 @@ export async function generateFacetVisualizations(
   baseViz: VisualizationConfig,
   variables: string[],
   scaleMode: ScaleMode,
-  primarySlotPath: FacetSlotPath
+  primarySlotPath: FacetSlotPath,
+  fillVariables: FacetFillVariables = {}
 ): Promise<VisualizationConfig[]> {
   const tableName = baseViz.datasetId;
 
@@ -483,7 +774,8 @@ export async function generateFacetVisualizations(
         variable,
         collectionVariables: variables,
         scaleMode,
-        primarySlotPath
+        primarySlotPath,
+        fillVariables
       }))
     };
 

@@ -60,6 +60,11 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import * as m from '$lib/paraglide/messages';
 import {
+  isSignedProportionalSymbol,
+  resolveSymbolSignColors,
+  SYMBOL_SIGN_LABELS
+} from '$lib/features/commons/utils/symbol-sign.utils';
+import {
   categoryLegendEntry,
   classLegendEntry,
   createLegendSvg,
@@ -78,6 +83,7 @@ import {
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
+  type LegendColorSwatch,
   type LegendPatternFill,
   type LegendSvgDefinition,
   type QuantiColorSwatch,
@@ -598,6 +604,14 @@ function clampValuesToDomain(
 
   const inside = sample.filter((value) => value > min && value < max);
   return [min, ...inside, max];
+}
+
+function buildSignColorSwatches(viz: VisualizationConfig): LegendColorSwatch[] {
+  const [positive, negative] = resolveSymbolSignColors(viz);
+  return [
+    { color: positive, label: SYMBOL_SIGN_LABELS.POSITIVE },
+    { color: negative, label: SYMBOL_SIGN_LABELS.NEGATIVE }
+  ];
 }
 
 function getNumericColumnValues(
@@ -1983,6 +1997,9 @@ function getPointSizeLegendDrafts(
                 type,
                 size: maxSize,
                 bar_width: barWidth,
+                ...(isSignedProportionalSymbol(viz)
+                  ? { colorSwatches: buildSignColorSwatches(viz) }
+                  : {}),
                 nodata: context.includeMissingDataFooter
                   ? isLegendMissingDataShown(viz, 'point')
                   : false,

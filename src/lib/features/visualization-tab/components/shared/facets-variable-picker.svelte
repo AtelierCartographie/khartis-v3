@@ -241,6 +241,7 @@
   .variable-dropdown {
     position: relative;
     width: 100%;
+    max-width: var(--khartis-dropdown-max-width, none);
   }
 
   .dropdown-trigger {

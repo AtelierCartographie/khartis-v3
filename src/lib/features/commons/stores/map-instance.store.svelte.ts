@@ -107,6 +107,47 @@ function dataToWorld(target: number[]): [number, number, number] {
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
 
+/** Reference extent center and size: `targetRatio` is expressed against them. */
+function getReferenceFrame(bbox: [number, number, number, number]): {
+  center: [number, number];
+  width: number;
+  height: number;
+} {
+  const [cx, cy] = get_bbox_center(bbox);
+  return {
+    center: [cx, cy],
+    width: Math.max(1e-9, bbox[2] - bbox[0]),
+    height: Math.max(1e-9, bbox[3] - bbox[1])
+  };
+}
+
+/**
+ * The render projection is fitted to the canvas, so the reference extent and
+ * the data target move with the size the map is drawn at. Relative to the
+ * extent, the view center stays put.
+ */
+function toTargetRatio(
+  target: [number, number, number],
+  bbox: [number, number, number, number]
+): [number, number] {
+  const { center, width, height } = getReferenceFrame(bbox);
+  return [(target[0] - center[0]) / width, (target[1] - center[1]) / height];
+}
+
+function fromTargetRatio(
+  ratio: [number, number],
+  bbox: [number, number, number, number]
+): [number, number, number] {
+  const { center, width, height } = getReferenceFrame(bbox);
+  return [center[0] + ratio[0] * width, center[1] + ratio[1] * height, 0];
+}
+
+function isPlausibleTargetRatio(ratio: [number, number]): boolean {
+  return ratio.every(
+    (value) => Number.isFinite(value) && Math.abs(value) <= 1.5
+  );
+}
+
 function isPlausibleSerializedTarget(
   target: [number, number, number],
   bbox: [number, number, number, number]
@@ -133,6 +174,7 @@ interface PendingViewState {
   zoom: number;
 
   target: [number, number, number];
+  targetRatio?: [number, number];
 }
 
 interface PendingMapLibreViewState {
@@ -219,9 +261,11 @@ function createMapInstanceStore() {
       return lastSerializedViewState;
     }
 
+    const target = worldToData(worldTarget);
     const serialized = {
       zoom: state.deckViewState.zoom,
-      target: worldToData(worldTarget)
+      target,
+      targetRatio: toTargetRatio(target, ctx.referenceBbox)
     } satisfies SerializedViewState;
 
     lastSerializedViewState = serialized;
@@ -795,11 +839,14 @@ function createMapInstanceStore() {
         return;
       }
 
+      const { targetRatio } = pendingOrthographicRestore;
+      const restoredTarget =
+        targetRatio && isPlausibleTargetRatio(targetRatio)
+          ? fromTargetRatio(targetRatio, ctx.referenceBbox)
+          : pendingOrthographicRestore.target;
       if (
-        !isPlausibleSerializedTarget(
-          pendingOrthographicRestore.target,
-          ctx.referenceBbox
-        )
+        !targetRatio &&
+        !isPlausibleSerializedTarget(restoredTarget, ctx.referenceBbox)
       ) {
         pendingOrthographicRestore = null;
         lastSerializedViewState = null;
@@ -815,7 +862,7 @@ function createMapInstanceStore() {
         }
 
         state.deckViewState = resolveDeckViewState({
-          target: dataToWorld(pendingOrthographicRestore.target),
+          target: dataToWorld(restoredTarget),
           zoom: pendingOrthographicRestore.zoom
         });
         markViewportManual();
@@ -887,7 +934,19 @@ function createMapInstanceStore() {
       ? [raw[0], raw[1], 0]
       : [0, 0, 0];
 
-    pendingOrthographicRestore = { zoom, target };
+    const rawRatio = 'targetRatio' in data ? data.targetRatio : undefined;
+    const targetRatio =
+      Array.isArray(rawRatio) &&
+      rawRatio.length >= 2 &&
+      rawRatio.every((value) => typeof value === 'number')
+        ? ([rawRatio[0], rawRatio[1]] as [number, number])
+        : undefined;
+
+    pendingOrthographicRestore = {
+      zoom,
+      target,
+      ...(targetRatio && { targetRatio })
+    };
     lastSerializedViewState = pendingOrthographicRestore;
   }
 

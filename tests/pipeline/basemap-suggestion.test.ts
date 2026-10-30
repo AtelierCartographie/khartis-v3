@@ -285,6 +285,23 @@ describe('[S02] calculateGeoColumnBasemapMatchScore', () => {
     expect(result.reason).toContain('Region');
   });
 
+  it('should mark a suggestion found in the column values as matching the data', () => {
+    const result = calculateGeoColumnBasemapMatchScore(
+      'code',
+      WORLD_BASEMAP,
+      WORLD_CATALOG_MATCH
+    );
+    expect(result.matchesData).toBe(true);
+  });
+
+  it('should not mark a suggestion scored on metadata alone as matching the data', () => {
+    // A recent world basemap scores 30 on its name and year, for values (A, B,
+    // C) it does not hold: offered, never preselected.
+    const result = calculateGeoColumnBasemapMatchScore('id', WORLD_BASEMAP);
+    expect(result.score).toBeGreaterThan(0);
+    expect(result.matchesData).toBe(false);
+  });
+
   it('caps the score at 100', () => {
     const result = calculateGeoColumnBasemapMatchScore(
       'code_country_iso',

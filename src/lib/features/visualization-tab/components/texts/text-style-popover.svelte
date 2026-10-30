@@ -5,11 +5,12 @@
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Close } from 'carbon-icons-svelte';
   import TextStyleSection, {
     type TextStyleSectionHandlers
   } from './text-style-section.svelte';
@@ -71,7 +72,7 @@
       return {
         width: `${DEFAULT_POPOVER_WIDTH}px`,
         right: resolveToolbarWidth(globalState.toolbarState),
-        top: '50%',
+        top: 'var(--kh-floating-window-center)',
         left: undefined,
         transform: 'translateY(-50%)'
       };
@@ -96,8 +97,11 @@
     if (top > maxTop) {
       top = maxTop;
     }
-    if (top < VIEWPORT_GUTTER) {
-      top = VIEWPORT_GUTTER;
+    const minTop =
+      (document.querySelector('.bx--header')?.getBoundingClientRect().bottom ??
+        0) + VIEWPORT_GUTTER;
+    if (top < minTop) {
+      top = minTop;
     }
 
     return {
@@ -196,44 +200,40 @@
       role="dialog"
       aria-label={popoverTitle}
     >
-      <header class="popover-header">
-        <h3>{popoverTitle}</h3>
-        <button
-          type="button"
-          class="popover-close-button"
-          aria-label={m.close()}
-          onclick={handleClose}
-        >
-          <Close size={16} />
-        </button>
-      </header>
+      <PanelHeader
+        title={popoverTitle}
+        closeLabel={m.close()}
+        onclose={handleClose}
+      />
 
-      <div class="popover-content">
-        {#if showPrimarySection}
-          <TextStyleSection
-            title={m.text_style_primary_title()}
-            section={primary}
-          />
-        {/if}
-
-        {#if showSecondarySection}
-          <TextStyleSection
-            title={m.text_style_secondary_title()}
-            section={secondary}
-          />
-        {/if}
-
-        {#if secondary}
-          <div class="text-hierarchy-field">
-            <SimpleRadioGroup
-              name="text-hierarchy"
-              legendText={m.text_hierarchy_title()}
-              items={hierarchyItems}
-              selected={hierarchy}
-              onchange={(value) => onHierarchyChange?.(value)}
+      <div class="kh-scroll-area">
+        <div class="popover-content" use:scrollShadows>
+          {#if showPrimarySection}
+            <TextStyleSection
+              title={m.text_style_primary_title()}
+              section={primary}
             />
-          </div>
-        {/if}
+          {/if}
+
+          {#if showSecondarySection}
+            <TextStyleSection
+              title={m.text_style_secondary_title()}
+              section={secondary}
+            />
+          {/if}
+
+          {#if secondary}
+            <div class="text-hierarchy-field">
+              <SimpleRadioGroup
+                name="text-hierarchy"
+                legendText={m.text_hierarchy_title()}
+                items={hierarchyItems}
+                selected={hierarchy}
+                onchange={(value) => onHierarchyChange?.(value)}
+              />
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
   </div>
@@ -255,11 +255,9 @@
   :global(.text-style-popover) {
     position: fixed;
     width: 320px;
-    max-height: min(80vh, calc(100dvh - 32px));
+    max-height: min(80vh, var(--kh-floating-window-max-height));
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-inline);
-    padding: 0 0 var(--cds-spacing-05, 16px);
     background: var(--cds-background, #ffffff);
     border: none;
     box-shadow:
@@ -273,57 +271,11 @@
     padding: 0 var(--cds-spacing-05, 16px);
   }
 
-  .popover-header {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02, 4px);
-    padding: 0 var(--cds-spacing-02, 4px) var(--cds-spacing-03, 8px)
-      var(--cds-spacing-05, 16px);
-    flex-shrink: 0;
-    background: var(--cds-background, #ffffff);
-
-    h3 {
-      flex: 1 1 auto;
-      min-width: 0;
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      line-height: 1.5;
-      color: var(--cds-text-primary, #161616);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .popover-close-button {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--cds-icon-primary, #161616);
-    cursor: pointer;
-
-    &:hover {
-      background: var(--cds-layer-hover-01, #e8e8e8);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: -2px;
-    }
-  }
-
   .popover-content {
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    padding: 0 var(--cds-spacing-05, 16px);
+    padding: var(--cds-spacing-05, 16px);
     overflow-y: auto;
   }
 
@@ -333,7 +285,7 @@
     }
 
     .popover-content {
-      padding: 0 var(--cds-spacing-03, 8px);
+      padding-inline: var(--cds-spacing-03, 8px);
     }
   }
 </style>

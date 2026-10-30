@@ -37,6 +37,7 @@ import {
 } from './khartis-projection-factories.utils';
 import {
   bumpWorkerParseVersion,
+  trackPendingWorkerParse,
   getParseWorkerClient,
   ipcBytesForTable,
   trackWorkerParseVersion,
@@ -348,12 +349,14 @@ function requestWorkerParse<T>(
   if (!workerPendingKeys.has(key)) {
     workerPendingKeys.add(key);
     const ipcBytes = ipcBytesForTable(normalizeGeomColumnName(table));
-    withParseWorkerTimeout(
-      client[method](ipcBytes, spec, {
-        capacityMultiplier: 1.0,
-        rewind: options.rewind
-      }),
-      method
+    trackPendingWorkerParse(
+      withParseWorkerTimeout(
+        client[method](ipcBytes, spec, {
+          capacityMultiplier: 1.0,
+          rewind: options.rewind
+        }),
+        method
+      )
     )
       .then((data) => {
         storeResult(data as T);

@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     datasets: [{ id: 'table1', tableName: 'table1', sourceFileId: 'source1' }],
-    getUniqueValues: mocks.getUniqueValues
+    getUniqueValues: mocks.getUniqueValues,
+    getColumnStatistics: () => null
   }
 }));
 
@@ -37,9 +38,11 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 import {
+  alignCategoryColors,
   buildFacetSlotUpdates,
   buildFacetVisualizationUpdates,
-  generateFacetVisualizations
+  generateFacetVisualizations,
+  loadFacetFillCategoryUnion
 } from './facet-generator.service';
 import {
   FACET_SLOT,
@@ -287,6 +290,170 @@ describe('generateFacetVisualizations', () => {
       [20, 30, 40],
       [20, 30, 40]
     ]);
+  });
+
+  it('should color each map fill category after the union the base lists when maps fill by different columns', async () => {
+    const labelsByColumn: Record<string, string[]> = {
+      zone: ['EU27', 'EFTA'],
+      region: ['North', 'South', 'EU27']
+    };
+    mocks.loadDistinctCategoryLabels.mockImplementation(
+      async (_dataset: unknown, column: string) => labelsByColumn[column] ?? []
+    );
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'pop', categoryColumn: 'zone' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'pop',
+        fillMode: 'categories',
+        fillCategoryColumn: 'zone',
+        fillClassification: {
+          method: 'equal_interval',
+          colors: ['#111', '#222', '#333', '#444'],
+          labels: ['EU27', 'EFTA', 'North', 'South'],
+          categoryValues: ['EU27', 'EFTA', 'North', 'South']
+        }
+      }
+    });
+
+    await expect(
+      loadFacetFillCategoryUnion({
+        baseViz: base as never,
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        collectionVariables: ['pop', 'gdp'],
+        fillVariables: { gdp: 'region' }
+      })
+    ).resolves.toEqual(['EU27', 'EFTA', 'North', 'South']);
+
+    const [pop, gdp] = await generateFacetVisualizations(
+      base as never,
+      ['pop', 'gdp'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { gdp: 'region' }
+    );
+
+    expect(pop.symbol?.fillCategoryColumn).toBe('zone');
+    expect(pop.symbol?.fillClassification?.labels).toEqual(['EU27', 'EFTA']);
+    expect(pop.symbol?.fillClassification?.colors).toEqual(['#111', '#222']);
+    expect(gdp.symbol?.sizeColumn).toBe('gdp');
+    expect(gdp.symbol?.fillCategoryColumn).toBe('region');
+    expect(gdp.symbol?.fillClassification?.colors).toEqual([
+      '#333',
+      '#444',
+      '#111'
+    ]);
+    expect(gdp.mapping.categoryColumn).toBe('zone');
+  });
+
+  it('keeps renamed fill categories on every map, matched by their raw value', async () => {
+    const labelsByColumn: Record<string, string[]> = {
+      charbon_evol: ['negative', 'positive'],
+      gaz_evol: ['positive', 'negative']
+    };
+    mocks.loadDistinctCategoryLabels.mockImplementation(
+      async (_dataset: unknown, column: string) => labelsByColumn[column] ?? []
+    );
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'charbon' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'charbon',
+        fillMode: 'categories',
+        fillCategoryColumn: 'charbon_evol',
+        fillClassification: {
+          method: 'equal_interval',
+          colors: ['#blue', '#orange'],
+          labels: ['En baisse', 'En hausse'],
+          categoryValues: ['negative', 'positive']
+        }
+      }
+    });
+
+    const [charbon, gaz] = await generateFacetVisualizations(
+      base as never,
+      ['charbon', 'gaz'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { charbon: 'charbon_evol', gaz: 'gaz_evol' }
+    );
+
+    expect(charbon.symbol?.fillClassification?.labels).toEqual([
+      'En baisse',
+      'En hausse'
+    ]);
+    expect(gaz.symbol?.fillClassification?.categoryValues).toEqual([
+      'positive',
+      'negative'
+    ]);
+    expect(gaz.symbol?.fillClassification?.labels).toEqual([
+      'En hausse',
+      'En baisse'
+    ]);
+    expect(gaz.symbol?.fillClassification?.colors).toEqual([
+      '#orange',
+      '#blue'
+    ]);
+  });
+
+  it('keeps the color of a renamed category when the union is realigned', () => {
+    const colors = alignCategoryColors(
+      {
+        method: 'equal_interval',
+        labels: ['En baisse', 'En hausse'],
+        categoryValues: ['negative', 'positive'],
+        colors: ['#blue', '#orange']
+      } as never,
+      ['positive', 'negative']
+    );
+
+    expect(colors).toEqual(['#orange', '#blue']);
+  });
+
+  it('should give each union category a free color when the previous colors repeat', () => {
+    const colors = alignCategoryColors(
+      {
+        method: 'equal_interval',
+        paletteId: 'cb-wong',
+        labels: ['UE', 'AELE', 'France', 'Allemagne'],
+        colors: ['#a', '#b', '#a', '#b']
+      } as never,
+      ['UE', 'AELE', 'romane', 'slave']
+    );
+
+    expect(colors.slice(0, 2)).toEqual(['#a', '#b']);
+    expect(new Set(colors).size).toBe(colors.length);
+  });
+
+  it('pools fill class breaks over every map fill column on a shared legend', async () => {
+    const base = makeBaseViz({
+      mapping: { sizeColumn: 'pop' },
+      symbol: {
+        mode: 'proportional',
+        sizeColumn: 'pop',
+        fillMode: 'classes',
+        fillValueColumn: 'density',
+        fillClassification: makeBaseViz().classification
+      }
+    });
+
+    const [pop, gdp] = await generateFacetVisualizations(
+      base as never,
+      ['pop', 'gdp'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_SIZE,
+      { gdp: 'income' }
+    );
+
+    expect(mocks.calculateBreaks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnName: 'density',
+        pooledColumnNames: ['density', 'income']
+      })
+    );
+    expect(pop.symbol?.fillValueColumn).toBe('density');
+    expect(gdp.symbol?.fillValueColumn).toBe('income');
+    expect(gdp.symbol?.fillClassification?.breaks).toEqual([20, 30, 40]);
   });
 
   it('keeps the diverging breakpoint when facets are reclassified', async () => {

@@ -2,7 +2,12 @@
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { SliderWithInput, VizFilterButton, VizFilterPanel } from '../shared';
+  import {
+    SliderWithInput,
+    ToggleWithLabel,
+    VizFilterButton,
+    VizFilterPanel
+  } from '../shared';
   import LineThicknessSection from './line-thickness-section.svelte';
   import LineColorSection from './line-color-section.svelte';
   import type {
@@ -176,6 +181,7 @@
   });
   let dashed = $state<boolean>(false);
   let dashedPattern = $state<BasemapDottedPattern>(BasemapDottedPattern.DOTS);
+  let capRounded = $state<boolean>(true);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataSize = $state<number>(2);
@@ -207,6 +213,7 @@
         visualization.line?.dashedPattern ??
         visualization.style.lineDashedPattern ??
         BasemapDottedPattern.DOTS;
+      capRounded = visualization.style.lineCapRounded ?? true;
     }
     if (visualization?.modes) {
       thicknessMode = visualization.modes.thickness ?? ThicknessMode.UNIQUE;
@@ -276,6 +283,11 @@
     const next = coerceDashedPattern(value);
     dashedPattern = next;
     onStyleChange?.({ lineDashedPattern: next });
+  }
+
+  function handleCapRoundedChange(value: boolean) {
+    capRounded = value;
+    onStyleChange?.({ lineCapRounded: value });
   }
 
   function handleToggleChange(checked: boolean) {
@@ -448,6 +460,14 @@
       onClassificationChange={handleColorClassificationChange}
       onInvertPalette={onInvertPalette}
     />
+
+    {#if !dashed}
+      <ToggleWithLabel
+        label={m.line_cap_rounded()}
+        toggled={capRounded}
+        ontoggle={handleCapRoundedChange}
+      />
+    {/if}
 
     <SliderWithInput
       label={m.opacity()}

@@ -1,34 +1,47 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import {
-    GeoreferenceType,
-    JoinStatus
-  } from '$lib/features/commons/constants/ui.constants';
+  import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
-  import { GeocodeSettings, type JoinStats } from '../index';
+  import { GeocodeSettings } from '../index';
+  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
+  import type {
+    EntityValidation,
+    IgnoredEntity,
+    JoinedEntity
+  } from '$lib/features/commons/types/data-tab.types';
+  import {
+    ENRICHMENT_JOINED_PAGE_SIZE,
+    type EnrichmentJoinView
+  } from '../../hooks/use-enrichment-join.svelte';
   import JoinAssistedSection from '../basemap-join/join-assisted-section.svelte';
   import type {
     EnrichDataFieldItem,
     GeoFileColumnItem
   } from '../../utils/enrichment.utils';
 
-  type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
-
   interface Props {
     enrichmentDataset: DatasetResult;
-    enrichmentFile: File | null;
+    enrichmentSourceName: string | null;
     geoFileColumns: GeoFileColumnItem[];
     enrichDataFieldItems: EnrichDataFieldItem[];
     enrichLinkedVariableId: number | undefined;
     geoFileColumnId: number | undefined;
     enrichSuggestedColumn: EnrichDataFieldItem | undefined;
     hasOnlyCoordinates: boolean;
-    joinStats: JoinStats | null;
+    view: EnrichmentJoinView | null;
     targetOptions?: string[];
+    fuzzyPassEstimate: JoinFuzzyPassEstimate | null;
+    fuzzyPassRunning: boolean;
+    joinedPage: number;
+    joinedPageRows: JoinedEntity[];
+    joinedTargetValues: string[];
+    onRunFullFuzzyPass: () => void;
+    onJoinedPageChange: (page: number) => void;
+    onRequestJoinedEntities: () => void;
     isComputingJoin: boolean;
     isFinalizingJoin: boolean;
     onRemoveFile: () => void;
@@ -43,26 +56,30 @@
     onMappingChange: (index: number, value: string) => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, targetValue: string) => void;
-    onIgnoreEntity?: (
-      dataValue: string,
-      source: IgnoreSource,
-      targetValue?: string
-    ) => void;
-    onValidateEntity?: (dataValue: string, targetValue: string) => void;
-    onRestoreEntity?: (dataValue: string) => void;
+    onIgnoreEntities?: (entries: IgnoredEntity[]) => void;
+    onValidateEntities?: (entries: EntityValidation[]) => void;
+    onRestoreEntities?: (dataValues: string[]) => void;
   }
 
   let {
     enrichmentDataset,
-    enrichmentFile,
+    enrichmentSourceName,
     geoFileColumns,
     enrichDataFieldItems,
     enrichLinkedVariableId,
     geoFileColumnId,
     enrichSuggestedColumn,
     hasOnlyCoordinates,
-    joinStats,
+    view,
     targetOptions = [],
+    fuzzyPassEstimate,
+    fuzzyPassRunning,
+    joinedPage,
+    joinedPageRows,
+    joinedTargetValues,
+    onRunFullFuzzyPass,
+    onJoinedPageChange,
+    onRequestJoinedEntities,
     isComputingJoin,
     isFinalizingJoin,
     onRemoveFile,
@@ -71,9 +88,9 @@
     onMappingChange,
     onFinalizeJoin,
     onManualCorrection,
-    onIgnoreEntity,
-    onValidateEntity,
-    onRestoreEntity
+    onIgnoreEntities,
+    onValidateEntities,
+    onRestoreEntities
   }: Props = $props();
 
   function handleEnrichColumnSelect(id: number, columnName: string): void {
@@ -103,53 +120,6 @@
     enrichDataFieldItems.find((i) => i.id === enrichLinkedVariableId)
       ?.columnName
   );
-
-  const joinedEntitiesList = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.JOINED)
-      .map((entity) => {
-        const targetValue =
-          entity.basemapValue ??
-          entity.geoValue ??
-          entity.selectedMapping ??
-          entity.matches?.[0] ??
-          entity.dataValue;
-        return {
-          dataValue: entity.dataValue,
-          basemapValue: targetValue,
-          otherIdentifiers:
-            entity.matches?.filter((match) => match !== targetValue) ?? []
-        };
-      })
-  );
-
-  const toVerifyRows = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.TO_VERIFY)
-      .map((entity) => ({
-        dataValue: entity.dataValue,
-        selectedMapping: entity.selectedMapping ?? entity.matches?.[0] ?? '',
-        basemapOptions: entity.basemapOptions ?? entity.matches ?? []
-      }))
-  );
-
-  const duplicateEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.DUPLICATE)
-      .map((entity) => entity.dataValue)
-  );
-
-  const unrecognizedEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.UNRECOGNIZED)
-      .map((entity) => entity.dataValue)
-  );
-
-  const ignoredEntities = $derived(
-    (joinStats?.entities ?? [])
-      .filter((entity) => entity.status === JoinStatus.IGNORED)
-      .map((entity) => ({ dataValue: entity.dataValue, lines: [] }))
-  );
 </script>
 
 <div class="join-config">
@@ -157,7 +127,7 @@
     <span class="file-label">{m.enrich_file_imported()}</span>
     <div class="file-row">
       <span class="file-name"
-        >{enrichmentFile?.name || m.dataset_pasted_name()}</span
+        >{enrichmentSourceName || m.dataset_pasted_name()}</span
       >
       <Button
         class="file-remove"
@@ -203,10 +173,7 @@
         closeButtonDescription={m.a11y_close_notification()}
         title={m.geo_column_detected_title()}
         subtitle={m.geo_column_detected_subtitle({
-          column: enrichSuggestedColumn.columnName,
-          confidence: Math.round(
-            enrichSuggestedColumn.confidence * 100
-          ).toString()
+          column: enrichSuggestedColumn.columnName
         })}
         kind="success"
         lowContrast
@@ -247,31 +214,41 @@
     <div class="join-assisted-section">
       <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
 
-      {#if joinStats || isComputingJoin}
+      {#if view || isComputingJoin}
         {#if isComputingJoin}
           <div class="computing-join">
             <span>{m.enrich_computing_join()}</span>
           </div>
-        {:else if joinStats}
+        {:else if view}
           <JoinAssistedSection
-            joinRows={toVerifyRows}
-            duplicates={duplicateEntities}
-            unknowns={unrecognizedEntities}
-            joinedCount={joinStats.joinedCount}
-            toVerifyCount={joinStats.toVerifyCount}
+            joinRows={view.joinRows}
+            duplicates={view.duplicates}
+            unknowns={view.unknowns}
+            joinedCount={view.joinedCount}
+            toVerifyCount={view.toVerifyCount}
+            duplicateTotal={view.duplicateTotal}
+            unrecognizedTotal={view.unrecognizedTotal}
+            fuzzyPassEstimate={fuzzyPassEstimate}
+            fuzzyPassRunning={fuzzyPassRunning}
+            onRunFullFuzzyPass={onRunFullFuzzyPass}
             linkedVariableName={linkedVariableName}
             basemapValues={targetOptions}
             loading={isFinalizingJoin}
             joinFinalized={false}
-            joinedEntitiesList={joinedEntitiesList}
-            duplicateLines={joinStats.duplicateLines}
-            ignoredEntities={ignoredEntities}
+            joinedEntitiesList={joinedPageRows}
+            joinedPage={joinedPage}
+            joinedPageSize={ENRICHMENT_JOINED_PAGE_SIZE}
+            joinedBasemapValues={joinedTargetValues}
+            onJoinedPageChange={onJoinedPageChange}
+            onRequestJoinedEntities={onRequestJoinedEntities}
+            duplicateLines={view.duplicateLines}
+            ignoredEntities={view.ignoredEntities}
             onMappingChange={onMappingChange}
             onFinalizeJoin={onFinalizeJoin}
             onManualCorrection={onManualCorrection}
-            onIgnoreEntity={onIgnoreEntity}
-            onValidateEntity={onValidateEntity}
-            onRestoreEntity={onRestoreEntity}
+            onIgnoreEntities={onIgnoreEntities}
+            onValidateEntities={onValidateEntities}
+            onRestoreEntities={onRestoreEntities}
           />
 
           {#if isFinalizingJoin}

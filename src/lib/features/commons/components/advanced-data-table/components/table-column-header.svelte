@@ -12,12 +12,14 @@
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
+  import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { ColumnInfo, ColumnType } from '../types';
   import Portal from './portal.svelte';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import { tick } from 'svelte';
 
   interface Props {
@@ -28,6 +30,10 @@
     showSummaryPlots: boolean;
     isEditMode: boolean;
     isHidden?: boolean;
+    /** File the column was joined from, for a column an enrichment added. */
+    origin?: string;
+    /** Shown instead of the column name, for a column Khartis wrote. */
+    displayName?: string;
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
     onRename?: (columnName: string) => void;
@@ -44,6 +50,8 @@
     showSummaryPlots,
     isEditMode,
     isHidden = false,
+    origin,
+    displayName,
     onSort,
     onRefine,
     onRename,
@@ -91,6 +99,8 @@
     category: string | null;
     count: number;
     percent: number;
+    /** Set on the bar that groups the least frequent categories. */
+    otherCategories: number | null;
   }
   interface HistogramLike {
     toArray(): unknown[];
@@ -155,13 +165,17 @@
     const typeSimple = analysis.type_simple;
 
     if (typeSimple === 'string') {
-      const items = (analysis.histogram.toArray() as CategoryItem[]).map(
-        (item) => ({
-          category: item.category,
-          count: toNum(item.count),
-          percent: item.percent
-        })
-      );
+      const items = (
+        analysis.histogram.toArray() as Array<
+          Omit<CategoryItem, 'otherCategories'> & { other_categories?: unknown }
+        >
+      ).map((item) => ({
+        category: item.category,
+        count: toNum(item.count),
+        percent: item.percent,
+        otherCategories:
+          item.other_categories == null ? null : toNum(item.other_categories)
+      }));
       const isAllUnique = items.length === 1 && items[0]?.category === 'unique';
       return {
         kind: 'categorical' as const,
@@ -257,6 +271,9 @@
   let warningBadgeRef = $state<HTMLElement | null>(null);
   let warningTooltipPosition = $state({ top: 0, left: 0 });
 
+  let originTooltipOpen = $state(false);
+  let originBadgeRef = $state<HTMLElement | null>(null);
+
   let typeTooltipOpen = $state(false);
   let pillRef = $state<HTMLButtonElement | undefined>(undefined);
   let typeTooltipPosition = $state({ top: 0, left: 0 });
@@ -320,7 +337,9 @@
   } satisfies TooltipController;
 
   // `unique` is the categorical SQL sentinel for values occurring once.
-  function catColor(category: string | null): string {
+  function catColor(item: CategoryItem): string {
+    const { category } = item;
+    if (item.otherCategories !== null) return '#6f6f6f';
     if (category === null) return '#ff832b';
     if (category === 'unique') return '#005d5d';
     return '#9f1853';
@@ -334,7 +353,14 @@
     )({ count: formatValue(count) });
   }
 
+  function otherCategoriesLabel(count: number): string {
+    return m.summary_plot_other_categories({ count: formatValue(count) });
+  }
+
   function catLabel(item: CategoryItem): string {
+    if (item.otherCategories !== null) {
+      return otherCategoriesLabel(item.otherCategories);
+    }
     if (item.category === null) return '⌀';
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
     return item.category;
@@ -342,7 +368,10 @@
 
   function catTooltipText(item: CategoryItem): string {
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
-    const name = item.category ?? m.column_null_label();
+    const name =
+      item.otherCategories !== null
+        ? otherCategoriesLabel(item.otherCategories)
+        : (item.category ?? m.column_null_label());
     return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
 
@@ -574,7 +603,7 @@
   <div class="col-header">
     <div class="col-title-row">
       <VariableBadge
-        label={column.name}
+        label={displayName ?? column.name}
         type={badgeType}
         bind:element={pillRef}
         onmouseenter={() => showTooltip(typeTooltip)}
@@ -582,7 +611,7 @@
         onfocus={() => showTooltip(typeTooltip)}
         onblur={() => hideTooltip(typeTooltip)}
         ariaLabel={m.column_type_badge_label({
-          column: column.name,
+          column: displayName ?? column.name,
           type: typeTooltipMessage
         })}
       />
@@ -597,6 +626,28 @@
             {typeTooltipMessage}
           </div>
         </Portal>
+      {/if}
+
+      {#if origin}
+        <button
+          type="button"
+          class="origin-badge"
+          bind:this={originBadgeRef}
+          onclick={() => (originTooltipOpen = !originTooltipOpen)}
+          onmouseenter={() => (originTooltipOpen = true)}
+          onmouseleave={() => (originTooltipOpen = false)}
+          onfocus={() => (originTooltipOpen = true)}
+          onblur={() => (originTooltipOpen = false)}
+          aria-label={m.column_origin_label({ file: origin })}
+        >
+          <DataTable size={16} />
+        </button>
+        {#if originTooltipOpen}
+          <TooltipBubble
+            text={m.column_origin_label({ file: origin })}
+            trigger={originBadgeRef}
+          />
+        {/if}
       {/if}
 
       {#if columnWarnings.length > 0}
@@ -907,13 +958,13 @@
               <div class="hist-spacer"></div>
             {:else}
               <div class="hist-cat-bars">
-                {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
+                {#each histogramData.items as item, i (item.otherCategories !== null ? `other-${i}` : (item.category ?? `null-${i}`))}
                   <div
                     class="hist-cat-bar"
                     class:first={i === 0}
                     class:last={i === histogramData.items.length - 1}
                     style="flex-grow: {item.count}; background-color: {catColor(
-                      item.category
+                      item
                     )};"
                     role="img"
                     aria-label={catTooltipText(item)}
@@ -1434,6 +1485,25 @@
     font-size: 12px;
     line-height: 16px;
     color: var(--cds-text-02, #525252);
+  }
+
+  .origin-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cds-icon-02, #525252);
+    cursor: pointer;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 1px;
+    border-radius: 2px;
+  }
+
+  .origin-badge:hover,
+  .origin-badge:focus-visible {
+    color: var(--cds-icon-01, #161616);
+    background-color: var(--cds-hover-ui);
   }
 
   .warning-badge {

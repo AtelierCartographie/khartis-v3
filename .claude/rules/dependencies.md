@@ -25,10 +25,10 @@ A patch is re-created with `pnpm patch <pkg>` followed by `pnpm patch-commit <di
 
 ## DuckDB
 
-- `@duckdb/duckdb-wasm` is pinned to an exact build. On postinstall, `scripts/download-duckdb-extensions.sh` reads the DuckDB core version from the WASM binary, downloads the `spatial`, `httpfs`, `parquet` and `json` extensions for both bundles into `static/duckdb-extensions/<version>/`, and removes the previous version. Those files are versioned and served to the engine as its extension repository: commit the new folder with the bump.
+- `@duckdb/duckdb-wasm` is pinned to an exact build. On postinstall, `scripts/download-duckdb-extensions.sh` reads the DuckDB core version from the WASM binary, downloads the `spatial`, `httpfs`, `parquet`, `json` and `sqlite_scanner` extensions for both bundles into `static/duckdb-extensions/<version>/`, and removes the previous version. Those files are versioned and served to the engine as its extension repository: commit the new folder with the bump.
 - The script stops when `extensions.duckdb.org` has no extensions for the detected version yet, and `pnpm install` fails with it. Check that before choosing a DuckDB WASM version.
 - `@duckdb/node-api` runs the server tests. Keep it on the same DuckDB release line as the WASM core, so that the tests exercise the engine the browser runs.
-- After a `@duckdb/node-api` bump, `vitest-global-setup-server.ts` installs the native `spatial` extension into `~/.duckdb/extensions/<version>/` at the start of the first server run. Without network access to `extensions.duckdb.org` that setup fails: download the extension for the platform by hand and `INSTALL` it from the local file.
+- After a `@duckdb/node-api` bump, `vitest-global-setup-server.ts` installs the native `spatial` and `sqlite_scanner` extensions into `~/.duckdb/extensions/<version>/` at the start of the first server run. Without network access to `extensions.duckdb.org` that setup fails: download the extensions for the platform by hand and `INSTALL` them from the local files.
 
 ## Other pins
 

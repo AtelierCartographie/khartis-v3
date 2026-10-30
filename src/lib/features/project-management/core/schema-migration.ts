@@ -18,7 +18,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // No-op on purpose: each bump fences off builds that would drop saved state on
 // save (3.10.0: imported basemap sources, 3.11.0: tabular archive layers,
-// 3.12.0: enrichment snapshots, 3.13.0: manual label positions).
+// 3.12.0: enrichment snapshots, 3.13.0: manual label positions, 3.14.0:
+// per-facet fill variables, 3.15.0: origin of joined columns).
 export const schemaMigrations: readonly SchemaMigration[] = [
   {
     from: '3.9.0',
@@ -38,6 +39,16 @@ export const schemaMigrations: readonly SchemaMigration[] = [
   {
     from: '3.12.0',
     to: '3.13.0',
+    migrate: (data) => ({ ...data })
+  },
+  {
+    from: '3.13.0',
+    to: '3.14.0',
+    migrate: (data) => ({ ...data })
+  },
+  {
+    from: '3.14.0',
+    to: '3.15.0',
     migrate: (data) => ({ ...data })
   }
 ];

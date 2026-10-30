@@ -6,6 +6,12 @@
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import {
+    findAttachedDataset,
+    findDatasetAttachment,
+    listVisualizableDatasets
+  } from '$lib/features/commons/utils/dataset-attachment.utils';
   import {
     getVisualizationOriginMode,
     visualizationStore
@@ -58,8 +64,18 @@
   let selectedSuggestionKey = $state<string | undefined>(undefined);
   let clearedSuggestion = $state<ClearedSuggestion | undefined>(undefined);
 
+  // A table joined into a geo file is visualized from that file.
+  const visualizableDatasets = $derived(
+    listVisualizableDatasets(
+      datasetsStore.datasets,
+      projectStore.currentProject?.data?.sourceFiles,
+      (datasetId) =>
+        visualizationStore.getVisualizationsByDataset(datasetId).length > 0
+    )
+  );
+
   const datasetItems = $derived.by(() =>
-    datasetsStore.datasets.map((ds, id) => ({
+    visualizableDatasets.map((ds, id) => ({
       id,
       text: ds.name,
       datasetId: ds.id
@@ -330,13 +346,24 @@
   });
 
   $effect(() => {
-    const datasets = datasetsStore.datasets;
+    const datasets = visualizableDatasets;
     if (!datasets.length) {
       return;
     }
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
-      selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
+      const current = datasetsStore.selectedDataset;
+      const attachedGeoDataset = findAttachedDataset(
+        datasets,
+        findDatasetAttachment(
+          projectStore.currentProject?.data?.sourceFiles,
+          current
+        )
+      );
+      selectedDatasetId =
+        attachedGeoDataset?.id ??
+        (datasets.some((ds) => ds.id === current?.id) ? current?.id : null) ??
+        datasets[0].id;
       visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
       selectedSuggestionKey = undefined;
     }

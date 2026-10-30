@@ -58,8 +58,9 @@ l'utilisateur a déplacée.
 
 `processBasemapImport` lit le fichier avec le même lecteur que les jeux de
 données (`readFileIntoTable` du pipeline) : mêmes formats, même normalisation
-GeoParquet, même CRS source, même repli navigateur pour les GeoPackages. Un
-shapefile zippé est décompressé avant lecture ; un `.shp` isolé est refusé.
+GeoParquet, même CRS source, même lecture des GeoPackages par l'extension
+`sqlite_scanner`. Un shapefile zippé est décompressé avant lecture ; un `.shp`
+isolé est refusé.
 
 Le fond reçoit ensuite ce qui lui est propre : une colonne de géométrie nommée
 `geom`, l'identifiant `__feature_id__` de la jointure et la table d'attributs de
@@ -109,8 +110,20 @@ tables sœurs :
 | `…__outerlines` | `extract_outerlines` | contour extérieur, calculé à partir de `__land` |
 | `…__innerlines` | `extract_innerlines` | limites internes partagées                      |
 
-La dérivation est relancée après une simplification. Un fond linéaire ne reçoit
-qu'une table de points représentatifs.
+Sur une couverture valide, `extract_coverage_land` et
+`extract_coverage_innerlines` évitent la dissolution, et le contour est le bord
+du territoire (`extract_coverage_outerlines`).
+
+Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
+arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
+connexion, puis les `__centroids` par lots : la création du projet ouvre
+l'étape Données sans les attendre, et le rendu dessine chaque couche quand sa
+table est prête (`waitForTableBuild`). Une requête lancée pendant une étape de
+la dérivation attend sa fin, DuckDB WASM ne l'interrompt pas.
+
+La dérivation est relancée après une simplification, qui attend d'abord une
+dérivation en cours. Un fond linéaire ne reçoit qu'une table de points
+représentatifs.
 
 - **Elle n'est jamais destructrice** : la table source reste intacte.
 - **GEOS WASM est plus strict que le natif** et refuse de dissoudre certaines
@@ -205,6 +218,23 @@ dessin (territoire principal, encarts) avec leur propre cadrage et ordre de
 couches. Les projections non identitaires peuvent ajouter un masque ou un
 contour de sphère, à vérifier avec les couches thématiques, pas seulement sur
 un fond vide.
+
+### Fichier déjà projeté
+
+Un fichier géographique importé dans un CRS projeté (Lambert-93, UTM…) garde
+ses coordonnées. Sans projection choisie, il est dessiné tel quel ; l'outil
+Projection reconnaît alors la suggestion qui porte le même code EPSG, la nomme
+comme projection courante et coche sa carte. Choisir cette suggestion revient au
+rendu d'origine, sans aucune transformation.
+
+Toute autre projection passe par le WGS84, sans que l'utilisateur le voie : une
+projection d3 ne prend que des longitudes et latitudes. Le jeu de données est
+relu par `ST_Transform` vers EPSG:4326, et le fond qui en dérive (territoire,
+limites, centroïdes) l'est aussi : `basemapService` sert une variante WGS84 du
+fond, avec sa propre emprise, tant que la projection ou le moteur tuilé
+l'exige. Tant que les tables WGS84 ne sont pas arrivées, la table encore en CRS
+source n'est ni dessinée ni mesurée, et une emprise hors longitude et latitude
+n'ajuste jamais une projection d3.
 
 ### Orientation intrinsèque
 

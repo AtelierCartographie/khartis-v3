@@ -3,7 +3,11 @@ export { default as ToolContainer } from './tools/tool-container.svelte';
 export { default as ToolPopover } from './tool-popover.svelte';
 export * from './fonts.constants';
 export { annotationsActions } from './tools/annotations';
-export { getLegendState, legendActions } from './tools/legend';
+export {
+  getLegendState,
+  legendActions,
+  requestLegendItemFocus
+} from './tools/legend';
 export {
   closeSelectedToolPanel,
   selectTool

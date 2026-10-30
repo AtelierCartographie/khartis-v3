@@ -27,7 +27,8 @@ import {
   findPaletteById,
   generateCategoricalColorsFromSeed,
   generatePaletteColors,
-  PALETTE_TYPE
+  PALETTE_TYPE,
+  resolvePaletteForType
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
@@ -302,17 +303,8 @@ export function resolveClassificationColors({
       userPalette &&
       (!ignorePatternPalette || userPalette.type !== PALETTE_TYPE.PATTERN)
     ) {
-      const effectivePalette =
-        paletteType === PALETTE_TYPE.DIVERGING &&
-        userPalette.type === PALETTE_TYPE.SEQUENTIAL
-          ? {
-              ...userPalette,
-              type: PALETTE_TYPE.DIVERGING,
-              colors: [userPalette.colors[userPalette.colors.length - 1]]
-            }
-          : userPalette;
       colors = generatePaletteColors(
-        effectivePalette,
+        resolvePaletteForType(userPalette, paletteType),
         resolvedClassCount,
         contrast,
         undefined,

@@ -8,6 +8,7 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import {
@@ -27,7 +28,10 @@
     ChevronLeft,
     ChevronRight,
     Copy,
+    DataTable,
     Edit,
+    Link,
+    Map as MapIcon,
     OverflowMenuVertical,
     TrashCan
   } from 'carbon-icons-svelte';
@@ -89,6 +93,23 @@
   ): { id: string; name: string } | undefined {
     const datasets = getDatasetsForTab(sourceFileId);
     return datasets.find((d) => d.isSelected) ?? datasets[0];
+  }
+
+  function getTabAttachment(sourceFileId: string) {
+    return findDatasetAttachment(
+      projectStore.currentProject?.data?.sourceFiles,
+      {
+        sourceFileId
+      }
+    );
+  }
+
+  function isGeographicTab(sourceFileId: string): boolean {
+    const datasetId = getSelectedDatasetForTab(sourceFileId)?.id;
+    return Boolean(
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+        ?.geometry
+    );
   }
 
   function getDatasetSourceFileId(datasetId: string): string | undefined {
@@ -604,12 +625,17 @@
     return { name, extension };
   };
 
+  // Cut in the middle: files of one project often share a prefix and differ
+  // by their end ("communes-2024" and "communes-2024-population").
   const truncateFileName = (
     name: string,
     maxLength: number = UI_CONSTANTS.TRUNCATE_FILE_NAME_MAX_LENGTH
   ): string => {
     if (name.length <= maxLength) return name;
-    return name.slice(0, maxLength - 3) + m.toolbar_tab_ellipsis();
+    const ellipsis = m.toolbar_tab_ellipsis();
+    const kept = maxLength - ellipsis.length;
+    const head = Math.ceil(kept / 2);
+    return name.slice(0, head) + ellipsis + name.slice(-(kept - head));
   };
 </script>
 
@@ -742,6 +768,13 @@
           datasetCount > 1 && selectedDataset
             ? selectedDataset.name
             : fileInfo.name}
+        {@const isGeographic = isGeographicTab(dataButton.id)}
+        {@const attachment = getTabAttachment(dataButton.id)}
+        {@const kindLabel = isGeographic
+          ? m.toolbar_tab_kind_geographic()
+          : attachment
+            ? m.toolbar_tab_kind_attached({ name: attachment.datasetName })
+            : m.toolbar_tab_kind_tabular()}
         <div
           class="tab-button-wrapper with-menu"
           class:selected={dataButton.isSelected}
@@ -753,9 +786,17 @@
             on:click={() =>
               handleTabClick(dataButton.id, dataButton.isSelected)}
             class="tab-button"
-            title={displayName}
+            title={`${kindLabel}${m.aria_label_separator()}${displayName}`}
+            aria-label={`${kindLabel}${m.aria_label_separator()}${displayName}`}
           >
             <div class="tab-content">
+              {#if isGeographic}
+                <MapIcon size={16} aria-hidden="true" class="tab-kind-icon" />
+              {:else if attachment}
+                <Link size={16} aria-hidden="true" class="tab-kind-icon" />
+              {:else}
+                <DataTable size={16} aria-hidden="true" class="tab-kind-icon" />
+              {/if}
               {#if editingTabId === dataButton.id}
                 <input
                   type="text"
@@ -1053,6 +1094,10 @@
     padding-right: var(--cds-spacing-02);
     min-width: 0;
     overflow: hidden;
+  }
+
+  .tab-content :global(.tab-kind-icon) {
+    flex-shrink: 0;
   }
 
   .tab-label {

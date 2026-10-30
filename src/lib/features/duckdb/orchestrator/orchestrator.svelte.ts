@@ -44,6 +44,7 @@ import {
   type GPSColumns,
   type SearchStats
 } from '../types';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import { isMissingDuckTableError } from '../utils/duckdb-error.utils';
 
 import * as arrowOps from './arrow-ops';
@@ -344,6 +345,92 @@ function applyPersistedTableFilters(): void {
   pendingPersistedTableFilters = serializePersistedTableFilters();
 }
 
+// The extent is reprojected row by row (about 1 s on 374 k polygons) and the
+// basemap suggestions ask for it again each time the catalog grows.
+const geometryExtentByTable = new Map<
+  string,
+  Promise<[number, number, number, number] | null>
+>();
+registerTableMutationCallback((table) => geometryExtentByTable.delete(table));
+
+async function computeGeometryExtent(
+  tableName: string,
+  datasetId: string
+): Promise<[number, number, number, number] | null> {
+  try {
+    const tableInfo = await Duck.describe_table(tableName);
+    const geometryIndex = tableInfo.type.findIndex((type) =>
+      isGeometryColumnType(type)
+    );
+    if (geometryIndex === -1) {
+      return null;
+    }
+    const geometryColumn = tableInfo.name[geometryIndex];
+
+    const escapedTable = escapeIdentifier(tableName);
+    const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+
+    // The suggester ranks projections for a WGS84 bbox. Reproject the geometry
+    // through PROJ (ST_Transform) when its source CRS is not already EPSG:4326,
+    // keeping the bounds path on the bundled PROJ engine instead of the
+    // hand-maintained proj4 definition list.
+    const sourceCrs =
+      tableInfo.type[geometryIndex].match(/\(\s*'([^']+)'\s*\)/)?.[1] ?? null;
+    const geometryExpression =
+      sourceCrs && !/^epsg:4326$/i.test(sourceCrs)
+        ? `ST_Transform("${escapedGeometryColumn}", '${escapeSqlString(
+            sourceCrs
+          )}', 'EPSG:4326', true)`
+        : `"${escapedGeometryColumn}"`;
+
+    const rows = (await Duck.query(
+      `WITH __extent_geom AS (
+         SELECT ${geometryExpression} AS geom
+         FROM "${escapedTable}"
+         WHERE "${escapedGeometryColumn}" IS NOT NULL
+       )
+       SELECT
+         MIN(ST_XMin(geom)) AS minx,
+         MIN(ST_YMin(geom)) AS miny,
+         MAX(ST_XMax(geom)) AS maxx,
+         MAX(ST_YMax(geom)) AS maxy
+       FROM __extent_geom`,
+      { format: 'array' }
+    )) as Array<{
+      minx: number | null;
+      miny: number | null;
+      maxx: number | null;
+      maxy: number | null;
+    }>;
+    const row = rows[0];
+    if (
+      !row ||
+      row.minx == null ||
+      row.miny == null ||
+      row.maxx == null ||
+      row.maxy == null
+    ) {
+      return null;
+    }
+    return [
+      Number(row.minx),
+      Number(row.miny),
+      Number(row.maxx),
+      Number(row.maxy)
+    ];
+  } catch (error) {
+    logger.warn('Failed to compute geometry extent', LogCategory.DUCKDB, {
+      error,
+      flow: 'geometry_extent',
+      extra: {
+        datasetId,
+        tableName
+      }
+    });
+    return null;
+  }
+}
+
 export const duckDBOrchestrator = {
   get datasetsVersion(): number {
     return state.getDatasetsVersion();
@@ -555,6 +642,120 @@ export const duckDBOrchestrator = {
     }
 
     return joinOps.runFullFuzzyPass(dataset, geoColumn, Duck);
+  },
+
+  /** Target of a table-to-table join; rebuild it when its table changes. */
+  async prepareTableJoinTarget(
+    input: joinOps.TableJoinTargetInput
+  ): Promise<joinOps.JoinTarget> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.prepareTableJoinTarget(Duck, input);
+  },
+
+  async computeTableJoinStats(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options?: joinOps.JoinGradingOptions
+  ): Promise<JoinQuality> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.computeTargetJoinStats(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinedEntitiesPage(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options: joinOps.JoinedEntitiesPageOptions
+  ): Promise<JoinedEntity[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getTargetJoinedEntitiesPage(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinedTargetValues(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget,
+    options?: joinOps.JoinGradingOptions
+  ): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getTargetJoinedValues(
+      { tableName: sourceTableName },
+      target,
+      sourceColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getTableJoinTargetValues(
+    target: joinOps.JoinTarget
+  ): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getJoinTargetValues(Duck, target);
+  },
+
+  async estimateTableJoinFuzzyPass(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget
+  ): Promise<joinOps.JoinFuzzyPassEstimate> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.estimateJoinFuzzyPass(
+      { tableName: sourceTableName },
+      sourceColumn,
+      Duck,
+      target.attributesTable
+    );
+  },
+
+  async runTableFullFuzzyPass(
+    sourceTableName: string,
+    sourceColumn: string,
+    target: joinOps.JoinTarget
+  ): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.runFullFuzzyPass(
+      { tableName: sourceTableName },
+      sourceColumn,
+      Duck,
+      target.attributesTable
+    );
+  },
+
+  async createEnrichedTable(
+    input: joinOps.EnrichedTableInput
+  ): Promise<joinOps.JoinedColumnName[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.createEnrichedTable(Duck, input);
   },
 
   async applyJoinCorrections(
@@ -856,78 +1057,16 @@ export const duckDBOrchestrator = {
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset || !dataset.tableName) return null;
 
-    try {
-      const tableInfo = await Duck.describe_table(dataset.tableName);
-      const geometryIndex = tableInfo.type.findIndex((type) =>
-        isGeometryColumnType(type)
-      );
-      if (geometryIndex === -1) {
-        return null;
-      }
-      const geometryColumn = tableInfo.name[geometryIndex];
+    const tableName = dataset.tableName;
+    const cached = geometryExtentByTable.get(tableName);
+    if (cached) return cached;
 
-      const escapedTable = escapeIdentifier(dataset.tableName);
-      const escapedGeometryColumn = escapeIdentifier(geometryColumn);
-
-      // The suggester ranks projections for a WGS84 bbox. Reproject the geometry
-      // through PROJ (ST_Transform) when its source CRS is not already EPSG:4326,
-      // keeping the bounds path on the bundled PROJ engine instead of the
-      // hand-maintained proj4 definition list.
-      const sourceCrs =
-        tableInfo.type[geometryIndex].match(/\(\s*'([^']+)'\s*\)/)?.[1] ?? null;
-      const geometryExpression =
-        sourceCrs && !/^epsg:4326$/i.test(sourceCrs)
-          ? `ST_Transform("${escapedGeometryColumn}", '${escapeSqlString(
-              sourceCrs
-            )}', 'EPSG:4326', true)`
-          : `"${escapedGeometryColumn}"`;
-
-      const rows = (await Duck.query(
-        `WITH __extent_geom AS (
-           SELECT ${geometryExpression} AS geom
-           FROM "${escapedTable}"
-           WHERE "${escapedGeometryColumn}" IS NOT NULL
-         )
-         SELECT
-           MIN(ST_XMin(geom)) AS minx,
-           MIN(ST_YMin(geom)) AS miny,
-           MAX(ST_XMax(geom)) AS maxx,
-           MAX(ST_YMax(geom)) AS maxy
-         FROM __extent_geom`,
-        { format: 'array' }
-      )) as Array<{
-        minx: number | null;
-        miny: number | null;
-        maxx: number | null;
-        maxy: number | null;
-      }>;
-      const row = rows[0];
-      if (
-        !row ||
-        row.minx == null ||
-        row.miny == null ||
-        row.maxx == null ||
-        row.maxy == null
-      ) {
-        return null;
-      }
-      return [
-        Number(row.minx),
-        Number(row.miny),
-        Number(row.maxx),
-        Number(row.maxy)
-      ];
-    } catch (error) {
-      logger.warn('Failed to compute geometry extent', LogCategory.DUCKDB, {
-        error,
-        flow: 'geometry_extent',
-        extra: {
-          datasetId,
-          tableName: dataset.tableName
-        }
-      });
-      return null;
+    const extent = computeGeometryExtent(tableName, datasetId);
+    geometryExtentByTable.set(tableName, extent);
+    if (!(await extent) && geometryExtentByTable.get(tableName) === extent) {
+      geometryExtentByTable.delete(tableName);
     }
+    return extent;
   },
 
   async getGeometryPerFeatureBounds(

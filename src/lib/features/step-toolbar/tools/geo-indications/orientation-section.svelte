@@ -42,6 +42,7 @@
   showToggle={true}
   toggleChecked={geoState.orientation.enabled}
   onToggleChange={() => store.toggleOrientation()}
+  scrollIntoViewOnOpen
 >
   <div class="section-content">
     <p class="orientation-center-note">

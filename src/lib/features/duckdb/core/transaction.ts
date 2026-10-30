@@ -2,6 +2,7 @@ import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
+import { trackQuery } from './query-activity';
 
 function createTransactionMutex() {
   const queue: Array<() => void> = [];
@@ -52,12 +53,12 @@ export async function runInTransaction(
   await transactionMutex.acquire();
 
   try {
-    await connection.query('BEGIN TRANSACTION;');
+    await trackQuery(() => connection.query('BEGIN TRANSACTION;'));
     try {
       await callback();
-      await connection.query('COMMIT;');
+      await trackQuery(() => connection.query('COMMIT;'));
     } catch (error) {
-      await connection.query('ROLLBACK;');
+      await trackQuery(() => connection.query('ROLLBACK;'));
       if (options.logRollback !== false) {
         logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
           context,

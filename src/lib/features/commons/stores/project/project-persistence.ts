@@ -1,4 +1,5 @@
 import {
+  type KhartisProject,
   ProjectStorageKey,
   projectFiles,
   projectRepository,
@@ -109,6 +110,16 @@ function mergePersistedSourceFile(
   };
 }
 
+function keepStoredAssetRefs(
+  project: KhartisProject,
+  storedFiles: UploadedFile[]
+): void {
+  const storedById = new Map(storedFiles.map((file) => [file.id, file]));
+  project.data.sourceFiles = project.data.sourceFiles.map((file) =>
+    mergePersistedSourceFile(file, storedById.get(file.id))
+  );
+}
+
 let mergedSourceFilesSignature: string | null = null;
 
 function computeSourceFilesSignature(
@@ -199,11 +210,13 @@ export async function saveCurrentProject(
       captureMapThumbnailThrottled(container._state.currentProject.id)
         ?.dataUrl ?? options.fallbackThumbnail;
 
+    const savedProject = container._state.currentProject;
     await projectRepository.save(
-      container._state.currentProject,
+      savedProject,
       thumbnail,
       options.exampleId,
-      projectSize
+      projectSize,
+      (storedFiles) => keepStoredAssetRefs(savedProject, storedFiles)
     );
     persistenceRegistry.markClean(saveGeneration);
     container._state.isDirty = persistenceRegistry.isDirty;

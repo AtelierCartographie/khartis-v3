@@ -7,7 +7,7 @@ import type {
 
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
-const state = $state({ version: 0 });
+const state = $state({ version: 0, pendingParses: 0 });
 
 export const WORKER_PARSE_TIMEOUT_MS = 30_000;
 
@@ -17,6 +17,21 @@ export function trackWorkerParseVersion(): number {
 
 export function bumpWorkerParseVersion(): void {
   state.version += 1;
+}
+
+export function hasPendingWorkerParse(): boolean {
+  return state.pendingParses > 0;
+}
+
+// Parses are requested while the layers are computed, where state cannot be
+// written: the count moves on the next microtask.
+export function trackPendingWorkerParse<T>(parse: Promise<T>): Promise<T> {
+  queueMicrotask(() => {
+    state.pendingParses += 1;
+  });
+  return parse.finally(() => {
+    state.pendingParses -= 1;
+  });
 }
 
 let client: ParseWorkerClient | null = null;
