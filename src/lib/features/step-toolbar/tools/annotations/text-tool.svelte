@@ -42,6 +42,10 @@
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
   import { getTextAnnotationName } from './_shared/annotation-name';
   import SelectionHeader from './_shared/selection-header.svelte';
+  import {
+    getPageElementPlaceholder,
+    hasPageElementDefaultWording
+  } from './annotations-placeholders.utils';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -62,9 +66,19 @@
     annotationsActions.applyStyle({ textAlign: align });
   }
 
+  // A page text still at its default wording shows it as the field's hint,
+  // so that typing writes the text instead of editing « Ajouter un titre ».
+  const selectedPlaceholder = $derived(
+    selectedText && hasPageElementDefaultWording(selectedText)
+      ? String(selectedText.content)
+      : null
+  );
+
   const textEditorValue = $derived(
     selectedText
-      ? String(selectedText.content ?? '')
+      ? selectedPlaceholder
+        ? ''
+        : String(selectedText.content ?? '')
       : annotationsState.textContent
   );
 
@@ -89,7 +103,14 @@
   function handleContentInput(e: Event) {
     const value = (e.currentTarget as HTMLTextAreaElement).value;
     if (selectedText) {
-      annotationsActions.updateAnnotation(selectedText.id, { content: value });
+      // A cleared page text goes back to its placeholder.
+      const placeholder =
+        value === '' && selectedText.role
+          ? getPageElementPlaceholder(selectedText.role)
+          : null;
+      annotationsActions.updateAnnotation(selectedText.id, {
+        content: placeholder ?? value
+      });
     } else {
       annotationsActions.setTextContent(value);
     }
@@ -204,7 +225,9 @@
           labelText={m.annotations_content()}
           value={textEditorValue}
           on:input={handleContentInput}
-          placeholder={selectedText ? '' : m.annotations_no_content()}
+          placeholder={selectedText
+            ? (selectedPlaceholder ?? '')
+            : m.annotations_no_content()}
           rows={5}
         />
       </div>
