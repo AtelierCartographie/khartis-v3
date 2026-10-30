@@ -3,7 +3,6 @@ packages:
 
 onlyBuiltDependencies:
   - '@ateliercartographie/geoarrow-deck-stream'
-  - '@ateliercartographie/label-placer'
   - '@ateliercartographie/proj-suggest'
   - esbuild
   - onnxruntime-node
