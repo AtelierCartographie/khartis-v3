@@ -9,7 +9,7 @@
     Row,
     Slider
   } from 'carbon-components-svelte';
-  import { TrashCan, Upload } from 'carbon-icons-svelte';
+  import { Upload } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -21,6 +21,7 @@
     MAX_ANNOTATION_IMAGE_SIZE_BYTES,
     SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS
   } from './image-file-validation';
+  import SelectionHeader from './_shared/selection-header.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -35,6 +36,12 @@
   const effectiveStyle = $derived(
     selectedImageAnnotation?.style ?? defaultStyle
   );
+
+  function deleteSelectedImage(): void {
+    if (selectedImageAnnotation) {
+      annotationsActions.removeAnnotation(selectedImageAnnotation.id);
+    }
+  }
 
   let hiddenUploader: HTMLDivElement | null = null;
   let imageImportError = $state<string | null>(null);
@@ -134,6 +141,21 @@
   <Row>
     <Column>
       <div class="section">
+        <SelectionHeader
+          title={selectedImageAnnotation
+            ? m.annotations_selected_image()
+            : m.annotations_new_image()}
+          name={selectedImageAnnotation ? m.annotations_image() : undefined}
+          deleteLabel={m.annotations_delete_image()}
+          ondelete={selectedImageAnnotation ? deleteSelectedImage : undefined}
+        />
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
         <Slider
           labelText={m.annotations_size()}
           value={effectiveStyle.size || 200}
@@ -165,34 +187,6 @@
           minLabel=""
           maxLabel=""
         />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        {#if annotationsState.selectedId}
-          {@const selected = annotationsState.items.find(
-            (i) => i.id === annotationsState.selectedId
-          )}
-          <Button
-            size="field"
-            kind="danger-tertiary"
-            icon={TrashCan}
-            disabled={!selected || selected.type !== AnnotationKind.IMAGE}
-            onclick={() =>
-              selected &&
-              selected.type === AnnotationKind.IMAGE &&
-              annotationsActions.removeAnnotation(selected.id)}
-          >
-            {m.annotations_delete_image()}
-          </Button>
-        {:else}
-          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled>
-            {m.annotations_delete_image()}
-          </Button>
-        {/if}
       </div>
     </Column>
   </Row>

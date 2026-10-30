@@ -33,14 +33,15 @@
     TextAlignRight,
     TextBold,
     TextItalic,
-    TextUnderline,
-    TrashCan
+    TextUnderline
   } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
+  import { getTextAnnotationName } from './_shared/annotation-name';
+  import SelectionHeader from './_shared/selection-header.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -66,6 +67,13 @@
       ? String(selectedText.content ?? '')
       : annotationsState.textContent
   );
+
+  function deleteSelectedText(): void {
+    if (selectedText) {
+      annotationsActions.removeAnnotation(selectedText.id);
+    }
+  }
+
   function handleAddText() {
     if (textEditorValue.trim().length === 0) {
       const textarea = document.getElementById(
@@ -169,6 +177,21 @@
           {m.annotations_add_text()}
         </Button>
         <p class="helper">{m.annotations_add_text_description()}</p>
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
+        <SelectionHeader
+          title={selectedText
+            ? m.annotations_selected_text()
+            : m.annotations_new_text()}
+          name={selectedText ? getTextAnnotationName(selectedText) : undefined}
+          deleteLabel={m.annotations_delete_text()}
+          ondelete={selectedText ? deleteSelectedText : undefined}
+        />
       </div>
     </Column>
   </Row>
@@ -434,24 +457,6 @@
       </div>
     </Column>
   </Row>
-
-  <Row>
-    <Column>
-      <div class="section delete-section">
-        <Button
-          size="field"
-          kind="danger-tertiary"
-          icon={TrashCan}
-          disabled={!selectedText}
-          onclick={() =>
-            selectedText &&
-            annotationsActions.removeAnnotation(selectedText.id)}
-        >
-          {m.annotations_delete_text()}
-        </Button>
-      </div>
-    </Column>
-  </Row>
 </Grid>
 
 <style>
@@ -547,10 +552,5 @@
   .bg-color-col {
     flex: 1;
     min-width: 0;
-  }
-
-  .delete-section :global(.bx--btn) {
-    width: 100%;
-    max-width: 100%;
   }
 </style>
