@@ -149,4 +149,32 @@
     flex-shrink: 0;
     color: inherit;
   }
+
+  /* Compact density shrinks the 24px fields around the badge; the badge
+     follows so it stays inside them. Same breakpoint as density.css. */
+  @media (min-width: 1024px) {
+    :global(:root[data-density='compact']) .variable-badge {
+      height: 16px;
+    }
+
+    :global(:root[data-density='compact']) .badge-label {
+      font-size: 11px;
+      line-height: 14px;
+      letter-spacing: 0.16px;
+      padding: 0 4px 0 6px;
+    }
+
+    :global(:root[data-density='compact']) .badge-divider {
+      height: 10px;
+    }
+
+    :global(:root[data-density='compact']) .badge-icon {
+      transform: scale(0.65);
+      padding: 0 2px 0 0;
+    }
+
+    :global(:root[data-density='compact']) .badge-icon-text {
+      font-size: 8px;
+    }
+  }
 </style>

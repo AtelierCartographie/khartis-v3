@@ -324,7 +324,36 @@
     });
   }
 
-  function scheduleLayerUpdate(source?: string): void {
+  function runLayerUpdate(source?: string): void {
+    if (
+      !mapInit.isMapLoaded ||
+      isSwitchingViewMode ||
+      mapBasemap.isStyleLoading
+    ) {
+      return;
+    }
+
+    if (
+      mapInit.viewMode === ViewMode.MAPLIBRE &&
+      mapInit.map &&
+      !mapInit.map.isStyleLoaded()
+    ) {
+      pendingLayerUpdate = true;
+      queueStyleIdleRetry(source);
+      return;
+    }
+
+    mapLoadingStore.setUpdatingLayers(true);
+    mapLayers.updateLayers(tables, splitData, densityTables);
+    requestAnimationFrame(() => {
+      mapLoadingStore.setUpdatingLayers(false);
+    });
+  }
+
+  function scheduleLayerUpdate(
+    source?: string,
+    options: { immediate?: boolean } = {}
+  ): void {
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
       pendingLayerUpdate = true;
       return;
@@ -341,32 +370,15 @@
     }
     if (layerUpdateTimeoutId) {
       clearTimeout(layerUpdateTimeoutId);
+      layerUpdateTimeoutId = null;
+    }
+    if (options.immediate) {
+      runLayerUpdate(source);
+      return;
     }
     layerUpdateTimeoutId = setTimeout(() => {
       layerUpdateTimeoutId = null;
-      if (
-        !mapInit.isMapLoaded ||
-        isSwitchingViewMode ||
-        mapBasemap.isStyleLoading
-      ) {
-        return;
-      }
-
-      if (
-        mapInit.viewMode === ViewMode.MAPLIBRE &&
-        mapInit.map &&
-        !mapInit.map.isStyleLoaded()
-      ) {
-        pendingLayerUpdate = true;
-        queueStyleIdleRetry(source);
-        return;
-      }
-
-      mapLoadingStore.setUpdatingLayers(true);
-      mapLayers.updateLayers(tables, splitData, densityTables);
-      requestAnimationFrame(() => {
-        mapLoadingStore.setUpdatingLayers(false);
-      });
+      runLayerUpdate(source);
     }, MAP_TIMING.LAYER_UPDATE_DEBOUNCE_MS);
   }
 
@@ -1452,7 +1464,10 @@
             );
           }
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-          scheduleLayerUpdate('effect:canvasResize');
+          // The resized canvas is redrawn on the next frame, with the
+          // rescaled view: its layers must carry the new page scale by then,
+          // or that frame shows the map misplaced over the page (a flash).
+          scheduleLayerUpdate('effect:canvasResize', { immediate: true });
           if (mapInstanceStore.hasPendingOrthographicRestore) {
             mapInstanceStore.fitToOrthographicBounds();
           }

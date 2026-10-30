@@ -549,62 +549,64 @@
       }}
     />
 
-    {#if !isCoordinatesMode && suggestedColumn() && !hasNoGeographicColumn}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        title={m.geo_notification_title()}
-        subtitle={m.geo_notification_subtitle()}
-        kind="info"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+    <div class="kh-notification-stack">
+      {#if !isCoordinatesMode && suggestedColumn() && !hasNoGeographicColumn}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          title={m.geo_notification_title()}
+          subtitle={m.geo_notification_subtitle()}
+          kind="info"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
 
-    {#if !isCoordinatesMode && hasNoGeographicColumn}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        title={m.warning_no_geo_column_title()}
-        subtitle={m.warning_no_geo_column_message()}
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+      {#if !isCoordinatesMode && hasNoGeographicColumn}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          title={m.warning_no_geo_column_title()}
+          subtitle={m.warning_no_geo_column_message()}
+          kind="warning"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
 
-    {#if isCoordinatesMode && latitudeColumns().length > 0 && longitudeColumns().length > 0}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        title={m.geo_notification_title()}
-        subtitle={m.geo_coords_detected_subtitle()}
-        kind="info"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+      {#if isCoordinatesMode && latitudeColumns().length > 0 && longitudeColumns().length > 0}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          title={m.geo_notification_title()}
+          subtitle={m.geo_coords_detected_subtitle()}
+          kind="info"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
 
-    {#if !isCoordinatesMode && suggestedColumn() && hasCategorizedOrNonUnique}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        title={m.geo_attention_categorized_title()}
-        subtitle={m.geo_attention_categorized_subtitle()}
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+      {#if !isCoordinatesMode && suggestedColumn() && hasCategorizedOrNonUnique}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          title={m.geo_attention_categorized_title()}
+          subtitle={m.geo_attention_categorized_subtitle()}
+          kind="warning"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
 
-    {#if isCoordinatesMode && gpsValidation?.warning}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        title={gpsValidation.possibleInversion
-          ? m.geo_coords_inversion_detected()
-          : m.warning_title()}
-        subtitle={gpsValidation.warning}
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+      {#if isCoordinatesMode && gpsValidation?.warning}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          title={gpsValidation.possibleInversion
+            ? m.geo_coords_inversion_detected()
+            : m.warning_title()}
+          subtitle={gpsValidation.warning}
+          kind="warning"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
+    </div>
 
     <Link href={DOC_LINK.GEOLOCATE_DATA} target="_blank">
       {m.geo_learn_more_geocoding()}

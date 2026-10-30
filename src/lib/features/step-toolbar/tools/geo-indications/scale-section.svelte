@@ -143,6 +143,7 @@
 <ExpandableSection
   title={m.geo_scale()}
   description={scaleDisabledReason}
+  scrollIntoViewOnOpen
   defaultOpen={geoState.scale.expanded}
   showToggle={true}
   toggleChecked={geoState.scale.enabled && !isScaleDisabled}

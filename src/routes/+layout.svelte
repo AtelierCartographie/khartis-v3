@@ -81,6 +81,14 @@
   let { children } = $props();
   let isLoading = $state(true);
   let pendingKhImport = $state<PendingKhImport | null>(null);
+  // The room the side panel takes once its change has settled; the
+  // workspace leaves it at once (see the main rule below).
+  const sidePanelSpace = $derived(
+    globalState.isMobileView || globalState.selectedStep === ToolbarStep.Styling
+      ? 'none'
+      : globalState.toolbarState
+  );
+
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
 
@@ -428,7 +436,10 @@
 
   <KeyboardShortcuts />
 
-  <main class:mobile-view={globalState.isMobileView}>
+  <main
+    class:mobile-view={globalState.isMobileView}
+    data-side-panel={sidePanelSpace}
+  >
     <h1 class="visually-hidden">{m.app_name()}</h1>
 
     {#if globalState.isCreateProjectModalOpen}
@@ -500,7 +511,29 @@
     display: flex;
     height: calc(100dvh - var(--cds-header-height));
     overflow: visible;
+    /* The side panel slides in from past the right edge: clipped there, it
+       gives the body nothing to scroll to when its content takes focus. */
+    overflow-x: clip;
     background-color: var(--cds-ui-01);
+  }
+
+  /* The side panel floats over the right edge and slides; the workspace
+     takes its final size at once, so the map is resized once per change
+     instead of on every frame of the panel's motion. */
+  main[data-side-panel='full'] {
+    --kh-side-panel-space: var(--kh-side-panel-full-width);
+  }
+
+  main[data-side-panel='compact'] {
+    --kh-side-panel-space: var(--kh-panel-w);
+  }
+
+  main[data-side-panel='collapsed'] {
+    --kh-side-panel-space: var(--kh-side-panel-collapsed-width);
+  }
+
+  main :global(> .main-content) {
+    margin-right: var(--kh-side-panel-space, 0px);
   }
 
   .visually-hidden {

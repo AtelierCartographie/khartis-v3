@@ -8,7 +8,11 @@
   import { Close } from 'carbon-icons-svelte';
   import { GeocodeSettings } from '../index';
   import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
-  import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
+  import type {
+    EntityValidation,
+    IgnoredEntity,
+    JoinedEntity
+  } from '$lib/features/commons/types/data-tab.types';
   import {
     ENRICHMENT_JOINED_PAGE_SIZE,
     type EnrichmentJoinView
@@ -18,8 +22,6 @@
     EnrichDataFieldItem,
     GeoFileColumnItem
   } from '../../utils/enrichment.utils';
-
-  type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
 
   interface Props {
     enrichmentDataset: DatasetResult;
@@ -54,13 +56,9 @@
     onMappingChange: (index: number, value: string) => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, targetValue: string) => void;
-    onIgnoreEntity?: (
-      dataValue: string,
-      source: IgnoreSource,
-      targetValue?: string
-    ) => void;
-    onValidateEntity?: (dataValue: string, targetValue: string) => void;
-    onRestoreEntity?: (dataValue: string) => void;
+    onIgnoreEntities?: (entries: IgnoredEntity[]) => void;
+    onValidateEntities?: (entries: EntityValidation[]) => void;
+    onRestoreEntities?: (dataValues: string[]) => void;
   }
 
   let {
@@ -90,9 +88,9 @@
     onMappingChange,
     onFinalizeJoin,
     onManualCorrection,
-    onIgnoreEntity,
-    onValidateEntity,
-    onRestoreEntity
+    onIgnoreEntities,
+    onValidateEntities,
+    onRestoreEntities
   }: Props = $props();
 
   function handleEnrichColumnSelect(id: number, columnName: string): void {
@@ -248,9 +246,9 @@
             onMappingChange={onMappingChange}
             onFinalizeJoin={onFinalizeJoin}
             onManualCorrection={onManualCorrection}
-            onIgnoreEntity={onIgnoreEntity}
-            onValidateEntity={onValidateEntity}
-            onRestoreEntity={onRestoreEntity}
+            onIgnoreEntities={onIgnoreEntities}
+            onValidateEntities={onValidateEntities}
+            onRestoreEntities={onRestoreEntities}
           />
 
           {#if isFinalizingJoin}

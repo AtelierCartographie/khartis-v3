@@ -12,7 +12,6 @@
     WatsonHealthScalpelSelect
   } from 'carbon-icons-svelte';
   import { selectTool } from './tool-list.utils.svelte';
-  import ToolsListContainer from './tools-list-container.svelte';
   import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
   import { untrack } from 'svelte';
   import { facetsStore } from '../tools/facets';
@@ -63,100 +62,98 @@
   }
 </script>
 
-<ToolsListContainer>
-  <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
-    <Row>
-      <Column>
-        <IconButton
-          kind="ghost"
-          iconDescription={m.tool_search()}
-          tooltipPosition="right"
-          icon={Search}
-          size="small"
-          isSelected={globalState.selectedTool === VisualizationTools.Search}
-          onclick={() => selectTool(VisualizationTools.Search)}
-        />
-      </Column>
-    </Row>
+<Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
+  <Row>
+    <Column>
+      <IconButton
+        kind="ghost"
+        iconDescription={m.tool_search()}
+        tooltipPosition="right"
+        icon={Search}
+        size="small"
+        isSelected={globalState.selectedTool === VisualizationTools.Search}
+        onclick={() => selectTool(VisualizationTools.Search)}
+      />
+    </Column>
+  </Row>
 
-    <Row>
-      <Column>
-        <IconButton
-          tooltipPosition="right"
-          kind="ghost"
-          iconDescription={m.tool_layers()}
-          icon={Layers}
-          size="small"
-          isSelected={globalState.selectedTool === VisualizationTools.Layers}
-          onclick={() => selectTool(VisualizationTools.Layers)}
-        />
-      </Column>
-    </Row>
+  <Row>
+    <Column>
+      <IconButton
+        tooltipPosition="right"
+        kind="ghost"
+        iconDescription={m.tool_layers()}
+        icon={Layers}
+        size="small"
+        isSelected={globalState.selectedTool === VisualizationTools.Layers}
+        onclick={() => selectTool(VisualizationTools.Layers)}
+      />
+    </Column>
+  </Row>
 
-    <Row>
-      <Column>
-        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <IconButton
-            tooltipPosition="right"
-            kind="ghost"
-            iconDescription={m.tool_projection()}
-            icon={Globe}
-            size="small"
-            isSelected={globalState.selectedTool ===
-              VisualizationTools.Projection}
-            onclick={handleProjectionClick}
-            aria-describedby={showProjectionBadge
-              ? 'projection-tool-badge'
-              : undefined}
-          />
-          {#if showProjectionBadge}
-            <span
-              id="projection-tool-badge"
-              class={CSS_CLASSES.NOTIFICATION_BADGE}
-              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-              ></span
-            >
-          {/if}
-        </div>
-      </Column>
-    </Row>
-
-    <Row>
-      <Column>
+  <Row>
+    <Column>
+      <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
         <IconButton
           tooltipPosition="right"
           kind="ghost"
-          iconDescription={m.tool_simplification()}
-          icon={WatsonHealthScalpelSelect}
+          iconDescription={m.tool_projection()}
+          icon={Globe}
           size="small"
           isSelected={globalState.selectedTool ===
-            VisualizationTools.Simplification}
-          onclick={() => selectTool(VisualizationTools.Simplification)}
+            VisualizationTools.Projection}
+          onclick={handleProjectionClick}
+          aria-describedby={showProjectionBadge
+            ? 'projection-tool-badge'
+            : undefined}
         />
-      </Column>
-    </Row>
+        {#if showProjectionBadge}
+          <span
+            id="projection-tool-badge"
+            class={CSS_CLASSES.NOTIFICATION_BADGE}
+            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+            ></span
+          >
+        {/if}
+      </div>
+    </Column>
+  </Row>
 
-    <Row>
-      <Column>
-        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <IconButton
-            tooltipPosition="right"
-            kind="ghost"
-            iconDescription={m.tool_facets()}
-            icon={GridIcon}
-            size="small"
-            isSelected={globalState.selectedTool === VisualizationTools.Facets}
-            onclick={handleFacetsClick}
-            aria-describedby={showFacetsBadge ? 'facets-tool-badge' : undefined}
-          />
-          {#if showFacetsBadge}
-            <span id="facets-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
-              ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-              ></span
-            >
-          {/if}
-        </div>
-      </Column>
-    </Row>
-  </Grid>
-</ToolsListContainer>
+  <Row>
+    <Column>
+      <IconButton
+        tooltipPosition="right"
+        kind="ghost"
+        iconDescription={m.tool_simplification()}
+        icon={WatsonHealthScalpelSelect}
+        size="small"
+        isSelected={globalState.selectedTool ===
+          VisualizationTools.Simplification}
+        onclick={() => selectTool(VisualizationTools.Simplification)}
+      />
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
+        <IconButton
+          tooltipPosition="right"
+          kind="ghost"
+          iconDescription={m.tool_facets()}
+          icon={GridIcon}
+          size="small"
+          isSelected={globalState.selectedTool === VisualizationTools.Facets}
+          onclick={handleFacetsClick}
+          aria-describedby={showFacetsBadge ? 'facets-tool-badge' : undefined}
+        />
+        {#if showFacetsBadge}
+          <span id="facets-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
+            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
+            ></span
+          >
+        {/if}
+      </div>
+    </Column>
+  </Row>
+</Grid>
