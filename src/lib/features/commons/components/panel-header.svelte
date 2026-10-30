@@ -14,12 +14,14 @@
 <header class="panel-header">
   <h3 class="panel-title">{title}</h3>
 
+  <!-- on:click, not onclick: a delegated onclick never reaches the windows
+       portaled out of the app root. -->
   <IconButton
     kind="ghost"
     size="small"
     iconDescription={closeLabel}
     icon={Close}
-    onclick={onclose}
+    on:click={onclose}
   />
 </header>
 
