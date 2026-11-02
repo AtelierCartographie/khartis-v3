@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
+
   let { children } = $props();
 </script>
 

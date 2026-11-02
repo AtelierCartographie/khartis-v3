@@ -1,7 +1,7 @@
 import {
-  visualizationStore,
   getEnabledPrimitiveFilters,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -11,18 +11,19 @@ import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   alignCategoryColors,
   buildFacetVisualizationUpdates,
+  type FacetFillVariables,
   generateFacetVisualizations,
   loadFacetFillCategoryUnion,
+  resolveCategoryDisplayLabels,
   resolveFacetFillSlotPath,
-  resolveFacetPrimitiveFilter,
-  type FacetFillVariables
+  resolveFacetPrimitiveFilter
 } from '$lib/features/commons/services/facet-generator.service';
 import {
   FACET_SLOT,
-  SCALE_MODE,
+  type FacetSlotPath,
   facetSlotRequiresNumericVariable,
   isFacetSlotPath,
-  type FacetSlotPath,
+  SCALE_MODE,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
 import {
@@ -276,7 +277,12 @@ function createFacetsStore() {
       return baseViz;
     }
 
-    const currentLabels = (fillClassification.labels ?? []).map(String);
+    // Raw values, not the display labels: a renamed category is still the same one.
+    const currentValues = (
+      fillClassification.categoryValues ??
+      fillClassification.labels ??
+      []
+    ).map(String);
     const key = JSON.stringify([
       baseViz.id,
       primarySlotPath,
@@ -295,7 +301,7 @@ function createFacetsStore() {
       fillUnionKey = key;
       fillUnion = union ?? [];
     }
-    if (fillUnion.length === 0 || arraysEqual(currentLabels, fillUnion)) {
+    if (fillUnion.length === 0 || arraysEqual(currentValues, fillUnion)) {
       return baseViz;
     }
 
@@ -303,7 +309,7 @@ function createFacetsStore() {
       ...symbol,
       fillClassification: {
         ...fillClassification,
-        labels: [...fillUnion],
+        labels: resolveCategoryDisplayLabels(fillClassification, fillUnion),
         categoryValues: [...fillUnion],
         colors: alignCategoryColors(fillClassification, fillUnion)
       }
@@ -328,7 +334,14 @@ function createFacetsStore() {
     const listsUnion =
       Object.keys(state.fillVariables).length > 0 &&
       fillUnion.length > 0 &&
-      arraysEqual((fillClassification?.labels ?? []).map(String), fillUnion);
+      arraysEqual(
+        (
+          fillClassification?.categoryValues ??
+          fillClassification?.labels ??
+          []
+        ).map(String),
+        fillUnion
+      );
     fillUnionKey = null;
     fillUnion = [];
     if (!baseViz || !symbol || !fillClassification || !listsUnion) {

@@ -1,10 +1,10 @@
+import type { DataTableFilterInput, DuckDBDataset } from '$lib/features/duckdb';
 import {
   buildFilterClause,
   buildFilterWhereClause,
   combineFilterClauses,
   duckDBOrchestrator
 } from '$lib/features/duckdb';
-import type { DataTableFilterInput, DuckDBDataset } from '$lib/features/duckdb';
 import { JOINED_BASEMAP_COLUMN } from '../constants/data.constants';
 import type {
   PrimitiveFilter,

@@ -1,35 +1,33 @@
-import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps, View } from '@deck.gl/core';
+import { Deck, OrthographicView } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext, type Device } from '@luma.gl/core';
+import type { IControl, StyleSpecification } from 'maplibre-gl';
 import {
   AttributionControl,
   Map as MapLibreMap,
   ScaleControl,
   setWorkerUrl
 } from 'maplibre-gl';
-import type { IControl, StyleSpecification } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils';
-
-export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   BasemapStyle,
-  DECK_VIEW_ID,
   DECK_CANVAS_ID,
   DECK_DEVICE_TYPE,
+  DECK_VIEW_ID,
   getBasemapStyle
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
-import { createHoverHandler, createClickHandler } from '../interactions';
+import { createClickHandler, createHoverHandler } from '../interactions';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
-  deckDebugStore,
-  type DeckDebugMetrics
+  type DeckDebugMetrics,
+  deckDebugStore
 } from '../stores/deck-debug.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
@@ -47,6 +45,8 @@ import type {
   DeckOrthographicViewStateMap,
   OrthographicMainViewState
 } from '../types';
+
+export type DeckInstance = Deck<View | View[] | null>;
 
 setWorkerUrl(maplibreWorkerUrl);
 
@@ -245,6 +245,49 @@ export function createDeckWithDeferredResizeObserver(
       });
     }
   }
+}
+
+interface ResizableCanvasContext {
+  canvas: { clientWidth?: number; clientHeight?: number };
+  cssWidth: number;
+  cssHeight: number;
+  device: { props: { onResize: (context: unknown, info: unknown) => void } };
+  getDevicePixelSize: () => [number, number];
+  _getDevicePixelSizeFromCSSSize: (
+    width: number,
+    height: number
+  ) => { devicePixelWidth: number; devicePixelHeight: number };
+  _setDevicePixelSize: (size: {
+    devicePixelWidth: number;
+    devicePixelHeight: number;
+  }) => void;
+  _updateDrawingBufferSize: () => void;
+}
+
+/**
+ * luma.gl learns a canvas's new size from a ResizeObserver, which reports
+ * after the next animation frame has rendered: that frame draws the new view
+ * into the old drawing buffer and the map jumps. Applying the laid-out size
+ * right away, as the observer would, keeps view and buffer in step; the
+ * observer's later report then finds nothing to change.
+ */
+export function syncDeckCanvasSize(deck: DeckInstance | null): void {
+  const device = (deck as unknown as { device?: Device } | null)?.device;
+  const context = device?.getDefaultCanvasContext() as unknown as
+    ResizableCanvasContext | undefined;
+  const width = context?.canvas.clientWidth;
+  const height = context?.canvas.clientHeight;
+  if (!context || !width || !height) return;
+  if (width === context.cssWidth && height === context.cssHeight) return;
+
+  const oldPixelSize = context.getDevicePixelSize();
+  context.cssWidth = width;
+  context.cssHeight = height;
+  context._setDevicePixelSize(
+    context._getDevicePixelSizeFromCSSSize(width, height)
+  );
+  context._updateDrawingBufferSize();
+  context.device.props.onResize(context, { oldPixelSize });
 }
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {

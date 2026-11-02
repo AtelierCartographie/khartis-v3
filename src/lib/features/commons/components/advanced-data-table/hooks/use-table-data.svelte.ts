@@ -6,19 +6,24 @@ import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
 import {
   EXCLUDED_COLUMNS,
+  JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS
 } from '../../../constants/data.constants';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
 import {
+  type HookValue,
   isMissingRequestedTableError,
   isRequestedTableAvailable,
-  resolveHookValue,
-  type HookValue
+  resolveHookValue
 } from './table-hook.utils';
 
+// The joined entity name stays visible: it is how a basemap join shows in the
+// table.
 const TABLE_HIDDEN_COLUMN_NAMES = new Set<string>([
   ...EXCLUDED_COLUMNS,
-  ...JOINED_BASEMAP_COLUMNS
+  ...JOINED_BASEMAP_COLUMNS.filter(
+    (column) => column !== JOINED_BASEMAP_COLUMN.NAME
+  )
 ]);
 
 export interface UseTableDataProps {

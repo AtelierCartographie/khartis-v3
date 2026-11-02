@@ -9,6 +9,7 @@ type ColumnLike = {
   name?: string | null;
   text?: string | null;
   type?: string | null;
+  stats?: { uniques?: number } | null;
 };
 
 interface ColumnSelectionOptions {
@@ -24,6 +25,13 @@ function resolveColumnName(column: ColumnLike | undefined): string | undefined {
 
 function isNumericColumn(column: ColumnLike): boolean {
   return column.type === 'number';
+}
+
+// A 0/1 flag (a statistical-secrecy marker, a boolean stored as a number)
+// is numeric but carries no quantity to size or class.
+function isAtMostBinaryColumn(column: ColumnLike): boolean {
+  const uniques = column.stats?.uniques;
+  return uniques !== undefined && uniques > 0 && uniques <= 2;
 }
 
 function isTextColumn(column: ColumnLike): boolean {
@@ -155,10 +163,13 @@ export function findPreferredNumericColumn(
     return resolveColumnName(preferredCandidate);
   }
 
-  const semanticCandidate = candidates.find((column) => {
+  const semanticCandidates = candidates.filter((column) => {
     const name = resolveColumnName(column);
     return name ? !isIdLikeColumnName(name) : false;
   });
+  const semanticCandidate =
+    semanticCandidates.find((column) => !isAtMostBinaryColumn(column)) ??
+    semanticCandidates[0];
   if (semanticCandidate) {
     return resolveColumnName(semanticCandidate);
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import { SliderWithInput, SectionHeading, ToggleWithLabel } from '../shared';
+  import { SectionHeading, SliderWithInput, ToggleWithLabel } from '../shared';
   import DottedToggle from './dotted-toggle.svelte';
   import {
     BASEMAP_LAYER_CONFIG,

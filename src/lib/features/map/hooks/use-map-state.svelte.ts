@@ -9,10 +9,10 @@ import {
   getSymbolFillCategoryColumn,
   getSymbolFillClassification,
   getSymbolPrimitive,
-  PrimitiveFilterType,
-  visualizationStore,
   type PrimitiveFilter,
-  type VisualizationConfig
+  PrimitiveFilterType,
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {

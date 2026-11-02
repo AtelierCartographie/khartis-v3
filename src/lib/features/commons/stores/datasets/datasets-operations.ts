@@ -17,7 +17,7 @@ import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
 import type { DatasetsState } from './datasets-state.svelte';
-import { startProcessing, endProcessing } from './datasets-state.svelte';
+import { endProcessing, startProcessing } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
@@ -273,6 +273,9 @@ export async function duplicateDataset(
       relatedFilesData: cloneRelatedFilesData(originalFile?.relatedFilesData),
       archiveLayerSnapshot: originalFile?.archiveLayerSnapshot,
       enrichmentSnapshot: originalFile?.enrichmentSnapshot,
+      joinedColumnOrigins: originalFile?.joinedColumnOrigins
+        ? { ...originalFile.joinedColumnOrigins }
+        : undefined,
       geometry: originalFile?.geometry
         ? clonePlainValue(originalFile.geometry)
         : undefined,

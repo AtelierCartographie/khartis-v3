@@ -8,6 +8,7 @@
   interface BasemapSuggestionItem {
     basemap: BasemapMetadata;
     score: number;
+    matchesData: boolean;
   }
 
   interface Props {
@@ -28,6 +29,7 @@
     catalogOpen?: boolean;
     onSuggestionsToggle?: (expanded: boolean) => void;
     onCatalogToggle?: (expanded: boolean) => void;
+    rankedByExtent?: boolean;
   }
 
   let {
@@ -47,7 +49,8 @@
     suggestionsOpen,
     catalogOpen,
     onSuggestionsToggle,
-    onCatalogToggle
+    onCatalogToggle,
+    rankedByExtent
   }: Props = $props();
 
   const TAB_INDEX_TO_SOURCE: readonly BasemapSource[] = [
@@ -77,6 +80,7 @@
     catalogOpen={catalogOpen}
     onSuggestionsToggle={onSuggestionsToggle}
     onCatalogToggle={onCatalogToggle}
+    rankedByExtent={rankedByExtent}
   />
 {/snippet}
 

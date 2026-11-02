@@ -14,9 +14,9 @@
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type { Palette, PaletteType } from './palette.constants';
   import {
-    PALETTE_TYPE,
     findPaletteById,
     normalizePaletteId,
+    PALETTE_TYPE,
     resolvePaletteForType
   } from './palette.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';

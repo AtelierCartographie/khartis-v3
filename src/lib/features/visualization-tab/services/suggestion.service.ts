@@ -7,6 +7,7 @@ import type {
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  ClassificationMethod,
   getLinePrimitive,
   getPolygonPrimitive,
   getSymbolPrimitive,
@@ -16,16 +17,14 @@ import {
   type PolygonPrimitiveConfig,
   type PrimitiveFilter,
   PrimitiveFilterType,
+  resolveVisualizationPreset,
   type SymbolPrimitiveConfig,
   type TextPrimitiveConfig,
-  type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
-  type VisualizationAppliedSuggestionState,
+  type VisualizationPreset,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
-  ClassificationMethod,
-  resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -34,8 +33,8 @@ import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/pa
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
-  DEFAULT_COLORS,
   ColorMode,
+  DEFAULT_COLORS,
   FillMode,
   ProportionalType,
   SizeMode,
@@ -55,8 +54,8 @@ import {
   findPreferredTextColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
 import {
-  clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
+  clampFontSize,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -1262,16 +1261,6 @@ function createVisualizationRestoreState(
   };
 }
 
-function createVisualizationAppliedSuggestionState(
-  visualization: VisualizationConfig,
-  suggestionKey: string
-): VisualizationAppliedSuggestionState {
-  return {
-    suggestionKey,
-    visualization: createVisualizationRestoreSnapshot(visualization)
-  };
-}
-
 export function buildSuggestionOrigin(
   visualization: VisualizationConfig,
   origin: VisualizationOrigin
@@ -1298,38 +1287,6 @@ export function buildSuggestionOrigin(
     restoreState:
       existingRestoreState ?? createVisualizationRestoreState(visualization)
   };
-}
-
-export function rememberAppliedSuggestionState(
-  vizId: string,
-  suggestionKey: string
-): void {
-  const visualization = visualizationStore.visualizations.find(
-    (item) => item.id === vizId
-  );
-  if (!visualization) {
-    return;
-  }
-
-  visualizationStore.updateVisualization(
-    vizId,
-    {
-      origin: {
-        mode: getVisualizationOriginMode(visualization),
-        ...(visualization.origin?.suggestionKey
-          ? { suggestionKey: visualization.origin.suggestionKey }
-          : { suggestionKey }),
-        ...(visualization.origin?.restoreState
-          ? { restoreState: deepClone(visualization.origin.restoreState) }
-          : {}),
-        appliedSuggestionState: createVisualizationAppliedSuggestionState(
-          visualization,
-          suggestionKey
-        )
-      }
-    },
-    SavePriority.IMMEDIATE
-  );
 }
 
 export function restoreVisualizationFromSuggestion(vizId: string): boolean {

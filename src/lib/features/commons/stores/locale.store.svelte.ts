@@ -1,11 +1,11 @@
 import {
-  getLocale,
-  overwriteGetLocale,
-  overwriteSetLocale,
-  cookieName,
-  cookieMaxAge,
   cookieDomain,
-  type Locale
+  cookieMaxAge,
+  cookieName,
+  getLocale,
+  type Locale,
+  overwriteGetLocale,
+  overwriteSetLocale
 } from '$lib/paraglide/runtime.js';
 
 const initialLocale = getLocale();

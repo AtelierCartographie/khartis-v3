@@ -1,1 +1,1 @@
-export type ExtensionName = 'spatial' | 'json';
+export type ExtensionName = 'spatial' | 'json' | 'sqlite_scanner';

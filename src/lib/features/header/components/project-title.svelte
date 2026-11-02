@@ -7,8 +7,8 @@
   import { Save } from 'carbon-icons-svelte';
   import { KEY } from '../../commons/constants/dom.constants';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   let inputValue = $state(projectStore.projectName);

@@ -1,9 +1,9 @@
 import * as m from '$lib/paraglide/messages';
 import {
+  availableShapesForSymbolMode,
   ProportionalType,
   ShapeType,
-  SymbolMode,
-  availableShapesForSymbolMode
+  SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 
 const shapeLabelByType: Record<ShapeType, () => string> = {

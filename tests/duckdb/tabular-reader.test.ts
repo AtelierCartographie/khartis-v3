@@ -54,7 +54,6 @@ function createContext(): DuckDBContext {
     rowCountCache: new Map(),
     extensionLoads: new Map([['spatial', Promise.resolve()]]),
     localExtensionRepositoryConfigured: false,
-    threadsSupported: false,
     bundleVariant: 'eh'
   };
 }

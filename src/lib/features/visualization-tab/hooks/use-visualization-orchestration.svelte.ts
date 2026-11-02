@@ -1,10 +1,11 @@
 import { untrack } from 'svelte';
 import {
   CLASSIFIABLE_PRIMITIVES,
-  STROKE_CLASSIFIABLE_PRIMITIVES,
   type ClassifiablePrimitive,
+  STROKE_CLASSIFIABLE_PRIMITIVES,
   type StrokeClassifiablePrimitive
 } from './use-primitive-panel-controller.svelte';
+import type { BreaksTrigger } from '../utils/breaks-trigger.utils';
 import {
   resolveBreaksTrigger,
   shouldFetchCategoryLabels
@@ -20,7 +21,6 @@ import type {
   StrokeClassificationTarget,
   SymbolFillTarget
 } from '../utils/classification-targets.utils';
-import type { BreaksTrigger } from '../utils/breaks-trigger.utils';
 import type { CategoryLabelsDataset } from './use-category-labels-fetcher.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DataFieldItem } from './use-dataset-analysis.svelte';

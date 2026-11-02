@@ -6,8 +6,8 @@ import {
 import {
   detectSemioType,
   SEMIO_TYPES,
-  toStatNumber,
-  type SemioType
+  type SemioType,
+  toStatNumber
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 import { DuckDBSimplifiedType } from '$lib/features/duckdb';

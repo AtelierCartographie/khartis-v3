@@ -14,6 +14,5 @@ export interface DuckDBContext {
   rowCountCache: Map<string, number>;
   extensionLoads: Map<ExtensionName, Promise<void>>;
   localExtensionRepositoryConfigured: boolean;
-  threadsSupported: boolean;
   bundleVariant: 'eh' | 'mvp';
 }

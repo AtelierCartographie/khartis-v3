@@ -1,7 +1,7 @@
 import {
+  type PrimitiveFilter,
   PrimitiveFilterType,
   resolveAllowedPrimitiveFilters,
-  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -16,6 +16,7 @@ export interface DataFieldItem {
   id: number;
   text: string;
   type?: string;
+  stats?: { uniques?: number };
 }
 
 const NUMERIC_DATA_FIELD_TYPES = new Set(['number', 'numeric']);
@@ -75,7 +76,8 @@ export function useDatasetAnalysis(
     return filterVisualizableDataColumns(dataset.columns).map((col, id) => ({
       id,
       text: col.name,
-      type: col.type
+      type: col.type,
+      stats: col.stats ? { uniques: col.stats.uniques } : undefined
     }));
   });
 

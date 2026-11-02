@@ -5,13 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnnotationKind,
   DEFAULT_MARGINS,
-  DrawingType
-} from '$lib/features/commons/constants/ui.constants';
-import { SHAPE_TYPE } from '$lib/features/commons/constants';
-import {
+  DrawingType,
   PAGE_PRESETS,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   globalActions,
   globalState

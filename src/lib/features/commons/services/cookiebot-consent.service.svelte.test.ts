@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  openCookiebotSettings,
+  subscribeToCookiebotConsent
+} from './cookiebot-consent.service';
 
 const mocks = vi.hoisted(() => ({
   loggerWarnMock: vi.fn()
@@ -14,11 +18,6 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
     warn: (...args: unknown[]) => mocks.loggerWarnMock(...args)
   }
 }));
-
-import {
-  openCookiebotSettings,
-  subscribeToCookiebotConsent
-} from './cookiebot-consent.service';
 
 describe('Cookiebot consent service', () => {
   beforeEach(() => {

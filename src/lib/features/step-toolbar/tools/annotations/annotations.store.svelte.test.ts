@@ -95,11 +95,11 @@ describe('annotations store', () => {
       y: 68
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
-      x: 572,
-      y: 456
+      x: 364,
+      y: 480
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
-      x: 572,
+      x: 364,
       y: 528
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
@@ -108,9 +108,7 @@ describe('annotations store', () => {
     expect(
       itemsByRole.get(ANNOTATION_ROLE.BASEMAP_SOURCE)?.style?.textAlign
     ).toBe(TextAlign.Right);
-    expect(itemsByRole.get(ANNOTATION_ROLE.SIGNATURE)?.style?.textAlign).toBe(
-      TextAlign.Right
-    );
+    expect(itemsByRole.has(ANNOTATION_ROLE.SIGNATURE)).toBe(false);
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
       TextAlign.Right
     );
@@ -120,6 +118,63 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.style?.textAlign).toBe(
       TextAlign.Left
     );
+  });
+
+  it('brings the page texts of older projects up to date and drops their untouched note', () => {
+    const year = new Date().getFullYear();
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.CREDIT,
+          content: 'Réalisé avec Khartis',
+          position: { x: 572, y: 528 }
+        },
+        {
+          id: 'note',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.SIGNATURE,
+          content: 'Ajouter une note',
+          position: { x: 572, y: 480 }
+        },
+        {
+          id: 'written-note',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.SIGNATURE,
+          content: 'Atelier de cartographie',
+          position: { x: 572, y: 456 },
+          positionMode: 'manual'
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const byId = new Map(getAnnotationsState().items.map((i) => [i.id, i]));
+    expect(byId.has('note')).toBe(false);
+    expect(byId.get('written-note')?.content).toBe('Atelier de cartographie');
+    expect(byId.get('credit')?.content).toBe(
+      `Ajouter l'auteur·rice, ${year}. Réalisé avec Khartis.`
+    );
+  });
+
+  it('turns the source placeholder into its lead-in once clicked', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const getSource = () =>
+      getAnnotationsState().items.find(
+        (item) => item.role === ANNOTATION_ROLE.SOURCE
+      );
+    const source = getSource();
+    expect(source?.content).toBe('Ajouter une source');
+    if (!source) {
+      return;
+    }
+
+    annotationsActions.selectAnnotation(source.id);
+
+    expect(getSource()?.content).toBe('Source\u00a0: ');
   });
 
   it('refreshes default page element placeholders when locale changes', async () => {
@@ -221,7 +276,7 @@ describe('annotations store', () => {
       (item) => item.role === ANNOTATION_ROLE.NOTE
     );
 
-    expect(note?.position).toEqual({ x: 572, y: 432 });
+    expect(note?.position).toEqual({ x: 364, y: 456 });
     expect(note?.coordinateSpace).toBe('page');
     expect(note?.positionMode).toBe('manual');
   });

@@ -12,6 +12,11 @@ import type { DuckClient } from '../duck';
 // moving vertices well below the pixel.
 const NODING_REPAIR_FACTOR = 0.000001;
 
+// Past this many mean cells across its extent, a mesh drawn whole on a map a
+// thousand pixels wide has cells under two pixels: its shared borders, at any
+// stroke width, paint over the fill they separate (a 1 km grid of France).
+const MAX_MESH_CELLS_ACROSS_EXTENT = 500;
+
 export function getDerivedLandTableName(sourceTable: string): string {
   return `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.LAND}`;
 }
@@ -86,6 +91,33 @@ async function isValidPolygonCoverage(
   }
 }
 
+export async function isMeshTooFineForInnerLimits(
+  duck: DuckClient,
+  sourceTable: string
+): Promise<boolean> {
+  const geom = sqlIdentifier(INTERNAL_COLUMN.GEOM);
+  try {
+    const rows = (await duck.query(
+      `SELECT sqrt(sum(ST_Area(${geom})) / count(*)) * ${MAX_MESH_CELLS_ACROSS_EXTENT}
+          < greatest(
+              max(ST_XMax(${geom})) - min(ST_XMin(${geom})),
+              max(ST_YMax(${geom})) - min(ST_YMin(${geom}))
+            ) AS too_fine
+       FROM ${sqlIdentifier(sourceTable)}
+       WHERE ${geom} IS NOT NULL`,
+      { format: 'array' }
+    )) as Array<{ too_fine: boolean | null }>;
+    return rows[0]?.too_fine === true;
+  } catch (error) {
+    logger.warn(
+      `Could not measure the mesh of ${sourceTable}`,
+      LogCategory.DUCKDB,
+      error
+    );
+    return false;
+  }
+}
+
 async function runDerivedTableQuery(
   duck: DuckClient,
   targetTable: string,
@@ -122,10 +154,12 @@ function buildLineSelect(macroCall: string): string {
  */
 export async function rebuildDerivedGeometryTables(
   duck: DuckClient,
-  sourceTable: string
+  sourceTable: string,
+  { isCurrent = () => true }: { isCurrent?: () => boolean } = {}
 ): Promise<void> {
   const landTable = getDerivedLandTableName(sourceTable);
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
+  if (!isCurrent()) return;
   const landSelect = (macroCall: string) => `
     SELECT geom
     FROM ${macroCall}
@@ -144,16 +178,30 @@ export async function rebuildDerivedGeometryTables(
       landSelect(`extract_land(${sqlString(sourceTable)}, ${noding})`)
     )
   ]);
+  if (!isCurrent()) return;
 
-  await createDerivedTable(
-    duck,
-    getDerivedOuterlinesTableName(sourceTable),
-    withNodingRetry((noding) =>
+  await createDerivedTable(duck, getDerivedOuterlinesTableName(sourceTable), [
+    ...(coverageIsValid
+      ? [
+          buildLineSelect(
+            `extract_coverage_outerlines(${sqlString(landTable)})`
+          )
+        ]
+      : []),
+    ...withNodingRetry((noding) =>
       buildLineSelect(`extract_outerlines(${sqlString(landTable)}, ${noding})`)
     )
-  );
+  ]);
 
-  await createDerivedTable(duck, getDerivedInnerlinesTableName(sourceTable), [
+  if (!isCurrent()) return;
+
+  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
+  if (await isMeshTooFineForInnerLimits(duck, sourceTable)) {
+    await createEmptyGeometryTable(duck, innerlinesTable);
+    return;
+  }
+
+  await createDerivedTable(duck, innerlinesTable, [
     ...(coverageIsValid
       ? [
           buildLineSelect(

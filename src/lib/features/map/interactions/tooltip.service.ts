@@ -9,12 +9,12 @@ import type { VisualizationConfig } from '$lib/features/commons/stores/visualiza
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
-import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
+import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 import {
-  mapHoverHighlightStore,
-  type HoveredRow
+  type HoveredRow,
+  mapHoverHighlightStore
 } from '../stores/map-hover-highlight.store.svelte';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {

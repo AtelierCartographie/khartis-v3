@@ -16,11 +16,11 @@
     detectApplePlatform,
     hasAnyPrimaryModifier,
     hasPlatformPrimaryModifier,
-    PROJECT_SHORTCUT_TIMEOUT_MS,
     isShortcutCode,
+    PROJECT_SHORTCUT_TIMEOUT_MS,
     SHORTCUT_CODE
   } from '../utils/keyboard-shortcuts.utils';
-  import { KEY, EVENT } from '../constants/dom.constants';
+  import { EVENT, KEY } from '../constants/dom.constants';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
     '1': ToolbarStep.Data,

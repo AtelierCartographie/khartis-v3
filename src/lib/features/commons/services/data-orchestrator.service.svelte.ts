@@ -6,8 +6,9 @@ import {
 } from '$lib/features/data-pipeline';
 import {
   Duck,
+  duckDBOrchestrator,
   RefineOperation,
-  duckDBOrchestrator
+  waitForQueryIdle
 } from '$lib/features/duckdb';
 import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
 import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
@@ -22,8 +23,8 @@ import { projectionActions } from '$lib/features/step-toolbar/tools/projections'
 import { formatError, isFatalError } from '../pipeline.errors';
 import type { UploadedFile } from '../types/create-project.types';
 import {
-  FileType,
-  COLUMN_TRANSFORMATION_TYPES
+  COLUMN_TRANSFORMATION_TYPES,
+  FileType
 } from '../types/create-project.types';
 import { dataTabActions, dataTabState } from '../stores/data-tab.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
@@ -37,8 +38,8 @@ import {
 } from '../stores/project/project-runtime.svelte';
 import {
   ClassificationMethod,
-  visualizationStore,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '../stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { PERF_PHASE, perfMark, perfMeasure } from '../utils/perf-marks.utils';
@@ -57,8 +58,8 @@ import {
 import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
-  calculateDivergingBreaks,
   calculateBreaks,
+  calculateDivergingBreaks,
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
@@ -90,6 +91,10 @@ export interface ProjectChangeOptions {
   isProjectCreation?: boolean;
   signal?: AbortSignal;
 }
+
+// Shorter than the idle delay of the derived geometry build, so the panel's
+// suggestion is ready before the territory and limits take the connection.
+const PROJECTION_SUGGESTION_IDLE_MS = 300;
 
 function throwIfProjectChangeAborted(signal?: AbortSignal): void {
   if (!signal?.aborted) {
@@ -324,7 +329,11 @@ function createDataOrchestratorService() {
         options?.suggestProjection !== false &&
         (dataset.geometry || dataset.geoDetection)
       ) {
-        projectionActions.suggestProjectionForCurrentData();
+        // Only the Projection panel reads the suggestion, and it computes it
+        // itself when missing: it waits for the import queries to drain.
+        void waitForQueryIdle(PROJECTION_SUGGESTION_IDLE_MS).then(() =>
+          projectionActions.suggestProjectionForCurrentData()
+        );
       }
 
       layersActions.syncWithVisualizations();

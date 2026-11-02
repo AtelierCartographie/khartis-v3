@@ -1,6 +1,6 @@
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 
 export enum SearchSource {
@@ -11,7 +11,8 @@ export enum DataToolType {
   None = 'none',
   Search = 'search',
   Filters = 'filters',
-  Calculator = 'calculator'
+  Calculator = 'calculator',
+  CsvOptions = 'csv-options'
 }
 
 export interface DataToolsState {

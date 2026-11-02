@@ -1,8 +1,8 @@
 import {
-  suggestProjectionsForBbox,
-  suggestProjectionsForFeatureBounds,
   buildProjectionFromSuggestion,
-  type ProjectionSuggestion
+  type ProjectionSuggestion,
+  suggestProjectionsForBbox,
+  suggestProjectionsForFeatureBounds
 } from './projection-suggest.service';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
@@ -23,8 +23,8 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
   getProjectionById,
-  resolveProjectionDefaultOrientation,
-  type ProjectionInfo
+  type ProjectionInfo,
+  resolveProjectionDefaultOrientation
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
@@ -34,6 +34,7 @@ import {
   projectionStore as mapRenderProjectionStore
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
+import { getNativeCrsEpsg } from './native-projection.utils';
 import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 const DEFAULT_PROJECTION = 'mercator';
@@ -393,6 +394,18 @@ const { actions, getState } = createToolStore<
         if (
           !supportsProjectionSuggestions(getProjectionAvailabilityContext())
         ) {
+          return;
+        }
+
+        // The file is already drawn in this projection: going back to the
+        // native rendering is exact, whereas a d3 or proj4 rebuild would pass
+        // the geometry through WGS84 for nothing.
+        if (
+          suggestion.epsg &&
+          suggestion.epsg ===
+            getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
+        ) {
+          clearSelectedInternal(true);
           return;
         }
 

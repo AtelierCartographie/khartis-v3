@@ -11,22 +11,22 @@ Khartis makes thematic maps: a data variable drives the styling of map geometry.
 
 ## French terms and their code names
 
-| French (UI, specification, issues)                                             | Code                                                                                             |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| Étapes Données, Visualisations, Habillage                                      | `ToolbarStep.Data`, `.Visualizations`, `.Styling`                                                |
-| Fond de carte                                                                  | basemap, from the catalog or imported by the user                                                |
-| Géolocalisation                                                                | geolocation: geographic columns recognized as names or codes (join) or as lat/lon (plotting)     |
-| Jointure : jointe, à vérifier, non unique, non reconnue, ignorée               | join, graded with `JoinStatus`: `joined`, `to_verify`, `duplicate`, `unrecognized`, `ignored`    |
-| Figuré ponctuel, linéaire, zonal, texte                                        | primitive: `symbol`, `line`, `polygon`, `text` (`PrimitiveConfigKind`)                           |
-| Discrétisation, bornes, valeur de rupture                                      | classification (`ClassificationMethod`), breaks, breakpoint; message keys say `discretization_*` |
-| Aplat, trame                                                                   | flat fill, pattern fill                                                                          |
-| Calques                                                                        | layers (`VisualizationTools.Layers`)                                                             |
-| Collection de cartes                                                           | facets (`VisualizationTools.Facets`)                                                             |
-| Simplification, généralisation                                                 | simplification (`VisualizationTools.Simplification`)                                             |
-| Format, légende, indications géographiques, annotations, déficiences visuelles | `StylingTools.Format`, `.Legend`, `.GeoIndications`, `.Annotations`, `.ColorBlindness`           |
-| Carton, encart                                                                 | inset map (`InsetMapType`)                                                                       |
-| Infobulle                                                                      | tooltip                                                                                          |
-| Emprise                                                                        | extent, bbox                                                                                     |
+| French (UI, specification, issues)                                             | Code                                                                                                                 |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Étapes Données, Visualisations, Habillage                                      | `ToolbarStep.Data`, `.Visualizations`, `.Styling`                                                                    |
+| Fond de carte                                                                  | basemap, from the catalog or imported by the user                                                                    |
+| Géolocalisation                                                                | geolocation: geographic columns recognized as names or codes (join) or as lat/lon (plotting)                         |
+| Jointure : jointe, à vérifier, non unique, non reconnue, ignorée               | join, graded in `join-ops.ts`: `matched`, `check`/`ambiguous`, `duplicate`, `not_found`; ignored values are excluded |
+| Figuré ponctuel, linéaire, zonal, texte                                        | primitive: `symbol`, `line`, `polygon`, `text` (`PrimitiveConfigKind`)                                               |
+| Discrétisation, bornes, valeur de rupture                                      | classification (`ClassificationMethod`), breaks, breakpoint; message keys say `discretization_*`                     |
+| Aplat, trame                                                                   | flat fill, pattern fill                                                                                              |
+| Calques                                                                        | layers (`VisualizationTools.Layers`)                                                                                 |
+| Collection de cartes                                                           | facets (`VisualizationTools.Facets`)                                                                                 |
+| Simplification, généralisation                                                 | simplification (`VisualizationTools.Simplification`)                                                                 |
+| Format, légende, indications géographiques, annotations, déficiences visuelles | `StylingTools.Format`, `.Legend`, `.GeoIndications`, `.Annotations`, `.ColorBlindness`                               |
+| Carton, encart                                                                 | inset map (`InsetMapType`)                                                                                           |
+| Infobulle                                                                      | tooltip                                                                                                              |
+| Emprise                                                                        | extent, bbox                                                                                                         |
 
 ## The semiology model
 

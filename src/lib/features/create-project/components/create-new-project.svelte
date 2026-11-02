@@ -17,8 +17,8 @@
   } from '$lib/features/commons/utils/format.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { m } from '$lib/paraglide/messages';

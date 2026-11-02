@@ -1,14 +1,14 @@
 import {
   applyPaletteInversion,
   calculateBreakCounts,
-  calculateDivergingBreaks,
   calculateBreaks,
   calculateCalendarBreakCounts,
   calculateCalendarBreaks,
+  calculateDivergingBreaks,
   computeDivergingSplit,
   detectDivergingBreakpoint,
-  isTemporalColumn,
-  generateColorsForBreaks
+  generateColorsForBreaks,
+  isTemporalColumn
 } from '$lib/features/commons/services/classification.service';
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
 import type {

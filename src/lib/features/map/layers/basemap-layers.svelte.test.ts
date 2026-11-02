@@ -22,12 +22,12 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
+  BASEMAP_LAYER_CONFIG,
   BasemapCityCategory,
   BasemapCitySymbol,
   BasemapDottedPattern,
   BasemapGraticuleMode,
-  BasemapRemarquables,
-  BASEMAP_LAYER_CONFIG
+  BasemapRemarquables
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   BASEMAP_LAYER_ID,
@@ -36,6 +36,16 @@ import {
 import type { BBox, GeometryInfo } from '../types';
 import { buildKhartisCompositeProjection } from '../utils/khartis-projection-factories.utils';
 import projectionPresets from '../../../../../static/basemaps/projection-presets.json';
+import {
+  createBasemapLayers,
+  createEquateurLayer,
+  createMeridiensLayer,
+  createMersLayer,
+  createTerreLayers,
+  createVillesLayers,
+  type MetadataLayerEntry
+} from './basemap-layers';
+import type { BasemapCity } from './basemap-cities';
 
 const {
   arrowTableToGeoJSONMock,
@@ -100,17 +110,6 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
     parsePointData: parsePointDataMock
   };
 });
-
-import {
-  createBasemapLayers,
-  createEquateurLayer,
-  createMeridiensLayer,
-  createMersLayer,
-  createTerreLayers,
-  createVillesLayers,
-  type MetadataLayerEntry
-} from './basemap-layers';
-import type { BasemapCity } from './basemap-cities';
 
 function createProjectionContext() {
   return {

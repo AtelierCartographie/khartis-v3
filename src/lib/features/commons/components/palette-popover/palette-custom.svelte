@@ -12,12 +12,12 @@
   import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
-    PALETTE_TYPE,
     type DivergingPaletteSplit,
-    type PaletteType,
     generatePaletteColors,
     generateSequentialFromColor,
-    generateSequentialFromColors
+    generateSequentialFromColors,
+    PALETTE_TYPE,
+    type PaletteType
   } from './palette.constants';
 
   interface Props {

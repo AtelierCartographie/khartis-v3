@@ -10,6 +10,10 @@ import {
   resolveOrthographicZoomBounds,
   resolveOrthographicZoomLevel
 } from '$lib/features/map/utils/map-zoom.utils';
+import {
+  injectProjectionContext,
+  mapInstanceStore
+} from './map-instance.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -40,11 +44,6 @@ vi.mock('$lib/features/map/core/projscreen', () => ({
   get_bbox_center: mocks.getBboxCenterMock,
   get_max_scale: mocks.getMaxScaleMock
 }));
-
-import {
-  injectProjectionContext,
-  mapInstanceStore
-} from './map-instance.store.svelte';
 
 const mapViewStatePersistenceEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'mapViewState'
@@ -424,6 +423,36 @@ describe('mapInstanceStore map zoom bounds', () => {
       }
     });
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
+  });
+
+  it('restores the view center relative to the reference extent when the map is drawn at another size', () => {
+    const { deck, setPropsMock } = createDeckMock();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    // Saved in a larger cell: its absolute target no longer matches this extent.
+    mapInstanceStore.restoreFromSerialized({
+      zoom: 2,
+      target: [418, 215, 0],
+      targetRatio: [0.1, -0.2]
+    });
+    mocks.projectionStoreMock.referenceBbox = [0, 0, 100, 100];
+    mocks.getBboxCenterMock.mockReturnValue([50, 50]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(setPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewState: {
+          main: expect.objectContaining({ target: [20, -40, 0], zoom: 2 })
+        }
+      })
+    );
+    expect(mapViewStatePersistenceEntry?.serialize()).toMatchObject({
+      zoom: 2,
+      targetRatio: [0.1, -0.2]
+    });
   });
 
   it('drops an implausible restored orthographic target and recenters the view', () => {

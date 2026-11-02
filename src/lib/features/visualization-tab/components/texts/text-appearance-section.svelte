@@ -30,8 +30,8 @@
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
-    filterFieldsByKind,
-    type FieldSelection
+    type FieldSelection,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
 

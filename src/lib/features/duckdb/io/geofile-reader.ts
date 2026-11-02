@@ -3,10 +3,6 @@ import { showWarning } from '$lib/features/commons/utils/notification.utils.svel
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
-import {
-  convertGeoPackageToGeoJsonFile,
-  listGeoPackageLayers
-} from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 import { rankGeoLayers } from '$lib/features/commons/utils/geo-layer-ranking.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { markTableMutated } from '../cache/cache-manager';
@@ -26,6 +22,7 @@ import {
   generateUniqueTableName,
   registerFiles
 } from './file-registry';
+import { readGeoPackageLayer } from './geopackage-reader';
 import { addRowId, dropSyntheticFeatureIdColumn } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
 import {
@@ -43,21 +40,6 @@ interface GeofileMetadata {
 
 function isGeoPackageFile(filename: string): boolean {
   return filename.toLowerCase().endsWith('.gpkg');
-}
-
-function shouldUseGeoPackageBrowserFallback(
-  ctx: DuckDBContext,
-  geofile: File,
-  meta: boolean,
-  shapefile: boolean
-): boolean {
-  return (
-    !meta &&
-    !shapefile &&
-    isGeoPackageFile(geofile.name) &&
-    typeof window !== 'undefined' &&
-    !ctx.threadsSupported
-  );
 }
 
 /**
@@ -168,12 +150,6 @@ export async function listGeofileSpatialLayers(
   ctx: DuckDBContext,
   geofile: File
 ): Promise<string[]> {
-  // Without threads ST_Read cannot open a GeoPackage in the browser: its
-  // layers are listed by the same sqlite fallback that later reads each one.
-  if (typeof window !== 'undefined' && !ctx.threadsSupported) {
-    return isGeoPackageFile(geofile.name) ? listGeoPackageLayers(geofile) : [];
-  }
-
   await registerFiles(ctx.db, ctx.registered_files, [geofile]);
   const fileId = (geofile as FileWithId).id;
   try {
@@ -269,6 +245,40 @@ async function detectGeofileMetadata(
   }
 }
 
+async function readWithStRead(
+  ctx: DuckDBContext,
+  fileId: string,
+  finalTablename: string,
+  geoMeta: GeofileMetadata
+): Promise<void> {
+  const selectedLayerClause = geoMeta.selectedLayer
+    ? `, layer = ${sqlString(geoMeta.selectedLayer)}`
+    : '';
+  const readQuery = `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM ST_Read(${sqlString(fileId)}${selectedLayerClause});`;
+
+  try {
+    await runGeofileRead(ctx, readQuery);
+  } catch (error) {
+    const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
+    if (
+      !matchesDuckDBError(error, 'crs-not-found') ||
+      !sourceCrs ||
+      !isProjectionSupported(sourceCrs)
+    ) {
+      throw error;
+    }
+    await runGeofileRead(
+      ctx,
+      buildCrsTaggedReadQuery(
+        finalTablename,
+        fileId,
+        selectedLayerClause,
+        sourceCrs
+      )
+    );
+  }
+}
+
 export async function readGeofile(
   ctx: DuckDBContext,
   geofile: File,
@@ -278,7 +288,6 @@ export async function readGeofile(
   const meta = options.meta ?? false;
   const shapefile = options.shapefile ?? false;
   const requestedLayer = options.layer;
-  let usedGeoPackageBrowserFallback = false;
 
   await registerFiles(ctx.db, ctx.registered_files, [geofile], { shapefile });
   const geofileWithId = geofile as FileWithId;
@@ -302,22 +311,6 @@ export async function readGeofile(
     tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
   }
 
-  if (shouldUseGeoPackageBrowserFallback(ctx, geofile, meta, shapefile)) {
-    const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(geofile, {
-      preferredLayer: requestedLayer ?? undefined
-    });
-
-    await readGeofile(ctx, fallbackGeoJsonFile, {
-      ...options,
-      tablename,
-      layer: undefined
-    });
-
-    await dropRegisteredFile(ctx.db, ctx.registered_files, geofileWithId.id);
-    ctx.loaded_files.set(tablename, geofile.name);
-    return tablename;
-  }
-
   const geoMeta = await detectGeofileMetadata(
     ctx,
     geofileWithId.id,
@@ -325,57 +318,20 @@ export async function readGeofile(
   );
 
   const finalTablename = tablename;
-  const selectedLayerClause = geoMeta.selectedLayer
-    ? `, layer = ${sqlString(geoMeta.selectedLayer)}`
-    : '';
-  const readQuery = `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM ST_Read(${sqlString(geofileWithId.id)}${selectedLayerClause});`;
-
-  try {
-    await runGeofileRead(ctx, readQuery);
-  } catch (error) {
-    const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
-
-    if (
-      matchesDuckDBError(error, 'crs-not-found') &&
-      sourceCrs &&
-      isProjectionSupported(sourceCrs)
-    ) {
-      await runGeofileRead(
-        ctx,
-        buildCrsTaggedReadQuery(
-          finalTablename,
-          geofileWithId.id,
-          selectedLayerClause,
-          sourceCrs
-        )
-      );
-    } else if (
-      isGeoPackageFile(geofile.name) &&
-      matchesDuckDBError(error, 'thread-pool')
-    ) {
-      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
-        geofile,
-        {
-          preferredLayer: geoMeta.selectedLayer ?? undefined
-        }
-      );
-
-      usedGeoPackageBrowserFallback = true;
-      await readGeofile(ctx, fallbackGeoJsonFile, {
-        ...options,
-        tablename: finalTablename,
-        layer: undefined
-      });
-    } else {
-      throw error;
-    }
+  if (isGeoPackageFile(geofile.name)) {
+    await readGeoPackageLayer(
+      ctx,
+      geofileWithId.id,
+      finalTablename,
+      geoMeta.selectedLayer
+    );
+  } else {
+    await readWithStRead(ctx, geofileWithId.id, finalTablename, geoMeta);
   }
 
-  if (!usedGeoPackageBrowserFallback) {
-    await dropSyntheticFeatureIdColumn(ctx.connection, finalTablename);
-    await promoteImportedTextDates(ctx.connection, finalTablename);
-    await addRowId(ctx.connection, finalTablename);
-  }
+  await dropSyntheticFeatureIdColumn(ctx.connection, finalTablename);
+  await promoteImportedTextDates(ctx.connection, finalTablename);
+  await addRowId(ctx.connection, finalTablename);
 
   if (shapefile) {
     // Sibling handles must stay registered together; the exact id is dropped on dataset deletion.

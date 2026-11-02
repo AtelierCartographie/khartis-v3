@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Table, TextScale, TextAllCaps } from 'carbon-icons-svelte';
+  import { Table, TextAllCaps, TextScale } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     DiscretizationRow,
@@ -11,8 +11,8 @@
   import { SizeMode } from '$lib/features/commons/constants/visualization.constants';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    filterFieldsByKind,
-    type FieldSelection
+    type FieldSelection,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
 

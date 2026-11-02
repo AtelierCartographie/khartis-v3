@@ -1,4 +1,4 @@
-import { Duck, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult, Duck } from '$lib/features/duckdb';
 import type {
   DatasetResult,
   EnrichedColumn,

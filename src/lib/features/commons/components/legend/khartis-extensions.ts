@@ -2,19 +2,20 @@ import Textbox from '@borgar/textbox';
 import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import {
   clampEntrySpacing,
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
   splitLegendOverflow,
   wrapLegendEntry,
-  wrapLegendText,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition
+  wrapLegendText
 } from './utils';
 
 export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
@@ -172,7 +173,7 @@ export function draw_khartis_proportional_line_legend(
 ): LegendSvgDefinition {
   const fontSize = options.fontSize ?? 12;
   const fontFamily = resolveLegendFontFamily(options.fontFamily);
-  const titleSize = options.title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = options.title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = options.subtitle ? fontSize : 0;
   const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
   const font = createLegendFont({ fontSize, fontFamily });
@@ -306,7 +307,7 @@ export function draw_khartis_density_legend(
 function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const fontSize = options.fontSize ?? 12;
   const fontFamily = resolveLegendFontFamily(options.fontFamily);
-  const titleSize = options.title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = options.title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = options.subtitle ? fontSize : 0;
   const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
   const lineHeight = fontSize * 1.2;
