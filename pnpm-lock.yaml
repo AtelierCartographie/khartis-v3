@@ -34,8 +34,8 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@deck.gl/layers@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.2)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.2.0))(apache-arrow@21.2.0)
       '@ateliercartographie/label-placer':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.4.0
+        version: 0.4.0
       '@ateliercartographie/motif.js':
         specifier: ^0.1.5
         version: 0.1.5
@@ -347,8 +347,8 @@ packages:
       '@geoarrow/geoarrow-js': '>=0.3.0'
       apache-arrow: '>=21.0.0'
 
-  '@ateliercartographie/label-placer@0.3.0':
-    resolution: {integrity: sha512-l4Ss3BpTje7VLyD8p22STMEFv0DHI+hGMVXkIRbiq51N1h/zIas7pXyOX6O0OcJpMpErlrBPY/KVWqisrrMWsw==}
+  '@ateliercartographie/label-placer@0.4.0':
+    resolution: {integrity: sha512-VZ5tvEpb9u/bYiVpOTzMuQbWlR8797zd2na4EEHX2qeBm+ZmTXStwajcjZO4kCGeESsh50h1p260RwzTYpVv2A==}
     engines: {node: '>=18'}
 
   '@ateliercartographie/motif.js@0.1.5':
@@ -6511,7 +6511,7 @@ snapshots:
       d3-geo: 3.1.1
       earcut: 3.2.4
 
-  '@ateliercartographie/label-placer@0.3.0': {}
+  '@ateliercartographie/label-placer@0.4.0': {}
 
   '@ateliercartographie/motif.js@0.1.5':
     dependencies:
