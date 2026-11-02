@@ -9,8 +9,10 @@
   import {
     formatActions,
     formatState,
+    MIN_PAGE_AREA_SIZE,
     resolvePageInsetBox
   } from '$lib/features/step-toolbar/tools/format';
+  import { FormatMode } from '../commons/constants/ui.constants';
   import { EVENT } from '../commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
@@ -135,7 +137,10 @@
   let workspaceHeight = $state(0);
   let stepToolbarWidth = $state(0);
 
-  const fitScale = $derived(
+  // Frozen while the page edges are dragged, so the dragged edge stays under
+  // the pointer instead of the page refitting to the workspace at each step.
+  let frozenFitScale = $state<number | null>(null);
+  const workspaceFitScale = $derived(
     resolveWorkspaceFitScale({
       viewportWidth: workspaceWidth,
       viewportHeight: workspaceHeight,
@@ -146,6 +151,7 @@
       maxViewportCoverageRatio: 1
     })
   );
+  const fitScale = $derived(frozenFitScale ?? workspaceFitScale);
   const renderedPageScale = $derived(
     fitScale * (globalState.zoom.pageZoomLevel / 100)
   );
@@ -290,6 +296,7 @@
       cleanupTransitionListener();
       stopResponsiveMapObservers();
       handleResizeUp();
+      handlePageResizeUp();
     };
   });
 
@@ -429,6 +436,127 @@
     event.stopPropagation();
     resizeMapFrame(edge, dx, dy, { ...formatState.mapFrame });
   }
+
+  let hoveredPageResizeEdge = $state<ResizeEdge | null>(null);
+  let pageResizeState = $state<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
+  let pendingPageResizeFrame: number | null = null;
+
+  function resizePage(
+    edge: ResizeEdge,
+    dx: number,
+    dy: number,
+    startWidth: number,
+    startHeight: number
+  ): void {
+    // The page stays centred in the workspace and grows on both sides, so
+    // twice the drag keeps the dragged edge under the pointer.
+    let width = startWidth;
+    let height = startHeight;
+    if (edge.includes('e')) width += 2 * dx;
+    if (edge.includes('w')) width -= 2 * dx;
+    if (edge.includes('s')) height += 2 * dy;
+    if (edge.includes('n')) height -= 2 * dy;
+
+    const snap = formatState.gridEnabled;
+    width = Math.round(
+      Math.max(MIN_PAGE_AREA_SIZE, snapToPageGrid(width, snap))
+    );
+    height = Math.round(
+      Math.max(MIN_PAGE_AREA_SIZE, snapToPageGrid(height, snap))
+    );
+    if (width === formatState.width && height === formatState.height) {
+      return;
+    }
+
+    if (formatState.mode !== FormatMode.CUSTOM) {
+      formatActions.setMode(FormatMode.CUSTOM);
+    }
+    formatActions.setSize(width, height);
+  }
+
+  function handlePageResizePointerDown(
+    event: PointerEvent,
+    edge: ResizeEdge
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    frozenFitScale = fitScale;
+    pageResizeState = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: formatState.width,
+      startHeight: formatState.height
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handlePageResizeUp);
+  }
+
+  // Pointer moves outpace a page relayout: only the latest one is applied,
+  // once per frame.
+  function handlePageResizeMove(event: PointerEvent): void {
+    if (!pageResizeState) return;
+    const { clientX, clientY } = event;
+    if (pendingPageResizeFrame !== null) {
+      cancelAnimationFrame(pendingPageResizeFrame);
+    }
+    pendingPageResizeFrame = requestAnimationFrame(() => {
+      pendingPageResizeFrame = null;
+      if (!pageResizeState) return;
+      const { edge, startX, startY, startWidth, startHeight } = pageResizeState;
+      const scale = Math.max(renderedPageScale, 0.01);
+      resizePage(
+        edge,
+        (clientX - startX) / scale,
+        (clientY - startY) / scale,
+        startWidth,
+        startHeight
+      );
+    });
+  }
+
+  function handlePageResizeUp(): void {
+    if (pendingPageResizeFrame !== null) {
+      cancelAnimationFrame(pendingPageResizeFrame);
+      pendingPageResizeFrame = null;
+    }
+    pageResizeState = null;
+    hoveredPageResizeEdge = null;
+    frozenFitScale = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handlePageResizeUp);
+  }
+
+  function handlePageResizeKeyDown(
+    event: KeyboardEvent,
+    edge: ResizeEdge
+  ): void {
+    const delta = getKeyboardMoveDelta(
+      event,
+      getKeyboardResizeStep(),
+      getKeyboardFastResizeStep()
+    );
+    if (!delta) {
+      return;
+    }
+
+    const dx = edge.includes('e') || edge.includes('w') ? delta.x : 0;
+    const dy = edge.includes('n') || edge.includes('s') ? delta.y : 0;
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    // One key press changes the size by one step, not by twice the step.
+    resizePage(edge, dx / 2, dy / 2, formatState.width, formatState.height);
+  }
 </script>
 
 <div class="main-map-container" class:resizable={showResizeHandles}>
@@ -501,6 +629,30 @@
       {/if}
 
       {#if showResizeHandles}
+        <div
+          class="resize-handles-page"
+          class:highlighted={hoveredPageResizeEdge !== null ||
+            pageResizeState !== null}
+          style="width: {renderedPageWidth}px; height: {renderedPageHeight}px;"
+        >
+          {#each RESIZE_EDGES as edge (edge)}
+            <div
+              class="resize-handle page-resize-handle resize-{edge}"
+              role="button"
+              tabindex="0"
+              aria-label={m.page_resize_handle()}
+              onpointerenter={() => (hoveredPageResizeEdge = edge)}
+              onpointerleave={() => {
+                if (hoveredPageResizeEdge === edge) {
+                  hoveredPageResizeEdge = null;
+                }
+              }}
+              onpointerdown={(e: PointerEvent) =>
+                handlePageResizePointerDown(e, edge)}
+              onkeydown={(e: KeyboardEvent) => handlePageResizeKeyDown(e, edge)}
+            ></div>
+          {/each}
+        </div>
         <div
           class="resize-handles-frame"
           class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
@@ -654,6 +806,62 @@
   .resize-handles-frame.highlighted {
     border-color: rgba(15, 98, 254, 0.55);
     box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
+  }
+
+  /* Page handles sit outside the page, so they never cover the frame handles
+     of a map that reaches the page edge. */
+  .resize-handles-page {
+    --resize-hit-reach: 8px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    outline: 1px dashed transparent;
+    transition: outline-color 120ms ease;
+  }
+
+  .resize-handles-page.highlighted {
+    outline-color: rgba(15, 98, 254, 0.55);
+  }
+
+  .page-resize-handle.resize-n,
+  .page-resize-handle.resize-ne,
+  .page-resize-handle.resize-nw {
+    top: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-s,
+  .page-resize-handle.resize-se,
+  .page-resize-handle.resize-sw {
+    bottom: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-e,
+  .page-resize-handle.resize-ne,
+  .page-resize-handle.resize-se {
+    right: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-w,
+  .page-resize-handle.resize-nw,
+  .page-resize-handle.resize-sw {
+    left: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-n::after {
+    top: calc(2 * var(--resize-hit-reach) - 6px);
+  }
+
+  .page-resize-handle.resize-s::after {
+    top: 0;
+  }
+
+  .page-resize-handle.resize-e::after {
+    left: 0;
+  }
+
+  .page-resize-handle.resize-w::after {
+    left: calc(2 * var(--resize-hit-reach) - 6px);
   }
 
   .resize-handle {

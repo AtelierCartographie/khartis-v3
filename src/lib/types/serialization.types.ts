@@ -81,6 +81,20 @@ export type SerializedMapViewState =
        * restore. Absent from projects saved before it existed.
        */
       targetRatio?: [number, number];
+      /**
+       * Zoom of the automatic fit, shown as 100 %: past the fit of the
+       * reference extent when the map frame closes in on the drawn map.
+       * Absent when it is the reference fit, and in older projects.
+       */
+      baseZoom?: number;
+      /** Centre of that fit, like `targetRatio`; absent when it is the reference centre. */
+      baseTargetRatio?: [number, number];
+      /**
+       * The view still follows the automatic fit: it reopens as such and
+       * keeps adapting to basemap, projection and page changes. Absent from
+       * a view framed by hand and from older projects, which reopen as is.
+       */
+      auto?: boolean;
     }
   | {
       zoom: number;

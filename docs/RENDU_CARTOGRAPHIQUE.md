@@ -288,11 +288,21 @@ grille, textes de page, légendes et indications géographiques s'y placent. Le
 cadre de la carte (`mapFrame`) délimite le canevas de la carte et de la
 collection de cartes, et c'est lui que l'export rend. Changer les marges ne
 déplace pas la carte. Les bords gris de l'étape Habillage modifient le cadre :
-tirer un bord recadre la carte sans la redessiner (vue manuelle). Tant que la
-vue est automatique, un réajustement (données, fond, projection, format de
-page) resserre le cadre sur l'emprise dessinée, centrée dans la zone des
-marges (`resolveFittedMapFrame`) ; avec MapLibre, la carte remplit tout cadre
-et le cadre automatique est la zone des marges.
+tirer un bord recadre la carte sans la redessiner (vue manuelle). Les bords de
+la page, juste à l'extérieur, la redimensionnent de la même manière ; la page
+reste centrée et grandit des deux côtés.
+
+Tant que la vue est automatique, un réajustement (données, fond, projection,
+format de page) colle le cadre à la carte dessinée, sans espace, dans la zone
+des marges. Après chaque mise à jour des calques, `measureDrawnExtent` mesure
+les positions binaires des calques Deck.gl ; `resolveFittedMapFrame` garde la
+partie de cette emprise que l'ajustement automatique montre, l'agrandit
+jusqu'aux marges et en déduit le cadre et la vue de base : un zoom au-delà de
+l'ajustement de la référence et un centre, affichés à 100 % et rétablis par la
+réinitialisation du zoom. La vue enregistrée garde cette vue de base et le fait
+qu'elle est automatique ; un projet antérieur, sans ces champs, rouvre en vue
+manuelle comme avant. Avec MapLibre, la carte remplit tout cadre et le cadre
+automatique est la zone des marges.
 
 Les facettes (collection de cartes) partagent une instance Deck.gl, avec une
 `OrthographicView` par facette. Elles sont toujours rendues en mode

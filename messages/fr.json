@@ -1652,6 +1652,7 @@
   "viz_suggestion_mode_categories": "en catégories",
   "viz_suggestion_mode_labels": "avec libellés",
   "map_resize_handle": "Redimensionner le cadre de la carte",
+  "page_resize_handle": "Redimensionner la page",
   "annotationImageAlt": "Annotation",
   "data_tab_enrich": "Enrichir",
   "enrich_status_done": "Enrichissement terminé",
