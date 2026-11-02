@@ -5,6 +5,8 @@ const USER_GUIDE_URL = `${KHARTIS_SITE_URL}/mode-emploi`;
 export const DOC_LINK = {
   KHARTIS_HOME: KHARTIS_SITE_URL,
   GETTING_STARTED: `${KHARTIS_SITE_URL}/prise-en-main`,
+  FIRST_MAP: `${KHARTIS_SITE_URL}/prise-en-main/ma-premiere-carte`,
+  TUTORIALS: `${KHARTIS_SITE_URL}/prise-en-main#tutoriels`,
   USER_GUIDE: USER_GUIDE_URL,
   LEGACY_V2: 'https://www.sciencespo.fr/cartographie/outils/khartis/old',
   HELP_AND_RESOURCES: `${KHARTIS_SITE_URL}#aide-et-ressources`,
