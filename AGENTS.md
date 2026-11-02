@@ -14,7 +14,7 @@ This file is the entry point for every coding agent. Area-specific rules live in
 
 ## Commands
 
-pnpm through Corepack, Node `>=22 <25` (`.nvmrc`). If pnpm stops with `ERR_PNPM_UNSUPPORTED_ENGINE`, the shell is on another Node: run the command through your version manager, for example `mise exec -- pnpm check`.
+pnpm through Corepack, Node `>=22 <27` (`.nvmrc`). If pnpm stops with `ERR_PNPM_UNSUPPORTED_ENGINE`, the shell is on another Node: run the command through your version manager, for example `mise exec -- pnpm check`.
 
 | Command                                  | Purpose                                                                    |
 | ---------------------------------------- | -------------------------------------------------------------------------- |
