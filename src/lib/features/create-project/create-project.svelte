@@ -227,13 +227,11 @@
     #khartis-create-project :global(.bx--modal-container) {
       width: 90vw;
       max-width: 700px;
-      height: auto;
-      max-height: 90vh;
+      height: min(42.25rem, 90vh);
       background: var(--cds-background);
     }
 
     #khartis-create-project :global(.fixed-modal-body) {
-      height: auto;
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
