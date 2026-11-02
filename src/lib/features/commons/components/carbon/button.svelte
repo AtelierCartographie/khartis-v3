@@ -6,7 +6,7 @@
     CarbonTooltipAlignment,
     CarbonTooltipDirection
   } from '$lib/features/commons/utils/carbon-tooltip-position';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface Props extends Record<string, unknown> {
     children?: Snippet;

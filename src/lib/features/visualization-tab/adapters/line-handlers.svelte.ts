@@ -1,10 +1,10 @@
 import {
-  PrimitiveFilterType,
   type ClassificationConfig,
+  getLinePrimitive,
   type LinePrimitiveConfig,
+  PrimitiveFilterType,
   type VisualizationConfig,
-  type VisualizationModes,
-  getLinePrimitive
+  type VisualizationModes
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { resolveLineModeTransition } from '../hooks/use-line-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';

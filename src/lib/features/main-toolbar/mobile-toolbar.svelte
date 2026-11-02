@@ -51,7 +51,7 @@
     ConfigureVisualization,
     CustomizeBasemap
   } from '$lib/features/visualization-tab';
-  import { tick, type Component } from 'svelte';
+  import { type Component, tick } from 'svelte';
 
   type MobileToolButtonConfig<TTool extends VisualizationTools | StylingTools> =
     {

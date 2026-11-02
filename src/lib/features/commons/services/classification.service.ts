@@ -6,22 +6,22 @@ import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
 import { DEFAULT_VISUALIZATION_COLOR } from '../constants/colors.constants';
+import type { ContrastMode, WebGLColor } from '@ateliercartographie/ok-palette';
 import {
-  sequential,
   divergentSequential,
-  resolvePalette
+  resolvePalette,
+  sequential
 } from '@ateliercartographie/ok-palette';
-import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
 import {
   addCalendarStep,
   buildCalendarBreaks,
   buildEvenCalendarBreaks,
+  type CalendarStep,
   chooseCalendarStep,
   countCalendarClasses,
   floorToCalendarStep,
-  inferCalendarGranularity,
-  type CalendarStep
+  inferCalendarGranularity
 } from '../utils/calendar-breaks.utils';
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';

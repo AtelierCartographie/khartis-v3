@@ -15,8 +15,8 @@ import type {
   VisualizationType
 } from '$lib/features/commons/constants/visualization.constants';
 import type {
-  PatternParams,
   PatternPaletteConfig,
+  PatternParams,
   PatternType
 } from '../constants/pattern.constants';
 import type { CalendarStep } from '../utils/calendar-breaks.utils';

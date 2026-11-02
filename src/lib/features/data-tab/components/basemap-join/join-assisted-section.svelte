@@ -523,10 +523,16 @@
       );
       if (target && node.contains(target)) actionTooltipTrigger = target;
     };
+    // A focused action removed by a bulk action fires focusout while Svelte
+    // tears its list down, when state cannot change: hide right after, unless
+    // another action took the tooltip meanwhile.
     const hide = (event: Event) => {
       const next = (event as MouseEvent | FocusEvent).relatedTarget;
       if (next instanceof Node && actionTooltipTrigger?.contains(next)) return;
-      actionTooltipTrigger = null;
+      const leaving = actionTooltipTrigger;
+      queueMicrotask(() => {
+        if (actionTooltipTrigger === leaving) actionTooltipTrigger = null;
+      });
     };
     const close = () => {
       actionTooltipTrigger = null;

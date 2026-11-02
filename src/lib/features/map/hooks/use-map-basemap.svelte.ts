@@ -13,8 +13,8 @@ import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
-  createOSMRasterSource,
-  createOSMRasterLayer
+  createOSMRasterLayer,
+  createOSMRasterSource
 } from '../services/osm-tile.service';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 

@@ -1,6 +1,6 @@
 import type { Color, Layer } from '@deck.gl/core';
-import { TextLayer } from '@deck.gl/layers';
 import type { TextLayerProps } from '@deck.gl/layers';
+import { TextLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 
 import {
@@ -49,8 +49,8 @@ import {
 } from '../utils/label-wrap.utils';
 import {
   computeLabelLeader,
-  resolveLabelAlignment,
-  type LabelOffset
+  type LabelOffset,
+  resolveLabelAlignment
 } from '../utils/label-layout.utils';
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
@@ -66,11 +66,11 @@ import {
 } from '../utils/label-auto-placement.utils';
 import { resolvePathParser } from './layer-geometry-parsers';
 import {
+  type LabelStackParams,
   resolveLabelStack,
   resolveManualLabelPlacement,
   resolveTextLabelPlacement,
-  TEXT_SYMBOL_GAP_PX,
-  type LabelStackParams
+  TEXT_SYMBOL_GAP_PX
 } from '../utils/text-label-placement.utils';
 import {
   LabelLeaderLayer,
@@ -110,8 +110,8 @@ import {
   resolveTextAnchor,
   resolveVariableTextSizeBounds,
   resolveVerticalPadding,
-  toTextValue,
-  type TextLayerDatum
+  type TextLayerDatum,
+  toTextValue
 } from './text-layer-data.utils';
 import {
   DEFAULT_HALO_WIDTH,
@@ -119,10 +119,10 @@ import {
   DEFAULT_TEXT_COLOR,
   DEFAULT_TEXT_MASK_PADDING,
   DEFAULT_TEXT_SIZE,
-  TEXT_COLLISION_SAFE_PADDING,
-  TRANSPARENT_BACKGROUND_COLOR,
   resolveDeckTextFontFamily,
-  resolveDeckTextFontWeight
+  resolveDeckTextFontWeight,
+  TEXT_COLLISION_SAFE_PADDING,
+  TRANSPARENT_BACKGROUND_COLOR
 } from './text-layer-style.utils';
 import { THEMATIC_OVERLAY_PARAMETERS } from './polygon-pattern-layer.utils';
 import {

@@ -17,8 +17,8 @@ import {
 } from '$lib/features/data-pipeline';
 import { isGeometryColumnType } from '../utils/geometry-column.utils';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 import * as m from '$lib/paraglide/messages';
 import type {
@@ -34,7 +34,6 @@ import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
 import type { Table } from 'apache-arrow/Arrow';
 import { Duck, initDuckDB } from '../duck';
 import {
-  RefineOperation,
   type AnalysisResult,
   type ArrowTableLike,
   type DataTableFilter,
@@ -42,6 +41,7 @@ import {
   type DuckDBDataset,
   type FilterStats,
   type GPSColumns,
+  RefineOperation,
   type SearchStats
 } from '../types';
 import { registerTableMutationCallback } from '../cache/cache-manager';

@@ -12,9 +12,9 @@
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
+    type ColorPickerValidateEvent,
     INSET_MAP_SIZE_LIMITS,
-    isInsetMapAvailableForViewport,
-    type ColorPickerValidateEvent
+    isInsetMapAvailableForViewport
   } from './geo-indications.utils';
 
   const store = geoIndicationsActions;

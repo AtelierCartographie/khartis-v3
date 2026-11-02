@@ -1,5 +1,5 @@
 import {
-  PrimitiveFilterType,
+  type ClassificationConfig,
   getLinePrimitive,
   getLineThicknessClassification,
   getPrimitiveCategoryColumn,
@@ -9,7 +9,7 @@ import {
   getSymbolFillClassification,
   getSymbolFillValueColumn,
   getSymbolPrimitive,
-  type ClassificationConfig,
+  PrimitiveFilterType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -18,8 +18,8 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   CLASSIFIABLE_PRIMITIVES,
-  STROKE_CLASSIFIABLE_PRIMITIVES,
   type ClassifiablePrimitive,
+  STROKE_CLASSIFIABLE_PRIMITIVES,
   type StrokeClassifiablePrimitive
 } from '../hooks/use-primitive-panel-controller.svelte';
 

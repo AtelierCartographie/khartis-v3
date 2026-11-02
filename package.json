@@ -25,7 +25,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=22 <25",
+    "node": ">=22 <27",
     "pnpm": ">=10"
   },
   "contributors": [

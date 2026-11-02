@@ -1,4 +1,5 @@
 import {
+  type ClassificationConfig,
   getEnabledPrimitiveFilters,
   getLinePrimitive,
   getLineThicknessClassification,
@@ -12,9 +13,8 @@ import {
   getSymbolPrimitive,
   PrimitiveFilterType,
   ScaleType,
-  VisualizationType,
-  type ClassificationConfig,
-  type VisualizationConfig
+  type VisualizationConfig,
+  VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ColorMode,

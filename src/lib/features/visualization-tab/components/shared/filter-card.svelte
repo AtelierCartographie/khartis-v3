@@ -13,11 +13,11 @@
   import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
   import {
     DEFAULT_FILTER_LIMIT,
-    MAX_FILTER_LIMIT,
+    defaultOperatorForType,
+    getAvailableOperatorsForType,
     getFilterColumnType,
     getOperatorDef,
-    getAvailableOperatorsForType,
-    defaultOperatorForType
+    MAX_FILTER_LIMIT
   } from './filter-operators.utils';
 
   interface DataFieldOption {

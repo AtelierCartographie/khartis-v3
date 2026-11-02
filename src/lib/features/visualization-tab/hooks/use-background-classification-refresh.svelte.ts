@@ -9,8 +9,8 @@ import {
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
+  type ClassificationConfig,
   ClassificationMethod,
-  PrimitiveFilterType,
   getLinePrimitive,
   getLineThicknessClassification,
   getPolygonPrimitive,
@@ -20,10 +20,10 @@ import {
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
-  visualizationStore,
-  type ClassificationConfig,
   type PrimitiveFilter,
-  type VisualizationConfig
+  PrimitiveFilterType,
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

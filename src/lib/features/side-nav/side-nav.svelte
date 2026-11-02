@@ -34,8 +34,8 @@
   } from 'carbon-components-svelte';
   import {
     CopyFile,
-    Download,
     DocumentAdd,
+    Download,
     Education,
     FolderOpen,
     Information,

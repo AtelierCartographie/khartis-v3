@@ -3,6 +3,7 @@ import {
   buildCalendarBreaks,
   buildEvenCalendarBreaks,
   CALENDAR_UNIT,
+  type CalendarStep,
   chooseCalendarStep,
   countCalendarClasses,
   floorToCalendarStep,
@@ -10,8 +11,7 @@ import {
   formatCalendarClassLabel,
   inferCalendarGranularity,
   listCalendarStepOptions,
-  parseCalendarBoundary,
-  type CalendarStep
+  parseCalendarBoundary
 } from './calendar-breaks.utils';
 
 const d = (iso: string) => Date.parse(`${iso}T00:00:00Z`);

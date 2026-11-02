@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Subtract, Add } from 'carbon-icons-svelte';
+  import { Add, Subtract } from 'carbon-icons-svelte';
   import { m } from '$lib/paraglide/messages';
 
   interface Props {

@@ -11,31 +11,31 @@
   import LineThicknessSection from './line-thickness-section.svelte';
   import LineColorSection from './line-color-section.svelte';
   import type {
+    ClassificationConfig,
     MissingDataConfig,
     VisualizationConfig,
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
     PrimitiveFilterType
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     BasemapDottedPattern,
     ColorMode,
     DEFAULT_COLORS,
-    ThicknessMode,
     SLIDER_LIMITS,
+    ThicknessMode,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import {
     NONE_FIELD_ID,

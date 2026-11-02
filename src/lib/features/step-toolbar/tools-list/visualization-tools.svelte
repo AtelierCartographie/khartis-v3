@@ -12,7 +12,7 @@
     WatsonHealthScalpelSelect
   } from 'carbon-icons-svelte';
   import { selectTool } from './tool-list.utils.svelte';
-  import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
+  import { CSS_CLASSES, STORAGE_KEYS } from '../step-toolbar.constants';
   import { untrack } from 'svelte';
   import { facetsStore } from '../tools/facets';
 

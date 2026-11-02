@@ -11,10 +11,10 @@ import {
 } from '../../../constants/data.constants';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
 import {
+  type HookValue,
   isMissingRequestedTableError,
   isRequestedTableAvailable,
-  resolveHookValue,
-  type HookValue
+  resolveHookValue
 } from './table-hook.utils';
 
 // The joined entity name stays visible: it is how a basemap join shows in the

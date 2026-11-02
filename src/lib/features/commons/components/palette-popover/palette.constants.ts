@@ -1,21 +1,21 @@
 import * as m from '$lib/paraglide/messages';
-import {
-  sequential,
-  divergentSequential,
-  categorical,
-  resolvePalette,
-  presets
-} from '@ateliercartographie/ok-palette';
 import type {
-  WebGLColor,
+  CategoricalColorOptions,
   ContrastMode,
-  CategoricalColorOptions
+  WebGLColor
+} from '@ateliercartographie/ok-palette';
+import {
+  categorical,
+  divergentSequential,
+  presets,
+  resolvePalette,
+  sequential
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
 import {
-  PatternType,
   type PatternParams,
-  type PatternShape
+  type PatternShape,
+  PatternType
 } from '$lib/features/commons/constants/pattern.constants';
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import {
@@ -24,8 +24,8 @@ import {
 } from '$lib/features/commons/utils/color-utils';
 import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
 import {
-  resolveMotifOptions,
-  type PatternName
+  type PatternName,
+  resolveMotifOptions
 } from '$lib/features/map/layers/pattern-texture';
 import {
   DEFAULT_QUALITATIVE_PRESET,
