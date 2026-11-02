@@ -282,6 +282,18 @@ Légendes, annotations, échelle, orientation, indications géographiques et
 sont persistés et exportés sans toucher la géométrie ni le moteur. L'export
 passe par `globalState.isMapExporting`, jamais par un changement d'étape.
 
+La page porte deux zones distinctes, enregistrées dans l'état du Format en
+unités de page. Les marges (`margins`) délimitent la zone de mise en page :
+grille, textes de page, légendes et indications géographiques s'y placent. Le
+cadre de la carte (`mapFrame`) délimite le canevas de la carte et de la
+collection de cartes, et c'est lui que l'export rend. Changer les marges ne
+déplace pas la carte. Les bords gris de l'étape Habillage modifient le cadre :
+tirer un bord recadre la carte sans la redessiner (vue manuelle). Tant que la
+vue est automatique, un réajustement (données, fond, projection, format de
+page) resserre le cadre sur l'emprise dessinée, centrée dans la zone des
+marges (`resolveFittedMapFrame`) ; avec MapLibre, la carte remplit tout cadre
+et le cadre automatique est la zone des marges.
+
 Les facettes (collection de cartes) partagent une instance Deck.gl, avec une
 `OrthographicView` par facette. Elles sont toujours rendues en mode
 orthographique : un fond uniquement MapLibre n'y est pas dessiné et un

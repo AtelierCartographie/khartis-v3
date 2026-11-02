@@ -8,7 +8,8 @@
   import { ToolbarStep } from '../commons/types/global';
   import {
     formatActions,
-    formatState
+    formatState,
+    resolvePageInsetBox
   } from '$lib/features/step-toolbar/tools/format';
   import { EVENT } from '../commons/constants/dom.constants';
   import {
@@ -18,7 +19,6 @@
   } from '../commons/utils/page-grid.utils';
   import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
-  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
@@ -156,34 +156,9 @@
     Math.max(1, Math.round(formatState.height * renderedPageScale))
   );
 
-  // Resize handles target the map frame inside fixed page margins.
-  const mapAreaInsetLeftPx = $derived(
-    Math.round(formatState.margins.left * renderedPageScale)
-  );
-  const mapAreaInsetTopPx = $derived(
-    Math.round(formatState.margins.top * renderedPageScale)
-  );
-  const mapAreaWidthPx = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (formatState.width -
-          formatState.margins.left -
-          formatState.margins.right) *
-          renderedPageScale
-      )
-    )
-  );
-  const mapAreaHeightPx = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (formatState.height -
-          formatState.margins.top -
-          formatState.margins.bottom) *
-          renderedPageScale
-      )
-    )
+  // Resize handles follow the map frame, which page margins do not move.
+  const mapFrameBox = $derived(
+    resolvePageInsetBox(formatState, formatState.mapFrame, renderedPageScale)
   );
 
   function applyWorkspaceResize(entry: ResizeObserverEntry): void {
@@ -358,7 +333,7 @@
     edge: ResizeEdge;
     startX: number;
     startY: number;
-    startMargins: { top: number; right: number; bottom: number; left: number };
+    startFrame: { top: number; right: number; bottom: number; left: number };
   } | null>(null);
 
   function getKeyboardResizeStep(): number {
@@ -373,17 +348,14 @@
     edge: ResizeEdge,
     dx: number,
     dy: number,
-    startMargins: { top: number; right: number; bottom: number; left: number }
+    startFrame: { top: number; right: number; bottom: number; left: number }
   ): void {
-    // Resizing the frame is composing the page by hand: page elements stay
-    // where they are instead of following the frame into the map.
-    annotationsActions.pinPageElements();
-    let { top, right, bottom, left } = startMargins;
+    let { top, right, bottom, left } = startFrame;
 
-    if (edge.includes('e')) right = startMargins.right - dx;
-    if (edge.includes('w')) left = startMargins.left + dx;
-    if (edge.includes('s')) bottom = startMargins.bottom - dy;
-    if (edge.includes('n')) top = startMargins.top + dy;
+    if (edge.includes('e')) right = startFrame.right - dx;
+    if (edge.includes('w')) left = startFrame.left + dx;
+    if (edge.includes('s')) bottom = startFrame.bottom - dy;
+    if (edge.includes('n')) top = startFrame.top + dy;
 
     // The frame edges snap in page coordinates, where layout objects snap too.
     const snap = formatState.gridEnabled;
@@ -393,7 +365,7 @@
     right = width - snapToPageGrid(width - right, snap);
     bottom = height - snapToPageGrid(height - bottom, snap);
 
-    formatActions.setMargins({
+    formatActions.setMapFrame({
       top: Math.round(top),
       right: Math.round(right),
       bottom: Math.round(bottom),
@@ -412,21 +384,21 @@
       edge,
       startX: event.clientX,
       startY: event.clientY,
-      startMargins: { ...formatState.margins }
+      startFrame: { ...formatState.mapFrame }
     };
     window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.addEventListener(EVENT.POINTERUP, handleResizeUp);
   }
 
-  // Edge drag adjusts margins, not page format.
+  // Edge drag adjusts the map frame, not page format or margins.
   function handleResizeMove(event: PointerEvent): void {
     if (!resizeState) return;
-    const { edge, startX, startY, startMargins } = resizeState;
+    const { edge, startX, startY, startFrame } = resizeState;
     const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startMargins);
+    resizeMapFrame(edge, dx, dy, startFrame);
   }
 
   function handleResizeUp(): void {
@@ -455,7 +427,7 @@
 
     event.preventDefault();
     event.stopPropagation();
-    resizeMapFrame(edge, dx, dy, { ...formatState.margins });
+    resizeMapFrame(edge, dx, dy, { ...formatState.mapFrame });
   }
 </script>
 
@@ -532,7 +504,7 @@
         <div
           class="resize-handles-frame"
           class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
-          style="left: {mapAreaInsetLeftPx}px; top: {mapAreaInsetTopPx}px; width: {mapAreaWidthPx}px; height: {mapAreaHeightPx}px;"
+          style="left: {mapFrameBox.left}px; top: {mapFrameBox.top}px; width: {mapFrameBox.width}px; height: {mapFrameBox.height}px;"
         >
           {#each RESIZE_EDGES as edge (edge)}
             <div
