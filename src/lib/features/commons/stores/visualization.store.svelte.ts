@@ -76,7 +76,6 @@ export type {
   TextPrimitiveConfig,
   TextSecondaryLabelsConfig,
   TextSizeModeState,
-  VisualizationAppliedSuggestionState,
   VisualizationConfig,
   VisualizationModes,
   VisualizationOrigin,
