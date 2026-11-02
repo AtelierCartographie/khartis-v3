@@ -149,6 +149,9 @@ vite.config.ts.timestamp-*
 .DS_Store
 **/.DS_Store
 
+# JetBrains IDEs
+.idea/
+
 # Test artifacts (Playwright, Vitest reporters)
 test-results/
 playwright-report/
