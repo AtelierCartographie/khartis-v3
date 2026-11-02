@@ -110,6 +110,16 @@ import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
 import { getBasemapCentroidsTableName } from '../services/basemap-import.service';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  type JoinControlCounts,
+  joinControlStore
+} from '../stores/join-control.store.svelte';
+import {
+  createJoinControlLayers,
+  type JoinControlLayers
+} from '../layers/join-control-layers';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -265,6 +275,69 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         : undefined,
       highlightVersion: mapHighlightStore.version
     };
+  }
+
+  // At the Data step the dataset joined to the reference basemap is drawn by
+  // the basemap: its territories take the color of their join status.
+  function createDatasetJoinControlLayers(
+    datasetId: string,
+    joinedBasemapFile: string | null,
+    split: SplitRenderingTable | undefined,
+    ctx: LayerContext,
+    showsBasemapLayers: boolean
+  ): JoinControlLayers | null {
+    const metadata = basemapService.currentMetadata;
+    if (
+      !split ||
+      !joinedBasemapFile ||
+      metadata?.file !== joinedBasemapFile ||
+      datasetId !== datasetsStore.selectedDatasetId ||
+      untrack(() => globalState.isMapExporting) ||
+      !split.dataset.schema.fields.some(
+        (field) => field.name === JOINED_BASEMAP_COLUMN.ID
+      )
+    ) {
+      return null;
+    }
+
+    const datasetEntry = datasetsStore.datasets.find(
+      (dataset) => dataset.id === datasetId
+    );
+    const orchestratorDatasetId = datasetEntry?.sourceFileId || datasetId;
+    const geoColumn =
+      duckDBOrchestrator.findDatasetByIdOrSourceFile(orchestratorDatasetId)
+        ?.geoColumn ?? datasetEntry?.geoColumn;
+    if (!geoColumn) {
+      return null;
+    }
+
+    const statuses = joinControlStore.request({
+      datasetId,
+      orchestratorDatasetId,
+      datasetTable: split.dataset,
+      basemap: metadata,
+      geoColumn,
+      excludedValues: dataTabState.basemapJoin.ignoredEntities.map(
+        (entity) => entity.dataValue
+      )
+    });
+    if (!statuses) {
+      return null;
+    }
+
+    return createJoinControlLayers({
+      layerId: `join-control-${datasetId}${
+        ctx.projectionSuffix ? `-${ctx.projectionSuffix}` : ''
+      }`,
+      geometry: split.geometry,
+      featureIdColumn: split.featureIdColumn,
+      rows: statuses.rows,
+      focusedStatus: joinControlStore.focusedStatus,
+      outlineTerritories:
+        !showsBasemapLayers ||
+        !metadata.layers.some((layer) => layer.type === BasemapLayerType.LIMIT),
+      ctx
+    });
   }
 
   function findFirstSymbolLayerId(map: MapLibreMap): string | undefined {
@@ -1527,6 +1600,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
+      const joinControlTerritoryLayers: Layer<DeckDataRow>[] = [];
+      let joinControlCounts: JoinControlCounts | null = null;
+
       if (shouldRenderDatasetFallbacks) {
         const fallbackDatasetIds = new Set<string>(tables.keys());
 
@@ -1613,6 +1689,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             ...fallbackCtx,
             highlightedRowIds: undefined
           };
+          const joinControl = isDrawnByReferenceBasemap
+            ? createDatasetJoinControlLayers(
+                datasetId,
+                datasetJoinedBasemap,
+                splitData?.get(datasetId),
+                fallbackCtx,
+                shouldShowBasemapLayers
+              )
+            : null;
+          if (joinControl) {
+            joinControlTerritoryLayers.push(...joinControl.territoryLayers);
+            layers.push(...joinControl.markerLayers);
+            joinControlCounts = joinControl.counts;
+          }
           if (
             !isDrawnByReferenceBasemap &&
             table?.schema.metadata?.get('geo')
@@ -1627,6 +1717,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           }
         }
       }
+
+      joinControlStore.publishCounts(joinControlCounts);
 
       // The projected-sphere ocean mask should appear for any non-identity
       // projection driving the render — both manual overrides and a basemap's
@@ -1763,6 +1855,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const orderedLayers = applyPanelRenderOrder(
         [
           ...basemapBackgroundLayers,
+          ...joinControlTerritoryLayers,
           ...basemapForegroundBelowThematicLayers,
           ...basemapForegroundLayers,
           ...layers

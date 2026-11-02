@@ -173,6 +173,10 @@ Le grading de jointure (joint / à vérifier / non unique / non reconnu) est
 matérialisé dans des tables dérivées, **clés sur le cache de similarité** qui
 les a produites : invalider ce cache fait tomber les gradings. Des appels
 concurrents partagent un même calcul.
+`getJoinTerritoryStatuses` relit ce grading avec la table finalisée pour donner
+un statut à chaque entité du fond (joint, à vérifier, répété, sans donnée) :
+c'est la carte de contrôle de l'étape Données. Comme la finalisation, elle lit
+toute la table, sans les filtres.
 
 La jointure à un fond et la jointure d'enrichissement (un tableau joint à un
 fichier géographique) passent par ce même moteur (`join-ops.ts`). Elles ne

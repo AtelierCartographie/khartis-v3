@@ -318,7 +318,13 @@
             <span class="tooltip-key" class:viz-column={entry.isVizColumn}
               >{entry.key}</span
             >
-            <span class="tooltip-value">{entry.value}</span>
+            <span class="tooltip-value"
+              >{#if entry.swatch}<span
+                  class="tooltip-swatch"
+                  style:background={entry.swatch}
+                  aria-hidden="true"
+                ></span>{/if}{entry.value}</span
+            >
           </div>
         {/each}
       </div>
@@ -412,7 +418,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
   }
 
   .tooltip-badges {
@@ -503,7 +509,7 @@
   }
 
   .tooltip-key {
-    color: #525252;
+    color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -526,6 +532,15 @@
     max-width: 114px;
     flex-shrink: 0;
     justify-self: end;
+  }
+
+  .tooltip-swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 4px;
+    vertical-align: -0.125rem;
+    box-shadow: inset 0 0 0 1px rgba(22, 22, 22, 0.25);
   }
 
   .interactive .tooltip-key,
@@ -555,7 +570,7 @@
     line-height: 1.3;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: #6f6f6f;
+    color: var(--cds-text-helper, #6f6f6f);
   }
 
   .interactive .tooltip-key.viz-column {

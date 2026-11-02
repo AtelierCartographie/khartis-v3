@@ -26,6 +26,8 @@ export interface TooltipEntry {
   value: string;
   /** The column drives one of the hovered layer's visualizations. */
   isVizColumn?: boolean;
+  /** CSS background of a swatch shown before the value, as in the legend. */
+  swatch?: string;
 }
 
 export interface OrthographicMainViewState {
