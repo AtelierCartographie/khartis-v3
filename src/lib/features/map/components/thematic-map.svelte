@@ -48,6 +48,7 @@
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
   import { labelPlacementViewStore } from '../stores/label-placement-view.store.svelte';
   import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
+  import LabelHoverFrame from './label-hover-frame.svelte';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { rowScopeStore } from '../stores/row-scope.store.svelte';
@@ -2187,6 +2188,7 @@
         class:is-over-label={labelEditing.isOverLabel}
         style={mapCanvasStyle}
       ></div>
+      <LabelHoverFrame box={labelEditing.hoverBox} />
 
       {#if isSwitchingViewMode}
         <div class="view-mode-loader" transition:fade={{ duration: 200 }}>

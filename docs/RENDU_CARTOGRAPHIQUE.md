@@ -127,7 +127,11 @@ données modifiées.
 
 Pendant le glisser, l'étiquette est retirée des couches thématiques et un aperçu
 est posé au-dessus de la pile, comme le surlignage au survol : suivre le
-pointeur ne reconstruit pas les couches.
+pointeur ne reconstruit pas les couches. Au survol, le bloc de l'étiquette est
+cerné d'un cadre tireté (`components/label-hover-frame.svelte`), le même que
+celui de la légende et des annotations, à l'emprise stricte du texte, sans la
+marge de sécurité du placement : un élément DOM posé sur le canevas, calculé
+depuis l'ancrage projeté et le bloc en pixels de page.
 
 Le filet (`computeLabelLeader`, qui délègue à `leaderGeometry` du paquet
 `@ateliercartographie/label-placer`) part d'une zone tampon autour du symbole et ne
