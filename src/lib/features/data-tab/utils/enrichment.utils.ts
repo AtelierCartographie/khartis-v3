@@ -1,7 +1,7 @@
 import {
-  getGeoColumnDescription,
   type GeoColumnResult,
-  type GeoDetectionResult
+  type GeoDetectionResult,
+  getGeoColumnDescription
 } from '$lib/features/commons/utils/geo-detection.utils';
 import {
   GEO_COLUMN_TYPE,

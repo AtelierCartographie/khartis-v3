@@ -1,6 +1,7 @@
 import { FileType } from '$lib/features/commons/utils/file-import.utils';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { FileWithId } from '$lib/features/duckdb';
 import { Duck } from '$lib/features/duckdb';
 import {
   createCompanionFilesFromAssetRefs,
@@ -26,9 +27,9 @@ import {
   readFileHead
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
-import type { FileWithId } from '$lib/features/duckdb';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
 import { normalizeGeoParquetTable } from '../operations/geoparquet';
+import { normalizeGeometryColumnName } from '../operations/geometry-column';
 import {
   assertImportRowCountWithinLimit,
   readParquetRowCount,
@@ -106,6 +107,7 @@ export async function readFileIntoTable(
         shapefile: isShapefile,
         ...(options.layer ? { layer: options.layer } : {})
       });
+      await normalizeGeometryColumnName(tableName, Duck);
       return { tableName, fileInfo, isGeoFile, format };
     } catch (geoReadError) {
       if (!fileInfo.name.toLowerCase().endsWith('.json')) {
@@ -144,6 +146,13 @@ export async function readFileIntoTable(
   );
   if (geoParquetMetadata) {
     await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
+  }
+  if (isParquetFileName(fileInfo.name)) {
+    await normalizeGeometryColumnName(
+      tableName,
+      Duck,
+      geoParquetMetadata?.primary_column
+    );
   }
   return { tableName, fileInfo, isGeoFile, format, csvOptions };
 }

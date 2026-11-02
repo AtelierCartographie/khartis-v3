@@ -1,55 +1,55 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     MAIN_TOOLBAR_ID,
     readToolbarPanelRight,
     resolveToolbarPanelWidthFromClassName
   } from '$lib/features/commons/utils/toolbar-width.utils';
-  import { Close } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import DiscretizationPanel from './discretization-panel.svelte';
   import {
-    ClassificationMethod,
     type ClassificationConfig,
+    ClassificationMethod,
     type PrimitiveFilter,
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
   import {
     DEFAULT_CLASSIFICATION_CLASS_COUNT,
-    SLIDER_DEBOUNCE_MS,
-    type ShapeType
+    type ShapeType,
+    SLIDER_DEBOUNCE_MS
   } from '$lib/features/commons/constants/visualization.constants';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { facetsStore, SCALE_MODE } from '../../adapters/facets-adapter';
   import { tick, untrack } from 'svelte';
+  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    isQ6ContractHonoured,
     normalizeClassificationMethod,
     resolveBreakpointLowerClassCount,
-    isQ6ContractHonoured,
     resolveComputedClassCount,
     resolveDiscretizationNote,
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
   } from '$lib/features/commons/utils/discretization.utils';
-  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import {
+    type ClassificationBreaksComputation,
     computeClassificationBreaks,
-    resolveClassificationBreakColors,
-    type ClassificationBreaksComputation
+    resolveClassificationBreakColors
   } from '../../hooks/use-classification-breaks.svelte';
   import {
+    type CalendarStep,
     formatCalendarBoundary,
     listCalendarStepOptions,
-    parseCalendarBoundary,
-    type CalendarStep
+    parseCalendarBoundary
   } from '$lib/features/commons/utils/calendar-breaks.utils';
   import { resolveLocale } from '$lib/features/commons/utils/format.utils';
   import {
@@ -801,45 +801,42 @@
     aria-label={m.discretization()}
     data-role={role}
   >
-    <header class="panel-header">
-      <h3>{m.discretization()}</h3>
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Close}
-        iconDescription={m.close()}
-        on:click={handleClose}
-      />
-    </header>
-    <div class="panel-body" aria-busy={isCalculating}>
-      {#key panelRenderKey}
-        <DiscretizationPanel
-          bind:method={currentMethod}
-          bind:numClasses={currentNumClasses}
-          discretizationNote={discretizationNote}
-          bind:breaks={currentBreaks}
-          bind:breakpointValue={currentBreakpoint}
-          bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}
-          showBreakpointControls={showBreakpointControls}
-          divergingPreviewColors={divergingPreview}
-          sizePreview={role === 'size' ? sizePreview : undefined}
-          binFillStrategy={binFillStrategy}
-          calendarStepOptions={calendarStepOptions}
-          calendarStepId={calendarStepId}
-          oncalendarstepchange={handleCalendarStepChange}
-          isDateValue={isDateValue}
-          formatBound={isDateValue ? formatCalendarBound : undefined}
-          parseBound={isDateValue ? parseCalendarBound : undefined}
-          classCountMax={currentMethod === ClassificationMethod.HEAD_TAIL
-            ? headTailClassCountMax
-            : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
-          onmethodchange={handleMethodChange}
-          onclasseschange={handleClassesChange}
-          onbreakpointchange={handleBreakpointChange}
-          onbreakpointpositionchange={handleBreakpointPositionChange}
-          onbreakschange={handleBreaksChange}
-        />
-      {/key}
+    <PanelHeader
+      title={m.discretization()}
+      closeLabel={m.close()}
+      onclose={handleClose}
+    />
+    <div class="kh-scroll-area">
+      <div class="panel-body" aria-busy={isCalculating} use:scrollShadows>
+        {#key panelRenderKey}
+          <DiscretizationPanel
+            bind:method={currentMethod}
+            bind:numClasses={currentNumClasses}
+            discretizationNote={discretizationNote}
+            bind:breaks={currentBreaks}
+            bind:breakpointValue={currentBreakpoint}
+            bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}
+            showBreakpointControls={showBreakpointControls}
+            divergingPreviewColors={divergingPreview}
+            sizePreview={role === 'size' ? sizePreview : undefined}
+            binFillStrategy={binFillStrategy}
+            calendarStepOptions={calendarStepOptions}
+            calendarStepId={calendarStepId}
+            oncalendarstepchange={handleCalendarStepChange}
+            isDateValue={isDateValue}
+            formatBound={isDateValue ? formatCalendarBound : undefined}
+            parseBound={isDateValue ? parseCalendarBound : undefined}
+            classCountMax={currentMethod === ClassificationMethod.HEAD_TAIL
+              ? headTailClassCountMax
+              : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
+            onmethodchange={handleMethodChange}
+            onclasseschange={handleClassesChange}
+            onbreakpointchange={handleBreakpointChange}
+            onbreakpointpositionchange={handleBreakpointPositionChange}
+            onbreakschange={handleBreaksChange}
+          />
+        {/key}
+      </div>
     </div>
   </aside>
 {/if}
@@ -854,7 +851,7 @@
     width: 320px;
     min-height: 320px;
     max-height: min(80vh, calc(100dvh - 120px));
-    z-index: var(--z-dropdown);
+    z-index: var(--z-overlay);
     background: var(--cds-background, #ffffff);
     display: flex;
     flex-direction: column;
@@ -885,32 +882,9 @@
     }
   }
 
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-04) var(--cds-spacing-02) var(--cds-spacing-03)
-      var(--cds-spacing-05);
-    position: sticky;
-    top: 0;
-    flex-shrink: 0;
-    background: var(--cds-background, #ffffff);
-    z-index: 1;
-
-    h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      line-height: 1.5rem;
-      letter-spacing: 0;
-      margin: 0;
-      color: var(--cds-text-01);
-    }
-  }
-
   .panel-body {
     flex: 1;
     overflow-y: auto;
-    padding-top: var(--cds-spacing-03);
+    padding-top: var(--cds-spacing-05);
   }
 </style>

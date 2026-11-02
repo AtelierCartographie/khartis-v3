@@ -4,8 +4,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
   getPolygonPrimitive,
-  PrimitiveFilterType,
-  type PrimitiveFilter
+  type PrimitiveFilter,
+  PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { DeckLayerId, GeometryType } from '../constants';
 import { extractGeometryInfo } from '../io';

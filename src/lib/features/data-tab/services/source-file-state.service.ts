@@ -1,10 +1,13 @@
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import type {
+  DatasetAttachment,
+  UploadedFile
+} from '$lib/features/commons/types/create-project.types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import {
   buildStatisticsSnapshot,
   type GeometryInfo
 } from '$lib/features/data-pipeline';
-import { Duck, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult, Duck } from '$lib/features/duckdb';
 import { persistTableSnapshot } from '$lib/features/project-management';
 
 type JoinStateUpdates = Partial<
@@ -78,11 +81,29 @@ export async function persistSourceFileState(input: {
   await projectStore.saveCurrentProject();
 }
 
+/**
+ * Marks a project table as part of the geo file it enriched. Saved with the
+ * enrichment that follows.
+ */
+export function markSourceFileAttached(
+  tableSourceFileId: string,
+  attachment: DatasetAttachment
+): void {
+  const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+    (file) => file.id === tableSourceFileId
+  );
+  if (sourceFile) {
+    sourceFile.attachedTo = attachment;
+  }
+}
+
 export async function persistEnrichedSourceFile(input: {
   sourceFileId: string;
   tableName: string;
   duckColumns: AnalysisResult[];
   geometry?: GeometryInfo;
+  /** Columns this enrichment added, with the file each came from. */
+  joinedColumnOrigins: Record<string, string>;
 }): Promise<void> {
   const { sourceFileId, tableName, duckColumns, geometry } = input;
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
@@ -107,6 +128,10 @@ export async function persistEnrichedSourceFile(input: {
   // with the original row ids, so only later ones are replayed on reload.
   sourceFile.columnTransformations = [];
   sourceFile.deletedRowIds = [];
+  sourceFile.joinedColumnOrigins = {
+    ...sourceFile.joinedColumnOrigins,
+    ...input.joinedColumnOrigins
+  };
 
   applySourceFileState(
     sourceFile,

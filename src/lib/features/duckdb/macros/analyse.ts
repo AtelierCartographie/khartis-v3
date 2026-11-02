@@ -208,6 +208,13 @@ const histogram_date_macro = `CREATE OR REPLACE MACRO histogram_date(tabname, co
 );`;
 
 // HISTOGRAM CATEGORICAL
+// A column header is a few hundred pixels wide: up to the first threshold
+// every repeated category gets its bar, past it the most frequent ones keep
+// theirs and the rest share one bar, which then always groups more categories
+// than it would hide under a single cap.
+const MAX_CATEGORIES_SHOWN = 100;
+const CATEGORIES_KEPT_WHEN_GROUPED = 50;
+
 const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categorical(tabname, colname) AS TABLE (
 	WITH nrow AS (
 		SELECT count(*) AS total FROM query_table(tabname)
@@ -215,18 +222,45 @@ const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categoric
 		FROM query_table(tabname), nrow
 	   	SELECT "colname" AS category, count(*) AS count, count / nrow.total AS percent
 	   	GROUP BY "colname", nrow.total
-	   	ORDER BY count DESC
 	), one AS (
 		FROM all_categories
-		SELECT 'unique', count(count) as count, sum(percent) as percent
+		SELECT 'unique' AS category, count(count) AS count, sum(percent) AS percent
 		WHERE count = 1
 	), several AS (
 		FROM all_categories
+		SELECT
+			*,
+			row_number() OVER (ORDER BY count DESC, category) AS rank,
+			count(*) OVER () AS several_categories
 		WHERE count <> 1
-	) FROM several
-	UNION ALL
-	FROM one
-  	WHERE count <> 0
+	), shown AS (
+		FROM several
+		SELECT category, count, percent, NULL::BIGINT AS other_categories, rank
+		WHERE several_categories <= ${MAX_CATEGORIES_SHOWN}
+			OR rank <= ${CATEGORIES_KEPT_WHEN_GROUPED}
+	), others AS (
+		FROM several
+		SELECT
+			NULL AS category,
+			sum(count)::BIGINT AS count,
+			sum(percent) AS percent,
+			count(*) AS other_categories,
+			${CATEGORIES_KEPT_WHEN_GROUPED + 1} AS rank
+		WHERE several_categories > ${MAX_CATEGORIES_SHOWN}
+			AND rank > ${CATEGORIES_KEPT_WHEN_GROUPED}
+		HAVING count(*) > 0
+	)
+	FROM (
+		FROM shown
+		UNION ALL BY NAME
+		FROM others
+		UNION ALL BY NAME
+		FROM one
+		SELECT *, NULL::BIGINT AS other_categories, ${MAX_CATEGORIES_SHOWN + 2} AS rank
+		WHERE count <> 0
+	)
+	SELECT category, count, percent, other_categories
+	ORDER BY rank
 );`;
 
 export const analyse =

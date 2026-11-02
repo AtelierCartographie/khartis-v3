@@ -1,13 +1,13 @@
 import {
-  SavePriority,
   persistenceRegistry,
+  SavePriority,
   type SavePriorityType
 } from '$lib/features/project-management/core';
 import {
+  DEFAULT_DISCRETIZATION_CLASS_COUNT,
   FillMode,
-  VisualizationType,
   VISUALIZATION_DEFAULTS,
-  DEFAULT_DISCRETIZATION_CLASS_COUNT
+  VisualizationType
 } from '$lib/features/commons/constants/visualization.constants';
 import { deepClone } from '../utils/clone.utils';
 import { DataValidationError } from '../pipeline.errors';
@@ -20,15 +20,15 @@ import * as m from '$lib/paraglide/messages';
 
 import {
   ALL_PRIMITIVE_FILTERS,
-  ClassificationMethod,
-  PrimitiveFilterType,
   type ClassificationConfig,
+  ClassificationMethod,
   type LinePrimitiveConfig,
   type MissingDataConfig,
   type PolygonPrimitiveConfig,
   type PrimitiveConfigKind,
   type PrimitiveConfigMap,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type SymbolPrimitiveConfig,
   type TextPrimitiveConfig,
   type VisualizationConfig,
@@ -38,6 +38,21 @@ import {
   type VisualizationState,
   type VizDataFilter
 } from './visualization.types';
+import {
+  buildLinePrimitiveConfig,
+  buildPolygonPrimitiveConfig,
+  buildSymbolPrimitiveConfig,
+  buildTextPrimitiveConfig,
+  getPrimitive,
+  normalizeVisualizationConfig,
+  resolvePrimitiveKind
+} from './visualization-normalize';
+import {
+  resolveDuplicatedVisualizationOrigin,
+  resolveNextVisualizationOrigin
+} from './visualization-origin';
+import { buildVisualizationPreset } from './visualization-presets';
+
 export {
   ALL_PRIMITIVE_FILTERS,
   ClassificationMethod,
@@ -73,20 +88,6 @@ export type {
   VizFilterOperator
 } from './visualization.types';
 
-import {
-  buildLinePrimitiveConfig,
-  buildPolygonPrimitiveConfig,
-  buildSymbolPrimitiveConfig,
-  buildTextPrimitiveConfig,
-  getPrimitive,
-  normalizeVisualizationConfig,
-  resolvePrimitiveKind
-} from './visualization-normalize';
-import {
-  resolveDuplicatedVisualizationOrigin,
-  resolveNextVisualizationOrigin
-} from './visualization-origin';
-import { buildVisualizationPreset } from './visualization-presets';
 export {
   DEFAULT_CATEGORICAL_COLORS,
   resolveVisualizationPreset

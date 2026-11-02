@@ -3,7 +3,7 @@ import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { bigIntReplacer } from './clone.utils';
 import { generateFilename } from './string.utils';
-import { MIME, GEOJSON_TYPE } from '../constants';
+import { GEOJSON_TYPE, MIME } from '../constants';
 import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMNS

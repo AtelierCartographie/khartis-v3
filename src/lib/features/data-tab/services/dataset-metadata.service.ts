@@ -1,7 +1,7 @@
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
-  readDatasetTableSnapshot,
-  type DatasetTableSnapshot
+  type DatasetTableSnapshot,
+  readDatasetTableSnapshot
 } from '$lib/features/data-pipeline';
 
 export async function refreshDatasetMetadata(

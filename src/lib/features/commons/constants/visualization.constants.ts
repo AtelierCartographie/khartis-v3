@@ -1,9 +1,9 @@
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
-  NEUTRAL_CARTOGRAPHY_COLORS,
   DEFAULT_VISUALIZATION_COLOR,
   DEFAULT_VISUALIZATION_NEUTRAL_COLOR,
-  DEFAULT_VISUALIZATION_SECONDARY_COLOR
+  DEFAULT_VISUALIZATION_SECONDARY_COLOR,
+  NEUTRAL_CARTOGRAPHY_COLORS
 } from '$lib/features/commons/constants/colors.constants';
 
 export enum SymbolMode {

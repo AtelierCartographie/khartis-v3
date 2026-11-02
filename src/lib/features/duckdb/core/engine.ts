@@ -30,7 +30,6 @@ const describeCache: Map<string, DescribeResult> = new Map();
 const rowCountCache: Map<string, number> = new Map();
 const extensionLoads: Map<ExtensionName, Promise<void>> = new Map();
 let localExtensionRepositoryConfigured = false;
-let threadsSupported = false;
 let bundleVariant: 'eh' | 'mvp' = 'eh';
 let initPromise: Promise<void> | null = null;
 
@@ -56,7 +55,6 @@ export function getContext(): DuckDBContext {
     rowCountCache,
     extensionLoads,
     localExtensionRepositoryConfigured,
-    threadsSupported,
     bundleVariant
   };
 }
@@ -244,12 +242,6 @@ export async function initEngine(): Promise<void> {
       } else {
         bundleVariant = 'mvp';
       }
-
-      // Keep the documented browser bundles for the DuckDB core itself. The
-      // page now runs in a cross-origin-isolated document so browser worker
-      // paths used by spatial readers can initialize, but the core stays on
-      // the extension-compatible eh/mvp bundles.
-      threadsSupported = false;
 
       worker = new Worker(bundle.mainWorker!);
 

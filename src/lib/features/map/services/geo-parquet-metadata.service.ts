@@ -16,6 +16,9 @@ export interface GeoParquetColumnMeta {
   geometry_types?: string[];
   bbox?: [number, number, number, number];
   crs?: GeoParquetCrsMetadata;
+  covering?: {
+    bbox?: Record<string, string[]>;
+  };
 }
 
 export interface GeoParquetMeta {

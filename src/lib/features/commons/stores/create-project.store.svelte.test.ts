@@ -7,6 +7,12 @@ import {
   DataSourceType,
   FileType
 } from '$lib/features/commons/types/create-project.types';
+import {
+  createProjectActions,
+  createProjectState
+} from './create-project.store.svelte';
+import { REMOTE_FILE_FETCH_TIMEOUT_MS } from '../utils/fetch-with-timeout';
+import { projectStore } from './project.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   processFileMock: vi.fn(),
@@ -122,13 +128,6 @@ vi.mock('$lib/paraglide/messages', () => ({
     `invalid-content-type:${type}`,
   error_download_timeout: () => 'download-timeout'
 }));
-
-import {
-  createProjectActions,
-  createProjectState
-} from './create-project.store.svelte';
-import { REMOTE_FILE_FETCH_TIMEOUT_MS } from '../utils/fetch-with-timeout';
-import { projectStore } from './project.store.svelte';
 
 function makeUploadedFile(
   id: string,

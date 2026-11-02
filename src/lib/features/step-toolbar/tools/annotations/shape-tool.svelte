@@ -21,12 +21,13 @@
     SelectItem,
     Slider
   } from 'carbon-components-svelte';
-  import { Add, TrashCan } from 'carbon-icons-svelte';
+  import { Add } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
+  import SelectionHeader from './_shared/selection-header.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -65,6 +66,19 @@
     { value: SHAPE_TYPE.CIRCLE, text: m.annotations_shape_circle() },
     { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
   ]);
+
+  const selectedShapeName = $derived(
+    selectedShapeAnnotation
+      ? (shapes.find((shape) => shape.value === selectedShapeAnnotation.content)
+          ?.text ?? m.annotations_shape())
+      : undefined
+  );
+
+  function deleteSelectedShape(): void {
+    if (selectedShapeAnnotation) {
+      annotationsActions.removeAnnotation(selectedShapeAnnotation.id);
+    }
+  }
 
   const FILLED_SHAPES: ShapeTypeValue[] = [
     SHAPE_TYPE.RECTANGLE,
@@ -216,6 +230,21 @@
   <Row>
     <Column>
       <div class="section">
+        <SelectionHeader
+          title={selectedShapeAnnotation
+            ? m.annotations_selected_shape()
+            : m.annotations_new_shape()}
+          name={selectedShapeName}
+          deleteLabel={m.annotations_delete_shape()}
+          ondelete={selectedShapeAnnotation ? deleteSelectedShape : undefined}
+        />
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
         <Slider
           labelText={m.thickness()}
           value={effectiveStyle.strokeWidth || 2}
@@ -352,34 +381,6 @@
           minLabel=""
           maxLabel=""
         />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        {#if annotationsState.selectedId}
-          {@const selected = annotationsState.items.find(
-            (i) => i.id === annotationsState.selectedId
-          )}
-          <Button
-            size="field"
-            kind="danger-tertiary"
-            icon={TrashCan}
-            disabled={!selected || selected.type !== AnnotationKind.SHAPE}
-            onclick={() =>
-              selected &&
-              selected.type === AnnotationKind.SHAPE &&
-              annotationsActions.removeAnnotation(selected.id)}
-          >
-            {m.annotations_delete_shape()}
-          </Button>
-        {:else}
-          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled
-            >{m.annotations_delete_shape()}</Button
-          >
-        {/if}
       </div>
     </Column>
   </Row>

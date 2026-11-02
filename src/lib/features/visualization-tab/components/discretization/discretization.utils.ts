@@ -1,6 +1,6 @@
 import {
-  ClassificationMethod,
-  type ClassificationConfig
+  type ClassificationConfig,
+  ClassificationMethod
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { normalizeClassificationMethod } from '$lib/features/commons/utils/discretization.utils';
 import {

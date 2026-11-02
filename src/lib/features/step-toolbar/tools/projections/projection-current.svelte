@@ -11,6 +11,7 @@
   import { m } from '$lib/paraglide/messages';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import { resolveCurrentProjectionDisplay } from './projection-label.utils';
+  import { getNativeCrsEpsg } from './native-projection.utils';
   import { getProjectionState } from './projection.store.svelte';
 
   interface Props {
@@ -36,7 +37,12 @@
         }
       : resolveCurrentProjectionDisplay(
           projectionState,
-          basemapService.currentMetadata?.proj_to,
+          {
+            ...basemapService.currentMetadata?.proj_to,
+            nativeEpsg: getNativeCrsEpsg(
+              basemapService.currentBasemap?.metadata
+            )
+          },
           basemapService.projectionPresets
         )
   );

@@ -74,6 +74,13 @@ export type SerializedMapViewState =
   | {
       zoom: number;
       target: [number, number, number];
+      /**
+       * View center relative to the reference extent: offset from its center,
+       * in extent widths and heights. Unlike `target`, it does not depend on the
+       * size the map is drawn at (window, facet cell), so it is preferred on
+       * restore. Absent from projects saved before it existed.
+       */
+      targetRatio?: [number, number];
     }
   | {
       zoom: number;
@@ -195,6 +202,8 @@ export interface SerializedUploadedFile {
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
   enrichmentSnapshot?: AssetRef;
+  joinedColumnOrigins?: Record<string, string>;
+  attachedTo?: { sourceFileId: string; datasetName: string };
   uploadProgress?: number;
   statistics?: unknown;
   columnTransformations?: ColumnTransformation[];

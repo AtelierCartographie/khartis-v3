@@ -88,6 +88,40 @@ describe('rankBasemapsByGPSBbox', () => {
     expect(suggestions[0]?.matchReason).toBe('GPS bbox containment');
   });
 
+  it('should prefer the tighter basemap when its rounded bbox misses a sliver of the data', () => {
+    const inseeGridBounds: GPSBounds = {
+      minLon: -5.1377,
+      minLat: 41.3676,
+      maxLon: 9.5657,
+      maxLat: 51.087
+    };
+    const suggestions = rankBasemapsByGPSBbox(
+      [
+        createBasemap({
+          file: 'europe-nuts2-2024-medium',
+          title_fr: 'Europe',
+          title_en: 'Europe',
+          date: '2024',
+          bbox: [-10.5, 34.5, 34.5, 71.2]
+        }),
+        createBasemap({
+          file: 'france-canton-2025-high',
+          title_fr: 'France',
+          title_en: 'France',
+          date: '2025',
+          bbox: [-5.14, 41.33, 9.56, 51.09]
+        })
+      ],
+      inseeGridBounds,
+      2
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.file)).toEqual([
+      'france-canton-2025-high',
+      'europe-nuts2-2024-medium'
+    ]);
+  });
+
   it('keeps full coverage ahead of a tighter but partial bbox', () => {
     const suggestions = rankBasemapsByGPSBbox(
       [
@@ -196,7 +230,8 @@ describe('shouldPreferTextBasemapRefinementForGPS', () => {
               bbox: [-61.81, -21.39, 55.83, 51.09]
             }),
             matchScore: 100,
-            matchReason: 'GPS bbox containment'
+            matchReason: 'GPS bbox containment',
+            matchesData: true
           }
         ],
         96
@@ -218,7 +253,8 @@ describe('shouldPreferTextBasemapRefinementForGPS', () => {
               bbox: [-180, -90, 180, 90]
             }),
             matchScore: 54,
-            matchReason: 'GPS bbox overlap'
+            matchReason: 'GPS bbox overlap',
+            matchesData: true
           }
         ],
         96

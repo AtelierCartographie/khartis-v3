@@ -101,6 +101,25 @@ describe('orthographic render resolution utils', () => {
       expect(bounds).toBeNull();
     });
 
+    it('should ignore the source-CRS table still in hand while the WGS84 reload is pending', () => {
+      const sourceCrsTable = makeWgs84Table();
+      sourceCrsTable.schema.metadata.set(
+        'geo',
+        JSON.stringify({
+          primary_column: 'geom',
+          columns: { geom: { crs: { id: { authority: 'EPSG', code: 2154 } } } }
+        })
+      );
+
+      const bounds = resolveOrthographicRenderedDatasetBounds({
+        dataset: makeDataset('EPSG:2154'),
+        renderedTable: sourceCrsTable,
+        hasManualProjectionOverride: true
+      });
+
+      expect(bounds).toBeNull();
+    });
+
     it('uses import-time bounds for a non-WGS84 dataset rendered in its source CRS', () => {
       const bounds = resolveOrthographicRenderedDatasetBounds({
         dataset: makeDataset('EPSG:2154'),

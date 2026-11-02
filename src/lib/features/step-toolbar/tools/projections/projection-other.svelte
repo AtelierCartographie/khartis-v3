@@ -21,8 +21,8 @@
   } from 'carbon-components-svelte';
   import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import {
-    PROJECTIONS as PROJECTION_CATALOG,
-    type ProjectionInfo
+    type ProjectionInfo,
+    PROJECTIONS as PROJECTION_CATALOG
   } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {
@@ -413,7 +413,7 @@
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
-    padding: 6px 12px;
+    padding-block: 6px;
     min-height: var(--kh-size-sm);
   }
 

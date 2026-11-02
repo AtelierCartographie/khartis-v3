@@ -61,6 +61,18 @@ rejouer. Au rechargement, cet instantané remplace la source ; « Réinitialiser
 revient à la source et l'efface. Un instantané illisible déclenche un
 avertissement et la couche est rouverte depuis sa source.
 
+Le fichier source enregistre aussi l'origine de chaque colonne ajoutée par un
+enrichissement (`joinedColumnOrigins`, colonne → fichier joint), que la table
+affiche. Une colonne jointe qui porte déjà un nom de la couche est renommée
+d'après son fichier, par exemple `nom (recensement)`. « Réinitialiser » efface
+cette origine avec l'instantané.
+
+Un tableau du projet joint à une couche géographique en devient une source :
+son fichier enregistre la couche (`attachedTo`). Il n'est plus géolocalisé ni
+joint pour lui-même, et l'étape Visualisations propose la couche à sa place,
+sauf s'il porte déjà des visualisations. Réinitialiser ou supprimer la couche
+le détache.
+
 Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
 les métadonnées de l'asset, le snapshot, les références et les métadonnées de
 projet sont écrits dans des transactions distinctes.

@@ -5,6 +5,7 @@ import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import { inferProjectionIdFromCode } from './projection-code.utils';
+import { findNativeSuggestion } from './native-projection.utils';
 import {
   getCatalogueProjectionIdForD3Config,
   getCatalogueProjectionIdForSuggestion
@@ -106,6 +107,7 @@ export interface BasemapProjectionSource {
   type?: string;
   preset?: string | null;
   proj4?: string | null;
+  nativeEpsg?: string;
 }
 
 // The rendered projection can come from five places: the reference basemap
@@ -121,6 +123,16 @@ export function resolveCurrentProjectionDisplay(
   // 'auto' one is the basemap's own composite, possibly left over from a
   // previous basemap, and must not rename the projection actually drawn.
   if (state.overrideActive !== true || state.overrideSource !== 'manual') {
+    const nativeSuggestion = findNativeSuggestion(
+      state.suggestions,
+      basemapProjection?.nativeEpsg
+    );
+    if (nativeSuggestion) {
+      return {
+        name: getSuggestionProjectionTitle(nativeSuggestion),
+        description: getSuggestionProjectionDescription(nativeSuggestion)
+      };
+    }
     return resolveBasemapProjectionDisplay(
       basemapProjection,
       projectionPresets
@@ -166,7 +178,12 @@ function resolveBasemapProjectionDisplay(
     return resolveProjectionCodeDisplay(source.proj4);
   }
 
-  return { name: m.projection_current_basemap_native() };
+  return source?.nativeEpsg
+    ? {
+        name: m.projection_current_basemap_native(),
+        description: `EPSG:${source.nativeEpsg}`
+      }
+    : { name: m.projection_current_basemap_native() };
 }
 
 function resolveProjectionCodeDisplay(code: string): CurrentProjectionDisplay {

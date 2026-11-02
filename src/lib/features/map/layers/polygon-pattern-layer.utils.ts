@@ -1,8 +1,8 @@
 import type { Layer } from '@deck.gl/core';
 import { SolidPolygonLayer } from '@deck.gl/layers';
 import {
-  createPolygonFillColorAttribute,
-  type BinaryPolygonData
+  type BinaryPolygonData,
+  createPolygonFillColorAttribute
 } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -11,19 +11,19 @@ import {
   type PatternParams
 } from '$lib/features/commons/constants/pattern.constants';
 import {
+  type ClassPattern,
   patternPaletteFromLegacy,
   resolveClassificationPatternConfig,
-  resolveClassPatterns,
-  type ClassPattern
+  resolveClassPatterns
 } from '$lib/features/commons/services/pattern-palette.service';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
-import {
-  getPrimitiveClassification,
-  PrimitiveFilterType
-} from '$lib/features/commons/stores/visualization.store.svelte';
 import type {
   ClassificationConfig,
   getPolygonPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  getPrimitiveClassification,
+  PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
@@ -32,9 +32,9 @@ import {
   getPatternAtlasForPattern,
   getPatternPaletteAtlas,
   isValidPatternId,
-  resolvePatternTilePx,
   PATTERN_TYPE_MAP,
-  type PatternName
+  type PatternName,
+  resolvePatternTilePx
 } from './pattern-texture';
 import { RotatableFillStyleExtension } from './rotatable-fill-style-extension';
 

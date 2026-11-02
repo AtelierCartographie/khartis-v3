@@ -1,7 +1,7 @@
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
-  visualizationStore,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   INTERNAL_COLUMN,

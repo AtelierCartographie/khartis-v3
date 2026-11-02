@@ -71,6 +71,13 @@ export function usesMercatorMapProjection(projectionId: string): boolean {
   );
 }
 
+// A d3 projection fits lon/lat. A bbox still in projected metres (an imported
+// file drawn in its source CRS, before its WGS84 reload lands) makes d3
+// resample a polygon thousands of degrees wide, which stalls the parse worker.
+function isLonLatBbox([west, south, east, north]: BBox): boolean {
+  return west >= -360 && east <= 360 && south >= -90 && north <= 90;
+}
+
 export function resolveUserProjectionOverride({
   state,
   fitBbox,
@@ -105,7 +112,7 @@ export function resolveUserProjectionOverride({
       );
     }
 
-    if (!fitBbox) {
+    if (!fitBbox || !isLonLatBbox(fitBbox)) {
       return undefined;
     }
 

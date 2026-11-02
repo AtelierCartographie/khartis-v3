@@ -7,8 +7,8 @@
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
-    FONT_SIZE_OPTIONS,
     clampFontSize,
+    FONT_SIZE_OPTIONS,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
   import {

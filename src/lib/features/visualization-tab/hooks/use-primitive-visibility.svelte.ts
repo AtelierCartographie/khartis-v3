@@ -1,5 +1,4 @@
 import {
-  PrimitiveFilterType,
   getLinePrimitive,
   getPolygonPrimitive,
   getSymbolPrimitive,
@@ -7,6 +6,7 @@ import {
   type LinePrimitiveConfig,
   type PolygonPrimitiveConfig,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type SymbolPrimitiveConfig,
   type TextPrimitiveConfig,
   type VisualizationConfig

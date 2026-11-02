@@ -11,9 +11,9 @@ import {
   getPolygonPrimitive,
   getPrimitiveSizeColumn,
   getPrimitiveValueColumn,
-  visualizationStore,
   type PrimitiveFilter,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
@@ -184,6 +184,17 @@ export function useMapDisplayData(
       projState.overrideSource === 'manual'
       ? 'projected'
       : 'native';
+  });
+
+  // Same rule as the dataset reprojection below, applied to an imported
+  // basemap drawn in a projected CRS.
+  $effect(() => {
+    const projState = getProjectionState();
+    void basemapService.setRenderInWgs84(
+      usesTiledBasemap ||
+        (projState.overrideActive === true &&
+          projState.overrideSource === 'manual')
+    );
   });
 
   let loadGeneration = 0;

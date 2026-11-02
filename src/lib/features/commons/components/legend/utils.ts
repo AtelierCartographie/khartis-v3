@@ -69,6 +69,11 @@ export interface RenderLegendNoteOptions {
  * rows outgrow any page, and the markup stops being worth rendering, so the
  * remainder collapses into a single counted row.
  */
+/** Size of a legend title for the legend text size `fontSize`. */
+export function legendTitleFontSize(fontSize: number): number {
+  return Math.round(fontSize * 1.16);
+}
+
 export const MAX_LEGEND_CATEGORIES = 200;
 
 export function splitLegendOverflow<T>(items: T[]): {

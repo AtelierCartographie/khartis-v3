@@ -7,11 +7,11 @@
   import {
     DENSITY_DEFAULTS,
     DENSITY_LEVEL,
-    DOT_DENSITY,
-    SLIDER_LIMITS,
     type DensityConfig,
     type DensityLevelName,
-    type DensityLevelOption
+    type DensityLevelOption,
+    DOT_DENSITY,
+    SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';

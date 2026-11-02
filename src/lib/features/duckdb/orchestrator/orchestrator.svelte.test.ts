@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
+import { type DuckDBContext, type DuckDBDataset, FileType } from '../types';
 
 const mocks = vi.hoisted(() => ({
   analyse: vi.fn(),

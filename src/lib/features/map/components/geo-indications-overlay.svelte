@@ -29,32 +29,30 @@
     snapAreaPointWithinPage
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
+    clampScaleDistance,
+    formatScaleDistance,
     geoIndicationsActions,
-    geoIndicationsState
+    geoIndicationsState,
+    getCurrentScaleDistanceContext,
+    getInsetMapFrameOutline,
+    getInsetMapGeographicBounds,
+    getNorthBearingAtCenter,
+    getScaleDistanceLimit,
+    getScaleMetersPerPixel,
+    getSuggestedScaleDistance,
+    INSET_MAP_SIZE_LIMITS,
+    isInsetMapAvailableForViewport,
+    SCALE_MAX_WIDTH_PX,
+    toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
   import {
     getFormatState,
     getLastPageResize,
     type PageResize
   } from '$lib/features/step-toolbar/tools/format';
-  import {
-    clampScaleDistance,
-    formatScaleDistance,
-    getScaleDistanceLimit,
-    getCurrentScaleDistanceContext,
-    getNorthBearingAtCenter,
-    getScaleMetersPerPixel,
-    getSuggestedScaleDistance,
-    getInsetMapFrameOutline,
-    getInsetMapGeographicBounds,
-    INSET_MAP_SIZE_LIMITS,
-    isInsetMapAvailableForViewport,
-    SCALE_MAX_WIDTH_PX,
-    toDistanceMeters
-  } from '$lib/features/step-toolbar/tools/geo-indications';
   import { onDestroy, tick, untrack } from 'svelte';
-  import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
+  import * as d3geo from 'd3-geo';
   import type {
     Feature,
     FeatureCollection,
@@ -79,8 +77,8 @@
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
-    getDefaultInsetStyle,
     getDefaultGeoIndicationTransformOrigin,
+    getDefaultInsetStyle,
     getDefaultOrientationStyle,
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';

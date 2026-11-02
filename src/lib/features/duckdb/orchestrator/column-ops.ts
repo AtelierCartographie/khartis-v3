@@ -1,9 +1,9 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import {
-  RefineOperation,
   type AnalysisResult,
-  type ArrowTableLike
+  type ArrowTableLike,
+  RefineOperation
 } from '../types';
 import { buildNormalizedNumericTextSql } from '$lib/features/commons/utils/numeric-format.utils';
 import {

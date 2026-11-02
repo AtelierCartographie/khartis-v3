@@ -100,3 +100,35 @@ describe('fuzzy scoring short-circuit', () => {
     expect(Number(nearMiss?.short_score)).toBe(0);
   });
 });
+
+async function isCodeColumn(values: string[]): Promise<boolean> {
+  const list = values.map((value) => `('${value}')`).join(', ');
+  const rows = await query(
+    db,
+    `SELECT is_code_column(normalize_text_join(raw), raw) AS result
+     FROM (VALUES ${list}) t(raw)`
+  );
+  return rows[0].result as boolean;
+}
+
+describe('is_code_column macro', () => {
+  it('should read INSEE commune codes as codes when Corsican codes break the numeric cast', async () => {
+    expect(await isCodeColumn(['26371', '75115', '2A004', '19223'])).toBe(true);
+  });
+
+  it('should read numeric codes of mixed lengths as codes', async () => {
+    expect(await isCodeColumn(['1', '13', '974'])).toBe(true);
+  });
+
+  it('should read uppercase ISO3 codes as codes', async () => {
+    expect(await isCodeColumn(['FRA', 'DEU', 'FRB'])).toBe(true);
+  });
+
+  it('should not read place names of equal length as codes', async () => {
+    expect(await isCodeColumn(['Lyon', 'Metz', 'Nice'])).toBe(false);
+  });
+
+  it('should not read lowercase three-letter names as codes', async () => {
+    expect(await isCodeColumn(['Gap', 'Dax', 'Ay'])).toBe(false);
+  });
+});

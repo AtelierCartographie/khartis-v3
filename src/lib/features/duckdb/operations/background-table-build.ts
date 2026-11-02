@@ -13,6 +13,8 @@ export interface BackgroundTableBuildOptions {
   sourceTable: string;
   targetTable: string;
   projection: string;
+  /** Another background build this one starts after. */
+  after?: Promise<unknown>;
 }
 
 interface BackgroundTableBuild {
@@ -85,12 +87,56 @@ export function buildTableInBackground(
     });
 }
 
+/**
+ * Runs a build that cannot be split into batches once the connection has been
+ * idle for idleMs, and marks its target tables pending until it settles. A
+ * single query of the build holds the connection to its end, so the longer
+ * idle delay lets the queries a step fires on opening go first.
+ */
+export function runTableBuildInBackground(
+  sourceTable: string,
+  targetTables: readonly string[],
+  run: (isCurrent: () => boolean) => Promise<void>,
+  idleMs: number
+): Promise<boolean> {
+  const build: BackgroundTableBuild = {
+    sourceTable,
+    stale: false,
+    pending: true,
+    settled: Promise.resolve(false)
+  };
+  for (const targetTable of targetTables) {
+    buildsByTarget.set(targetTable, build);
+  }
+
+  build.settled = (async () => {
+    const isCurrent = () => !build.stale;
+    await waitForQueryIdle(idleMs);
+    if (!isCurrent()) return false;
+    await run(isCurrent);
+    return isCurrent();
+  })()
+    .catch((error) => {
+      logger.error(
+        `Failed to build ${targetTables.join(', ')}`,
+        LogCategory.DUCKDB,
+        error
+      );
+      return false;
+    })
+    .finally(() => {
+      build.pending = false;
+    });
+  return build.settled;
+}
+
 async function buildInBatches(
   duck: DuckClient,
-  { sourceTable, targetTable, projection }: BackgroundTableBuildOptions,
+  { sourceTable, targetTable, projection, after }: BackgroundTableBuildOptions,
   stagingTable: string,
   isCurrent: () => boolean
 ): Promise<boolean> {
+  await after;
   const selectBatch = (start: number) => `
     SELECT ${projection} FROM ${sqlIdentifier(sourceTable)}
     WHERE rowid >= ${start} AND rowid < ${start + BATCH_ROW_COUNT}

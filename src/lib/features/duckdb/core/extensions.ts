@@ -4,7 +4,8 @@ import { executeQuery } from './query';
 
 const LOAD_SQL: Record<ExtensionName, string> = {
   spatial: `INSTALL ${EXTENSIONS.SPATIAL}; ${LOAD_SPATIAL_SQL}`,
-  json: `INSTALL ${EXTENSIONS.JSON}; LOAD ${EXTENSIONS.JSON};`
+  json: `INSTALL ${EXTENSIONS.JSON}; LOAD ${EXTENSIONS.JSON};`,
+  sqlite_scanner: `INSTALL ${EXTENSIONS.SQLITE}; LOAD ${EXTENSIONS.SQLITE};`
 };
 
 /**

@@ -1,18 +1,18 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     MAIN_TOOLBAR_ID,
     readToolbarPanelRight,
     resolveToolbarPanelWidth
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import * as m from '$lib/paraglide/messages';
-  import { Close } from 'carbon-icons-svelte';
   import { onMount, type Snippet } from 'svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
 
@@ -74,18 +74,15 @@
 </script>
 
 <aside class="data-tool-panel" style:right={panelRight}>
-  <header class="panel-header">
-    <h3>{title}</h3>
-    <IconButton
-      kind="ghost"
-      size="small"
-      icon={Close}
-      iconDescription={m.data_tool_close()}
-      on:click={() => dataToolsStore.closeTool()}
-    />
-  </header>
-  <div class="panel-content">
-    {@render children()}
+  <PanelHeader
+    title={title}
+    closeLabel={m.data_tool_close()}
+    onclose={() => dataToolsStore.closeTool()}
+  />
+  <div class="kh-scroll-area">
+    <div class="panel-content" use:scrollShadows>
+      {@render children()}
+    </div>
   </div>
 </aside>
 
@@ -93,9 +90,10 @@
   .data-tool-panel {
     position: fixed;
     right: 0;
-    top: 50%;
+    top: var(--kh-floating-window-center);
     transform: translateY(-50%);
     width: 280px;
+    max-height: var(--kh-floating-window-max-height);
     background: var(--cds-ui-02);
     border: 1px solid var(--cds-border-subtle);
     z-index: var(--z-dropdown);
@@ -125,24 +123,9 @@
     }
   }
 
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--cds-spacing-04);
-    border-bottom: 1px solid var(--cds-border-subtle);
-  }
-
-  .panel-header h3 {
-    margin: 0;
-    font-size: var(--kh-font-primitive);
-    font-weight: var(--kh-weight-primitive);
-    line-height: var(--kh-line-primitive);
-    color: var(--cds-text-01);
-  }
-
   .panel-content {
-    padding: var(--cds-spacing-04);
+    overflow-y: auto;
+    padding: var(--cds-spacing-05);
   }
 
   /* Carbon forces min-width: 18rem on inline notifications, wider than this

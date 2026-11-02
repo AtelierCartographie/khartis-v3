@@ -4,8 +4,8 @@
   import { Modal } from 'carbon-components-svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
-    showSuccess,
-    showError
+    showError,
+    showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
 
   let {

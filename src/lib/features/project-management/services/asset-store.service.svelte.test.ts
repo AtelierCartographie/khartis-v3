@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type AssetRef,
   DataSourceType,
-  FileType,
-  type AssetRef
+  FileType
 } from '$lib/features/commons/types/create-project.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import {

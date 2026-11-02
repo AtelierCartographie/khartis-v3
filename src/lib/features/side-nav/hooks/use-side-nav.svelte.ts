@@ -1,16 +1,17 @@
 import type { UseSideNavReturn } from '../types';
-export type { UseSideNavReturn } from '../types';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
 import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
-import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
+import { getLocale, type Locale, setLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages';
 import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
 import { ExportTab, useExportModal } from '$lib/features/header';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
+export type { UseSideNavReturn } from '../types';
 
 const SIDENAV_CONTAINER_ID = 'khartis-side-nav';
 const HAMBURGER_SELECTOR = '.bx--header__menu-trigger';

@@ -4,8 +4,8 @@ import { render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PolygonModeDensity from './polygon-mode-density.svelte';
-import { DENSITY_LEVEL } from '$lib/features/commons/constants/visualization.constants';
 import type { DensityLevelOption } from '$lib/features/commons/constants/visualization.constants';
+import { DENSITY_LEVEL } from '$lib/features/commons/constants/visualization.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const mocks = vi.hoisted(() => ({

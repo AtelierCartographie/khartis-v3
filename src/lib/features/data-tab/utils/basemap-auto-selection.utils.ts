@@ -1,6 +1,7 @@
 export interface SuggestedBasemapAutoSelectionInput {
   hasDismissedSuggestedBasemap: boolean;
   suggestionCount: number;
+  topSuggestionMatchesData: boolean;
   isOSMActive: boolean;
   hasDatasetGeometry: boolean;
   persistedBasemapId?: string | null;
@@ -17,6 +18,7 @@ export function shouldAutoSelectSuggestedBasemap(
   return (
     !input.hasDismissedSuggestedBasemap &&
     input.suggestionCount > 0 &&
+    input.topSuggestionMatchesData &&
     !input.isOSMActive &&
     !input.hasDatasetGeometry &&
     !input.persistedBasemapId &&

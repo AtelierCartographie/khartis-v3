@@ -12,6 +12,8 @@ export const CANONICAL_ID_COLUMN = 'id' as const;
 export const JOINED_BASEMAP_COLUMN = {
   ID: 'basemap_id',
   LABEL: 'basemap_label',
+  // Display name of the joined entity, in the language of the interface.
+  NAME: 'basemap_name',
   TYPO_MATCH: 'typo_match'
 } as const;
 
@@ -42,8 +44,6 @@ export const FUZZY_PASS_OVERHEAD_MS = 90;
 // Measured: at 300 the top two basemaps are unchanged, only near-tied regional
 // subsets permute, and it costs ~0.9 s against the whole catalog.
 export const MAX_FUZZY_RANKING_SAMPLE = 300;
-
-export const MAX_FUZZY_MATCHES_PER_VALUE = 5;
 
 export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN

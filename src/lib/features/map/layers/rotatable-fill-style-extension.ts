@@ -1,17 +1,15 @@
-import { LayerExtension } from '@deck.gl/core';
-import { project, fp64LowPart } from '@deck.gl/core';
-
 import type {
-  Layer,
-  LayerContext,
-  DefaultProps,
   Accessor,
   AccessorFunction,
-  TextureSource,
-  UpdateParameters,
+  DefaultProps,
+  Layer,
+  LayerContext,
   ProjectProps,
-  ProjectUniforms
+  ProjectUniforms,
+  TextureSource,
+  UpdateParameters
 } from '@deck.gl/core';
+import { fp64LowPart, LayerExtension, project } from '@deck.gl/core';
 import type { Texture } from '@luma.gl/core';
 
 const uniformBlock = /* glsl */ `\

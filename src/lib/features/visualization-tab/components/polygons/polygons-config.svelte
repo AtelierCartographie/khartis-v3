@@ -4,9 +4,11 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type {
+    ClassificationConfig,
     MissingDataConfig,
     VisualizationConfig,
-    VisualizationModes
+    VisualizationModes,
+    VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
@@ -15,17 +17,15 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_COLORS,
-    FillMode,
     type DensityConfig,
+    FillMode,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import { FILL_MODES_WITH_DENSITY } from '../shared/fill-mode-presets';
   import FillSection from '../shared/fill-section.svelte';
   import { StrokeSection, VizFilterButton, VizFilterPanel } from '../shared';
-  import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import { PolygonModeDensity } from '.';

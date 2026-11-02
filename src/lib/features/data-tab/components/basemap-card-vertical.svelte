@@ -7,7 +7,7 @@
   import * as m from '$lib/paraglide/messages';
   import { getLocale } from '$lib/paraglide/runtime';
   import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
-  import { Calendar } from 'carbon-icons-svelte';
+  import { Calendar, Map } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
   interface BasemapCardVerticalProps {
@@ -81,6 +81,8 @@
     matchScore !== undefined ? Math.round(matchScore) : undefined
   );
 
+  const isImportedFile = $derived(Boolean(basemap.isCustom) && !isOSMBasemap);
+
   const aspectRatio = '16:9';
   const thumbnailUrl = $derived.by(() => {
     if (basemap.isCustom || isOSMBasemap) {
@@ -121,14 +123,20 @@
       />
     </div>
 
-    <ThumbnailPreview
-      src={thumbnailUrl}
-      alt={m.basemap_preview_label()}
-      ratio={aspectRatio}
-      label={m.basemap_preview_label()}
-      theme={isSuggestion ? 'suggestion' : 'default'}
-      objectFit="contain"
-    />
+    {#if isImportedFile}
+      <div class="file-preview" aria-hidden="true">
+        <Map size={32} />
+      </div>
+    {:else}
+      <ThumbnailPreview
+        src={thumbnailUrl}
+        alt={m.basemap_preview_label()}
+        ratio={aspectRatio}
+        label={m.basemap_preview_label()}
+        theme={isSuggestion ? 'suggestion' : 'default'}
+        objectFit="contain"
+      />
+    {/if}
   </div>
 
   <div class="content-section">
@@ -143,11 +151,15 @@
 
     {#if showMetadata}
       <div class="metadata">
-        <span class="source" title={source}>{sourceProducer}</span>
-        <span class="date">
-          <Calendar size={16} />
-          <span>{formatBasemapValidity(basemap)}</span>
-        </span>
+        {#if sourceProducer}
+          <span class="source" title={source}>{sourceProducer}</span>
+        {/if}
+        {#if !isImportedFile}
+          <span class="date">
+            <Calendar size={16} />
+            <span>{formatBasemapValidity(basemap)}</span>
+          </span>
+        {/if}
       </div>
     {/if}
   </div>
@@ -303,6 +315,16 @@
       --basemap-card-icon-disabled,
       var(--basemap-card-text-disabled)
     );
+  }
+
+  .file-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background: var(--tile-preview-background);
+    color: var(--tile-preview-color);
   }
 
   .preview-radio {

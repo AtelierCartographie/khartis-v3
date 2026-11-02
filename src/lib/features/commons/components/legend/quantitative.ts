@@ -5,21 +5,22 @@ import type { LegendPatternFill } from './khartis-extensions';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   classLegendEntry,
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
-  LEGEND_ENTRY_ATTRIBUTE,
-  MISSING_LEGEND_ENTRY,
-  wrapLegendEntry,
   escapeSvgAttribute,
   escapeSvgText,
+  LEGEND_ENTRY_ATTRIBUTE,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   linearScale,
   measureLegendLongestToken,
+  MISSING_LEGEND_ENTRY,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
   scaleLegendMetric,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition
+  wrapLegendEntry
 } from './utils';
 
 /**
@@ -85,7 +86,7 @@ export function draw_quanti_color_legend(
   nodata ??= false;
   const resolvedFontFamily = resolveLegendFontFamily(options.fontFamily);
 
-  const titleSize = title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
   const noteSize = note ? Math.round(fontSize * 0.92) : 0;
   const nb_boxes = thresholds.length - 1;
@@ -390,7 +391,7 @@ function draw_vertical_quanti_color_legend(
   const nodata = options.nodata ?? false;
   const swatch: QuantiColorSwatch = options.swatch ?? { type: 'box' };
   const resolvedFontFamily = resolveLegendFontFamily(options.fontFamily);
-  const titleSize = title ? Math.round(fontSize * 1.16) : 0;
+  const titleSize = title ? legendTitleFontSize(fontSize) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
   const noteSize = note ? Math.round(fontSize * 0.92) : 0;
   const nb_boxes = thresholds.length - 1;

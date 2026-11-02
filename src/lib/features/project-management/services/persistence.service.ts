@@ -1,6 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PipelineError } from '$lib/features/commons/pipeline.errors';
 import { m } from '$lib/paraglide/messages';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
@@ -333,16 +334,24 @@ async function writeRevisionedProject(
   });
 }
 
+/**
+ * `onSourceFilesStored` receives the source files with their asset refs once
+ * the project is written, before the next queued save prepares its own copy:
+ * a live project that never gets them back persists its files again on every
+ * save.
+ */
 export async function saveProject(
   project: KhartisProject,
   thumbnail?: string,
   exampleId?: string,
-  sizeBytes?: number
+  sizeBytes?: number,
+  onSourceFilesStored?: (sourceFiles: UploadedFile[]) => void
 ): Promise<void> {
   await enqueueProjectSave(project.id, async () => {
     const projectForStorage = await prepareProjectForStorage(project);
     const serialized = await prepareForIndexedDB(projectForStorage);
     await writeRevisionedProject(serialized);
+    onSourceFilesStored?.(projectForStorage.data.sourceFiles);
     await syncProjectAssetRefs(
       projectForStorage.id,
       projectForStorage.data.sourceFiles,

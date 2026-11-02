@@ -4,8 +4,8 @@ import {
   hasGeometryType
 } from '$lib/features/commons/constants/geometry.constants';
 import {
-  normalizeCrsName,
-  extractGeometryColumnCrs
+  extractGeometryColumnCrs,
+  normalizeCrsName
 } from '$lib/features/data-pipeline';
 import { isGeometryColumnType } from '../utils/geometry-column.utils';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import {
-  FACET_TITLE_HEIGHT,
   buildFacetRenderDescriptors,
-  buildFacetsGridMetrics
+  buildFacetsGridMetrics,
+  FACET_TITLE_HEIGHT
 } from './facets-shared-renderer.utils';
 import type { FacetsLayout } from './facets.store.svelte';
 
@@ -91,6 +91,24 @@ describe('facets shared renderer utils', () => {
         containerWidth
       );
     }
+  });
+
+  it('makes room for a taller title band above each map', () => {
+    const args = {
+      visualizations: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' }
+      ] as never,
+      layout: createLayout(2),
+      containerWidth: 900,
+      containerHeight: 600,
+      primarySlotPath: null
+    };
+    const [usual] = buildFacetRenderDescriptors(args);
+    const [tall] = buildFacetRenderDescriptors({ ...args, titleHeight: 40 });
+
+    expect(tall.frame.height).toBe(usual.frame.height - 12);
+    expect(tall.frame.y - 40).toBeGreaterThanOrEqual(0);
   });
 
   it('derives the facet title from the slot variable, not the frozen name', () => {

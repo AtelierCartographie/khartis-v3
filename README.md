@@ -210,7 +210,7 @@ independent, ISC-licensed packages:
 
 ## Run locally
 
-Requirements: Node.js `>=22 <25`, pnpm `>=10` (through Corepack) and a desktop
+Requirements: Node.js `>=22 <27`, pnpm `>=10` (through Corepack) and a desktop
 browser with WebGL2.
 
 ```sh

@@ -1,7 +1,7 @@
 <script lang="ts">
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { formatState, formatActions } from './format.store.svelte';
+  import { formatActions, formatState } from './format.store.svelte';
 
   let width = $state(formatState.width ?? 842);
   let height = $state(formatState.height ?? 595);
@@ -70,7 +70,6 @@
   .size-input {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-label);
     min-width: 0;
   }
 

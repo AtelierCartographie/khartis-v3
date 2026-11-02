@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Table } from 'apache-arrow/Arrow';
 import { markTableMutated } from '../cache/cache-manager';
-import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
+import { type DuckDBContext, type DuckDBDataset, FileType } from '../types';
 import { getGPSArrowTable, validateGPSColumns } from './gps-ops';
 import type { DuckClient } from '../duck';
 

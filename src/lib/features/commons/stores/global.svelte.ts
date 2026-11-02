@@ -1,11 +1,11 @@
 import {
+  type GlobalState,
+  type ProjectionFilterId,
+  type ProjectionViewMode,
   StylingTools,
   ToolbarState,
   ToolbarStep,
-  VisualizationTools,
-  type GlobalState,
-  type ProjectionFilterId,
-  type ProjectionViewMode
+  VisualizationTools
 } from '$lib/features/commons/types/global';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { persistenceRegistry } from '$lib/features/project-management/core';

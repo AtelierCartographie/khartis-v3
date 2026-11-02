@@ -67,6 +67,39 @@ describe('resolveCurrentProjectionDisplay', () => {
     expect(display.description).toContain('EPSG:10857');
   });
 
+  it('should name the suggestion matching the EPSG code when an imported file is drawn in its own CRS', () => {
+    const lambert93 = {
+      id: 'national-fr',
+      name: 'lambert93',
+      type: 'national' as const,
+      epsg: '2154',
+      proj4String: '+proj=lcc',
+      d3Config: null,
+      bbox: [2, 43, 4, 44] as [number, number, number, number]
+    };
+    const display = resolveCurrentProjectionDisplay(
+      createState({
+        overrideActive: false,
+        overrideSource: undefined,
+        suggestions: { national: [lambert93], generic: [] }
+      }),
+      { type: 'identity', nativeEpsg: '2154' }
+    );
+
+    expect(display.name).toBe('lambert93');
+    expect(display.description).toContain('EPSG:2154');
+  });
+
+  it('should keep the EPSG code of the file when no suggestion matches it', () => {
+    const display = resolveCurrentProjectionDisplay(
+      createState({ overrideActive: false, overrideSource: undefined }),
+      { type: 'identity', nativeEpsg: '32620' }
+    );
+
+    expect(display.name).toBe("Projection d'origine du fond");
+    expect(display.description).toBe('EPSG:32620');
+  });
+
   it('names a suggestion restored from its d3 config alone', () => {
     expect(
       resolveCurrentProjectionDisplay(

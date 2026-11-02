@@ -7,29 +7,29 @@
   import { ChartBubble, CircleFilled, Table, Tag } from 'carbon-icons-svelte';
   import {
     FillMode,
+    ProportionalType,
     SymbolMode
   } from '$lib/features/commons/constants/visualization.constants';
+  import type {
+    ClassificationConfig,
+    MissingDataConfig,
+    SymbolPrimitiveConfig,
+    VisualizationConfig,
+    VisualizationModes,
+    VizDataFilter
+  } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
     getSymbolPrimitive,
     PrimitiveFilterType
   } from '$lib/features/commons/stores/visualization.store.svelte';
-  import { ProportionalType } from '$lib/features/commons/constants/visualization.constants';
-  import type {
-    MissingDataConfig,
-    SymbolPrimitiveConfig,
-    VisualizationConfig,
-    VisualizationModes,
-    ClassificationConfig
-  } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import { SectionHeading, VizFilterButton, VizFilterPanel } from '../shared';
-  import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import {
-    SymbolModeUnique,
+    SymbolModeCategories,
     SymbolModeProportional,
-    SymbolModeCategories
+    SymbolModeUnique
   } from '.';
 
   interface Props {

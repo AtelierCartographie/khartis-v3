@@ -21,8 +21,8 @@ import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelt
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import {
-  simplifyGeometryTable,
-  calculateToleranceFromRate
+  calculateToleranceFromRate,
+  simplifyGeometryTable
 } from '$lib/features/duckdb/operations/simplification';
 import {
   getBasemapRawTableName,

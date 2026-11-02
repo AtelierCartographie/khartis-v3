@@ -74,6 +74,9 @@
       return;
     }
     if (showToggle && !toggleChecked) {
+      if (!toggleDisabled) {
+        handleToggleChange(true);
+      }
       return;
     }
     expanded = !expanded;
@@ -225,7 +228,7 @@
 
       <span
         class="section-chevron"
-        class:toggle-off={showToggle && !toggleChecked}
+        class:toggle-off={showToggle && !toggleChecked && toggleDisabled}
         aria-hidden="true"
       >
         {#if expanded}

@@ -108,3 +108,13 @@ export function isShortcutCode(
 ): boolean {
   return eventCode === expectedCode;
 }
+
+/** The modifier names the zoom shortcuts read as on this platform. */
+export function getZoomShortcutModifiers(isApplePlatform: boolean): {
+  primary: string;
+  alt: string;
+} {
+  return isApplePlatform
+    ? { primary: '⌘', alt: '⌥' }
+    : { primary: 'Ctrl', alt: 'Alt' };
+}

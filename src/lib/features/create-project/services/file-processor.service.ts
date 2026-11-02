@@ -1,10 +1,6 @@
 import type {
-  ProcessingCallbacks,
-  FileProcessorService
-} from '../types/file-processing.service.types';
-export type {
-  ProcessingCallbacks,
-  FileProcessorService
+  FileProcessorService,
+  ProcessingCallbacks
 } from '../types/file-processing.service.types';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import {
@@ -32,8 +28,8 @@ import {
 import {
   buildStatisticsFromColumns,
   dataPipeline,
-  isZipDatasetResult,
   type DatasetResult,
+  isZipDatasetResult,
   type ZipDatasetResult
 } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
@@ -42,6 +38,11 @@ import {
   getCsvErrorLine,
   matchesDuckDBError
 } from '$lib/features/duckdb/utils/duckdb-error.utils';
+
+export type {
+  ProcessingCallbacks,
+  FileProcessorService
+} from '../types/file-processing.service.types';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
 
