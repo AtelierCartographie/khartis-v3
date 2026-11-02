@@ -590,7 +590,7 @@
   "create_project_load": "Charger",
   "create_project_file_imported": "Fichier importé",
   "create_project_files_imported": "Fichiers importés",
-  "create_project_welcome_info": "En savoir plus sur Khartis",
+  "create_project_welcome_learn_more": "(en savoir plus)",
   "open_project_select_backup": "Sélectionner une sauvegarde automatique…",
   "open_project_backup_description": "Les projets sont automatiquement sauvegardés sur le navigateur web et répertoriés ici.",
   "open_project_backup_warning": "Attention, ces sauvegardes disparaîtront en cas de changement de matériel, de navigateur ou de nettoyage de celui-ci (suppression du cache).",
