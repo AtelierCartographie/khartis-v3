@@ -281,6 +281,27 @@
     overflow: visible;
     background: var(--khartis-control-surface-background);
     padding: 0;
+    animation: tool-popover-enter 180ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  @keyframes tool-popover-enter {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+  }
+
+  @keyframes tool-popover-enter-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  @keyframes tool-content-swap {
+    from {
+      opacity: 0;
+    }
   }
 
   @media (max-width: 1023px) {
@@ -317,6 +338,7 @@
       max-height: 70vh;
       border-radius: 8px 8px 0 0;
       box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+      animation-name: tool-popover-enter-up;
     }
   }
 
@@ -327,6 +349,14 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    animation: tool-content-swap 150ms ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(#khartis-tool-popover .bx--popover-contents),
+    .popover-frame {
+      animation: none;
+    }
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {

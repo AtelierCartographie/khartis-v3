@@ -335,6 +335,7 @@
             toggleChecked={item.visible}
             open={isItemExpanded(item.id)}
             scrollIntoViewOnOpen
+            animateBody
             onToggle={(expanded) => setItemExpanded(item.id, expanded)}
             onToggleChange={(checked) =>
               handleItemVisibilityChange(item, checked)}
