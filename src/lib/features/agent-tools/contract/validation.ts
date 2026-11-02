@@ -74,6 +74,11 @@ export interface LegendTextsChange {
   note?: string;
 }
 
+export interface TextChange {
+  textId: string;
+  text: string;
+}
+
 export interface StepChange {
   step: (typeof AGENT_STEPS)[number];
 }
@@ -263,6 +268,21 @@ export function parseLegendTextsInput(
     return invalidInput('Give at least one of title, subtitle, note.');
   }
   return { ok: true, value: change };
+}
+
+export function parseSetTextInput(input: unknown): Parsed<TextChange> {
+  if (!isRecord(input)) {
+    return invalidInput('Expected an object.');
+  }
+  const unexpected = findUnexpectedKey(input, ['text_id', 'text']);
+  if (unexpected) {
+    return invalidInput(`Unexpected field: ${unexpected}.`);
+  }
+  const id = parseIdentifier(input.text_id, 'text_id');
+  if (!id.ok) return id;
+  const text = parseText(input.text, 'text', AGENT_TEXT_LIMITS.note);
+  if (!text.ok) return text;
+  return { ok: true, value: { textId: id.value, text: text.value } };
 }
 
 export function parseGoToStepInput(input: unknown): Parsed<StepChange> {

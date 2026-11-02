@@ -1,3 +1,6 @@
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.types';
+import type { EnrichedColumn } from '$lib/features/data-pipeline';
 import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
@@ -11,11 +14,9 @@ import {
  * categories), so only counts leave this function.
  */
 
-export interface SnapshotColumnInput {
-  name: string;
-  type: string;
-  stats?: { nulls?: number; uniques?: number; [key: string]: unknown };
-}
+export type SnapshotColumnInput = Pick<EnrichedColumn, 'name' | 'type'> & {
+  stats?: Partial<EnrichedColumn['stats']>;
+};
 
 export interface SnapshotDatasetInput {
   id: string;
@@ -26,20 +27,12 @@ export interface SnapshotDatasetInput {
   columns: SnapshotColumnInput[];
 }
 
-export interface SnapshotClassificationInput {
-  method?: string;
-  classes?: number;
-  paletteId?: string;
-  inverted?: boolean;
-  [key: string]: unknown;
-}
-
 export interface SnapshotPrimitiveInput {
   primitive: string;
   mode: string;
   valueColumn?: string;
   categoryColumn?: string;
-  classification?: SnapshotClassificationInput;
+  classification?: Partial<ClassificationConfig>;
 }
 
 export interface SnapshotVisualizationInput {
@@ -50,8 +43,9 @@ export interface SnapshotVisualizationInput {
   primitives: SnapshotPrimitiveInput[];
 }
 
-export interface SnapshotPageTextInput {
-  role: string;
+export interface SnapshotTextInput {
+  id: string;
+  role?: string;
   content: unknown;
   placeholder: boolean;
 }
@@ -69,7 +63,7 @@ export interface ProjectSnapshotInput {
   step: string;
   datasets: SnapshotDatasetInput[];
   visualizations: SnapshotVisualizationInput[];
-  pageTexts: SnapshotPageTextInput[];
+  texts: SnapshotTextInput[];
   legends: SnapshotLegendInput[];
 }
 
@@ -79,11 +73,9 @@ function countOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function readPageText(
-  pageTexts: SnapshotPageTextInput[],
-  role: string
-): string | null {
-  const text = pageTexts.find((item) => item.role === role);
+const INTERNAL_COLUMN_NAMES = new Set<string>(Object.values(INTERNAL_COLUMN));
+
+function readText(text: SnapshotTextInput | undefined): string | null {
   if (!text || text.placeholder || typeof text.content !== 'string') {
     return null;
   }
@@ -100,12 +92,14 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
       row_count: dataset.rowCount,
       has_geometry: dataset.hasGeometry,
       joined_basemap: dataset.joinedBasemap ?? null,
-      columns: dataset.columns.map((column) => ({
-        name: column.name,
-        type: column.type,
-        missing_count: countOrNull(column.stats?.nulls),
-        distinct_count: countOrNull(column.stats?.uniques)
-      }))
+      columns: dataset.columns
+        .filter((column) => !INTERNAL_COLUMN_NAMES.has(column.name))
+        .map((column) => ({
+          name: column.name,
+          type: column.type,
+          missing_count: countOrNull(column.stats?.nulls),
+          distinct_count: countOrNull(column.stats?.uniques)
+        }))
     })),
     visualizations: input.visualizations.map((visualization) => ({
       id: visualization.id,
@@ -128,9 +122,14 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
     page_texts: Object.fromEntries(
       SNAPSHOT_PAGE_TEXT_ROLES.map((role) => [
         role,
-        readPageText(input.pageTexts, role)
+        readText(input.texts.find((text) => text.role === role))
       ])
     ),
+    texts: input.texts.map((text) => ({
+      id: text.id,
+      role: text.role ?? null,
+      text: readText(text)
+    })),
     legends: input.legends.map((legend) => ({
       id: legend.id,
       visualization_id: legend.visualizationId ?? null,
@@ -146,5 +145,3 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
     }
   };
 }
-
-export type ProjectSnapshot = ReturnType<typeof buildProjectSnapshot>;
