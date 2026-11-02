@@ -900,10 +900,6 @@
     justify-content: flex-end;
   }
 
-  .is-modal-create-project .files-section {
-    min-height: 7.125rem;
-  }
-
   .files-section {
     display: flex;
     flex-direction: column;
