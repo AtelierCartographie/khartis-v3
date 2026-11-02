@@ -1,13 +1,13 @@
+import type { ContrastMode, WebGLColor } from '@ateliercartographie/ok-palette';
 import {
   categoricalPatterns,
   resolvePalette,
   sequentialPatterns
 } from '@ateliercartographie/ok-palette';
-import type { ContrastMode, WebGLColor } from '@ateliercartographie/ok-palette';
 
 import type {
-  PatternParams as LegacyPatternParams,
   PatternPaletteConfig,
+  PatternParams as LegacyPatternParams,
   PatternShape
 } from '../constants/pattern.constants';
 import { webglToHex } from '../utils/color-utils';

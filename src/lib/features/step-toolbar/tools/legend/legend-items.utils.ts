@@ -1,8 +1,8 @@
 import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, SCALE_MODE } from '../facets';
 import {
-  visualizationStore,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   getEnabledLegendPrimitives,

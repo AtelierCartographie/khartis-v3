@@ -1,6 +1,6 @@
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 
 export enum SearchSource {

@@ -3,13 +3,13 @@
   import type { Snippet } from 'svelte';
   import { tick } from 'svelte';
   import * as m from '$lib/paraglide/messages';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
-    resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
-    type CarbonTooltipDirection
+    type CarbonTooltipDirection,
+    resolveCarbonTooltipPosition
   } from '$lib/features/commons/utils/carbon-tooltip-position';
 
   interface Props {

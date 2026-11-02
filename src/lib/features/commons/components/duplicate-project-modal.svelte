@@ -4,8 +4,8 @@
   import SimpleRadioGroup from './simple-radio-group.svelte';
   import { projectsStore } from '../stores/projects.store.svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {

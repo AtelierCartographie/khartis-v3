@@ -1,10 +1,10 @@
 <script lang="ts">
   import {
+    InlineNotification,
     Select,
     SelectItem,
-    TextInput,
     Tag,
-    InlineNotification
+    TextInput
   } from 'carbon-components-svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
@@ -26,8 +26,8 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {

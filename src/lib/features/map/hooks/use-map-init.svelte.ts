@@ -1,35 +1,33 @@
-import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps, View } from '@deck.gl/core';
+import { Deck, OrthographicView } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext, type Device } from '@luma.gl/core';
+import type { IControl, StyleSpecification } from 'maplibre-gl';
 import {
   AttributionControl,
   Map as MapLibreMap,
   ScaleControl,
   setWorkerUrl
 } from 'maplibre-gl';
-import type { IControl, StyleSpecification } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils';
-
-export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   BasemapStyle,
-  DECK_VIEW_ID,
   DECK_CANVAS_ID,
   DECK_DEVICE_TYPE,
+  DECK_VIEW_ID,
   getBasemapStyle
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
-import { createHoverHandler, createClickHandler } from '../interactions';
+import { createClickHandler, createHoverHandler } from '../interactions';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
-  deckDebugStore,
-  type DeckDebugMetrics
+  type DeckDebugMetrics,
+  deckDebugStore
 } from '../stores/deck-debug.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
@@ -47,6 +45,8 @@ import type {
   DeckOrthographicViewStateMap,
   OrthographicMainViewState
 } from '../types';
+
+export type DeckInstance = Deck<View | View[] | null>;
 
 setWorkerUrl(maplibreWorkerUrl);
 

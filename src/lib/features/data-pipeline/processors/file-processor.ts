@@ -1,6 +1,7 @@
 import { FileType } from '$lib/features/commons/utils/file-import.utils';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { FileWithId } from '$lib/features/duckdb';
 import { Duck } from '$lib/features/duckdb';
 import {
   createCompanionFilesFromAssetRefs,
@@ -26,7 +27,6 @@ import {
   readFileHead
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
-import type { FileWithId } from '$lib/features/duckdb';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
 import { normalizeGeoParquetTable } from '../operations/geoparquet';

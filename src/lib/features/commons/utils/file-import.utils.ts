@@ -6,9 +6,9 @@ import {
 } from '$lib/features/commons/constants/file-types.constants';
 import { ParseError } from '../pipeline.errors';
 import {
-  type UploadedFile,
   DataSourceType,
-  FileType
+  FileType,
+  type UploadedFile
 } from '../types/create-project.types';
 import { detectFileType } from './file-type-detection.utils';
 import { sanitizeDisplayName } from './string.utils';

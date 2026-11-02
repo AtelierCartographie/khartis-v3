@@ -1,14 +1,14 @@
 import {
   BasemapStyle,
+  type BasemapZone,
   getBasemapViewportPreset,
-  getBasemapZone,
-  type BasemapZone
+  getBasemapZone
 } from '../constants/basemap-styles';
 import {
   isDeckOrthographicEngine,
   isMapLibreInterleavedEngine,
-  resolveMapRenderEngine,
-  type MapRenderEngine
+  type MapRenderEngine,
+  resolveMapRenderEngine
 } from './render-engine.utils';
 import type { BBox } from '../types';
 import type { ProjectionPresets } from '../types/basemap.types';

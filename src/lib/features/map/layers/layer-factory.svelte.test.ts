@@ -12,14 +12,14 @@ import {
   ClassificationMethod,
   PrimitiveFilterType,
   ScaleType,
-  VisualizationType,
-  type VisualizationConfig
+  type VisualizationConfig,
+  VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   BasemapDottedPattern,
   CategoryShapeMode,
-  FillMode,
   ColorMode,
+  FillMode,
   MissingDataShape,
   ProportionalType,
   SHAPE_ORDINAL,
@@ -30,9 +30,27 @@ import {
   SymbolMode,
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
-import { resolveTextHaloWidthPx } from './text-character-set';
+import {
+  EXPLICIT_TEXT_CHARACTER_SET,
+  resolveTextHaloWidthPx
+} from './text-character-set';
 import { logger } from '$lib/features/commons/utils/logger';
 import type { GeometryInfo, LayerContext } from '../types';
+import {
+  createDeckLayers,
+  createLineLayers,
+  createPointLayers,
+  createPolygonLayers,
+  resolveEffectiveCategoryColorMap,
+  type TextLayerDatum
+} from './layer-factory';
+import { MultiShapeLayer } from './multi-shape-layer';
+import {
+  createHighlightedFeatureOverlay,
+  HIGHLIGHT_STROKE_COLOR,
+  HIGHLIGHT_STROKE_WIDTH
+} from './layer-selection-overlays';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
 const {
   createCompatibleSolidPolygonLayerPropsMock,
@@ -142,23 +160,6 @@ vi.mock('$lib/features/commons/stores/font-assets.store.svelte', () => ({
     ready: true
   }
 }));
-
-import {
-  createDeckLayers,
-  createLineLayers,
-  createPointLayers,
-  createPolygonLayers,
-  resolveEffectiveCategoryColorMap,
-  type TextLayerDatum
-} from './layer-factory';
-import { MultiShapeLayer } from './multi-shape-layer';
-import {
-  createHighlightedFeatureOverlay,
-  HIGHLIGHT_STROKE_COLOR,
-  HIGHLIGHT_STROKE_WIDTH
-} from './layer-selection-overlays';
-import { hexToRgb } from '$lib/features/commons/utils/color-utils';
-import { EXPLICIT_TEXT_CHARACTER_SET } from './text-character-set';
 
 function createTableWithFields(fieldNames: string[]): ArrowTable {
   return {

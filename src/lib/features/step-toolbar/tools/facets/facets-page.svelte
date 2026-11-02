@@ -21,9 +21,9 @@
   } from '../color-blindness';
   import FacetsGrid from './facets-grid.svelte';
   import {
+    type FacetsLayout,
     facetsStore,
-    SCALE_MODE,
-    type FacetsLayout
+    SCALE_MODE
   } from './facets.store.svelte';
 
   interface Props {

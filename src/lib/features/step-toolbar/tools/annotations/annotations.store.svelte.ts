@@ -14,8 +14,8 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
-  clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
+  clampFontSize,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -43,11 +43,11 @@ import {
   isBottomRightPageElementRole,
   isGridEnabled,
   isPageElementRole,
+  type PageLayout,
   reconcileAutoPageElementStyle,
   remapPageElementPosition,
   resolvePageLayout,
-  shouldSnapAutoPageElement,
-  type PageLayout
+  shouldSnapAutoPageElement
 } from './annotations-page-layout.utils';
 import {
   getKnownPageElementDefaultContents,

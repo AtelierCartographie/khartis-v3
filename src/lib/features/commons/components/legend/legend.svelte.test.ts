@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import Textbox from '@borgar/textbox';
-import { scaleLegendMetric } from './utils';
+import {
+  renderLegendHeader,
+  renderLegendNote,
+  round_extreme,
+  scaleLegendMetric,
+  wrapLegendText
+} from './utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createLegendSvg,
@@ -12,12 +18,6 @@ import {
   draw_quanti_color_legend,
   draw_symbols_legend
 } from '.';
-import {
-  renderLegendHeader,
-  renderLegendNote,
-  round_extreme,
-  wrapLegendText
-} from './utils';
 
 const measureCanvas = {
   getContext: () => ({

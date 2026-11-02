@@ -2,20 +2,20 @@ import Textbox from '@borgar/textbox';
 import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import {
   clampEntrySpacing,
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
   splitLegendOverflow,
   wrapLegendEntry,
-  wrapLegendText,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition,
-  legendTitleFontSize
+  wrapLegendText
 } from './utils';
 
 export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';

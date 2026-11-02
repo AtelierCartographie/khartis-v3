@@ -44,8 +44,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import {
     visualizationStore,

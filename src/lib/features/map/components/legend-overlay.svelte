@@ -9,8 +9,8 @@
   } from '$lib/features/commons/types/global';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import {
-    visualizationStore,
-    type VisualizationConfig
+    type VisualizationConfig,
+    visualizationStore
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -20,16 +20,16 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
-    PAGE_GRID_SIZE_PX,
-    PAGE_SNAP_STEP_PX,
     clampPointToBounds,
     getDragBounds,
+    PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
+    type PageGridPoint,
+    type PageGridSize,
     remapAreaPointToResizedPage,
     roundToLayoutUnit,
     snapAreaPointWithinPage,
-    snapPointWithinBounds,
-    type PageGridPoint,
-    type PageGridSize
+    snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     getElementCenteringDelta,
@@ -55,7 +55,7 @@
     type PageResize
   } from '$lib/features/step-toolbar/tools/format';
   import * as m from '$lib/paraglide/messages';
-  import { tick, untrack, onDestroy } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';

@@ -1,8 +1,8 @@
 import {
-  suggestProjectionsForBbox,
-  suggestProjectionsForFeatureBounds,
   buildProjectionFromSuggestion,
-  type ProjectionSuggestion
+  type ProjectionSuggestion,
+  suggestProjectionsForBbox,
+  suggestProjectionsForFeatureBounds
 } from './projection-suggest.service';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
@@ -23,8 +23,8 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
   getProjectionById,
-  resolveProjectionDefaultOrientation,
-  type ProjectionInfo
+  type ProjectionInfo,
+  resolveProjectionDefaultOrientation
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {

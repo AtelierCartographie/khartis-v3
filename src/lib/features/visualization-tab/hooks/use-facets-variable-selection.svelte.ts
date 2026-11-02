@@ -1,4 +1,4 @@
-import { facetsStore, type FacetSlotPath } from '../adapters/facets-adapter';
+import { type FacetSlotPath, facetsStore } from '../adapters/facets-adapter';
 import { NONE_FIELD_ID } from './use-field-selection.svelte';
 
 interface DataFieldOption {

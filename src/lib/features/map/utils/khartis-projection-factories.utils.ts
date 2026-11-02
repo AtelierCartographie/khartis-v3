@@ -14,9 +14,9 @@ import {
   type UserProjectionBuildParams
 } from './user-projection-build.utils';
 import {
+  type GeoBounds,
   hasCompositeSubProjections,
-  withGeographicBoundsRouting,
-  type GeoBounds
+  withGeographicBoundsRouting
 } from './composite-routing.utils';
 
 const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {

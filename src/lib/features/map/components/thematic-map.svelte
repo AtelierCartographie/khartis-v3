@@ -28,9 +28,9 @@
   import { MAP_TIMING } from '../constants/timing.constants';
   import {
     syncDeckCanvasSize,
+    useLabelEditing,
     useMapBasemap,
     useMapBounds,
-    useLabelEditing,
     useMapInit,
     useMapLayers,
     useMapReferenceBasemap,
@@ -71,8 +71,10 @@
     getMarginsEditId
   } from '$lib/features/step-toolbar/tools/format';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
-  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
-  import { buildProjectionRenderKey } from '$lib/features/step-toolbar/tools/projections';
+  import {
+    buildProjectionRenderKey,
+    getProjectionState
+  } from '$lib/features/step-toolbar/tools/projections';
   import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
   import { trackWorkerParseVersion } from '../utils/worker-parse.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -94,8 +96,8 @@
   import {
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
-    resolveOrthographicRenderProjection,
     resolveOrthographicRenderedDatasetBounds,
+    resolveOrthographicRenderProjection,
     toBboxFromOrthographicBounds,
     toOrthographicBounds
   } from '../utils/orthographic-render-resolution.utils';

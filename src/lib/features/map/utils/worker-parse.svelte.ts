@@ -1,9 +1,9 @@
-import { tableToIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createParseWorkerClient } from '@ateliercartographie/geoarrow-deck-stream/worker';
+import { type Table as ArrowTable, tableToIPC } from 'apache-arrow/Arrow';
 import type {
   ParseWorkerClient,
   WorkerLike
 } from '@ateliercartographie/geoarrow-deck-stream/worker';
+import { createParseWorkerClient } from '@ateliercartographie/geoarrow-deck-stream/worker';
 
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 

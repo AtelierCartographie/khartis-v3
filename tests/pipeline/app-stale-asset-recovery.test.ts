@@ -266,6 +266,21 @@ describe('stale asset recovery bootstrap', () => {
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
   });
 
+  it('should ignore an application error thrown from an immutable chunk', () => {
+    const harness = createRecoveryHarness();
+
+    const event = harness.trigger('error', {
+      message: 'Uncaught Error: https://svelte.dev/e/state_unsafe_mutation',
+      error: new Error('https://svelte.dev/e/state_unsafe_mutation'),
+      filename:
+        'https://example.org/cartographie/khartis/_app/immutable/chunks/CERvhkr7.js'
+    });
+
+    expect(harness.reload).not.toHaveBeenCalled();
+    expect(harness.replace).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
   it('should ignore failed resources outside the application bootstrap', () => {
     const harness = createRecoveryHarness();
 

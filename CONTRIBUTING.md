@@ -15,7 +15,7 @@ every change must respect, how to validate it and how to submit it. The
 
 ## Setup
 
-Requirements: Node.js `>=22 <25` and pnpm `>=10`, through Corepack.
+Requirements: Node.js `>=22 <27` and pnpm `>=10`, through Corepack.
 
 ```sh
 corepack enable pnpm

@@ -1,5 +1,17 @@
 import { m } from '$lib/paraglide/messages';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  alignCategoryColors,
+  buildFacetSlotUpdates,
+  buildFacetVisualizationUpdates,
+  generateFacetVisualizations,
+  loadFacetFillCategoryUnion
+} from './facet-generator.service';
+import {
+  FACET_SLOT,
+  SCALE_MODE
+} from '$lib/features/commons/constants/facets.constants';
+import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   calculateBreaks: vi.fn(),
@@ -36,19 +48,6 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn() },
   LogCategory: { STORE: 'STORE' }
 }));
-
-import {
-  alignCategoryColors,
-  buildFacetSlotUpdates,
-  buildFacetVisualizationUpdates,
-  generateFacetVisualizations,
-  loadFacetFillCategoryUnion
-} from './facet-generator.service';
-import {
-  FACET_SLOT,
-  SCALE_MODE
-} from '$lib/features/commons/constants/facets.constants';
-import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 function makeBaseViz(overrides = {}) {
   return {

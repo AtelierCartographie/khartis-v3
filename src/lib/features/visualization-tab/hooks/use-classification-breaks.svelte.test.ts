@@ -1,4 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type ClassificationConfig,
+  ClassificationMethod,
+  PrimitiveFilterType
+} from '$lib/features/commons/stores/visualization.store.svelte';
+
+import {
+  computeClassificationBreaks,
+  resolveClassificationBreakColors,
+  resolveClassificationColors,
+  useClassificationBreaksController
+} from './use-classification-breaks.svelte';
 
 const storeMocks = vi.hoisted(() => ({
   ClassificationMethod: {
@@ -83,19 +95,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   PrimitiveFilterType: storeMocks.PrimitiveFilterType,
   DEFAULT_CATEGORICAL_COLORS: ['#cat-0', '#cat-1', '#cat-2']
 }));
-
-import {
-  ClassificationMethod,
-  PrimitiveFilterType,
-  type ClassificationConfig
-} from '$lib/features/commons/stores/visualization.store.svelte';
-
-import {
-  computeClassificationBreaks,
-  resolveClassificationColors,
-  resolveClassificationBreakColors,
-  useClassificationBreaksController
-} from './use-classification-breaks.svelte';
 
 describe('use-classification-breaks', () => {
   beforeEach(() => {

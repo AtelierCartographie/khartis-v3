@@ -16,7 +16,7 @@
     Slider
   } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-  import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
+  import { Earth, LicenseGlobal, Undo } from 'carbon-icons-svelte';
   import type { SimplificationResult } from '../../types/simplification.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
@@ -28,8 +28,8 @@
   } from '$lib/features/map';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
-    simplificationActions,
-    getSimplificationState
+    getSimplificationState,
+    simplificationActions
   } from '../simplification/simplification.store.svelte';
   import { onDestroy } from 'svelte';
 

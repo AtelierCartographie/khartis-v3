@@ -1,6 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
 import { hexToOklchHue } from '$lib/features/commons/utils/color-utils';
+import {
+  divergingPalettes,
+  findPaletteById,
+  generateCategoricalColorsFromSeed,
+  generatePaletteColors,
+  getPalettesForType,
+  getQualitativeColorBands,
+  getSuggestionPalettes,
+  getSuggestionPresetsForType,
+  PALETTE_TYPE,
+  qualitativePalettes,
+  SUGGESTION_PRESET,
+  VIF_MIXTE_COLORS
+} from './palette.constants';
+import {
+  TOL_MUTED_COLORS,
+  WONG_COLORS
+} from '$lib/features/commons/constants/colorblind-palette.constants';
+import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 vi.mock('@ateliercartographie/ok-palette', async () => {
   const divergentSequential = vi.fn(
@@ -34,26 +53,6 @@ vi.mock('@ateliercartographie/ok-palette', async () => {
       })
   };
 });
-
-import {
-  PALETTE_TYPE,
-  divergingPalettes,
-  qualitativePalettes,
-  generatePaletteColors,
-  generateCategoricalColorsFromSeed,
-  getSuggestionPalettes,
-  getSuggestionPresetsForType,
-  getPalettesForType,
-  getQualitativeColorBands,
-  SUGGESTION_PRESET,
-  findPaletteById,
-  VIF_MIXTE_COLORS
-} from './palette.constants';
-import {
-  TOL_MUTED_COLORS,
-  WONG_COLORS
-} from '$lib/features/commons/constants/colorblind-palette.constants';
-import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 const HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 

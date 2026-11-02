@@ -10,8 +10,8 @@
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
-    DEFAULT_COLORS,
     BasemapDottedPattern,
+    DEFAULT_COLORS,
     MissingDataShape,
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';

@@ -1,4 +1,4 @@
-import { EVENT, CUSTOM_EVENT } from '../constants/dom.constants';
+import { CUSTOM_EVENT, EVENT } from '../constants/dom.constants';
 
 export function clickOutside(
   node: HTMLElement,
