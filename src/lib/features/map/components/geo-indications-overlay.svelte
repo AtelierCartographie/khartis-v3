@@ -21,7 +21,7 @@
     clampFontSize,
     resolveFontFamilyStack
   } from '$lib/features/step-toolbar/fonts.constants';
-  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
     PAGE_SNAP_STEP_PX,
@@ -1010,7 +1010,7 @@
     target: DragTarget,
     snapEnabled = formatState.gridEnabled
   ): void {
-    if (currentDrag === target) {
+    if (currentDrag === target || (target === 'inset' && insetResize)) {
       return;
     }
 
@@ -1412,6 +1412,104 @@
     });
   });
 
+  type InsetResizeCorner = 'nw' | 'ne' | 'se' | 'sw';
+  const INSET_RESIZE_CORNERS: InsetResizeCorner[] = ['nw', 'ne', 'se', 'sw'];
+
+  let insetResize = $state<{
+    corner: InsetResizeCorner;
+    startClientX: number;
+    startClientY: number;
+    startSize: number;
+    startPosition: { x: number; y: number };
+    maxGrowth: number;
+  } | null>(null);
+
+  // The inset stays square: the corner follows the pointer along the diagonal
+  // while the opposite corner stays where it is, and it grows no further than
+  // the page edges on the dragged side.
+  function handleInsetResizePointerDown(
+    event: PointerEvent,
+    corner: InsetResizeCorner
+  ): void {
+    if (!interactive || !overlayElement || !insetMapElement) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const scale = getPageScale();
+    const overlayRect = overlayElement.getBoundingClientRect();
+    const panelRect = insetMapElement.getBoundingClientRect();
+    const startPosition = geoIndicationsState.insetMap.dragPosition ?? {
+      x: (panelRect.left - overlayRect.left) / scale,
+      y: (panelRect.top - overlayRect.top) / scale
+    };
+    const pageX = startPosition.x + formatState.margins.left;
+    const pageY = startPosition.y + formatState.margins.top;
+    const panelSize = insetMapElement.offsetWidth;
+    insetResize = {
+      corner,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startSize: insetDimensions.width,
+      startPosition,
+      maxGrowth: Math.max(
+        0,
+        Math.min(
+          corner.includes('w') ? pageX : formatState.width - pageX - panelSize,
+          corner.includes('n') ? pageY : formatState.height - pageY - panelSize
+        )
+      )
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleInsetResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleInsetResizeUp);
+  }
+
+  function handleInsetResizeMove(event: PointerEvent): void {
+    if (!insetResize) {
+      return;
+    }
+
+    const {
+      corner,
+      startClientX,
+      startClientY,
+      startSize,
+      startPosition,
+      maxGrowth
+    } = insetResize;
+    const scale = getPageScale();
+    const dx = (event.clientX - startClientX) / scale;
+    const dy = (event.clientY - startClientY) / scale;
+    const growth =
+      ((corner.includes('e') ? dx : -dx) + (corner.includes('s') ? dy : -dy)) /
+      2;
+    const limits = INSET_MAP_SIZE_LIMITS[geoIndicationsState.insetMap.type];
+    const size = clamp(
+      Math.round(startSize + growth),
+      limits.min,
+      Math.max(
+        limits.min,
+        Math.min(limits.max, Math.floor(startSize + maxGrowth))
+      )
+    );
+    const delta = size - startSize;
+
+    geoIndicationsActions.setInsetMapSize(size);
+    geoIndicationsActions.setInsetMapDragPosition({
+      x: startPosition.x - (corner.includes('w') ? delta : 0),
+      y: startPosition.y - (corner.includes('n') ? delta : 0)
+    });
+  }
+
+  function handleInsetResizeUp(): void {
+    insetResize = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleInsetResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleInsetResizeUp);
+    normalizeStoredDragPosition('inset');
+  }
+
   function handleScalePointerDown(event: PointerEvent): void {
     startDrag(event, 'scale', scaleElement);
   }
@@ -1429,6 +1527,7 @@
     centeredGeoTarget = null;
     clearSuppressedGeoIndicationsClick();
     stopDragging();
+    handleInsetResizeUp();
   });
 </script>
 
@@ -1597,8 +1696,11 @@
       class="inset-map-panel"
       class:draggable={interactive}
       class:dragging={currentDrag === 'inset'}
+      class:resizing={insetResize !== null}
+      class:tool-active={isGeoIndicationsActive}
       data-workspace-pan-ignore="true"
       style={insetPanelStyle}
+      style:--_handle-scale={1 / getPageScale()}
       role="button"
       tabindex="0"
       aria-label={m.geo_inset_map()}
@@ -1691,6 +1793,20 @@
           {/if}
         </svg>
       </div>
+      {#if interactive && !globalState.isMapExporting}
+        {#each INSET_RESIZE_CORNERS as corner (corner)}
+          <div
+            class="inset-resize-handle inset-resize-{corner}"
+            role="button"
+            tabindex="-1"
+            aria-label={m.geo_inset_map_resize_handle()}
+            onpointerdown={(event: PointerEvent) =>
+              handleInsetResizePointerDown(event, corner)}
+            onclick={(event: MouseEvent) => event.stopPropagation()}
+            onkeydown={(event: KeyboardEvent) => event.stopPropagation()}
+          ></div>
+        {/each}
+      {/if}
     </div>
   {/if}
 </div>
@@ -1814,5 +1930,47 @@
     fill: none;
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
+  }
+
+  .inset-resize-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: white;
+    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border-radius: 2px;
+    transform: translate(-50%, -50%) scale(var(--_handle-scale, 1));
+    opacity: 0;
+  }
+
+  .inset-map-panel:hover .inset-resize-handle,
+  .inset-map-panel:focus-visible .inset-resize-handle,
+  .inset-map-panel.resizing .inset-resize-handle,
+  .inset-map-panel.tool-active .inset-resize-handle {
+    opacity: 1;
+  }
+
+  .inset-resize-nw {
+    left: 0;
+    top: 0;
+    cursor: nwse-resize;
+  }
+
+  .inset-resize-ne {
+    left: 100%;
+    top: 0;
+    cursor: nesw-resize;
+  }
+
+  .inset-resize-se {
+    left: 100%;
+    top: 100%;
+    cursor: nwse-resize;
+  }
+
+  .inset-resize-sw {
+    left: 0;
+    top: 100%;
+    cursor: nesw-resize;
   }
 </style>
