@@ -427,7 +427,7 @@
   "tool_geo_indications": "Map elements",
   "tool_annotations": "Annotations",
   "tool_color_blindness": "Color blindness",
-  "styling_drag_helper": "Drag an element on the map to move it.",
+  "styling_drag_helper": "Click an element and drag it on the page to move it.",
   "label_edit_title": "Edit label",
   "label_edit_primary": "Text",
   "label_edit_secondary": "Secondary text",
