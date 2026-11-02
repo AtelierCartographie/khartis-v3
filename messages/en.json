@@ -198,6 +198,7 @@
   "download_data_geojson": "Geographic file (GeoJSON)",
   "download_data_geopackage": "Geographic file (GeoPackage)",
   "project_placeholder": "Untitled project",
+  "project_title_label": "Project name",
   "project_import_url_error_title": "Failed to load project",
   "project_import_url_error_subtitle": "The project link (.kh) is invalid or unreachable.",
   "project_import_url_confirm_title": "Replace the open project?",
