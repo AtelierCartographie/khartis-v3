@@ -427,7 +427,7 @@
   "tool_geo_indications": "Indications géographiques",
   "tool_annotations": "Annotations",
   "tool_color_blindness": "Déficiences visuelles",
-  "styling_drag_helper": "Glisser un élément sur la carte pour le déplacer.",
+  "styling_drag_helper": "Cliquer sur un élément et le glisser sur la page pour le déplacer.",
   "label_edit_title": "Modifier l'étiquette",
   "label_edit_primary": "Texte",
   "label_edit_secondary": "Texte secondaire",
