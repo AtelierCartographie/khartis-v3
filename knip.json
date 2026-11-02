@@ -4,6 +4,7 @@
     "src/routes/**/*.svelte",
     "src/routes/**/+*.{js,ts}",
     "src/sw.ts",
+    "src/lib/features/agent-tools/index.ts",
     "pwa-assets.config.js",
     "scripts/**/*.sh",
     "scripts/**/*.mjs"
