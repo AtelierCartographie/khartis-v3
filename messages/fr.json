@@ -475,6 +475,7 @@
   "geo_miles": "Miles",
   "geo_orientation": "Orientation",
   "geo_inset_map": "Carte en encart",
+  "geo_inset_map_resize_handle": "Redimensionner la carte en encart",
   "geo_scale_form_line": "Ligne",
   "geo_scale_form_box": "Boîte",
   "facets_collection_description": "Une collection de cartes aligne des cartes partageant le même fond et la même sémiologie graphique, chacune dédiée à une variable. Cette méthode est efficace pour comparer des évolutions ou des structures géographiques.",

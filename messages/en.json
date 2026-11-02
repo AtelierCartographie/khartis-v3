@@ -475,6 +475,7 @@
   "geo_miles": "Miles",
   "geo_orientation": "North arrow",
   "geo_inset_map": "Inset map",
+  "geo_inset_map_resize_handle": "Resize the inset map",
   "geo_scale_form_line": "Line",
   "geo_scale_form_box": "Box",
   "facets_collection_description": "A map collection lines up maps sharing the same basemap and the same graphic semiology, each one dedicated to a variable. It is an effective way to compare trends or geographic structures.",
