@@ -49,6 +49,7 @@ import {
 } from '$lib/features/commons/utils/sql.utils';
 import type { DuckClient } from '../duck';
 import { CATALOG_ATTRIBUTES_TABLE } from './geo-detection-ops';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 
 export type { FinalizeJoinResult };
 
@@ -1008,6 +1009,37 @@ async function resolveGradedTable(
   );
 }
 
+/**
+ * A mutation of the source table drops its similarity and graded caches, even
+ * while a read of the joined view is under way. Such a read is retried once,
+ * which rebuilds the caches from the mutated table.
+ */
+async function readGradedTable<T>(
+  dataset: JoinSource,
+  target: JoinTarget,
+  geoColumn: string,
+  Duck: DuckClient,
+  excludedValues: string[],
+  read: (gradedTable: string) => Promise<T>
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const gradedTable = await resolveGradedTable(
+        dataset,
+        target,
+        geoColumn,
+        Duck,
+        excludedValues
+      );
+      return await read(sqlIdentifier(gradedTable));
+    } catch (error) {
+      if (attempt > 0 || !matchesDuckDBError(error, 'missing-table')) {
+        throw error;
+      }
+    }
+  }
+}
+
 export async function getTargetJoinedEntitiesPage(
   dataset: JoinSource,
   target: JoinTarget,
@@ -1015,28 +1047,26 @@ export async function getTargetJoinedEntitiesPage(
   Duck: DuckClient,
   options: JoinedEntitiesPageOptions
 ): Promise<JoinedEntity[]> {
-  const gradedTable = sqlIdentifier(
-    await resolveGradedTable(
-      dataset,
-      target,
-      geoColumn,
-      Duck,
-      options.excludedValues ?? []
-    )
+  const rows = await readGradedTable(
+    dataset,
+    target,
+    geoColumn,
+    Duck,
+    options.excludedValues ?? [],
+    async (gradedTable) =>
+      (await Duck.query(
+        `SELECT original_name, candidates
+        FROM ${gradedTable}
+        WHERE status = 'matched'
+        ORDER BY original_name
+        LIMIT ${Math.max(0, Math.trunc(options.limit))}
+        OFFSET ${Math.max(0, Math.trunc(options.offset))}`,
+        { format: 'array' }
+      )) as Array<{
+        original_name: string;
+        candidates: RawJoinCandidate[] | null;
+      }>
   );
-
-  const rows = (await Duck.query(
-    `SELECT original_name, candidates
-    FROM ${gradedTable}
-    WHERE status = 'matched'
-    ORDER BY original_name
-    LIMIT ${Math.max(0, Math.trunc(options.limit))}
-    OFFSET ${Math.max(0, Math.trunc(options.offset))}`,
-    { format: 'array' }
-  )) as Array<{
-    original_name: string;
-    candidates: RawJoinCandidate[] | null;
-  }>;
 
   return (rows ?? []).map((row) => {
     const candidates = (row.candidates ?? []).map(toJoinCandidate);
@@ -1078,23 +1108,21 @@ export async function getTargetJoinedValues(
   Duck: DuckClient,
   options: JoinGradingOptions = {}
 ): Promise<string[]> {
-  const gradedTable = sqlIdentifier(
-    await resolveGradedTable(
-      dataset,
-      target,
-      geoColumn,
-      Duck,
-      options.excludedValues ?? []
-    )
+  const rows = await readGradedTable(
+    dataset,
+    target,
+    geoColumn,
+    Duck,
+    options.excludedValues ?? [],
+    async (gradedTable) =>
+      (await Duck.query(
+        `SELECT DISTINCT (candidates[1]).name AS value
+        FROM ${gradedTable}
+        WHERE status = 'matched'
+          AND candidates IS NOT NULL`,
+        { format: 'array' }
+      )) as Array<{ value: string | null }>
   );
-
-  const rows = (await Duck.query(
-    `SELECT DISTINCT (candidates[1]).name AS value
-    FROM ${gradedTable}
-    WHERE status = 'matched'
-      AND candidates IS NOT NULL`,
-    { format: 'array' }
-  )) as Array<{ value: string | null }>;
 
   return (rows ?? []).flatMap((row) => (row.value ? [row.value] : []));
 }

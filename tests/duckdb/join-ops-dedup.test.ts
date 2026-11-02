@@ -617,6 +617,40 @@ describe('exact_claimed_ids deduplication', () => {
     expect(countTempTableBuilds(querySpy, '__join_graded__')).toBe(1);
   });
 
+  it('should rebuild the joined view when a mutation drops its cache mid-read', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_graded_race (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_graded_race VALUES ('Lyon')`);
+
+    const baseDuck = makeDuckClient(db);
+    const dataset = makeDataset('user_graded_race');
+    let pageReads = 0;
+    const Duck = {
+      ...baseDuck,
+      async query(sql: string, options?: { format?: string }) {
+        const isPageRead =
+          sql.includes("WHERE status = 'matched'") && sql.includes('LIMIT');
+        if (isPageRead && ++pageReads === 1) {
+          // The source table is mutated between the cache lookup and the read.
+          invalidateSimilarityCache(dataset.tableName, Duck);
+          await baseDuck.query('SELECT 1');
+        }
+        return baseDuck.query(sql, options as never);
+      }
+    } as unknown as DuckClient;
+
+    await computeJoinStats(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+    const page = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10 }
+    );
+
+    expect(pageReads).toBe(2);
+    expect(page.map((row) => row.dataValue)).toEqual(['Lyon']);
+  });
+
   it('regrades a different exclusion set instead of reusing the cached one', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_graded3 (geo VARCHAR)`);
     await run(db, `INSERT INTO user_graded3 VALUES ('Lyon'), ('69123')`);
