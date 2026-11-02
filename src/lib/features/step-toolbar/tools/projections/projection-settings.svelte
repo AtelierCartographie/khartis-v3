@@ -2,20 +2,12 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    basemapService,
-    osmBasemapStore,
-    projectionStore as mapRenderProjectionStore
-  } from '$lib/features/map';
-  import {
-    resolveProjectionAvailabilityContext,
-    supportsCustomProjectionCode
-  } from '$lib/features/map/utils/projection-availability.utils';
+  import { supportsCustomProjectionCode } from '$lib/features/map/utils/projection-availability.utils';
   import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
   import { resolveProjectionDefaultOrientation } from '$lib/features/commons/utils/projection.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {
+    getProjectionAvailabilityContext,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
@@ -24,23 +16,7 @@
 
   const projectionState = $derived(getProjectionState());
 
-  const projectionContext = $derived(
-    resolveProjectionAvailabilityContext({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive,
-      currentStyle: basemapStyleStore.selectedStyle,
-      preferredStyle: basemapStyleStore.preferredTiledStyle,
-      referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
-        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
-        : null,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
-      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
-        ? null
-        : mapRenderProjectionStore.referenceBbox,
-      projectionPresets: basemapService.projectionPresets
-    })
-  );
+  const projectionContext = $derived(getProjectionAvailabilityContext());
   const renderEngineSupportsSettings = $derived(
     supportsCustomProjectionCode(projectionContext)
   );
