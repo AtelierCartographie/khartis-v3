@@ -1952,7 +1952,7 @@
 
   const hasAutomaticLabelPlacement = $derived(
     visualizationStore.activeVisualizations.some(
-      (viz) => getTextPrimitive(viz)?.collisionDetection === true
+      (viz) => getTextPrimitive(viz)?.automaticPlacement === true
     )
   );
 

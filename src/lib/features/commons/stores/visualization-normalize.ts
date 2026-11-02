@@ -457,6 +457,10 @@ export function buildTextPrimitiveConfig(
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??
       true,
+    automaticPlacement:
+      existing?.automaticPlacement ??
+      visualization.style.textAutomaticPlacement ??
+      false,
     labelColumns:
       existing?.labelColumns ?? visualization.style.textLabelColumns ?? false,
     labelSpacing:

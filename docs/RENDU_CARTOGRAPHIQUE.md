@@ -154,9 +154,12 @@ extrémités sur l'entité et les décale en pixels dans le shader, comme le
 
 ### Placement automatique des étiquettes
 
-L'option « Placement automatique » du panneau Textes (`collisionDetection` du
-primitif texte) confie le placement au paquet `@ateliercartographie/label-placer`
-(`utils/label-auto-placement.utils.ts`). La fabrique projette chaque ancrage en
+L'option « Placement automatique » du panneau Textes (`automaticPlacement`,
+champ optionnel du primitif texte, désactivé par défaut) confie le placement
+au paquet `@ateliercartographie/label-placer`
+(`utils/label-auto-placement.utils.ts`). Elle n'emprunte pas
+`collisionDetection`, un champ resté sans effet que les projets enregistrent
+à `true` : l'option s'y serait activée à l'ouverture. La fabrique projette chaque ancrage en
 pixels de page à travers le viewport deck courant, depuis le centre du canevas
 et dans la taille nominale de la zone carte : le canevas est arrondi au pixel
 près, sa taille en pixels de page varie d'une fraction de pixel avec le zoom de

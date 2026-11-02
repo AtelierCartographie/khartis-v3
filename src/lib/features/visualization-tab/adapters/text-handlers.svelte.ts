@@ -31,6 +31,7 @@ const TEXT_STYLE_MIRROR_KEYS = [
   'textHaloWidth',
   'textHaloOpacity',
   'textCollisionDetection',
+  'textAutomaticPlacement',
   'textLabelColumns',
   'textLabelSpacing',
   'textFilteredLabelsOptional',
@@ -93,6 +94,7 @@ export function createTextHandlers(deps: TextHandlersDeps) {
         { from: 'textHaloWidth', to: 'haloWidth' },
         { from: 'textHaloOpacity', to: 'haloOpacity' },
         { from: 'textCollisionDetection', to: 'collisionDetection' },
+        { from: 'textAutomaticPlacement', to: 'automaticPlacement' },
         { from: 'textLabelColumns', to: 'labelColumns' },
         { from: 'textLabelSpacing', to: 'labelSpacing' },
         {
