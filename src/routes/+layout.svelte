@@ -319,6 +319,16 @@
 
     initApp();
 
+    // Experimental and off by default: without the build flag the module is
+    // never fetched.
+    let stopAgentTools: (() => void) | undefined;
+    let agentToolsDisposed = false;
+    if (import.meta.env.VITE_KHARTIS_AGENT_TOOLS === 'true') {
+      void import('$lib/features/agent-tools').then(({ startAgentTools }) => {
+        if (!agentToolsDisposed) stopAgentTools = startAgentTools();
+      });
+    }
+
     // Carbon ComboBox renders a listbox wrapper; remap it so ARIA owns options only.
     const fixComboboxAria = (root: Element | Document = document) => {
       (root as Element)
@@ -343,6 +353,8 @@
         capture: true
       });
       ariaObserver.disconnect();
+      agentToolsDisposed = true;
+      stopAgentTools?.();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handleLifecycleFlush);
       window.removeEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);

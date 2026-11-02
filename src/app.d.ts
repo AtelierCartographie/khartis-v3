@@ -11,6 +11,8 @@ declare global {
     readonly VITE_LOG_CATEGORIES?: string;
     readonly VITE_LOG_LEVEL?: string;
     readonly VITE_LOG_STACK?: string;
+    /** `true` exposes the experimental agent tools through WebMCP. */
+    readonly VITE_KHARTIS_AGENT_TOOLS?: string;
   }
 
   interface ImportMeta {
@@ -19,6 +21,11 @@ declare global {
 
   interface Window {
     __khartisFlushBeforePwaRecovery?: () => Promise<boolean>;
+    /** Dev only: the agent tools, callable from the console. */
+    __khartisAgentTools?: {
+      list: () => string[];
+      call: (name: string, input?: unknown) => Promise<unknown>;
+    };
   }
 }
 
