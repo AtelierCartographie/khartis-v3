@@ -1652,6 +1652,7 @@
   "viz_suggestion_mode_categories": "categorical",
   "viz_suggestion_mode_labels": "with labels",
   "map_resize_handle": "Resize map frame",
+  "page_resize_handle": "Resize page",
   "annotationImageAlt": "Annotation",
   "data_tab_enrich": "Enrich",
   "enrich_status_done": "Enrichment completed",

@@ -92,9 +92,10 @@
   import { getMainlandBboxForBasemap } from '../utils/geoarrow-stream-bridge.utils';
   import { resolveActiveBasemapMetadata } from '../utils/basemap-metadata-resolution.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
-  import { getBasemapFrameBbox } from '../utils/basemap-frame.utils';
-  import { resolveFittedMapFrame } from '../utils/map-frame.utils';
-  import { sampleProjectedBbox } from '../utils/projected-bbox.utils';
+  import {
+    measureDrawnExtent,
+    resolveFittedMapFrame
+  } from '../utils/map-frame.utils';
   import {
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
@@ -361,6 +362,7 @@
     mapLayers.updateLayers(tables, splitData, densityTables);
     requestAnimationFrame(() => {
       mapLoadingStore.setUpdatingLayers(false);
+      measureDrawnMapExtent();
     });
   }
 
@@ -1435,37 +1437,78 @@
     ].join('|');
   }
 
-  /** Extent of the drawn map in projected units, when it exceeds the reference. */
-  function resolveDrawnMapBbox(
-    renderProjection: ProjectionLike | null
-  ): BBox | null {
-    if (!renderProjection) {
-      return null;
+  // Measured after each layer update, relative to the reference extent the
+  // layers were drawn against: the fit rescales both together.
+  let drawnMapExtent = $state.raw<BBox | null>(null);
+  let hasMeasuredDrawnMapExtent = $state(false);
+
+  function measureDrawnMapExtent(): void {
+    const referenceBbox = projectionStore.referenceBbox;
+    const layers = mapInit.deckInstance?.props.layers;
+    if (
+      isFacetCell ||
+      mapInit.viewMode !== ViewMode.ORTHOGRAPHIC ||
+      !referenceBbox ||
+      !layers
+    ) {
+      return;
     }
 
-    const frameBbox = getBasemapFrameBbox(renderProjection);
-    if (frameBbox) {
-      return frameBbox;
+    const extent = measureDrawnExtent(layers);
+    const next = extent ? toReferenceRatio(extent, referenceBbox) : null;
+    hasMeasuredDrawnMapExtent = true;
+    const previous = drawnMapExtent;
+    if (
+      next === null ||
+      previous === null ||
+      next.some((value, index) => Math.abs(value - previous[index]) > 1e-4)
+    ) {
+      drawnMapExtent = next;
     }
+  }
 
-    const basemapMeta = worldBaseTable
-      ? getProjectionMetadataForDataset(firstDatasetId)
-      : null;
-    return basemapMeta?.bbox && basemapMeta.proj_to?.type !== 'composite'
-      ? sampleProjectedBbox(renderProjection, basemapMeta.bbox)
-      : null;
+  function toReferenceRatio(bbox: BBox, referenceBbox: BBox): BBox {
+    const [cx, cy] = [
+      (referenceBbox[0] + referenceBbox[2]) / 2,
+      (referenceBbox[1] + referenceBbox[3]) / 2
+    ];
+    const width = referenceBbox[2] - referenceBbox[0] || 1;
+    const height = referenceBbox[3] - referenceBbox[1] || 1;
+    return [
+      (bbox[0] - cx) / width,
+      (bbox[1] - cy) / height,
+      (bbox[2] - cx) / width,
+      (bbox[3] - cy) / height
+    ];
+  }
+
+  function fromReferenceRatio(ratio: BBox, referenceBbox: BBox): BBox {
+    const [cx, cy] = [
+      (referenceBbox[0] + referenceBbox[2]) / 2,
+      (referenceBbox[1] + referenceBbox[3]) / 2
+    ];
+    const width = referenceBbox[2] - referenceBbox[0];
+    const height = referenceBbox[3] - referenceBbox[1];
+    return [
+      cx + ratio[0] * width,
+      cy + ratio[1] * height,
+      cx + ratio[2] * width,
+      cy + ratio[3] * height
+    ];
   }
 
   let lastAutomaticMapFrameTrigger: string | null = null;
 
   // An automatic fit (data, basemap, projection, page format) closes the
-  // frame in on the drawn map, inside the margins. A tiled MapLibre map fills
-  // any frame, so its automatic frame is the margin box, set again only when
-  // the basemap, projection or page changes. A manual view keeps its frame.
+  // frame in on the drawn map, inside the margins, and zooms the map to meet
+  // it. A tiled MapLibre map fills any frame, so its automatic frame is the
+  // margin box, set again only when the basemap, projection or page changes.
+  // A manual view keeps its frame.
   $effect(() => {
     const trigger = readAutomaticMapFrameTrigger();
     const referenceBbox = projectionStore.referenceBbox;
-    const renderProjection = projectionStore.renderProjection;
+    const drawnExtent = drawnMapExtent;
+    const hasMeasuredExtent = hasMeasuredDrawnMapExtent;
     const viewMode = mapInit.viewMode;
 
     if (isFacetCell || !mapInit.isMapLoaded || isSwitchingViewMode) {
@@ -1491,18 +1534,42 @@
         return;
       }
 
-      const nextFrame = isOrthographic
-        ? resolveFittedMapFrame({
-            page: { width: fmtState.width, height: fmtState.height },
-            margins: fmtState.margins,
-            referenceBbox,
-            drawnBbox: resolveDrawnMapBbox(renderProjection),
-            fitPaddingPx: logicalMapViewportFitPaddingPx,
-            minFrameSize: MIN_PAGE_AREA_SIZE
-          })
-        : fmtState.margins;
-      if (!arePageInsetsEqual(nextFrame, fmtState.mapFrame)) {
-        formatActions.fitMapFrame(nextFrame);
+      if (!isOrthographic) {
+        if (!arePageInsetsEqual(fmtState.margins, fmtState.mapFrame)) {
+          formatActions.fitMapFrame(fmtState.margins);
+        }
+        return;
+      }
+      // Framing on the reference alone, before the drawn map is measured,
+      // would make the frame jump once the layers are drawn.
+      if (!hasMeasuredExtent) {
+        return;
+      }
+
+      const { frame, zoom, centerRatio } = resolveFittedMapFrame({
+        page: { width: fmtState.width, height: fmtState.height },
+        margins: fmtState.margins,
+        referenceBbox,
+        drawnBbox:
+          referenceBbox && drawnExtent
+            ? fromReferenceRatio(drawnExtent, referenceBbox)
+            : null,
+        fitPaddingPx: logicalMapViewportFitPaddingPx,
+        minFrameSize: MIN_PAGE_AREA_SIZE
+      });
+      const baseRatio = mapInstanceStore.orthographicBaseTargetRatio;
+      const isBaseViewChanged =
+        Math.abs(zoom - mapInstanceStore.orthographicBaseZoom) > 1e-3 ||
+        Math.abs(centerRatio[0] - baseRatio[0]) > 1e-4 ||
+        Math.abs(centerRatio[1] - baseRatio[1]) > 1e-4;
+      if (isBaseViewChanged) {
+        mapInstanceStore.setOrthographicBaseView(zoom, centerRatio);
+      }
+      if (!arePageInsetsEqual(frame, fmtState.mapFrame)) {
+        // The resized frame refits the map, on the new base view.
+        formatActions.fitMapFrame(frame);
+      } else if (isBaseViewChanged) {
+        fitOrthographicViewport(getCurrentViewportAutoFitReason());
       }
     });
   });
