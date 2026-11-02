@@ -2836,6 +2836,12 @@
     filter: grayscale(1) opacity(0.45);
   }
 
+  /* Outside Habillage, page texts not written yet are left out, as in exports. */
+  .annotation-overlay.non-interactive
+    .annotation-item[data-khartis-export-placeholder='true'] {
+    visibility: hidden;
+  }
+
   .annotation-item.has-text-width .annotation-text {
     width: 100%;
     max-width: none;
