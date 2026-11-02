@@ -247,11 +247,16 @@
     #khartis-create-project :global(.bx--modal-container) {
       width: 90vw;
       max-width: 700px;
-      height: min(42.25rem, 90vh);
+      height: auto;
+      max-height: 90vh;
       background: var(--cds-background);
     }
 
+    /* The body keeps the height « Ouvrir un projet » needs, whatever the
+       header wraps to; the space left for the header caps it. */
     #khartis-create-project :global(.fixed-modal-body) {
+      height: 37.25rem;
+      max-height: calc(90vh - 7.5rem);
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
