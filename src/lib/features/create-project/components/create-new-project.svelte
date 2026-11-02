@@ -755,22 +755,12 @@
     <span>{m.create_project_learn_more_title()}</span>
     <ul>
       <li>
-        <Link
-          href={DOC_LINK.IMPORT_DATA}
-          target="_blank"
-          size="sm"
-          icon={Launch}
-        >
+        <Link href={DOC_LINK.IMPORT_DATA} target="_blank" icon={Launch}>
           {m.create_project_learn_more_data()}
         </Link>
       </li>
       <li>
-        <Link
-          href={DOC_LINK.JOIN_BASEMAP}
-          target="_blank"
-          size="sm"
-          icon={Launch}
-        >
+        <Link href={DOC_LINK.JOIN_BASEMAP} target="_blank" icon={Launch}>
           {m.create_project_learn_more_basemaps()}
         </Link>
       </li>
@@ -823,9 +813,13 @@
 
   .learn-more {
     align-self: end;
-    font-size: var(--kh-font-label);
-    line-height: var(--kh-line-label);
-    color: var(--cds-text-secondary);
+    color: var(--cds-text-05);
+  }
+
+  .learn-more :global(.bx--link) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
   }
 
   .paste-feedback {
@@ -1051,6 +1045,7 @@
     align-items: flex-start;
     padding: 0.6875rem var(--cds-spacing-05);
     line-height: 1.25rem;
+    color: var(--cds-text-05);
   }
 
   @media (max-width: 672px) {

@@ -217,7 +217,7 @@
   <header class="mb-4">
     <h6 class="mb-3">{m.open_project_select_backup()}</h6>
 
-    <p class="text-grey">
+    <span class="text-grey">
       {m.open_project_backup_description()}
       <span class="inline-tooltip">
         <Tooltip>
@@ -226,7 +226,7 @@
           </p>
         </Tooltip>
       </span>
-    </p>
+    </span>
   </header>
 
   {#if error}
@@ -383,6 +383,11 @@
 </section>
 
 <style>
+  #khartis-open-project :global(.bx--file__drop-container) {
+    line-height: 1.25rem;
+    color: var(--cds-text-05);
+  }
+
   #khartis-open-project :global(.bx--file-browse-btn) {
     min-width: 100%;
   }
