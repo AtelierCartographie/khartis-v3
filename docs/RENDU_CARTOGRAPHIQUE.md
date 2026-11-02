@@ -160,15 +160,18 @@ filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferr
 empilement, filets et export SVG suivent sans chemin propre.
 
 - Les étiquettes retenues par un filtre Textes sont requises : jamais masquées,
-  en chevauchement en dernier recours. Sans filtre, celles qui ne trouvent pas
-  de place sont masquées, des moins importantes aux plus importantes (rayon du
-  symbole, puis taille du texte, puis valeur). Le filtre se lit dans ses
-  identifiants de lignes : en rendu scindé, la table d'attributs est toujours
-  restreinte, filtre ou non.
-- Sans filtre, les étiquettes gardent entre elles un espace libre d'une
-  demi-hauteur d'étiquette médiane (`spacing` du moteur), filets compris : les
-  zones denses s'éclaircissent d'abord. Avec un filtre, aucun espace n'est
-  imposé.
+  en chevauchement en dernier recours. L'option « Masquer des étiquettes
+  filtrées faute de place » (`filteredLabelsOptional`) les rend facultatives
+  comme sans filtre. Celles qui ne trouvent pas de place sont masquées, des
+  moins importantes aux plus importantes (rang d'un filtre « Top » s'il y en
+  a un, puis rayon du symbole, taille du texte et valeur). Le filtre se lit
+  dans ses identifiants de lignes : en rendu scindé, la table d'attributs est
+  toujours restreinte, filtre ou non.
+- Les étiquettes facultatives gardent entre elles un espace libre
+  (`labelSpacing`, une demi-hauteur d'étiquette médiane par défaut, réglable
+  de 0 à 150 % dans le panneau Textes ; `spacing` du moteur), filets compris :
+  les zones denses s'éclaircissent d'abord. Des étiquettes requises n'en
+  gardent aucun.
 - Seul le premier quart des étiquettes de symboles, par importance, peut
   prendre un filet (300 au plus) : avec des filets pour toutes, la plupart des
   noms d'une carte dense en portaient un.
@@ -187,6 +190,16 @@ empilement, filets et export SVG suivent sans chemin propre.
   à un léger surcoût ; le texte est dessiné dans la forme retenue.
 - Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
   autres.
+- Les étiquettes masquées restent accessibles (`hidden-labels.store`). Le
+  panneau Textes les compte et les liste avec la raison du moteur (`reason`,
+  `by`) ; « Afficher » épingle l'étiquette là où le moteur la poserait si elle
+  était requise (`findRequiredSpot`). À l'étape Habillage, survoler une zone,
+  un symbole ou la place d'une étiquette masquée dessine son fantôme en
+  transparence, par-dessus les calques comme l'aperçu de glisser ;
+  l'interrupteur du panneau Textes les dessine tous. Glisser un fantôme
+  l'épingle. Une
+  position manuelle étant déjà enregistrée, rien ne change dans le format du
+  projet.
 - Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
   passent au moteur comme symboles seuls, des obstacles pour les étiquettes. En
   rendu scindé (jeu joint à un fond), leurs attributs ne sont lus que dans le

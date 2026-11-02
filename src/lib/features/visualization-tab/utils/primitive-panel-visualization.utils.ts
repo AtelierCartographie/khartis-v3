@@ -177,6 +177,8 @@ export const buildTextPanelVisualization = createPanelBuilder({
       textHaloOpacity: text.haloOpacity,
       textCollisionDetection: text.collisionDetection,
       textLabelColumns: text.labelColumns ?? false,
+      textLabelSpacing: text.labelSpacing,
+      textFilteredLabelsOptional: text.filteredLabelsOptional ?? false,
       textDxpMasking: text.dxpMasking,
       labelColor: text.secondaryLabels.color,
       labelOpacity: text.secondaryLabels.opacity,

@@ -2,8 +2,12 @@
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
+  import {
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import { VizFilterButton, VizFilterPanel } from '../shared';
+  import HiddenLabelsSummary from './hidden-labels-summary.svelte';
   import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
@@ -24,8 +28,10 @@
     ColorMode,
     DEFAULT_COLORS,
     SizeMode,
+    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
+  import { isVizFilterComplete } from '$lib/features/commons/utils/viz-filter.utils';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
     DEFAULT_SEQUENTIAL_PREVIEW
@@ -143,6 +149,10 @@
   let halo = $state<boolean>(false);
   let automaticPlacement = $state<boolean>(false);
   let labelColumns = $state<boolean>(false);
+  let labelSpacing = $state<number>(
+    VISUALIZATION_DEFAULTS.textLabelSpacing * 100
+  );
+  let filteredLabelsOptional = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
   let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
@@ -181,6 +191,7 @@
   let categoryPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
 
+  const hasTextFilter = $derived(filters.some(isVizFilterComplete));
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(
     labelFieldSelection.selectedFieldId !== NONE_FIELD_ID
@@ -274,6 +285,12 @@
       halo = visualization.style.textHalo ?? false;
       automaticPlacement = visualization.style.textCollisionDetection ?? false;
       labelColumns = visualization.style.textLabelColumns ?? false;
+      labelSpacing = Math.round(
+        (visualization.style.textLabelSpacing ??
+          VISUALIZATION_DEFAULTS.textLabelSpacing) * 100
+      );
+      filteredLabelsOptional =
+        visualization.style.textFilteredLabelsOptional ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
@@ -419,6 +436,16 @@
   function handleLabelColumnsToggle(value: boolean) {
     labelColumns = value;
     onStyleChange?.({ textLabelColumns: value });
+  }
+
+  function handleLabelSpacingChange(value: number) {
+    labelSpacing = value;
+    onStyleChange?.({ textLabelSpacing: value / 100 });
+  }
+
+  function handleFilteredLabelsOptionalToggle(value: boolean) {
+    filteredLabelsOptional = value;
+    onStyleChange?.({ textFilteredLabelsOptional: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -649,6 +676,31 @@
           infoText={m.text_label_columns_info()}
           ontoggle={handleLabelColumnsToggle}
         />
+        {#if automaticPlacement && hasTextFilter}
+          <ToggleWithLabel
+            label={m.text_filtered_labels_optional()}
+            toggled={filteredLabelsOptional}
+            infoText={m.text_filtered_labels_optional_info()}
+            ontoggle={handleFilteredLabelsOptionalToggle}
+          />
+        {/if}
+        {#if automaticPlacement}
+          <SliderWithInput
+            label={m.text_label_spacing()}
+            infoText={m.text_label_spacing_info()}
+            min={SLIDER_LIMITS.textLabelSpacing.min}
+            max={SLIDER_LIMITS.textLabelSpacing.max}
+            step={SLIDER_LIMITS.textLabelSpacing.step}
+            value={labelSpacing}
+            disabled={hasTextFilter && !filteredLabelsOptional}
+            showMinMax
+            inputWidth="64px"
+            onchange={handleLabelSpacingChange}
+          />
+        {/if}
+        {#if automaticPlacement && visualization}
+          <HiddenLabelsSummary vizId={visualization.id} />
+        {/if}
 
         <TextMissingDataSection
           show={showMissingData}

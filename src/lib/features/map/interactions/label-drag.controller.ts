@@ -7,6 +7,7 @@ import {
   type LabelEditingContext
 } from '../layers/text-layer-factory';
 import type { TextLayerDatum } from '../layers/text-layer-data.utils';
+import { hiddenLabelsStore } from '../stores/hidden-labels.store.svelte';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import type { LabelOffset } from '../utils/label-layout.utils';
 import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
@@ -202,12 +203,23 @@ export function attachLabelDragController({
     hoverFrame = requestAnimationFrame(() => {
       hoverFrame = null;
       if (drag) return;
-      setHovering(pickLabel({ clientX, clientY }) !== null);
+      const picked = pickLabel({ clientX, clientY });
+      setHovering(picked !== null);
+      const rect = container.getBoundingClientRect();
+      hiddenLabelsStore.updateHover(
+        [clientX - rect.left, clientY - rect.top],
+        picked && {
+          vizId: picked.context.vizId,
+          featureKey: picked.featureKey
+        }
+      );
     });
   }
 
   function handlePointerLeave(): void {
-    if (!drag) setHovering(false);
+    if (drag) return;
+    setHovering(false);
+    hiddenLabelsStore.clearHover();
   }
 
   container.addEventListener(EVENT.POINTERDOWN, handlePointerDown, true);
@@ -222,6 +234,7 @@ export function attachLabelDragController({
       hoverFrame = null;
     }
     setHovering(false);
+    hiddenLabelsStore.clearHover();
     container.removeEventListener(EVENT.POINTERDOWN, handlePointerDown, true);
     container.removeEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
     container.removeEventListener(EVENT.POINTERMOVE, handleHoverMove);

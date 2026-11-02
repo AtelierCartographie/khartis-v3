@@ -1,7 +1,9 @@
 import {
   placeLabels,
+  type HiddenReason,
   type LabelInput,
   type LabelMode,
+  type PlaceOptions,
   type PlacementResult
 } from '@ateliercartographie/label-placer';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
@@ -394,11 +396,29 @@ function hashPlacementInput(
   return `${entries.length}:${hash >>> 0}`;
 }
 
+/** Why a named label is hidden, by entry id. */
+export interface HiddenLabelDetail {
+  reason: HiddenReason;
+  /** Entry ids of the labels on the spot it would get, for `labels`. */
+  by: number[];
+}
+
+export interface PlacementReport {
+  /** Entries with a size, symbols alone left out. */
+  labelCount: number;
+  hidden: Map<number, HiddenLabelDetail>;
+  /** Required or pinned labels that could not avoid a conflict. */
+  overlapping: number;
+}
+
 interface CachedPlacement {
   key: string;
   obstaclesKey: string;
+  labels: LabelInput[];
+  options: PlaceOptions;
   result: PlacementResult;
   blocks: Map<number, AutoPlacedBlock | null>;
+  report: PlacementReport;
 }
 
 const placementByVisualization = new Map<string, CachedPlacement>();
@@ -457,7 +477,7 @@ export function placeLabelBlocks(
     offset: entry.center,
     leader: mayUseLeader.has(entry.id)
   }));
-  const result = placeLabels(labels, {
+  const placeOptions: PlaceOptions = {
     bounds: options.bounds,
     obstacles: [
       ...options.obstacles.map(([x0, y0, x1, y1]) => ({
@@ -490,7 +510,10 @@ export function placeLabelBlocks(
     gap: options.gap,
     leader: { symbolGap: options.symbolGap, minGap: options.minGap },
     // Without a symbol the label names an area or a bare point: centred first.
-    areaOverflowCost: 0,
+    areaOverflowCost: 0
+  };
+  const result = placeLabels(labels, {
+    ...placeOptions,
     previous: cached?.obstaclesKey === obstaclesKey ? cached.result : undefined
   });
 
@@ -502,6 +525,11 @@ export function placeLabelBlocks(
         box[0] < x1 && x0 < box[2] && box[1] < y1 && y0 < box[3]
     );
   const blocks = new Map<number, AutoPlacedBlock | null>();
+  const report: PlacementReport = {
+    labelCount: 0,
+    hidden: new Map(),
+    overlapping: 0
+  };
   result.labels.forEach((placed, index) => {
     const entry = entries[index];
     const [ax, ay] = entry.anchor;
@@ -522,7 +550,61 @@ export function placeLabelBlocks(
           }
         : null
     );
+    if (entry.halfSize[0] <= 0) return;
+    report.labelCount += 1;
+    if (blocks.get(entry.id) === null) {
+      report.hidden.set(entry.id, {
+        // Hidden by Khartis under a page item, the engine had set it.
+        reason: placed.reason ?? 'obstacles',
+        by: placed.by.map((byIndex) => entries[byIndex].id)
+      });
+    } else if (placed.overlapping) {
+      report.overlapping += 1;
+    }
   });
-  placementByVisualization.set(vizId, { key, obstaclesKey, result, blocks });
+  placementByVisualization.set(vizId, {
+    key,
+    obstaclesKey,
+    labels,
+    options: placeOptions,
+    result,
+    blocks,
+    report
+  });
   return blocks;
+}
+
+/** What the last placement of a visualization hid, or null before one. */
+export function getPlacementReport(vizId: string): PlacementReport | null {
+  return placementByVisualization.get(vizId)?.report ?? null;
+}
+
+/**
+ * Where the engine would set a label it hid if it had to show it, as a block
+ * centre relative to its anchor, or null when it found no spot even then.
+ * The others keep their places where they can.
+ */
+export function findRequiredSpot(
+  vizId: string,
+  id: number
+): LabelOffset | null {
+  const cached = placementByVisualization.get(vizId);
+  const index = cached?.labels.findIndex((label) => label.id === id) ?? -1;
+  if (!cached || index < 0) return null;
+  const labels = cached.labels.map((label, labelIndex) =>
+    labelIndex === index
+      ? { ...label, mode: 'required' as const, leader: true }
+      : label
+  );
+  const placed = placeLabels(labels, {
+    ...cached.options,
+    previous: cached.result
+  }).labels[index];
+  const label = labels[index];
+  return placed.box
+    ? [
+        (placed.box[0] + placed.box[2]) / 2 - label.x,
+        (placed.box[1] + placed.box[3]) / 2 - label.y
+      ]
+    : null;
 }
