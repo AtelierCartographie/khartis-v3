@@ -1,5 +1,4 @@
 import type { Layer } from '@deck.gl/core';
-import type { HiddenReason } from '@ateliercartographie/label-placer';
 
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -12,9 +11,6 @@ import { labelLayoutStore } from './label-layout.store.svelte';
 export interface HiddenLabel {
   featureKey: string;
   text: string;
-  reason: HiddenReason;
-  /** Names of the labels on the spot it would get, for `labels`. */
-  by: string[];
   anchor: LabelOffset;
   symbolRadius: number;
   /** Outline of the area it names, if any. */
@@ -30,8 +26,8 @@ export interface LabelPlacementReport {
   hidden: HiddenLabel[];
   overlapping: number;
   pageDisplayScale: number;
-  /** Ghosts of the given hidden labels, drawn over the map. */
-  buildGhosts: (featureKeys: ReadonlySet<string>) => Layer[];
+  /** The ghost of a hidden label, drawn over the map. */
+  buildGhost: (featureKey: string) => Layer[];
   /** Block centre to pin a hidden label at, relative to its anchor. */
   resolveShownCenter: (featureKey: string) => LabelOffset | null;
 }
@@ -79,13 +75,12 @@ function hitsLabel(label: HiddenLabel, point: LabelOffset): boolean {
 }
 
 /**
- * The labels the automatic placement hid, by visualization, and their ghosts
- * in the Styling step: the hovered one, or all of them on request. A ghost is
- * dragged like a label, which pins it where it is dropped.
+ * The labels the automatic placement hid, by visualization, and the ghost of
+ * the hovered one in the Styling step. A ghost is dragged like a label, which
+ * pins it where it is dropped.
  */
 function createHiddenLabelsStore() {
   let reports = $state.raw<Record<string, LabelPlacementReport>>({});
-  let revealAll = $state(false);
   let hovered = $state.raw<HoveredHiddenLabel | null>(null);
 
   const ghostLayers = $derived.by((): Layer[] => {
@@ -96,20 +91,16 @@ function createHiddenLabelsStore() {
       return [];
     }
     const dragged = labelLayoutStore.draggedLabel;
-    return Object.values(reports).flatMap((report) => {
-      const keys = new Set(
-        report.hidden
-          .map((label) => label.featureKey)
-          .filter(
-            (key) =>
-              (revealAll ||
-                (hovered?.vizId === report.vizId &&
-                  hovered.featureKey === key)) &&
-              !(dragged?.vizId === report.vizId && dragged.featureKey === key)
-          )
-      );
-      return keys.size > 0 ? report.buildGhosts(keys) : [];
-    });
+    const report = hovered && reports[hovered.vizId];
+    if (
+      !hovered ||
+      !report ||
+      (dragged?.vizId === hovered.vizId &&
+        dragged.featureKey === hovered.featureKey)
+    ) {
+      return [];
+    }
+    return report.buildGhost(hovered.featureKey);
   });
 
   function report(vizId: string, next: LabelPlacementReport | null): void {
@@ -178,12 +169,6 @@ function createHiddenLabelsStore() {
   return {
     get ghostLayers(): Layer[] {
       return ghostLayers;
-    },
-    get revealAll(): boolean {
-      return revealAll;
-    },
-    setRevealAll(value: boolean): void {
-      revealAll = value;
     },
     getReport(vizId: string): LabelPlacementReport | null {
       return reports[vizId] ?? null;

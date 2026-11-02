@@ -1,6 +1,5 @@
 import {
   placeLabels,
-  type HiddenReason,
   type LabelInput,
   type LabelMode,
   type PlaceOptions,
@@ -400,17 +399,11 @@ function hashPlacementInput(
   return `${entries.length}:${hash >>> 0}`;
 }
 
-/** Why a named label is hidden, by entry id. */
-export interface HiddenLabelDetail {
-  reason: HiddenReason;
-  /** Entry ids of the labels on the spot it would get, for `labels`. */
-  by: number[];
-}
-
 export interface PlacementReport {
   /** Entries with a size, symbols alone left out. */
   labelCount: number;
-  hidden: Map<number, HiddenLabelDetail>;
+  /** Entry ids of the labels hidden for lack of room. */
+  hidden: Set<number>;
   /** Required or pinned labels that could not avoid a conflict. */
   overlapping: number;
 }
@@ -534,7 +527,7 @@ export function placeLabelBlocks(
   const blocks = new Map<number, AutoPlacedBlock | null>();
   const report: PlacementReport = {
     labelCount: 0,
-    hidden: new Map(),
+    hidden: new Set(),
     overlapping: 0
   };
   result.labels.forEach((placed, index) => {
@@ -560,11 +553,7 @@ export function placeLabelBlocks(
     if (entry.halfSize[0] <= 0) return;
     report.labelCount += 1;
     if (blocks.get(entry.id) === null) {
-      report.hidden.set(entry.id, {
-        // Hidden by Khartis under a page item, the engine had set it.
-        reason: placed.reason ?? 'obstacles',
-        by: placed.by.map((byIndex) => entries[byIndex].id)
-      });
+      report.hidden.add(entry.id);
     } else if (placed.overlapping) {
       report.overlapping += 1;
     }

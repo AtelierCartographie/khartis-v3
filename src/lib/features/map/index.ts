@@ -18,10 +18,7 @@ export { mapTooltipStore } from './stores/map-tooltip.store.svelte';
 export { rowScopeStore } from './stores/row-scope.store.svelte';
 export { trackWorkerParseVersion } from './utils/worker-parse.svelte';
 export { labelLayoutStore } from './stores/label-layout.store.svelte';
-export {
-  hiddenLabelsStore,
-  type HiddenLabel
-} from './stores/hidden-labels.store.svelte';
+export { hiddenLabelsStore } from './stores/hidden-labels.store.svelte';
 export { default as LabelTextEditor } from './components/label-text-editor.svelte';
 
 export {
