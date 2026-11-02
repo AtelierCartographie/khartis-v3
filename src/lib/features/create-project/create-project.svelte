@@ -10,6 +10,7 @@
   import { fade, fly } from 'svelte/transition';
   import {
     ComposedModal,
+    Loading,
     ModalBody,
     ModalHeader
   } from 'carbon-components-svelte';
@@ -221,6 +222,13 @@
           {/key}
         </div>
 
+        {#if createProjectState.isOpeningProject}
+          <div class="opening-overlay" role="status">
+            <Loading withOverlay={false} small />
+            <span>{m.create_project_opening_project()}</span>
+          </div>
+        {/if}
+
         {#if createProjectState.selectedTab === 1}
           <div
             in:fade={{
@@ -336,6 +344,32 @@
   .tab-pane {
     grid-area: 1 / 1;
     min-width: 0;
+  }
+
+  /* Delayed so that a small project opens without a flash. */
+  .opening-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--cds-spacing-03);
+    background: color-mix(in srgb, var(--cds-background) 85%, transparent);
+    color: var(--cds-text-primary);
+    animation: opening-fade-in 200ms 150ms both;
+  }
+
+  @keyframes opening-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .opening-overlay {
+      animation-duration: 0ms;
+    }
   }
 
   #khartis-create-project :global(.bx--tile) {
