@@ -239,8 +239,9 @@
 
 <style lang="scss">
   #khartis-create-project :global(.bx--modal-header .bx--link) {
-    font-size: inherit;
+    font-size: 0.875rem;
     line-height: inherit;
+    color: inherit;
   }
 
   @media (min-width: 1024px) {
