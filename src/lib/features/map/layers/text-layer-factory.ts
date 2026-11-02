@@ -974,7 +974,14 @@ function buildTextOverlayLayers(
           ctx.modelMatrix,
           pageDisplayScale,
           getBasemapFrameExtent(ctx.customProjection),
-          pageFormat.width - pageFormat.margins.left - pageFormat.margins.right
+          [
+            pageFormat.width -
+              pageFormat.margins.left -
+              pageFormat.margins.right,
+            pageFormat.height -
+              pageFormat.margins.top -
+              pageFormat.margins.bottom
+          ]
         )
       : null;
   // Labels a Texts filter kept are the ones the user asked for: never hidden,

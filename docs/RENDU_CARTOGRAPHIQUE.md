@@ -153,7 +153,11 @@ extrémités sur l'entité et les décale en pixels dans le shader, comme le
 L'option « Placement automatique » du panneau Textes (`collisionDetection` du
 primitif texte) confie le placement au paquet `@ateliercartographie/label-placer`
 (`utils/label-auto-placement.utils.ts`). La fabrique projette chaque ancrage en
-pixels de page à travers le viewport deck courant, mesure le bloc d'étiquettes et
+pixels de page à travers le viewport deck courant, depuis le centre du canevas
+et dans la taille nominale de la zone carte : le canevas est arrondi au pixel
+près, sa taille en pixels de page varie d'une fraction de pixel avec le zoom de
+page, et sans ce recentrage le placement changeait entre les étapes
+Visualisations et Habillage. Elle mesure ensuite le bloc d'étiquettes et
 le rayon du symbole, puis le moteur choisit pour chaque bloc une position autour
 du symbole (pratique de l'Atelier), dans le symbole s'il y tient, ou plus loin avec un
 filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferrage,

@@ -124,18 +124,28 @@ export interface LabelPlacementFrame {
  * Projects layer positions to page pixels through the live map viewport, or
  * null before the map has rendered once. The canvas spans the whole page, so
  * labels are kept inside the basemap frame when the projection has one.
- * `mapAreaWidth` is the logical width of the map area, which page item boxes
+ * `mapAreaSize` is the logical size of the map area, which page item boxes
  * are measured against.
+ *
+ * The canvas is rounded to whole device pixels around a map centred in it, so
+ * its page size drifts by a fraction of a pixel with the page zoom, from one
+ * step to the next. Positions are taken from its centre into the map area's
+ * own size: the same inputs at every zoom, and the labels stay put.
  */
 export function resolveLabelPlacementFrame(
   modelMatrix: Matrix4 | null | undefined,
   pageDisplayScale: number,
   frameExtent: BasemapFrameExtent | null,
-  mapAreaWidth: number
+  [mapAreaWidth, mapAreaHeight]: [number, number]
 ): LabelPlacementFrame | null {
   const viewport = resolveMapViewport();
-  if (!viewport) return null;
+  if (!viewport || mapAreaWidth <= 0 || mapAreaHeight <= 0) return null;
   const scale = pageDisplayScale > 0 ? pageDisplayScale : 1;
+  // MapLibre renders at page scale 1 on a canvas sized by the page zoom, so
+  // page item boxes are scaled to the canvas rather than assumed to match it.
+  const itemScale = modelMatrix ? 1 : viewport.width / scale / mapAreaWidth;
+  const width = mapAreaWidth * itemScale;
+  const height = mapAreaHeight * itemScale;
   const toPagePx = ([x, y]: [number, number]): LabelOffset | null => {
     const world = modelMatrix
       ? Array.from(modelMatrix.transformAsPoint([x, y, 0]))
@@ -144,15 +154,13 @@ export function resolveLabelPlacementFrame(
     const sx = projected[0];
     const sy = projected[1];
     return Number.isFinite(sx) && Number.isFinite(sy)
-      ? [sx / scale, sy / scale]
+      ? [
+          (sx - viewport.width / 2) / scale + width / 2,
+          (sy - viewport.height / 2) / scale + height / 2
+        ]
       : null;
   };
-  let bounds: [number, number, number, number] = [
-    0,
-    0,
-    viewport.width / scale,
-    viewport.height / scale
-  ];
+  let bounds: [number, number, number, number] = [0, 0, width, height];
   const corners = frameExtent
     ? [toPagePx(frameExtent[0]), toPagePx(frameExtent[1])]
     : [];
@@ -165,10 +173,6 @@ export function resolveLabelPlacementFrame(
       Math.min(bounds[3], Math.max(a[1], b[1]))
     ];
   }
-  // MapLibre renders at page scale 1 on a canvas sized by the page zoom, so
-  // page item boxes are scaled to the canvas rather than assumed to match it.
-  const itemScale =
-    mapAreaWidth > 0 ? viewport.width / scale / mapAreaWidth : 1;
   const toObstacles = (
     boxes: PageItemBox[]
   ): [number, number, number, number][] =>
@@ -437,7 +441,10 @@ export function placeLabelBlocks(
   const key = hashPlacementInput(entries, options);
   const cached = placementByVisualization.get(vizId);
   if (cached?.key === key) return cached.blocks;
-  const obstaclesKey = options.obstacles.flat().join(',');
+  const obstaclesKey = options.obstacles
+    .flat()
+    .map((value) => Math.round(value * 100))
+    .join(',');
 
   const named = entries.filter(
     (entry) =>
