@@ -223,7 +223,7 @@ describe('placeLabelBlocks on land and with spacing', () => {
     expect(gap).toBeGreaterThanOrEqual(8 - 1e-9);
   });
 
-  it('should report who took the room of a hidden label and where it would go if required', () => {
+  it('should report a hidden label and where it would go if required', () => {
     // Room for one name only, centred on the shared anchor.
     const kept: AutoLabelEntry = {
       ...ENTRY,
@@ -240,10 +240,7 @@ describe('placeLabelBlocks on land and with spacing', () => {
 
     const report = getPlacementReport('viz-hidden');
     expect(report?.labelCount).toBe(2);
-    expect(report?.hidden.get(hidden.id)).toEqual({
-      reason: 'labels',
-      by: [kept.id]
-    });
+    expect([...(report?.hidden ?? [])]).toEqual([hidden.id]);
 
     const spot = findRequiredSpot('viz-hidden', hidden.id);
     expect(spot?.[0]).toBeCloseTo(0);

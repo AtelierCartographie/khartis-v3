@@ -1120,9 +1120,7 @@ function buildTextOverlayLayers(
     return secondaryDatumByFeatureId.get(datum.featureId);
   };
   let primaryTextLayer: TextLayer<TextLayerDatum> | null = null;
-  let buildHiddenLabelGhosts = (
-    _featureKeys: ReadonlySet<string>
-  ): Layer[] => [];
+  let buildHiddenLabelGhost = (_featureKey: string): Layer[] => [];
   let secondaryTextLayer: TextLayer<TextLayerDatum> | null = null;
   const buildLabelDragPreview = (
     datum: TextLayerDatum,
@@ -1271,15 +1269,11 @@ function buildTextOverlayLayers(
     const datumById = new Map(
       textLayerData.map((datum) => [datum.featureId, datum])
     );
-    const nameOf = (id: number): string[] => {
-      const datum = datumById.get(id);
-      return datum ? [resolvePrimaryLabelText(datum)] : [];
-    };
     hiddenLabels = entries.flatMap((entry): HiddenLabel[] => {
-      const detail = placementReport?.hidden.get(entry.id);
       const datum = datumById.get(entry.id);
       const featureKey = datum ? resolveFeatureKey(datum) : null;
-      if (!detail || !datum || !featureKey) return [];
+      if (!placementReport?.hidden.has(entry.id) || !datum || !featureKey)
+        return [];
       const [cx, cy] = resolveDefaultBlockCenter(datum);
       const [hw, hh] = resolveBlockHalfSize(datum, 0);
       const [ax, ay] = entry.anchor;
@@ -1287,8 +1281,6 @@ function buildTextOverlayLayers(
         {
           featureKey,
           text: resolvePrimaryLabelText(datum),
-          reason: detail.reason,
-          by: detail.by.flatMap(nameOf),
           anchor: entry.anchor,
           symbolRadius: entry.symbolRadius,
           rings: entry.rings,
@@ -1303,7 +1295,7 @@ function buildTextOverlayLayers(
         hidden: hiddenLabels,
         overlapping: placementReport.overlapping,
         pageDisplayScale,
-        buildGhosts: (featureKeys) => buildHiddenLabelGhosts(featureKeys),
+        buildGhost: (featureKey) => buildHiddenLabelGhost(featureKey),
         resolveShownCenter: (featureKey) => {
           const datum = textLayerData.find(
             (candidate) => resolveFeatureKey(candidate) === featureKey
@@ -1652,11 +1644,10 @@ function buildTextOverlayLayers(
         layers.push(primaryTextLayer as ThematicLayer);
       }
       const ghostLayer = primaryTextLayer;
-      buildHiddenLabelGhosts = (featureKeys) => {
+      buildHiddenLabelGhost = (featureKey) => {
         const data = ghostData.filter(
           (datum) =>
-            !isDraggedDatum(datum) &&
-            featureKeys.has(resolveFeatureKey(datum) ?? '')
+            !isDraggedDatum(datum) && resolveFeatureKey(datum) === featureKey
         );
         if (data.length === 0) return [];
         Object.assign(data, {

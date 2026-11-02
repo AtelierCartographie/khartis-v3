@@ -3,6 +3,7 @@
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import {
+    SectionHeading,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
@@ -663,6 +664,17 @@
         class:texts-config__dependent--disabled={!hasPrimaryField}
         inert={!hasPrimaryField}
       >
+        <TextMissingDataSection
+          show={showMissingData}
+          label={missingDataLabel}
+          color={missingDataColor}
+          onShowChange={handleMissingDataShowChange}
+          onLabelChange={handleMissingDataLabelChange}
+          onColorChange={handleMissingDataColorChange}
+        />
+
+        <SectionHeading title={m.text_position_title()} />
+        <p class="texts-config__helper">{m.text_position_helper()}</p>
         <ToggleWithLabel
           label={m.text_automatic_placement()}
           toggled={automaticPlacement}
@@ -701,15 +713,6 @@
         {#if automaticPlacement && visualization}
           <HiddenLabelsSummary vizId={visualization.id} />
         {/if}
-
-        <TextMissingDataSection
-          show={showMissingData}
-          label={missingDataLabel}
-          color={missingDataColor}
-          onShowChange={handleMissingDataShowChange}
-          onLabelChange={handleMissingDataLabelChange}
-          onColorChange={handleMissingDataColorChange}
-        />
 
         <TextSizeSection
           sizeMode={sizeMode}
@@ -837,6 +840,11 @@
 
   .texts-config__dependent--disabled {
     opacity: 0.4;
+  }
+
+  .texts-config__helper {
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    color: var(--cds-text-helper);
   }
 
   :global(.text-input-field .bx--text-input) {

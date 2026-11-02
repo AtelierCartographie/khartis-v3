@@ -194,14 +194,12 @@ empilement, filets et export SVG suivent sans chemin propre.
   à un léger surcoût ; le texte est dessiné dans la forme retenue.
 - Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
   autres.
-- Les étiquettes masquées restent accessibles (`hidden-labels.store`). Le
-  panneau Textes les compte et les liste avec la raison du moteur (`reason`,
-  `by`) ; « Afficher » épingle l'étiquette là où le moteur la poserait si elle
-  était requise (`findRequiredSpot`). À l'étape Habillage, survoler une zone,
-  un symbole ou la place d'une étiquette masquée dessine son fantôme en
-  transparence, par-dessus les calques comme l'aperçu de glisser ;
-  l'interrupteur du panneau Textes les dessine tous. Glisser un fantôme
-  l'épingle. Une
+- Les étiquettes masquées restent accessibles (`hidden-labels.store`). La
+  section Position du panneau Textes les compte. À l'étape Habillage, survoler
+  une zone, un symbole ou la place d'une étiquette masquée dessine son fantôme
+  en transparence, par-dessus les calques comme l'aperçu de glisser. Glisser
+  un fantôme l'épingle ; « Afficher l'étiquette » de son éditeur l'épingle là
+  où le moteur la poserait si elle était requise (`findRequiredSpot`). Une
   position manuelle étant déjà enregistrée, rien ne change dans le format du
   projet.
 - Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
