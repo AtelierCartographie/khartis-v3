@@ -1,0 +1,530 @@
+import type { Layer } from '@deck.gl/core';
+import {
+  PathLayer,
+  ScatterplotLayer,
+  SolidPolygonLayer
+} from '@deck.gl/layers';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import {
+  type BinaryPathData,
+  type BinaryPolygonData,
+  createPathLayerProps,
+  createPolygonFillColorAttribute
+} from '@ateliercartographie/geoarrow-deck-stream';
+
+import type {
+  JoinTerritoryStatus,
+  JoinTerritoryStatusRow
+} from '$lib/features/duckdb';
+import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+
+import {
+  JOIN_CONTROL_FILL_COLORS,
+  JOIN_CONTROL_FOCUS_MARKER_STATUSES,
+  JOIN_CONTROL_FOCUS_OUTLINE_COLOR,
+  JOIN_CONTROL_FOCUS_OUTLINE_WIDTH_PX,
+  JOIN_CONTROL_MARKER_RADIUS_PX,
+  JOIN_CONTROL_MARKER_STATUSES,
+  JOIN_CONTROL_MARKER_STROKE_COLOR,
+  JOIN_CONTROL_MARKER_STROKE_WIDTH_PX,
+  JOIN_CONTROL_OUTLINE_COLOR,
+  JOIN_CONTROL_OUTLINE_WIDTH_PX,
+  JOIN_CONTROL_PATTERNS,
+  JOIN_CONTROL_SMALL_TERRITORY_RATIO,
+  JOIN_CONTROL_STATUSES,
+  JOIN_CONTROL_UNFOCUSED_ALPHA
+} from '../constants/join-control.constants';
+import type { JoinControlCounts } from '../stores/join-control.store.svelte';
+import type { DeckDataRow, LayerContext } from '../types';
+import {
+  pathColorAttr,
+  pathWidthAttr
+} from '../utils/geoarrow-stream-bridge.utils';
+import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
+import {
+  resolvePathParser,
+  resolvePolygonParser
+} from './layer-geometry-parsers';
+import {
+  createBinaryPolygonPatternOverlayLayer,
+  createClassPatternProps,
+  type PolygonPatternProps,
+  THEMATIC_OVERLAY_PARAMETERS,
+  TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+} from './polygon-pattern-layer.utils';
+
+type Rgba = [number, number, number, number];
+
+const NO_ROW = -1;
+const DUPLICATE_PATTERN_OPACITY = 0.9;
+
+export interface JoinControlTerritories {
+  /** Index in `rows` of each geometry row's entity, NO_ROW when unknown. */
+  rowIndexByGeomRow: Int32Array;
+  statusByGeomRow: JoinTerritoryStatus[];
+  counts: JoinControlCounts;
+}
+
+/** What the tooltip reads from a picked join-control layer. */
+export interface JoinControlPickData {
+  rows: JoinTerritoryStatusRow[];
+  territories: JoinControlTerritories;
+  geometry: ArrowTable;
+  featureIdColumn: string;
+}
+
+export interface JoinControlLayerInput {
+  layerId: string;
+  geometry: ArrowTable;
+  featureIdColumn: string;
+  rows: JoinTerritoryStatusRow[];
+  focusedStatus: JoinTerritoryStatus | null;
+  /** A basemap without boundary layers leaves the territories unseparated. */
+  outlineTerritories: boolean;
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId' | 'customProjection'>;
+}
+
+export interface JoinControlLayers {
+  /** Drawn over the basemap land, under its boundaries and labels. */
+  territoryLayers: Layer<DeckDataRow>[];
+  /** Drawn on top, so a territory too small to see keeps a hover target. */
+  markerLayers: Layer<DeckDataRow>[];
+  counts: JoinControlCounts;
+}
+
+const territoriesCache = new WeakMap<
+  ArrowTable,
+  WeakMap<JoinTerritoryStatusRow[], Map<string, JoinControlTerritories>>
+>();
+
+export function resolveJoinControlTerritories(
+  geometry: ArrowTable,
+  featureIdColumn: string,
+  rows: JoinTerritoryStatusRow[]
+): JoinControlTerritories {
+  let byRows = territoriesCache.get(geometry);
+  if (!byRows) {
+    byRows = new WeakMap();
+    territoriesCache.set(geometry, byRows);
+  }
+  let byColumn = byRows.get(rows);
+  if (!byColumn) {
+    byColumn = new Map();
+    byRows.set(rows, byColumn);
+  }
+  const cached = byColumn.get(featureIdColumn);
+  if (cached) return cached;
+
+  const rowIndexById = new Map<string, number>();
+  rows.forEach((row, index) => rowIndexById.set(row.territoryId, index));
+
+  const idVector = geometry.getChild(featureIdColumn);
+  const rowIndexByGeomRow = new Int32Array(geometry.numRows).fill(NO_ROW);
+  const statusByGeomRow: JoinTerritoryStatus[] = [];
+  const counts = Object.fromEntries(
+    JOIN_CONTROL_STATUSES.map((status) => [status, 0])
+  ) as JoinControlCounts;
+
+  for (let geomRow = 0; geomRow < geometry.numRows; geomRow += 1) {
+    const id = idVector?.get(geomRow);
+    const rowIndex =
+      id === null || id === undefined
+        ? undefined
+        : rowIndexById.get(String(id));
+    const status = rowIndex === undefined ? 'no_data' : rows[rowIndex].status;
+    if (rowIndex !== undefined) rowIndexByGeomRow[geomRow] = rowIndex;
+    statusByGeomRow.push(status);
+    counts[status] += 1;
+  }
+
+  const territories = { rowIndexByGeomRow, statusByGeomRow, counts };
+  byColumn.set(featureIdColumn, territories);
+  return territories;
+}
+
+interface FeatureExtents {
+  /** Bounding-box center of each feature, NaN when it has no vertex. */
+  centers: Float64Array;
+  /** Larger side of each feature's bounding box. */
+  sizes: Float64Array;
+  /** Larger side of the whole geometry's bounding box. */
+  extent: number;
+}
+
+const extentsCache = new WeakMap<BinaryPolygonData, FeatureExtents>();
+
+function resolveFeatureExtents(
+  polyData: BinaryPolygonData,
+  featureCount: number
+): FeatureExtents {
+  const cached = extentsCache.get(polyData);
+  if (cached && cached.sizes.length === featureCount) return cached;
+
+  const bounds = new Float64Array(featureCount * 4);
+  for (let feature = 0; feature < featureCount; feature += 1) {
+    bounds.set([Infinity, Infinity, -Infinity, -Infinity], feature * 4);
+  }
+  const { positions, polygonIndices, featureIds } = polyData;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let polygon = 0; polygon < polyData.length; polygon += 1) {
+    const feature = featureIds[polygon];
+    if (feature >= featureCount) continue;
+    const offset = feature * 4;
+    for (
+      let vertex = polygonIndices[polygon];
+      vertex < polygonIndices[polygon + 1];
+      vertex += 1
+    ) {
+      const x = positions[vertex * 2];
+      const y = positions[vertex * 2 + 1];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < bounds[offset]) bounds[offset] = x;
+      if (y < bounds[offset + 1]) bounds[offset + 1] = y;
+      if (x > bounds[offset + 2]) bounds[offset + 2] = x;
+      if (y > bounds[offset + 3]) bounds[offset + 3] = y;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  const centers = new Float64Array(featureCount * 2).fill(Number.NaN);
+  const sizes = new Float64Array(featureCount).fill(Number.NaN);
+  for (let feature = 0; feature < featureCount; feature += 1) {
+    const offset = feature * 4;
+    if (!Number.isFinite(bounds[offset])) continue;
+    centers[feature * 2] = (bounds[offset] + bounds[offset + 2]) / 2;
+    centers[feature * 2 + 1] = (bounds[offset + 1] + bounds[offset + 3]) / 2;
+    sizes[feature] = Math.max(
+      bounds[offset + 2] - bounds[offset],
+      bounds[offset + 3] - bounds[offset + 1]
+    );
+  }
+
+  const extents = {
+    centers,
+    sizes,
+    extent: Number.isFinite(minX) ? Math.max(maxX - minX, maxY - minY) : 0
+  };
+  extentsCache.set(polyData, extents);
+  return extents;
+}
+
+const patternPropsCache = new Map<
+  JoinTerritoryStatus,
+  { props: PolygonPatternProps; color: Rgba } | null
+>();
+
+function resolveStatusPattern(
+  status: JoinTerritoryStatus
+): { props: PolygonPatternProps; color: Rgba } | null {
+  if (patternPropsCache.has(status)) {
+    return patternPropsCache.get(status) ?? null;
+  }
+  const config = JOIN_CONTROL_PATTERNS[status];
+  const pattern = config
+    ? resolveClassPatterns(1, config, 'sequential', config.contrast)[0]
+    : undefined;
+  const resolved = pattern
+    ? {
+        props: createClassPatternProps([pattern], 0),
+        color: [...hexToRgb(pattern.fill), 255] as Rgba
+      }
+    : null;
+  patternPropsCache.set(status, resolved);
+  return resolved;
+}
+
+function withFocusAlpha(
+  color: Rgba,
+  status: JoinTerritoryStatus,
+  focusedStatus: JoinTerritoryStatus | null
+): Rgba {
+  return focusedStatus && focusedStatus !== status
+    ? [color[0], color[1], color[2], JOIN_CONTROL_UNFOCUSED_ALPHA]
+    : color;
+}
+
+const FILL_COLORS = Object.fromEntries(
+  JOIN_CONTROL_STATUSES.map((status) => [
+    status,
+    [...hexToRgb(JOIN_CONTROL_FILL_COLORS[status]), 255]
+  ])
+) as Record<JoinTerritoryStatus, Rgba>;
+
+type BinaryLayerData = Record<string, unknown> & {
+  length: number;
+  attributes: Record<string, unknown>;
+};
+
+// Binary attributes are rebuilt only when the geometry, the statuses or the
+// focus change: deck then compares the data by reference and skips the upload.
+const layerDataCache = new WeakMap<
+  object,
+  WeakMap<JoinTerritoryStatusRow[], Map<string, BinaryLayerData>>
+>();
+
+function memoLayerData(
+  source: object,
+  rows: JoinTerritoryStatusRow[],
+  key: string,
+  build: () => BinaryLayerData
+): BinaryLayerData {
+  let byRows = layerDataCache.get(source);
+  if (!byRows) {
+    byRows = new WeakMap();
+    layerDataCache.set(source, byRows);
+  }
+  let byKey = byRows.get(rows);
+  if (!byKey) {
+    byKey = new Map();
+    byRows.set(rows, byKey);
+  }
+  let data = byKey.get(key);
+  if (!data) {
+    data = build();
+    byKey.set(key, data);
+  }
+  return data;
+}
+
+function placementProps(
+  ctx: JoinControlLayerInput['ctx']
+): Record<string, unknown> {
+  return {
+    ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+    ...(ctx.beforeId && { beforeId: ctx.beforeId })
+  };
+}
+
+function createOutlineLayer(
+  id: string,
+  pathData: BinaryPathData,
+  rows: JoinTerritoryStatusRow[],
+  key: string,
+  colorOf: (featureId: number) => Rgba,
+  widthOf: (featureId: number) => number,
+  ctx: JoinControlLayerInput['ctx']
+): Layer<DeckDataRow> {
+  const data = memoLayerData(pathData, rows, key, () => {
+    const built = createPathLayerProps(pathData).data as BinaryLayerData;
+    built.attributes.getColor = pathColorAttr(pathData, colorOf);
+    built.attributes.getWidth = pathWidthAttr(pathData, widthOf);
+    return built;
+  });
+
+  return new PathLayer({
+    id,
+    ...({ data } as Record<string, unknown>),
+    _pathType: 'open',
+    widthUnits: 'pixels',
+    widthMinPixels: 0,
+    pickable: false,
+    parameters: THEMATIC_OVERLAY_PARAMETERS,
+    ...placementProps(ctx),
+    dataComparator: (newData, oldData) => newData === oldData
+  }) as Layer<DeckDataRow>;
+}
+
+export function createJoinControlLayers(
+  input: JoinControlLayerInput
+): JoinControlLayers {
+  const {
+    layerId,
+    geometry,
+    featureIdColumn,
+    rows,
+    focusedStatus,
+    outlineTerritories,
+    ctx
+  } = input;
+  const territories = resolveJoinControlTerritories(
+    geometry,
+    featureIdColumn,
+    rows
+  );
+  const polyData = resolvePolygonParser(ctx.customProjection)(geometry);
+  if (polyData.length === 0) {
+    return {
+      territoryLayers: [],
+      markerLayers: [],
+      counts: territories.counts
+    };
+  }
+
+  const { statusByGeomRow } = territories;
+  const statusOf = (featureId: number): JoinTerritoryStatus =>
+    statusByGeomRow[featureId] ?? 'no_data';
+  const focusKey = `${featureIdColumn}:${focusedStatus ?? ''}`;
+  const pickData: JoinControlPickData = {
+    rows,
+    territories,
+    geometry,
+    featureIdColumn
+  };
+
+  const fillData = memoLayerData(polyData, rows, `fill:${focusKey}`, () => {
+    const built = createCompatibleSolidPolygonLayerProps(polyData)
+      .data as unknown as BinaryLayerData;
+    built.attributes.getFillColor = createPolygonFillColorAttribute(
+      polyData,
+      (featureId) => {
+        const status = statusOf(featureId);
+        return withFocusAlpha(FILL_COLORS[status], status, focusedStatus);
+      }
+    );
+    built.featureIds = polyData.featureIds;
+    built.khartisPickGeometry = polyData;
+    built.khartisJoinControl = pickData;
+    return built;
+  });
+
+  const territoryLayers: Layer<DeckDataRow>[] = [
+    new SolidPolygonLayer({
+      id: `${layerId}-fill`,
+      ...({ data: fillData } as Record<string, unknown>),
+      _normalize: false,
+      pickable: true,
+      parameters: THEMATIC_OVERLAY_PARAMETERS,
+      ...placementProps(ctx),
+      dataComparator: (newData, oldData) => newData === oldData
+    }) as Layer<DeckDataRow>
+  ];
+
+  for (const status of JOIN_CONTROL_STATUSES) {
+    const pattern = resolveStatusPattern(status);
+    if (!pattern || territories.counts[status] === 0) continue;
+    const color = withFocusAlpha(pattern.color, status, focusedStatus);
+    const overlay = createBinaryPolygonPatternOverlayLayer(
+      layerId,
+      status,
+      polyData,
+      pattern.props,
+      ctx,
+      (featureId) =>
+        statusOf(featureId) === status
+          ? color
+          : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
+      `${status}-pattern`,
+      status === 'duplicate' ? DUPLICATE_PATTERN_OPACITY : undefined
+    );
+    if (overlay) territoryLayers.push(overlay);
+  }
+
+  const hasFocusedTerritory =
+    focusedStatus !== null && territories.counts[focusedStatus] > 0;
+  const pathData =
+    outlineTerritories || hasFocusedTerritory
+      ? resolvePathParser(ctx.customProjection)(geometry)
+      : null;
+  if (pathData && pathData.length > 0) {
+    if (outlineTerritories) {
+      territoryLayers.push(
+        createOutlineLayer(
+          `${layerId}-outline`,
+          pathData,
+          rows,
+          `outline:${featureIdColumn}`,
+          () => JOIN_CONTROL_OUTLINE_COLOR,
+          () => JOIN_CONTROL_OUTLINE_WIDTH_PX,
+          ctx
+        )
+      );
+    }
+    if (hasFocusedTerritory) {
+      territoryLayers.push(
+        createOutlineLayer(
+          `${layerId}-focus-outline`,
+          pathData,
+          rows,
+          `focus:${focusKey}`,
+          (featureId) =>
+            statusOf(featureId) === focusedStatus
+              ? JOIN_CONTROL_FOCUS_OUTLINE_COLOR
+              : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
+          (featureId) =>
+            statusOf(featureId) === focusedStatus
+              ? JOIN_CONTROL_FOCUS_OUTLINE_WIDTH_PX
+              : 0,
+          ctx
+        )
+      );
+    }
+  }
+
+  const markerLayers: Layer<DeckDataRow>[] = [];
+  const extents = resolveFeatureExtents(polyData, geometry.numRows);
+  const smallSize = extents.extent * JOIN_CONTROL_SMALL_TERRITORY_RATIO;
+  const markerStatuses =
+    focusedStatus && JOIN_CONTROL_FOCUS_MARKER_STATUSES.includes(focusedStatus)
+      ? [focusedStatus]
+      : JOIN_CONTROL_MARKER_STATUSES;
+  for (const status of markerStatuses) {
+    if (focusedStatus && focusedStatus !== status) continue;
+    if (territories.counts[status] === 0) continue;
+    const markerData = memoLayerData(
+      polyData,
+      rows,
+      `markers:${status}:${featureIdColumn}`,
+      () => {
+        const positions: number[] = [];
+        const featureIds: number[] = [];
+        for (let feature = 0; feature < statusByGeomRow.length; feature += 1) {
+          if (statusByGeomRow[feature] !== status) continue;
+          if (!(extents.sizes[feature] < smallSize)) continue;
+          positions.push(
+            extents.centers[feature * 2],
+            extents.centers[feature * 2 + 1]
+          );
+          featureIds.push(feature);
+        }
+        return {
+          length: featureIds.length,
+          attributes: {
+            getPosition: { value: new Float64Array(positions), size: 2 }
+          },
+          featureIds: new Uint32Array(featureIds),
+          khartisPickGeometry: polyData,
+          khartisJoinControl: pickData
+        };
+      }
+    );
+    if (markerData.length === 0) continue;
+
+    markerLayers.push(
+      new ScatterplotLayer({
+        id: `${layerId}-${status}-markers`,
+        ...({ data: markerData } as Record<string, unknown>),
+        filled: true,
+        stroked: true,
+        radiusUnits: 'pixels',
+        getRadius: JOIN_CONTROL_MARKER_RADIUS_PX,
+        lineWidthUnits: 'pixels',
+        getLineWidth: JOIN_CONTROL_MARKER_STROKE_WIDTH_PX,
+        getFillColor: FILL_COLORS[status],
+        getLineColor: JOIN_CONTROL_MARKER_STROKE_COLOR,
+        pickable: true,
+        parameters: THEMATIC_OVERLAY_PARAMETERS,
+        ...placementProps(ctx),
+        dataComparator: (newData, oldData) => newData === oldData
+      }) as unknown as Layer<DeckDataRow>
+    );
+  }
+
+  return { territoryLayers, markerLayers, counts: territories.counts };
+}
+
+export function readJoinControlPickData(
+  layerData: unknown
+): JoinControlPickData | null {
+  if (typeof layerData !== 'object' || layerData === null) return null;
+  const pickData = Reflect.get(layerData, 'khartisJoinControl');
+  return typeof pickData === 'object' && pickData !== null
+    ? (pickData as JoinControlPickData)
+    : null;
+}

@@ -275,6 +275,31 @@ légendes d'une visualisation tirée du même jeu de données lisent la même li
 ce qui marque le lieu dans chaque carte d'une collection. Les exports ne portent
 jamais cette marque.
 
+## Étape Données : contrôle de la jointure
+
+À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
+fond qui porte ses territoires. Chacun prend la couleur de son statut de
+jointure, celle des catégories du panneau : joint, à vérifier (`check` et
+`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune
+ligne, en gris hachuré). Les valeurs non reconnues ou ignorées n'ont pas de
+géométrie et restent dans le panneau.
+
+- Le statut de chaque territoire est calculé en SQL
+  (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
+  finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
+  le projet.
+- `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
+  fond, entre son sol et ses limites. Les répétés portent une trame de croix et
+  les territoires sans donnée le hachuré des valeurs manquantes : rouge et vert
+  se confondent pour un daltonien.
+- Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
+  repère ponctuel ; un territoire sans donnée seulement quand ce statut est mis
+  en évidence.
+- L'encadré de synthèse (`join-control-summary.svelte`) est un overlay de
+  l'espace de travail, pas un élément de la page. Ouvrir une catégorie du
+  panneau, ou cliquer une ligne de l'encadré, met ses territoires en évidence.
+- Rien de cela n'entre dans un export.
+
 ## Habillage et facettes
 
 Légendes, annotations, échelle, orientation, indications géographiques et

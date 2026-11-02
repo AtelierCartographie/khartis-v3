@@ -33,7 +33,11 @@
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
-  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
+  import type {
+    JoinFuzzyPassEstimate,
+    JoinTerritoryStatus
+  } from '$lib/features/duckdb';
+  import { joinControlStore } from '$lib/features/map';
   import type {
     EntityValidation,
     IgnoredEntity,
@@ -750,9 +754,25 @@
     ignoredExpanded = false;
   }
 
+  // Opening a category highlights its territories on the map; the values
+  // left without a territory have nothing to highlight.
+  function focusMapCategory(
+    status: JoinTerritoryStatus | null,
+    expanded: boolean
+  ): void {
+    if (expanded) {
+      joinControlStore.setFocusedStatus(status);
+    } else if (status && joinControlStore.focusedStatus === status) {
+      joinControlStore.setFocusedStatus(null);
+    }
+  }
+
+  $effect(() => () => joinControlStore.setFocusedStatus(null));
+
   function toggleJoined(): void {
     const nextExpanded = !joinedExpanded;
     joinedExpanded = nextExpanded;
+    focusMapCategory('matched', nextExpanded);
     if (nextExpanded && basemapValues.length === 0) {
       onRequestBasemapValues?.();
     }
@@ -778,6 +798,7 @@
   function toggleUnrecognized(): void {
     const nextExpanded = !unrecognizedExpanded;
     unrecognizedExpanded = nextExpanded;
+    focusMapCategory(null, nextExpanded);
     if (nextExpanded && basemapValues.length === 0) {
       onRequestBasemapValues?.();
     }
@@ -1239,7 +1260,10 @@
         <button
           type="button"
           class="category-row-header"
-          onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
+          onclick={() => {
+            toVerifyExpanded = !toVerifyExpanded;
+            focusMapCategory('check', toVerifyExpanded);
+          }}
           aria-expanded={toVerifyExpanded}
         >
           <span class="category-icon icon-warning">
@@ -1592,7 +1616,10 @@
           <button
             type="button"
             class="category-row-header"
-            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+            onclick={() => {
+              duplicatesExpanded = !duplicatesExpanded;
+              focusMapCategory('duplicate', duplicatesExpanded);
+            }}
             aria-expanded={duplicatesExpanded}
           >
             <span class="category-icon icon-warning-alt">
@@ -1646,7 +1673,10 @@
           <button
             type="button"
             class="category-row-header"
-            onclick={() => (ignoredExpanded = !ignoredExpanded)}
+            onclick={() => {
+              ignoredExpanded = !ignoredExpanded;
+              focusMapCategory(null, ignoredExpanded);
+            }}
             aria-expanded={ignoredExpanded}
           >
             <span class="category-icon icon-ignored">
