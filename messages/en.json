@@ -590,7 +590,7 @@
   "create_project_load": "Load",
   "create_project_file_imported": "Imported file",
   "create_project_files_imported": "Imported files",
-  "create_project_welcome_info": "Learn more about Khartis",
+  "create_project_welcome_learn_more": "(learn more)",
   "open_project_select_backup": "Select an automatic backup…",
   "open_project_backup_description": "Projects are automatically saved in the web browser and listed here.",
   "open_project_backup_warning": "Warning: these backups will be lost if you change device or browser, or clear the browser data (cache).",

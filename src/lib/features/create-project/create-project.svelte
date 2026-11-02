@@ -10,6 +10,7 @@
   import { fade, fly } from 'svelte/transition';
   import {
     ComposedModal,
+    Link,
     Loading,
     ModalBody,
     ModalHeader
@@ -18,7 +19,7 @@
     Categories,
     CopyFile,
     FetchUpload,
-    Information
+    Launch
   } from 'carbon-icons-svelte';
   import CreateNewProject from './components/create-new-project.svelte';
   import OpenProject from './components/open-project.svelte';
@@ -113,21 +114,12 @@
   <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader title={m.create_project_welcome()} iconDescription={m.close()}>
       <div class="mb-3"></div>
-      <div class="welcome-description">
-        <span class="text-grey">
-          {m.create_project_welcome_description()}
-        </span>
-        <a
-          href={DOC_LINK.KHARTIS_HOME}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="info-icon-link"
-          aria-label={m.create_project_welcome_info()}
-          title={m.create_project_welcome_info()}
-        >
-          <Information size={16} />
-        </a>
-      </div>
+      <p class="text-grey">
+        {m.create_project_welcome_description()}
+        <Link href={DOC_LINK.KHARTIS_HOME} target="_blank" icon={Launch}>
+          {m.create_project_welcome_learn_more()}
+        </Link>
+      </p>
     </ModalHeader>
 
     <ModalBody class="fixed-modal-body">
@@ -246,22 +238,9 @@
 </div>
 
 <style lang="scss">
-  .welcome-description {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--cds-spacing-03);
-  }
-
-  .info-icon-link {
-    flex-shrink: 0;
-    color: var(--cds-icon-secondary);
-    display: flex;
-    align-items: center;
-    padding-top: 2px;
-
-    &:hover {
-      color: var(--cds-icon-primary);
-    }
+  #khartis-create-project :global(.bx--modal-header .bx--link) {
+    font-size: inherit;
+    line-height: inherit;
   }
 
   @media (min-width: 1024px) {
