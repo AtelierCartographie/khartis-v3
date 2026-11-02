@@ -430,10 +430,11 @@
     position: relative;
   }
 
+  /* Its icon lines up with the card's radio, set inside the 1px border. */
   .project-card-wrapper :global(.bx--overflow-menu) {
     position: absolute;
     top: 8px;
-    right: 8px;
+    right: 9px;
     z-index: var(--z-content);
   }
 
