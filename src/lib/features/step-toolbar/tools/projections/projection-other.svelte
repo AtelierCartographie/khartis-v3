@@ -311,6 +311,8 @@
               size="sm"
               items={catalogueComboItems}
               selectedId={activeCatalogueSelectionId}
+              labelText={catalogueLabel}
+              hideLabel
               placeholder={m.projection_catalog_search_placeholder()}
               shouldFilterItem={(comboItem, value) =>
                 !value ||
