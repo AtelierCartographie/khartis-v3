@@ -306,7 +306,7 @@
   /* The leaving and arriving panes share one cell while they swap. */
   .tab-content {
     display: grid;
-    align-content: start;
+    grid-auto-rows: minmax(100%, auto);
     flex: 1;
     min-height: 0;
     overflow-y: auto;

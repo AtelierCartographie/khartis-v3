@@ -489,32 +489,6 @@
           status="active"
           description={m.create_project_loading_status()}
         />
-      {:else}
-        <div class="learn-more">
-          <span>{m.create_project_learn_more_title()}</span>
-          <ul>
-            <li>
-              <Link
-                href={DOC_LINK.IMPORT_DATA}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_data()}
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={DOC_LINK.JOIN_BASEMAP}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_basemaps()}
-              </Link>
-            </li>
-          </ul>
-        </div>
       {/if}
     </div>
 
@@ -776,6 +750,32 @@
       {/each}
     </div>
   </div>
+
+  <div class="learn-more">
+    <span>{m.create_project_learn_more_title()}</span>
+    <ul>
+      <li>
+        <Link
+          href={DOC_LINK.IMPORT_DATA}
+          target="_blank"
+          size="sm"
+          icon={Launch}
+        >
+          {m.create_project_learn_more_data()}
+        </Link>
+      </li>
+      <li>
+        <Link
+          href={DOC_LINK.JOIN_BASEMAP}
+          target="_blank"
+          size="sm"
+          icon={Launch}
+        >
+          {m.create_project_learn_more_basemaps()}
+        </Link>
+      </li>
+    </ul>
+  </div>
 </section>
 
 {#snippet shapefileComponents(relatedFiles?: readonly string[])}
@@ -799,6 +799,8 @@
 
   .is-modal-create-project {
     margin-bottom: 0 !important;
+    min-height: 100%;
+    grid-template-rows: auto auto auto 1fr;
   }
 
   #khartis-create-new-project :global(.bx--file__selected-file) {
@@ -820,6 +822,7 @@
   }
 
   .learn-more {
+    align-self: end;
     font-size: var(--kh-font-label);
     line-height: var(--kh-line-label);
     color: var(--cds-text-secondary);
@@ -1036,6 +1039,18 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--cds-spacing-05);
+  }
+
+  /* The drop zone takes the paste area's height and first line. */
+  .import-grid :global(.bx--file__drop-container),
+  .import-grid :global(.bx--text-area) {
+    height: 6.5rem;
+  }
+
+  .import-grid :global(.bx--file__drop-container) {
+    align-items: flex-start;
+    padding: 0.6875rem var(--cds-spacing-05);
+    line-height: 1.25rem;
   }
 
   @media (max-width: 672px) {
