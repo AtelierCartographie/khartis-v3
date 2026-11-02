@@ -192,20 +192,19 @@
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
-  <header class="mb-4 flex justify-between items-end">
-    <div>
-      <h6 class="mb-3">{m.open_project_select_backup()}</h6>
+  <header class="mb-4">
+    <h6 class="mb-3">{m.open_project_select_backup()}</h6>
 
-      <span class="text-grey">
-        {m.open_project_backup_description()}
+    <p class="text-grey">
+      {m.open_project_backup_description()}
+      <span class="inline-tooltip">
+        <Tooltip>
+          <p>
+            {m.open_project_backup_warning()}
+          </p>
+        </Tooltip>
       </span>
-    </div>
-
-    <Tooltip align="end">
-      <p>
-        {m.open_project_backup_warning()}
-      </p>
-    </Tooltip>
+    </p>
   </header>
 
   {#if error}
@@ -330,6 +329,14 @@
 <style>
   #khartis-open-project :global(.bx--file-browse-btn) {
     min-width: 100%;
+  }
+
+  /* Centred on the line of text it ends. */
+  .inline-tooltip {
+    display: inline-flex;
+    align-items: center;
+    height: 1lh;
+    vertical-align: top;
   }
 
   .project-card-skeleton {
