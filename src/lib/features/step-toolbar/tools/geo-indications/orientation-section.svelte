@@ -24,6 +24,13 @@
     }
   ]);
 
+  interface Props {
+    open: boolean;
+    onToggle: (expanded: boolean) => void;
+  }
+
+  const { open, onToggle }: Props = $props();
+
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
 
@@ -38,7 +45,9 @@
 
 <ExpandableSection
   title={m.geo_orientation()}
-  defaultOpen={false}
+  open={open}
+  onToggle={onToggle}
+  animateBody
   showToggle={true}
   toggleChecked={geoState.orientation.enabled}
   onToggleChange={() => store.toggleOrientation()}

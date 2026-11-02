@@ -42,6 +42,7 @@
     getSuggestedScaleDistance,
     INSET_MAP_SIZE_LIMITS,
     isInsetMapAvailableForViewport,
+    requestGeoIndicationFocus,
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
@@ -1220,9 +1221,11 @@
   }
 
   function handleGeoIndicationsActivate(
-    event: MouseEvent | KeyboardEvent
+    event: MouseEvent | KeyboardEvent,
+    target: DragTarget
   ): void {
     event.stopPropagation();
+    requestGeoIndicationFocus(target);
     activateStylingToolFromMap(StylingTools.GeoIndications);
   }
 
@@ -1266,7 +1269,7 @@
       return;
     }
 
-    handleGeoIndicationsActivate(event);
+    handleGeoIndicationsActivate(event, target);
     centeredGeoTarget = target;
 
     const currentTarget = event.currentTarget;
@@ -1306,7 +1309,7 @@
     }
 
     event.preventDefault();
-    handleGeoIndicationsActivate(event);
+    handleGeoIndicationsActivate(event, target);
     setDragPosition(
       target,
       normalizeDragPosition(target, {
@@ -1330,7 +1333,7 @@
     }
 
     event.preventDefault();
-    handleGeoIndicationsActivate(event);
+    handleGeoIndicationsActivate(event, target);
     centeredGeoTarget = target;
     void tick().then(() => {
       centerGeoTargetOnClick(target);

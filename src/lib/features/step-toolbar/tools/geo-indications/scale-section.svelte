@@ -46,6 +46,13 @@
     { value: DistanceUnit.MILES, labelText: m.geo_miles() }
   ]);
 
+  interface Props {
+    open: boolean;
+    onToggle: (expanded: boolean) => void;
+  }
+
+  const { open, onToggle }: Props = $props();
+
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
   let localScaleFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
@@ -144,7 +151,9 @@
   title={m.geo_scale()}
   description={scaleDisabledReason}
   scrollIntoViewOnOpen
-  defaultOpen={geoState.scale.expanded}
+  open={open}
+  onToggle={onToggle}
+  animateBody
   showToggle={true}
   toggleChecked={geoState.scale.enabled && !isScaleDisabled}
   toggleDisabled={isScaleDisabled}
