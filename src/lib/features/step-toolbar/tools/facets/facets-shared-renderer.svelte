@@ -34,6 +34,7 @@
     type BBox,
     getPreferredBasemapFile,
     labelLayoutStore,
+    LabelHoverFrame,
     LabelTextEditor,
     mapHighlightStore,
     mapProjectionStore,
@@ -940,6 +941,7 @@
       class="shared-facets-canvas"
       class:is-over-label={labelEditing.isOverLabel}
     ></div>
+    <LabelHoverFrame box={labelEditing.hoverBox} />
 
     <div class="facets-overlay">
       {#each descriptors as descriptor (descriptor.facetId)}

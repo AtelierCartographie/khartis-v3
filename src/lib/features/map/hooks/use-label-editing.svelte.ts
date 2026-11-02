@@ -2,7 +2,8 @@ import type { PickingInfo } from '@deck.gl/core';
 
 import {
   attachLabelDragController,
-  type LabelEditRequest
+  type LabelEditRequest,
+  type LabelHoverBox
 } from '../interactions/label-drag.controller';
 
 interface UseLabelEditingOptions {
@@ -21,7 +22,7 @@ export function useLabelEditing({
   isEnabled,
   pick
 }: UseLabelEditingOptions) {
-  let isOverLabel = $state(false);
+  let hoverBox = $state.raw<LabelHoverBox | null>(null);
   let editRequest = $state.raw<LabelEditRequest | null>(null);
 
   $effect(() => {
@@ -33,8 +34,8 @@ export function useLabelEditing({
     const detach = attachLabelDragController({
       container,
       pick,
-      onHoverChange: (value) => {
-        isOverLabel = value;
+      onHoverChange: (box) => {
+        hoverBox = box;
       },
       onEditLabel: (request) => {
         editRequest = request;
@@ -43,14 +44,18 @@ export function useLabelEditing({
 
     return () => {
       detach();
-      isOverLabel = false;
+      hoverBox = null;
       editRequest = null;
     };
   });
 
   return {
     get isOverLabel(): boolean {
-      return isOverLabel;
+      return hoverBox !== null;
+    },
+    /** The hovered label block, in pixels of the map container. */
+    get hoverBox(): LabelHoverBox | null {
+      return hoverBox;
     },
     get editRequest(): LabelEditRequest | null {
       return editRequest;

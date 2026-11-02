@@ -175,6 +175,8 @@ export interface LabelEditingContext {
   };
   /** Centre of the label block, in page pixels from the anchor. */
   resolveBlockCenter: (datum: TextLayerDatum) => LabelOffset;
+  /** Half size of the texts of the block, padding left out, in page pixels. */
+  resolveTextHalfSize: (datum: TextLayerDatum) => LabelOffset;
   buildDragPreview: (datum: TextLayerDatum, center: LabelOffset) => Layer[];
 }
 
@@ -1512,6 +1514,10 @@ function buildTextOverlayLayers(
         }),
         resolveBlockCenter: (datum) =>
           resolvePlacedCenter(datum) ?? resolveDefaultBlockCenter(datum),
+        resolveTextHalfSize: (datum) => {
+          const [hw, hh] = resolveBlockHalfSize(datum);
+          return [hw - (sharedBackgroundPadding[0] ?? 0), hh - paddingY];
+        },
         buildDragPreview: buildLabelDragPreview
       };
       Object.assign(textData, {

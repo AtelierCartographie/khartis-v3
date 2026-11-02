@@ -1,4 +1,5 @@
 import type { PickingInfo } from '@deck.gl/core';
+import { Matrix4 } from '@math.gl/core';
 
 import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
 
@@ -21,6 +22,9 @@ export interface PickedLabel {
   featureKey: string;
 }
 
+/** A label block in pixels of the map container: x0, y0, x1, y1. */
+export type LabelHoverBox = [number, number, number, number];
+
 export interface LabelEditRequest extends PickedLabel {
   clientX: number;
   clientY: number;
@@ -29,7 +33,8 @@ export interface LabelEditRequest extends PickedLabel {
 interface LabelDragControllerOptions {
   container: HTMLElement;
   pick: (x: number, y: number, radius: number) => PickingInfo | null;
-  onHoverChange: (isOverLabel: boolean) => void;
+  /** The block of the label under the pointer, or null. */
+  onHoverChange: (box: LabelHoverBox | null) => void;
   onEditLabel: (request: LabelEditRequest) => void;
 }
 
@@ -58,12 +63,12 @@ export function attachLabelDragController({
   let drag: ActiveDrag | null = null;
   let previewFrame: number | null = null;
   let hoverFrame: number | null = null;
-  let isHovering = false;
+  let hoverBox: LabelHoverBox | null = null;
 
-  function pickLabel(point: {
+  function pickLabelAt(point: {
     clientX: number;
     clientY: number;
-  }): PickedLabel | null {
+  }): { picked: PickedLabel; info: PickingInfo } | null {
     const rect = container.getBoundingClientRect();
     const info = pick(
       point.clientX - rect.left,
@@ -72,14 +77,48 @@ export function attachLabelDragController({
     );
     const context = getLabelEditingContext(info?.layer);
     const datum = info?.object as TextLayerDatum | undefined;
-    if (!context || !datum) return null;
+    if (!info || !context || !datum) return null;
     const featureKey = context.resolveFeatureKey(datum);
-    return featureKey ? { context, datum, featureKey } : null;
+    return featureKey ? { picked: { context, datum, featureKey }, info } : null;
   }
 
-  function setHovering(next: boolean): void {
-    if (next === isHovering) return;
-    isHovering = next;
+  function pickLabel(point: {
+    clientX: number;
+    clientY: number;
+  }): PickedLabel | null {
+    return pickLabelAt(point)?.picked ?? null;
+  }
+
+  function resolveHoverBox(
+    { context, datum }: PickedLabel,
+    info: PickingInfo
+  ): LabelHoverBox | null {
+    if (!info.viewport) return null;
+    const [x, y] = datum.position;
+    const matrix = info.layer?.props.modelMatrix;
+    const world = matrix
+      ? Array.from(new Matrix4(Array.from(matrix)).transformAsPoint([x, y, 0]))
+      : [x, y, 0];
+    const [ax, ay] = info.viewport.project(world);
+    const [cx, cy] = context.resolveBlockCenter(datum);
+    const [hw, hh] = context.resolveTextHalfSize(datum);
+    const scale = context.pageDisplayScale;
+    return [
+      ax + (cx - hw) * scale,
+      ay + (cy - hh) * scale,
+      ax + (cx + hw) * scale,
+      ay + (cy + hh) * scale
+    ];
+  }
+
+  function setHoverBox(next: LabelHoverBox | null): void {
+    if (
+      next === hoverBox ||
+      (next && hoverBox && next.every((value, i) => value === hoverBox?.[i]))
+    ) {
+      return;
+    }
+    hoverBox = next;
     onHoverChange(next);
   }
 
@@ -127,6 +166,7 @@ export function attachLabelDragController({
 
     if (!drag.isMoving) {
       drag.isMoving = true;
+      setHoverBox(null);
       setStylingToolPopoverDragging(true);
       labelLayoutStore.beginDrag(
         { vizId: drag.context.vizId, featureKey: drag.featureKey },
@@ -203,8 +243,9 @@ export function attachLabelDragController({
     hoverFrame = requestAnimationFrame(() => {
       hoverFrame = null;
       if (drag) return;
-      const picked = pickLabel({ clientX, clientY });
-      setHovering(picked !== null);
+      const hit = pickLabelAt({ clientX, clientY });
+      const picked = hit?.picked ?? null;
+      setHoverBox(hit && resolveHoverBox(hit.picked, hit.info));
       const rect = container.getBoundingClientRect();
       hiddenLabelsStore.updateHover(
         [clientX - rect.left, clientY - rect.top],
@@ -218,7 +259,7 @@ export function attachLabelDragController({
 
   function handlePointerLeave(): void {
     if (drag) return;
-    setHovering(false);
+    setHoverBox(null);
     hiddenLabelsStore.clearHover();
   }
 
@@ -233,7 +274,7 @@ export function attachLabelDragController({
       cancelAnimationFrame(hoverFrame);
       hoverFrame = null;
     }
-    setHovering(false);
+    setHoverBox(null);
     hiddenLabelsStore.clearHover();
     container.removeEventListener(EVENT.POINTERDOWN, handlePointerDown, true);
     container.removeEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
