@@ -199,6 +199,10 @@
     return values;
   });
 
+  const availableBasemapValueSet = $derived.by(
+    () => new Set<string>(availableBasemapValues)
+  );
+
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
   );
@@ -580,6 +584,15 @@
 
   const pendingUnrecognizedSelections = new SvelteMap<string, string>();
 
+  // A value joined by another row since it was picked leaves the options, so
+  // its combo box cannot show it: it is no longer a validatable selection.
+  function getPendingUnrecognizedSelection(entity: string): string | undefined {
+    const value = pendingUnrecognizedSelections.get(entity);
+    return value !== undefined && availableBasemapValueSet.has(value)
+      ? value
+      : undefined;
+  }
+
   function handleUnrecognizedSelect(
     entity: string,
     item: ComboBoxItem | undefined
@@ -593,7 +606,7 @@
   }
 
   function handleUnrecognizedValidate(entity: string): void {
-    const value = pendingUnrecognizedSelections.get(entity);
+    const value = getPendingUnrecognizedSelection(entity);
     if (!value) return;
     pendingUnrecognizedSelections.delete(entity);
     onManualCorrection?.(entity, value);
@@ -1472,11 +1485,11 @@
               )}
               <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
                 {#each unknowns as entity, unknownIndex (entity)}
-                  {@const hasPendingSelection =
-                    pendingUnrecognizedSelections.has(entity)}
-                  {@const unrecognizedTooltip = buildRowTooltip(
-                    pendingUnrecognizedSelections.get(entity)
-                  )}
+                  {@const pendingSelection =
+                    getPendingUnrecognizedSelection(entity)}
+                  {@const hasPendingSelection = pendingSelection !== undefined}
+                  {@const unrecognizedTooltip =
+                    buildRowTooltip(pendingSelection)}
                   <div class="table-row" use:observeUnrecognizedRow={entity}>
                     <div class="table-cell cell-data" title={entity}>
                       {entity}
@@ -1493,6 +1506,7 @@
                               autoHighlight="first-match"
                               id={`${comboIdPrefix}-unrecognized-${unknownIndex}`}
                               items={basemapComboBoxItems}
+                              selectedId={pendingSelection}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
                                 entity
