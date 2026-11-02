@@ -1547,9 +1547,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           // A joined dataset whose basemap is not the reference one would be
           // clipped by a foreign projection. Without a join or own geometry,
           // only a stale table from a prior join would be left to leak through.
+          // OpenStreetMap tiles clear the reference basemap: points joined to
+          // them are drawn from their coordinates.
           if (
             datasetJoinedBasemap &&
-            datasetJoinedBasemap !== basemapStyleStore.referenceBasemapId
+            datasetJoinedBasemap !== basemapStyleStore.referenceBasemapId &&
+            datasetJoinedBasemap !== osmBasemapStore.activeOSMBasemap?.file
           ) {
             continue;
           }
