@@ -8,6 +8,12 @@
     VisualizationTools as VisualizationToolId
   } from '$lib/features/commons/types/global';
   import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import {
+    UI_DENSITY,
+    uiDensityStore
+  } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
   import { Popover } from 'carbon-components-svelte';
@@ -83,6 +89,33 @@
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
   }));
+
+  const steps = $derived([
+    {
+      step: ToolbarStep.Data,
+      icon: DataTable,
+      testId: TEST_IDS.STEP_DATA,
+      ariaLabel: m.step_data_aria()
+    },
+    {
+      step: ToolbarStep.Visualizations,
+      icon: ColorPalette,
+      testId: TEST_IDS.STEP_VISUALIZATIONS,
+      ariaLabel: m.step_visualizations_aria()
+    },
+    {
+      step: ToolbarStep.Styling,
+      icon: ToolsAlt,
+      testId: TEST_IDS.STEP_STYLING,
+      ariaLabel: m.step_styling_aria()
+    }
+  ]);
+
+  // In compact density, step labels move into tooltips to narrow the bar.
+  const isCompact = $derived(
+    uiDensityStore.appliedDensity === UI_DENSITY.COMPACT
+  );
+  let hoveredStep = $state<ToolbarStep | null>(null);
 
   let SelectedList = $derived<Component | undefined>(
     globalState.selectedStep === ToolbarStep.Visualizations ||
@@ -171,51 +204,40 @@
         ></span>
       {/if}
 
-      <button
-        bind:this={stepButtons[ToolbarStep.Data]}
-        type="button"
-        data-testid={TEST_IDS.STEP_DATA}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
-        })}
-        onclick={() => selectStep(ToolbarStep.Data)}
-        aria-pressed={isStepSelected(ToolbarStep.Data)}
-        aria-label={m.step_data_aria()}
-      >
-        <DataTable size={32} />
-        <span>{stepLabels[ToolbarStep.Data]}</span>
-      </button>
-
-      <button
-        bind:this={stepButtons[ToolbarStep.Visualizations]}
-        type="button"
-        data-testid={TEST_IDS.STEP_VISUALIZATIONS}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
-        })}
-        onclick={() => selectStep(ToolbarStep.Visualizations)}
-        aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
-        aria-label={m.step_visualizations_aria()}
-      >
-        <ColorPalette size={32} />
-        <span>{stepLabels[ToolbarStep.Visualizations]}</span>
-      </button>
-
-      <button
-        bind:this={stepButtons[ToolbarStep.Styling]}
-        type="button"
-        data-testid={TEST_IDS.STEP_STYLING}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)
-        })}
-        onclick={() => selectStep(ToolbarStep.Styling)}
-        aria-pressed={isStepSelected(ToolbarStep.Styling)}
-        aria-label={m.step_styling_aria()}
-      >
-        <ToolsAlt size={32} />
-        <span>{stepLabels[ToolbarStep.Styling]}</span>
-      </button>
+      {#each steps as { step, icon: StepIcon, testId, ariaLabel } (step)}
+        <button
+          bind:this={stepButtons[step]}
+          type="button"
+          data-testid={testId}
+          class={clsx(CSS_CLASSES.NAV_ITEM, {
+            [CSS_CLASSES.SELECTED]: isStepSelected(step)
+          })}
+          onclick={() => selectStep(step)}
+          onmouseenter={() => (hoveredStep = step)}
+          onmouseleave={() => (hoveredStep = null)}
+          onfocus={() => (hoveredStep = step)}
+          onblur={() => (hoveredStep = null)}
+          onkeydown={(e: KeyboardEvent) => {
+            if (e.key === KEY.ESCAPE) hoveredStep = null;
+          }}
+          aria-pressed={isStepSelected(step)}
+          aria-label={ariaLabel}
+        >
+          <StepIcon size={32} />
+          {#if !isCompact}
+            <span>{stepLabels[step]}</span>
+          {/if}
+        </button>
+      {/each}
     </div>
+
+    {#if isCompact && hoveredStep !== null}
+      <TooltipBubble
+        text={stepLabels[hoveredStep]}
+        trigger={stepButtons[hoveredStep] ?? null}
+        direction="right"
+      />
+    {/if}
 
     {#if SelectedList}
       <div
@@ -372,7 +394,7 @@
   }
 
   :global(#khartis-step-toolbar .tools-grid) {
-    padding: var(--cds-spacing-03) var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-02) var(--cds-spacing-03);
   }
 
   /* The outgoing and incoming tool sets share one cell while they swap, so
@@ -466,8 +488,7 @@
   }
 
   .step-title {
-    padding-bottom: var(--cds-spacing-02);
-    padding-top: var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
   }
 
   .step-container {
