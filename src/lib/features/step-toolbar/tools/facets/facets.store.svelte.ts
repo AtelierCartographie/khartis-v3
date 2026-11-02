@@ -1,7 +1,7 @@
 import {
-  visualizationStore,
   getEnabledPrimitiveFilters,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -11,19 +11,19 @@ import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   alignCategoryColors,
   buildFacetVisualizationUpdates,
+  type FacetFillVariables,
   generateFacetVisualizations,
   loadFacetFillCategoryUnion,
   resolveCategoryDisplayLabels,
   resolveFacetFillSlotPath,
-  resolveFacetPrimitiveFilter,
-  type FacetFillVariables
+  resolveFacetPrimitiveFilter
 } from '$lib/features/commons/services/facet-generator.service';
 import {
   FACET_SLOT,
-  SCALE_MODE,
+  type FacetSlotPath,
   facetSlotRequiresNumericVariable,
   isFacetSlotPath,
-  type FacetSlotPath,
+  SCALE_MODE,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
 import {

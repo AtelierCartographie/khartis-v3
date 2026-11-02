@@ -1,8 +1,8 @@
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   FACET_SLOT,
-  getFacetMappingKey,
-  type FacetSlotPath
+  type FacetSlotPath,
+  getFacetMappingKey
 } from '$lib/features/commons/constants/facets.constants';
 
 export function buildFacetVariablePatch(

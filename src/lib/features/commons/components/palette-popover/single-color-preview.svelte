@@ -7,8 +7,8 @@
   import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
   import {
     buildClassPatternSvgBackground,
-    PALETTE_TYPE,
-    type Palette
+    type Palette,
+    PALETTE_TYPE
   } from './palette.constants';
 
   interface Props {

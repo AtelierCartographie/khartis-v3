@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet, Component } from 'svelte';
+  import type { Component, Snippet } from 'svelte';
 
   interface Props {
     children?: Snippet;

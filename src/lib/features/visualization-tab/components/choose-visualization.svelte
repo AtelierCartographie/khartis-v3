@@ -29,16 +29,16 @@
     applyEmptyVisualizationPreset,
     applySuggestionToVisualization,
     buildSuggestionOrigin,
-    isVisualizationMatchingSuggestion,
     isVisualizationBlank,
-    restoreVisualizationFromSuggestion,
-    resolveBlankVisualizationType
+    isVisualizationMatchingSuggestion,
+    resolveBlankVisualizationType,
+    restoreVisualizationFromSuggestion
   } from '../services/suggestion.service';
   import {
+    type ClearedSuggestion,
     getSuggestionSignature,
     includePersistedSuggestion,
     keepClearedSuggestion,
-    type ClearedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion,

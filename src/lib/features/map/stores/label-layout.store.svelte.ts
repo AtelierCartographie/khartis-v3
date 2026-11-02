@@ -6,13 +6,13 @@ import {
 } from '$lib/features/project-management/core';
 
 import {
-  normalizeLabelText,
-  parseLabelLayouts,
-  roundLabelOffset,
   type LabelLayout,
   type LabelLayouts,
   type LabelOffset,
-  type LabelTextOverride
+  type LabelTextOverride,
+  normalizeLabelText,
+  parseLabelLayouts,
+  roundLabelOffset
 } from '../utils/label-layout.utils';
 
 const PERSISTENCE_KEY = 'labelLayouts';

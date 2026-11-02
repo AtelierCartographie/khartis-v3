@@ -3,20 +3,20 @@ import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern
 import type { LegendPatternFill } from './khartis-extensions';
 import {
   clampEntrySpacing,
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
   scaleLegendMetric,
   splitLegendOverflow,
-  wrapLegendEntry,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition,
-  legendTitleFontSize
+  wrapLegendEntry
 } from './utils';
 
 export type CategoricalShapeType = 'box' | 'line' | 'symbol';

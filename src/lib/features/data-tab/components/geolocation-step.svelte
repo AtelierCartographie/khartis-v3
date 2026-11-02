@@ -25,10 +25,10 @@
     perfMeasure
   } from '$lib/features/commons/utils/perf-marks.utils';
   import {
-    Duck,
-    validateGPSColumns,
     type AnalysisResult,
-    type GPSValidationResult
+    Duck,
+    type GPSValidationResult,
+    validateGPSColumns
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Table } from 'apache-arrow/Arrow';
 import { markTableMutated } from '../cache/cache-manager';
-import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
+import { type DuckDBContext, type DuckDBDataset, FileType } from '../types';
 import {
+  type DuckDBClientForGPS,
   getGPSArrowTable,
-  validateGPSColumns,
-  type DuckDBClientForGPS
+  validateGPSColumns
 } from './gps-ops';
 
 function makeGpsDataset(

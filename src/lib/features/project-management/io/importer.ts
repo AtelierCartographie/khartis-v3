@@ -1,4 +1,4 @@
-import { unzipSync, type UnzipFileInfo } from 'fflate';
+import { type UnzipFileInfo, unzipSync } from 'fflate';
 import { m } from '$lib/paraglide/messages';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';

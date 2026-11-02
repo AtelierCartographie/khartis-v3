@@ -2,13 +2,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPwaCachePrefix, resolvePwaScopeUrl } from './pwa-cache';
-
-vi.mock('$app/navigation', () => ({
-  replaceState: (url: string | URL, state: App.PageState) => {
-    window.history.replaceState(state, '', url);
-  }
-}));
-
 import {
   buildLastProjectRestoreFallbackUrl,
   clearLastProjectRestoreQuarantine,
@@ -17,6 +10,12 @@ import {
   quarantineLastProjectRestore,
   shouldSkipLastProjectRestore
 } from './pwa-reset';
+
+vi.mock('$app/navigation', () => ({
+  replaceState: (url: string | URL, state: App.PageState) => {
+    window.history.replaceState(state, '', url);
+  }
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();

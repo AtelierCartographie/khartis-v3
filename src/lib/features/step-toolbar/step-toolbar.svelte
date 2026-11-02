@@ -12,8 +12,8 @@
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
   import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
-  import { tick, untrack } from 'svelte';
   import type { Component } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
   import { fly, slide } from 'svelte/transition';
   import {
@@ -21,11 +21,11 @@
     trackStepDirection
   } from '$lib/features/commons/utils/step-transition.svelte';
   import {
-    DOM_IDS,
     CSS_CLASSES,
-    TEST_IDS,
+    DOM_IDS,
+    FILL_HEIGHT_TOOLS,
     POPOVER_DIMENSIONS,
-    FILL_HEIGHT_TOOLS
+    TEST_IDS
   } from './step-toolbar.constants';
   import ToolPopover from './tool-popover.svelte';
   import StylingTools from './tools-list/styling-tools.svelte';

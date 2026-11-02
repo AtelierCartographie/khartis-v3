@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
+import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
 import {
   CANONICAL_ID_COLUMN,
   INTERNAL_COLUMN,

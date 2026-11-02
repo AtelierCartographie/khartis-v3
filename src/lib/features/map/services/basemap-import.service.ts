@@ -31,12 +31,6 @@ import {
   getDerivedOuterlinesTableName as getBasemapOuterlinesTableName,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
-
-export {
-  getBasemapInnerlinesTableName,
-  getBasemapLandTableName,
-  getBasemapOuterlinesTableName
-};
 import {
   escapeIdentifier,
   escapeSqlString
@@ -61,6 +55,12 @@ import {
   fetchWithTimeout
 } from '$lib/features/commons/utils/fetch-with-timeout';
 import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
+
+export {
+  getBasemapInnerlinesTableName,
+  getBasemapLandTableName,
+  getBasemapOuterlinesTableName
+};
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;

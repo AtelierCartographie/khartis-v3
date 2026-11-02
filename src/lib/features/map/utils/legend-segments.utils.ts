@@ -1,5 +1,5 @@
-import { motif } from '@ateliercartographie/motif.js';
 import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
+import { motif } from '@ateliercartographie/motif.js';
 import {
   getPatternOverlayColorHex,
   isValidPatternId,
@@ -14,20 +14,20 @@ import type { PatternParams } from '$lib/features/commons/constants/pattern.cons
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
+  type ClassificationConfig,
   getLinePrimitive,
   getLineThicknessClassification,
   getPolygonPrimitive,
-  getPrimitiveClassification,
   getPrimitiveCategoryColumn,
+  getPrimitiveClassification,
   getPrimitiveValueColumn,
   getSymbolFillCategoryColumn,
   getSymbolFillClassification,
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
-  PrimitiveFilterType,
-  type ClassificationConfig,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -40,8 +40,8 @@ import {
 } from '$lib/features/commons/utils/calendar-breaks.utils';
 import { getSingleClassValue } from '$lib/features/commons/utils/discretization.utils';
 import {
-  rowScopeStore,
-  type ColumnDomain
+  type ColumnDomain,
+  rowScopeStore
 } from '../stores/row-scope.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
@@ -65,10 +65,13 @@ import {
   SYMBOL_SIGN_LABELS
 } from '$lib/features/commons/utils/symbol-sign.utils';
 import {
+  type CategoricalFooterShapeType,
+  type CategoricalShapeType,
+  type CategoryItem,
   categoryLegendEntry,
   classLegendEntry,
+  type CommonLegendTextOptions,
   createLegendSvg,
-  MISSING_LEGEND_ENTRY,
   draw_categorical_legend,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
@@ -76,38 +79,35 @@ import {
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend,
-  type CategoricalFooterShapeType,
-  type CategoricalShapeType,
-  type CategoryItem,
-  type CommonLegendTextOptions,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
   type LegendColorSwatch,
   type LegendPatternFill,
   type LegendSvgDefinition,
+  MISSING_LEGEND_ENTRY,
   type QuantiColorSwatch,
   type SymbolType
 } from '$lib/features/commons/components/legend';
 import {
-  getLineWidthLegendScale,
-  getPointSizeLegendScale,
-  getDensityLegendScale,
   getCategoricalColorLegendPrimitives,
   getClassedColorLegendPrimitives,
-  resolveLegendColorSwatchPrimitive,
-  resolveMissingDataLegendPrimitive,
-  resolveMissingDataPointShape,
+  getDensityLegendScale,
+  getLineWidthLegendScale,
+  getPointSizeLegendScale,
   type LegendSwatchPrimitive,
   type LineWidthLegendScale,
-  type PointSizeLegendScale
+  type PointSizeLegendScale,
+  resolveLegendColorSwatchPrimitive,
+  resolveMissingDataLegendPrimitive,
+  resolveMissingDataPointShape
 } from './legend.utils';
 import {
-  resolveLegendEntryLabel,
-  resolveLegendItemLayout,
   type LegendItem,
   type RenderedLegendSegmentKind,
-  type ResolvedLegendItemLayout
+  type ResolvedLegendItemLayout,
+  resolveLegendEntryLabel,
+  resolveLegendItemLayout
 } from '$lib/features/step-toolbar/tools/legend';
 import {
   facetsStore,

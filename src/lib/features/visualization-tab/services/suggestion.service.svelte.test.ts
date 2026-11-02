@@ -1,4 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ClassificationMethod,
+  PrimitiveFilterType,
+  visualizationStore,
+  VisualizationType
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  DEFAULT_COLORS,
+  FillMode,
+  StrokeMode,
+  SymbolDoublePosition,
+  SymbolMode,
+  ThicknessMode
+} from '$lib/features/commons/constants/visualization.constants';
+import {
+  applyBlankVisualizationPreset,
+  applySuggestionToVisualization,
+  buildSuggestionOrigin,
+  isVisualizationBlank,
+  isVisualizationMatchingSuggestion,
+  mapSuggestionToType,
+  resolveBlankVisualizationType,
+  resolveDatasetGeometryType,
+  restoreVisualizationFromSuggestion
+} from './suggestion.service';
+import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
 
 const mocks = vi.hoisted(() => ({
   notifyChangeMock: vi.fn(),
@@ -55,33 +81,6 @@ vi.mock('$lib/features/step-toolbar/tools/legend/legend.store.svelte', () => ({
     updateLegendItem: mocks.updateLegendItemMock
   }
 }));
-
-import {
-  ClassificationMethod,
-  PrimitiveFilterType,
-  visualizationStore,
-  VisualizationType
-} from '$lib/features/commons/stores/visualization.store.svelte';
-import {
-  DEFAULT_COLORS,
-  FillMode,
-  StrokeMode,
-  SymbolDoublePosition,
-  SymbolMode,
-  ThicknessMode
-} from '$lib/features/commons/constants/visualization.constants';
-import {
-  applyBlankVisualizationPreset,
-  applySuggestionToVisualization,
-  buildSuggestionOrigin,
-  mapSuggestionToType,
-  resolveBlankVisualizationType,
-  isVisualizationBlank,
-  isVisualizationMatchingSuggestion,
-  resolveDatasetGeometryType,
-  restoreVisualizationFromSuggestion
-} from './suggestion.service';
-import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
 
 type SuggestionTestDataset = Parameters<
   typeof isVisualizationMatchingSuggestion

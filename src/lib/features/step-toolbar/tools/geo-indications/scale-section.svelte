@@ -20,11 +20,6 @@
     SelectItem
   } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-
-  const scaleUnitsOptions = $derived.by(() => [
-    { value: DistanceUnit.KILOMETERS, labelText: m.geo_kilometers() },
-    { value: DistanceUnit.MILES, labelText: m.geo_miles() }
-  ]);
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
@@ -38,13 +33,18 @@
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
+    type ColorPickerValidateEvent,
     formatScaleDistance,
-    getScaleDistanceLimit,
-    getScaleDistanceStep,
     getNumericEventValue,
-    type ColorPickerValidateEvent
+    getScaleDistanceLimit,
+    getScaleDistanceStep
   } from './geo-indications.utils';
   import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
+
+  const scaleUnitsOptions = $derived.by(() => [
+    { value: DistanceUnit.KILOMETERS, labelText: m.geo_kilometers() },
+    { value: DistanceUnit.MILES, labelText: m.geo_miles() }
+  ]);
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);

@@ -3,6 +3,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  ScaleType,
+  VisualizationType
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  BasemapDottedPattern,
+  MissingDataShape,
+  ShapeType
+} from '$lib/features/commons/constants/visualization.constants';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { layersActions, layersState } from './layers.store.svelte';
+import type { Layer } from '../../types/layers.types';
+import { layerOrderStore } from './layer-order.store.svelte';
+import { SEPIA_MIXTE_COLORS } from '$lib/features/commons/constants/qualitative-palette.constants';
 
 const {
   mockVisualizationStore,
@@ -218,22 +233,6 @@ vi.mock('$lib/features/map/utils/basemap-metadata-resolution.utils', () => ({
       referenceBasemapId ? currentMetadata : null
   )
 }));
-
-import {
-  PrimitiveFilterType,
-  ScaleType,
-  VisualizationType
-} from '$lib/features/commons/stores/visualization.store.svelte';
-import {
-  BasemapDottedPattern,
-  MissingDataShape,
-  ShapeType
-} from '$lib/features/commons/constants/visualization.constants';
-import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { layersActions, layersState } from './layers.store.svelte';
-import type { Layer } from '../../types/layers.types';
-import { layerOrderStore } from './layer-order.store.svelte';
-import { SEPIA_MIXTE_COLORS } from '$lib/features/commons/constants/qualitative-palette.constants';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}

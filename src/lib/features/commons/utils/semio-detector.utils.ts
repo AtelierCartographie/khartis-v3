@@ -1,6 +1,6 @@
 import {
-  DuckDBSimplifiedType,
-  type AnalysisResult
+  type AnalysisResult,
+  DuckDBSimplifiedType
 } from '$lib/features/duckdb';
 
 export type SemioType =

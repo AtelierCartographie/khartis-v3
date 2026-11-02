@@ -12,18 +12,17 @@ import {
   mapInstanceStore
 } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { formatActions } from '../format/format.store.svelte';
+import {
+  geoIndicationsActions,
+  geoIndicationsState
+} from './geo-indications.store.svelte';
+import { MAX_SCALE_DISTANCE_BY_UNIT } from './geo-indications.utils';
 
 vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: {
     resetPagePan: vi.fn()
   }
 }));
-
-import {
-  geoIndicationsActions,
-  geoIndicationsState
-} from './geo-indications.store.svelte';
-import { MAX_SCALE_DISTANCE_BY_UNIT } from './geo-indications.utils';
 
 function createScaleMap(widthPerLongitudeDegree: number) {
   return {

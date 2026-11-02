@@ -4,14 +4,14 @@
   import {
     canUseThousandsSeparator,
     fromThousandsSeparatorSelectValue,
-    toThousandsSeparatorSelectValue,
-    type ThousandsSeparatorSelectValue
+    type ThousandsSeparatorSelectValue,
+    toThousandsSeparatorSelectValue
   } from '$lib/features/data-tab/utils/csv-options.utils';
   import * as m from '$lib/paraglide/messages';
   import { InlineLoading, Select, SelectItem } from 'carbon-components-svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   export interface CsvOptions {

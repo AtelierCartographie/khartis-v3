@@ -11,7 +11,7 @@
   import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
-  import { searchState, searchActions } from './search.store.svelte';
+  import { searchActions, searchState } from './search.store.svelte';
 
   const ALL_SOURCES_ID = 'all';
 

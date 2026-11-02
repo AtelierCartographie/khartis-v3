@@ -1,7 +1,7 @@
-import type { EnrichedColumn, ColumnInfo } from './column.types';
+import type { ColumnInfo, EnrichedColumn } from './column.types';
 import type {
-  GeometryInfo,
   AnalysisResult,
+  GeometryInfo,
   ProcessedDatasetAnalysisResult
 } from './geometry.types';
 import type { DatasetMetadata, FileFormat } from './import.types';

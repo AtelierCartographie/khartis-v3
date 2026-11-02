@@ -10,6 +10,10 @@ import {
   resolveOrthographicZoomBounds,
   resolveOrthographicZoomLevel
 } from '$lib/features/map/utils/map-zoom.utils';
+import {
+  injectProjectionContext,
+  mapInstanceStore
+} from './map-instance.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -40,11 +44,6 @@ vi.mock('$lib/features/map/core/projscreen', () => ({
   get_bbox_center: mocks.getBboxCenterMock,
   get_max_scale: mocks.getMaxScaleMock
 }));
-
-import {
-  injectProjectionContext,
-  mapInstanceStore
-} from './map-instance.store.svelte';
 
 const mapViewStatePersistenceEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'mapViewState'

@@ -1,10 +1,10 @@
 import {
   CANONICAL_ID_COLUMN,
+  FUZZY_PAIRS_PER_MS,
+  FUZZY_PASS_OVERHEAD_MS,
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS,
-  FUZZY_PAIRS_PER_MS,
-  FUZZY_PASS_OVERHEAD_MS,
   MAX_FUZZY_AUTO_PAIRS,
   MAX_FUZZY_RANKING_SAMPLE,
   MAX_JOIN_BUCKET_LIST_VALUES
@@ -39,8 +39,8 @@ import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
 import type {
   JoinCandidate,
-  JoinMapping,
-  JoinedEntity
+  JoinedEntity,
+  JoinMapping
 } from '$lib/features/commons/types/data-tab.types';
 import { detectGPSColumns } from './gps-ops';
 import { isGeometryColumnName } from '../utils/geometry-column.utils';

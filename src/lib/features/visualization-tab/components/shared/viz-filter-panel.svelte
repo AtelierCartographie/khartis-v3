@@ -27,9 +27,9 @@
   import FilterCard from './filter-card.svelte';
   import {
     DEFAULT_FILTER_LIMIT,
+    defaultOperatorForType,
     getFilterColumnType,
-    getOperatorDef,
-    defaultOperatorForType
+    getOperatorDef
   } from './filter-operators.utils';
 
   interface DataFieldOption {

@@ -15,8 +15,8 @@
   import { onMount, untrack } from 'svelte';
   import {
     AVAILABLE_FONTS,
-    clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
+    clampFontSize,
     normalizeFontFamily,
     resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
