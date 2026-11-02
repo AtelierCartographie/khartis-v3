@@ -5,6 +5,9 @@
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { fade, fly } from 'svelte/transition';
   import {
     ComposedModal,
     ModalBody,
@@ -48,7 +51,10 @@
     3: 'create-project-tab-example'
   } as const;
 
+  const PANE_SHIFT = 24;
+
   let tabRefs = $state<HTMLElement[]>([]);
+  let paneShift = $state(PANE_SHIFT);
   let resetToken = $state(0);
   let wasOpen = $state(false);
   const activeProjectTabId = $derived(
@@ -68,6 +74,8 @@
   }
 
   function selectTile(index: number) {
+    paneShift =
+      index < createProjectState.selectedTab ? -PANE_SHIFT : PANE_SHIFT;
     createProjectActions.selectTab(index as 1 | 2 | 3);
   }
 
@@ -187,17 +195,42 @@
           role="tabpanel"
           aria-labelledby={activeProjectTabId}
         >
-          {#if createProjectState.selectedTab === 1}
-            <CreateNewProject isModal showTitle resetToken={resetToken} />
-          {:else if createProjectState.selectedTab === 2}
-            <OpenProject onClose={handleClose} />
-          {:else if createProjectState.selectedTab === 3}
-            <TryWithExample onClose={handleClose} />
-          {/if}
+          {#key createProjectState.selectedTab}
+            <div
+              class="tab-pane"
+              in:fly={{
+                x: paneShift,
+                duration: motionDuration(220),
+                delay: motionDuration(90),
+                easing: cubicOut
+              }}
+              out:fly={{
+                x: -paneShift,
+                duration: motionDuration(90),
+                easing: cubicIn
+              }}
+            >
+              {#if createProjectState.selectedTab === 1}
+                <CreateNewProject isModal showTitle resetToken={resetToken} />
+              {:else if createProjectState.selectedTab === 2}
+                <OpenProject onClose={handleClose} />
+              {:else if createProjectState.selectedTab === 3}
+                <TryWithExample onClose={handleClose} />
+              {/if}
+            </div>
+          {/key}
         </div>
 
         {#if createProjectState.selectedTab === 1}
-          <ProjectName onClose={handleClose} />
+          <div
+            in:fade={{
+              duration: motionDuration(220),
+              delay: motionDuration(90)
+            }}
+            out:fade={{ duration: motionDuration(90) }}
+          >
+            <ProjectName onClose={handleClose} />
+          </div>
         {/if}
       </article>
     </ModalBody>
@@ -270,7 +303,10 @@
     flex: 1;
   }
 
+  /* The leaving and arriving panes share one cell while they swap. */
   .tab-content {
+    display: grid;
+    align-content: start;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -295,6 +331,11 @@
         background-color: var(--cds-border-strong);
       }
     }
+  }
+
+  .tab-pane {
+    grid-area: 1 / 1;
+    min-width: 0;
   }
 
   #khartis-create-project :global(.bx--tile) {
