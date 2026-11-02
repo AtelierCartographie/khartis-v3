@@ -1112,6 +1112,136 @@ export async function getTargetJoinedValues(
   return (rows ?? []).flatMap((row) => (row.value ? [row.value] : []));
 }
 
+/**
+ * What the finalized join leaves on one basemap entity: one row joined,
+ * joined through a value to verify (`check` or `ambiguous`), several rows on
+ * the same entity, or no row at all.
+ */
+export type JoinTerritoryStatus = 'matched' | 'check' | 'duplicate' | 'no_data';
+
+export interface JoinTerritoryStatusRow {
+  territoryId: string;
+  territoryName: string;
+  status: JoinTerritoryStatus;
+  rowCount: number;
+  /** Distinct source values joined to the entity, first ones only. */
+  dataValues: string[];
+  valueCount: number;
+  /** Basemap value the join matched. */
+  matchedLabel: string | null;
+}
+
+const MAX_TERRITORY_DATA_VALUES = 3;
+
+/**
+ * Grade every entity of the joined basemap from the finalized table. Like the
+ * finalization it reads the whole table, so lifting a table filter changes
+ * nothing on the map; values to verify come from the grading the join panel
+ * shows.
+ */
+export async function getJoinTerritoryStatuses(
+  dataset: DuckDBDataset,
+  basemap: BasemapMetadata,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin,
+  options: JoinGradingOptions = {}
+): Promise<JoinTerritoryStatusRow[]> {
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'full'
+  );
+  const gradedTable = await ensureGradedMaterialized(
+    cacheTableName,
+    basemapId,
+    Duck,
+    options.excludedValues ?? []
+  );
+
+  const escapedDataset = escapeIdentifier(dataset.tableName);
+  const escapedGeoColumn = escapeIdentifier(geoColumn);
+  const escapedIdColumn = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
+  const escapedLabelColumn = escapeIdentifier(JOINED_BASEMAP_COLUMN.LABEL);
+
+  const rows = (await Duck.query(
+    `WITH territories AS (
+      SELECT DISTINCT CAST(id AS VARCHAR) AS territory_id
+      FROM "${escapeIdentifier(CATALOG_ATTRIBUTES_TABLE)}"
+      WHERE basemap = '${escapeSqlString(basemapId)}' AND id IS NOT NULL
+    ),
+    display_names AS (
+      ${buildDisplayNamesQuery(
+        CATALOG_ATTRIBUTES_TABLE,
+        basemapId,
+        getBasemapDisplayVariants(basemap)
+      )}
+    ),
+    joined_rows AS (
+      SELECT
+        CAST(t."${escapedIdColumn}" AS VARCHAR) AS territory_id,
+        CAST(t."${escapedGeoColumn}" AS VARCHAR) AS data_value,
+        CAST(t."${escapedLabelColumn}" AS VARCHAR) AS matched_label,
+        g.status AS value_status
+      FROM "${escapedDataset}" t
+      LEFT JOIN "${escapeIdentifier(gradedTable)}" g
+        ON CAST(t."${escapedGeoColumn}" AS VARCHAR) = g.original_name
+      WHERE t."${escapedIdColumn}" IS NOT NULL
+    ),
+    per_territory AS (
+      SELECT
+        territory_id,
+        COUNT(*) AS row_count,
+        bool_or(value_status IN ('check', 'ambiguous')) AS needs_check,
+        list(DISTINCT data_value ORDER BY data_value) AS data_values,
+        min(matched_label) AS matched_label
+      FROM joined_rows
+      GROUP BY territory_id
+    )
+    SELECT
+      t.territory_id,
+      COALESCE(CAST(n.raw AS VARCHAR), t.territory_id) AS territory_name,
+      CASE
+        WHEN p.territory_id IS NULL THEN 'no_data'
+        WHEN p.row_count > 1 THEN 'duplicate'
+        WHEN p.needs_check THEN 'check'
+        ELSE 'matched'
+      END AS status,
+      COALESCE(p.row_count, 0) AS row_count,
+      COALESCE(p.data_values[1:${MAX_TERRITORY_DATA_VALUES}], []) AS data_values,
+      COALESCE(len(p.data_values), 0) AS value_count,
+      p.matched_label
+    FROM territories t
+    LEFT JOIN display_names n ON CAST(n.id AS VARCHAR) = t.territory_id
+    LEFT JOIN per_territory p ON p.territory_id = t.territory_id
+    ORDER BY t.territory_id`,
+    { format: 'array' }
+  )) as Array<{
+    territory_id: string;
+    territory_name: string;
+    status: JoinTerritoryStatus;
+    row_count: number | bigint;
+    data_values: string[] | null;
+    value_count: number | bigint;
+    matched_label: string | null;
+  }>;
+
+  return (rows ?? []).map((row) => ({
+    territoryId: row.territory_id,
+    territoryName: row.territory_name,
+    status: row.status,
+    rowCount: Number(row.row_count),
+    dataValues: (row.data_values ?? []).filter(
+      (value): value is string => value !== null
+    ),
+    valueCount: Number(row.value_count),
+    matchedLabel: row.matched_label ?? null
+  }));
+}
+
 /** Per-basemap similarity scores; candidate share and basemap share use different scales. */
 export interface JoinSynthesisResult {
   basemap: string;
@@ -1879,6 +2009,36 @@ export async function applyJoinCorrections(
   invalidateSimilarityCache(dataset.tableName, Duck);
 }
 
+/**
+ * One display name per entity id: the display variant names the entity
+ * whatever value matched it (a code, an alias); a basemap without one keeps the
+ * matched value.
+ */
+function buildDisplayNamesQuery(
+  attributesTable: string,
+  basemapId: string,
+  displayVariants: string[]
+): string {
+  const displayRank =
+    displayVariants.length > 0
+      ? `CASE ${displayVariants
+          .map(
+            (variant, index) =>
+              `WHEN variant = '${escapeSqlString(variant)}' THEN ${index}`
+          )
+          .join(' ')} END`
+      : 'NULL';
+
+  return `SELECT id, raw
+      FROM (
+        SELECT id, raw, ${displayRank} AS display_rank
+        FROM "${escapeIdentifier(attributesTable)}"
+        WHERE basemap = '${escapeSqlString(basemapId)}' AND raw IS NOT NULL
+      )
+      WHERE display_rank IS NOT NULL
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY display_rank, raw) = 1`;
+}
+
 async function applyCachedJoinAssociation(
   datasetTableName: string,
   geoColumn: string,
@@ -1902,29 +2062,11 @@ async function applyCachedJoinAssociation(
           .map((value) => `'${escapeSqlString(value)}'`)
           .join(', ')})`
       : '';
-  // The display variant names the entity whatever value matched it (a code,
-  // an alias); a basemap without one keeps the matched value.
-  const displayRank =
-    displayVariants.length > 0
-      ? `CASE ${displayVariants
-          .map(
-            (variant, index) =>
-              `WHEN variant = '${escapeSqlString(variant)}' THEN ${index}`
-          )
-          .join(' ')} END`
-      : 'NULL';
 
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
     WITH display_names AS (
-      SELECT id, raw
-      FROM (
-        SELECT id, raw, ${displayRank} AS display_rank
-        FROM basemap_attributes
-        WHERE basemap = '${escapedBasemapId}' AND raw IS NOT NULL
-      )
-      WHERE display_rank IS NOT NULL
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY display_rank, raw) = 1
+      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, displayVariants)}
     ),
     all_basemap_matches AS (
       SELECT
