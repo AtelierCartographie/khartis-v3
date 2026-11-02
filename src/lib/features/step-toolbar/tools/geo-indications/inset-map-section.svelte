@@ -17,6 +17,13 @@
     isInsetMapAvailableForViewport
   } from './geo-indications.utils';
 
+  interface Props {
+    open: boolean;
+    onToggle: (expanded: boolean) => void;
+  }
+
+  const { open, onToggle }: Props = $props();
+
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
 
@@ -63,7 +70,9 @@
 
 <ExpandableSection
   title={m.geo_inset_map()}
-  defaultOpen={false}
+  open={open}
+  onToggle={onToggle}
+  animateBody
   scrollIntoViewOnOpen
   showToggle={true}
   toggleChecked={geoState.insetMap.enabled && insetMapAvailable}
