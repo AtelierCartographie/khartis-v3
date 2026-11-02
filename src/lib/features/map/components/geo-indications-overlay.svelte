@@ -1591,7 +1591,7 @@
             x2={scaleBarStartX + scaleBarWidth}
             y2={scaleLineY}
             stroke={scaleColor}
-            stroke-width="2"
+            stroke-width={geoIndicationsState.scale.lineWidth}
           />
           <text
             x={scaleLabelX}

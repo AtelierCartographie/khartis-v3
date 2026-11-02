@@ -87,6 +87,27 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.insetMap.sphereColor).toEqual(sphereColor);
   });
 
+  it('should draw a scale line saved before its thickness at the former width', () => {
+    const { lineWidth, ...savedScale } = geoIndicationsState.scale;
+    geoIndicationsActions.setScaleLineWidth(6);
+    geoIndicationsActions.reset();
+
+    geoIndicationsActions.setState({
+      scale: savedScale as typeof geoIndicationsState.scale
+    });
+
+    expect(lineWidth).toBe(2);
+    expect(geoIndicationsState.scale.lineWidth).toBe(2);
+  });
+
+  it('should keep a restored scale line thickness within its limits', () => {
+    geoIndicationsActions.setState({
+      scale: { ...geoIndicationsState.scale, lineWidth: 40 }
+    });
+
+    expect(geoIndicationsState.scale.lineWidth).toBe(8);
+  });
+
   it('promotes default sizes to the A3 profile on first enable', () => {
     formatActions.setModel(PageModel.A3_LANDSCAPE);
 
