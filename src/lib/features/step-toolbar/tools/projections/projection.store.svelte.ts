@@ -22,6 +22,7 @@ import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelt
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
+  cloneD3UsageConfig,
   getProjectionById,
   type ProjectionInfo,
   resolveProjectionDefaultOrientation
@@ -35,7 +36,6 @@ import {
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
 import { getNativeCrsEpsg } from './native-projection.utils';
-import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -72,16 +72,6 @@ type ProjectionActions = {
 };
 
 const MERCATOR_PROJECTION_TYPE = 'mercator';
-
-function cloneD3UsageConfig(config: D3Usage): D3Usage {
-  return {
-    projection: config.projection,
-    ...(config.rotate ? { rotate: [...config.rotate] } : {}),
-    ...(config.center ? { center: [...config.center] } : {}),
-    ...(config.parallels ? { parallels: [...config.parallels] } : {}),
-    ...(config.snippet ? { snippet: config.snippet } : {})
-  };
-}
 
 function toBoundsFromGpsBounds(gpsBounds: {
   minLon: number;
@@ -127,7 +117,7 @@ function getSuggestionCandidates(): DatasetResult[] {
   return candidates;
 }
 
-function getProjectionAvailabilityContext() {
+export function getProjectionAvailabilityContext() {
   return resolveProjectionAvailabilityContext({
     requiresMapLibre: basemapStyleStore.requiresMapLibre,
     hasOSMBasemap: osmBasemapStore.isActive,
