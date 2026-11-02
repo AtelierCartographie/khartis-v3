@@ -22,8 +22,8 @@ import type { LabelOffset } from './label-layout.utils';
  * quarter of the named symbols, 300 at most. With leaders for all, most names
  * of a dense map hang on one (33 of 58 on the départements); with a quarter,
  * a third as many leaders for one name less. Area labels with their outline
- * count too: their leader runs into the area up to its anchor, so it does not
- * point at the neighbour across the border.
+ * all may: a name set next to its area gets a short leader into it, without
+ * which it reads as the neighbour's.
  */
 const AUTO_LEADER_MAX_LABELS = 300;
 const AUTO_LEADER_SHARE = 0.25;
@@ -439,23 +439,24 @@ export function placeLabelBlocks(
     .map((value) => Math.round(value * 100))
     .join(',');
 
-  const named = entries.filter(
-    (entry) =>
-      (entry.symbolRadius > 0 || entry.rings !== undefined) &&
-      entry.halfSize[0] > 0
+  const namedSymbols = entries.filter(
+    (entry) => entry.symbolRadius > 0 && entry.halfSize[0] > 0
   );
-  const mayUseLeader = new Set(
-    named
+  const mayUseLeader = new Set([
+    ...namedSymbols
       .sort((a, b) => b.priority - a.priority)
       .slice(
         0,
         Math.min(
           AUTO_LEADER_MAX_LABELS,
-          Math.ceil(named.length * AUTO_LEADER_SHARE)
+          Math.ceil(namedSymbols.length * AUTO_LEADER_SHARE)
         )
       )
+      .map((entry) => entry.id),
+    ...entries
+      .filter((entry) => entry.rings !== undefined)
       .map((entry) => entry.id)
-  );
+  ]);
   const labels: LabelInput[] = entries.map((entry) => ({
     id: entry.id,
     x: entry.anchor[0],
