@@ -267,7 +267,15 @@ export default defineConfig(({ mode }) => {
         'maplibre-gl',
         '@deck.gl/core',
         '@deck.gl/layers',
-        'apache-arrow'
+        'apache-arrow',
+        // Imported by the dev Service Worker, which registers after the first
+        // render: discovered then, they would reload the whole page.
+        'workbox-cacheable-response',
+        'workbox-core',
+        'workbox-expiration',
+        'workbox-precaching',
+        'workbox-routing',
+        'workbox-strategies'
       ],
       exclude: ['parquet-wasm', '@sqlite.org/sqlite-wasm']
     },
