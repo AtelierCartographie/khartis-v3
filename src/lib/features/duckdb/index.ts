@@ -10,7 +10,9 @@ export {
 export type { GPSValidationResult } from './orchestrator/gps-ops';
 export type {
   JoinFuzzyPassEstimate,
-  JoinTarget
+  JoinTarget,
+  JoinTerritoryStatus,
+  JoinTerritoryStatusRow
 } from './orchestrator/join-ops';
 export { selectBasemapJoinKeyColumns } from './utils/basemap-join-key-columns.utils';
 export type { MissingValueColumn } from './orchestrator/table-data-ops';
