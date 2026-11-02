@@ -8,6 +8,7 @@
   import { m } from '$lib/paraglide/messages';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
+    Button,
     FileUploaderDropContainer,
     InlineNotification,
     Modal,
@@ -15,7 +16,7 @@
     OverflowMenuItem,
     SkeletonPlaceholder
   } from 'carbon-components-svelte';
-  import { Calendar } from 'carbon-icons-svelte';
+  import { Calendar, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
@@ -46,6 +47,7 @@
   let isDuplicating = $state(false);
   let projectToDelete = $state<string | null>(null);
   let showDeleteConfirm = $state(false);
+  let showDeleteAllConfirm = $state(false);
 
   onMount(async () => {
     await loadProjects();
@@ -179,6 +181,26 @@
     }
   }
 
+  async function handleDeleteAllProjects() {
+    showDeleteAllConfirm = false;
+    error = '';
+
+    try {
+      for (const project of savedProjects) {
+        await projectStore.deleteProject(project.id);
+      }
+      selectedProjectId = null;
+    } catch (err) {
+      logger.error('Failed to delete all projects', LogCategory.PROJECT, err);
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_delete_project();
+    } finally {
+      await loadProjects();
+    }
+  }
+
   function cancelDelete() {
     projectToDelete = null;
     showDeleteConfirm = false;
@@ -284,6 +306,19 @@
     {/if}
   </div>
 
+  {#if !isLoading && savedProjects.length > 0}
+    <div class="flex justify-end">
+      <Button
+        kind="tertiary"
+        size="small"
+        icon={TrashCan}
+        on:click={() => (showDeleteAllConfirm = true)}
+      >
+        {m.open_project_delete_all()}
+      </Button>
+    </div>
+  {/if}
+
   <div class="mt-5">
     <header>
       <h6 class="mb-3">{m.open_project_import_project()}</h6>
@@ -320,6 +355,27 @@
       >
         <p>
           {m.open_project_delete_confirm_message()}
+        </p>
+      </Modal>
+    </div>
+  {/if}
+
+  {#if showDeleteAllConfirm}
+    <div use:portal>
+      <Modal
+        iconDescription={m.a11y_close_dialog()}
+        danger
+        bind:open={showDeleteAllConfirm}
+        modalHeading={m.open_project_delete_all_confirm_title()}
+        primaryButtonText={m.open_project_delete_all_confirm_button()}
+        secondaryButtonText={m.open_project_cancel()}
+        on:click:button--primary={handleDeleteAllProjects}
+        on:click:button--secondary={() => (showDeleteAllConfirm = false)}
+        on:close={() => (showDeleteAllConfirm = false)}
+        size="sm"
+      >
+        <p>
+          {m.open_project_delete_all_confirm_message()}
         </p>
       </Modal>
     </div>
