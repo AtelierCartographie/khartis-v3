@@ -121,6 +121,9 @@
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
     basemapAliasesByValue?: Record<string, BasemapAlias[]>;
+    // Rows hold the variant each value matched, often not in the UI
+    // language: they wait for the displayed values instead of switching.
+    basemapValuesLoading?: boolean;
     onRequestBasemapValues?: () => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
@@ -154,6 +157,7 @@
     duplicateLines = [],
     ignoredEntities = [],
     basemapAliasesByValue = {},
+    basemapValuesLoading = false,
     onRequestBasemapValues,
     onFinalizeJoin,
     onManualCorrection,
@@ -1108,7 +1112,7 @@
                       </div>
                       <div class="table-cell cell-equals">=</div>
                       <div class="table-cell cell-select" use:titleMenuToggle>
-                        {#if visibleJoinedRows.has(row.dataValue)}
+                        {#if visibleJoinedRows.has(row.dataValue) && !basemapValuesLoading}
                           {@const joinedRowOptions = buildJoinedRowOptions(
                             row.basemapValue
                           )}
@@ -1169,7 +1173,7 @@
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
-                            {joinedDisplayedValue}
+                            {basemapValuesLoading ? '' : joinedDisplayedValue}
                           </div>
                         {/if}
                       </div>
@@ -1308,7 +1312,7 @@
                       <span class="approx-symbol" aria-hidden="true">≈</span>
                     </div>
                     <div class="table-cell cell-select" use:titleMenuToggle>
-                      {#if visibleToVerifyRows.has(rowKey)}
+                      {#if visibleToVerifyRows.has(rowKey) && !basemapValuesLoading}
                         {@const toVerifyItems = buildToVerifyItems(
                           row.basemapOptions
                         )}
@@ -1362,7 +1366,9 @@
                         {/key}
                       {:else}
                         <div class="select-placeholder" aria-hidden="true">
-                          {row.selectedMapping ?? ''}
+                          {basemapValuesLoading || !row.selectedMapping
+                            ? ''
+                            : resolveDisplayedBasemapValue(row.selectedMapping)}
                         </div>
                       {/if}
                     </div>
