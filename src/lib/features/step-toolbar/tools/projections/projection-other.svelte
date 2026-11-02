@@ -1,14 +1,8 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    basemapService,
-    osmBasemapStore,
-    projectionStore as mapRenderProjectionStore
-  } from '$lib/features/map';
+  import { basemapService } from '$lib/features/map';
   import {
     getAvailableProjectionIds,
-    resolveProjectionAvailabilityContext,
     supportsCustomProjectionCode
   } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
@@ -26,6 +20,7 @@
   } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {
+    getProjectionAvailabilityContext,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
@@ -55,23 +50,7 @@
 
   const projectionState = $derived(getProjectionState());
   const crsCode = $derived(crsCodeDraft ?? projectionState.customCode ?? '');
-  const projectionContext = $derived(
-    resolveProjectionAvailabilityContext({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive,
-      currentStyle: basemapStyleStore.selectedStyle,
-      preferredStyle: basemapStyleStore.preferredTiledStyle,
-      referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
-        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
-        : null,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
-      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
-        ? null
-        : mapRenderProjectionStore.referenceBbox,
-      projectionPresets: basemapService.projectionPresets
-    })
-  );
+  const projectionContext = $derived(getProjectionAvailabilityContext());
   const customCodeEnabled = $derived(
     supportsCustomProjectionCode(projectionContext)
   );
