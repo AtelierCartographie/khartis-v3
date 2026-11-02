@@ -15,22 +15,22 @@
     Image
   } from 'carbon-icons-svelte';
   import { useExportModal } from '../hooks/use-export-modal.svelte';
+  import type {
+    DataExportFormat,
+    ExportResolution,
+    ExportTabType,
+    MapExportFormat
+  } from '../types';
   import {
-    ExportTab,
-    MAP_FORMAT,
     DATA_FORMAT,
-    EXPORT_RESOLUTION
+    EXPORT_RESOLUTION,
+    ExportTab,
+    MAP_FORMAT
   } from '../types';
   import {
     formatExportDimensions,
     getExportDimensionsForPage
   } from '../export-dimensions.utils';
-  import type {
-    MapExportFormat,
-    DataExportFormat,
-    ExportTabType,
-    ExportResolution
-  } from '../types';
 
   const modal = useExportModal();
   const currentFormat = $derived(getFormatState());

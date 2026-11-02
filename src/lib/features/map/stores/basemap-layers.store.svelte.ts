@@ -1,20 +1,20 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
-  BasemapDottedPattern,
-  BasemapGraticuleMode,
-  BasemapRepresentation,
-  BasemapRemarquables,
+  BASEMAP_LAYER_CONFIG,
   BasemapCityCategory,
   BasemapCitySymbol,
-  BASEMAP_LAYER_CONFIG
+  BasemapDottedPattern,
+  BasemapGraticuleMode,
+  BasemapRemarquables,
+  BasemapRepresentation
 } from '$lib/features/commons/constants/visualization.constants';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   BASEMAP_LAYER_ID,
-  getBasemapRenderGroup,
   type BasemapLayerId,
-  type BasemapRenderGroup
+  type BasemapRenderGroup,
+  getBasemapRenderGroup
 } from '$lib/features/commons/constants/basemap.constants';
 
 export { BasemapDottedPattern, BASEMAP_LAYER_ID, getBasemapRenderGroup };

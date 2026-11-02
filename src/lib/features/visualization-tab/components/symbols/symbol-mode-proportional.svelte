@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import DoubleModeControls from './proportional/double-mode-controls.svelte';
@@ -6,17 +7,17 @@
   import ProportionalDoubleSection from './proportional/proportional-double-section.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    DEFAULT_COLORS,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
+    FillMode,
+    isLinearShape,
     MissingDataShape,
     ProportionalType,
     ShapeType,
     SLIDER_LIMITS,
     SymbolDoublePosition,
     SymbolMode,
-    VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS,
-    FillMode,
-    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
-    isLinearShape
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import {
     DiscretizationRow,
@@ -29,15 +30,12 @@
   import type { SymbolModeProps } from '../../types/symbol.types';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets';
-
-  const SIGN_FILL_MODES: readonly FillMode[] = [FillMode.CATEGORIES];
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    NONE_FIELD_ID,
     filterFieldsByKind,
+    NONE_FIELD_ID,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
@@ -57,6 +55,8 @@
     isSignedProportionalSymbol,
     resolveSymbolSignColors
   } from '$lib/features/commons/utils/symbol-sign.utils';
+
+  const SIGN_FILL_MODES: readonly FillMode[] = [FillMode.CATEGORIES];
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;

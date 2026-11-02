@@ -1,4 +1,6 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { dataTabStore } from './data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
@@ -24,9 +26,6 @@ vi.mock('$lib/features/commons/utils/gps-columns.utils', () => ({
     geoDetection: { gpsCoordinates?: unknown } | undefined
   ) => !!geoDetection?.gpsCoordinates
 }));
-
-import { dataTabStore } from './data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 
 type MockedDatasets = {
   datasets: Array<Record<string, unknown>>;

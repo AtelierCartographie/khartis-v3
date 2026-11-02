@@ -25,12 +25,12 @@
   import { persistenceRegistry } from '$lib/features/project-management/core';
   import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
   import {
-    REMOTE_FILE_FETCH_TIMEOUT_MS,
-    fetchWithTimeout
+    fetchWithTimeout,
+    REMOTE_FILE_FETCH_TIMEOUT_MS
   } from '$lib/features/commons/utils/fetch-with-timeout';
 
   import '$lib/features/commons/stores/locale.store.svelte';
-  import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
+  import { cookieName, locales, setLocale } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import { MainToolbar, MobileToolbar } from '$lib/features/main-toolbar';
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';

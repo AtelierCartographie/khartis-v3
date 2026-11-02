@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAutoFacetDataColumn,
   filterVisualizableDataColumns,
   findLatestYearNumericColumn,
   findPreferredNumericColumn,
+  isAutoFacetDataColumn,
   isAutoFacetNumericColumn,
   isVisualizableDataColumn
 } from './visualization-columns.utils';

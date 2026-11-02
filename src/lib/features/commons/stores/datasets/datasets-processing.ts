@@ -10,8 +10,8 @@ import {
 } from '$lib/features/data-pipeline';
 import type { AssetRef, UploadedFile } from '../../types/create-project.types';
 import { FileType } from '../../types/create-project.types';
-import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
-import { startProcessing, endProcessing } from './datasets-state.svelte';
+import type { DatasetsInternals, DatasetsState } from './datasets-state.svelte';
+import { endProcessing, startProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';

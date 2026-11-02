@@ -19,6 +19,7 @@
     basemapService,
     getPreferredBasemapFile
   } from '$lib/features/map/services/basemap.service.svelte';
+  import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
@@ -31,7 +32,6 @@
   import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
   import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
-  import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
   const isTiledBasemapEnabled = $derived(
     shouldUseMapLibreInterleaved({

@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import { FileType } from '$lib/features/commons/types/create-project.types';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
@@ -20,7 +21,6 @@
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import {
     createFileFromUpload,
     normalizeFormattedNumericColumns,

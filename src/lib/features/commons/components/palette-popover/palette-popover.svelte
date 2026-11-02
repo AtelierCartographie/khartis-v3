@@ -4,7 +4,7 @@
   import * as m from '$lib/paraglide/messages';
   import { untrack } from 'svelte';
   import { ArrowRight } from 'carbon-icons-svelte';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
@@ -19,18 +19,18 @@
   import PaletteComparison from './palette-comparison.svelte';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
-    PALETTE_TYPE,
+    DEFAULT_QUALITATIVE_PRESET,
     type DivergingPaletteSplit,
-    type PaletteType,
+    findPaletteById,
+    generateCategoricalColorsFromSeed,
+    generatePaletteColors,
+    getPatternPalettes,
     type Palette,
+    PALETTE_TYPE,
+    type PaletteType,
     type PatternId,
     type PatternParams,
-    type QualitativePreset,
-    DEFAULT_QUALITATIVE_PRESET,
-    generatePaletteColors,
-    generateCategoricalColorsFromSeed,
-    findPaletteById,
-    getPatternPalettes
+    type QualitativePreset
   } from './palette.constants';
 
   interface Props {

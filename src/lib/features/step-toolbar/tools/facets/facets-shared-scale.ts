@@ -1,8 +1,8 @@
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   FACET_SLOT,
-  SCALE_MODE,
   type FacetSlotPath,
+  SCALE_MODE,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
 

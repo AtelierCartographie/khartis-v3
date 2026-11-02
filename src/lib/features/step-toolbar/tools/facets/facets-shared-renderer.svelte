@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Deck, OrthographicView, type DeckProps } from '@deck.gl/core';
+  import { Deck, type DeckProps, OrthographicView } from '@deck.gl/core';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
@@ -14,8 +14,8 @@
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import {
-    visualizationStore,
-    type VisualizationConfig
+    type VisualizationConfig,
+    visualizationStore
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -28,28 +28,29 @@
     useMapLayers,
     useMapState
   } from '$lib/features/map/hooks';
-  import { LabelTextEditor, labelLayoutStore } from '$lib/features/map';
-  import {
-    createDeckWithDeferredResizeObserver,
-    patchLumaCanvasContextResizeGuard,
-    supportsWebGL2,
-    type DeckInstance
-  } from '$lib/features/map/hooks/use-map-init.svelte';
-  import { DECK_DEVICE_TYPE } from '$lib/features/map/constants';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
     basemapLayersStore,
     basemapService,
+    type BBox,
     getPreferredBasemapFile,
+    labelLayoutStore,
+    LabelTextEditor,
     mapHighlightStore,
     mapProjectionStore,
     osmBasemapStore,
     projectionStore,
-    trackWorkerParseVersion,
-    type BBox,
-    type SplitRenderingTable
+    type SplitRenderingTable,
+    trackWorkerParseVersion
   } from '$lib/features/map';
+  import {
+    createDeckWithDeferredResizeObserver,
+    type DeckInstance,
+    patchLumaCanvasContextResizeGuard,
+    supportsWebGL2
+  } from '$lib/features/map/hooks/use-map-init.svelte';
+  import { DECK_DEVICE_TYPE } from '$lib/features/map/constants';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.store.svelte';
   import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
@@ -58,8 +59,8 @@
   import {
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
-    resolveOrthographicRenderProjection,
     resolveOrthographicRenderedDatasetBounds,
+    resolveOrthographicRenderProjection,
     toBboxFromOrthographicBounds,
     toOrthographicBounds
   } from '$lib/features/map/utils/orthographic-render-resolution.utils';
@@ -78,9 +79,9 @@
     FACET_TITLE_HEIGHT
   } from './facets-shared-renderer.utils';
   import {
+    type FacetsLayout,
     facetsStore,
-    SCALE_MODE,
-    type FacetsLayout
+    SCALE_MODE
   } from './facets.store.svelte';
   import { resolveSharedFacetScaleStats } from './facets-shared-scale';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';

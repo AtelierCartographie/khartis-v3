@@ -11,45 +11,45 @@
   import * as m from '$lib/paraglide/messages';
   import DiscretizationPanel from './discretization-panel.svelte';
   import {
-    ClassificationMethod,
     type ClassificationConfig,
+    ClassificationMethod,
     type PrimitiveFilter,
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
   import {
     DEFAULT_CLASSIFICATION_CLASS_COUNT,
-    SLIDER_DEBOUNCE_MS,
-    type ShapeType
+    type ShapeType,
+    SLIDER_DEBOUNCE_MS
   } from '$lib/features/commons/constants/visualization.constants';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { facetsStore, SCALE_MODE } from '../../adapters/facets-adapter';
   import { tick, untrack } from 'svelte';
+  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    isQ6ContractHonoured,
     normalizeClassificationMethod,
     resolveBreakpointLowerClassCount,
-    isQ6ContractHonoured,
     resolveComputedClassCount,
     resolveDiscretizationNote,
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
   } from '$lib/features/commons/utils/discretization.utils';
-  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import {
+    type ClassificationBreaksComputation,
     computeClassificationBreaks,
-    resolveClassificationBreakColors,
-    type ClassificationBreaksComputation
+    resolveClassificationBreakColors
   } from '../../hooks/use-classification-breaks.svelte';
   import {
+    type CalendarStep,
     formatCalendarBoundary,
     listCalendarStepOptions,
-    parseCalendarBoundary,
-    type CalendarStep
+    parseCalendarBoundary
   } from '$lib/features/commons/utils/calendar-breaks.utils';
   import { resolveLocale } from '$lib/features/commons/utils/format.utils';
   import {

@@ -1,8 +1,8 @@
 import type { VisualizationConfig } from '../../commons/stores/visualization.store.svelte';
 import {
   getLinePrimitive,
+  getPolygonPrimitive,
   getPrimitiveCategoryColumn,
-  PrimitiveFilterType,
   getPrimitiveClassification,
   getPrimitiveValueColumn,
   getSymbolFillCategoryColumn,
@@ -10,7 +10,7 @@ import {
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
-  getPolygonPrimitive,
+  PrimitiveFilterType,
   ScaleType,
   VisualizationType
 } from '../../commons/stores/visualization.store.svelte';

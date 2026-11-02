@@ -6,9 +6,9 @@ import {
   RecordBatch,
   Schema,
   Table,
-  Type,
+  type Table as ArrowTable,
   tableFromIPC,
-  type Table as ArrowTable
+  Type
 } from 'apache-arrow/Arrow';
 import type * as ParquetWasm from 'parquet-wasm';
 import { ArrowExtension, GeoArrowMetadataKey } from '../constants';

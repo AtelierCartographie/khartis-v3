@@ -16,8 +16,8 @@ import type {
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
 import {
-  serializeUploadedFile,
-  deserializeUploadedFile
+  deserializeUploadedFile,
+  serializeUploadedFile
 } from '../core/file-serializer';
 import { persistenceRegistry } from '../core/persistence-registry';
 import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';

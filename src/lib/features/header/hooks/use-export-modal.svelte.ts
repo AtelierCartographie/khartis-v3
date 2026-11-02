@@ -1,29 +1,30 @@
 import type { UseExportModalReturn } from '../types';
-export type { UseExportModalReturn } from '../types';
+import {
+  DATA_FORMAT,
+  type DataExportFormat,
+  EXPORT_RESOLUTION,
+  type ExportResolution,
+  ExportTab,
+  type ExportTabType,
+  MAP_FORMAT,
+  type MapExportFormat
+} from '../types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { analyticsService } from '$lib/features/commons/services/analytics.service';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
 import { m } from '$lib/paraglide/messages';
-import {
-  type MapExportFormat,
-  type DataExportFormat,
-  type ExportTabType,
-  type ExportResolution,
-  ExportTab,
-  MAP_FORMAT,
-  DATA_FORMAT,
-  EXPORT_RESOLUTION
-} from '../types';
 import { getExportDimensionsForPage } from '../export-dimensions.utils';
 import {
-  exportProject,
-  exportMapAsSvg,
-  exportMapAsJpg,
   exportData,
-  ExportError
+  ExportError,
+  exportMapAsJpg,
+  exportMapAsSvg,
+  exportProject
 } from '../services/export.service';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+
+export type { UseExportModalReturn } from '../types';
 
 function getDefaultFileName(): string {
   return m.export_default_filename();

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyThematicLayerPrimitive,
   computeDefaultLayerOrder,
+  type LayerOrderRow,
   mergeLayerOrder,
   shouldRenderDeckBelowTiledLabels,
-  TILED_BASEMAP_LABELS_ROW_ID,
-  type LayerOrderRow
+  TILED_BASEMAP_LABELS_ROW_ID
 } from './layer-panel-row.utils';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 

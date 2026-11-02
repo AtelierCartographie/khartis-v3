@@ -1,8 +1,8 @@
 import * as m from '$lib/paraglide/messages';
 import {
-  STORAGE_LIMITS,
   getMaxFileSizeForType,
-  getWarningFileSizeForType
+  getWarningFileSizeForType,
+  STORAGE_LIMITS
 } from '../constants/validation.config';
 import { detectFileType } from './file-import.utils';
 

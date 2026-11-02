@@ -1,26 +1,26 @@
 import {
-  type Table as ArrowTable,
-  Schema,
   Field,
   RecordBatch,
+  Schema,
+  type Table as ArrowTable,
   Table as ArrowTableImpl
 } from 'apache-arrow/Arrow';
-import {
-  geoIdentity,
-  parseGeometry,
-  parsePolygonsToSolid,
-  parsePoints
-} from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BinaryPathData,
-  BinaryPolygonData,
   BinaryPointData,
+  BinaryPolygonData,
   DeckBinaryAttribute,
   ParserOptions,
   ProjectionLike
 } from '@ateliercartographie/geoarrow-deck-stream';
+import {
+  geoIdentity,
+  parseGeometry,
+  parsePoints,
+  parsePolygonsToSolid
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type { ProjectionSpec } from '@ateliercartographie/geoarrow-deck-stream/worker';
-import { geoArea, geoStream, type GeoProjection, type GeoStream } from 'd3-geo';
+import { geoArea, type GeoProjection, geoStream, type GeoStream } from 'd3-geo';
 
 import type {
   BasemapMetadata,
@@ -30,16 +30,16 @@ import type {
 } from '../types/basemap.types';
 import {
   buildKhartisCompositeProjection,
-  resolveSimpleProjection,
   KHARTIS_COMPOSITE_FACTORY,
   KHARTIS_PROJ4_FACTORY,
-  type KhartisCompositeParams
+  type KhartisCompositeParams,
+  resolveSimpleProjection
 } from './khartis-projection-factories.utils';
 import {
   bumpWorkerParseVersion,
-  trackPendingWorkerParse,
   getParseWorkerClient,
   ipcBytesForTable,
+  trackPendingWorkerParse,
   trackWorkerParseVersion,
   withParseWorkerTimeout
 } from './worker-parse.svelte';

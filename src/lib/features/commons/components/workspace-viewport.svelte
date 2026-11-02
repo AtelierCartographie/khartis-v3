@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack, type Snippet } from 'svelte';
+  import { onMount, type Snippet, tick, untrack } from 'svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     globalActions,
@@ -8,11 +8,11 @@
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import {
-    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
-    WORKSPACE_FIT_EVENT,
     clampWorkspacePanOffset,
+    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
     isWorkspacePanTarget,
     resolveWorkspaceViewportBounds,
+    WORKSPACE_FIT_EVENT,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
   import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';

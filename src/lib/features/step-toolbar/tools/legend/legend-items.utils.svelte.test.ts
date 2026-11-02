@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FACET_SLOT,
-  SCALE_MODE,
-  type FacetSlotPath
+  type FacetSlotPath,
+  SCALE_MODE
 } from '$lib/features/commons/constants/facets.constants';
 import type { LegendItem } from '../../types/legend.types';
 

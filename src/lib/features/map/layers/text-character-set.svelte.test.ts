@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
   EXPLICIT_TEXT_CHARACTER_SET,
-  MAX_TEXT_OUTLINE_WIDTH,
-  TEXT_ATLAS_BUFFER,
-  TEXT_ATLAS_FONT_SIZE,
-  TEXT_ATLAS_RADIUS,
   extendTextCharacterSet,
+  MAX_TEXT_OUTLINE_WIDTH,
   resolveTextHaloWidthPx,
   resolveTextOutlineWidth,
-  resolveTextSmoothing
+  resolveTextSmoothing,
+  TEXT_ATLAS_BUFFER,
+  TEXT_ATLAS_FONT_SIZE,
+  TEXT_ATLAS_RADIUS
 } from './text-character-set';
 
 const SDF_EDGE_ALPHA = 0.75;

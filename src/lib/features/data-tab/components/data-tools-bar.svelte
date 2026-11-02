@@ -1,14 +1,14 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Search,
-    Filter,
     Calculator,
-    TrashCan,
-    Reset,
-    Maximize,
-    Settings,
     ChartHistogram,
+    Filter,
+    Maximize,
+    Reset,
+    Search,
+    Settings,
+    TrashCan,
     View
   } from 'carbon-icons-svelte';
   import Button from '$lib/features/commons/components/button-native.svelte';

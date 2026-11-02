@@ -7,18 +7,18 @@ import {
 } from '$lib/features/project-management/core';
 import type { SerializedMapViewState } from '$lib/types/serialization.types';
 import {
-  clampOrthographicZoomLevel,
   clampMapZoomLevel,
+  clampOrthographicZoomLevel,
   DEFAULT_MAP_BASE_ZOOM,
   nudgeMapZoomLevel,
   nudgeOrthographicZoomLevel,
   ORTHOGRAPHIC_MAP_BASE_ZOOM,
   resolveMapZoomBounds,
   resolveMapZoomLevel,
+  resolveMapZoomPercent,
   resolveOrthographicZoomBounds,
   resolveOrthographicZoomLevel,
-  resolveOrthographicZoomPercent,
-  resolveMapZoomPercent
+  resolveOrthographicZoomPercent
 } from '$lib/features/map/utils/map-zoom.utils';
 import {
   get_bbox_center,
