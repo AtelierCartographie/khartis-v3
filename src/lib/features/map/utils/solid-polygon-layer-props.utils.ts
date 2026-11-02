@@ -1,6 +1,6 @@
 import {
-  createSolidPolygonLayerProps,
-  type BinaryPolygonData
+  type BinaryPolygonData,
+  createSolidPolygonLayerProps
 } from '@ateliercartographie/geoarrow-deck-stream';
 
 type CompatibleDeckBinaryAttribute = {

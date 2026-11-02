@@ -15,8 +15,8 @@ import {
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
-  PrimitiveFilterType,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {

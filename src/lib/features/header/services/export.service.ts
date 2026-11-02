@@ -1,10 +1,10 @@
 import {
-  exportProcessedDatasets,
-  type GeoJsonExportDataset,
   downloadFile,
-  generateExportFilename
+  exportProcessedDatasets,
+  generateExportFilename,
+  type GeoJsonExportDataset
 } from '$lib/features/commons/utils/file-export.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages';
 import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck, duckDBOrchestrator, initDuckDB } from '$lib/features/duckdb';
@@ -15,9 +15,10 @@ import type {
   DatasetResult,
   ProcessedDataset
 } from '$lib/features/data-pipeline';
+import { normalizeDatasets } from '$lib/features/data-pipeline';
 import {
-  COLUMN_TYPE_GEOMETRY,
   CANONICAL_ID_COLUMN,
+  COLUMN_TYPE_GEOMETRY,
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
@@ -31,15 +32,14 @@ import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelt
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   exportGeoPackageLayers,
-  type GeoPackageLayerExportOptions,
-  type GeoPackageFeatureRow
+  type GeoPackageFeatureRow,
+  type GeoPackageLayerExportOptions
 } from '$lib/features/commons/utils/geopackage-export.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import {
-  exportMapToSvg,
-  exportMapToJpg
+  exportMapToJpg,
+  exportMapToSvg
 } from '$lib/features/commons/utils/map-export.utils';
-import { normalizeDatasets } from '$lib/features/data-pipeline';
 import {
   DataValidationError,
   DuckDBError

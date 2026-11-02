@@ -5,24 +5,24 @@ import type {
 import {
   BasemapDottedPattern,
   DEFAULT_COLORS,
-  DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   DEFAULT_DISCRETIZATION_CLASS_COUNT,
+  DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   FillMode,
   MissingDataShape,
   ShapeType,
   StrokeMode,
   SymbolMode,
-  VisualizationType,
-  VISUALIZATION_DEFAULTS
+  VISUALIZATION_DEFAULTS,
+  VisualizationType
 } from '$lib/features/commons/constants/visualization.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 import { DEFAULT_MISSING_DATA_PATTERN_CONFIG } from '../constants/pattern.constants';
 import {
   DEFAULT_STROKE_COLOR,
-  DEFAULT_VISUALIZATION_COLOR,
+  DEFAULT_STROKE_WIDTH,
   DEFAULT_STYLE_OPACITY,
-  DEFAULT_STROKE_WIDTH
+  DEFAULT_VISUALIZATION_COLOR
 } from '../constants/colors.constants';
 import {
   findPreferredNumericColumn,
@@ -30,11 +30,11 @@ import {
 } from '../utils/visualization-columns.utils';
 import { CARTOGRAPHIC_FONT_FAMILY } from '$lib/features/step-toolbar/fonts.constants';
 import {
-  ClassificationMethod,
-  ScaleType,
   type ClassificationConfig,
+  ClassificationMethod,
   type MissingDataConfig,
   type PrimitiveFilter,
+  ScaleType,
   type VisualizationConfig,
   type VisualizationModes,
   type VisualizationPreset

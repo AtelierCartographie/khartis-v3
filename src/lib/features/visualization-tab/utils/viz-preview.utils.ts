@@ -1,6 +1,6 @@
 import {
-  SHAPE_CATEGORY_VIZ_IDS,
   type SemioType,
+  SHAPE_CATEGORY_VIZ_IDS,
   type VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
@@ -11,14 +11,14 @@ import {
 import {
   DEFAULT_QUALITATIVE_PREVIEW,
   DEFAULT_SEQUENTIAL_PREVIEW,
-  ORDERED_CATEGORY_PALETTE_ID,
-  findPaletteById
+  findPaletteById,
+  ORDERED_CATEGORY_PALETTE_ID
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { VIF_MIXTE_COLORS } from '$lib/features/commons/constants/qualitative-palette.constants';
 import {
+  DEFAULT_STROKE_COLOR,
   DEFAULT_VISUALIZATION_COLOR,
-  DEFAULT_VISUALIZATION_SECONDARY_COLOR,
-  DEFAULT_STROKE_COLOR
+  DEFAULT_VISUALIZATION_SECONDARY_COLOR
 } from '$lib/features/commons/constants/colors.constants';
 
 export const VIZ_PREVIEW_SIZE = 120;

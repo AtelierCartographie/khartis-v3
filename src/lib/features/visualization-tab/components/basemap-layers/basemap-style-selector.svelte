@@ -16,14 +16,14 @@
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import {
-    ZONES,
-    getStylesForZone,
     getStyleConfig,
+    getStylesForZone,
     getToggleableGroups,
-    type ZoneId,
-    type StyleVariantId,
     type LayerGroupId,
-    type StyleConfig
+    type StyleConfig,
+    type StyleVariantId,
+    type ZoneId,
+    ZONES
   } from '$lib/features/map/constants/carte-facile-layer-groups';
   import type { Locale } from '$lib/paraglide/runtime.js';
   import {

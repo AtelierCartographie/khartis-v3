@@ -1,17 +1,17 @@
 import {
+  type GeometryType,
   simplifyGeometryType,
   vizSuggester,
-  type GeometryType,
   type VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
-
-type ColumnAnalysis = Parameters<
-  typeof vizSuggester.suggestVisualizations
->[0][number];
 import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
 import { isNumericType } from '$lib/features/commons/utils/format.utils';
 import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
 import { resolveDatasetGeometryType } from '../services/suggestion.service';
+
+type ColumnAnalysis = Parameters<
+  typeof vizSuggester.suggestVisualizations
+>[0][number];
 
 interface DatasetColumn {
   name: string;

@@ -1,7 +1,7 @@
 import type { StyleSpecification } from 'maplibre-gl';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 import {
   BasemapStyle,
@@ -10,8 +10,8 @@ import {
   getBasemapStyle
 } from '../../map/constants/basemap-styles';
 import {
-  getStyleConfig,
   getDefaultVisibility,
+  getStyleConfig,
   type LayerGroupId
 } from '../../map/constants/carte-facile-layer-groups';
 

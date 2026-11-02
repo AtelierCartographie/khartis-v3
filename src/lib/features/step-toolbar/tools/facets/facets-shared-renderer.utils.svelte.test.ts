@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import {
-  FACET_TITLE_HEIGHT,
   buildFacetRenderDescriptors,
-  buildFacetsGridMetrics
+  buildFacetsGridMetrics,
+  FACET_TITLE_HEIGHT
 } from './facets-shared-renderer.utils';
 import type { FacetsLayout } from './facets.store.svelte';
 

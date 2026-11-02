@@ -14,8 +14,8 @@
   } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {

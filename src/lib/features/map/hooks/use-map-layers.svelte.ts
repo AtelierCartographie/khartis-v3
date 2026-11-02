@@ -11,7 +11,18 @@ import {
   isBuiltTableFresh,
   isTableBuildPending
 } from '$lib/features/duckdb';
-import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import type {
+  PrimitiveFilter,
+  VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  ALL_PRIMITIVE_FILTERS,
+  getLinePrimitive,
+  getPolygonPrimitive,
+  getSymbolPrimitive,
+  getTextPrimitive,
+  PrimitiveFilterType
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
@@ -29,10 +40,10 @@ import {
 } from '../stores/basemap-layers.store.svelte';
 import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import {
+  type BasemapRowOrderEntry,
   createBasemapLayers,
   createDeckLayers,
   createSelectionOverlay,
-  type BasemapRowOrderEntry,
   type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
@@ -40,15 +51,6 @@ import { isPolygonGeometryType } from '../layers/layer-highlight.utils';
 import { resolveUnprojectedFrameBbox } from '../utils/basemap-frame.utils';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
-import {
-  ALL_PRIMITIVE_FILTERS,
-  PrimitiveFilterType,
-  getSymbolPrimitive,
-  getLinePrimitive,
-  getTextPrimitive,
-  getPolygonPrimitive
-} from '$lib/features/commons/stores/visualization.store.svelte';
-import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type {
   BBox,
   DeckDataRow,
@@ -77,9 +79,9 @@ import {
   buildVisualizationSubLayerId,
   classifyThematicLayerPrimitive,
   isPerKeyAuxLayerType,
+  type LayerOrderRow,
   mergeLayerOrder,
-  shouldRenderDeckBelowTiledLabels,
-  type LayerOrderRow
+  shouldRenderDeckBelowTiledLabels
 } from '../utils/layer-panel-row.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';

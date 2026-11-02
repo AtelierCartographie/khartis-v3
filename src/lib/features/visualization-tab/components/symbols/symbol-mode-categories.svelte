@@ -17,19 +17,19 @@
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     CategoryShapeMode,
+    DEFAULT_COLORS,
     MissingDataShape,
     ShapeType,
     SLIDER_LIMITS,
     StrokeMode,
     SymbolMode,
-    DEFAULT_COLORS,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import {
-    DEFAULT_COMMON_ASPECT,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
-    type CategoryDraft
+    type CategoryDraft,
+    DEFAULT_COMMON_ASPECT
   } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import {
     InfoPopover,
@@ -47,8 +47,8 @@
   import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import {
-    NONE_FIELD_ID,
     filterFieldsByKind,
+    NONE_FIELD_ID,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';

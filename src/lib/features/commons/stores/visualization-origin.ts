@@ -1,7 +1,7 @@
 import { deepClone } from '../utils/clone.utils';
 import {
-  getVisualizationOriginMode,
   type ClassificationConfig,
+  getVisualizationOriginMode,
   type PrimitiveConfigKind,
   type PrimitiveConfigMap,
   type VisualizationConfig

@@ -1,5 +1,5 @@
-import { StylingTools } from '$lib/features/commons/types/global';
 import type { VisualizationTools } from '$lib/features/commons/types/global';
+import { StylingTools } from '$lib/features/commons/types/global';
 
 export function shouldBlockToolClose(
   tool: StylingTools | VisualizationTools | undefined,

@@ -1,17 +1,17 @@
 <script lang="ts">
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
-    StylingTools,
-    type ProjectionViewMode
+    type ProjectionViewMode,
+    StylingTools
   } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
   import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
-  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
+  import { tick } from 'svelte';
   import {
-    DOM_IDS,
     CSS_CLASSES,
+    DOM_IDS,
     POPOVER_DIMENSIONS,
     type ToolPopoverSizing
   } from './step-toolbar.constants';

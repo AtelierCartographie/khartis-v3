@@ -2,9 +2,9 @@
   import { tick } from 'svelte';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
-    resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
-    type CarbonTooltipDirection
+    type CarbonTooltipDirection,
+    resolveCarbonTooltipPosition
   } from '$lib/features/commons/utils/carbon-tooltip-position';
 
   interface Props {

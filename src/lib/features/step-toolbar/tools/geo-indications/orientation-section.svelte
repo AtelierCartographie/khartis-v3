@@ -7,6 +7,11 @@
   import * as m from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import {
+    geoIndicationsActions,
+    geoIndicationsState
+  } from './geo-indications.store.svelte';
+  import type { ColorPickerValidateEvent } from './geo-indications.utils';
 
   const orientationStyleOptions = $derived.by(() => [
     {
@@ -18,11 +23,6 @@
       labelText: m.geo_orientation_compass()
     }
   ]);
-  import {
-    geoIndicationsActions,
-    geoIndicationsState
-  } from './geo-indications.store.svelte';
-  import type { ColorPickerValidateEvent } from './geo-indications.utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);

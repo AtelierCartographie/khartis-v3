@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FileType, type DuckDBDataset } from '../types';
+import { type DuckDBDataset, FileType } from '../types';
 
 const { updateDatasetJoinInfo } = await import('./dataset-ops');
 const { clearState, getDatasetsVersion, getState } =

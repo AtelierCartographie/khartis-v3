@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
 

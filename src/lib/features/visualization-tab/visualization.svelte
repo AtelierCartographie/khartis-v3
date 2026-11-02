@@ -18,8 +18,8 @@
     resolveBlankVisualizationType
   } from './services/suggestion.service';
   import {
-    resolveRelevantPersistedBasemap,
-    type PersistedProjectBasemap
+    type PersistedProjectBasemap,
+    resolveRelevantPersistedBasemap
   } from '$lib/features/data-tab/services/persisted-basemap.service';
 
   let configureSection: HTMLElement | undefined = $state();

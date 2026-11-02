@@ -3,21 +3,21 @@ import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
-  visualizationStore,
-  getTextPrimitive
+  getTextPrimitive,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 import type { Deck, View } from '@deck.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { motif } from '@ateliercartographie/motif.js';
 import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
+import { motif } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
-  resolveMotifOptions,
-  stripSvgDefsWrapper,
   PATTERN_TYPE_MAP,
-  type PatternName
+  type PatternName,
+  resolveMotifOptions,
+  stripSvgDefsWrapper
 } from '$lib/features/map/layers/pattern-texture';
 import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';

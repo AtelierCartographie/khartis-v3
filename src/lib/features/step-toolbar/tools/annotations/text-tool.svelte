@@ -6,12 +6,12 @@
   import { TextAlign } from '$lib/features/commons/types/enums';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import { hslToHex, hexToHsl } from '$lib/features/commons/utils/color-utils';
+  import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
-    DEFAULT_FONT_SIZE,
     clampFontSize,
+    DEFAULT_FONT_SIZE,
     normalizeFontFamily,
     resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';

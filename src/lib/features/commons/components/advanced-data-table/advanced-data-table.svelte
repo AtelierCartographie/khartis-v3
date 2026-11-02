@@ -20,11 +20,11 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onDestroy, onMount, tick, untrack, type Component } from 'svelte';
+  import { type Component, onDestroy, onMount, tick, untrack } from 'svelte';
   import { LogCategory, logger } from '../../utils/logger';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
@@ -37,9 +37,9 @@
   import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import {
+    type ColumnType,
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
-    type ColumnType,
     type TableMutation
   } from './types';
 

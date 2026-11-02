@@ -3,11 +3,11 @@ import type {
   SavedProjectMetadata
 } from '$lib/features/project-management';
 import {
-  ProjectStorageKey,
-  PROJECT_CONST,
   duplicateProject as duplicateProjectEntity,
+  PROJECT_CONST,
   projectRepository,
-  projectStorage
+  projectStorage,
+  ProjectStorageKey
 } from '$lib/features/project-management';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';

@@ -47,8 +47,8 @@ import {
   pointRadiusAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
-import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BinaryPointData } from '@ateliercartographie/geoarrow-deck-stream';
+import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   cloneScatterBinaryData,
   duplicateScatterBinaryGeometry,
@@ -64,9 +64,9 @@ import {
 } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
 import {
-  createClassedSizeAccessor,
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
+  createClassedSizeAccessor,
   createProportionalSymbolSizeAccessor,
   createStrokeClassificationAccessor,
   HIGHLIGHT_FILL_COLOR,

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+import { resolveRelevantPersistedBasemap } from './persisted-basemap.service';
 
 const mocks = vi.hoisted(() => ({
   getBasemapByIdMock: vi.fn()
@@ -28,9 +30,6 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
 vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   osmBasemapStore: {}
 }));
-
-import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
-import { resolveRelevantPersistedBasemap } from './persisted-basemap.service';
 
 describe('resolveRelevantPersistedBasemap', () => {
   beforeEach(() => {

@@ -20,24 +20,24 @@
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import {
-    StrokeMode,
-    SLIDER_LIMITS,
-    VISUALIZATION_DEFAULTS,
+    BasemapDottedPattern,
     DEFAULT_COLORS,
     MIN_VISIBLE_STROKE_WIDTH,
-    BasemapDottedPattern
+    SLIDER_LIMITS,
+    StrokeMode,
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import type {
+    ClassificationConfig,
     VisualizationConfig,
-    VisualizationModes,
-    ClassificationConfig
+    VisualizationModes
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationRow from './discretization-row.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -46,8 +46,8 @@
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {
-    NONE_FIELD_ID,
     filterFieldsByKind,
+    NONE_FIELD_ID,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import {

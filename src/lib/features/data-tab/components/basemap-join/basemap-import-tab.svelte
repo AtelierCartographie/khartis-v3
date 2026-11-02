@@ -9,8 +9,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface ProjectGeoBasemapCard {
