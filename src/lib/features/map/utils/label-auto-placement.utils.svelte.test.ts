@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  findRequiredSpot,
+  getPlacementReport,
   placeLabelBlocks,
   projectFeatureRings,
   ringsSurround,
@@ -219,6 +221,33 @@ describe('placeLabelBlocks on land and with spacing', () => {
     const [p, q] = [box(a), box(b)];
     const gap = Math.max(p[0] - q[2], q[0] - p[2], p[1] - q[3], q[1] - p[3]);
     expect(gap).toBeGreaterThanOrEqual(8 - 1e-9);
+  });
+
+  it('should report who took the room of a hidden label and where it would go if required', () => {
+    // Room for one name only, centred on the shared anchor.
+    const kept: AutoLabelEntry = {
+      ...ENTRY,
+      id: 1,
+      symbolRadius: 0,
+      priority: 2
+    };
+    const hidden: AutoLabelEntry = { ...kept, id: 2, priority: 1 };
+    const blocks = placeLabelBlocks('viz-hidden', [kept, hidden], {
+      ...OPTIONS,
+      bounds: [170, 192, 230, 208]
+    });
+    expect(blocks.get(hidden.id)).toBeNull();
+
+    const report = getPlacementReport('viz-hidden');
+    expect(report?.labelCount).toBe(2);
+    expect(report?.hidden.get(hidden.id)).toEqual({
+      reason: 'labels',
+      by: [kept.id]
+    });
+
+    const spot = findRequiredSpot('viz-hidden', hidden.id);
+    expect(spot?.[0]).toBeCloseTo(0);
+    expect(spot?.[1]).toBeCloseTo(0);
   });
 });
 

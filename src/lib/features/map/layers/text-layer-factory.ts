@@ -8,8 +8,13 @@ import {
   DEFAULT_COLORS,
   ShapeType,
   SizeMode,
-  SymbolMode
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/commons/constants/visualization.constants';
+import {
+  isTopVizFilter,
+  selectVizFiltersForPrimitive
+} from '$lib/features/commons/utils/viz-filter.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
@@ -41,6 +46,11 @@ import {
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
+import {
+  hiddenLabelsStore,
+  type HiddenLabel,
+  type LabelPlacementReport
+} from '../stores/hidden-labels.store.svelte';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
 import {
@@ -54,6 +64,8 @@ import {
 } from '../utils/label-layout.utils';
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
+  findRequiredSpot,
+  getPlacementReport,
   placeLabelBlocks,
   projectFeatureRings,
   projectLandRings,
@@ -138,9 +150,8 @@ const LABEL_LEADER_SYMBOL_GAP_PX = 3;
 // Clear space an area label keeps around its text, in page pixels. The safe
 // background padding would keep most names out of their area.
 const AREA_LABEL_MARGIN_PX = 1;
-// Clear space between labels with no Texts filter, in median label heights: it thins the
-// dense areas first, where names touched. A filter asks for its labels, so none then.
-const LABEL_SPACING_EM = 0.5;
+// A hidden label shown in the Styling step, to be dragged into view.
+const HIDDEN_LABEL_GHOST_OPACITY = 0.4;
 // No glyph is wider than an em, so a label this short never wraps at
 // LABEL_MAX_WIDTH_EM and its lines need no measuring.
 const LABEL_SINGLE_LINE_MAX_CHARACTERS = LABEL_MAX_WIDTH_EM;
@@ -222,6 +233,18 @@ export function createTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
   ctx: LayerContext
+): ThematicLayer[] {
+  const sink: { report: LabelPlacementReport | null } = { report: null };
+  const layers = buildTextOverlayLayers(jsTable, geometryInfo, ctx, sink);
+  if (ctx.viz) hiddenLabelsStore.report(ctx.viz.id, sink.report);
+  return layers;
+}
+
+function buildTextOverlayLayers(
+  jsTable: ArrowTable,
+  geometryInfo: GeometryInfo,
+  ctx: LayerContext,
+  sink: { report: LabelPlacementReport | null }
 ): ThematicLayer[] {
   const viz = ctx.viz;
   const textConfig = getTextPrimitive(viz);
@@ -802,6 +825,7 @@ export function createTextOverlayLayers(
     return metrics;
   };
   let autoBlocks: Map<number, AutoPlacedBlock | null> | null = null;
+  let hiddenLabels: HiddenLabel[] = [];
   /** 1 when the automatic placement set the primary text on two lines. */
   const resolvePlacedLayout = (datum: TextLayerDatum): number =>
     autoBlocks?.get(datum.featureId)?.layout ?? 0;
@@ -953,10 +977,45 @@ export function createTextOverlayLayers(
           pageFormat.width - pageFormat.margins.left - pageFormat.margins.right
         )
       : null;
-  // Labels a Texts filter kept are the ones the user asked for: never hidden.
-  // Split rendering always has a scoped attribute table, filter or not, so
-  // only the filter's row ids tell.
-  const placementMode = resolveScopedRowIds(ctx) ? 'required' : 'optional';
+  // Labels a Texts filter kept are the ones the user asked for: never hidden,
+  // unless the user lets them go. Split rendering always has a scoped
+  // attribute table, filter or not, so only the filter's row ids tell.
+  const placementMode =
+    resolveScopedRowIds(ctx) && !textConfig.filteredLabelsOptional
+      ? 'required'
+      : 'optional';
+  // A top filter ranks the labels it keeps: its order comes first.
+  const topFilter = selectVizFiltersForPrimitive(
+    viz.dataFilters,
+    PrimitiveFilterType.TEXT
+  ).find(isTopVizFilter);
+  const topFilterVector = topFilter
+    ? textAttributeTable.getChild(topFilter.column)
+    : null;
+  let topFilterShareByRow: Map<number, number> | null = null;
+  const resolveTopFilterShare = (datum: TextLayerDatum): number => {
+    if (!topFilter || !topFilterVector) return 0;
+    if (!topFilterShareByRow) {
+      const ranked = textLayerData
+        .map((candidate) => ({
+          rowIndex: candidate.rowIndex,
+          value: Number(topFilterVector.get(candidate.rowIndex))
+        }))
+        .filter((candidate) => Number.isFinite(candidate.value))
+        .sort((a, b) =>
+          topFilter.operator === 'top_asc'
+            ? a.value - b.value
+            : b.value - a.value
+        );
+      topFilterShareByRow = new Map(
+        ranked.map((candidate, rank) => [
+          candidate.rowIndex,
+          1 - rank / ranked.length
+        ])
+      );
+    }
+    return topFilterShareByRow.get(datum.rowIndex) ?? 0;
+  };
   const resolvePlacementPriority = (datum: TextLayerDatum): number => {
     const value = Number(thematicValueVector?.get(datum.rowIndex));
     const valueMax = getAbsoluteDomainMax(
@@ -966,6 +1025,7 @@ export function createTextOverlayLayers(
     const valueShare =
       Number.isFinite(value) && valueMax > 0 ? Math.abs(value) / valueMax : 0;
     return (
+      resolveTopFilterShare(datum) * 1e9 +
       resolvePointRadiusForDatum(datum) * 10000 +
       resolveAccessorValue(textSizeAccessor, datum) * 100 +
       valueShare * 99
@@ -1053,6 +1113,9 @@ export function createTextOverlayLayers(
     return secondaryDatumByFeatureId.get(datum.featureId);
   };
   let primaryTextLayer: TextLayer<TextLayerDatum> | null = null;
+  let buildHiddenLabelGhosts = (
+    _featureKeys: ReadonlySet<string>
+  ): Layer[] => [];
   let secondaryTextLayer: TextLayer<TextLayerDatum> | null = null;
   const buildLabelDragPreview = (
     datum: TextLayerDatum,
@@ -1185,7 +1248,9 @@ export function createTextOverlayLayers(
           ),
       spacing:
         placementMode === 'optional' && heights.length
-          ? LABEL_SPACING_EM * heights[heights.length >> 1]
+          ? (textConfig.labelSpacing ??
+              VISUALIZATION_DEFAULTS.textLabelSpacing) *
+            heights[heights.length >> 1]
           : 0,
 
       align: textConfig.labelColumns ? 'columns' : 'none',
@@ -1195,6 +1260,55 @@ export function createTextOverlayLayers(
         ? leaderMinGaps.sort((a, b) => a - b)[leaderMinGaps.length >> 1]
         : LABEL_LEADER_MIN_GAP_PX
     });
+    const placementReport = getPlacementReport(vizId);
+    const datumById = new Map(
+      textLayerData.map((datum) => [datum.featureId, datum])
+    );
+    const nameOf = (id: number): string[] => {
+      const datum = datumById.get(id);
+      return datum ? [resolvePrimaryLabelText(datum)] : [];
+    };
+    hiddenLabels = entries.flatMap((entry): HiddenLabel[] => {
+      const detail = placementReport?.hidden.get(entry.id);
+      const datum = datumById.get(entry.id);
+      const featureKey = datum ? resolveFeatureKey(datum) : null;
+      if (!detail || !datum || !featureKey) return [];
+      const [cx, cy] = resolveDefaultBlockCenter(datum);
+      const [hw, hh] = resolveBlockHalfSize(datum, 0);
+      const [ax, ay] = entry.anchor;
+      return [
+        {
+          featureKey,
+          text: resolvePrimaryLabelText(datum),
+          reason: detail.reason,
+          by: detail.by.flatMap(nameOf),
+          anchor: entry.anchor,
+          symbolRadius: entry.symbolRadius,
+          rings: entry.rings,
+          box: [ax + cx - hw, ay + cy - hh, ax + cx + hw, ay + cy + hh]
+        }
+      ];
+    });
+    if (placementReport) {
+      sink.report = {
+        vizId,
+        labelCount: placementReport.labelCount,
+        hidden: hiddenLabels,
+        overlapping: placementReport.overlapping,
+        pageDisplayScale,
+        buildGhosts: (featureKeys) => buildHiddenLabelGhosts(featureKeys),
+        resolveShownCenter: (featureKey) => {
+          const datum = textLayerData.find(
+            (candidate) => resolveFeatureKey(candidate) === featureKey
+          );
+          if (!datum) return null;
+          return (
+            findRequiredSpot(vizId, datum.featureId) ??
+            resolveDefaultBlockCenter(datum)
+          );
+        }
+      };
+    }
   }
   if (labelLayout || autoBlocks) {
     const leaderSegments = textLayerData.flatMap((datum) => {
@@ -1376,7 +1490,14 @@ export function createTextOverlayLayers(
       ),
       (datum) => resolveAccessorValue(textSizeAccessor, datum)
     );
-    if (textData.length > 0) {
+    const hiddenKeys = new Set(hiddenLabels.map((label) => label.featureKey));
+    const ghostData =
+      hiddenKeys.size > 0
+        ? textLayerData.filter((datum) =>
+            hiddenKeys.has(resolveFeatureKey(datum) ?? '')
+          )
+        : [];
+    if (textData.length > 0 || ghostData.length > 0) {
       // Each datum names its attribute row, so hovering a label reads the row
       // it was drawn from, split rendering included.
       const labelEditing: LabelEditingContext = {
@@ -1400,7 +1521,10 @@ export function createTextOverlayLayers(
       });
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
       const textCharacterSet = extendTextCharacterSet(
-        collectTextLayerGlyphs(textData, [missingTextLabel, ...overrideTexts])
+        collectTextLayerGlyphs(
+          [...textData, ...ghostData],
+          [missingTextLabel, ...overrideTexts]
+        )
       );
       const baseTextColorAccessor = createTextColorAccessor(
         textColor,
@@ -1517,7 +1641,29 @@ export function createTextOverlayLayers(
           getBorderColor: []
         }
       });
-      layers.push(primaryTextLayer as ThematicLayer);
+      if (textData.length > 0) {
+        layers.push(primaryTextLayer as ThematicLayer);
+      }
+      const ghostLayer = primaryTextLayer;
+      buildHiddenLabelGhosts = (featureKeys) => {
+        const data = ghostData.filter(
+          (datum) =>
+            !isDraggedDatum(datum) &&
+            featureKeys.has(resolveFeatureKey(datum) ?? '')
+        );
+        if (data.length === 0) return [];
+        Object.assign(data, {
+          khartisSourceTable: textAttributeTable,
+          khartisLabelEditing: labelEditing
+        });
+        return [
+          ghostLayer.clone({
+            id: `${ghostLayer.id}-hidden-ghosts`,
+            data,
+            opacity: HIDDEN_LABEL_GHOST_OPACITY
+          })
+        ];
+      };
     }
   }
 

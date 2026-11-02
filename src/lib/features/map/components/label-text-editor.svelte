@@ -6,6 +6,7 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
   import type { LabelEditRequest } from '../interactions/label-drag.controller';
+  import { hiddenLabelsStore } from '../stores/hidden-labels.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 
   interface Props {
@@ -78,6 +79,15 @@
     secondary = texts.dataSecondary ?? '';
   }
 
+  const isHidden = untrack(() =>
+    hiddenLabelsStore.isHidden(request.context.vizId, request.featureKey)
+  );
+
+  function showLabel(): void {
+    hiddenLabelsStore.show(request.context.vizId, request.featureKey);
+    commit();
+  }
+
   function putLabelBack(): void {
     labelLayoutStore.clearOffset(request.context.vizId, request.featureKey);
     onclose();
@@ -139,6 +149,11 @@
     >
       {m.label_edit_restore()}
     </Button>
+    {#if isHidden}
+      <Button kind="ghost" size="small" on:click={showLabel}>
+        {m.label_edit_show()}
+      </Button>
+    {/if}
     {#if isMoved}
       <Button kind="ghost" size="small" on:click={putLabelBack}>
         {m.label_edit_put_back()}
