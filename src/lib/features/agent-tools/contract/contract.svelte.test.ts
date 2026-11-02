@@ -4,11 +4,14 @@ import {
   qualitativePalettes,
   sequentialPalettes
 } from '$lib/features/commons/components/palette-popover/palette.constants';
+import { ClassificationMethod } from '$lib/features/commons/stores/visualization.types';
+import type { EnrichedColumn } from '$lib/features/data-pipeline';
 import { buildProjectSnapshot } from './project-snapshot';
 import {
   parseGoToStepInput,
   parseLayoutTextsInput,
   parseLegendTextsInput,
+  parseSetTextInput,
   parseUpdateClassificationInput
 } from './validation';
 
@@ -112,6 +115,17 @@ describe('agent command validation', () => {
     });
   });
 
+  it('should refuse a text change when the text id or the text is missing', () => {
+    expect(parseSetTextInput({ text: 'Source : Insee' }).ok).toBe(false);
+    expect(parseSetTextInput({ text_id: 'annotation-1' }).ok).toBe(false);
+    expect(
+      parseSetTextInput({ text_id: 'annotation-1', text: 'Source : Insee' })
+    ).toEqual({
+      ok: true,
+      value: { textId: 'annotation-1', text: 'Source : Insee' }
+    });
+  });
+
   it('should accept only the three steps of the toolbar', () => {
     expect(parseGoToStepInput({ step: 'styling' })).toEqual({
       ok: true,
@@ -135,7 +149,7 @@ describe('agent project snapshot', () => {
         columns: [
           {
             name: 'commune',
-            type: 'string',
+            type: 'text' as EnrichedColumn['type'],
             stats: {
               nulls: 0,
               uniques: 40,
@@ -146,7 +160,7 @@ describe('agent project snapshot', () => {
           },
           {
             name: 'taux_pauvrete',
-            type: 'number',
+            type: 'number' as EnrichedColumn['type'],
             stats: {
               nulls: 2,
               uniques: 38,
@@ -155,6 +169,11 @@ describe('agent project snapshot', () => {
               mean: 24.5,
               value_sample: [7.25, 12.5, 41.75]
             }
+          },
+          {
+            name: '__id',
+            type: 'number' as EnrichedColumn['type'],
+            stats: { nulls: 0, uniques: 40 }
           }
         ]
       }
@@ -171,7 +190,7 @@ describe('agent project snapshot', () => {
             mode: 'classes',
             valueColumn: 'taux_pauvrete',
             classification: {
-              method: 'quantiles',
+              method: ClassificationMethod.QUANTILES,
               classes: 5,
               paletteId: SEQUENTIAL_ID,
               inverted: false,
@@ -182,13 +201,24 @@ describe('agent project snapshot', () => {
         ]
       }
     ],
-    pageTexts: [
+    texts: [
       {
+        id: 'text-1',
         role: 'title',
         content: 'Pauvreté en Seine-Saint-Denis',
         placeholder: false
       },
-      { role: 'subtitle', content: 'Sous-titre', placeholder: true }
+      {
+        id: 'text-2',
+        role: 'subtitle',
+        content: 'Sous-titre',
+        placeholder: true
+      },
+      {
+        id: 'text-3',
+        content: 'Source : Insee, Filosofi 2021',
+        placeholder: false
+      }
     ],
     legends: [
       {
@@ -202,7 +232,7 @@ describe('agent project snapshot', () => {
   });
   const serialized = JSON.stringify(snapshot);
 
-  it('should describe the map without any data value when columns carry statistics', () => {
+  it('should describe the map without any data value or internal column when columns carry statistics', () => {
     for (const value of [
       'Bobigny',
       'Montreuil',
@@ -215,7 +245,7 @@ describe('agent project snapshot', () => {
       expect(serialized).not.toContain(value);
     }
     expect(snapshot.datasets[0].columns).toEqual([
-      { name: 'commune', type: 'string', missing_count: 0, distinct_count: 40 },
+      { name: 'commune', type: 'text', missing_count: 0, distinct_count: 40 },
       {
         name: 'taux_pauvrete',
         type: 'number',
@@ -240,5 +270,13 @@ describe('agent project snapshot', () => {
       subtitle: null,
       source: null
     });
+  });
+
+  it('should list every text of the page with its id when some have no role', () => {
+    expect(snapshot.texts).toEqual([
+      { id: 'text-1', role: 'title', text: 'Pauvreté en Seine-Saint-Denis' },
+      { id: 'text-2', role: 'subtitle', text: null },
+      { id: 'text-3', role: null, text: 'Source : Insee, Filosofi 2021' }
+    ]);
   });
 });
