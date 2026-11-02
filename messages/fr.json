@@ -723,6 +723,7 @@
   "create_project_processing_status": "Traitement en cours...",
   "create_project_uploading_status": "Téléchargement en cours...",
   "create_project_loading_status": "Chargement...",
+  "create_project_opening_project": "Ouverture du projet…",
   "create_project_error_label": "Erreur :",
   "create_project_validation_errors": "Erreurs de validation",
   "create_project_clear_all_button": "Tout effacer",

@@ -138,6 +138,7 @@ export { ExampleCategory, FileStatus };
 
 export interface CreateProjectState {
   selectedTab: ProjectTab;
+  isOpeningProject: boolean;
 
   newProject: {
     uploadedFiles: UploadedFile[];

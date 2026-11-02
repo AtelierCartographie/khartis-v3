@@ -15,6 +15,7 @@
   import { InlineNotification, Tag } from 'carbon-components-svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectRepository } from '$lib/features/project-management';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
 
@@ -90,6 +91,7 @@
 
     selectedExample = exampleId;
     isLoading = true;
+    createProjectActions.setOpeningProject(true);
     error = '';
 
     try {
@@ -117,6 +119,7 @@
         err instanceof Error ? err.message : m.error_example_load_failed();
     } finally {
       isLoading = false;
+      createProjectActions.setOpeningProject(false);
     }
   }
 </script>

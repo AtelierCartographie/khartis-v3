@@ -20,6 +20,7 @@
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import {
     formatDate,
     formatFileSize
@@ -74,6 +75,7 @@
     }
 
     selectedProjectId = projectId;
+    createProjectActions.setOpeningProject(true);
 
     try {
       await projectStore.loadProject(projectId);
@@ -86,6 +88,8 @@
           ? err.message
           : m.open_project_error_load_project();
       selectedProjectId = null;
+    } finally {
+      createProjectActions.setOpeningProject(false);
     }
   }
 
@@ -106,6 +110,7 @@
     }
 
     isImporting = true;
+    createProjectActions.setOpeningProject(true);
     error = '';
 
     try {
@@ -121,6 +126,7 @@
           : m.open_project_error_import_project();
     } finally {
       isImporting = false;
+      createProjectActions.setOpeningProject(false);
     }
   }
 
