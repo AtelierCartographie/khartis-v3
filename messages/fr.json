@@ -1165,7 +1165,6 @@
   "zoom_value_input_label": "Niveau de zoom",
   "zoom_in": "Zoom avant",
   "zoom_out": "Zoom arrière",
-  "zoom_tab_double_click_hint": "Double-cliquez pour ajuster à l'écran ({primary} + 0)",
   "toolbar_expand": "Agrandir",
   "toolbar_compact": "Réduire",
   "toolbar_open": "Ouvrir le panneau",
