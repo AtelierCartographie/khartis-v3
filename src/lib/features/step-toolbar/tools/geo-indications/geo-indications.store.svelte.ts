@@ -27,7 +27,8 @@ import {
   clampScaleDistance,
   convertDistanceValue,
   INSET_MAP_SIZE_LIMITS,
-  normalizeScaleDistanceValue
+  normalizeScaleDistanceValue,
+  SCALE_LINE_WIDTH_LIMITS
 } from './geo-indications.utils';
 import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
 import type {
@@ -47,6 +48,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
   scale: {
     enabled: false,
     form: ScaleForm.LINE,
+    lineWidth: 2,
     distance: 0,
     autoTuned: true,
     units: DistanceUnit.KILOMETERS,
@@ -156,6 +158,12 @@ function normalizeState(
         nextScale?.form === ScaleForm.LINE || nextScale?.form === ScaleForm.BOX
           ? nextScale.form
           : current.scale.form,
+      lineWidth: clampNumber(
+        nextScale?.lineWidth,
+        SCALE_LINE_WIDTH_LIMITS.min,
+        SCALE_LINE_WIDTH_LIMITS.max,
+        current.scale.lineWidth
+      ),
       distance: clampScaleDistance(
         toFiniteNumber(nextScale?.distance, current.scale.distance),
         nextScaleUnits,
@@ -277,6 +285,7 @@ type GeoIndicationsActions = {
   toggleInsetMap: () => void;
   toggleScaleExpanded: () => void;
   setScaleForm: (form: ScaleForm) => void;
+  setScaleLineWidth: (lineWidth: number) => void;
   setScaleUnits: (units: DistanceUnit) => void;
   setScaleColor: (colorState: ColorState) => void;
   setScaleColorFromHex: (hex: string) => void;
@@ -389,6 +398,14 @@ const { state, actions } = createToolStore<
     },
     setScaleForm: (form: ScaleForm) => {
       s.scale.form = form;
+    },
+    setScaleLineWidth: (lineWidth: number) => {
+      s.scale.lineWidth = clampNumber(
+        lineWidth,
+        SCALE_LINE_WIDTH_LIMITS.min,
+        SCALE_LINE_WIDTH_LIMITS.max,
+        s.scale.lineWidth
+      );
     },
     setScaleUnits: (units: DistanceUnit) => {
       if (units === s.scale.units) {

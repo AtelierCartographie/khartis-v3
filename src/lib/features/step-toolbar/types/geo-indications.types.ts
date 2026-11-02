@@ -21,6 +21,7 @@ export interface GeoIndicationsState {
   scale: {
     enabled: boolean;
     form: ScaleForm;
+    lineWidth: number;
     distance: number;
     // When true, distance is re-suggested whenever projection/zoom/center
     // changes — releases stale auto-suggestions from previous sessions when
