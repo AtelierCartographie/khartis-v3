@@ -284,7 +284,7 @@
       colorMode = visualization.modes?.color ?? ColorMode.UNIQUE;
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
-      automaticPlacement = visualization.style.textCollisionDetection ?? false;
+      automaticPlacement = visualization.style.textAutomaticPlacement ?? false;
       labelColumns = visualization.style.textLabelColumns ?? false;
       labelSpacing = Math.round(
         (visualization.style.textLabelSpacing ??
@@ -431,7 +431,7 @@
 
   function handleAutomaticPlacementToggle(value: boolean) {
     automaticPlacement = value;
-    onStyleChange?.({ textCollisionDetection: value });
+    onStyleChange?.({ textAutomaticPlacement: value });
   }
 
   function handleLabelColumnsToggle(value: boolean) {

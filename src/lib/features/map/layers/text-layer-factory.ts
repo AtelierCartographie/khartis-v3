@@ -971,7 +971,7 @@ function buildTextOverlayLayers(
   // Automatic placement needs the live map view, which facet cells do not share.
   const pageFormat = getFormatState();
   const placementFrame =
-    textConfig.collisionDetection && !facetsStore.enabled
+    textConfig.automaticPlacement && !facetsStore.enabled
       ? resolveLabelPlacementFrame(
           ctx.modelMatrix,
           pageDisplayScale,
