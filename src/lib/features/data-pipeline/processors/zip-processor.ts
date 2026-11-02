@@ -5,8 +5,8 @@ import { ParseError } from '$lib/features/commons/pipeline.errors';
 import type { DatasetResult, ZipDatasetResult } from '../types';
 import {
   createFileFromExtracted,
-  extractZip,
   type ExtractedFile,
+  extractZip,
   getNonShapefileFilesFromArchive,
   getShapefileBundlesFromArchive,
   getSupportedFilesFromArchive,

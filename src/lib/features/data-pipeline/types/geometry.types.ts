@@ -1,5 +1,5 @@
 import type { GeoColumnTypeValue } from '$lib/features/commons/constants/data.constants';
-import type { EnrichedColumn, ColumnInfo } from './column.types';
+import type { ColumnInfo, EnrichedColumn } from './column.types';
 
 export interface GeometryInfo {
   type: string;

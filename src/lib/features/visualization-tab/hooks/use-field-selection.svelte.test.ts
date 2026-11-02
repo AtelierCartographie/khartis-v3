@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  NONE_FIELD_ID,
+  type FieldSelectionItem,
   filterFieldsByKind,
-  type FieldSelectionItem
+  NONE_FIELD_ID
 } from './use-field-selection.svelte';
 
 const items: FieldSelectionItem[] = [

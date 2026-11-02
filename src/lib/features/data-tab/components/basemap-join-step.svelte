@@ -1,12 +1,15 @@
 <script lang="ts">
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
+  import {
+    GEO_COLUMN_TYPE,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 
   import {
-    Duck,
     type AnalysisResults,
+    Duck,
     type JoinFuzzyPassEstimate
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -27,8 +30,8 @@
     BasemapSuggestion
   } from '$lib/features/map/types/basemap.types';
   import {
-    createOSMBasemap,
     bundleBasemapImportFiles,
+    createOSMBasemap,
     loadBasemapFromUrl,
     processBasemapImport
   } from '$lib/features/map/services/basemap-import.service';
@@ -54,11 +57,11 @@
     shouldResetJoinState
   } from '../utils/dataset-identity.utils';
   import {
-    resolveRelevantPersistedBasemap,
-    restorePersistedBasemapSelection,
-    resolveBasemapSource,
     PERSISTED_BASEMAP_TYPE,
-    type PersistedProjectBasemap
+    type PersistedProjectBasemap,
+    resolveBasemapSource,
+    resolveRelevantPersistedBasemap,
+    restorePersistedBasemapSelection
   } from '../services/persisted-basemap.service';
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
   import { resolveActiveBasemapOrigin } from '../utils/active-basemap.utils';
@@ -68,8 +71,8 @@
   import {
     listProjectGeoBasemapOptions,
     mergeProjectGeoSuggestions,
-    scoreProjectGeoBasemapOptions,
-    type ProjectGeoMatch
+    type ProjectGeoMatch,
+    scoreProjectGeoBasemapOptions
   } from '../services/project-geo-basemap.service';
   import { openDatasetTab } from '../services/dataset-navigation.service';
   import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
@@ -78,8 +81,8 @@
     NotificationActionButton
   } from 'carbon-components-svelte';
   import {
-    SavePriority,
-    persistenceRegistry
+    persistenceRegistry,
+    SavePriority
   } from '$lib/features/project-management/core';
   import { persistCustomBasemapSource } from '$lib/features/project-management';
   import { useBasemapJoinAttributes } from '../hooks/use-basemap-join-attributes.svelte';
@@ -93,7 +96,6 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
-  import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';

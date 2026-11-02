@@ -21,8 +21,8 @@
   } from 'carbon-components-svelte';
   import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import {
-    PROJECTIONS as PROJECTION_CATALOG,
-    type ProjectionInfo
+    type ProjectionInfo,
+    PROJECTIONS as PROJECTION_CATALOG
   } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {

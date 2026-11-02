@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  StylingTools,
+  ToolbarState,
+  ToolbarStep,
+  VisualizationTools
+} from '$lib/features/commons/types/global';
+import { globalActions, globalState } from './global.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -41,14 +48,6 @@ vi.mock('./data-tab.store.svelte', () => ({
 vi.mock('./project.store.svelte', () => ({
   projectStore: mocks.projectStoreMock
 }));
-
-import {
-  StylingTools,
-  ToolbarState,
-  ToolbarStep,
-  VisualizationTools
-} from '$lib/features/commons/types/global';
-import { globalActions, globalState } from './global.svelte';
 
 const globalUiEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'globalUi'

@@ -7,7 +7,7 @@ import {
   buildStatisticsSnapshot,
   type GeometryInfo
 } from '$lib/features/data-pipeline';
-import { Duck, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult, Duck } from '$lib/features/duckdb';
 import { persistTableSnapshot } from '$lib/features/project-management';
 
 type JoinStateUpdates = Partial<

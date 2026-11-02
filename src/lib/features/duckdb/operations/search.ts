@@ -1,6 +1,6 @@
 import {
-  escapeSqlString,
-  escapeIdentifier
+  escapeIdentifier,
+  escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';

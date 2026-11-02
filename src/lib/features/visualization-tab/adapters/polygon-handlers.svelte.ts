@@ -1,9 +1,9 @@
 import {
-  PrimitiveFilterType,
+  getPolygonPrimitive,
   type PolygonPrimitiveConfig,
+  PrimitiveFilterType,
   type VisualizationConfig,
-  type VisualizationModes,
-  getPolygonPrimitive
+  type VisualizationModes
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DensityConfig } from '$lib/features/commons/constants/visualization.constants';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';

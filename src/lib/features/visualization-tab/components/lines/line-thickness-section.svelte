@@ -19,8 +19,8 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    filterFieldsByKind,
-    type FieldSelectionWithHandler
+    type FieldSelectionWithHandler,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {

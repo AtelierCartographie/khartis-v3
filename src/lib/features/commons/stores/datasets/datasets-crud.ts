@@ -7,7 +7,7 @@ import {
   disableFacets,
   getFacetsBaseVisualizationId
 } from '$lib/features/step-toolbar/tools/facets';
-import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
+import type { DatasetsInternals, DatasetsState } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';
 import { projectStore } from '../project.store.svelte';
@@ -15,8 +15,8 @@ import { dataTabActions, dataTabState } from '../data-tab.store.svelte';
 import {
   findById,
   removeById,
-  updateById,
-  replaceAtIndex
+  replaceAtIndex,
+  updateById
 } from '../../utils/array-helpers';
 
 export function addProcessedDataset(

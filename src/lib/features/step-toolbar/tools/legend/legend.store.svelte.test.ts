@@ -17,6 +17,11 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { formatActions } from '../format/format.store.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import { getLegendState, legendActions } from './legend.store.svelte';
+import { selectRenderedLegendItems } from './legend-items.utils';
+import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
+import { LEGEND_DEFAULTS } from './legend.constants';
+import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 
 const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
@@ -40,12 +45,6 @@ vi.mock('../facets', () => ({
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: mockVisualizationStore
 }));
-
-import { getLegendState, legendActions } from './legend.store.svelte';
-import { selectRenderedLegendItems } from './legend-items.utils';
-import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
-import { LEGEND_DEFAULTS } from './legend.constants';
-import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 
 function buildLineViz(
   lineOverrides: Partial<NonNullable<VisualizationConfig['line']>> = {}

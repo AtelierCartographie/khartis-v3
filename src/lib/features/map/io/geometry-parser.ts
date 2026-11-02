@@ -3,8 +3,8 @@ import type { Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   ArrowExtension,
-  GeoArrowMetadataKey,
   GEO_EXTENSION_TO_TYPE,
+  GeoArrowMetadataKey,
   GeometryType,
   WKBGeometryTypeCode
 } from '../constants';

@@ -1,7 +1,7 @@
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
+import { type AnalysisResult, type DuckDBDataset, FileType } from '../types';
 import {
   bumpDatasetsVersion,
   findDatasetByIdOrSourceFile,

@@ -10,29 +10,29 @@ import type {
   UploadedFile
 } from '../types/create-project.types';
 import {
-  createProjectState,
-  type ProjectStateContainer,
-  createProject as createProjectFn,
-  loadProject as loadProjectFn,
-  deleteProject as deleteProjectFn,
-  duplicateProject as duplicateProjectFn,
-  listProjects as listProjectsFn,
-  clearProject as clearProjectFn,
-  loadLastProject as loadLastProjectFn,
+  addColumnTransformation as addColumnTransformationFn,
+  addDeletedRows as addDeletedRowsFn,
   addFilesToProject as addFilesToProjectFn,
   addVirtualSourceFile as addVirtualSourceFileFn,
+  clearColumnTransformations as clearColumnTransformationsFn,
+  clearProject as clearProjectFn,
+  createProject as createProjectFn,
+  createProjectState,
+  deleteProject as deleteProjectFn,
+  duplicateProject as duplicateProjectFn,
+  exportProject as exportProjectFn,
+  importProject as importProjectFn,
+  listProjects as listProjectsFn,
+  loadLastProject as loadLastProjectFn,
+  loadProject as loadProjectFn,
+  markDirty as markDirtyFn,
+  type ProjectStateContainer,
   removeFileFromProject as removeFileFromProjectFn,
   renameFile as renameFileFn,
   saveCurrentProject as saveCurrentProjectFn,
-  exportProject as exportProjectFn,
-  importProject as importProjectFn,
-  markDirty as markDirtyFn,
-  addColumnTransformation as addColumnTransformationFn,
-  clearColumnTransformations as clearColumnTransformationsFn,
-  updateFileJoinedBasemap as updateFileJoinedBasemapFn,
+  type SaveCurrentProjectOptions,
   updateFileCsvOptions as updateFileCsvOptionsFn,
-  addDeletedRows as addDeletedRowsFn,
-  type SaveCurrentProjectOptions
+  updateFileJoinedBasemap as updateFileJoinedBasemapFn
 } from './project';
 
 function createProjectStore() {

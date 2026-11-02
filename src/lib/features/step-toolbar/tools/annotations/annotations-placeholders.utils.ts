@@ -1,7 +1,7 @@
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { m } from '$lib/paraglide/messages';
-import { getLocale, locales, type Locale } from '$lib/paraglide/runtime.js';
+import { getLocale, type Locale, locales } from '$lib/paraglide/runtime.js';
 import type { PageElementRole } from '../../types/annotations.types';
 
 type PageElementMessageBundle = {

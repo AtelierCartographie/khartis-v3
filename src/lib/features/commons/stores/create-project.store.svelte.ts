@@ -30,8 +30,8 @@ import {
 import { formatFileSize } from '../utils/format.utils';
 import {
   FetchTimeoutError,
-  REMOTE_FILE_FETCH_TIMEOUT_MS,
-  fetchWithTimeout
+  fetchWithTimeout,
+  REMOTE_FILE_FETCH_TIMEOUT_MS
 } from '../utils/fetch-with-timeout';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';

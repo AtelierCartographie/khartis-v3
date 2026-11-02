@@ -2,15 +2,15 @@ import * as m from '$lib/paraglide/messages';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
-  visualizationStore,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { showWarning } from '../../../utils/notification.utils.svelte';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
-import { resolveHookValue, type HookValue } from './table-hook.utils';
+import { type HookValue, resolveHookValue } from './table-hook.utils';
 
 const DUCKDB_COLUMN_TYPE: Record<ColumnType, string> = {
   text: 'VARCHAR',

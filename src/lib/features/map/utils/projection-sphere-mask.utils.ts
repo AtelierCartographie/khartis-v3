@@ -1,10 +1,10 @@
 import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import {
-  createPathLayerProps,
-  parseSphere,
   type BinaryPathData,
   type BinaryPolygonData,
+  createPathLayerProps,
+  parseSphere,
   type ProjectionLike
 } from '@ateliercartographie/geoarrow-deck-stream';
 import type { Matrix4 } from '@math.gl/core';
@@ -17,8 +17,8 @@ import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   createProjectedCompositeOceanData,
   createScreenExtentPolygon,
-  hasCompositeGraticuleSubProjections,
-  type GraticuleClipExtent
+  type GraticuleClipExtent,
+  hasCompositeGraticuleSubProjections
 } from '../layers/basemap-graticule';
 import { getBasemapFrameExtent } from './basemap-frame.utils';
 

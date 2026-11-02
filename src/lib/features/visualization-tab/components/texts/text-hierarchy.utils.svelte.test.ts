@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_FONT_SIZE } from '$lib/features/step-toolbar/fonts.constants';
 import {
-  TEXT_HIERARCHY,
   resolveSecondaryTextSize,
-  resolveTextHierarchy
+  resolveTextHierarchy,
+  TEXT_HIERARCHY
 } from './text-hierarchy.utils';
 
 describe('resolveSecondaryTextSize', () => {

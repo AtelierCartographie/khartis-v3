@@ -11,9 +11,9 @@ import {
   getPolygonPrimitive,
   getPrimitiveSizeColumn,
   getPrimitiveValueColumn,
-  visualizationStore,
   type PrimitiveFilter,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';

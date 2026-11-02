@@ -2,19 +2,20 @@
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
+  import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
   import {
-    SLIDER_DEBOUNCE_MS,
-    DEFAULT_DISCRETIZATION_CLASS_COUNT
+    DEFAULT_DISCRETIZATION_CLASS_COUNT,
+    SLIDER_DEBOUNCE_MS
   } from '$lib/features/commons/constants/visualization.constants';
+  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
-    DISCRETIZATION_NOTE,
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    DISCRETIZATION_NOTE,
     NESTED_MEANS_CLASS_COUNTS,
     normalizeClassificationMethod,
     Q6_CLASS_COUNT,
     resolveBreakpointLowerClassCount
   } from '$lib/features/commons/utils/discretization.utils';
-  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     Select,
     SelectItem,
@@ -24,7 +25,6 @@
   import { Information, Launch } from 'carbon-icons-svelte';
   import DiscretizationHistogram from './discretization-histogram.svelte';
   import { InfoPopover } from '../shared';
-  import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
   import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface ClassBreak {

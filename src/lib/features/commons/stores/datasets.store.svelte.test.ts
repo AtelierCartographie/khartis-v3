@@ -7,6 +7,7 @@ import {
   FileType
 } from '$lib/features/commons/types/create-project.types';
 import { ColumnType } from '$lib/features/data-pipeline';
+import { datasetsStore } from './datasets.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -111,8 +112,6 @@ vi.mock('$lib/features/step-toolbar/tools/facets/facets-access', () => ({
   disableFacets: vi.fn(),
   getFacetsBaseVisualizationId: mocks.getFacetsBaseVisualizationIdMock
 }));
-
-import { datasetsStore } from './datasets.store.svelte';
 
 function makeDataset(id: string, sourceFileId = `source-${id}`) {
   return {

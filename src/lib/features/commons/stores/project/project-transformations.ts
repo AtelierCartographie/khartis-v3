@@ -1,5 +1,7 @@
-import type { UploadedFile } from '../../types/create-project.types';
-import type { ColumnTransformation } from '../../types/create-project.types';
+import type {
+  ColumnTransformation,
+  UploadedFile
+} from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { getSourceFileIndex } from './project-files';
 import { markDirtyAndSave } from './project-persistence';

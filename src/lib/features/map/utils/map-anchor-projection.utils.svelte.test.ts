@@ -1,4 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ANNOTATION_ANCHOR_SPAN_PX,
+  buildAnchorFromScreenPx,
+  canAnchorToMap,
+  dataToScreenPx,
+  getAnchorScaleFactor,
+  screenPxToData
+} from './map-anchor-projection.utils';
 
 const mocks = vi.hoisted(() => ({
   mapInstanceStore: {
@@ -24,15 +32,6 @@ vi.mock('$lib/features/commons/stores/map-instance.store.svelte', () => ({
 vi.mock('../stores/projection.store.svelte', () => ({
   projectionStore: mocks.projectionStore
 }));
-
-import {
-  ANNOTATION_ANCHOR_SPAN_PX,
-  buildAnchorFromScreenPx,
-  canAnchorToMap,
-  dataToScreenPx,
-  getAnchorScaleFactor,
-  screenPxToData
-} from './map-anchor-projection.utils';
 
 function createMapLibreMock() {
   return {

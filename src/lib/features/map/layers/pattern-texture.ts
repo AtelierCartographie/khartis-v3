@@ -1,8 +1,8 @@
-import { motifAtlas } from '@ateliercartographie/motif.js';
 import type {
   AtlasResult,
   PatternOptions
 } from '@ateliercartographie/motif.js';
+import { motifAtlas } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 

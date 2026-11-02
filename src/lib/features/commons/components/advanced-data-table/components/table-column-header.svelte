@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RefineOperation, type AnalysisResult } from '$lib/features/duckdb';
+  import { type AnalysisResult, RefineOperation } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
