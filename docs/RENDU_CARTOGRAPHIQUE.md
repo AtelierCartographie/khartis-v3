@@ -284,6 +284,9 @@ jointure, celle des catégories du panneau : joint, à vérifier (`check` et
 ligne, en gris hachuré). Les valeurs non reconnues ou ignorées n'ont pas de
 géométrie et restent dans le panneau.
 
+- L'étape Données se suit dans l'ordre : la jointure n'apparaît sur la carte,
+  en fondu avec son encadré, qu'une fois la sous-étape « 3. Joindre » atteinte
+  dans le panneau, puis reste affichée pour la session.
 - Le statut de chaque territoire est calculé en SQL
   (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
   finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
@@ -305,9 +308,10 @@ géométrie et restent dans le panneau.
 - Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
   le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
   la carte, sans reconstruire les couches.
-- L'infobulle donne le statut, la valeur des données tabulaires (ou du fichier
-  importé) avec la variable liée, puis le nom sur le fond ; épinglée, elle
-  ajoute les autres données jointes.
+- L'infobulle donne le statut, puis, côte à côte comme une ligne des tableaux
+  de jointure, la valeur des données tabulaires (ou du fichier importé) avec la
+  variable liée et le nom sur le fond ; épinglée, elle ajoute les autres
+  données jointes.
 - La carte suit la variable liée du panneau : tant que la jointure finalisée
   porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
   variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.

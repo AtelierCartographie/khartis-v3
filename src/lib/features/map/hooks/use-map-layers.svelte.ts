@@ -124,6 +124,8 @@ import {
   type JoinControlLayers
 } from '../layers/join-control-layers';
 
+const JOIN_CONTROL_LAYER_PREFIX = 'join-control-';
+
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
   [GeometryType.MULTIPOINT]: PrimitiveFilterType.POINT,
@@ -324,7 +326,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         (entity) => entity.dataValue
       )
     });
-    if (!statuses) {
+    if (!statuses || !joinControlStore.isRevealed(datasetId)) {
       return null;
     }
     // The finalized join belongs to the variable it was built on. Once the
@@ -334,8 +336,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       statuses.geoColumn === geoColumn &&
       dataTabState.geolocation.linkedVariableName === geoColumn;
 
+    joinControlStore.startRevealAnimation(datasetId);
     return createJoinControlLayers({
-      layerId: `join-control-${datasetId}${
+      layerId: `${JOIN_CONTROL_LAYER_PREFIX}${datasetId}${
         ctx.projectionSuffix ? `-${ctx.projectionSuffix}` : ''
       }`,
       geometry: split.geometry,
@@ -458,10 +461,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...layers, ...createJoinControlHoverLayers(source, target)];
   }
 
+  // The join fades in over the applied stack the first time it is drawn.
+  function withJoinControlReveal(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const progress = untrack(() => joinControlStore.revealProgress);
+    if (progress >= 1) return layers;
+    return layers.map((layer) =>
+      layer.id.startsWith(JOIN_CONTROL_LAYER_PREFIX)
+        ? (layer.clone({
+            opacity: (layer.props.opacity ?? 1) * progress
+          }) as Layer<DeckDataRow>)
+        : layer
+    );
+  }
+
   $effect(() => {
     void mapHoverHighlightStore.overlay;
     void labelLayoutStore.dragPreview;
     void joinControlStore.hoverTarget;
+    void joinControlStore.revealProgress;
     untrack(() => {
       if (lastAppliedLayers.length > 0) {
         setLayers(lastAppliedLayers);
@@ -471,7 +490,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function setLayers(stack: Layer<DeckDataRow>[]): boolean {
     const layers = withLabelDragPreview(
-      withHoverHighlight(withJoinControlHover(stack))
+      withHoverHighlight(withJoinControlReveal(withJoinControlHover(stack)))
     );
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();

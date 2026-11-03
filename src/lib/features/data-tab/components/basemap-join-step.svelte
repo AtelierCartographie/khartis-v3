@@ -101,6 +101,7 @@
     GeoreferenceType
   } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
+  import { joinControlStore } from '$lib/features/map';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
   const BASEMAP_SUGGESTION_LIMIT = 3;
@@ -112,6 +113,27 @@
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+
+  // Steps run in order: the map shows the join once the user reaches this
+  // step, and keeps showing it afterwards.
+  let joinStepElement = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const element = joinStepElement;
+    const datasetId = selectedDataset?.id;
+    if (!element || !datasetId || joinControlStore.isRevealed(datasetId)) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          joinControlStore.reveal(datasetId);
+        }
+      },
+      { rootMargin: '0px 0px -25% 0px' }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const datasetIdForOrchestrator = $derived.by(() =>
     resolveDatasetIdForOrchestrator(selectedDataset)
@@ -2196,7 +2218,7 @@
   />
 {/snippet}
 
-<section id="basemap-join-step">
+<section id="basemap-join-step" bind:this={joinStepElement}>
   <MainToolBarHeader title={stepTitle} icon={Earth} showDivider />
 
   <p class="kh-help">{m.basemap_step_description()}</p>
