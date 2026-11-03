@@ -231,6 +231,11 @@ export interface SymbolPrimitiveConfig {
   fillClassification?: ClassificationConfig;
   /** Positive then negative fill when the size column holds both signs. */
   signColors?: [string, string];
+  /**
+   * Knockout group: each proportional symbol hides the symbols it covers,
+   * fill included, without hiding the map below the group. On when absent.
+   */
+  knockout?: boolean;
   missingData?: MissingDataConfig;
   modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
 }

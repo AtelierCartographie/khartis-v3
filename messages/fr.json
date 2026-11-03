@@ -1438,6 +1438,8 @@
   "show_missing_data_info": "Affiche un style spécifique pour les entités dont la valeur est vide dans les données importées, afin qu'elles restent visibles sur la carte.",
   "fill_section_info": "Couleur intérieure des symboles. Peut être fixe, varier par classe ou par catégorie.",
   "stroke_section_info": "Contour dessiné autour de chaque symbole. Permet de distinguer les entités qui se chevauchent.",
+  "symbol_knockout": "Contours optimisés",
+  "symbol_knockout_info": "Chaque symbole masque les contours des symboles qu'il recouvre, sans masquer le fond de carte. Avec un fond transparent, les symboles restent lisibles tout en laissant voir la carte.",
   "unique_size_info": "Taille fixe en pixels appliquée à tous les symboles.",
   "category_variable_info": "Sélectionnez la variable dont les valeurs distinctes définissent les catégories de couleur.",
   "texts_disabled_no_geometry": "Les textes nécessitent des données géographiques (points, lignes ou polygones).",
