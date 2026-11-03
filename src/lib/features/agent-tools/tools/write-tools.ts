@@ -1,4 +1,5 @@
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
+import { SCALE_MODE } from '$lib/features/commons/constants/facets.constants';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
@@ -24,13 +25,18 @@ import {
   facetsStore,
   getAnnotationsState,
   getLegendState,
+  getPageElementPlaceholder,
   legendActions
 } from '$lib/features/step-toolbar';
 import {
   buildClassificationUpdate,
   computeClassificationBreaks
 } from '$lib/features/visualization-tab';
-import type { AgentTool, AgentToolResult } from '../contract/types';
+import type {
+  AgentTool,
+  AgentToolErrorCode,
+  AgentToolResult
+} from '../contract/types';
 import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
@@ -48,7 +54,7 @@ import {
 } from '../contract/validation';
 
 function failure(
-  code: 'not_found' | 'unsupported' | 'unavailable',
+  code: Exclude<AgentToolErrorCode, 'invalid_input'>,
   message: string
 ): AgentToolResult {
   return { ok: false, error: { code, message } };
@@ -58,28 +64,56 @@ function isAgentMethod(method: string | undefined): boolean {
   return AGENT_CLASSIFICATION_METHODS.some((candidate) => candidate === method);
 }
 
+// The shared classes of a map collection are computed on all its variables,
+// as the discretization panel does; otherwise the maps stop being comparable.
+function resolvePooledColumnNames(
+  visualizationId: string,
+  valueColumn: string
+): string[] | undefined {
+  return facetsStore.enabled &&
+    facetsStore.scaleMode === SCALE_MODE.SHARED &&
+    facetsStore.baseVisualizationId === visualizationId &&
+    facetsStore.variables.includes(valueColumn)
+    ? [...facetsStore.variables]
+    : undefined;
+}
+
+function findClassedPolygon(visualizationId: string) {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === visualizationId && !item.facet
+  );
+  const polygon = visualization && getPolygonPrimitive(visualization);
+  if (!visualization || !polygon?.enabled) return null;
+  return {
+    visualization,
+    classed: polygon.fillMode === FillMode.CLASSES,
+    valueColumn: getPrimitiveValueColumn(
+      visualization,
+      PrimitiveFilterType.POLYGON
+    )
+  };
+}
+
 async function applyClassificationChange(
   change: ClassificationChange
 ): Promise<AgentToolResult> {
-  const visualization = visualizationStore.visualizations.find(
-    (item) => item.id === change.visualizationId && !item.facet
-  );
-  if (!visualization) {
+  if (
+    !visualizationStore.visualizations.some(
+      (item) => item.id === change.visualizationId && !item.facet
+    )
+  ) {
     return failure('not_found', 'No visualization has this id.');
   }
 
-  const polygon = getPolygonPrimitive(visualization);
-  if (!polygon?.enabled || polygon.fillMode !== FillMode.CLASSES) {
+  const target = findClassedPolygon(change.visualizationId);
+  if (!target?.classed) {
     return failure(
       'unsupported',
       'This prototype changes the classes of a polygon fill in classes only.'
     );
   }
 
-  const valueColumn = getPrimitiveValueColumn(
-    visualization,
-    PrimitiveFilterType.POLYGON
-  );
+  const { visualization, valueColumn } = target;
   const dataset = datasetsStore.datasets.find(
     (item) => item.id === visualization.datasetId
   );
@@ -125,12 +159,22 @@ async function applyClassificationChange(
     }),
     classification: next,
     method,
-    numClasses: classes
+    numClasses: classes,
+    pooledColumnNames: resolvePooledColumnNames(visualization.id, valueColumn)
   });
   if (!computation) {
     return failure(
       'unavailable',
       'The engine could not compute classes for this column.'
+    );
+  }
+
+  // The user may have changed the visualization while the engine computed.
+  const latest = findClassedPolygon(visualization.id);
+  if (!latest?.classed || latest.valueColumn !== valueColumn) {
+    return failure(
+      'conflict',
+      'The visualization changed while its classes were computed: read the project again.'
     );
   }
 
@@ -142,7 +186,7 @@ async function applyClassificationChange(
     inverted: next.inverted,
     ...buildClassificationUpdate(computation, next, method)
   });
-  facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
+  await facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
 
   return {
     ok: true,
@@ -156,6 +200,15 @@ async function applyClassificationChange(
       }
     }
   };
+}
+
+// A cleared page text goes back to its placeholder, as in the text tool; the
+// export leaves placeholders out.
+function resolveTextContent(
+  role: Parameters<typeof getPageElementPlaceholder>[0] | undefined,
+  text: string
+): string {
+  return (text === '' && role ? getPageElementPlaceholder(role) : null) ?? text;
 }
 
 const LAYOUT_ROLES = {
@@ -186,7 +239,9 @@ function applyLayoutTexts(change: LayoutTextsChange): AgentToolResult {
       missing.push(field);
       continue;
     }
-    annotationsActions.updateAnnotation(item.id, { content: change[field] });
+    annotationsActions.updateAnnotation(item.id, {
+      content: resolveTextContent(item.role, change[field] ?? '')
+    });
     written.push(field);
   }
 
@@ -201,7 +256,9 @@ function applyText(change: TextChange): AgentToolResult {
   if (!item) {
     return failure('not_found', 'No text on the page has this id.');
   }
-  annotationsActions.updateAnnotation(item.id, { content: change.text });
+  annotationsActions.updateAnnotation(item.id, {
+    content: resolveTextContent(item.role, change.text)
+  });
   return { ok: true, data: { text_id: item.id } };
 }
 
@@ -287,7 +344,7 @@ export const setLayoutTextsTool: AgentTool = {
   name: 'set_layout_texts',
   title: 'Write the page texts',
   description:
-    'Write the title, subtitle or source shown on the map page. Plain text; an empty string clears a text. Texts are laid out on the page the same way as when the user types them.',
+    'Write the title, subtitle or source shown on the map page. Plain text; an empty string brings back the placeholder, which the export leaves out. Texts are laid out on the page the same way as when the user types them.',
   inputSchema: {
     type: 'object',
     properties: {

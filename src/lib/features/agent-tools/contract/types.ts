@@ -1,5 +1,5 @@
 export type AgentToolErrorCode =
-  'invalid_input' | 'not_found' | 'unsupported' | 'unavailable';
+  'invalid_input' | 'not_found' | 'unsupported' | 'unavailable' | 'conflict';
 
 export interface AgentToolError {
   code: AgentToolErrorCode;
