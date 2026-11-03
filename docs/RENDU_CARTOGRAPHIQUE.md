@@ -298,15 +298,19 @@ géométrie et restent dans le panneau.
 - L'encadré de synthèse (`join-control-summary.svelte`), en bas à droite de
   l'espace de travail et non dans la page, reprend les catégories du panneau
   avec leurs comptes et le même en-tête (`join-category-header.svelte`), puis
-  les entités hors carte et les entités du fond sans données. Cliquer une
-  catégorie ouvre son accordéon dans le panneau ; ouvrir une catégorie met ses
-  territoires en évidence.
+  les entités hors carte et les entités du fond sans données. Cliquer son titre
+  amène le panneau sur la jointure assistée, cliquer une catégorie y ouvre son
+  accordéon ; ouvrir une catégorie met ses territoires en évidence. Il glisse
+  avec le bord du panneau quand celui-ci change de largeur.
 - Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
   le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
   la carte, sans reconstruire les couches.
-- L'infobulle donne le statut, la référence géographique, le nom sur le fond et
-  la valeur du tableau (ou du fichier importé) ; épinglée, elle ajoute les autres
-  variables jointes.
+- L'infobulle donne le statut, la valeur des données tabulaires (ou du fichier
+  importé) avec la variable liée, puis le nom sur le fond ; épinglée, elle
+  ajoute les autres données jointes.
+- La carte suit la variable liée du panneau : tant que la jointure finalisée
+  porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
+  variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.
 - Rien de cela n'entre dans un export.
 
 ## Habillage et facettes

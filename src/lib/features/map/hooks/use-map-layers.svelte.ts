@@ -119,6 +119,7 @@ import {
 import {
   createJoinControlHoverLayers,
   createJoinControlLayers,
+  toUnjoinedRows,
   type JoinControlHoverSource,
   type JoinControlLayers
 } from '../layers/join-control-layers';
@@ -326,6 +327,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     if (!statuses) {
       return null;
     }
+    // The finalized join belongs to the variable it was built on. Once the
+    // panel links another one, nothing is joined until it is finalized again,
+    // which never happens for a variable that matches nothing.
+    const isCurrentJoin =
+      statuses.geoColumn === geoColumn &&
+      dataTabState.geolocation.linkedVariableName === geoColumn;
 
     return createJoinControlLayers({
       layerId: `join-control-${datasetId}${
@@ -336,7 +343,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       dataset: split.dataset,
       geoColumn,
       sourceIsFile: Boolean(datasetEntry?.geometry),
-      rows: statuses.rows,
+      rows: isCurrentJoin ? statuses.rows : toUnjoinedRows(statuses.rows),
       focusedStatus: joinControlStore.focusedStatus,
       outlineTerritories:
         !showsBasemapLayers ||

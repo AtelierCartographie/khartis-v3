@@ -751,6 +751,7 @@
     ignoredExpanded = false;
   }
 
+  let sectionElement = $state<HTMLDivElement | null>(null);
   const categoryRowElements: Partial<
     Record<JoinPanelCategory, HTMLDivElement>
   > = $state({});
@@ -811,7 +812,8 @@
     setCategoryExpanded(category, !isCategoryExpanded(category));
   }
 
-  // The map's join summary opens a category here and brings it into view.
+  // The map's join summary opens a category here, or this section, and
+  // brings it into view.
   let handledPanelRequestId = untrack(
     () => joinControlStore.panelRequest?.id ?? 0
   );
@@ -819,13 +821,16 @@
     const request = joinControlStore.panelRequest;
     if (!request || request.id === handledPanelRequestId) return;
     handledPanelRequestId = request.id;
-    untrack(() => setCategoryExpanded(request.category, request.open));
-    if (request.open) {
+    const { category, open } = request;
+    if (category) {
+      untrack(() => setCategoryExpanded(category, open));
+    }
+    if (open) {
       void tick().then(() =>
-        categoryRowElements[request.category]?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        })
+        (category
+          ? categoryRowElements[category]
+          : sectionElement
+        )?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       );
     }
   });
@@ -1108,6 +1113,7 @@
 {/snippet}
 
 <div
+  bind:this={sectionElement}
   class="join-assisted-section"
   class:is-narrow={isNarrow}
   bind:clientWidth={sectionWidth}

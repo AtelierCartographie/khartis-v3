@@ -11,6 +11,7 @@
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
@@ -272,11 +273,6 @@
   }
 </script>
 
-{#snippet swatch(background: string)}
-  <span class="tooltip-swatch" style:background={background} aria-hidden="true"
-  ></span>
-{/snippet}
-
 {#if tooltipState.visible && !isStylingStep}
   <div
     bind:this={tooltipElement}
@@ -329,31 +325,29 @@
           {#if entry.role === 'divider'}
             <hr class="tooltip-divider" />
           {:else if entry.role === 'subtitle'}
-            <div class="tooltip-subtitle">
-              {entry.key}
-              {#if entry.value}
-                <span class="tooltip-subtitle-value">{entry.value}</span>
-              {/if}
-            </div>
+            <div class="tooltip-subtitle">{entry.key}</div>
           {:else if entry.role === 'heading'}
             <div class="tooltip-heading">
               <span class="tooltip-heading-key">{entry.key}</span>
-              <span class="tooltip-heading-value"
-                >{#if entry.swatch}{@render swatch(
-                    entry.swatch
-                  )}{/if}{entry.value}</span
+              <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
+                >{entry.value}</span
               >
             </div>
           {:else}
             <div class="tooltip-row">
-              <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-                >{entry.key}</span
-              >
-              <span class="tooltip-value"
-                >{#if entry.swatch}{@render swatch(
-                    entry.swatch
-                  )}{/if}{entry.value}</span
-              >
+              <span class="tooltip-key-group">
+                <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+                  >{entry.key}</span
+                >
+                {#if entry.badge}
+                  <VariableBadge
+                    label={entry.badge}
+                    type="geo-ref"
+                    interactive={false}
+                  />
+                {/if}
+              </span>
+              <span class="tooltip-value">{entry.value}</span>
             </div>
           {/if}
         {/each}
@@ -566,8 +560,9 @@
 
   .tooltip-heading {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
   }
 
   .tooltip-heading-key {
@@ -575,8 +570,38 @@
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
-  .tooltip-heading-value {
+  /* Drawn like the counts of the join summary and panel. */
+  .tooltip-chip {
+    --chip-color: var(--cds-border-strong-01, #8d8d8d);
+    --chip-background: var(--cds-layer-01, #f4f4f4);
+    padding: 0 4px 1px;
     font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+    background-color: var(--chip-background);
+    border-bottom: 1px solid var(--chip-color);
+  }
+
+  .tooltip-chip.tone-success {
+    --chip-color: var(--khartis-additions-join-success, #24a148);
+    --chip-background: var(--khartis-additions-join-success-bg, #defbe6);
+  }
+
+  .tooltip-chip.tone-warning {
+    --chip-color: var(--khartis-additions-join-warning, #f1c21b);
+    --chip-background: var(--khartis-additions-join-warning-bg, #fcf4d6);
+  }
+
+  .tooltip-chip.tone-error {
+    --chip-color: var(--khartis-additions-join-error, #da1e28);
+    --chip-background: var(--khartis-additions-join-error-bg, #fff1f1);
+  }
+
+  .tooltip-key-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
   }
 
   .tooltip-subtitle {
@@ -585,24 +610,10 @@
     overflow-wrap: anywhere;
   }
 
-  .tooltip-subtitle-value {
-    font-weight: 600;
-    color: var(--cds-text-primary, #161616);
-  }
-
   .tooltip-divider {
     margin: 4px 0;
     border: 0;
     border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-  }
-
-  .tooltip-swatch {
-    display: inline-block;
-    width: 0.75rem;
-    height: 0.75rem;
-    margin-right: 4px;
-    vertical-align: -0.125rem;
-    box-shadow: inset 0 0 0 1px rgba(22, 22, 22, 0.25);
   }
 
   .interactive .tooltip-key,
