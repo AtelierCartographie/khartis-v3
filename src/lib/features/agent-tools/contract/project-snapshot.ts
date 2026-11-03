@@ -1,6 +1,7 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.types';
 import type { EnrichedColumn } from '$lib/features/data-pipeline';
+import { computeRevision } from './revision';
 import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
@@ -83,9 +84,7 @@ function readText(text: SnapshotTextInput | undefined): string | null {
 }
 
 export function buildProjectSnapshot(input: ProjectSnapshotInput) {
-  return {
-    project_name: input.projectName,
-    step: input.step,
+  const map = {
     datasets: input.datasets.map((dataset) => ({
       id: dataset.id,
       name: dataset.name,
@@ -136,7 +135,14 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
       title: legend.title,
       subtitle: legend.subtitle,
       note: legend.note
-    })),
+    }))
+  };
+
+  return {
+    project_name: input.projectName,
+    step: input.step,
+    revision: computeRevision(map),
+    ...map,
     capabilities: {
       steps: [...AGENT_STEPS],
       classification_methods: [...AGENT_CLASSIFICATION_METHODS],

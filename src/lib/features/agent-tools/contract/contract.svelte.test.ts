@@ -6,7 +6,11 @@ import {
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.types';
 import type { EnrichedColumn } from '$lib/features/data-pipeline';
-import { buildProjectSnapshot } from './project-snapshot';
+import {
+  buildProjectSnapshot,
+  type ProjectSnapshotInput
+} from './project-snapshot';
+import { splitExpectedRevision } from './revision';
 import {
   parseGoToStepInput,
   parseLayoutTextsInput,
@@ -135,101 +139,103 @@ describe('agent command validation', () => {
   });
 });
 
+const SNAPSHOT_INPUT: ProjectSnapshotInput = {
+  projectName: 'Pauvreté',
+  step: 'visualizations',
+  datasets: [
+    {
+      id: 'ds-1',
+      name: 'pauvrete.csv',
+      rowCount: 40,
+      hasGeometry: false,
+      joinedBasemap: 'communes-93',
+      columns: [
+        {
+          name: 'commune',
+          type: 'text' as EnrichedColumn['type'],
+          stats: {
+            nulls: 0,
+            uniques: 40,
+            categories: ['Bobigny', 'Montreuil'],
+            min: 'Aubervilliers',
+            max: 'Villetaneuse'
+          }
+        },
+        {
+          name: 'taux_pauvrete',
+          type: 'number' as EnrichedColumn['type'],
+          stats: {
+            nulls: 2,
+            uniques: 38,
+            min: 7.25,
+            max: 41.75,
+            mean: 24.5,
+            value_sample: [7.25, 12.5, 41.75]
+          }
+        },
+        {
+          name: '__id',
+          type: 'number' as EnrichedColumn['type'],
+          stats: { nulls: 0, uniques: 40 }
+        }
+      ]
+    }
+  ],
+  visualizations: [
+    {
+      id: 'viz-1',
+      name: 'Taux de pauvreté',
+      datasetId: 'ds-1',
+      enabled: true,
+      primitives: [
+        {
+          primitive: 'polygon',
+          mode: 'classes',
+          valueColumn: 'taux_pauvrete',
+          classification: {
+            method: ClassificationMethod.QUANTILES,
+            classes: 5,
+            paletteId: SEQUENTIAL_ID,
+            inverted: false,
+            breaks: [7.25, 15, 22, 30, 41.75],
+            counts: [8, 8, 8, 8, 6]
+          }
+        }
+      ]
+    }
+  ],
+  texts: [
+    {
+      id: 'text-1',
+      role: 'title',
+      content: 'Pauvreté en Seine-Saint-Denis',
+      placeholder: false
+    },
+    {
+      id: 'text-2',
+      role: 'subtitle',
+      content: 'Sous-titre',
+      placeholder: true
+    },
+    {
+      id: 'text-3',
+      content: 'Source : Insee, Filosofi 2021',
+      placeholder: false
+    }
+  ],
+  legends: [
+    {
+      id: 'legend-1',
+      visualizationId: 'viz-1',
+      title: 'Taux de pauvreté',
+      subtitle: '',
+      note: ''
+    }
+  ]
+};
+
 describe('agent project snapshot', () => {
-  const snapshot = buildProjectSnapshot({
-    projectName: 'Pauvreté',
-    step: 'visualizations',
-    datasets: [
-      {
-        id: 'ds-1',
-        name: 'pauvrete.csv',
-        rowCount: 40,
-        hasGeometry: false,
-        joinedBasemap: 'communes-93',
-        columns: [
-          {
-            name: 'commune',
-            type: 'text' as EnrichedColumn['type'],
-            stats: {
-              nulls: 0,
-              uniques: 40,
-              categories: ['Bobigny', 'Montreuil'],
-              min: 'Aubervilliers',
-              max: 'Villetaneuse'
-            }
-          },
-          {
-            name: 'taux_pauvrete',
-            type: 'number' as EnrichedColumn['type'],
-            stats: {
-              nulls: 2,
-              uniques: 38,
-              min: 7.25,
-              max: 41.75,
-              mean: 24.5,
-              value_sample: [7.25, 12.5, 41.75]
-            }
-          },
-          {
-            name: '__id',
-            type: 'number' as EnrichedColumn['type'],
-            stats: { nulls: 0, uniques: 40 }
-          }
-        ]
-      }
-    ],
-    visualizations: [
-      {
-        id: 'viz-1',
-        name: 'Taux de pauvreté',
-        datasetId: 'ds-1',
-        enabled: true,
-        primitives: [
-          {
-            primitive: 'polygon',
-            mode: 'classes',
-            valueColumn: 'taux_pauvrete',
-            classification: {
-              method: ClassificationMethod.QUANTILES,
-              classes: 5,
-              paletteId: SEQUENTIAL_ID,
-              inverted: false,
-              breaks: [7.25, 15, 22, 30, 41.75],
-              counts: [8, 8, 8, 8, 6]
-            }
-          }
-        ]
-      }
-    ],
-    texts: [
-      {
-        id: 'text-1',
-        role: 'title',
-        content: 'Pauvreté en Seine-Saint-Denis',
-        placeholder: false
-      },
-      {
-        id: 'text-2',
-        role: 'subtitle',
-        content: 'Sous-titre',
-        placeholder: true
-      },
-      {
-        id: 'text-3',
-        content: 'Source : Insee, Filosofi 2021',
-        placeholder: false
-      }
-    ],
-    legends: [
-      {
-        id: 'legend-1',
-        visualizationId: 'viz-1',
-        title: 'Taux de pauvreté',
-        subtitle: '',
-        note: ''
-      }
-    ]
-  });
+  const snapshot = buildProjectSnapshot(SNAPSHOT_INPUT);
   const serialized = JSON.stringify(snapshot);
 
   it('should describe the map without any data value or internal column when columns carry statistics', () => {
@@ -279,4 +285,66 @@ describe('agent project snapshot', () => {
       { id: 'text-3', role: null, text: 'Source : Insee, Filosofi 2021' }
     ]);
   });
+});
+
+describe('agent revision', () => {
+  const revision = buildProjectSnapshot(SNAPSHOT_INPUT).revision;
+
+  it('should keep the revision when only the step changes', () => {
+    expect(
+      buildProjectSnapshot({ ...SNAPSHOT_INPUT, step: 'styling' }).revision
+    ).toBe(revision);
+  });
+
+  it('should give a new revision when a page text or the classes change', () => {
+    const retitled = buildProjectSnapshot({
+      ...SNAPSHOT_INPUT,
+      texts: SNAPSHOT_INPUT.texts.map((text) =>
+        text.id === 'text-1' ? { ...text, content: 'Autre titre' } : text
+      )
+    });
+    const [visualization] = SNAPSHOT_INPUT.visualizations;
+    const reclassed = buildProjectSnapshot({
+      ...SNAPSHOT_INPUT,
+      visualizations: [
+        {
+          ...visualization,
+          primitives: [
+            {
+              ...visualization.primitives[0],
+              classification: {
+                ...visualization.primitives[0].classification,
+                classes: 4
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(retitled.revision).not.toBe(revision);
+    expect(reclassed.revision).not.toBe(revision);
+  });
+
+  it('should take the expected revision out of an input when it is well formed', () => {
+    expect(
+      splitExpectedRevision({ title: 'Titre', expected_revision: revision })
+    ).toEqual({
+      ok: true,
+      value: { input: { title: 'Titre' }, expectedRevision: revision }
+    });
+    expect(splitExpectedRevision({ title: 'Titre' })).toEqual({
+      ok: true,
+      value: { input: { title: 'Titre' } }
+    });
+  });
+
+  it.each([['latest'], [42], [null], ['ABCDEF12']])(
+    'should refuse an expected revision when it is %s',
+    (expectedRevision) => {
+      expect(
+        splitExpectedRevision({ expected_revision: expectedRevision }).ok
+      ).toBe(false);
+    }
+  );
 });

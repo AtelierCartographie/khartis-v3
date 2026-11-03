@@ -32,10 +32,12 @@ import {
   buildClassificationUpdate,
   computeClassificationBreaks
 } from '$lib/features/visualization-tab';
+import { splitExpectedRevision } from '../contract/revision';
 import type {
   AgentTool,
   AgentToolErrorCode,
-  AgentToolResult
+  AgentToolResult,
+  Parsed
 } from '../contract/types';
 import {
   AGENT_CLASS_COUNT,
@@ -52,6 +54,7 @@ import {
   type LegendTextsChange,
   type TextChange
 } from '../contract/validation';
+import { readProjectSnapshot } from './read-tools';
 
 function failure(
   code: Exclude<AgentToolErrorCode, 'invalid_input'>,
@@ -307,6 +310,47 @@ const textProperty = (description: string, maxLength: number) => ({
   description
 });
 
+const REVISION_PROPERTY = {
+  type: 'string',
+  pattern: '^[0-9a-f]{8}$',
+  description:
+    'Revision returned by inspect_project. When given, the change is refused if the map changed since that reading.'
+};
+
+/**
+ * Parses the input, refuses a change made on a stale reading of the map,
+ * applies the change and returns the new revision.
+ */
+async function runEdit<T>(
+  input: unknown,
+  parse: (input: unknown) => Parsed<T>,
+  apply: (change: T) => AgentToolResult | Promise<AgentToolResult>
+): Promise<AgentToolResult> {
+  const split = splitExpectedRevision(input);
+  if (!split.ok) return split;
+  const parsed = parse(split.value.input);
+  if (!parsed.ok) return parsed;
+
+  const { expectedRevision } = split.value;
+  if (
+    expectedRevision !== undefined &&
+    expectedRevision !== readProjectSnapshot().revision
+  ) {
+    return failure(
+      'conflict',
+      'The map changed since this revision was read: call inspect_project again before retrying.'
+    );
+  }
+
+  const result = await apply(parsed.value);
+  return result.ok
+    ? {
+        ok: true,
+        data: { ...result.data, revision: readProjectSnapshot().revision }
+      }
+    : result;
+}
+
 export const updateClassificationTool: AgentTool = {
   name: 'update_classification',
   title: 'Change the classes of a choropleth',
@@ -328,16 +372,15 @@ export const updateClassificationTool: AgentTool = {
         maximum: AGENT_CLASS_COUNT.max
       },
       palette_id: { type: 'string' },
-      inverted: { type: 'boolean' }
+      inverted: { type: 'boolean' },
+      expected_revision: REVISION_PROPERTY
     },
     required: ['visualization_id'],
     additionalProperties: false
   },
   annotations: {},
-  async execute(input) {
-    const parsed = parseUpdateClassificationInput(input);
-    return parsed.ok ? applyClassificationChange(parsed.value) : parsed;
-  }
+  execute: (input) =>
+    runEdit(input, parseUpdateClassificationInput, applyClassificationChange)
 };
 
 export const setLayoutTextsTool: AgentTool = {
@@ -353,15 +396,13 @@ export const setLayoutTextsTool: AgentTool = {
       source: textProperty(
         'Data source, may span lines.',
         AGENT_TEXT_LIMITS.source
-      )
+      ),
+      expected_revision: REVISION_PROPERTY
     },
     additionalProperties: false
   },
   annotations: {},
-  async execute(input) {
-    const parsed = parseLayoutTextsInput(input);
-    return parsed.ok ? applyLayoutTexts(parsed.value) : parsed;
-  }
+  execute: (input) => runEdit(input, parseLayoutTextsInput, applyLayoutTexts)
 };
 
 export const setTextTool: AgentTool = {
@@ -373,16 +414,14 @@ export const setTextTool: AgentTool = {
     type: 'object',
     properties: {
       text_id: { type: 'string' },
-      text: textProperty('New content of the text.', AGENT_TEXT_LIMITS.note)
+      text: textProperty('New content of the text.', AGENT_TEXT_LIMITS.note),
+      expected_revision: REVISION_PROPERTY
     },
     required: ['text_id', 'text'],
     additionalProperties: false
   },
   annotations: {},
-  async execute(input) {
-    const parsed = parseSetTextInput(input);
-    return parsed.ok ? applyText(parsed.value) : parsed;
-  }
+  execute: (input) => runEdit(input, parseSetTextInput, applyText)
 };
 
 export const setLegendTextsTool: AgentTool = {
@@ -399,16 +438,14 @@ export const setLegendTextsTool: AgentTool = {
         'Legend subtitle, often the unit.',
         AGENT_TEXT_LIMITS.subtitle
       ),
-      note: textProperty('Legend note.', AGENT_TEXT_LIMITS.note)
+      note: textProperty('Legend note.', AGENT_TEXT_LIMITS.note),
+      expected_revision: REVISION_PROPERTY
     },
     required: ['legend_id'],
     additionalProperties: false
   },
   annotations: {},
-  async execute(input) {
-    const parsed = parseLegendTextsInput(input);
-    return parsed.ok ? applyLegendTexts(parsed.value) : parsed;
-  }
+  execute: (input) => runEdit(input, parseLegendTextsInput, applyLegendTexts)
 };
 
 export const goToStepTool: AgentTool = {
