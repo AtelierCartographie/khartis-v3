@@ -16,10 +16,11 @@ interface WebMcpToolDescriptor {
 }
 
 interface ModelContext {
+  // A promise in the current draft, rejected for a duplicate or invalid tool.
   registerTool: (
     tool: WebMcpToolDescriptor,
     options: { signal: AbortSignal }
-  ) => unknown;
+  ) => Promise<void> | void;
 }
 
 function getModelContext(): ModelContext | null {
@@ -66,26 +67,32 @@ export function registerAgentTools(tools: readonly AgentTool[]): () => void {
   const modelContext = getModelContext();
 
   if (modelContext) {
-    for (const tool of tools) {
-      try {
-        modelContext.registerTool(
-          {
-            name: tool.name,
-            title: tool.title,
-            description: tool.description,
-            inputSchema: tool.inputSchema,
-            annotations: tool.annotations,
-            execute: (input) => runTool(tool, input)
-          },
-          { signal: controller.signal }
-        );
-      } catch (error) {
-        logger.warn('WebMCP refused an agent tool', LogCategory.SYSTEM, {
-          tool: tool.name,
-          error
-        });
-      }
-    }
+    const registrations = tools.map(async (tool) =>
+      modelContext.registerTool(
+        {
+          name: tool.name,
+          title: tool.title,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          annotations: tool.annotations,
+          execute: (input) => runTool(tool, input)
+        },
+        { signal: controller.signal }
+      )
+    );
+    // All the tools or none, as Chrome advises: a partial set misleads agents.
+    void Promise.allSettled(registrations).then((results) => {
+      const refused = results.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      );
+      if (refused.length === 0) return;
+      controller.abort();
+      logger.warn('WebMCP refused the agent tools', LogCategory.SYSTEM, {
+        refused: refused.length,
+        error: refused[0].reason
+      });
+    });
   }
 
   if (import.meta.env.DEV) {

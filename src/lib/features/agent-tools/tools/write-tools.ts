@@ -318,7 +318,7 @@ export const updateClassificationTool: AgentTool = {
         type: 'string',
         enum: [...AGENT_CLASSIFICATION_METHODS],
         description:
-          'quantiles: equal counts; equal_interval: equal ranges; kmeans: natural groups; q6: six quantile-based classes isolating extremes; nested_means: 2, 4 or 8 classes around means; head_tail: heavy-tailed distributions.'
+          'quantiles: equal counts; equal_interval: equal ranges; kmeans: natural groups; q6: extremes apart; nested_means: around means; head_tail: skewed data.'
       },
       classes: {
         type: 'integer',
