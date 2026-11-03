@@ -26,12 +26,12 @@
   } from '$lib/features/commons/utils/perf-marks.utils';
   import {
     type AnalysisResult,
+    detectGPSColumns,
     Duck,
     type GPSValidationResult,
     validateGPSColumns
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import * as m from '$lib/paraglide/messages';
   import { InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Map as MapIcon } from 'carbon-icons-svelte';

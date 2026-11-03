@@ -28,6 +28,8 @@
     "@fontsource/noto-sans",
     "@fontsource/open-sans"
   ],
+  "ignoreWorkspaces": ["tools/ragmir"],
+  "ignoreBinaries": ["sips", "avifenc"],
   "ignoreExportsUsedInFile": true,
   "rules": {
     "enumMembers": "off"

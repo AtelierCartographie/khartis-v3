@@ -70,6 +70,8 @@
     <TextInput
       light
       size="sm"
+      labelText={m.project_title_label()}
+      hideLabel
       value={inputValue}
       placeholder={m.project_placeholder()}
       on:input={handleTitleInput}
