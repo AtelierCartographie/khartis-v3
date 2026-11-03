@@ -1,5 +1,5 @@
+import { tick } from 'svelte';
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { SCALE_MODE } from '$lib/features/commons/constants/facets.constants';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
@@ -14,12 +14,16 @@ import {
   getPrimitiveValueColumn
 } from '$lib/features/commons/stores/visualization-normalize';
 import {
+  ClassificationMethod,
   type ClassificationConfig,
   PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.types';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import { ToolbarStep } from '$lib/features/commons/types/global';
-import { resolveRequestedClassCount } from '$lib/features/commons/utils/discretization.utils';
+import {
+  DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+  resolveRequestedClassCount
+} from '$lib/features/commons/utils/discretization.utils';
 import {
   annotationsActions,
   closeSelectedToolPanel,
@@ -27,7 +31,6 @@ import {
   getAnnotationsState,
   getLegendState,
   getPageElementPlaceholder,
-  LEGEND_ID_PREFIXES,
   legendActions
 } from '$lib/features/step-toolbar';
 import {
@@ -36,7 +39,10 @@ import {
   resetClassificationComputedValues,
   syncLegendSubtitleAfterMappingChange
 } from '$lib/features/visualization-tab';
-import { listCalculatedColumns } from '../contract/project-snapshot';
+import {
+  INTERNAL_COLUMN_NAMES,
+  listCalculatedColumns
+} from '../contract/project-snapshot';
 import type { AgentTool, AgentToolResult } from '../contract/types';
 import {
   AGENT_CLASS_COUNT,
@@ -57,11 +63,15 @@ import {
   type TextChange
 } from '../contract/validation';
 import { listColumnNatures } from './column-natures';
-import { failure, REVISION_PROPERTY, runEdit } from './edit-guard';
-
-function isAgentMethod(method: string | undefined): boolean {
-  return AGENT_CLASSIFICATION_METHODS.some((candidate) => candidate === method);
-}
+import {
+  type Commit,
+  failure,
+  REVISION_PROPERTY,
+  runEdit,
+  STALE_FAILURE
+} from './edit-guard';
+import { listVisualizationLegends } from './legends';
+import { readProjectSnapshot } from './read-tools';
 
 // As in the discretization panel, the base of a collection with shared
 // classes is classed on all its variables; the maps of the collection then
@@ -95,7 +105,8 @@ function findClassedPolygon(visualizationId: string) {
 }
 
 async function applyClassificationChange(
-  change: ClassificationChange
+  change: ClassificationChange,
+  commit: Commit
 ): Promise<AgentToolResult> {
   if (
     !visualizationStore.visualizations.some(
@@ -125,36 +136,55 @@ async function applyClassificationChange(
     visualization,
     PrimitiveFilterType.POLYGON
   );
+  // Manual bounds depend on values the agent does not see. A calendar method
+  // is left to the engine, which keeps it for dates and drops it for numbers.
   const method = change.method ?? current?.method;
-  if (!method || !isAgentMethod(method)) {
+  if (!method || method === ClassificationMethod.MANUAL) {
     return failure(
       'unsupported',
-      'The current classes use manual bounds or calendar steps: give a method to replace them.'
+      'The current classes use manual bounds: give a method to replace them.'
     );
   }
 
   const classes = resolveRequestedClassCount(
     method,
     change.classes ??
+      // As in the discretization panel, head/tail asks for the largest
+      // count and keeps the classes the distribution gives.
+      (change.method === ClassificationMethod.HEAD_TAIL
+        ? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+        : undefined) ??
       current?.numClasses ??
       current?.classes ??
       DEFAULT_DISCRETIZATION_CLASS_COUNT
   );
+  const paletteId = change.paletteId ?? current?.paletteId;
+  // A palette picked from the menu starts the right way round.
+  const inverted =
+    change.inverted ??
+    (change.paletteId !== undefined ? false : (current?.inverted ?? false));
+  // A hand-built ramp has no palette id: inverting flips its colors, as the
+  // panel does. A palette is regenerated instead, since the engine keeps the
+  // stored colors while the breaks do not change.
+  const handBuilt = !paletteId && Boolean(current?.colors?.length);
+  const flipped = inverted !== (current?.inverted ?? false);
+  const recolor =
+    !handBuilt &&
+    (change.paletteId !== undefined || change.inverted !== undefined);
   const next: ClassificationConfig = {
     ...current,
     method,
     classes,
     numClasses: classes,
-    paletteId: change.paletteId ?? current?.paletteId,
-    // A palette picked from the menu starts the right way round.
-    inverted:
-      change.inverted ??
-      (change.paletteId !== undefined ? false : (current?.inverted ?? false))
+    paletteId,
+    inverted,
+    colors:
+      handBuilt && flipped
+        ? [...(current?.colors ?? [])].reverse()
+        : recolor
+          ? undefined
+          : current?.colors
   };
-  // The engine keeps the stored colors while breaks are unchanged, so a new
-  // palette or inversion needs them regenerated, as the palette menu does.
-  const recolor =
-    change.paletteId !== undefined || change.inverted !== undefined;
 
   const computation = await computeClassificationBreaks({
     datasetSourceFileId: dataset.sourceFileId,
@@ -164,7 +194,7 @@ async function applyClassificationChange(
       vizFilters: visualization.dataFilters,
       primitive: PrimitiveFilterType.POLYGON
     }),
-    classification: recolor ? { ...next, colors: undefined } : next,
+    classification: next,
     method,
     numClasses: classes,
     pooledColumnNames: resolvePooledColumnNames(visualization.id, valueColumn)
@@ -176,23 +206,17 @@ async function applyClassificationChange(
     );
   }
 
-  // The user may have changed the visualization while the engine computed.
-  const latest = findClassedPolygon(visualization.id);
-  if (!latest?.classed || latest.valueColumn !== valueColumn) {
-    return failure(
-      'conflict',
-      'The visualization changed while its classes were computed: read the project again.'
-    );
-  }
-
-  visualizationStore.updateClassification(visualization.id, {
-    method,
-    classes,
-    numClasses: classes,
-    paletteId: next.paletteId,
-    inverted: next.inverted,
-    ...buildClassificationUpdate(computation, next, method)
+  const written = commit(() => {
+    visualizationStore.updateClassification(visualization.id, {
+      method,
+      classes,
+      numClasses: classes,
+      paletteId,
+      inverted,
+      ...buildClassificationUpdate(computation, next, method)
+    });
   });
+  if (!written) return STALE_FAILURE;
   await facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
 
   return {
@@ -202,19 +226,18 @@ async function applyClassificationChange(
       classification: {
         method: computation.normalizedMethod,
         classes: computation.actualClassCount,
-        palette_id: next.paletteId ?? null,
-        inverted: next.inverted
+        palette_id: paletteId ?? null,
+        inverted
       }
     }
   };
 }
 
-const INTERNAL_COLUMN_NAMES = new Set<string>(Object.values(INTERNAL_COLUMN));
-
 // Same writes as the variable picker of the panel, then the classes are
 // computed for the new column with the current settings.
 async function applyChoroplethVariable(
-  change: ChoroplethVariableChange
+  change: ChoroplethVariableChange,
+  commit: Commit
 ): Promise<AgentToolResult> {
   const target = findClassedPolygon(change.visualizationId);
   if (!target) {
@@ -247,7 +270,7 @@ async function applyChoroplethVariable(
     projectStore.currentProject?.data?.sourceFiles?.find(
       (file) => file.id === dataset.sourceFileId
     )?.columnTransformations
-  ).map((column) => column.name);
+  );
   const columns = new Set([
     ...dataset.columns
       .map((column) => column.name)
@@ -280,44 +303,63 @@ async function applyChoroplethVariable(
   if (!polygon) {
     return failure('unsupported', 'This visualization has no polygon fill.');
   }
-  const restore = {
-    classification: visualization.classification,
-    polygon,
-    mapping: visualization.mapping
-  };
-  visualizationStore.updateVisualization(visualization.id, {
-    classification: resetClassificationComputedValues(
-      visualization.classification
-    ),
-    polygon: {
-      ...polygon,
-      valueColumn: change.column,
-      classification: resetClassificationComputedValues(polygon.classification)
-    },
-    mapping: { ...visualization.mapping, valueColumn: change.column }
-  });
-  const updated = visualizationStore.visualizations.find(
-    (item) => item.id === visualization.id
-  );
-  if (updated) {
-    syncLegendSubtitleAfterMappingChange(
-      PrimitiveFilterType.POLYGON,
-      visualization,
-      updated
+  const findCurrent = () =>
+    visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
     );
-  }
-
-  const classes = await applyClassificationChange({
-    visualizationId: visualization.id
+  const columnWritten = commit(() => {
+    visualizationStore.updateVisualization(visualization.id, {
+      classification: resetClassificationComputedValues(
+        visualization.classification
+      ),
+      polygon: {
+        ...polygon,
+        valueColumn: change.column,
+        classification: resetClassificationComputedValues(
+          polygon.classification
+        )
+      },
+      mapping: { ...visualization.mapping, valueColumn: change.column }
+    });
+    const updated = findCurrent();
+    if (updated) {
+      syncLegendSubtitleAfterMappingChange(
+        PrimitiveFilterType.POLYGON,
+        visualization,
+        updated
+      );
+    }
   });
+  if (!columnWritten) return STALE_FAILURE;
+
+  const classes = await applyClassificationChange(
+    { visualizationId: visualization.id },
+    commit
+  );
   if (!classes.ok) {
-    // A column the engine cannot class leaves the map as it was.
-    visualizationStore.updateVisualization(visualization.id, restore);
+    // A column the engine cannot class leaves the map as it was; a change
+    // the user made meanwhile is kept.
+    if (classes.error.code !== 'conflict') {
+      commit(() => {
+        const changed = findCurrent();
+        visualizationStore.updateVisualization(visualization.id, {
+          origin: visualization.origin,
+          classification: visualization.classification,
+          polygon,
+          mapping: visualization.mapping
+        });
+        const restored = findCurrent();
+        if (changed && restored) {
+          syncLegendSubtitleAfterMappingChange(
+            PrimitiveFilterType.POLYGON,
+            changed,
+            restored
+          );
+        }
+      });
+    }
     return classes;
   }
-  const legend = getLegendState().items.find((item) =>
-    item.id.startsWith(`${LEGEND_ID_PREFIXES.VIZ}${visualization.id}--`)
-  );
   return {
     ok: true,
     data: {
@@ -325,7 +367,9 @@ async function applyChoroplethVariable(
       column: change.column,
       nature: nature ?? null,
       classification: classes.data.classification,
-      legend_title_kept: legend?.titleMode === 'custom'
+      legend_title_kept: listVisualizationLegends(visualization.id).some(
+        (legend) => legend.titleMode === 'custom'
+      )
     }
   };
 }
@@ -416,7 +460,7 @@ function applyLegendTexts(change: LegendTextsChange): AgentToolResult {
   return { ok: true, data: { legend_id: legend.id } };
 }
 
-function goToStep(step: ToolbarStep): AgentToolResult {
+async function goToStep(step: ToolbarStep): Promise<AgentToolResult> {
   const project = projectStore.currentProject;
   if (!project) {
     return failure('unavailable', 'No project is open.');
@@ -426,7 +470,9 @@ function goToStep(step: ToolbarStep): AgentToolResult {
   }
   closeSelectedToolPanel();
   globalActions.setNavigationState(step);
-  return { ok: true, data: { step } };
+  // The Styling step lays out the page texts the first time it opens.
+  await tick();
+  return { ok: true, data: { step, revision: readProjectSnapshot().revision } };
 }
 
 const textProperty = (description: string, maxLength: number) => ({

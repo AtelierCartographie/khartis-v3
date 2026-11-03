@@ -52,6 +52,11 @@ export interface SnapshotVisualizationInput {
   datasetId: string;
   enabled: boolean;
   primitives: SnapshotPrimitiveInput[];
+  /**
+   * Settings the agent does not read but that a change must not overwrite,
+   * such as filters or a breakpoint: they enter the revision only.
+   */
+  revisionKey?: string;
 }
 
 export interface SnapshotTextInput {
@@ -85,7 +90,9 @@ function countOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-const INTERNAL_COLUMN_NAMES = new Set<string>(Object.values(INTERNAL_COLUMN));
+export const INTERNAL_COLUMN_NAMES = new Set<string>(
+  Object.values(INTERNAL_COLUMN)
+);
 
 function readText(text: SnapshotTextInput | undefined): string | null {
   if (!text || text.placeholder || typeof text.content !== 'string') {
@@ -95,28 +102,26 @@ function readText(text: SnapshotTextInput | undefined): string | null {
 }
 
 /**
- * Columns the user calculated, with their formula: column names and
- * operators only. Later renames and drops are replayed.
+ * Names of the columns the user calculated, after later renames and drops.
+ * The formula stays out: it is free text that can hold a place name or a
+ * threshold taken from the data.
  */
-export function listCalculatedColumns(
-  changes: ColumnChange[] = []
-): { name: string; formula: string }[] {
-  const formulas = new Map<string, string>();
+export function listCalculatedColumns(changes: ColumnChange[] = []): string[] {
+  const names = new Set<string>();
   for (const change of changes) {
-    if (change.type === 'calculate' && change.newValue) {
-      formulas.set(change.column, change.newValue);
+    if (change.type === 'calculate') {
+      names.add(change.column);
     } else if (change.type === 'drop') {
-      formulas.delete(change.column);
+      names.delete(change.column);
     } else if (
       change.type === 'rename' &&
       change.newValue &&
-      formulas.has(change.column)
+      names.delete(change.column)
     ) {
-      formulas.set(change.newValue, formulas.get(change.column) as string);
-      formulas.delete(change.column);
+      names.add(change.newValue);
     }
   }
-  return [...formulas].map(([name, formula]) => ({ name, formula }));
+  return [...names];
 }
 
 export function buildProjectSnapshot(input: ProjectSnapshotInput) {
@@ -181,7 +186,12 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
   return {
     project_name: input.projectName,
     step: input.step,
-    revision: computeRevision(map),
+    revision: computeRevision({
+      map,
+      keys: input.visualizations.map(
+        (visualization) => visualization.revisionKey
+      )
+    }),
     ...map,
     capabilities: {
       steps: [...AGENT_STEPS],

@@ -1,9 +1,9 @@
 import type { ColumnNature } from './types';
 
 /**
- * Checks Khartis computes before an export, for the agent to explain. They
- * restate cartographic rules the engine already follows; none needs a data
- * value.
+ * Checks Khartis computes on a map, for the agent to explain before an
+ * export. They restate cartographic rules the engine already follows; none
+ * needs a data value.
  */
 
 export interface ReviewClassesInput {

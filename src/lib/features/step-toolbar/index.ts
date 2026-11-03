@@ -12,9 +12,9 @@ export { facetsStore } from './tools/facets';
 export {
   getLegendState,
   legendActions,
-  requestLegendItemFocus
+  requestLegendItemFocus,
+  selectRenderedLegendItems
 } from './tools/legend';
-export { LEGEND_ID_PREFIXES } from './tools/legend/legend.constants';
 export {
   closeSelectedToolPanel,
   selectTool
