@@ -54,8 +54,9 @@ function isAgentMethod(method: string | undefined): boolean {
   return AGENT_CLASSIFICATION_METHODS.some((candidate) => candidate === method);
 }
 
-// The shared classes of a map collection are computed on all its variables,
-// as the discretization panel does; otherwise the maps stop being comparable.
+// As in the discretization panel, the base of a collection with shared
+// classes is classed on all its variables; the maps of the collection then
+// recompute the same shared classes.
 function resolvePooledColumnNames(
   visualizationId: string,
   valueColumn: string
