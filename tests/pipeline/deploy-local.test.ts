@@ -24,6 +24,7 @@ const {
   parseRemoteTagCommit,
   parseRemoteTagNames,
   publishNewAssetsBeforeSwap,
+  releaseBuildEnv,
   reportPublicInfrastructurePreflight,
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
@@ -1308,6 +1309,24 @@ describe('local deployment child environment', () => {
     expect(env.KHARTIS_HTTP_ROUTING_BACKENDS_PPRD).toBeUndefined();
     expect(env.KHARTIS_SFTP_USER).toBeUndefined();
     expect(env.PUBLIC_GTM_CONTAINER_ID).toBe('GTM-TEST');
+  });
+
+  it('should build releases without debug output or agent tools when local env files enable them', () => {
+    vi.stubEnv('VITE_KHARTIS_AGENT_TOOLS', 'true');
+    vi.stubEnv('VITE_DEBUG', 'true');
+    const env = sanitizedChildEnv(
+      releaseBuildEnv({
+        basePath: '/khartis',
+        tag: 'v9.9.9',
+        khartisEnv: 'prod',
+        gtmContainerId: ''
+      })
+    );
+
+    vi.unstubAllEnvs();
+
+    expect(env.VITE_KHARTIS_AGENT_TOOLS).toBe('false');
+    expect(env.VITE_DEBUG).toBe('false');
   });
 });
 
