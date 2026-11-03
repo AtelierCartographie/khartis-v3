@@ -1,5 +1,6 @@
 import {
   type GeometryType,
+  type SemioType,
   simplifyGeometryType,
   vizSuggester,
   type VizSuggestion
@@ -48,11 +49,7 @@ interface DatasetForSuggestions {
   };
 }
 
-export function computeVisualizationSuggestions(
-  dataset: DatasetForSuggestions | null | undefined
-): VizSuggestion[] {
-  if (!dataset?.columns) return [];
-
+function buildColumnAnalysis(dataset: DatasetForSuggestions): ColumnAnalysis[] {
   const geoColumnsByName = new Map(
     (dataset.geoDetection?.geoColumns ?? []).map((column) => [
       column.columnName,
@@ -60,7 +57,7 @@ export function computeVisualizationSuggestions(
     ])
   );
 
-  const columnAnalysis: ColumnAnalysis[] = dataset.columns.map((col) => {
+  return (dataset.columns ?? []).map((col) => {
     const geoColumn = geoColumnsByName.get(col.name);
     return {
       ...(geoColumn
@@ -87,7 +84,14 @@ export function computeVisualizationSuggestions(
       }
     } as ColumnAnalysis;
   });
+}
 
+export function computeVisualizationSuggestions(
+  dataset: DatasetForSuggestions | null | undefined
+): VizSuggestion[] {
+  if (!dataset?.columns) return [];
+
+  const columnAnalysis = buildColumnAnalysis(dataset);
   const geometryType =
     resolveDatasetGeometryType(dataset) ||
     (dataset.geometry?.type as GeometryType | undefined) ||
@@ -102,6 +106,18 @@ export function computeVisualizationSuggestions(
       maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
     })
     .map((suggestion) => ({ ...suggestion, dataGeometry }));
+}
+
+/** The semiology type of each column, as the engine sees it for suggestions. */
+export function computeColumnSemioTypes(
+  dataset: DatasetForSuggestions | null | undefined
+): Map<string, SemioType> {
+  if (!dataset?.columns) return new Map();
+  return new Map(
+    vizSuggester
+      .describeColumns(buildColumnAnalysis(dataset))
+      .map((column) => [column.name, column.semioType])
+  );
 }
 
 export function resolveColumnBadgeType(

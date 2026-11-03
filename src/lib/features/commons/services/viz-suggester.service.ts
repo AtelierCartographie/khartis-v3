@@ -929,6 +929,12 @@ function suggestVisualizations(
     .slice(0, maxSuggestions);
 }
 
+/** The semiology type the engine gives each column, as for suggestions. */
+function describeColumns(columns: ColumnAnalysis[]): EnrichedColumn[] {
+  return columns.map((column) => getColumnSemioType(column));
+}
+
 export const vizSuggester = {
-  suggestVisualizations
+  suggestVisualizations,
+  describeColumns
 };
