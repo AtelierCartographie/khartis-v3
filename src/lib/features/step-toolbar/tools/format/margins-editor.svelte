@@ -3,7 +3,7 @@
   import { Position } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import { formatActions, getFormatState } from './format.store.svelte';
-  import { MIN_MAP_FRAME_SIZE } from './page-margins.utils';
+  import { MIN_PAGE_AREA_SIZE } from './page-insets.utils';
 
   const formatState = $derived(getFormatState());
 
@@ -13,10 +13,10 @@
   let right = $state(0);
 
   const availableHeight = $derived(
-    Math.max(0, formatState.height - MIN_MAP_FRAME_SIZE)
+    Math.max(0, formatState.height - MIN_PAGE_AREA_SIZE)
   );
   const availableWidth = $derived(
-    Math.max(0, formatState.width - MIN_MAP_FRAME_SIZE)
+    Math.max(0, formatState.width - MIN_PAGE_AREA_SIZE)
   );
 
   $effect(() => {
