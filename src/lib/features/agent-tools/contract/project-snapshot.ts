@@ -2,6 +2,7 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.types';
 import type { EnrichedColumn } from '$lib/features/data-pipeline';
 import { computeRevision } from './revision';
+import type { ColumnNature } from './types';
 import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
@@ -17,7 +18,14 @@ import {
 
 export type SnapshotColumnInput = Pick<EnrichedColumn, 'name' | 'type'> & {
   stats?: Partial<EnrichedColumn['stats']>;
+  nature?: ColumnNature;
 };
+
+export interface ColumnChange {
+  type: string;
+  column: string;
+  newValue?: string;
+}
 
 export interface SnapshotDatasetInput {
   id: string;
@@ -26,6 +34,7 @@ export interface SnapshotDatasetInput {
   hasGeometry: boolean;
   joinedBasemap?: string;
   columns: SnapshotColumnInput[];
+  columnChanges?: ColumnChange[];
 }
 
 export interface SnapshotPrimitiveInput {
@@ -33,6 +42,7 @@ export interface SnapshotPrimitiveInput {
   mode: string;
   valueColumn?: string;
   categoryColumn?: string;
+  sizeColumn?: string;
   classification?: Partial<ClassificationConfig>;
 }
 
@@ -54,6 +64,7 @@ export interface SnapshotTextInput {
 export interface SnapshotLegendInput {
   id: string;
   visualizationId?: string;
+  visible: boolean;
   title: string;
   subtitle: string;
   note: string;
@@ -83,6 +94,31 @@ function readText(text: SnapshotTextInput | undefined): string | null {
   return text.content;
 }
 
+/**
+ * Columns the user calculated, with their formula: column names and
+ * operators only. Later renames and drops are replayed.
+ */
+export function listCalculatedColumns(
+  changes: ColumnChange[] = []
+): { name: string; formula: string }[] {
+  const formulas = new Map<string, string>();
+  for (const change of changes) {
+    if (change.type === 'calculate' && change.newValue) {
+      formulas.set(change.column, change.newValue);
+    } else if (change.type === 'drop') {
+      formulas.delete(change.column);
+    } else if (
+      change.type === 'rename' &&
+      change.newValue &&
+      formulas.has(change.column)
+    ) {
+      formulas.set(change.newValue, formulas.get(change.column) as string);
+      formulas.delete(change.column);
+    }
+  }
+  return [...formulas].map(([name, formula]) => ({ name, formula }));
+}
+
 export function buildProjectSnapshot(input: ProjectSnapshotInput) {
   const map = {
     datasets: input.datasets.map((dataset) => ({
@@ -96,9 +132,11 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
         .map((column) => ({
           name: column.name,
           type: column.type,
+          nature: column.nature ?? null,
           missing_count: countOrNull(column.stats?.nulls),
           distinct_count: countOrNull(column.stats?.uniques)
-        }))
+        })),
+      calculated_columns: listCalculatedColumns(dataset.columnChanges)
     })),
     visualizations: input.visualizations.map((visualization) => ({
       id: visualization.id,
@@ -110,6 +148,7 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
         mode: primitive.mode,
         value_column: primitive.valueColumn,
         category_column: primitive.categoryColumn,
+        size_column: primitive.sizeColumn,
         classification: primitive.classification && {
           method: primitive.classification.method,
           classes: primitive.classification.classes,
@@ -132,6 +171,7 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
     legends: input.legends.map((legend) => ({
       id: legend.id,
       visualization_id: legend.visualizationId ?? null,
+      visible: legend.visible,
       title: legend.title,
       subtitle: legend.subtitle,
       note: legend.note

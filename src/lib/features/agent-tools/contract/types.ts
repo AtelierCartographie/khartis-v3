@@ -1,6 +1,17 @@
 export type AgentToolErrorCode =
   'invalid_input' | 'not_found' | 'unsupported' | 'unavailable' | 'conflict';
 
+/** What a column measures, in the words the agent reads. */
+export type ColumnNature =
+  | 'count'
+  | 'ratio'
+  | 'category'
+  | 'ordered_category'
+  | 'label'
+  | 'place_id'
+  | 'latitude'
+  | 'longitude';
+
 export interface AgentToolError {
   code: AgentToolErrorCode;
   message: string;

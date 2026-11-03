@@ -13,3 +13,4 @@ export {
   buildSuggestionOrigin,
   mapSuggestionToType
 } from './services/suggestion.service';
+export { computeColumnSemioTypes } from './utils/compute-suggestions.utils';

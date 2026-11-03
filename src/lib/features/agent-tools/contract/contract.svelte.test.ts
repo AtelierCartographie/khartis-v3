@@ -8,6 +8,7 @@ import { ClassificationMethod } from '$lib/features/commons/stores/visualization
 import type { EnrichedColumn } from '$lib/features/data-pipeline';
 import {
   buildProjectSnapshot,
+  listCalculatedColumns,
   type ProjectSnapshotInput
 } from './project-snapshot';
 import { splitExpectedRevision } from './revision';
@@ -164,6 +165,7 @@ const SNAPSHOT_INPUT: ProjectSnapshotInput = {
         {
           name: 'taux_pauvrete',
           type: 'number' as EnrichedColumn['type'],
+          nature: 'ratio',
           stats: {
             nulls: 2,
             uniques: 38,
@@ -227,6 +229,7 @@ const SNAPSHOT_INPUT: ProjectSnapshotInput = {
     {
       id: 'legend-1',
       visualizationId: 'viz-1',
+      visible: true,
       title: 'Taux de pauvreté',
       subtitle: '',
       note: ''
@@ -251,10 +254,17 @@ describe('agent project snapshot', () => {
       expect(serialized).not.toContain(value);
     }
     expect(snapshot.datasets[0].columns).toEqual([
-      { name: 'commune', type: 'text', missing_count: 0, distinct_count: 40 },
+      {
+        name: 'commune',
+        type: 'text',
+        nature: null,
+        missing_count: 0,
+        distinct_count: 40
+      },
       {
         name: 'taux_pauvrete',
         type: 'number',
+        nature: 'ratio',
         missing_count: 2,
         distinct_count: 38
       }
@@ -284,6 +294,20 @@ describe('agent project snapshot', () => {
       { id: 'text-2', role: 'subtitle', text: null },
       { id: 'text-3', role: null, text: 'Source : Insee, Filosofi 2021' }
     ]);
+  });
+});
+
+describe('agent calculated columns', () => {
+  it('should list calculated columns with their formula when renames and drops follow', () => {
+    expect(
+      listCalculatedColumns([
+        { type: 'calculate', column: 'densite', newValue: '"pop" / "surface"' },
+        { type: 'calculate', column: 'ecart', newValue: '"a" - "b"' },
+        { type: 'rename', column: 'densite', newValue: 'densite_km2' },
+        { type: 'drop', column: 'ecart' },
+        { type: 'rename', column: 'commune', newValue: 'nom' }
+      ])
+    ).toEqual([{ name: 'densite_km2', formula: '"pop" / "surface"' }]);
   });
 });
 
