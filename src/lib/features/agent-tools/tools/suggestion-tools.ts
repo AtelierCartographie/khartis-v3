@@ -11,7 +11,10 @@ import {
   getPolygonPrimitive,
   getPrimitiveClassification
 } from '$lib/features/commons/stores/visualization-normalize';
-import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.types';
+import {
+  getVisualizationOriginMode,
+  PrimitiveFilterType
+} from '$lib/features/commons/stores/visualization.types';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import { listVisualizableDatasets } from '$lib/features/commons/utils/dataset-attachment.utils';
 import { closeSelectedToolPanel } from '$lib/features/step-toolbar';
@@ -31,7 +34,13 @@ import {
   type SuggestionsQuery
 } from '../contract/validation';
 import { toColumnNature } from './column-natures';
-import { failure, REVISION_PROPERTY, runEdit } from './edit-guard';
+import {
+  type Commit,
+  failure,
+  REVISION_PROPERTY,
+  runEdit,
+  STALE_FAILURE
+} from './edit-guard';
 
 type Dataset = (typeof datasetsStore.datasets)[number];
 
@@ -78,6 +87,15 @@ function findTargetVisualization(datasetId: string) {
     .find((visualization) => !visualization.facet);
 }
 
+// A suggestion the user customized afterwards no longer describes the map.
+function findAppliedSuggestionKey(datasetId: string): string | null {
+  const target = findTargetVisualization(datasetId);
+  const mode = getVisualizationOriginMode(target);
+  return mode === 'auto-suggestion' || mode === 'manual-suggestion'
+    ? (target?.origin?.suggestionKey ?? null)
+    : null;
+}
+
 function describeSuggestion(suggestion: VizSuggestion) {
   return {
     key: getSuggestionSignature(suggestion),
@@ -103,8 +121,7 @@ function listSuggestions(query: SuggestionsQuery): AgentToolResult {
       visualizable_dataset_ids: listDatasetsToVisualize().map(
         (item) => item.id
       ),
-      applied_suggestion_key:
-        findTargetVisualization(dataset.id)?.origin?.suggestionKey ?? null,
+      applied_suggestion_key: findAppliedSuggestionKey(dataset.id),
       suggestions:
         computeVisualizationSuggestions(dataset).map(describeSuggestion)
     }
@@ -136,7 +153,8 @@ async function waitForPolygonClasses(
 }
 
 async function applySuggestion(
-  choice: SuggestionChoice
+  choice: SuggestionChoice,
+  commit: Commit
 ): Promise<AgentToolResult> {
   const resolved = resolveDataset(choice);
   if (!resolved.ok) return resolved.result;
@@ -153,30 +171,38 @@ async function applySuggestion(
 
   // The card is applied from the Visualizations step, whose panel then
   // computes the classes and colors, as after a click.
-  if (globalState.selectedStep !== ToolbarStep.Visualizations) {
-    closeSelectedToolPanel();
-    globalActions.setNavigationState(ToolbarStep.Visualizations);
-  }
-  datasetsStore.selectDataset(dataset.id);
-
-  const target =
-    findTargetVisualization(dataset.id) ??
-    visualizationStore.createVisualization(
-      resolveBlankVisualizationType(dataset),
-      dataset.id
-    );
-  const unchanged =
-    target.origin?.suggestionKey === choice.suggestionKey &&
-    isVisualizationMatchingSuggestion(target, dataset, suggestion);
-  if (!unchanged) {
-    applySuggestionToVisualization(target.id, suggestion, {
-      origin: buildSuggestionOrigin(target, {
-        mode: 'manual-suggestion',
-        suggestionKey: choice.suggestionKey
-      })
-    });
-  }
-  visualizationStore.selectVisualization(target.id);
+  const applied: {
+    target?: ReturnType<typeof findTargetVisualization>;
+    unchanged: boolean;
+  } = { unchanged: false };
+  const written = commit(() => {
+    if (globalState.selectedStep !== ToolbarStep.Visualizations) {
+      closeSelectedToolPanel();
+      globalActions.setNavigationState(ToolbarStep.Visualizations);
+    }
+    datasetsStore.selectDataset(dataset.id);
+    const visualization =
+      findTargetVisualization(dataset.id) ??
+      visualizationStore.createVisualization(
+        resolveBlankVisualizationType(dataset),
+        dataset.id
+      );
+    applied.unchanged =
+      visualization.origin?.suggestionKey === choice.suggestionKey &&
+      isVisualizationMatchingSuggestion(visualization, dataset, suggestion);
+    if (!applied.unchanged) {
+      applySuggestionToVisualization(visualization.id, suggestion, {
+        origin: buildSuggestionOrigin(visualization, {
+          mode: 'manual-suggestion',
+          suggestionKey: choice.suggestionKey
+        })
+      });
+    }
+    visualizationStore.selectVisualization(visualization.id);
+    applied.target = visualization;
+  });
+  const { target, unchanged } = applied;
+  if (!written || !target) return STALE_FAILURE;
 
   return {
     ok: true,

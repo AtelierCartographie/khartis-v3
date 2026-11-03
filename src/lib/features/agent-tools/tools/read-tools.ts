@@ -20,9 +20,7 @@ import {
 } from '$lib/features/commons/stores/visualization.types';
 import {
   getAnnotationsState,
-  getLegendState,
-  isPageElementPlaceholder,
-  LEGEND_ID_PREFIXES
+  isPageElementPlaceholder
 } from '$lib/features/step-toolbar';
 import {
   buildProjectSnapshot,
@@ -30,6 +28,7 @@ import {
 } from '../contract/project-snapshot';
 import type { AgentTool } from '../contract/types';
 import { listColumnNatures } from './column-natures';
+import { listRenderedLegends, resolveLegendVisualizationId } from './legends';
 
 const CLASSES_MODE = 'classes';
 
@@ -119,7 +118,13 @@ export function readProjectSnapshot() {
       name: visualization.name,
       datasetId: visualization.datasetId,
       enabled: visualization.enabled,
-      primitives: describePrimitives(visualization)
+      primitives: describePrimitives(visualization),
+      revisionKey: JSON.stringify({
+        filters: visualization.dataFilters ?? null,
+        breakpoint:
+          getPrimitiveClassification(visualization, PrimitiveFilterType.POLYGON)
+            ?.breakpointValue ?? null
+      })
     })),
     texts: getAnnotationsState()
       .items.filter((item) => item.type === AnnotationKind.TEXT)
@@ -129,11 +134,9 @@ export function readProjectSnapshot() {
         content: item.content,
         placeholder: isPageElementPlaceholder(item)
       })),
-    legends: getLegendState().items.map((legend) => ({
+    legends: listRenderedLegends().map((legend) => ({
       id: legend.id,
-      visualizationId: visualizations.find((visualization) =>
-        legend.id.startsWith(`${LEGEND_ID_PREFIXES.VIZ}${visualization.id}--`)
-      )?.id,
+      visualizationId: resolveLegendVisualizationId(legend),
       visible: legend.visible,
       title: legend.title,
       subtitle: legend.subtitle,

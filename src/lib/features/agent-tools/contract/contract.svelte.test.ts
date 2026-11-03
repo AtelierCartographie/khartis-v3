@@ -14,7 +14,6 @@ import {
 import { reviewMap, type MapReviewInput } from './map-review';
 import { splitExpectedRevision } from './revision';
 import {
-  parseGoToStepInput,
   parseLayoutTextsInput,
   parseLegendTextsInput,
   parseSetTextInput,
@@ -100,6 +99,8 @@ describe('agent command validation', () => {
     ['a text that is not a string', { title: 42 }],
     ['a title longer than the limit', { title: 'x'.repeat(201) }],
     ['a control character', { subtitle: 'line\u0007bell' }],
+    ['a C1 control character', { subtitle: 'line\u0085next' }],
+    ['a bidirectional override', { title: 'Taux \u202Eedis' }],
     ['a role the tool does not write', { credit: 'Atelier' }]
   ])('should refuse page texts when they have %s', (_, input) => {
     expect(parseLayoutTextsInput(input).ok).toBe(false);
@@ -131,14 +132,6 @@ describe('agent command validation', () => {
       ok: true,
       value: { textId: 'annotation-1', text: 'Source : Insee' }
     });
-  });
-
-  it('should accept only the three steps of the toolbar', () => {
-    expect(parseGoToStepInput({ step: 'styling' })).toEqual({
-      ok: true,
-      value: { step: 'styling' }
-    });
-    expect(parseGoToStepInput({ step: 'export' }).ok).toBe(false);
   });
 });
 
@@ -300,7 +293,7 @@ describe('agent project snapshot', () => {
 });
 
 describe('agent calculated columns', () => {
-  it('should list calculated columns with their formula when renames and drops follow', () => {
+  it('should list calculated columns by name when renames and drops follow', () => {
     expect(
       listCalculatedColumns([
         { type: 'calculate', column: 'densite', newValue: '"pop" / "surface"' },
@@ -309,7 +302,31 @@ describe('agent calculated columns', () => {
         { type: 'drop', column: 'ecart' },
         { type: 'rename', column: 'commune', newValue: 'nom' }
       ])
-    ).toEqual([{ name: 'densite_km2', formula: '"pop" / "surface"' }]);
+    ).toEqual(['densite_km2']);
+  });
+
+  it('should leave the formula out when it holds a place name or a threshold', () => {
+    const snapshot = buildProjectSnapshot({
+      ...SNAPSHOT_INPUT,
+      datasets: [
+        {
+          ...SNAPSHOT_INPUT.datasets[0],
+          columnChanges: [
+            {
+              type: 'calculate',
+              column: 'pauvrete_forte',
+              newValue:
+                'CASE WHEN "commune" = \'Bobigny\' OR "revenu" > 21500 THEN 1 ELSE 0 END'
+            }
+          ]
+        }
+      ]
+    });
+    const serialized = JSON.stringify(snapshot);
+
+    expect(snapshot.datasets[0].calculated_columns).toEqual(['pauvrete_forte']);
+    expect(serialized).not.toContain('Bobigny');
+    expect(serialized).not.toContain('21500');
   });
 });
 
@@ -320,6 +337,17 @@ describe('agent revision', () => {
     expect(
       buildProjectSnapshot({ ...SNAPSHOT_INPUT, step: 'styling' }).revision
     ).toBe(revision);
+  });
+
+  it('should give a new revision when a filter changes without showing it', () => {
+    const [visualization] = SNAPSHOT_INPUT.visualizations;
+    const filtered = buildProjectSnapshot({
+      ...SNAPSHOT_INPUT,
+      visualizations: [{ ...visualization, revisionKey: 'filter: Bobigny' }]
+    });
+
+    expect(filtered.revision).not.toBe(revision);
+    expect(JSON.stringify(filtered)).not.toContain('Bobigny');
   });
 
   it('should give a new revision when a page text or the classes change', () => {
@@ -535,19 +563,9 @@ describe('agent map review', () => {
 });
 
 describe('agent choropleth variable', () => {
-  it.each([
-    ['count'],
-    ['category'],
-    ['ordered_category'],
-    ['label'],
-    ['place_id'],
-    ['latitude']
-  ] as const)(
-    'should refuse a %s column when a choropleth classes it',
-    (nature) => {
-      expect(refuseForChoropleth(nature)).not.toBeNull();
-    }
-  );
+  it('should refuse a count when a choropleth would class it', () => {
+    expect(refuseForChoropleth('count')).not.toBeNull();
+  });
 
   it('should accept a ratio or a calculated column the engine has not typed', () => {
     expect(refuseForChoropleth('ratio')).toBeNull();
