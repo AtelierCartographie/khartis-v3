@@ -126,7 +126,6 @@ type AnnotationsActions = {
   }) => void;
   refreshPageElementPlaceholders: () => void;
   setPageElementsVisibility: (visible: boolean) => void;
-  pinPageElements: () => void;
   redistributePageElements: (
     layout?: {
       width?: number;
@@ -993,21 +992,6 @@ const { actions, getState } = createToolStore<
     setPageElementsVisibility: (visible: boolean) => {
       s.items = s.items.map((item) =>
         isPageElementRole(item.role) ? { ...item, visible } : item
-      );
-    },
-    pinPageElements: () => {
-      if (
-        !s.items.some(
-          (item) =>
-            isPageElementRole(item.role) && item.positionMode !== 'manual'
-        )
-      ) {
-        return;
-      }
-      s.items = s.items.map((item) =>
-        isPageElementRole(item.role) && item.positionMode !== 'manual'
-          ? { ...item, positionMode: 'manual' }
-          : item
       );
     },
     redistributePageElements: (layoutOverrides, previousPage) => {
