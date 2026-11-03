@@ -96,7 +96,10 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
-  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+  import {
+    BasemapSource,
+    GeoreferenceType
+  } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
@@ -368,8 +371,11 @@
   let previousLinkedVariableName: string | null = null;
   let loadSuggestionsAbortController: AbortController | null = null;
   let hasDismissedSuggestedBasemap = $state(false);
+  // A table holding coordinates may still be geolocated by its entities.
   const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
+    if (dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES)
+      return false;
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
