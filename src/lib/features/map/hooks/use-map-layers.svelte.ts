@@ -1028,12 +1028,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
       // Page zoom scales pixel-sized marks (radius, line width, label size) so
-      // they track the canvas and SVG legend. Only orthographic mode applies the
-      // render modelMatrix that scales geometry positions, so gate the mark scale
-      // to that mode too; interleaved (MapLibre) keeps it at 1 to stay in sync.
-      const pageDisplayScaleToApply = isOrthographicMode
-        ? (getPageDisplayScale?.() ?? 1)
-        : 1;
+      // they track the geometry and the SVG legend. Geometry follows through the
+      // render modelMatrix in orthographic mode and through the map zoom
+      // (`rescaleMapLibreView`) in interleaved mode.
+      const pageDisplayScaleToApply = getPageDisplayScale?.() ?? 1;
 
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
