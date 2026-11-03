@@ -1935,7 +1935,7 @@
     basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
-    joinControlVersion: joinControlStore.version,
+    joinControlKey: joinControlStore.renderKey,
     labelLayoutVersion: labelLayoutStore.version,
     dataVersion,
     dataSize: `${tables.size}`,

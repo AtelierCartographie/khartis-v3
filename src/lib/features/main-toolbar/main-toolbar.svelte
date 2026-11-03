@@ -37,14 +37,13 @@
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     motionDuration,
+    PANEL_EASING,
+    PANEL_MOTION_MS,
     trackStepDirection
   } from '$lib/features/commons/utils/step-transition.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
   let panelElement = $state<HTMLElement | null>(null);
-
-  const PANEL_MOTION_MS = 300;
-  const PANEL_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
 
   // Habillage slides the panel out. It keeps the width it had, rather than
   // the collapsed state the step sets, so that it does not shrink first.

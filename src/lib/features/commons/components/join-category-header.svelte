@@ -1,10 +1,6 @@
-<script lang="ts" module>
-  export type JoinCategoryTone =
-    'success' | 'warning' | 'error' | 'ignored' | 'missing';
-</script>
-
 <script lang="ts">
   import type { Component } from 'svelte';
+  import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import { formatValue } from '$lib/features/commons/utils/format.utils';
 

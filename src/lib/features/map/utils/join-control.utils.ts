@@ -1,4 +1,5 @@
 import type { JoinTerritoryStatus } from '$lib/features/duckdb';
+import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
 import { buildClassPatternSvgBackground } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
@@ -56,10 +57,17 @@ function joinValues(values: string[], total: number): string {
   return total > values.length ? `${listed}, …` : listed;
 }
 
+const STATUS_TONES: Record<JoinTerritoryStatus, JoinCategoryTone> = {
+  matched: 'success',
+  check: 'warning',
+  duplicate: 'error',
+  no_data: 'missing'
+};
+
 /**
- * The hovered territory's join status, the variable that joined it, its name
- * on the basemap and the value that joined it. The pinned inspector adds the
- * row's other variables.
+ * The hovered territory's join status, the value that joined it under the
+ * variable it was joined on, and its name on the basemap. The pinned inspector
+ * adds the row's other variables.
  */
 export function buildJoinControlTooltipEntries(
   pickData: JoinControlPickData,
@@ -73,37 +81,32 @@ export function buildJoinControlTooltipEntries(
   const row = rowIndex >= 0 ? rows[rowIndex] : undefined;
   const status = territories.statusByGeomRow[geomRow] ?? 'no_data';
   const fallbackName = geometry.getChild(featureIdColumn)?.get(geomRow);
+  const hasData = row !== undefined && status !== 'no_data';
 
   const entries: TooltipEntry[] = [
     {
       key: m.join_control_tooltip_status(),
       value: getJoinControlStatusLabel(status),
-      swatch: getJoinControlSwatchBackground(status),
+      tone: STATUS_TONES[status],
       role: 'heading'
     },
     {
-      key: m.join_control_tooltip_geo_reference(),
-      value: pickData.geoColumn,
-      role: 'subtitle'
+      key: pickData.sourceIsFile
+        ? m.join_control_tooltip_file()
+        : m.join_data_column(),
+      value: hasData ? joinValues(row.dataValues, row.valueCount) : '—',
+      badge: pickData.geoColumn
     },
     {
-      key: m.join_control_tooltip_basemap(),
+      key: m.join_basemap_column(),
       value: formatValue(row?.territoryName ?? String(fallbackName ?? ''))
     }
   ];
 
-  if (row && status !== 'no_data') {
-    if (status === 'duplicate') {
-      entries.push({
-        key: m.join_control_tooltip_rows(),
-        value: formatValue(row.rowCount)
-      });
-    }
+  if (hasData && status === 'duplicate') {
     entries.push({
-      key: pickData.sourceIsFile
-        ? m.join_control_tooltip_file()
-        : m.join_control_tooltip_table(),
-      value: joinValues(row.dataValues, row.valueCount)
+      key: m.join_control_tooltip_rows(),
+      value: formatValue(row.rowCount)
     });
   }
 

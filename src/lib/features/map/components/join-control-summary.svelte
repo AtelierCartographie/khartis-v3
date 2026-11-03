@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { Button } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
     Error as NotAllowed,
@@ -13,6 +14,11 @@
   import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { isSingularCount } from '$lib/features/commons/utils/format.utils';
+  import {
+    motionDuration,
+    PANEL_EASING,
+    PANEL_MOTION_MS
+  } from '$lib/features/commons/utils/step-transition.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     joinControlStore,
@@ -32,10 +38,51 @@
   const ignoredCount = $derived(basemapJoin.ignoredEntities.length);
   const activeCategory = $derived(joinControlStore.activeCategory);
 
+  // A window drag resizes the workspace in small steps the box simply
+  // follows; a panel width change moves it far enough to glide.
+  const SLIDE_MIN_SHIFT_PX = 24;
+
+  let summaryElement = $state<HTMLElement | null>(null);
+
   $effect(() => {
     if (!mapCounts) {
       untrack(() => joinControlStore.setActiveCategory(null));
     }
+  });
+
+  // The side panel snaps to its new width and slides its edge back into
+  // place; the box, anchored to the workspace edge, slides with it.
+  $effect(() => {
+    const element = summaryElement;
+    const anchor = element?.parentElement;
+    if (!element || !anchor) return;
+
+    let resting = element.getBoundingClientRect();
+    let slide: Animation | null = null;
+    const observer = new ResizeObserver(() => {
+      const shown = element.getBoundingClientRect();
+      slide?.cancel();
+      const next = element.getBoundingClientRect();
+      const dx = resting.left - next.left + (shown.left - next.left);
+      const dy = resting.top - next.top + (shown.top - next.top);
+      resting = next;
+      if (
+        Math.max(Math.abs(dx), Math.abs(dy)) < SLIDE_MIN_SHIFT_PX ||
+        motionDuration(PANEL_MOTION_MS) === 0
+      ) {
+        return;
+      }
+      slide = element.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+        { duration: PANEL_MOTION_MS, easing: PANEL_EASING }
+      );
+    });
+    observer.observe(anchor);
+
+    return () => {
+      observer.disconnect();
+      slide?.cancel();
+    };
   });
 
   function openPanelCategory(category: JoinPanelCategory): void {
@@ -55,15 +102,22 @@
 {#if mapCounts}
   <div class="summary-anchor">
     <section
+      bind:this={summaryElement}
       class="join-control-summary"
       aria-label={m.section_join_assisted()}
     >
-      <div class="summary-header">
+      <Button
+        kind="ghost"
+        size="small"
+        class="summary-header"
+        title={m.join_control_open_section()}
+        on:click={() => joinControlStore.requestPanelSection()}
+      >
         <span class="summary-title">{m.section_join_assisted()}</span>
         <span class="summary-title-icon" aria-hidden="true">
           <MagicWandFilled size={16} />
         </span>
-      </div>
+      </Button>
 
       <div class="summary-rows">
         <JoinCategoryHeader
@@ -165,12 +219,15 @@
     pointer-events: none;
   }
 
+  /* Bottom edge in line with the zoom toolbar's, at the same distance from
+     the right edge. */
   .join-control-summary {
+    --summary-offset: 24px;
     position: absolute;
-    right: var(--cds-spacing-05, 1rem);
-    bottom: var(--cds-spacing-05, 1rem);
+    right: var(--summary-offset);
+    bottom: var(--summary-offset);
     width: 17rem;
-    max-width: calc(100% - 2rem);
+    max-width: calc(100% - 2 * var(--summary-offset));
     padding: 0.5rem 0;
     background: var(--cds-layer-01, #ffffff);
     color: var(--cds-text-primary, #161616);
@@ -181,18 +238,25 @@
     pointer-events: auto;
   }
 
-  /* Too narrow to sit beside the zoom toolbar: it rises above it. */
+  /* Too narrow to sit beside the zoom toolbar (two rows high): it rises
+     above it. */
   @container (max-width: 42rem) {
     .join-control-summary {
-      bottom: 7.5rem;
+      bottom: calc(
+        var(--summary-offset) + 2 * var(--kh-size-md, 2.5rem) + 0.5rem
+      );
     }
   }
 
-  .summary-header {
+  .join-control-summary :global(.summary-header.bx--btn) {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 0.375rem;
-    padding: 0 0.5rem 0.375rem;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    padding: 0.125rem 0.5rem 0.375rem;
   }
 
   .summary-title {

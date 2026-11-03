@@ -5,6 +5,7 @@ import {
   type JoinTerritoryStatus,
   type JoinTerritoryStatusRow
 } from '$lib/features/duckdb';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { BasemapMetadata } from '../types/basemap.types';
@@ -21,6 +22,8 @@ export interface JoinControlRequest {
 
 export interface JoinControlStatuses {
   datasetId: string;
+  /** The variable the finalized join was built on. */
+  geoColumn: string;
   rows: JoinTerritoryStatusRow[];
 }
 
@@ -34,7 +37,8 @@ export type JoinPanelCategory = Exclude<JoinControlCategory, 'no_data'>;
 
 export interface JoinPanelRequest {
   id: number;
-  category: JoinPanelCategory;
+  /** `null` brings the join panel itself into view. */
+  category: JoinPanelCategory | null;
   open: boolean;
 }
 
@@ -107,7 +111,11 @@ function createJoinControlStore() {
         { excludedValues: request.excludedValues }
       );
       if (pendingKey !== key) return;
-      statuses = { datasetId: request.datasetId, rows };
+      statuses = {
+        datasetId: request.datasetId,
+        geoColumn: request.geoColumn,
+        rows
+      };
     } catch (error) {
       if (pendingKey !== key) return;
       // A project switch can drop the table under a pending request.
@@ -178,6 +186,14 @@ function createJoinControlStore() {
     panelRequest = { id: (panelRequest?.id ?? 0) + 1, category, open };
   }
 
+  function requestPanelSection(): void {
+    panelRequest = {
+      id: (panelRequest?.id ?? 0) + 1,
+      category: null,
+      open: true
+    };
+  }
+
   function setHoverTarget(next: JoinControlHoverTarget | null): void {
     if (!next && !hoverTarget) return;
     hoverTarget = next;
@@ -199,13 +215,18 @@ function createJoinControlStore() {
     get hoverTarget(): JoinControlHoverTarget | null {
       return hoverTarget;
     },
-    get version(): number {
-      return version;
+    /**
+     * Changes whenever the join-control layers must be redrawn, including when
+     * the join panel links another variable.
+     */
+    get renderKey(): string {
+      return `${version}:${dataTabState.geolocation.linkedVariableName}`;
     },
     request,
     publishCounts,
     setActiveCategory,
     requestPanelCategory,
+    requestPanelSection,
     setHoverTarget
   };
 }

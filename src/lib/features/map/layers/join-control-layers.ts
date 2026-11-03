@@ -124,6 +124,29 @@ export interface JoinControlHoverSource {
   placement: Record<string, unknown>;
 }
 
+const unjoinedRowsCache = new WeakMap<
+  JoinTerritoryStatusRow[],
+  JoinTerritoryStatusRow[]
+>();
+
+/** The same entities with no row joined: every one of them lacks data. */
+export function toUnjoinedRows(
+  rows: JoinTerritoryStatusRow[]
+): JoinTerritoryStatusRow[] {
+  let unjoined = unjoinedRowsCache.get(rows);
+  if (!unjoined) {
+    unjoined = rows.map((row) => ({
+      ...row,
+      status: 'no_data',
+      rowCount: 0,
+      dataValues: [],
+      valueCount: 0
+    }));
+    unjoinedRowsCache.set(rows, unjoined);
+  }
+  return unjoined;
+}
+
 const territoriesCache = new WeakMap<
   ArrowTable,
   WeakMap<JoinTerritoryStatusRow[], Map<string, JoinControlTerritories>>
