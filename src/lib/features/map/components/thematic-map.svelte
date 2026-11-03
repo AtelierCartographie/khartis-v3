@@ -59,11 +59,15 @@
     DeckOrthographicViewStateMap
   } from '../types';
   import {
+    arePageInsetsEqual,
     DEFAULT_PAGE_COLOR,
+    formatActions,
     getFormatLayoutSizingContext,
     getFormatState,
     getLastPageResize,
-    getMarginsEditId
+    getMapFrameEditId,
+    MIN_PAGE_AREA_SIZE,
+    resolvePageInsetBox
   } from '$lib/features/step-toolbar/tools/format';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
   import {
@@ -88,6 +92,10 @@
   import { getMainlandBboxForBasemap } from '../utils/geoarrow-stream-bridge.utils';
   import { resolveActiveBasemapMetadata } from '../utils/basemap-metadata-resolution.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
+  import {
+    measureDrawnExtent,
+    resolveFittedMapFrame
+  } from '../utils/map-frame.utils';
   import {
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
@@ -144,6 +152,7 @@
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
   const pageMargins = $derived(fmtState.margins);
+  const mapFrame = $derived(fmtState.mapFrame);
   const layoutSizingTokens = $derived(
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmtState))
   );
@@ -153,12 +162,13 @@
   const pageDisplayScale = $derived(
     Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
   );
-  const renderedPageMargins = $derived({
-    top: pageMargins.top * pageDisplayScale,
-    right: pageMargins.right * pageDisplayScale,
-    bottom: pageMargins.bottom * pageDisplayScale,
-    left: pageMargins.left * pageDisplayScale
-  });
+  const pageSize = $derived({ width: logicalWidth, height: logicalHeight });
+  const renderedMarginBox = $derived(
+    resolvePageInsetBox(pageSize, pageMargins, pageDisplayScale)
+  );
+  const renderedMapFrameBox = $derived(
+    resolvePageInsetBox(pageSize, mapFrame, pageDisplayScale)
+  );
   const mapViewportFitPaddingPx = $derived(
     logicalMapViewportFitPaddingPx * pageDisplayScale
   );
@@ -177,19 +187,20 @@
   );
   const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
   const logicalMapCanvasWidth = $derived(
-    Math.max(1, logicalWidth - pageMargins.left - pageMargins.right)
+    Math.max(1, logicalWidth - mapFrame.left - mapFrame.right)
   );
   const logicalMapCanvasHeight = $derived(
-    Math.max(1, logicalHeight - pageMargins.top - pageMargins.bottom)
+    Math.max(1, logicalHeight - mapFrame.top - mapFrame.bottom)
   );
-  const mapCanvasWidth = $derived(
-    Math.max(1, Math.round(logicalMapCanvasWidth * pageDisplayScale))
+  const mapCanvasWidth = $derived(renderedMapFrameBox.width);
+  const mapCanvasHeight = $derived(renderedMapFrameBox.height);
+  const mapStageStyle = $derived(
+    `left: ${renderedMapFrameBox.left}px; top: ${renderedMapFrameBox.top}px; width: ${mapCanvasWidth}px; height: ${mapCanvasHeight}px;`
   );
-  const mapCanvasHeight = $derived(
-    Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
-  );
+  // Layout items are placed in the area the page margins leave, not in the
+  // map frame.
   const layoutStageStyle = $derived(
-    `left: ${renderedPageMargins.left}px; top: ${renderedPageMargins.top}px; width: ${mapCanvasWidth}px; height: ${mapCanvasHeight}px;`
+    `left: ${renderedMarginBox.left}px; top: ${renderedMarginBox.top}px; width: ${renderedMarginBox.width}px; height: ${renderedMarginBox.height}px;`
   );
   const renderModelMatrix = $derived.by(() => {
     const modelMatrix = projectionStore.modelMatrix;
@@ -202,7 +213,7 @@
       .multiplyRight(modelMatrix);
   });
   const pageStyle = $derived(
-    `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
+    `background-color: ${pageBackgroundColor}; width: ${width}px; height: ${height}px;`
   );
   const mapCanvasStyle = $derived.by(() => {
     return `background-color: ${pageBackgroundColor};`;
@@ -281,7 +292,7 @@
     manual: boolean;
   }
   let orthographicFramingForMapLibre: OrthographicFraming | null = null;
-  let handledMarginsEditId = untrack(() => getMarginsEditId());
+  let handledMapFrameEditId = untrack(() => getMapFrameEditId());
   // A manual view inherited from another renderer (the facet collection) was
   // framed on its fit; the first reference refresh refits it to this canvas.
   let inheritedFramingScale = untrack(() =>
@@ -301,6 +312,7 @@
   let pendingMapLibreSyncFrameId: number | null = null;
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastLayoutSnapshot: string | null = null;
+  let lastPageLayoutSnapshot: string | null = null;
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
 
   let isApplyingMapLibreSync = false;
@@ -350,6 +362,7 @@
     mapLayers.updateLayers(tables, splitData, densityTables);
     requestAnimationFrame(() => {
       mapLoadingStore.setUpdatingLayers(false);
+      measureDrawnMapExtent();
     });
   }
 
@@ -1343,30 +1356,23 @@
   });
 
   $effect(() => {
-    const margins = pageMargins;
-    const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
-
-    const pageResize = getLastPageResize();
-    const previousPageSize =
-      pageResize && pageResize.id !== handledPageResizeId
-        ? pageResize.from
-        : undefined;
-    handledPageResizeId = pageResize?.id ?? handledPageResizeId;
+    const frame = mapFrame;
+    const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${frame.top}-${frame.right}-${frame.bottom}-${frame.left}`;
 
     const frameLayout = {
       pageWidth: fmtState.width,
       pageHeight: fmtState.height,
-      ...margins
+      ...frame
     };
     const previousFrameLayout = lastFrameLayout;
     lastFrameLayout = frameLayout;
-    const marginsEditId = getMarginsEditId();
-    const isMarginsEdit = marginsEditId !== handledMarginsEditId;
-    handledMarginsEditId = marginsEditId;
+    const mapFrameEditId = getMapFrameEditId();
+    const isMapFrameEdit = mapFrameEditId !== handledMapFrameEditId;
+    handledMapFrameEditId = mapFrameEditId;
     // Moving the frame edges on an unchanged page crops the map instead of
     // refitting it.
     const frameCrop =
-      isMarginsEdit &&
+      isMapFrameEdit &&
       previousFrameLayout !== null &&
       previousFrameLayout.pageWidth === frameLayout.pageWidth &&
       previousFrameLayout.pageHeight === frameLayout.pageHeight
@@ -1414,19 +1420,190 @@
         pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
       }
 
-      if (!globalState.isResizingMapFrame) {
-        annotationsActions.redistributePageElements(
-          {
-            width: fmtState.width,
-            height: fmtState.height,
-            margins
-          },
-          previousPageSize
-        );
-      }
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
       }
+    });
+  });
+
+  function readAutomaticMapFrameTrigger(): string {
+    return [
+      fmtState.width,
+      fmtState.height,
+      basemapStyleStore.selectedStyle,
+      osmBasemapStore.isActive,
+      mapProjectionStore.projection,
+      mapInit.viewMode
+    ].join('|');
+  }
+
+  // Measured after each layer update, relative to the reference extent the
+  // layers were drawn against: the fit rescales both together.
+  let drawnMapExtent = $state.raw<BBox | null>(null);
+  let hasMeasuredDrawnMapExtent = $state(false);
+
+  function measureDrawnMapExtent(): void {
+    const referenceBbox = projectionStore.referenceBbox;
+    const layers = mapInit.deckInstance?.props.layers;
+    if (
+      isFacetCell ||
+      mapInit.viewMode !== ViewMode.ORTHOGRAPHIC ||
+      !referenceBbox ||
+      !layers
+    ) {
+      return;
+    }
+
+    const extent = measureDrawnExtent(layers);
+    const next = extent ? toReferenceRatio(extent, referenceBbox) : null;
+    hasMeasuredDrawnMapExtent = true;
+    const previous = drawnMapExtent;
+    if (
+      next === null ||
+      previous === null ||
+      next.some((value, index) => Math.abs(value - previous[index]) > 1e-4)
+    ) {
+      drawnMapExtent = next;
+    }
+  }
+
+  function toReferenceRatio(bbox: BBox, referenceBbox: BBox): BBox {
+    const [cx, cy] = [
+      (referenceBbox[0] + referenceBbox[2]) / 2,
+      (referenceBbox[1] + referenceBbox[3]) / 2
+    ];
+    const width = referenceBbox[2] - referenceBbox[0] || 1;
+    const height = referenceBbox[3] - referenceBbox[1] || 1;
+    return [
+      (bbox[0] - cx) / width,
+      (bbox[1] - cy) / height,
+      (bbox[2] - cx) / width,
+      (bbox[3] - cy) / height
+    ];
+  }
+
+  function fromReferenceRatio(ratio: BBox, referenceBbox: BBox): BBox {
+    const [cx, cy] = [
+      (referenceBbox[0] + referenceBbox[2]) / 2,
+      (referenceBbox[1] + referenceBbox[3]) / 2
+    ];
+    const width = referenceBbox[2] - referenceBbox[0];
+    const height = referenceBbox[3] - referenceBbox[1];
+    return [
+      cx + ratio[0] * width,
+      cy + ratio[1] * height,
+      cx + ratio[2] * width,
+      cy + ratio[3] * height
+    ];
+  }
+
+  let lastAutomaticMapFrameTrigger: string | null = null;
+
+  // An automatic fit (data, basemap, projection, page format) closes the
+  // frame in on the drawn map, inside the margins, and zooms the map to meet
+  // it. A tiled MapLibre map fills any frame, so its automatic frame is the
+  // margin box, set again only when the basemap, projection or page changes.
+  // A manual view keeps its frame.
+  $effect(() => {
+    const trigger = readAutomaticMapFrameTrigger();
+    const referenceBbox = projectionStore.referenceBbox;
+    const drawnExtent = drawnMapExtent;
+    const hasMeasuredExtent = hasMeasuredDrawnMapExtent;
+    const viewMode = mapInit.viewMode;
+
+    if (isFacetCell || !mapInit.isMapLoaded || isSwitchingViewMode) {
+      return;
+    }
+
+    // The first settled run is the baseline: mounting the map is no change.
+    const isTriggered =
+      lastAutomaticMapFrameTrigger !== null &&
+      trigger !== lastAutomaticMapFrameTrigger;
+    lastAutomaticMapFrameTrigger = trigger;
+    const isOrthographic = viewMode === ViewMode.ORTHOGRAPHIC;
+    if (!isOrthographic && !isTriggered) {
+      return;
+    }
+
+    untrack(() => {
+      if (
+        !mapInstanceStore.isViewportAutoFitManaged ||
+        hasPendingViewportRestore() ||
+        globalState.isResizingMapFrame
+      ) {
+        return;
+      }
+
+      if (!isOrthographic) {
+        if (!arePageInsetsEqual(fmtState.margins, fmtState.mapFrame)) {
+          formatActions.fitMapFrame(fmtState.margins);
+        }
+        return;
+      }
+      // Framing on the reference alone, before the drawn map is measured,
+      // would make the frame jump once the layers are drawn.
+      if (!hasMeasuredExtent) {
+        return;
+      }
+
+      const { frame, zoom, centerRatio } = resolveFittedMapFrame({
+        page: { width: fmtState.width, height: fmtState.height },
+        margins: fmtState.margins,
+        referenceBbox,
+        drawnBbox:
+          referenceBbox && drawnExtent
+            ? fromReferenceRatio(drawnExtent, referenceBbox)
+            : null,
+        fitPaddingPx: logicalMapViewportFitPaddingPx,
+        minFrameSize: MIN_PAGE_AREA_SIZE
+      });
+      const baseRatio = mapInstanceStore.orthographicBaseTargetRatio;
+      const isBaseViewChanged =
+        Math.abs(zoom - mapInstanceStore.orthographicBaseZoom) > 1e-3 ||
+        Math.abs(centerRatio[0] - baseRatio[0]) > 1e-4 ||
+        Math.abs(centerRatio[1] - baseRatio[1]) > 1e-4;
+      if (isBaseViewChanged) {
+        mapInstanceStore.setOrthographicBaseView(zoom, centerRatio);
+      }
+      if (!arePageInsetsEqual(frame, fmtState.mapFrame)) {
+        // The resized frame refits the map, on the new base view.
+        formatActions.fitMapFrame(frame);
+      } else if (isBaseViewChanged) {
+        fitOrthographicViewport(getCurrentViewportAutoFitReason());
+      }
+    });
+  });
+
+  // Page elements follow the margins and the page, never the map frame.
+  $effect(() => {
+    const margins = pageMargins;
+    const pageWidth = fmtState.width;
+    const pageHeight = fmtState.height;
+    const pageLayoutSnapshot = `${pageWidth}x${pageHeight}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
+
+    const pageResize = getLastPageResize();
+    const previousPageSize =
+      pageResize && pageResize.id !== handledPageResizeId
+        ? pageResize.from
+        : undefined;
+    handledPageResizeId = pageResize?.id ?? handledPageResizeId;
+
+    if (lastPageLayoutSnapshot === null) {
+      lastPageLayoutSnapshot = pageLayoutSnapshot;
+      return;
+    }
+
+    if (pageLayoutSnapshot === lastPageLayoutSnapshot) {
+      return;
+    }
+
+    lastPageLayoutSnapshot = pageLayoutSnapshot;
+
+    untrack(() => {
+      annotationsActions.redistributePageElements(
+        { width: pageWidth, height: pageHeight, margins },
+        previousPageSize
+      );
     });
   });
 
@@ -2124,9 +2301,9 @@
     {/if}
 
     <div
-      class="map-stage"
+      class="map-stage page-map-stage"
       class:is-empty={isBlankCanvas}
-      style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
+      style={mapStageStyle}
     >
       <div
         bind:this={mapContainer}
@@ -2143,7 +2320,7 @@
       {/if}
     </div>
 
-    <!-- Layout items sit over the map area but may move into the margins, so
+    <!-- Layout items sit in the margin box, independent of the map frame, so
          they live outside the clipped map stage. -->
     {#if showGeoIndicationsOverlay}
       <div class="layout-stage" style={layoutStageStyle}>
@@ -2185,6 +2362,10 @@
   .map-stage {
     position: relative;
     overflow: hidden;
+  }
+
+  .page-map-stage {
+    position: absolute;
   }
 
   .layout-stage {
