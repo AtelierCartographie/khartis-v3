@@ -457,6 +457,20 @@ export function buildTextPrimitiveConfig(
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??
       true,
+    automaticPlacement:
+      existing?.automaticPlacement ??
+      visualization.style.textAutomaticPlacement ??
+      false,
+    labelColumns:
+      existing?.labelColumns ?? visualization.style.textLabelColumns ?? false,
+    labelSpacing:
+      existing?.labelSpacing ??
+      visualization.style.textLabelSpacing ??
+      VISUALIZATION_DEFAULTS.textLabelSpacing,
+    filteredLabelsOptional:
+      existing?.filteredLabelsOptional ??
+      visualization.style.textFilteredLabelsOptional ??
+      false,
     dxpMasking:
       existing?.dxpMasking ?? visualization.style.textDxpMasking ?? false,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,

@@ -59,6 +59,7 @@
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
@@ -314,6 +315,7 @@
   let overlayElement = $state<HTMLDivElement | null>(null);
   let frameElements = $state<Record<string, HTMLDivElement | null>>({});
   let autoPositions = $state<Record<string, PageGridPoint>>({});
+  let frameSizeRevision = $state(0);
   let draggingItemId = $state<string | null>(null);
   let centeredItemId = $state<string | null>(null);
   let dragStartClientX = 0;
@@ -615,12 +617,40 @@
       return;
     }
 
-    const observer = new ResizeObserver(() => resolveAutoPositions());
+    const observer = new ResizeObserver(() => {
+      resolveAutoPositions();
+      frameSizeRevision += 1;
+    });
     for (const element of observed) {
       observer.observe(element);
     }
 
     return () => observer.disconnect();
+  });
+
+  // Labels placed automatically keep clear of the page legend.
+  $effect(() => {
+    if (inline) {
+      return;
+    }
+
+    void frameSizeRevision;
+    const items = legendState.visible ? visibleItems : [];
+    const boxes = items.flatMap((item) => {
+      const position = getFramePosition(item);
+      const size = getFrameSize(item.id);
+      return position && size && size.width > 0 && size.height > 0
+        ? [
+            [
+              position.x,
+              position.y,
+              position.x + size.width,
+              position.y + size.height
+            ] as [number, number, number, number]
+          ]
+        : [];
+    });
+    pageItemObstaclesStore.setBoxes('legend', boxes);
   });
 
   const legendDragController = createDraggablePageItemController({
@@ -849,6 +879,9 @@
   });
 
   onDestroy(() => {
+    if (!inline) {
+      pageItemObstaclesStore.setBoxes('legend', []);
+    }
     centeredItemId = null;
     clearSuppressedLegendClick();
     stopDragging();

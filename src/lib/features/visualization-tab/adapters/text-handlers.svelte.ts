@@ -31,6 +31,10 @@ const TEXT_STYLE_MIRROR_KEYS = [
   'textHaloWidth',
   'textHaloOpacity',
   'textCollisionDetection',
+  'textAutomaticPlacement',
+  'textLabelColumns',
+  'textLabelSpacing',
+  'textFilteredLabelsOptional',
   'textDxpMasking'
 ] as const satisfies ReadonlyArray<keyof VisualizationConfig['style']>;
 
@@ -90,6 +94,13 @@ export function createTextHandlers(deps: TextHandlersDeps) {
         { from: 'textHaloWidth', to: 'haloWidth' },
         { from: 'textHaloOpacity', to: 'haloOpacity' },
         { from: 'textCollisionDetection', to: 'collisionDetection' },
+        { from: 'textAutomaticPlacement', to: 'automaticPlacement' },
+        { from: 'textLabelColumns', to: 'labelColumns' },
+        { from: 'textLabelSpacing', to: 'labelSpacing' },
+        {
+          from: 'textFilteredLabelsOptional',
+          to: 'filteredLabelsOptional'
+        },
         { from: 'textDxpMasking', to: 'dxpMasking' }
       ],
       text

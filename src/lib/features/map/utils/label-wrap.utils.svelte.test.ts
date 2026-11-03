@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { wrapLabelText } from './label-wrap.utils';
+import { wrapLabelText, wrapLabelTextInTwoLines } from './label-wrap.utils';
 
 // One unit per character keeps the expected lines readable.
 const measure = (text: string): number => text.length;
@@ -53,5 +53,26 @@ describe('wrapLabelText', () => {
       'Paris',
       '2 100 000'
     ]);
+  });
+});
+
+describe('wrapLabelTextInTwoLines', () => {
+  it('should break where the two lines are closest in width', () => {
+    expect(wrapLabelTextInTwoLines('Seine-Saint-Denis', measure)).toEqual([
+      'Seine-',
+      'Saint-Denis'
+    ]);
+    expect(wrapLabelTextInTwoLines('Alpes-de-Haute-Provence', measure)).toEqual(
+      ['Alpes-de-', 'Haute-Provence']
+    );
+    expect(wrapLabelTextInTwoLines('Pyrénées Orientales', measure)).toEqual([
+      'Pyrénées',
+      'Orientales'
+    ]);
+  });
+
+  it('should not break off a few letters or a single word', () => {
+    expect(wrapLabelTextInTwoLines('Finistère', measure)).toBeNull();
+    expect(wrapLabelTextInTwoLines('Le Mans', measure)).toBeNull();
   });
 });
