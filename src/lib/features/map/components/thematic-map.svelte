@@ -1643,6 +1643,9 @@
               pageDisplayScale / previousRenderScale
             );
           }
+          if (previousRenderScale !== pageDisplayScale) {
+            scheduleLayerUpdate('effect:canvasResize', { immediate: true });
+          }
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           // The resized canvas is redrawn on the next frame, with the
           // rescaled view: its drawing buffer and its layers must carry the
