@@ -35,6 +35,8 @@ type MultiShapeModuleProps = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
+  knockoutPass?: number;
+  instanceCount?: number;
 };
 
 function getMultiShapeUniforms(
@@ -43,9 +45,7 @@ function getMultiShapeUniforms(
   return opts ?? {};
 }
 
-const multiShapeModule = {
-  name: 'multiShape',
-  fs: `
+const multiShapeUniformBlock = `
     uniform multiShapeUniforms {
       float barWidth;
       float offsetX;
@@ -57,8 +57,35 @@ const multiShapeModule = {
       float gapLength;
       float dotLength;
       float dotGap;
+      float knockoutPass;
+      float instanceCount;
     } multiShape;
-  `,
+  `;
+
+// Knockout group (Illustrator "groupe défonce"): a symbol replaces the
+// symbols below it instead of blending with them, so a transparent fill hides
+// the strokes underneath while the map stays visible. The depth buffer is
+// cleared, then pass 1 writes depth only, the topmost instance nearest, and
+// pass 2 paints with less-equal so only the topmost symbol reaches each pixel.
+// luma.gl turns depthCompare 'always' into a disabled depth test, which also
+// stops depth writes, hence the clears instead of an 'always' pass.
+const KNOCKOUT_PASS = { OFF: 0, DEPTH: 1, COLOR: 2 } as const;
+
+const KNOCKOUT_PASSES = [
+  {
+    pass: KNOCKOUT_PASS.DEPTH,
+    parameters: { depthCompare: 'less', depthWriteEnabled: true }
+  },
+  {
+    pass: KNOCKOUT_PASS.COLOR,
+    parameters: { depthCompare: 'less-equal', depthWriteEnabled: false }
+  }
+] as const;
+
+const multiShapeModule = {
+  name: 'multiShape',
+  vs: multiShapeUniformBlock,
+  fs: multiShapeUniformBlock,
   getUniforms: getMultiShapeUniforms,
   uniformTypes: {
     barWidth: 'f32',
@@ -70,7 +97,9 @@ const multiShapeModule = {
     dashLength: 'f32',
     gapLength: 'f32',
     dotLength: 'f32',
-    dotGap: 'f32'
+    dotGap: 'f32',
+    knockoutPass: 'f32',
+    instanceCount: 'f32'
   }
 } as const;
 
@@ -180,6 +209,12 @@ void main(void) {
   DECKGL_FILTER_COLOR(vFillColor, geometry);
   vLineColor = vec4(instanceLineColors.rgb, instanceLineColors.a * layer.opacity);
   DECKGL_FILTER_COLOR(vLineColor, geometry);
+
+  // The last (topmost) instance is the nearest.
+  if (multiShape.knockoutPass > 0.5) {
+    float order = (float(gl_InstanceID) + 1.0) / (multiShape.instanceCount + 1.0);
+    gl_Position.z = (0.9 - 1.8 * order) * gl_Position.w;
+  }
 }
 `;
 
@@ -354,6 +389,17 @@ void main(void) {
 
     if (inShape == 0.0) discard;
 
+    // The depth pass covers the whole shape, filled or not, and keeps only
+    // the inner half of the antialiased edge, so the fringe of an upper
+    // symbol still blends over the symbol below in the color pass. A symbol
+    // with nothing visible knocks nothing out.
+    if (multiShape.knockoutPass > 0.5 && multiShape.knockoutPass < 1.5) {
+        if (inShape < 0.5) discard;
+        if (vFillColor.a == 0.0 && (scatterplot.stroked < 0.5 || vLineColor.a == 0.0)) discard;
+        fragColor = vec4(0.0);
+        return;
+    }
+
     if (scatterplot.stroked > 0.5) {
         float innerEdge = innerUnitRadius * outerRadiusPixels;
         float strokePx = max(outerRadiusPixels - innerEdge, 1.0);
@@ -394,6 +440,7 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
+  knockout?: boolean;
 };
 
 const defaultProps = {
@@ -408,11 +455,14 @@ const defaultProps = {
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 },
   dotLength: { type: 'number', value: 0 },
-  dotGap: { type: 'number', value: 0 }
+  dotGap: { type: 'number', value: 0 },
+  knockout: { type: 'boolean', value: false }
 };
 
 interface MultiShapeLayerState {
   model?: {
+    parameters: Record<string, unknown>;
+    setParameters: (parameters: Record<string, unknown>) => void;
     shaderInputs?: {
       setProps: (props: Record<string, unknown>) => void;
     };
@@ -468,12 +518,14 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
       dashLength,
       gapLength,
       dotLength,
-      dotGap
+      dotGap,
+      knockout
     } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
-    const shaderInputs = state.model?.shaderInputs;
-    if (shaderInputs) {
-      shaderInputs.setProps({
+    const model = state.model;
+    const shaderInputs = model?.shaderInputs;
+    const setMultiShapeProps = (knockoutPass: number) =>
+      shaderInputs?.setProps({
         multiShape: {
           barWidth,
           offsetX: offsetX ?? 0,
@@ -484,10 +536,35 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2,
           dotLength: dotLength ?? 0,
-          dotGap: dotGap ?? 0
+          dotGap: dotGap ?? 0,
+          knockoutPass,
+          instanceCount: this.getNumInstances()
         }
       });
+
+    if (!knockout || !model) {
+      setMultiShapeProps(KNOCKOUT_PASS.OFF);
+      super.draw(opts);
+      return;
     }
-    super.draw(opts);
+
+    const baseParameters = model.parameters;
+    this.clearDepth();
+    for (const { pass, parameters } of KNOCKOUT_PASSES) {
+      setMultiShapeProps(pass);
+      model.setParameters({ ...baseParameters, ...parameters });
+      super.draw(opts);
+    }
+    model.setParameters(baseParameters);
+    this.clearDepth();
+  }
+
+  private clearDepth(): void {
+    const gl = (
+      this.context.device as unknown as { gl?: WebGL2RenderingContext }
+    ).gl;
+    if (!gl) return;
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
   }
 }
