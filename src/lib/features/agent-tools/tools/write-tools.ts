@@ -137,8 +137,15 @@ async function applyClassificationChange(
     classes,
     numClasses: classes,
     paletteId: change.paletteId ?? current?.paletteId,
-    inverted: change.inverted ?? current?.inverted ?? false
+    // A palette picked from the menu starts the right way round.
+    inverted:
+      change.inverted ??
+      (change.paletteId !== undefined ? false : (current?.inverted ?? false))
   };
+  // The engine keeps the stored colors while breaks are unchanged, so a new
+  // palette or inversion needs them regenerated, as the palette menu does.
+  const recolor =
+    change.paletteId !== undefined || change.inverted !== undefined;
 
   const computation = await computeClassificationBreaks({
     datasetSourceFileId: dataset.sourceFileId,
@@ -148,7 +155,7 @@ async function applyClassificationChange(
       vizFilters: visualization.dataFilters,
       primitive: PrimitiveFilterType.POLYGON
     }),
-    classification: next,
+    classification: recolor ? { ...next, colors: undefined } : next,
     method,
     numClasses: classes,
     pooledColumnNames: resolvePooledColumnNames(visualization.id, valueColumn)
@@ -302,7 +309,7 @@ export const updateClassificationTool: AgentTool = {
   name: 'update_classification',
   title: 'Change the classes of a choropleth',
   description:
-    'Change how a polygon fill in classes (choropleth) is classified: method, number of classes, palette, inversion. Khartis computes the breaks and colors itself, like the classification panel. Give the visualization id from inspect_project and at least one setting. Palettes must come from capabilities.class_palettes of inspect_project.',
+    'Change how a polygon fill in classes (choropleth) is classified: method, number of classes, palette, inversion. Khartis computes the breaks and colors itself, like the classification panel; a new palette starts the right way round unless inverted is given. Give the visualization id from inspect_project and at least one setting. Palettes must come from capabilities.class_palettes of inspect_project.',
   inputSchema: {
     type: 'object',
     properties: {
