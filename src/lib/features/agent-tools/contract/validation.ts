@@ -11,7 +11,7 @@ import {
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.types';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '$lib/features/commons/utils/discretization.utils';
-import { invalidInput, type Parsed } from './types';
+import { invalidInput, type ColumnNature, type Parsed } from './types';
 
 // Manual bounds and calendar steps depend on the data, which the agent does
 // not see: it picks among the methods the engine computes on its own.
@@ -81,6 +81,11 @@ export interface TextChange {
 
 export interface StepChange {
   step: (typeof AGENT_STEPS)[number];
+}
+
+export interface ChoroplethVariableChange {
+  visualizationId: string;
+  column: string;
 }
 
 export interface SuggestionsQuery {
@@ -348,4 +353,48 @@ export function parseApplySuggestionInput(
     );
   }
   return { ok: true, value: { ...dataset.value, suggestionKey: key } };
+}
+
+export function parseSetChoroplethVariableInput(
+  input: unknown
+): Parsed<ChoroplethVariableChange> {
+  if (!isRecord(input)) {
+    return invalidInput('Expected an object.');
+  }
+  const unexpected = findUnexpectedKey(input, ['visualization_id', 'column']);
+  if (unexpected) {
+    return invalidInput(`Unexpected field: ${unexpected}.`);
+  }
+  const id = parseIdentifier(input.visualization_id, 'visualization_id');
+  if (!id.ok) return id;
+  const column = parseIdentifier(input.column, 'column');
+  if (!column.ok) return column;
+  return {
+    ok: true,
+    value: { visualizationId: id.value, column: column.value }
+  };
+}
+
+/**
+ * Why a column cannot drive a choropleth, or null when it can: a choropleth
+ * classes a ratio. A calculated column the engine has not typed is allowed,
+ * the classes computation then decides.
+ */
+export function refuseForChoropleth(
+  nature: ColumnNature | undefined
+): string | null {
+  switch (nature) {
+    case 'count':
+      return 'is a count: areas of different sizes make counts misleading in a choropleth. Apply the proportional symbols suggestion, or map a ratio such as a rate or a density.';
+    case 'category':
+    case 'ordered_category':
+    case 'label':
+    case 'place_id':
+      return 'holds categories or names, not numbers to class.';
+    case 'latitude':
+    case 'longitude':
+      return 'holds coordinates, not a variable to map.';
+    default:
+      return null;
+  }
 }

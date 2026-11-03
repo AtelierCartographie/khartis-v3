@@ -9,6 +9,10 @@ export {
   computeClassificationBreaks
 } from './hooks/use-classification-breaks.svelte';
 export {
+  resetClassificationComputedValues,
+  syncLegendSubtitleAfterMappingChange
+} from './hooks/use-primitive-panel-controller.svelte';
+export {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
   isVisualizationMatchingSuggestion,

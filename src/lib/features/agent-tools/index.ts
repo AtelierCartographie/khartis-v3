@@ -6,6 +6,7 @@ import {
 } from './tools/suggestion-tools';
 import {
   goToStepTool,
+  setChoroplethVariableTool,
   setLayoutTextsTool,
   setLegendTextsTool,
   setTextTool,
@@ -19,6 +20,7 @@ const AGENT_TOOLS = [
   reviewMapTool,
   applyVisualizationSuggestionTool,
   updateClassificationTool,
+  setChoroplethVariableTool,
   setLayoutTextsTool,
   setTextTool,
   setLegendTextsTool,

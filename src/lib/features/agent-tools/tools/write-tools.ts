@@ -1,4 +1,5 @@
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { SCALE_MODE } from '$lib/features/commons/constants/facets.constants';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
@@ -26,12 +27,16 @@ import {
   getAnnotationsState,
   getLegendState,
   getPageElementPlaceholder,
+  LEGEND_ID_PREFIXES,
   legendActions
 } from '$lib/features/step-toolbar';
 import {
   buildClassificationUpdate,
-  computeClassificationBreaks
+  computeClassificationBreaks,
+  resetClassificationComputedValues,
+  syncLegendSubtitleAfterMappingChange
 } from '$lib/features/visualization-tab';
+import { listCalculatedColumns } from '../contract/project-snapshot';
 import type { AgentTool, AgentToolResult } from '../contract/types';
 import {
   AGENT_CLASS_COUNT,
@@ -42,12 +47,16 @@ import {
   parseLayoutTextsInput,
   parseLegendTextsInput,
   parseSetTextInput,
+  parseSetChoroplethVariableInput,
   parseUpdateClassificationInput,
+  refuseForChoropleth,
+  type ChoroplethVariableChange,
   type ClassificationChange,
   type LayoutTextsChange,
   type LegendTextsChange,
   type TextChange
 } from '../contract/validation';
+import { listColumnNatures } from './column-natures';
 import { failure, REVISION_PROPERTY, runEdit } from './edit-guard';
 
 function isAgentMethod(method: string | undefined): boolean {
@@ -200,6 +209,127 @@ async function applyClassificationChange(
   };
 }
 
+const INTERNAL_COLUMN_NAMES = new Set<string>(Object.values(INTERNAL_COLUMN));
+
+// Same writes as the variable picker of the panel, then the classes are
+// computed for the new column with the current settings.
+async function applyChoroplethVariable(
+  change: ChoroplethVariableChange
+): Promise<AgentToolResult> {
+  const target = findClassedPolygon(change.visualizationId);
+  if (!target) {
+    return failure('not_found', 'No visualization has this id.');
+  }
+  if (!target.classed) {
+    return failure(
+      'unsupported',
+      'This tool changes the variable of a polygon fill in classes (choropleth) only.'
+    );
+  }
+  const { visualization } = target;
+  if (
+    facetsStore.enabled &&
+    facetsStore.baseVisualizationId === visualization.id
+  ) {
+    return failure(
+      'unsupported',
+      'This visualization is the base of a map collection: its variables are chosen in the collection panel.'
+    );
+  }
+  const dataset = datasetsStore.datasets.find(
+    (item) => item.id === visualization.datasetId
+  );
+  if (!dataset) {
+    return failure('unavailable', 'The dataset is not loaded yet.');
+  }
+
+  const calculated = listCalculatedColumns(
+    projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === dataset.sourceFileId
+    )?.columnTransformations
+  ).map((column) => column.name);
+  const columns = new Set([
+    ...dataset.columns
+      .map((column) => column.name)
+      .filter((name) => !INTERNAL_COLUMN_NAMES.has(name)),
+    ...calculated
+  ]);
+  if (!columns.has(change.column)) {
+    return failure(
+      'not_found',
+      'No column has this name: give a column or a calculated column from inspect_project.'
+    );
+  }
+  const nature = listColumnNatures(dataset).get(change.column);
+  const refusal = refuseForChoropleth(nature);
+  if (refusal) {
+    return failure('unsupported', `${change.column} ${refusal}`);
+  }
+  if (target.valueColumn === change.column) {
+    return {
+      ok: true,
+      data: {
+        visualization_id: visualization.id,
+        column: change.column,
+        unchanged: true
+      }
+    };
+  }
+
+  const polygon = getPolygonPrimitive(visualization);
+  if (!polygon) {
+    return failure('unsupported', 'This visualization has no polygon fill.');
+  }
+  const restore = {
+    classification: visualization.classification,
+    polygon,
+    mapping: visualization.mapping
+  };
+  visualizationStore.updateVisualization(visualization.id, {
+    classification: resetClassificationComputedValues(
+      visualization.classification
+    ),
+    polygon: {
+      ...polygon,
+      valueColumn: change.column,
+      classification: resetClassificationComputedValues(polygon.classification)
+    },
+    mapping: { ...visualization.mapping, valueColumn: change.column }
+  });
+  const updated = visualizationStore.visualizations.find(
+    (item) => item.id === visualization.id
+  );
+  if (updated) {
+    syncLegendSubtitleAfterMappingChange(
+      PrimitiveFilterType.POLYGON,
+      visualization,
+      updated
+    );
+  }
+
+  const classes = await applyClassificationChange({
+    visualizationId: visualization.id
+  });
+  if (!classes.ok) {
+    // A column the engine cannot class leaves the map as it was.
+    visualizationStore.updateVisualization(visualization.id, restore);
+    return classes;
+  }
+  const legend = getLegendState().items.find((item) =>
+    item.id.startsWith(`${LEGEND_ID_PREFIXES.VIZ}${visualization.id}--`)
+  );
+  return {
+    ok: true,
+    data: {
+      visualization_id: visualization.id,
+      column: change.column,
+      nature: nature ?? null,
+      classification: classes.data.classification,
+      legend_title_kept: legend?.titleMode === 'custom'
+    }
+  };
+}
+
 // A cleared page text goes back to its placeholder, as in the text tool; the
 // export leaves placeholders out.
 function resolveTextContent(
@@ -335,6 +465,29 @@ export const updateClassificationTool: AgentTool = {
   annotations: {},
   execute: (input) =>
     runEdit(input, parseUpdateClassificationInput, applyClassificationChange)
+};
+
+export const setChoroplethVariableTool: AgentTool = {
+  name: 'set_choropleth_variable',
+  title: 'Map another column with a choropleth',
+  description:
+    'Map another column with the same choropleth, as the variable picker of its panel does: Khartis recomputes the classes and colors with the current method, class count and palette. Give a column or calculated column from inspect_project. A count or a category is refused, since a choropleth classes ratios: for a count, apply the proportional symbols suggestion. A custom legend title is kept (legend_title_kept): rewrite it with set_legend_texts if it names the old variable.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      visualization_id: { type: 'string' },
+      column: {
+        type: 'string',
+        description: 'Column or calculated column name from inspect_project.'
+      },
+      expected_revision: REVISION_PROPERTY
+    },
+    required: ['visualization_id', 'column'],
+    additionalProperties: false
+  },
+  annotations: {},
+  execute: (input) =>
+    runEdit(input, parseSetChoroplethVariableInput, applyChoroplethVariable)
 };
 
 export const setLayoutTextsTool: AgentTool = {
