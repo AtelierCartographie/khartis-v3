@@ -29,6 +29,7 @@ export {
   isGeometryColumnName,
   isGeometryColumnType
 } from './utils/geometry-column.utils';
+export { isMissingDuckTableError } from './utils/duckdb-error.utils';
 export type {
   AnalysisResult,
   AnalysisResults,

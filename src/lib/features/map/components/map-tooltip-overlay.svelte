@@ -39,9 +39,12 @@
       ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
       : []
   );
+  const previewEntries = $derived(
+    tooltipState.entries.filter((entry) => !entry.pinnedOnly)
+  );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return tooltipState.entries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
+      return previewEntries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
@@ -51,10 +54,14 @@
 
     return tooltipState.entries.filter((entry) => !skippedKeys.has(entry.key));
   });
+  // The pinned inspector shows what the preview leaves out.
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, tooltipState.entries.length - PREVIEW_MAX_ENTRIES_COUNT)
+      : Math.max(0, previewEntries.length - PREVIEW_MAX_ENTRIES_COUNT) +
+          tooltipState.entries.filter(
+            (entry) => entry.pinnedOnly && !entry.role
+          ).length
   );
 
   function getTooltipViewerRect(): {
@@ -265,6 +272,11 @@
   }
 </script>
 
+{#snippet swatch(background: string)}
+  <span class="tooltip-swatch" style:background={background} aria-hidden="true"
+  ></span>
+{/snippet}
+
 {#if tooltipState.visible && !isStylingStep}
   <div
     bind:this={tooltipElement}
@@ -313,19 +325,37 @@
 
     <div class="tooltip-shell-body">
       <div class="tooltip-entries">
-        {#each visibleEntries as entry (entry.key)}
-          <div class="tooltip-row">
-            <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-              >{entry.key}</span
-            >
-            <span class="tooltip-value"
-              >{#if entry.swatch}<span
-                  class="tooltip-swatch"
-                  style:background={entry.swatch}
-                  aria-hidden="true"
-                ></span>{/if}{entry.value}</span
-            >
-          </div>
+        {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
+          {#if entry.role === 'divider'}
+            <hr class="tooltip-divider" />
+          {:else if entry.role === 'subtitle'}
+            <div class="tooltip-subtitle">
+              {entry.key}
+              {#if entry.value}
+                <span class="tooltip-subtitle-value">{entry.value}</span>
+              {/if}
+            </div>
+          {:else if entry.role === 'heading'}
+            <div class="tooltip-heading">
+              <span class="tooltip-heading-key">{entry.key}</span>
+              <span class="tooltip-heading-value"
+                >{#if entry.swatch}{@render swatch(
+                    entry.swatch
+                  )}{/if}{entry.value}</span
+              >
+            </div>
+          {:else}
+            <div class="tooltip-row">
+              <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+                >{entry.key}</span
+              >
+              <span class="tooltip-value"
+                >{#if entry.swatch}{@render swatch(
+                    entry.swatch
+                  )}{/if}{entry.value}</span
+              >
+            </div>
+          {/if}
         {/each}
       </div>
 
@@ -513,7 +543,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 82px;
+    max-width: 104px;
     flex-shrink: 1;
   }
 
@@ -532,6 +562,38 @@
     max-width: 114px;
     flex-shrink: 0;
     justify-self: end;
+  }
+
+  .tooltip-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tooltip-heading-key {
+    font-weight: 600;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  .tooltip-heading-value {
+    font-weight: 600;
+  }
+
+  .tooltip-subtitle {
+    font-size: 10px;
+    color: var(--cds-text-secondary, #525252);
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-subtitle-value {
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .tooltip-divider {
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
 
   .tooltip-swatch {

@@ -872,15 +872,14 @@ describe('join status per basemap entity', () => {
       status: 'matched',
       rowCount: 1,
       dataValues: ['Lyon'],
-      valueCount: 1,
-      matchedLabel: 'Lyon'
+      valueCount: 1
     });
-    // A typo joined through a fuzzy match is shown beside the basemap name.
+    // A typo joined through a fuzzy match is to verify.
     expect(statuses.BO).toMatchObject({
+      territoryName: 'Bordeaux',
       status: 'check',
       rowCount: 1,
-      dataValues: ['Bordaux'],
-      matchedLabel: 'Bordeaux'
+      dataValues: ['Bordaux']
     });
     // An exact name shared by two entities joins one of them, still to verify.
     expect(
@@ -907,8 +906,7 @@ describe('join status per basemap entity', () => {
       status: 'no_data',
       rowCount: 0,
       dataValues: [],
-      valueCount: 0,
-      matchedLabel: null
+      valueCount: 0
     });
     expect(statuses.NA.status).toBe('no_data');
   });

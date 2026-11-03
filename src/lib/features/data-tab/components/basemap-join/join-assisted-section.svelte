@@ -21,8 +21,6 @@
   } from 'carbon-components-svelte/src/utils/fuzzyMatch.js';
   import {
     CheckmarkFilled,
-    ChevronDown,
-    ChevronUp,
     Error as NotAllowed,
     ErrorFilled,
     MagicWandFilled,
@@ -33,17 +31,16 @@
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
-  import type {
-    JoinFuzzyPassEstimate,
-    JoinTerritoryStatus
-  } from '$lib/features/duckdb';
-  import { joinControlStore } from '$lib/features/map';
+  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
+  import { joinControlStore, type JoinPanelCategory } from '$lib/features/map';
+  import JoinCategoryHeader from '$lib/features/commons/components/join-category-header.svelte';
   import type {
     EntityValidation,
     IgnoredEntity,
     JoinCandidate
   } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+  import { tick, untrack } from 'svelte';
 
   type HeaderSlot =
     | 'info'
@@ -754,28 +751,110 @@
     ignoredExpanded = false;
   }
 
-  // Opening a category highlights its territories on the map; the values
-  // left without a territory have nothing to highlight.
-  function focusMapCategory(
-    status: JoinTerritoryStatus | null,
-    expanded: boolean
-  ): void {
-    if (expanded) {
-      joinControlStore.setFocusedStatus(status);
-    } else if (status && joinControlStore.focusedStatus === status) {
-      joinControlStore.setFocusedStatus(null);
+  const categoryRowElements: Partial<
+    Record<JoinPanelCategory, HTMLDivElement>
+  > = $state({});
+
+  function isCategoryExpanded(category: JoinPanelCategory): boolean {
+    switch (category) {
+      case 'matched':
+        return joinedExpanded;
+      case 'check':
+        return toVerifyExpanded;
+      case 'duplicate':
+        return duplicatesExpanded;
+      case 'unrecognized':
+        return unrecognizedExpanded;
+      case 'ignored':
+        return ignoredExpanded;
     }
   }
 
-  $effect(() => () => joinControlStore.setFocusedStatus(null));
-
-  function toggleJoined(): void {
-    const nextExpanded = !joinedExpanded;
-    joinedExpanded = nextExpanded;
-    focusMapCategory('matched', nextExpanded);
-    if (nextExpanded && basemapValues.length === 0) {
+  // The open category is highlighted on the map; the values left without a
+  // territory have nothing to highlight there.
+  function setCategoryExpanded(
+    category: JoinPanelCategory,
+    expanded: boolean
+  ): void {
+    switch (category) {
+      case 'matched':
+        joinedExpanded = expanded;
+        break;
+      case 'check':
+        toVerifyExpanded = expanded;
+        break;
+      case 'duplicate':
+        duplicatesExpanded = expanded;
+        break;
+      case 'unrecognized':
+        unrecognizedExpanded = expanded;
+        break;
+      case 'ignored':
+        ignoredExpanded = expanded;
+        break;
+    }
+    if (
+      expanded &&
+      (category === 'matched' || category === 'unrecognized') &&
+      basemapValues.length === 0
+    ) {
       onRequestBasemapValues?.();
     }
+    if (expanded) {
+      joinControlStore.setActiveCategory(category);
+    } else if (joinControlStore.activeCategory === category) {
+      joinControlStore.setActiveCategory(null);
+    }
+  }
+
+  function toggleCategory(category: JoinPanelCategory): void {
+    setCategoryExpanded(category, !isCategoryExpanded(category));
+  }
+
+  // The map's join summary opens a category here and brings it into view.
+  let handledPanelRequestId = untrack(
+    () => joinControlStore.panelRequest?.id ?? 0
+  );
+  $effect(() => {
+    const request = joinControlStore.panelRequest;
+    if (!request || request.id === handledPanelRequestId) return;
+    handledPanelRequestId = request.id;
+    untrack(() => setCategoryExpanded(request.category, request.open));
+    if (request.open) {
+      void tick().then(() =>
+        categoryRowElements[request.category]?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+      );
+    }
+  });
+
+  $effect(() => () => {
+    joinControlStore.setActiveCategory(null);
+    joinControlStore.setHoverTarget(null);
+  });
+
+  // Hovering or focusing a value outlines its territory on the map.
+  function mapHoverValue(node: HTMLElement, dataValue: string) {
+    let value = dataValue;
+    const show = () => joinControlStore.setHoverTarget({ values: [value] });
+    const hide = () => joinControlStore.setHoverTarget(null);
+    node.addEventListener('pointerenter', show);
+    node.addEventListener('pointerleave', hide);
+    node.addEventListener('focusin', show);
+    node.addEventListener('focusout', hide);
+    return {
+      update(nextValue: string) {
+        value = nextValue;
+      },
+      destroy() {
+        node.removeEventListener('pointerenter', show);
+        node.removeEventListener('pointerleave', hide);
+        node.removeEventListener('focusin', show);
+        node.removeEventListener('focusout', hide);
+      }
+    };
   }
 
   $effect(() => {
@@ -794,15 +873,6 @@
       onRequestJoinedEntities?.();
     }
   });
-
-  function toggleUnrecognized(): void {
-    const nextExpanded = !unrecognizedExpanded;
-    unrecognizedExpanded = nextExpanded;
-    focusMapCategory(null, nextExpanded);
-    if (nextExpanded && basemapValues.length === 0) {
-      onRequestBasemapValues?.();
-    }
-  }
 
   let hasInitializedExpanded = $state(false);
   let notificationSnapshot = $state<NotificationSnapshot>({
@@ -1064,32 +1134,20 @@
     use:actionTooltips
   >
     <div class="category-rows">
-      <div class="category-row category-row-joined">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={toggleJoined}
-          aria-expanded={joinedExpanded}
-        >
-          <span class="category-icon icon-success">
-            <CheckmarkFilled size={20} />
-          </span>
-          <div class="category-count count-success">
-            {formatValue(joinedCount)}
-          </div>
-          <span class="category-label label-success"
-            >{isSingularCount(joinedCount)
-              ? m.join_entities_joined_one()
-              : m.join_entities_joined()}</span
-          >
-          <span class="category-chevron">
-            {#if joinedExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
+      <div
+        class="category-row category-row-joined"
+        bind:this={categoryRowElements.matched}
+      >
+        <JoinCategoryHeader
+          tone="success"
+          icon={CheckmarkFilled}
+          count={joinedCount}
+          label={isSingularCount(joinedCount)
+            ? m.join_entities_joined_one()
+            : m.join_entities_joined()}
+          expanded={isCategoryExpanded('matched')}
+          onclick={() => toggleCategory('matched')}
+        />
         {#if joinedExpanded}
           <div class="category-body">
             {#if joinedEntitiesList.length > 0}
@@ -1110,7 +1168,11 @@
                     {@const joinedTooltip = joinedCleared
                       ? buildRowTooltip(undefined)
                       : buildRowTooltip(row.basemapValue, row.otherIdentifiers)}
-                    <div class="table-row" use:observeRow={row.dataValue}>
+                    <div
+                      class="table-row"
+                      use:observeRow={row.dataValue}
+                      use:mapHoverValue={row.dataValue}
+                    >
                       <div class="table-cell cell-data" title={row.dataValue}>
                         {row.dataValue}
                       </div>
@@ -1256,35 +1318,20 @@
         {/if}
       </div>
 
-      <div class="category-row category-row-verify">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => {
-            toVerifyExpanded = !toVerifyExpanded;
-            focusMapCategory('check', toVerifyExpanded);
-          }}
-          aria-expanded={toVerifyExpanded}
-        >
-          <span class="category-icon icon-warning">
-            <WarningFilled size={20} />
-          </span>
-          <div class="category-count count-warning">
-            {formatValue(toVerifyCount)}
-          </div>
-          <span class="category-label label-warning"
-            >{isSingularCount(toVerifyCount)
-              ? m.join_entities_to_verify_one()
-              : m.join_entities_to_verify()}</span
-          >
-          <span class="category-chevron">
-            {#if toVerifyExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
+      <div
+        class="category-row category-row-verify"
+        bind:this={categoryRowElements.check}
+      >
+        <JoinCategoryHeader
+          tone="warning"
+          icon={WarningFilled}
+          count={toVerifyCount}
+          label={isSingularCount(toVerifyCount)
+            ? m.join_entities_to_verify_one()
+            : m.join_entities_to_verify()}
+          expanded={isCategoryExpanded('check')}
+          onclick={() => toggleCategory('check')}
+        />
         {#if toVerifyExpanded}
           <div class="category-body">
             <div class="join-table join-table-warning">
@@ -1308,7 +1355,11 @@
                     selectedMapping,
                     selectedCandidate
                   )}
-                  <div class="table-row" use:observeToVerifyRow={rowKey}>
+                  <div
+                    class="table-row"
+                    use:observeToVerifyRow={rowKey}
+                    use:mapHoverValue={row.dataValue}
+                  >
                     <div class="table-cell cell-data" title={row.dataValue}>
                       {row.dataValue}
                     </div>
@@ -1430,32 +1481,20 @@
         {/if}
       </div>
 
-      <div class="category-row category-row-unrecognized">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={toggleUnrecognized}
-          aria-expanded={unrecognizedExpanded}
-        >
-          <span class="category-icon icon-error">
-            <ErrorFilled size={20} />
-          </span>
-          <div class="category-count count-error">
-            {formatValue(unrecognizedCount)}
-          </div>
-          <span class="category-label label-error"
-            >{isSingularCount(unrecognizedCount)
-              ? m.join_entities_unrecognized_one()
-              : m.join_entities_unrecognized()}</span
-          >
-          <span class="category-chevron">
-            {#if unrecognizedExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
+      <div
+        class="category-row category-row-unrecognized"
+        bind:this={categoryRowElements.unrecognized}
+      >
+        <JoinCategoryHeader
+          tone="error"
+          icon={ErrorFilled}
+          count={unrecognizedCount}
+          label={isSingularCount(unrecognizedCount)
+            ? m.join_entities_unrecognized_one()
+            : m.join_entities_unrecognized()}
+          expanded={isCategoryExpanded('unrecognized')}
+          onclick={() => toggleCategory('unrecognized')}
+        />
         {#if showFuzzyPassOffer}
           <div class="fuzzy-pass-offer">
             <InlineNotification
@@ -1612,35 +1651,20 @@
       </div>
 
       {#if duplicateCount > 0}
-        <div class="category-row category-row-duplicates">
-          <button
-            type="button"
-            class="category-row-header"
-            onclick={() => {
-              duplicatesExpanded = !duplicatesExpanded;
-              focusMapCategory('duplicate', duplicatesExpanded);
-            }}
-            aria-expanded={duplicatesExpanded}
-          >
-            <span class="category-icon icon-warning-alt">
-              <WarningAltFilled size={20} />
-            </span>
-            <div class="category-count count-warning-alt">
-              {formatValue(duplicateCount)}
-            </div>
-            <span class="category-label label-warning-alt"
-              >{isSingularCount(duplicateCount)
-                ? m.join_entities_duplicate_one()
-                : m.join_entities_duplicate()}</span
-            >
-            <span class="category-chevron">
-              {#if duplicatesExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
+        <div
+          class="category-row category-row-duplicates"
+          bind:this={categoryRowElements.duplicate}
+        >
+          <JoinCategoryHeader
+            tone="error"
+            icon={WarningAltFilled}
+            count={duplicateCount}
+            label={isSingularCount(duplicateCount)
+              ? m.join_entities_duplicate_one()
+              : m.join_entities_duplicate()}
+            expanded={isCategoryExpanded('duplicate')}
+            onclick={() => toggleCategory('duplicate')}
+          />
           {#if duplicatesExpanded}
             <div class="category-body">
               <div class="inline-banner inline-banner-error">
@@ -1649,7 +1673,10 @@
               <div class="join-table join-table-error">
                 {@render tableHeader(m.join_lines_column(), null, null)}
                 {#each duplicates as entity (entity)}
-                  <div class="table-row table-row-lines">
+                  <div
+                    class="table-row table-row-lines"
+                    use:mapHoverValue={entity}
+                  >
                     <div class="table-cell cell-data" title={entity}>
                       {entity}
                     </div>
@@ -1669,35 +1696,20 @@
       {/if}
 
       {#if ignoredCount > 0}
-        <div class="category-row category-row-ignored">
-          <button
-            type="button"
-            class="category-row-header"
-            onclick={() => {
-              ignoredExpanded = !ignoredExpanded;
-              focusMapCategory(null, ignoredExpanded);
-            }}
-            aria-expanded={ignoredExpanded}
-          >
-            <span class="category-icon icon-ignored">
-              <NotAllowed size={20} />
-            </span>
-            <div class="category-count count-ignored">
-              {formatValue(ignoredCount)}
-            </div>
-            <span class="category-label label-ignored"
-              >{isSingularCount(ignoredCount)
-                ? m.join_entities_ignored_one()
-                : m.join_entities_ignored()}</span
-            >
-            <span class="category-chevron">
-              {#if ignoredExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
+        <div
+          class="category-row category-row-ignored"
+          bind:this={categoryRowElements.ignored}
+        >
+          <JoinCategoryHeader
+            tone="ignored"
+            icon={NotAllowed}
+            count={ignoredCount}
+            label={isSingularCount(ignoredCount)
+              ? m.join_entities_ignored_one()
+              : m.join_entities_ignored()}
+            expanded={isCategoryExpanded('ignored')}
+            onclick={() => toggleCategory('ignored')}
+          />
           {#if ignoredExpanded}
             <div class="category-body">
               <div class="inline-banner inline-banner-info">
@@ -1814,22 +1826,20 @@
 
     --join-text: #161616;
     --join-text-secondary: #525252;
-    --join-label: #00539a;
     --join-row-bg: #f4f4f4;
     --join-row-border: #c6c6c6;
-    --join-header-hover: #f4f4f4;
     --join-divider: #e0e0e0;
     --join-action-hover: rgba(0, 0, 0, 0.05);
     --join-icon-disabled: rgba(22, 22, 22, 0.25);
-    --join-success: #24a148;
-    --join-success-bg: #defbe6;
+    --join-success: var(--khartis-additions-join-success);
+    --join-success-bg: var(--khartis-additions-join-success-bg);
     --join-success-line: rgba(36, 161, 72, 0.3);
     --join-success-text: #044317;
-    --join-warning: #f1c21b;
-    --join-warning-bg: #fcf4d6;
+    --join-warning: var(--khartis-additions-join-warning);
+    --join-warning-bg: var(--khartis-additions-join-warning-bg);
     --join-warning-line: rgba(241, 194, 27, 0.3);
-    --join-error: #da1e28;
-    --join-error-bg: #fff1f1;
+    --join-error: var(--khartis-additions-join-error);
+    --join-error-bg: var(--khartis-additions-join-error-bg);
     --join-error-line: rgba(218, 30, 40, 0.3);
     --join-info: #0043ce;
     --join-info-bg: #edf5ff;
@@ -1896,114 +1906,6 @@
 
   .category-row:first-child {
     border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-  }
-
-  .category-row-header {
-    display: flex;
-    align-items: center;
-    gap: var(--kh-gap-inline);
-    width: 100%;
-    padding: var(--kh-gap-param) var(--kh-pad-panel);
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-    transition: background-color 0.15s;
-  }
-
-  .category-row-header:hover {
-    background-color: var(--join-header-hover);
-  }
-
-  .category-row-header:focus-visible {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: -2px;
-  }
-
-  .category-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .icon-success :global(svg) {
-    fill: var(--join-success);
-  }
-
-  .icon-warning :global(svg) {
-    fill: var(--join-warning);
-  }
-
-  .icon-warning-alt :global(svg) {
-    fill: var(--join-error);
-  }
-
-  .icon-error :global(svg) {
-    fill: var(--join-error);
-  }
-
-  .icon-ignored :global(svg) {
-    fill: var(--join-text-secondary);
-  }
-
-  .category-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 4ch;
-    padding: 0 var(--kh-gap-inline) 2px var(--kh-gap-inline);
-    font-weight: 600;
-    font-size: 1rem;
-    line-height: var(--kh-line-primitive);
-    color: var(--join-text);
-    border-bottom: 1px solid;
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .count-success {
-    background-color: var(--join-success-bg);
-    border-bottom-color: var(--join-success);
-  }
-
-  .count-warning {
-    background-color: var(--join-warning-bg);
-    border-bottom-color: var(--join-warning);
-  }
-
-  .count-warning-alt,
-  .count-error {
-    background-color: var(--join-error-bg);
-    border-bottom-color: var(--join-error);
-  }
-
-  .count-ignored {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
-  }
-
-  .category-label {
-    flex: 1;
-    font-weight: 400;
-    font-size: 0.875rem;
-    line-height: var(--kh-line-primitive);
-    color: var(--join-label);
-  }
-
-  .label-success,
-  .label-warning,
-  .label-warning-alt,
-  .label-error,
-  .label-ignored {
-    color: var(--join-label);
-  }
-
-  .category-chevron {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    color: var(--join-text);
   }
 
   .category-body {
@@ -2495,21 +2397,14 @@
   :global(html[theme='g100']) .join-assisted-section {
     --join-text: #f4f4f4;
     --join-text-secondary: #c6c6c6;
-    --join-label: #78a9ff;
     --join-row-bg: #262626;
     --join-row-border: #393939;
-    --join-header-hover: #262626;
     --join-divider: #525252;
     --join-action-hover: rgba(255, 255, 255, 0.1);
     --join-icon-disabled: rgba(244, 244, 244, 0.25);
-    --join-success: #42be65;
-    --join-success-bg: #022d0d;
     --join-success-line: rgba(66, 190, 101, 0.4);
     --join-success-text: #a7f0ba;
-    --join-warning-bg: #302400;
     --join-warning-line: rgba(241, 194, 27, 0.4);
-    --join-error: #fa4d56;
-    --join-error-bg: #2d0709;
     --join-error-line: rgba(250, 77, 86, 0.4);
     --join-info: #4589ff;
     --join-info-bg: #001141;

@@ -16,6 +16,10 @@ import type {
   JoinTerritoryStatus,
   JoinTerritoryStatusRow
 } from '$lib/features/duckdb';
+import {
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
@@ -35,13 +39,23 @@ import {
   JOIN_CONTROL_STATUSES,
   JOIN_CONTROL_UNFOCUSED_ALPHA
 } from '../constants/join-control.constants';
-import type { JoinControlCounts } from '../stores/join-control.store.svelte';
+import type {
+  JoinControlCounts,
+  JoinControlHoverTarget
+} from '../stores/join-control.store.svelte';
 import type { DeckDataRow, LayerContext } from '../types';
 import {
   pathColorAttr,
   pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
+import { createFeatureOutlineOverlay } from './hover-highlight-overlay';
+import {
+  HIGHLIGHT_POINT_RING_RADIUS,
+  HIGHLIGHT_STROKE_COLOR,
+  HIGHLIGHT_STROKE_WIDTH
+} from './layer-selection-overlays';
+import { buildSplitDatasetRowMapping } from './split-rendering-accessors';
 import {
   resolvePathParser,
   resolvePolygonParser
@@ -66,18 +80,26 @@ export interface JoinControlTerritories {
   counts: JoinControlCounts;
 }
 
-/** What the tooltip reads from a picked join-control layer. */
+/** What the tooltip and the hover outline read from the join-control layers. */
 export interface JoinControlPickData {
   rows: JoinTerritoryStatusRow[];
   territories: JoinControlTerritories;
   geometry: ArrowTable;
   featureIdColumn: string;
+  /** The finalized table, one row per source row. */
+  dataset: ArrowTable;
+  geoColumn: string;
+  /** The joined dataset is a geographic file rather than a table. */
+  sourceIsFile: boolean;
 }
 
 export interface JoinControlLayerInput {
   layerId: string;
   geometry: ArrowTable;
   featureIdColumn: string;
+  dataset: ArrowTable;
+  geoColumn: string;
+  sourceIsFile: boolean;
   rows: JoinTerritoryStatusRow[];
   focusedStatus: JoinTerritoryStatus | null;
   /** A basemap without boundary layers leaves the territories unseparated. */
@@ -91,6 +113,15 @@ export interface JoinControlLayers {
   /** Drawn on top, so a territory too small to see keeps a hover target. */
   markerLayers: Layer<DeckDataRow>[];
   counts: JoinControlCounts;
+  /** What outlines the territories hovered in the join panel or the table. */
+  hoverSource: JoinControlHoverSource | null;
+}
+
+export interface JoinControlHoverSource {
+  fillLayerId: string;
+  pickData: JoinControlPickData;
+  polyData: BinaryPolygonData;
+  placement: Record<string, unknown>;
 }
 
 const territoriesCache = new WeakMap<
@@ -338,6 +369,9 @@ export function createJoinControlLayers(
     layerId,
     geometry,
     featureIdColumn,
+    dataset,
+    geoColumn,
+    sourceIsFile,
     rows,
     focusedStatus,
     outlineTerritories,
@@ -353,7 +387,8 @@ export function createJoinControlLayers(
     return {
       territoryLayers: [],
       markerLayers: [],
-      counts: territories.counts
+      counts: territories.counts,
+      hoverSource: null
     };
   }
 
@@ -365,7 +400,10 @@ export function createJoinControlLayers(
     rows,
     territories,
     geometry,
-    featureIdColumn
+    featureIdColumn,
+    dataset,
+    geoColumn,
+    sourceIsFile
   };
 
   const fillData = memoLayerData(polyData, rows, `fill:${focusKey}`, () => {
@@ -380,9 +418,10 @@ export function createJoinControlLayers(
     );
     built.featureIds = polyData.featureIds;
     built.khartisPickGeometry = polyData;
-    built.khartisJoinControl = pickData;
     return built;
   });
+  // Reused buffers still describe the latest finalized table.
+  fillData.khartisJoinControl = pickData;
 
   const territoryLayers: Layer<DeckDataRow>[] = [
     new SolidPolygonLayer({
@@ -489,12 +528,12 @@ export function createJoinControlLayers(
             getPosition: { value: new Float64Array(positions), size: 2 }
           },
           featureIds: new Uint32Array(featureIds),
-          khartisPickGeometry: polyData,
-          khartisJoinControl: pickData
+          khartisPickGeometry: polyData
         };
       }
     );
     if (markerData.length === 0) continue;
+    markerData.khartisJoinControl = pickData;
 
     markerLayers.push(
       new ScatterplotLayer({
@@ -516,7 +555,171 @@ export function createJoinControlLayers(
     );
   }
 
-  return { territoryLayers, markerLayers, counts: territories.counts };
+  return {
+    territoryLayers,
+    markerLayers,
+    counts: territories.counts,
+    hoverSource: {
+      fillLayerId: `${layerId}-fill`,
+      pickData,
+      polyData,
+      placement: placementProps(ctx)
+    }
+  };
+}
+
+const datasetRowsCache = new WeakMap<
+  ArrowTable,
+  WeakMap<ArrowTable, Map<string, Int32Array>>
+>();
+
+/** The finalized row a territory displays, as the split rendering reads it. */
+export function resolveJoinControlDatasetRow(
+  pickData: JoinControlPickData,
+  geomRow: number
+): number | null {
+  const { geometry, dataset, featureIdColumn } = pickData;
+  let byDataset = datasetRowsCache.get(geometry);
+  if (!byDataset) {
+    byDataset = new WeakMap();
+    datasetRowsCache.set(geometry, byDataset);
+  }
+  let byColumn = byDataset.get(dataset);
+  if (!byColumn) {
+    byColumn = new Map();
+    byDataset.set(dataset, byColumn);
+  }
+  let mapping = byColumn.get(featureIdColumn);
+  if (!mapping) {
+    mapping = buildSplitDatasetRowMapping(geometry, dataset, featureIdColumn);
+    byColumn.set(featureIdColumn, mapping);
+  }
+  const datasetRow = mapping[geomRow];
+  return datasetRow === undefined || datasetRow < 0 ? null : datasetRow;
+}
+
+interface HoverLookup {
+  geomRowsById: Map<string, number[]>;
+  idsByValue: Map<string, Set<string>>;
+  idByRowId: Map<number, string>;
+}
+
+const hoverLookupCache = new WeakMap<
+  JoinTerritoryStatusRow[],
+  WeakMap<ArrowTable, HoverLookup>
+>();
+
+function resolveHoverLookup(pickData: JoinControlPickData): HoverLookup {
+  const { rows, geometry, featureIdColumn, dataset, geoColumn } = pickData;
+  let byDataset = hoverLookupCache.get(rows);
+  if (!byDataset) {
+    byDataset = new WeakMap();
+    hoverLookupCache.set(rows, byDataset);
+  }
+  const cached = byDataset.get(dataset);
+  if (cached) return cached;
+
+  const geomRowsById = new Map<string, number[]>();
+  const geomIdVector = geometry.getChild(featureIdColumn);
+  for (let geomRow = 0; geomRow < geometry.numRows; geomRow += 1) {
+    const id = geomIdVector?.get(geomRow);
+    if (id === null || id === undefined) continue;
+    const key = String(id);
+    const geomRows = geomRowsById.get(key);
+    if (geomRows) geomRows.push(geomRow);
+    else geomRowsById.set(key, [geomRow]);
+  }
+
+  const idsByValue = new Map<string, Set<string>>();
+  const idByRowId = new Map<number, string>();
+  const idVector = dataset.getChild(JOINED_BASEMAP_COLUMN.ID);
+  const valueVector = dataset.getChild(geoColumn);
+  const rowIdVector = dataset.getChild(INTERNAL_COLUMN.ID);
+  for (let row = 0; row < dataset.numRows; row += 1) {
+    const id = idVector?.get(row);
+    if (id === null || id === undefined) continue;
+    const key = String(id);
+    const value = valueVector?.get(row);
+    if (value !== null && value !== undefined) {
+      const ids = idsByValue.get(String(value));
+      if (ids) ids.add(key);
+      else idsByValue.set(String(value), new Set([key]));
+    }
+    const rowId = rowIdVector?.get(row);
+    if (rowId !== null && rowId !== undefined) {
+      idByRowId.set(Number(rowId), key);
+    }
+  }
+
+  const lookup = { geomRowsById, idsByValue, idByRowId };
+  byDataset.set(dataset, lookup);
+  return lookup;
+}
+
+/**
+ * Outlines the territories joined by the hovered source values or rows; a
+ * territory too small for its outline also gets a ring.
+ */
+export function createJoinControlHoverLayers(
+  source: JoinControlHoverSource,
+  target: JoinControlHoverTarget
+): Layer<DeckDataRow>[] {
+  const lookup = resolveHoverLookup(source.pickData);
+  const ids = new Set<string>();
+  for (const value of target.values ?? []) {
+    for (const id of lookup.idsByValue.get(value) ?? []) ids.add(id);
+  }
+  for (const rowId of target.rowIds ?? []) {
+    const id = lookup.idByRowId.get(rowId);
+    if (id !== undefined) ids.add(id);
+  }
+  const geomRows = [...ids].flatMap((id) => lookup.geomRowsById.get(id) ?? []);
+  if (geomRows.length === 0) return [];
+
+  const layerId = `${source.fillLayerId}-hover`;
+  const layers: Layer<DeckDataRow>[] = [];
+  const outline = createFeatureOutlineOverlay(
+    layerId,
+    source.polyData,
+    geomRows,
+    source.placement
+  );
+  if (outline) layers.push(outline as Layer<DeckDataRow>);
+
+  const extents = resolveFeatureExtents(
+    source.polyData,
+    source.pickData.geometry.numRows
+  );
+  const smallSize = extents.extent * JOIN_CONTROL_SMALL_TERRITORY_RATIO;
+  const ringPositions = geomRows.flatMap((geomRow) =>
+    extents.sizes[geomRow] < smallSize
+      ? [extents.centers[geomRow * 2], extents.centers[geomRow * 2 + 1]]
+      : []
+  );
+  if (ringPositions.length > 0) {
+    layers.push(
+      new ScatterplotLayer({
+        id: `${layerId}-rings`,
+        data: {
+          length: ringPositions.length / 2,
+          attributes: {
+            getPosition: { value: new Float64Array(ringPositions), size: 2 }
+          }
+        },
+        filled: false,
+        stroked: true,
+        radiusUnits: 'pixels',
+        getRadius: HIGHLIGHT_POINT_RING_RADIUS,
+        lineWidthUnits: 'pixels',
+        getLineWidth: HIGHLIGHT_STROKE_WIDTH,
+        getLineColor: HIGHLIGHT_STROKE_COLOR,
+        pickable: false,
+        parameters: THEMATIC_OVERLAY_PARAMETERS,
+        ...source.placement
+      }) as unknown as Layer<DeckDataRow>
+    );
+  }
+  return layers;
 }
 
 export function readJoinControlPickData(

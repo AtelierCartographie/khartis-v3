@@ -16,7 +16,10 @@ import {
   type HoveredRow,
   mapHoverHighlightStore
 } from '../stores/map-hover-highlight.store.svelte';
-import { readJoinControlPickData } from '../layers/join-control-layers';
+import {
+  readJoinControlPickData,
+  resolveJoinControlDatasetRow
+} from '../layers/join-control-layers';
 import { buildJoinControlTooltipEntries } from '../utils/join-control.utils';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {
@@ -288,9 +291,22 @@ export function extractTooltipEntries(
       'featureIds'
     ) as ArrayLike<number> | undefined;
     const geomRow = featureIds?.[info.index];
-    return geomRow === undefined
-      ? []
-      : buildJoinControlTooltipEntries(joinControl, Number(geomRow));
+    if (geomRow === undefined) return [];
+    const datasetRow = resolveJoinControlDatasetRow(
+      joinControl,
+      Number(geomRow)
+    );
+    const otherVariables =
+      datasetRow === null
+        ? []
+        : extractEntriesFromArrowTable(joinControl.dataset, datasetRow).filter(
+            (entry) => entry.key !== joinControl.geoColumn
+          );
+    return buildJoinControlTooltipEntries(
+      joinControl,
+      Number(geomRow),
+      otherVariables
+    );
   }
 
   const rowIndex = resolvePickedRowIndex(info);

@@ -117,7 +117,9 @@ import {
   joinControlStore
 } from '../stores/join-control.store.svelte';
 import {
+  createJoinControlHoverLayers,
   createJoinControlLayers,
+  type JoinControlHoverSource,
   type JoinControlLayers
 } from '../layers/join-control-layers';
 
@@ -331,6 +333,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       }`,
       geometry: split.geometry,
       featureIdColumn: split.featureIdColumn,
+      dataset: split.dataset,
+      geoColumn,
+      sourceIsFile: Boolean(datasetEntry?.geometry),
       rows: statuses.rows,
       focusedStatus: joinControlStore.focusedStatus,
       outlineTerritories:
@@ -426,9 +431,30 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...layers, ...(preview as Layer<DeckDataRow>[])];
   }
 
+  let joinControlHoverSource: JoinControlHoverSource | null = null;
+
+  // Hovering a value in the join panel or a row of the table outlines its
+  // territory over the applied stack, like the map hover.
+  function withJoinControlHover(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const target = untrack(() => joinControlStore.hoverTarget);
+    const source = joinControlHoverSource;
+    if (
+      !target ||
+      !source ||
+      untrack(() => globalState.isMapExporting) ||
+      !layers.some((layer) => layer.id === source.fillLayerId)
+    ) {
+      return layers;
+    }
+    return [...layers, ...createJoinControlHoverLayers(source, target)];
+  }
+
   $effect(() => {
     void mapHoverHighlightStore.overlay;
     void labelLayoutStore.dragPreview;
+    void joinControlStore.hoverTarget;
     untrack(() => {
       if (lastAppliedLayers.length > 0) {
         setLayers(lastAppliedLayers);
@@ -437,7 +463,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   });
 
   function setLayers(stack: Layer<DeckDataRow>[]): boolean {
-    const layers = withLabelDragPreview(withHoverHighlight(stack));
+    const layers = withLabelDragPreview(
+      withHoverHighlight(withJoinControlHover(stack))
+    );
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
 
@@ -1602,6 +1630,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const joinControlTerritoryLayers: Layer<DeckDataRow>[] = [];
       let joinControlCounts: JoinControlCounts | null = null;
+      joinControlHoverSource = null;
 
       if (shouldRenderDatasetFallbacks) {
         const fallbackDatasetIds = new Set<string>(tables.keys());
@@ -1702,6 +1731,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             joinControlTerritoryLayers.push(...joinControl.territoryLayers);
             layers.push(...joinControl.markerLayers);
             joinControlCounts = joinControl.counts;
+            joinControlHoverSource = joinControl.hoverSource;
           }
           if (
             !isDrawnByReferenceBasemap &&
