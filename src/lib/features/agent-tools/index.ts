@@ -1,5 +1,9 @@
 import { inspectProjectTool } from './tools/read-tools';
 import {
+  applyVisualizationSuggestionTool,
+  suggestVisualizationsTool
+} from './tools/suggestion-tools';
+import {
   goToStepTool,
   setLayoutTextsTool,
   setLegendTextsTool,
@@ -10,6 +14,8 @@ import { registerAgentTools } from './webmcp/adapter';
 
 const AGENT_TOOLS = [
   inspectProjectTool,
+  suggestVisualizationsTool,
+  applyVisualizationSuggestionTool,
   updateClassificationTool,
   setLayoutTextsTool,
   setTextTool,

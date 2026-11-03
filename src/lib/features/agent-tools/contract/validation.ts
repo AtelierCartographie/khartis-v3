@@ -83,6 +83,14 @@ export interface StepChange {
   step: (typeof AGENT_STEPS)[number];
 }
 
+export interface SuggestionsQuery {
+  datasetId?: string;
+}
+
+export interface SuggestionChoice extends SuggestionsQuery {
+  suggestionKey: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -298,4 +306,46 @@ export function parseGoToStepInput(input: unknown): Parsed<StepChange> {
     return invalidInput(`step must be one of ${AGENT_STEPS.join(', ')}.`);
   }
   return { ok: true, value: { step } };
+}
+
+function parseOptionalDatasetId(
+  input: Record<string, unknown>
+): Parsed<SuggestionsQuery> {
+  if (input.dataset_id === undefined) return { ok: true, value: {} };
+  const id = parseIdentifier(input.dataset_id, 'dataset_id');
+  return id.ok ? { ok: true, value: { datasetId: id.value } } : id;
+}
+
+export function parseSuggestVisualizationsInput(
+  input: unknown
+): Parsed<SuggestionsQuery> {
+  if (!isRecord(input)) {
+    return invalidInput('Expected an object.');
+  }
+  const unexpected = findUnexpectedKey(input, ['dataset_id']);
+  if (unexpected) {
+    return invalidInput(`Unexpected field: ${unexpected}.`);
+  }
+  return parseOptionalDatasetId(input);
+}
+
+export function parseApplySuggestionInput(
+  input: unknown
+): Parsed<SuggestionChoice> {
+  if (!isRecord(input)) {
+    return invalidInput('Expected an object.');
+  }
+  const unexpected = findUnexpectedKey(input, ['dataset_id', 'suggestion_key']);
+  if (unexpected) {
+    return invalidInput(`Unexpected field: ${unexpected}.`);
+  }
+  const dataset = parseOptionalDatasetId(input);
+  if (!dataset.ok) return dataset;
+  const key = input.suggestion_key;
+  if (typeof key !== 'string' || key.trim() === '' || key.length > 2000) {
+    return invalidInput(
+      'suggestion_key must be a key returned by suggest_visualizations.'
+    );
+  }
+  return { ok: true, value: { ...dataset.value, suggestionKey: key } };
 }
