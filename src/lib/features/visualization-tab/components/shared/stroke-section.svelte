@@ -61,7 +61,7 @@
     coerceDashedPattern
   } from './dashed-pattern.utils';
   import MissingDataSection from './missing-data-section.svelte';
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -69,6 +69,8 @@
     fillColor?: string | string[];
     infoText?: string;
     showDashed?: boolean;
+    /** Controls rendered between the dash options and the opacity slider. */
+    beforeOpacity?: Snippet;
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -105,6 +107,7 @@
     fillColor,
     infoText,
     showDashed = true,
+    beforeOpacity,
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -537,6 +540,8 @@
       />
     {/if}
   {/if}
+
+  {@render beforeOpacity?.()}
 
   <SliderWithInput
     label={m.opacity()}

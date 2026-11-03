@@ -319,6 +319,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.modes?.categoryShape ??
       CategoryShapeMode.UNIQUE,
     commonScale: existing?.commonScale ?? true,
+    knockout: existing?.knockout ?? true,
     positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
     breakValueA: existing?.breakValueA ?? null,
     breakValueB: existing?.breakValueB ?? null,
