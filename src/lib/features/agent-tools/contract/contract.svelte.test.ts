@@ -11,6 +11,7 @@ import {
   listCalculatedColumns,
   type ProjectSnapshotInput
 } from './project-snapshot';
+import { reviewMap, type MapReviewInput } from './map-review';
 import { splitExpectedRevision } from './revision';
 import {
   parseGoToStepInput,
@@ -371,4 +372,163 @@ describe('agent revision', () => {
       ).toBe(false);
     }
   );
+});
+
+describe('agent map review', () => {
+  const READY_MAP: MapReviewInput = {
+    pageTitle: 'Pauvreté en Seine-Saint-Denis',
+    pageSource: 'Insee, Filosofi 2021',
+    freeTexts: [],
+    visualizations: [
+      {
+        id: 'viz-1',
+        datasetId: 'ds-1',
+        dataDriven: true,
+        fill: {
+          column: 'taux_pauvrete',
+          nature: 'ratio',
+          missingCount: 0,
+          missingShown: false,
+          classes: {
+            classes: 5,
+            counts: [8, 8, 8, 8, 8],
+            paletteFamily: 'sequential',
+            colorblindSafePalette: false,
+            hasBreakpoint: false
+          }
+        },
+        legends: [{ visible: true, title: 'Taux de pauvreté (%)' }]
+      }
+    ]
+  };
+  const ids = (input: MapReviewInput) =>
+    reviewMap(input).checks.map((check) => check.id);
+  const withFill = (
+    fill: Partial<NonNullable<MapReviewInput['visualizations'][0]['fill']>>
+  ): MapReviewInput => ({
+    ...READY_MAP,
+    visualizations: [
+      {
+        ...READY_MAP.visualizations[0],
+        fill: { ...READY_MAP.visualizations[0].fill!, ...fill }
+      }
+    ]
+  });
+
+  it('should find nothing to fix when a rate is classed, titled, sourced and its legend titled', () => {
+    expect(reviewMap(READY_MAP)).toEqual({ ready: true, checks: [] });
+  });
+
+  it('should warn when a count is shown as a choropleth or a ratio as proportional symbols', () => {
+    expect(ids(withFill({ column: 'population', nature: 'count' }))).toEqual([
+      'count_as_choropleth'
+    ]);
+    expect(
+      ids({
+        ...READY_MAP,
+        visualizations: [
+          {
+            id: 'viz-2',
+            dataDriven: true,
+            proportionalSymbols: { column: 'taux', nature: 'ratio' },
+            legends: [{ visible: true, title: 'Taux' }]
+          }
+        ]
+      })
+    ).toEqual(['ratio_as_proportional_symbols']);
+  });
+
+  it('should warn when classes are empty or missing values are not shown', () => {
+    const review = reviewMap(
+      withFill({
+        missingCount: 3,
+        missingShown: false,
+        classes: {
+          ...READY_MAP.visualizations[0].fill!.classes!,
+          counts: [10, 0, 10, 10, 10]
+        }
+      })
+    );
+
+    expect(review.ready).toBe(false);
+    expect(review.checks.map((check) => check.id)).toEqual([
+      'missing_values_hidden',
+      'empty_classes'
+    ]);
+    expect(ids(withFill({ missingCount: 3, missingShown: true }))).toEqual([]);
+  });
+
+  it('should not warn about missing values when another layer of the same column shows them', () => {
+    const classes = withFill({ missingCount: 3, missingShown: false })
+      .visualizations[0];
+    expect(
+      ids({
+        ...READY_MAP,
+        visualizations: [
+          classes,
+          {
+            ...classes,
+            id: 'viz-missing',
+            fill: { ...classes.fill!, missingShown: true }
+          }
+        ]
+      })
+    ).toEqual([]);
+  });
+
+  it('should only advise when the title or source sit in free texts and the palette needs a check', () => {
+    const review = reviewMap({
+      ...withFill({
+        classes: {
+          classes: 9,
+          counts: [5, 5, 5, 5, 5, 5, 5, 5, 5],
+          paletteFamily: 'diverging',
+          colorblindSafePalette: false,
+          hasBreakpoint: false
+        }
+      }),
+      pageTitle: null,
+      pageSource: null,
+      freeTexts: ['Pauvreté en 2021', 'Source : Insee']
+    });
+
+    expect(review.ready).toBe(true);
+    expect(review.checks.map((check) => check.id)).toEqual([
+      'title_in_free_text',
+      'many_classes',
+      'diverging_without_breakpoint',
+      'palette_outside_colorblind_set'
+    ]);
+  });
+
+  it('should warn when the page has no title or source and a legend is hidden or untitled', () => {
+    expect(
+      ids({
+        ...READY_MAP,
+        pageTitle: null,
+        pageSource: null,
+        visualizations: [
+          {
+            ...READY_MAP.visualizations[0],
+            legends: [{ visible: false, title: '' }]
+          },
+          {
+            id: 'viz-3',
+            dataDriven: true,
+            legends: [{ visible: true, title: ' ' }]
+          },
+          {
+            id: 'viz-4',
+            dataDriven: false,
+            legends: [{ visible: true, title: '' }]
+          }
+        ]
+      })
+    ).toEqual([
+      'title_missing',
+      'source_missing',
+      'legend_hidden',
+      'legend_title_missing'
+    ]);
+  });
 });
