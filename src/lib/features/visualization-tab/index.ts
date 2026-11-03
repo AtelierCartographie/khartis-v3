@@ -11,6 +11,11 @@ export {
 export {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
-  mapSuggestionToType
+  isVisualizationMatchingSuggestion,
+  mapSuggestionToType,
+  resolveBlankVisualizationType
 } from './services/suggestion.service';
-export { computeColumnSemioTypes } from './utils/compute-suggestions.utils';
+export {
+  computeColumnSemioTypes,
+  computeVisualizationSuggestions
+} from './utils/compute-suggestions.utils';
