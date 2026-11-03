@@ -188,16 +188,12 @@ async function main() {
   );
   log(`Public URL: ${deployment.publicUrl}`);
   log(`Base path: ${deployment.basePath || '/'}`);
-  const buildEnv = {
-    BASE_PATH: deployment.basePath,
-    VITE_APP_VERSION: tag,
-    VITE_KHARTIS_ENV: target.khartisEnv,
-    VITE_DEBUG: 'false',
-    VITE_DEBUG_AUTH: 'false',
-    VITE_LOG_LEVEL: 'ERROR',
-    VITE_LOG_STACK: 'false',
-    PUBLIC_GTM_CONTAINER_ID: process.env[target.gtmContainerEnv]?.trim() ?? ''
-  };
+  const buildEnv = releaseBuildEnv({
+    basePath: deployment.basePath,
+    tag,
+    khartisEnv: target.khartisEnv,
+    gtmContainerId: process.env[target.gtmContainerEnv]?.trim() ?? ''
+  });
 
   if (!options.dryRun) {
     assertSafeRemoteDir(remoteDir, target.remoteDirLeaf);
@@ -804,6 +800,22 @@ async function readSftpConfig() {
   }
 
   return { ...baseConnection, password };
+}
+
+// A deployed build never carries debug output or experimental features, even
+// when the maintainer's local env files turn them on for development.
+function releaseBuildEnv({ basePath, tag, khartisEnv, gtmContainerId }) {
+  return {
+    BASE_PATH: basePath,
+    VITE_APP_VERSION: tag,
+    VITE_KHARTIS_ENV: khartisEnv,
+    VITE_DEBUG: 'false',
+    VITE_DEBUG_AUTH: 'false',
+    VITE_LOG_LEVEL: 'ERROR',
+    VITE_LOG_STACK: 'false',
+    VITE_KHARTIS_AGENT_TOOLS: 'false',
+    PUBLIC_GTM_CONTAINER_ID: gtmContainerId
+  };
 }
 
 function sanitizedChildEnv(extra = {}) {
@@ -3448,6 +3460,7 @@ export {
   parseRemoteTagCommit,
   parseRemoteTagNames,
   publishNewAssetsBeforeSwap,
+  releaseBuildEnv,
   reportPublicInfrastructurePreflight,
   reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
