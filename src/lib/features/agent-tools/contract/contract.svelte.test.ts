@@ -18,7 +18,8 @@ import {
   parseLayoutTextsInput,
   parseLegendTextsInput,
   parseSetTextInput,
-  parseUpdateClassificationInput
+  parseUpdateClassificationInput,
+  refuseForChoropleth
 } from './validation';
 
 const SEQUENTIAL_ID = sequentialPalettes[0].id;
@@ -530,5 +531,26 @@ describe('agent map review', () => {
       'legend_hidden',
       'legend_title_missing'
     ]);
+  });
+});
+
+describe('agent choropleth variable', () => {
+  it.each([
+    ['count'],
+    ['category'],
+    ['ordered_category'],
+    ['label'],
+    ['place_id'],
+    ['latitude']
+  ] as const)(
+    'should refuse a %s column when a choropleth classes it',
+    (nature) => {
+      expect(refuseForChoropleth(nature)).not.toBeNull();
+    }
+  );
+
+  it('should accept a ratio or a calculated column the engine has not typed', () => {
+    expect(refuseForChoropleth('ratio')).toBeNull();
+    expect(refuseForChoropleth(undefined)).toBeNull();
   });
 });

@@ -146,7 +146,7 @@ function mergeClassificationConfig(
   };
 }
 
-function resetClassificationComputedValues(
+export function resetClassificationComputedValues(
   classification: ClassificationConfig | undefined
 ): ClassificationConfig | undefined {
   if (!classification) {
@@ -169,6 +169,75 @@ function resetClassificationComputedValues(
     breakpointLowerClassCount: undefined,
     calendarStep: undefined
   };
+}
+
+function getLegendSubtitleForPrimitive(
+  visualization: VisualizationConfig,
+  primitive: ClassifiablePrimitive
+): string {
+  switch (primitive) {
+    case PrimitiveFilterType.POLYGON:
+      return joinLegendSubtitleParts([
+        getPrimitiveValueColumn(visualization, primitive),
+        getPrimitiveCategoryColumn(visualization, primitive)
+      ]);
+
+    case PrimitiveFilterType.POINT:
+      return joinLegendSubtitleParts([
+        getPrimitiveSizeColumn(visualization, primitive),
+        getPrimitiveValueColumn(visualization, primitive),
+        getPrimitiveCategoryColumn(visualization, primitive)
+      ]);
+
+    case PrimitiveFilterType.LINE:
+      return joinLegendSubtitleParts([
+        getPrimitiveSizeColumn(visualization, primitive),
+        getPrimitiveValueColumn(visualization, primitive),
+        getPrimitiveCategoryColumn(visualization, primitive)
+      ]);
+
+    case PrimitiveFilterType.TEXT: {
+      const text = getTextPrimitive(visualization);
+      return joinLegendSubtitleParts([
+        text?.valueColumn,
+        text?.categoryColumn,
+        text?.labelColumn
+      ]);
+    }
+  }
+}
+
+export function syncLegendSubtitleAfterMappingChange(
+  primitive: ClassifiablePrimitive,
+  previousVisualization: VisualizationConfig,
+  nextVisualization: VisualizationConfig
+): void {
+  const previousAutoSubtitle = getLegendSubtitleForPrimitive(
+    previousVisualization,
+    primitive
+  );
+  const nextAutoSubtitle = getLegendSubtitleForPrimitive(
+    nextVisualization,
+    primitive
+  );
+  const legendItem = getLegendState().items.find(
+    (item) => item.variableId === nextVisualization.id
+  );
+  const usesAutomaticSubtitle =
+    legendItem?.subtitleMode === 'auto' ||
+    (!legendItem?.subtitleMode &&
+      (!legendItem?.subtitle || legendItem.subtitle === previousAutoSubtitle));
+
+  if (
+    legendItem &&
+    usesAutomaticSubtitle &&
+    legendItem.subtitle !== nextAutoSubtitle
+  ) {
+    legendActions.updateLegendItem(legendItem.id, {
+      subtitle: nextAutoSubtitle,
+      subtitleMode: 'auto'
+    });
+  }
 }
 
 function invertClassificationPalette(
@@ -950,76 +1019,6 @@ export function usePrimitivePanelController({
           { visualization: currentVisualization, preserveOrigin: true }
         )
     });
-  }
-
-  function getLegendSubtitleForPrimitive(
-    visualization: VisualizationConfig,
-    primitive: ClassifiablePrimitive
-  ): string {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return joinLegendSubtitleParts([
-          getPrimitiveValueColumn(visualization, primitive),
-          getPrimitiveCategoryColumn(visualization, primitive)
-        ]);
-
-      case PrimitiveFilterType.POINT:
-        return joinLegendSubtitleParts([
-          getPrimitiveSizeColumn(visualization, primitive),
-          getPrimitiveValueColumn(visualization, primitive),
-          getPrimitiveCategoryColumn(visualization, primitive)
-        ]);
-
-      case PrimitiveFilterType.LINE:
-        return joinLegendSubtitleParts([
-          getPrimitiveSizeColumn(visualization, primitive),
-          getPrimitiveValueColumn(visualization, primitive),
-          getPrimitiveCategoryColumn(visualization, primitive)
-        ]);
-
-      case PrimitiveFilterType.TEXT: {
-        const text = getTextPrimitive(visualization);
-        return joinLegendSubtitleParts([
-          text?.valueColumn,
-          text?.categoryColumn,
-          text?.labelColumn
-        ]);
-      }
-    }
-  }
-
-  function syncLegendSubtitleAfterMappingChange(
-    primitive: ClassifiablePrimitive,
-    previousVisualization: VisualizationConfig,
-    nextVisualization: VisualizationConfig
-  ): void {
-    const previousAutoSubtitle = getLegendSubtitleForPrimitive(
-      previousVisualization,
-      primitive
-    );
-    const nextAutoSubtitle = getLegendSubtitleForPrimitive(
-      nextVisualization,
-      primitive
-    );
-    const legendItem = getLegendState().items.find(
-      (item) => item.variableId === nextVisualization.id
-    );
-    const usesAutomaticSubtitle =
-      legendItem?.subtitleMode === 'auto' ||
-      (!legendItem?.subtitleMode &&
-        (!legendItem?.subtitle ||
-          legendItem.subtitle === previousAutoSubtitle));
-
-    if (
-      legendItem &&
-      usesAutomaticSubtitle &&
-      legendItem.subtitle !== nextAutoSubtitle
-    ) {
-      legendActions.updateLegendItem(legendItem.id, {
-        subtitle: nextAutoSubtitle,
-        subtitleMode: 'auto'
-      });
-    }
   }
 
   function applyPrimitiveMappingUpdate(
