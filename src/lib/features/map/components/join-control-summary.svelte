@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { Button } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -41,6 +42,8 @@
   // A window drag resizes the workspace in small steps the box simply
   // follows; a panel width change moves it far enough to glide.
   const SLIDE_MIN_SHIFT_PX = 24;
+  // Shown with the join the first time it is drawn, then shown at once.
+  const REVEAL_MS = 400;
 
   let summaryElement = $state<HTMLElement | null>(null);
 
@@ -103,6 +106,11 @@
   <div class="summary-anchor">
     <section
       bind:this={summaryElement}
+      in:fly={{
+        y: 12,
+        duration:
+          joinControlStore.revealProgress < 1 ? motionDuration(REVEAL_MS) : 0
+      }}
       class="join-control-summary"
       aria-label={m.section_join_assisted()}
     >
@@ -257,6 +265,11 @@
     max-width: none;
     min-height: 0;
     padding: 0.125rem 0.5rem 0.375rem;
+  }
+
+  .join-control-summary :global(.summary-header.bx--btn:hover),
+  .join-control-summary :global(.summary-header.bx--btn:active) {
+    background: none;
   }
 
   .summary-title {

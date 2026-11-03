@@ -7,6 +7,7 @@ import {
 } from '$lib/features/duckdb';
 import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { BasemapMetadata } from '../types/basemap.types';
 
@@ -47,6 +48,8 @@ export interface JoinControlHoverTarget {
   values?: string[];
   rowIds?: number[];
 }
+
+const REVEAL_MOTION_MS = 600;
 
 const TERRITORY_STATUSES = new Set<JoinControlCategory>([
   'matched',
@@ -96,6 +99,11 @@ function createJoinControlStore() {
   let panelRequest = $state.raw<JoinPanelRequest | null>(null);
   let hoverTarget = $state.raw<JoinControlHoverTarget | null>(null);
   let version = $state(0);
+  // The join appears on the map once the user reaches the join step, and
+  // stays for the session; it fades in the first time it is drawn.
+  let revealedDatasetIds = $state.raw(new Set<string>());
+  let revealProgress = $state(1);
+  const animatedDatasetIds = new Set<string>();
   let loadedKey: string | null = null;
   let pendingKey: string | null = null;
 
@@ -194,6 +202,27 @@ function createJoinControlStore() {
     };
   }
 
+  function reveal(datasetId: string): void {
+    if (revealedDatasetIds.has(datasetId)) return;
+    revealedDatasetIds = new Set(revealedDatasetIds).add(datasetId);
+    version++;
+  }
+
+  /** Fades the join in, once per dataset, from its first drawing on. */
+  function startRevealAnimation(datasetId: string): void {
+    if (animatedDatasetIds.has(datasetId)) return;
+    animatedDatasetIds.add(datasetId);
+    const duration = motionDuration(REVEAL_MOTION_MS);
+    if (duration === 0 || typeof requestAnimationFrame !== 'function') return;
+    revealProgress = 0;
+    const start = performance.now();
+    const step = (now: number) => {
+      revealProgress = Math.min(1, (now - start) / duration);
+      if (revealProgress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   function setHoverTarget(next: JoinControlHoverTarget | null): void {
     if (!next && !hoverTarget) return;
     hoverTarget = next;
@@ -227,7 +256,13 @@ function createJoinControlStore() {
     setActiveCategory,
     requestPanelCategory,
     requestPanelSection,
-    setHoverTarget
+    setHoverTarget,
+    reveal,
+    startRevealAnimation,
+    isRevealed: (datasetId: string) => revealedDatasetIds.has(datasetId),
+    get revealProgress(): number {
+      return revealProgress;
+    }
   };
 }
 

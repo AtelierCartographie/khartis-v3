@@ -333,20 +333,29 @@
                 >{entry.value}</span
               >
             </div>
+          {:else if entry.role === 'columns'}
+            <div class="tooltip-columns">
+              {#each entry.columns ?? [] as column, columnIndex (columnIndex)}
+                <div class="tooltip-column">
+                  <span class="tooltip-column-label">
+                    <span class="tooltip-key">{column.label}</span>
+                    {#if column.badge}
+                      <VariableBadge
+                        label={column.badge}
+                        type="geo-ref"
+                        interactive={false}
+                      />
+                    {/if}
+                  </span>
+                  <span class="tooltip-column-value">{column.value}</span>
+                </div>
+              {/each}
+            </div>
           {:else}
             <div class="tooltip-row">
-              <span class="tooltip-key-group">
-                <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-                  >{entry.key}</span
-                >
-                {#if entry.badge}
-                  <VariableBadge
-                    label={entry.badge}
-                    type="geo-ref"
-                    interactive={false}
-                  />
-                {/if}
-              </span>
+              <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+                >{entry.key}</span
+              >
               <span class="tooltip-value">{entry.value}</span>
             </div>
           {/if}
@@ -596,12 +605,42 @@
     --chip-background: var(--khartis-additions-join-error-bg, #fff1f1);
   }
 
-  .tooltip-key-group {
+  /* Two fields side by side, like a row of the join tables. */
+  .tooltip-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+
+  .tooltip-column {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 2px;
     min-width: 0;
+  }
+
+  .tooltip-column-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 4px;
+    min-width: 0;
+  }
+
+  .tooltip-column-value {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  /* The variable reads at the size of the values. */
+  .tooltip-column-label :global(.variable-badge) {
+    min-width: 0;
+    height: 15px;
+  }
+
+  .tooltip-column-label :global(.badge-label) {
+    font-size: 11px;
+    line-height: 13px;
   }
 
   .tooltip-subtitle {
@@ -639,10 +678,7 @@
   }
 
   .interactive .tooltip-key {
-    font-size: 10px;
     line-height: 1.3;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
     color: var(--cds-text-helper, #6f6f6f);
   }
 

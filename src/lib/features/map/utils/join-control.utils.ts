@@ -90,16 +90,24 @@ export function buildJoinControlTooltipEntries(
       tone: STATUS_TONES[status],
       role: 'heading'
     },
+    { key: 'heading-divider', value: '', role: 'divider' },
     {
-      key: pickData.sourceIsFile
-        ? m.join_control_tooltip_file()
-        : m.join_data_column(),
-      value: hasData ? joinValues(row.dataValues, row.valueCount) : '—',
-      badge: pickData.geoColumn
-    },
-    {
-      key: m.join_basemap_column(),
-      value: formatValue(row?.territoryName ?? String(fallbackName ?? ''))
+      key: 'join',
+      value: '',
+      role: 'columns',
+      columns: [
+        {
+          label: pickData.sourceIsFile
+            ? m.join_control_tooltip_file()
+            : m.join_data_column(),
+          badge: pickData.geoColumn,
+          value: hasData ? joinValues(row.dataValues, row.valueCount) : '—'
+        },
+        {
+          label: m.join_basemap_column(),
+          value: formatValue(row?.territoryName ?? String(fallbackName ?? ''))
+        }
+      ]
     }
   ];
 

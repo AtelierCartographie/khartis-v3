@@ -22,6 +22,13 @@ export interface GeometryInfo {
 
 export type RGBColor = [number, number, number];
 
+export interface TooltipColumn {
+  label: string;
+  value: string;
+  /** A variable drawn as a badge beside the label, as in the join tables. */
+  badge?: string;
+}
+
 export interface TooltipEntry {
   key: string;
   value: string;
@@ -29,13 +36,14 @@ export interface TooltipEntry {
   isVizColumn?: boolean;
   /** A heading's value drawn as a join category count. */
   tone?: JoinCategoryTone;
-  /** A variable drawn as a badge under the key, as in the join tables. */
-  badge?: string;
+  /** The fields of a `columns` entry, side by side like a join table row. */
+  columns?: TooltipColumn[];
   /**
    * A heading (key in the accent color, then its value), a subtitle (the key
-   * alone, muted) or a divider, instead of a key/value row.
+   * alone, muted), a divider, or fields side by side, instead of a key/value
+   * row.
    */
-  role?: 'heading' | 'subtitle' | 'divider';
+  role?: 'heading' | 'subtitle' | 'divider' | 'columns';
   /** Shown only once the inspector is pinned. */
   pinnedOnly?: boolean;
 }
