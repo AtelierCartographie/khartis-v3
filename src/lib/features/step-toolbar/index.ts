@@ -5,6 +5,7 @@ export * from './fonts.constants';
 export {
   annotationsActions,
   getAnnotationsState,
+  getPageElementPlaceholder,
   isPageElementPlaceholder
 } from './tools/annotations';
 export { facetsStore } from './tools/facets';

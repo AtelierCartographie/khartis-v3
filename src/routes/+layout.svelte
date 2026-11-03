@@ -324,9 +324,13 @@
     let stopAgentTools: (() => void) | undefined;
     let agentToolsDisposed = false;
     if (import.meta.env.VITE_KHARTIS_AGENT_TOOLS === 'true') {
-      void import('$lib/features/agent-tools').then(({ startAgentTools }) => {
-        if (!agentToolsDisposed) stopAgentTools = startAgentTools();
-      });
+      import('$lib/features/agent-tools')
+        .then(({ startAgentTools }) => {
+          if (!agentToolsDisposed) stopAgentTools = startAgentTools();
+        })
+        .catch((error: unknown) => {
+          logger.warn('Agent tools failed to load', LogCategory.SYSTEM, error);
+        });
     }
 
     // Carbon ComboBox renders a listbox wrapper; remap it so ARIA owns options only.

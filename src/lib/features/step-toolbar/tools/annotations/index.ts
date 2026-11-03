@@ -2,7 +2,10 @@ export {
   annotationsActions,
   getAnnotationsState
 } from './annotations.store.svelte';
-export { isPageElementPlaceholder } from './annotations-placeholders.utils';
+export {
+  getPageElementPlaceholder,
+  isPageElementPlaceholder
+} from './annotations-placeholders.utils';
 export { stackBottomRightPageElements } from './annotations-page-layout.utils';
 export type {
   PageElementRole,
