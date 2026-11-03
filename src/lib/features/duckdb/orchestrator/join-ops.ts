@@ -1127,8 +1127,6 @@ export interface JoinTerritoryStatusRow {
   /** Distinct source values joined to the entity, first ones only. */
   dataValues: string[];
   valueCount: number;
-  /** Basemap value the join matched. */
-  matchedLabel: string | null;
 }
 
 const MAX_TERRITORY_DATA_VALUES = 3;
@@ -1165,7 +1163,6 @@ export async function getJoinTerritoryStatuses(
   const escapedDataset = escapeIdentifier(dataset.tableName);
   const escapedGeoColumn = escapeIdentifier(geoColumn);
   const escapedIdColumn = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
-  const escapedLabelColumn = escapeIdentifier(JOINED_BASEMAP_COLUMN.LABEL);
 
   const rows = (await Duck.query(
     `WITH territories AS (
@@ -1184,7 +1181,6 @@ export async function getJoinTerritoryStatuses(
       SELECT
         CAST(t."${escapedIdColumn}" AS VARCHAR) AS territory_id,
         CAST(t."${escapedGeoColumn}" AS VARCHAR) AS data_value,
-        CAST(t."${escapedLabelColumn}" AS VARCHAR) AS matched_label,
         g.status AS value_status
       FROM "${escapedDataset}" t
       LEFT JOIN "${escapeIdentifier(gradedTable)}" g
@@ -1196,8 +1192,7 @@ export async function getJoinTerritoryStatuses(
         territory_id,
         COUNT(*) AS row_count,
         bool_or(value_status IN ('check', 'ambiguous')) AS needs_check,
-        list(DISTINCT data_value ORDER BY data_value) AS data_values,
-        min(matched_label) AS matched_label
+        list(DISTINCT data_value ORDER BY data_value) AS data_values
       FROM joined_rows
       GROUP BY territory_id
     )
@@ -1212,8 +1207,7 @@ export async function getJoinTerritoryStatuses(
       END AS status,
       COALESCE(p.row_count, 0) AS row_count,
       COALESCE(p.data_values[1:${MAX_TERRITORY_DATA_VALUES}], []) AS data_values,
-      COALESCE(len(p.data_values), 0) AS value_count,
-      p.matched_label
+      COALESCE(len(p.data_values), 0) AS value_count
     FROM territories t
     LEFT JOIN display_names n ON CAST(n.id AS VARCHAR) = t.territory_id
     LEFT JOIN per_territory p ON p.territory_id = t.territory_id
@@ -1226,7 +1220,6 @@ export async function getJoinTerritoryStatuses(
     row_count: number | bigint;
     data_values: string[] | null;
     value_count: number | bigint;
-    matched_label: string | null;
   }>;
 
   return (rows ?? []).map((row) => ({
@@ -1237,8 +1230,7 @@ export async function getJoinTerritoryStatuses(
     dataValues: (row.data_values ?? []).filter(
       (value): value is string => value !== null
     ),
-    valueCount: Number(row.value_count),
-    matchedLabel: row.matched_label ?? null
+    valueCount: Number(row.value_count)
   }));
 }
 

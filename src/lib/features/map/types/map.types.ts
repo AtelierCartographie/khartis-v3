@@ -28,6 +28,13 @@ export interface TooltipEntry {
   isVizColumn?: boolean;
   /** CSS background of a swatch shown before the value, as in the legend. */
   swatch?: string;
+  /**
+   * A heading (key in the accent color above its value), a subtitle (key and
+   * value on one muted line) or a divider, instead of a key/value row.
+   */
+  role?: 'heading' | 'subtitle' | 'divider';
+  /** Shown only once the inspector is pinned. */
+  pinnedOnly?: boolean;
 }
 
 export interface OrthographicMainViewState {

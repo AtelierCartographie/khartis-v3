@@ -295,9 +295,18 @@ géométrie et restent dans le panneau.
 - Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
   repère ponctuel ; un territoire sans donnée seulement quand ce statut est mis
   en évidence.
-- L'encadré de synthèse (`join-control-summary.svelte`) est un overlay de
-  l'espace de travail, pas un élément de la page. Ouvrir une catégorie du
-  panneau, ou cliquer une ligne de l'encadré, met ses territoires en évidence.
+- L'encadré de synthèse (`join-control-summary.svelte`), en bas à droite de
+  l'espace de travail et non dans la page, reprend les catégories du panneau
+  avec leurs comptes et le même en-tête (`join-category-header.svelte`), puis
+  les entités hors carte et les entités du fond sans données. Cliquer une
+  catégorie ouvre son accordéon dans le panneau ; ouvrir une catégorie met ses
+  territoires en évidence.
+- Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
+  le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
+  la carte, sans reconstruire les couches.
+- L'infobulle donne le statut, la référence géographique, le nom sur le fond et
+  la valeur du tableau (ou du fichier importé) ; épinglée, elle ajoute les autres
+  variables jointes.
 - Rien de cela n'entre dans un export.
 
 ## Habillage et facettes

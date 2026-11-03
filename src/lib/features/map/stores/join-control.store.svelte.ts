@@ -1,6 +1,7 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   duckDBOrchestrator,
+  isMissingDuckTableError,
   type JoinTerritoryStatus,
   type JoinTerritoryStatusRow
 } from '$lib/features/duckdb';
@@ -24,6 +25,31 @@ export interface JoinControlStatuses {
 }
 
 export type JoinControlCounts = Record<JoinTerritoryStatus, number>;
+
+/** A join panel category, or the territories left without data. */
+export type JoinControlCategory =
+  JoinTerritoryStatus | 'unrecognized' | 'ignored';
+
+export type JoinPanelCategory = Exclude<JoinControlCategory, 'no_data'>;
+
+export interface JoinPanelRequest {
+  id: number;
+  category: JoinPanelCategory;
+  open: boolean;
+}
+
+/** Source values or row ids whose territories the map outlines. */
+export interface JoinControlHoverTarget {
+  values?: string[];
+  rowIds?: number[];
+}
+
+const TERRITORY_STATUSES = new Set<JoinControlCategory>([
+  'matched',
+  'check',
+  'duplicate',
+  'no_data'
+]);
 
 const tableIdentities = new WeakMap<ArrowTable, number>();
 let nextTableIdentity = 0;
@@ -62,12 +88,17 @@ function areCountsEqual(
 function createJoinControlStore() {
   let statuses = $state.raw<JoinControlStatuses | null>(null);
   let counts = $state.raw<JoinControlCounts | null>(null);
-  let focusedStatus = $state<JoinTerritoryStatus | null>(null);
+  let activeCategory = $state<JoinControlCategory | null>(null);
+  let panelRequest = $state.raw<JoinPanelRequest | null>(null);
+  let hoverTarget = $state.raw<JoinControlHoverTarget | null>(null);
   let version = $state(0);
   let loadedKey: string | null = null;
   let pendingKey: string | null = null;
 
   async function load(request: JoinControlRequest, key: string) {
+    const tableName = duckDBOrchestrator.findDatasetByIdOrSourceFile(
+      request.orchestratorDatasetId
+    )?.tableName;
     try {
       const rows = await duckDBOrchestrator.getJoinTerritoryStatuses(
         request.orchestratorDatasetId,
@@ -79,13 +110,23 @@ function createJoinControlStore() {
       statuses = { datasetId: request.datasetId, rows };
     } catch (error) {
       if (pendingKey !== key) return;
+      // A project switch can drop the table under a pending request.
+      const isDatasetGone =
+        isMissingDuckTableError(error) &&
+        (!tableName || !duckDBOrchestrator.getDatasetByTable(tableName));
       // The map falls back to the neutral preview; the join panel still
       // reports every bucket.
-      logger.error('Failed to grade the joined territories', LogCategory.MAP, {
-        datasetId: request.datasetId,
-        basemap: request.basemap.file,
-        error
-      });
+      if (!isDatasetGone) {
+        logger.error(
+          'Failed to grade the joined territories',
+          LogCategory.MAP,
+          {
+            datasetId: request.datasetId,
+            basemap: request.basemap.file,
+            error
+          }
+        );
+      }
       statuses = null;
     }
     loadedKey = key;
@@ -112,25 +153,60 @@ function createJoinControlStore() {
     counts = next;
   }
 
-  function setFocusedStatus(status: JoinTerritoryStatus | null): void {
-    if (focusedStatus === status) return;
-    focusedStatus = status;
-    version++;
+  function toFocusedStatus(
+    category: JoinControlCategory | null
+  ): JoinTerritoryStatus | null {
+    return category && TERRITORY_STATUSES.has(category)
+      ? (category as JoinTerritoryStatus)
+      : null;
+  }
+
+  /** The open category; a territory status also highlights the map. */
+  function setActiveCategory(category: JoinControlCategory | null): void {
+    if (activeCategory === category) return;
+    const redraws =
+      toFocusedStatus(activeCategory) !== toFocusedStatus(category);
+    activeCategory = category;
+    if (redraws) version++;
+  }
+
+  /** Asks the join panel to open or close one of its categories. */
+  function requestPanelCategory(
+    category: JoinPanelCategory,
+    open: boolean
+  ): void {
+    panelRequest = { id: (panelRequest?.id ?? 0) + 1, category, open };
+  }
+
+  function setHoverTarget(next: JoinControlHoverTarget | null): void {
+    if (!next && !hoverTarget) return;
+    hoverTarget = next;
   }
 
   return {
     get counts(): JoinControlCounts | null {
       return counts;
     },
+    get activeCategory(): JoinControlCategory | null {
+      return activeCategory;
+    },
     get focusedStatus(): JoinTerritoryStatus | null {
-      return focusedStatus;
+      return toFocusedStatus(activeCategory);
+    },
+    get panelRequest(): JoinPanelRequest | null {
+      return panelRequest;
+    },
+    get hoverTarget(): JoinControlHoverTarget | null {
+      return hoverTarget;
     },
     get version(): number {
       return version;
     },
     request,
     publishCounts,
-    setFocusedStatus
+    setActiveCategory,
+    requestPanelCategory,
+    setHoverTarget
   };
 }
 
