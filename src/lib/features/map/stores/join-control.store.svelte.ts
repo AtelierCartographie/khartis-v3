@@ -20,8 +20,6 @@ export interface JoinControlRequest {
   basemap: BasemapMetadata;
   geoColumn: string;
   excludedValues: string[];
-  /** Basemap values the ignored source values were matched to. */
-  ignoredBasemapValues: string[];
   /**
    * Associations picked in the join panel and not applied yet, by source
    * value; an empty value leaves its source value unjoined.
@@ -39,7 +37,8 @@ export interface JoinControlStatuses {
 export type JoinControlCounts = Record<JoinTerritoryStatus, number>;
 
 /** A join panel category, or the territories left without data. */
-export type JoinControlCategory = JoinTerritoryStatus | 'unrecognized';
+export type JoinControlCategory =
+  JoinTerritoryStatus | 'unrecognized' | 'ignored';
 
 export type JoinPanelCategory = Exclude<JoinControlCategory, 'no_data'>;
 
@@ -70,7 +69,6 @@ function buildRequestKey(request: JoinControlRequest): string {
     request.basemap.file,
     request.geoColumn,
     [...request.excludedValues].sort(),
-    [...request.ignoredBasemapValues].sort(),
     Object.entries(request.pendingMappings).sort(([left], [right]) =>
       left.localeCompare(right)
     ),
@@ -110,7 +108,6 @@ function createJoinControlStore() {
         request.geoColumn,
         {
           excludedValues: request.excludedValues,
-          ignoredBasemapValues: request.ignoredBasemapValues,
           pendingMappings: request.pendingMappings
         }
       );

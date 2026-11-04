@@ -327,9 +327,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       excludedValues: dataTabState.basemapJoin.ignoredEntities.map(
         (entity) => entity.dataValue
       ),
-      ignoredBasemapValues: dataTabState.basemapJoin.ignoredEntities.flatMap(
-        (entity) => (entity.basemapValue ? [entity.basemapValue] : [])
-      ),
       pendingMappings: buildPendingJoinMappings(
         dataTabState.basemapJoin.joinMappings,
         joinControlStore.getClearedValues(datasetId)
