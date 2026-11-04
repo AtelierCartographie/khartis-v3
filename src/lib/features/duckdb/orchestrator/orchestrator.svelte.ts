@@ -798,11 +798,7 @@ export const duckDBOrchestrator = {
       });
     }
 
-    await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
-
-    invalidateDatasetCache(dataset.tableName);
-    const columns = await Duck.analyse(dataset.tableName);
-    datasetOps.updateDatasetColumns(dataset.id, columns);
+    joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
   },
 
   async finalizeJoin(

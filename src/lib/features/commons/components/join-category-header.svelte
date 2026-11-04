@@ -8,88 +8,33 @@
     tone: JoinCategoryTone;
     count: number;
     label: string;
-    /** Carbon icon of the category. */
-    icon?: Component<{ size?: number }>;
-    /**
-     * CSS background of a map legend box drawn before the icon; `null` keeps
-     * the box's place empty, for a category the map does not draw.
-     */
-    legend?: string | null;
-    /** An accordion header: shows the chevron and sets `aria-expanded`. */
-    expanded?: boolean;
-    compact?: boolean;
-    /** A secondary category, its label in grey. */
-    muted?: boolean;
-    title?: string;
-    /** Without it the header is a plain row, not a button. */
-    onclick?: () => void;
+    icon: Component<{ size?: number }>;
+    expanded: boolean;
+    onclick: () => void;
   }
 
-  let {
-    tone,
-    count,
-    label,
-    icon: Icon,
-    legend,
-    expanded,
-    compact = false,
-    muted = false,
-    title,
-    onclick
-  }: Props = $props();
-
-  const iconSize = $derived(compact ? 16 : 20);
+  let { tone, count, label, icon: Icon, expanded, onclick }: Props = $props();
 </script>
 
-{#snippet content()}
-  {#if legend !== undefined}
-    <span
-      class="category-legend"
-      class:is-empty={legend === null}
-      style:background={legend ?? undefined}
-      aria-hidden="true"
-    ></span>
-  {/if}
-  <span class="category-icon" style:min-width="{iconSize}px" aria-hidden="true">
-    {#if Icon}
-      <Icon size={iconSize} />
-    {/if}
+<button
+  type="button"
+  class="join-category-header tone-{tone}"
+  aria-expanded={expanded}
+  onclick={onclick}
+>
+  <span class="category-icon" aria-hidden="true">
+    <Icon size={20} />
   </span>
   <span class="category-count">{formatValue(count)}</span>
   <span class="category-label">{label}</span>
-  {#if expanded !== undefined}
-    <span class="category-chevron" aria-hidden="true">
-      {#if expanded}
-        <ChevronUp size={iconSize} />
-      {:else}
-        <ChevronDown size={iconSize} />
-      {/if}
-    </span>
-  {/if}
-{/snippet}
-
-{#if onclick}
-  <button
-    type="button"
-    class="join-category-header tone-{tone}"
-    class:compact={compact}
-    class:muted={muted}
-    aria-expanded={expanded}
-    title={title}
-    onclick={onclick}
-  >
-    {@render content()}
-  </button>
-{:else}
-  <div
-    class="join-category-header is-static tone-{tone}"
-    class:compact={compact}
-    class:muted={muted}
-    title={title}
-  >
-    {@render content()}
-  </div>
-{/if}
+  <span class="category-chevron" aria-hidden="true">
+    {#if expanded}
+      <ChevronUp size={20} />
+    {:else}
+      <ChevronDown size={20} />
+    {/if}
+  </span>
+</button>
 
 <style>
   .join-category-header {
@@ -108,12 +53,8 @@
     transition: background-color 0.15s;
   }
 
-  button.join-category-header:hover {
+  .join-category-header:hover {
     background-color: var(--khartis-additions-join-row-hover, #f4f4f4);
-  }
-
-  .is-static {
-    cursor: default;
   }
 
   .join-category-header:focus-visible {
@@ -151,17 +92,6 @@
     fill: var(--category-color);
   }
 
-  .category-legend {
-    flex-shrink: 0;
-    width: 1.125rem;
-    height: 1.125rem;
-    box-shadow: inset 0 0 0 1px rgba(22, 22, 22, 0.25);
-  }
-
-  .category-legend.is-empty {
-    box-shadow: none;
-  }
-
   .category-count {
     display: inline-flex;
     align-items: center;
@@ -191,29 +121,5 @@
     align-items: center;
     flex-shrink: 0;
     color: var(--cds-text-primary, #161616);
-  }
-
-  .muted .category-label,
-  .muted .category-count {
-    color: var(--cds-text-secondary, #525252);
-  }
-
-  .compact {
-    gap: 0.375rem;
-    padding: 0.25rem 0.5rem;
-  }
-
-  .compact .category-count {
-    min-width: 3.5ch;
-    font-size: 0.8125rem;
-  }
-
-  .compact .category-label {
-    font-size: 0.75rem;
-  }
-
-  .compact .category-legend {
-    width: 0.875rem;
-    height: 0.875rem;
   }
 </style>

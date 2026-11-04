@@ -178,6 +178,14 @@ un statut à chaque entité du fond (joint, à vérifier, répété, sans donné
 c'est la carte de contrôle de l'étape Données. Comme la finalisation, elle lit
 toute la table, sans les filtres.
 
+Une correction manuelle (une valeur non reconnue associée à une entité, une
+suggestion remplacée) ne réécrit pas la colonne source : `applyJoinCorrections`
+la garde par colonne et le cache de similarité la lit comme une correspondance
+exacte vers l'entité choisie, à la place des correspondances calculées. Grading,
+finalisation et statuts la suivent donc, et le tableau garde ses valeurs
+d'origine. Le projet enregistre ces corrections dans `joinCorrections` (valeur
+d'origine → valeur du fond), réappliquées à l'ouverture.
+
 La jointure à un fond et la jointure d'enrichissement (un tableau joint à un
 fichier géographique) passent par ce même moteur (`join-ops.ts`). Elles ne
 diffèrent que par leur **cible** (`JoinTarget`) : la table `basemap_attributes`

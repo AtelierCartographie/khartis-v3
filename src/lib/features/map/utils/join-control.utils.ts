@@ -1,15 +1,10 @@
 import type { JoinTerritoryStatus } from '$lib/features/duckdb';
+import type { JoinMapping } from '$lib/features/commons/types/data-tab.types';
 import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
-import { buildClassPatternSvgBackground } from '$lib/features/commons/components/palette-popover/palette.constants';
-import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
 
-import {
-  JOIN_CONTROL_FILL_COLORS,
-  JOIN_CONTROL_PATTERNS
-} from '../constants/join-control.constants';
 import type { JoinControlPickData } from '../layers/join-control-layers';
 import type { TooltipEntry } from '../types';
 
@@ -31,27 +26,6 @@ export function getJoinControlStatusLabel(status: JoinTerritoryStatus): string {
     case 'no_data':
       return capitalize(m.join_entities_no_data_one());
   }
-}
-
-const swatchBackgrounds = new Map<JoinTerritoryStatus, string>();
-
-/** The status as the map draws it: its fill, under its motif when it has one. */
-export function getJoinControlSwatchBackground(
-  status: JoinTerritoryStatus
-): string {
-  const cached = swatchBackgrounds.get(status);
-  if (cached) return cached;
-
-  const fill = JOIN_CONTROL_FILL_COLORS[status];
-  const config = JOIN_CONTROL_PATTERNS[status];
-  const pattern = config
-    ? resolveClassPatterns(1, config, 'sequential', config.contrast)[0]
-    : undefined;
-  const background = pattern
-    ? `${buildClassPatternSvgBackground(pattern, fill)} center / cover, ${fill}`
-    : fill;
-  swatchBackgrounds.set(status, background);
-  return background;
 }
 
 function joinValues(values: string[], total: number): string {
@@ -133,4 +107,24 @@ export function buildJoinControlTooltipEntries(
     );
   }
   return entries;
+}
+
+/**
+ * What the join panel shows and the finalized join does not hold yet: a
+ * suggestion replaced by another entity, or a joined value whose entity was
+ * cleared (empty).
+ */
+export function buildPendingJoinMappings(
+  joinMappings: readonly JoinMapping[],
+  clearedValues: ReadonlySet<string>
+): Record<string, string> {
+  const pending: Record<string, string> = {};
+  for (const mapping of joinMappings) {
+    const suggested = mapping.candidates?.[0]?.name;
+    if (suggested !== undefined && mapping.selectedMapping !== suggested) {
+      pending[mapping.dataValue] = mapping.selectedMapping;
+    }
+  }
+  for (const value of clearedValues) pending[value] = '';
+  return pending;
 }

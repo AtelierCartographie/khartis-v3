@@ -41,7 +41,7 @@
     JoinCandidate
   } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
 
   type HeaderSlot =
     | 'info'
@@ -517,7 +517,16 @@
   );
   const comboIdPrefix = $derived(isNarrow ? 'join-sm' : 'join');
 
-  const clearedJoinedRows = new SvelteSet<string>();
+  // A joined value whose entity the user cleared is no longer joined: the map
+  // and the Visualize button follow it until it gets an entity or is ignored.
+  const clearedJoinedRows = $derived(
+    joinControlStore.getClearedValues(datasetsStore.selectedDatasetId ?? '')
+  );
+  function setJoinedRowCleared(dataValue: string, cleared: boolean): void {
+    const datasetId = datasetsStore.selectedDatasetId;
+    if (datasetId)
+      joinControlStore.setJoinCleared(datasetId, dataValue, cleared);
+  }
 
   let actionTooltipTrigger = $state<HTMLElement | null>(null);
   const actionTooltipText = $derived(
@@ -742,7 +751,10 @@
   // valid as soon as one entity is joined. To-verify entities are joined;
   // unrecognized and duplicate ones are only left out.
   const unresolvedCount = $derived(unrecognizedCount + duplicateCount);
-  const showSuccessNotification = $derived(joinedCount > 0 && joinFinalized);
+  const hasClearedJoins = $derived(clearedJoinedRows.size > 0);
+  const showSuccessNotification = $derived(
+    joinedCount > 0 && joinFinalized && !hasClearedJoins
+  );
   const showValidationNotification = $derived(
     joinedCount > 0 && !joinFinalized
   );
@@ -768,9 +780,6 @@
   }
 
   let sectionElement = $state<HTMLDivElement | null>(null);
-  const categoryRowElements: Partial<
-    Record<JoinPanelCategory, HTMLDivElement>
-  > = $state({});
 
   function isCategoryExpanded(category: JoinPanelCategory): boolean {
     return expandedCategory === category;
@@ -797,29 +806,6 @@
   function toggleCategory(category: JoinPanelCategory): void {
     setCategoryExpanded(category, !isCategoryExpanded(category));
   }
-
-  // The map's join summary opens a category here, or this section, and
-  // brings it into view.
-  let handledPanelRequestId = untrack(
-    () => joinControlStore.panelRequest?.id ?? 0
-  );
-  $effect(() => {
-    const request = joinControlStore.panelRequest;
-    if (!request || request.id === handledPanelRequestId) return;
-    handledPanelRequestId = request.id;
-    const { category, open } = request;
-    if (category) {
-      untrack(() => setCategoryExpanded(category, open));
-    }
-    if (open) {
-      void tick().then(() =>
-        (category
-          ? categoryRowElements[category]
-          : sectionElement
-        )?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      );
-    }
-  });
 
   $effect(() => () => {
     joinControlStore.setHoverTarget(null);
@@ -978,6 +964,7 @@
 
   function handleIgnore(entries: IgnoredEntity[]): void {
     if (entries.length === 0) return;
+    for (const entry of entries) setJoinedRowCleared(entry.dataValue, false);
     const nextIgnoredCount = ignoredCount + entries.length;
     onIgnoreEntities?.(entries);
     if (entries.length > 1) {
@@ -1189,10 +1176,7 @@
   >
     <div class="category-rows">
       {#if joinedCount > 0}
-        <div
-          class="category-row category-row-joined"
-          bind:this={categoryRowElements.matched}
-        >
+        <div class="category-row category-row-joined">
           <JoinCategoryHeader
             tone="success"
             icon={CheckmarkFilled}
@@ -1269,7 +1253,7 @@
                                     ComboBoxItem | undefined;
                                   const nextValue = item?.text;
                                   if (nextValue) {
-                                    clearedJoinedRows.delete(row.dataValue);
+                                    setJoinedRowCleared(row.dataValue, false);
                                   }
                                   if (
                                     nextValue &&
@@ -1287,8 +1271,9 @@
                                     );
                                   }
                                 }}
+                                invalid={joinedCleared}
                                 on:clear={() =>
-                                  clearedJoinedRows.add(row.dataValue)}
+                                  setJoinedRowCleared(row.dataValue, true)}
                                 let:item
                               >
                                 {@render comboItemContent(
@@ -1299,7 +1284,9 @@
                             {/key}
                           {:else}
                             <div class="select-placeholder" aria-hidden="true">
-                              {basemapValuesLoading ? '' : joinedDisplayedValue}
+                              {basemapValuesLoading || joinedCleared
+                                ? ''
+                                : joinedDisplayedValue}
                             </div>
                           {/if}
                         </div>
@@ -1380,10 +1367,7 @@
       {/if}
 
       {#if toVerifyCount > 0}
-        <div
-          class="category-row category-row-verify"
-          bind:this={categoryRowElements.check}
-        >
+        <div class="category-row category-row-verify">
           <JoinCategoryHeader
             tone="warning"
             icon={WarningFilled}
@@ -1550,10 +1534,7 @@
       {/if}
 
       {#if unrecognizedCount > 0 || showFuzzyPassOffer}
-        <div
-          class="category-row category-row-unrecognized"
-          bind:this={categoryRowElements.unrecognized}
-        >
+        <div class="category-row category-row-unrecognized">
           <JoinCategoryHeader
             tone="error"
             icon={ErrorFilled}
@@ -1723,10 +1704,7 @@
       {/if}
 
       {#if duplicateCount > 0}
-        <div
-          class="category-row category-row-duplicates"
-          bind:this={categoryRowElements.duplicate}
-        >
+        <div class="category-row category-row-duplicates">
           <JoinCategoryHeader
             tone="error"
             icon={WarningAltFilled}
@@ -1768,10 +1746,7 @@
       {/if}
 
       {#if ignoredCount > 0}
-        <div
-          class="category-row category-row-ignored"
-          bind:this={categoryRowElements.ignored}
-        >
+        <div class="category-row category-row-ignored">
           <JoinCategoryHeader
             tone="ignored"
             icon={NotAllowed}
@@ -1826,7 +1801,15 @@
     </div>
 
     <div class="join-status-zone">
-      {#if displayedNotificationState.showSuccessNotification}
+      {#if hasClearedJoins}
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title={m.join_cleared_title()}
+          subtitle={m.join_cleared_subtitle()}
+        />
+      {:else if displayedNotificationState.showSuccessNotification}
         <div class="notification-success">
           <span class="notification-success-icon">
             <CheckmarkFilled size={20} />

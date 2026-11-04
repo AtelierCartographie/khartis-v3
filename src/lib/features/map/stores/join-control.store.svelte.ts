@@ -10,6 +10,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { BasemapMetadata } from '../types/basemap.types';
+import { buildPendingJoinMappings } from '../utils/join-control.utils';
 
 export interface JoinControlRequest {
   datasetId: string;
@@ -21,6 +22,11 @@ export interface JoinControlRequest {
   excludedValues: string[];
   /** Basemap values the ignored source values were matched to. */
   ignoredBasemapValues: string[];
+  /**
+   * Associations picked in the join panel and not applied yet, by source
+   * value; an empty value leaves its source value unjoined.
+   */
+  pendingMappings: Record<string, string>;
 }
 
 export interface JoinControlStatuses {
@@ -36,13 +42,6 @@ export type JoinControlCounts = Record<JoinTerritoryStatus, number>;
 export type JoinControlCategory = JoinTerritoryStatus | 'unrecognized';
 
 export type JoinPanelCategory = Exclude<JoinControlCategory, 'no_data'>;
-
-export interface JoinPanelRequest {
-  id: number;
-  /** `null` brings the join panel itself into view. */
-  category: JoinPanelCategory | null;
-  open: boolean;
-}
 
 /** Source values or row ids whose territories the map outlines. */
 export interface JoinControlHoverTarget {
@@ -72,26 +71,23 @@ function buildRequestKey(request: JoinControlRequest): string {
     request.geoColumn,
     [...request.excludedValues].sort(),
     [...request.ignoredBasemapValues].sort(),
+    Object.entries(request.pendingMappings).sort(([left], [right]) =>
+      left.localeCompare(right)
+    ),
     getLocale()
   ]);
 }
 
-function areCountsEqual(
-  left: JoinControlCounts | null,
-  right: JoinControlCounts | null
-): boolean {
-  if (left === right) return true;
-  if (!left || !right) return false;
-  return (Object.keys(left) as JoinTerritoryStatus[]).every(
-    (status) => left[status] === right[status]
-  );
-}
-
 function createJoinControlStore() {
   let statuses = $state.raw<JoinControlStatuses | null>(null);
-  let counts = $state.raw<JoinControlCounts | null>(null);
-  let panelRequest = $state.raw<JoinPanelRequest | null>(null);
   let hoverTarget = $state.raw<JoinControlHoverTarget | null>(null);
+  // Joined values whose association the user cleared in the join panel: they
+  // are no longer joined, and the dataset cannot be visualized until each one
+  // gets an entity or is ignored.
+  let clearedJoins = $state.raw<{ datasetId: string; values: Set<string> }>({
+    datasetId: '',
+    values: new Set()
+  });
   let version = $state(0);
   // The join appears on the map once the user reaches the join step, and
   // stays for the session; it fades in the first time it is drawn.
@@ -114,7 +110,8 @@ function createJoinControlStore() {
         request.geoColumn,
         {
           excludedValues: request.excludedValues,
-          ignoredBasemapValues: request.ignoredBasemapValues
+          ignoredBasemapValues: request.ignoredBasemapValues,
+          pendingMappings: request.pendingMappings
         }
       );
       if (pendingKey !== key) return;
@@ -163,27 +160,6 @@ function createJoinControlStore() {
     return statuses?.datasetId === next.datasetId ? statuses : null;
   }
 
-  function publishCounts(next: JoinControlCounts | null): void {
-    if (areCountsEqual(counts, next)) return;
-    counts = next;
-  }
-
-  /** Asks the join panel to open or close one of its categories. */
-  function requestPanelCategory(
-    category: JoinPanelCategory,
-    open: boolean
-  ): void {
-    panelRequest = { id: (panelRequest?.id ?? 0) + 1, category, open };
-  }
-
-  function requestPanelSection(): void {
-    panelRequest = {
-      id: (panelRequest?.id ?? 0) + 1,
-      category: null,
-      open: true
-    };
-  }
-
   function getRevealProgress(datasetId: string): number {
     if (revealedDatasetIds.has(datasetId)) return 1;
     return revealing?.datasetId === datasetId ? revealing.progress : 0;
@@ -226,33 +202,49 @@ function createJoinControlStore() {
     requestAnimationFrame(step);
   }
 
+  function getClearedValues(datasetId: string): ReadonlySet<string> {
+    return clearedJoins.datasetId === datasetId
+      ? clearedJoins.values
+      : new Set<string>();
+  }
+
+  function setJoinCleared(
+    datasetId: string,
+    dataValue: string,
+    cleared: boolean
+  ): void {
+    const values = new Set(getClearedValues(datasetId));
+    if (values.has(dataValue) === cleared) return;
+    if (cleared) values.add(dataValue);
+    else values.delete(dataValue);
+    clearedJoins = { datasetId, values };
+  }
+
   function setHoverTarget(next: JoinControlHoverTarget | null): void {
     if (!next && !hoverTarget) return;
     hoverTarget = next;
   }
 
   return {
-    get counts(): JoinControlCounts | null {
-      return counts;
-    },
-    get panelRequest(): JoinPanelRequest | null {
-      return panelRequest;
-    },
     get hoverTarget(): JoinControlHoverTarget | null {
       return hoverTarget;
     },
     /**
      * Changes whenever the join-control layers must be redrawn, including when
-     * the join panel links another variable or geolocates by coordinates.
+     * the join panel links another variable, geolocates by coordinates or
+     * holds an association not applied yet.
      */
     get renderKey(): string {
       const { geoReference, linkedVariableName } = dataTabState.geolocation;
-      return `${version}:${geoReference}:${linkedVariableName}`;
+      const pending = buildPendingJoinMappings(
+        dataTabState.basemapJoin.joinMappings,
+        clearedJoins.values
+      );
+      return `${version}:${geoReference}:${linkedVariableName}:${JSON.stringify(pending)}`;
     },
     request,
-    publishCounts,
-    requestPanelCategory,
-    requestPanelSection,
+    getClearedValues,
+    setJoinCleared,
     setHoverTarget,
     getRevealProgress,
     setRevealProgress,

@@ -285,8 +285,8 @@ territoire qu'une valeur ignorée désignait, en gris moyen pointillé de blanc)
 sans donnée (aucune ligne, en gris clair hachuré, plus discret). Les valeurs
 non reconnues n'ont pas de géométrie et restent dans le panneau.
 
-- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte avec
-  son encadré quand le panneau défile jusqu'à « Jointure assistée par
+- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte
+  quand le panneau défile jusqu'à « Jointure assistée par
   Khartis ». Le fondu suit le défilement (`setRevealProgress`, qui ne recule
   jamais) et s'achève seul si le panneau ne peut plus défiler ; la jointure
   reste ensuite affichée pour la session.
@@ -304,15 +304,14 @@ non reconnues n'ont pas de géométrie et restent dans le panneau.
   zoom de la page (`pageDisplayScale`), comme les autres marques.
 - Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
   repère ponctuel.
-- L'encadré de synthèse (`join-control-summary.svelte`), en bas à droite de
-  l'espace de travail et non dans la page, reprend les catégories non vides du
-  panneau avec leurs comptes et le même en-tête (`join-category-header.svelte`),
-  chacune précédée du caisson de légende de son rendu sur la carte, puis les
-  entités hors carte et, en gris, les entités du fond sans données.
-  Cliquer son titre amène le panneau sur la jointure assistée, cliquer une
-  catégorie y ouvre son accordéon, le seul ouvert. Ouvrir une catégorie ne
-  filtre pas la carte. L'encadré glisse avec le bord du panneau quand celui-ci
-  change de largeur.
+- Le panneau ouvre un seul accordéon de catégorie à la fois ; ouvrir une
+  catégorie ne filtre pas la carte.
+- La carte suit aussi ce que le panneau tient sans l'avoir encore appliqué
+  (`buildPendingJoinMappings`) : une suggestion « à vérifier » remplacée par une
+  autre entité, ou une association effacée parmi les entités jointes, qui laisse
+  la valeur sans territoire. Tant qu'une association reste effacée, sa liste est
+  en erreur, une notification d'erreur remplace la validation et le bouton
+  Visualiser est désactivé.
 - Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
   le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
   la carte, sans reconstruire les couches.
