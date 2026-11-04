@@ -46,13 +46,16 @@ série : `head_tail` à partir de 3, `quantiles` à partir de 1,5 en valeur
 absolue, sinon la méthode courante. Le nombre de classes est plafonné à
 max(2, lignes / 3). L'utilisateur reste libre de ce choix.
 
-## Dates : pas calendaire ou bornes manuelles
+## Dates : pas calendaire, k-means ou bornes manuelles
 
-Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire
-ou par bornes manuelles, jamais par une méthode numérique ; une colonne
-numérique ne se classe jamais par pas calendaire. `computeClassificationBreaks()`
-lit le type DuckDB de la colonne (`isTemporalColumn()`) et impose la méthode,
-quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
+Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire,
+par k-means ou par bornes manuelles ; une colonne numérique ne se classe jamais
+par pas calendaire. `computeClassificationBreaks()` lit le type DuckDB de la
+colonne (`isTemporalColumn()`) et impose la méthode, quel que soit l'appelant
+(panneau, suggestion, rafraîchissement, exemple). K-means est aussi la méthode
+par défaut de tous les préréglages : sur une date, il n'est retenu que si la
+classification porte déjà un résultat daté (`calendarStep`), sinon la date
+part en pas calendaire.
 
 - **Calcul.** `calculateCalendarBreaks()` lit `epoch_ms(colonne)` dans DuckDB
   (min, max, effectifs). Le choix et l'alignement du pas sont des fonctions
@@ -74,6 +77,26 @@ quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
   année, tous au 1er du mois → mois, sinon jour) devient `calendarStep` : elle
   fixe les bornes extérieures et les libellés. `parseCalendarBoundary()` relit
   les saisies (« 1975 », « 04/1975 », « 12/04/1975 », « avr. 1975 »…).
+- **K-means.** `calculateDateDataBreaks()` lance la macro sur
+  `epoch_ms(colonne)::DOUBLE`, puis `snapBreaksToCalendar()` ramène chaque
+  seuil au repère calendaire le plus proche. L'accrochage part deux crans sous
+  le pas qu'aurait le pas calendaire pour ce nombre de classes (une série sur
+  70 ans accroche aux 10 ans, une série sur un an aux 2 mois) et descend
+  jusqu'au premier pas qui garde tous les seuils distincts : une classe ne se
+  perd que si deux seuils tombent le même jour, et la note de fusion l'annonce.
+  `calendarStep` reçoit la granularité des seuils, comme en manuel.
+- **Date pivot.** `breakpointValue` porte une date (epoch ms) et rend la palette
+  divergente, avec un sens propre à chaque méthode :
+  - pas calendaire : les périodes sont comptées depuis la pivot
+    (`buildCalendarBreaks(…, anchor)`), qui est donc toujours un seuil ; un mois
+    compté depuis le 31 garde le dernier jour des mois courts. Le pas fixe le
+    nombre de classes de chaque côté, le curseur de position est inactif ;
+  - k-means : chaque côté est classé à part, comme pour un nombre, avec le
+    nombre de classes du curseur ;
+  - manuel : la pivot ne fait que répartir les couleurs, comme pour un nombre
+    (classe centrale neutre si elle tombe dans une classe).
+    Les seuils sont libellés à leur propre précision : dans une série en années,
+    une pivot au 10 mai s'affiche « 10 mai 1981 » et les classes voisines au jour.
 - **Unités.** Bornes, `min` et `max` sont en millisecondes epoch : c'est
   l'unité que reçoit le rendu, qui décode la date Arrow sans `useDate`.
 - **Légende.** La même que pour les nombres (barre horizontale ou verticale,
@@ -81,8 +104,13 @@ quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
   (`formatCalendarBoundary()`) : « 1950 », « avr. 2020 », « 12 avr. 2020 ».
   Les listes de pastilles libellent chaque classe par sa période, fin incluse
   (`formatCalendarClassLabel()`) : « 1950–1969 », « janv.–mars 2021 ».
-- **Hors périmètre.** Pas de point de rupture ni de taille proportionnelle sur
-  une date.
+- **Suggestions.** Une date a un score sémiologique fixe et passe toujours
+  derrière les taux. Quand le jeu contient une date assez étalée pour être
+  classée, `suggestVisualizations()` lui réserve une suggestion (une place
+  libre, sinon la dernière, jamais la première). Elle est classée en couleur
+  (aplats, symboles, lignes, textes), jamais en taille.
+- **Hors périmètre.** Pas de taille proportionnelle sur une date : il faudrait
+  d'abord une durée (ancienneté), qui est une variable de rapport.
 
 La reconnaissance des dates à l'import est décrite dans
 [Import DuckDB](IMPORT_DUCKDB.md).
