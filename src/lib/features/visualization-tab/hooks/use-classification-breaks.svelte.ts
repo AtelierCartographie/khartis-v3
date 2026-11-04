@@ -4,6 +4,7 @@ import {
   calculateBreaks,
   calculateCalendarBreakCounts,
   calculateCalendarBreaks,
+  calculateDateDataBreaks,
   calculateDivergingBreaks,
   computeDivergingSplit,
   detectDivergingBreakpoint,
@@ -389,14 +390,19 @@ export async function computeClassificationBreaks(
   const requestedMethod = normalizeClassificationMethod(
     options.method ?? classification?.method ?? ClassificationMethod.KMEANS
   );
-  // The column decides: a date is classed on calendar steps or manual dates, a number never on calendar steps.
+  // The column decides: a date is classed on calendar steps, k-means or manual
+  // dates, a number never on calendar steps. K-means is also every preset's
+  // default, so on a date it counts only once the classification already
+  // holds date results (a calendar step); otherwise the date starts on steps.
   const temporal = await isTemporalColumn(
     options.datasetSourceFileId,
     options.valueColumn
   );
   const storeMethod = temporal
-    ? requestedMethod === ClassificationMethod.MANUAL
-      ? ClassificationMethod.MANUAL
+    ? requestedMethod === ClassificationMethod.MANUAL ||
+      (requestedMethod === ClassificationMethod.KMEANS &&
+        classification?.calendarStep != null)
+      ? requestedMethod
       : ClassificationMethod.CALENDAR
     : requestedMethod === ClassificationMethod.CALENDAR
       ? ClassificationMethod.KMEANS
@@ -550,24 +556,47 @@ async function computeCalendarClassificationBreaks(
 ): Promise<ClassificationBreaksComputation | null> {
   const classification = options.classification;
   const manualBreaks = options.breakValues ?? classification?.breaks ?? [];
-  const isManual = method === ClassificationMethod.MANUAL;
-  const result = isManual
-    ? await calculateCalendarBreakCounts({
-        datasetId: options.datasetSourceFileId,
-        columnName: options.valueColumn,
-        breaks: manualBreaks,
-        classCount: requestedClassCount,
-        rowScopeClause: options.rowScopeClause,
-        pooledColumnNames: options.pooledColumnNames
-      })
-    : await calculateCalendarBreaks({
-        datasetId: options.datasetSourceFileId,
-        columnName: options.valueColumn,
-        maxClasses: requestedClassCount,
-        step: classification?.calendarStep,
-        rowScopeClause: options.rowScopeClause,
-        pooledColumnNames: options.pooledColumnNames
-      });
+  const requestedPivot = Object.prototype.hasOwnProperty.call(
+    options,
+    'breakpointValue'
+  )
+    ? options.breakpointValue
+    : classification?.breakpointValue;
+  const pivot =
+    requestedPivot != null && Number.isFinite(requestedPivot)
+      ? requestedPivot
+      : null;
+  const scope = {
+    datasetId: options.datasetSourceFileId,
+    columnName: options.valueColumn,
+    rowScopeClause: options.rowScopeClause,
+    pooledColumnNames: options.pooledColumnNames
+  };
+  const result =
+    method === ClassificationMethod.MANUAL
+      ? await calculateCalendarBreakCounts({
+          ...scope,
+          breaks: manualBreaks,
+          classCount: requestedClassCount
+        })
+      : method === ClassificationMethod.KMEANS
+        ? await calculateDateDataBreaks({
+            ...scope,
+            method,
+            numClasses: requestedClassCount,
+            breakpointValue: pivot,
+            lowerClassCount: resolveBreakpointLowerClassCount(
+              requestedClassCount,
+              options.breakpointLowerClassCount ??
+                classification?.breakpointLowerClassCount
+            )
+          })
+        : await calculateCalendarBreaks({
+            ...scope,
+            maxClasses: requestedClassCount,
+            step: classification?.calendarStep,
+            anchor: pivot
+          });
   if (!result) {
     return null;
   }
@@ -579,7 +608,7 @@ async function computeCalendarClassificationBreaks(
     classification,
     actualClassCount,
     result.breaks,
-    null
+    pivot
   );
   const colors =
     result.counts.length === 1 && rampColors
@@ -587,14 +616,12 @@ async function computeCalendarClassificationBreaks(
       : rampColors;
 
   return {
-    normalizedMethod: isManual
-      ? ClassificationMethod.MANUAL
-      : ClassificationMethod.CALENDAR,
+    normalizedMethod: method,
     requestedClassCount,
     actualClassCount,
     result,
-    breakpointValue: null,
-    autoBreakpointCleared: classification?.breakpointValue != null,
+    breakpointLowerClassCount: result.breakpointLowerClassCount,
+    breakpointValue: pivot,
     colors
   };
 }

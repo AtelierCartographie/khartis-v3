@@ -76,7 +76,77 @@ function utc(year: number, monthIndex: number, day = 1): number {
   return date.getTime();
 }
 
-export function floorToCalendarStep(ms: number, step: CalendarStep): number {
+/** Months covered by a month or year step, 0 for days and weeks. */
+function stepMonths(step: CalendarStep): number {
+  const count = Math.max(1, Math.floor(step.count));
+  if (step.unit === CALENDAR_UNIT.MONTH) return count;
+  if (step.unit === CALENDAR_UNIT.YEAR) return count * 12;
+  return 0;
+}
+
+function stepDays(step: CalendarStep): number {
+  const count = Math.max(1, Math.floor(step.count));
+  return step.unit === CALENDAR_UNIT.WEEK ? count * 7 : count;
+}
+
+function monthIndexOfDate(ms: number): number {
+  const date = new Date(ms);
+  return date.getUTCFullYear() * 12 + date.getUTCMonth();
+}
+
+function daysInMonth(year: number, monthIndex: number): number {
+  return new Date(utc(year, monthIndex + 1, 1) - DAY_MS).getUTCDate();
+}
+
+/**
+ * The `index`-th boundary from `anchor` (negative before it). Months are
+ * counted from the anchor itself, so an anchor on the 31st keeps the last day
+ * of shorter months instead of drifting into the next one.
+ */
+function anchoredBoundary(
+  anchor: number,
+  step: CalendarStep,
+  index: number
+): number {
+  const months = stepMonths(step);
+  if (months === 0) {
+    return anchor + index * stepDays(step) * DAY_MS;
+  }
+  const date = new Date(anchor);
+  const target = monthIndexOfDate(anchor) + index * months;
+  const year = Math.floor(target / 12);
+  const monthIndex = ((target % 12) + 12) % 12;
+  const timeOfDay = anchor - Math.floor(anchor / DAY_MS) * DAY_MS;
+  const day = Math.min(date.getUTCDate(), daysInMonth(year, monthIndex));
+  return utc(year, monthIndex, day) + timeOfDay;
+}
+
+/** Index of the anchored class that contains `ms`. */
+function anchoredIndex(ms: number, anchor: number, step: CalendarStep): number {
+  const months = stepMonths(step);
+  if (months === 0) {
+    return Math.floor((ms - anchor) / (stepDays(step) * DAY_MS));
+  }
+  let index = Math.floor(
+    (monthIndexOfDate(ms) - monthIndexOfDate(anchor)) / months
+  );
+  if (anchoredBoundary(anchor, step, index) > ms) index -= 1;
+  return index;
+}
+
+/**
+ * Start of the period that contains `ms`. Without an anchor, periods align on
+ * the calendar (decades on years in 0, quarters in January); with one, they
+ * are counted from the anchor, which is then always a threshold.
+ */
+export function floorToCalendarStep(
+  ms: number,
+  step: CalendarStep,
+  anchor?: number | null
+): number {
+  if (anchor != null && Number.isFinite(anchor)) {
+    return anchoredBoundary(anchor, step, anchoredIndex(ms, anchor, step));
+  }
   const count = Math.max(1, Math.floor(step.count));
   switch (step.unit) {
     case CALENDAR_UNIT.DAY: {
@@ -134,8 +204,14 @@ export function countCalendarClasses(
   min: number,
   max: number,
   step: CalendarStep,
-  limit = Number.POSITIVE_INFINITY
+  limit = Number.POSITIVE_INFINITY,
+  anchor?: number | null
 ): number {
+  if (anchor != null && Number.isFinite(anchor)) {
+    return (
+      anchoredIndex(max, anchor, step) - anchoredIndex(min, anchor, step) + 1
+    );
+  }
   let classes = 1;
   let boundary = addCalendarStep(floorToCalendarStep(min, step), step);
   while (boundary <= max) {
@@ -149,8 +225,26 @@ export function countCalendarClasses(
 export function buildCalendarBreaks(
   min: number,
   max: number,
-  step: CalendarStep
+  step: CalendarStep,
+  anchor?: number | null
 ): CalendarBreaks {
+  if (anchor != null && Number.isFinite(anchor)) {
+    const first = anchoredIndex(min, anchor, step);
+    const breaks: number[] = [];
+    let index = first + 1;
+    let boundary = anchoredBoundary(anchor, step, index);
+    while (boundary <= max) {
+      breaks.push(boundary);
+      index += 1;
+      boundary = anchoredBoundary(anchor, step, index);
+    }
+    return {
+      step,
+      breaks,
+      lower: anchoredBoundary(anchor, step, first),
+      upper: boundary
+    };
+  }
   const lower = floorToCalendarStep(min, step);
   const breaks: number[] = [];
   let boundary = addCalendarStep(lower, step);
@@ -169,12 +263,13 @@ export function buildCalendarBreaks(
 export function chooseCalendarStep(
   min: number,
   max: number,
-  maxClasses: number
+  maxClasses: number,
+  anchor?: number | null
 ): CalendarStep {
   const limit = Math.max(1, Math.floor(maxClasses));
   const ladder = calendarStepLadder();
   for (const step of ladder) {
-    if (countCalendarClasses(min, max, step, limit) <= limit) {
+    if (countCalendarClasses(min, max, step, limit, anchor) <= limit) {
       return step;
     }
   }
@@ -185,11 +280,12 @@ export function chooseCalendarStep(
 export function listCalendarStepOptions(
   min: number,
   max: number,
-  maxClasses: number
+  maxClasses: number,
+  anchor?: number | null
 ): CalendarStep[] {
   const options: CalendarStep[] = [];
   for (const step of calendarStepLadder()) {
-    const classes = countCalendarClasses(min, max, step, maxClasses);
+    const classes = countCalendarClasses(min, max, step, maxClasses, anchor);
     if (classes > maxClasses) continue;
     if (classes < 2) break;
     options.push(step);
@@ -240,7 +336,14 @@ export function formatCalendarClassLabel(
   locale: string
 ): string {
   const lastDay = end - DAY_MS;
-  if (step.unit === CALENDAR_UNIT.YEAR) {
+  // A bound off the step's grid (a pivot date on 10 May in a yearly series) is
+  // labelled at its own precision, so neighbouring classes never share a year.
+  const precision = inferCalendarGranularity([start, end]).unit;
+  const unitRank = (unit: CalendarUnit) =>
+    unit === CALENDAR_UNIT.YEAR ? 2 : unit === CALENDAR_UNIT.MONTH ? 1 : 0;
+  const labelUnit =
+    unitRank(precision) < unitRank(step.unit) ? precision : step.unit;
+  if (labelUnit === CALENDAR_UNIT.YEAR) {
     const firstYear = new Date(start).getUTCFullYear();
     const lastYear = new Date(lastDay).getUTCFullYear();
     return firstYear === lastYear
@@ -250,7 +353,7 @@ export function formatCalendarClassLabel(
 
   const unit: CalendarStep = {
     unit:
-      step.unit === CALENDAR_UNIT.MONTH
+      labelUnit === CALENDAR_UNIT.MONTH
         ? CALENDAR_UNIT.MONTH
         : CALENDAR_UNIT.DAY,
     count: 1
@@ -415,4 +518,67 @@ export function buildEvenCalendarBreaks(
     }
   }
   return breaks;
+}
+
+/** Steps a data-driven threshold may snap to: the ladder without weeks, so labels read in days, months or years. */
+const SNAP_LADDER = calendarStepLadder().filter(
+  (step) => step.unit !== CALENDAR_UNIT.WEEK
+);
+// Snapping starts two ladder steps below the regular step for the same class
+// count: a yearly series snaps to quarters, a decade-wide one to even years.
+const SNAP_STEPS_BELOW_REGULAR = 2;
+
+function snapToNearest(ms: number, step: CalendarStep): number {
+  const floor = floorToCalendarStep(ms, step);
+  if (floor === ms) return ms;
+  const ceil = addCalendarStep(floor, step);
+  return ms - floor <= ceil - ms ? floor : ceil;
+}
+
+/**
+ * Moves data-driven thresholds (k-means on epoch values) to the nearest
+ * calendar boundary, on the coarsest step that keeps every class: each
+ * threshold distinct and inside `]min, max]`. Only when even single days
+ * merge two thresholds does the class count shrink.
+ */
+export function snapBreaksToCalendar(
+  rawBreaks: readonly number[],
+  min: number,
+  max: number
+): number[] {
+  const raw = rawBreaks
+    .filter((value) => Number.isFinite(value) && value > min && value <= max)
+    .sort((a, b) => a - b);
+  if (raw.length === 0) return [];
+
+  const regular = chooseCalendarStep(min, max, raw.length + 1);
+  const regularIndex = SNAP_LADDER.findIndex(
+    (step) => step.unit === regular.unit && step.count === regular.count
+  );
+  const startIndex = Math.max(
+    0,
+    (regularIndex < 0 ? 0 : regularIndex) - SNAP_STEPS_BELOW_REGULAR
+  );
+
+  for (let index = startIndex; index >= 0; index -= 1) {
+    const snapped = raw.map((value) =>
+      snapToNearest(value, SNAP_LADDER[index])
+    );
+    const keepsEveryClass = snapped.every(
+      (value, position) =>
+        value > min &&
+        value <= max &&
+        (position === 0 || value > snapped[position - 1])
+    );
+    if (keepsEveryClass) return snapped;
+  }
+
+  return raw
+    .map((value) => floorToCalendarStep(value, SNAP_LADDER[0]))
+    .filter(
+      (value, position, values) =>
+        value > min &&
+        value <= max &&
+        (position === 0 || value > values[position - 1])
+    );
 }
