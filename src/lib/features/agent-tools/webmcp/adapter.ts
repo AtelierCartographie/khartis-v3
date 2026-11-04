@@ -1,5 +1,9 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { AgentTool, AgentToolResult } from '../contract/types';
+import {
+  failure,
+  type AgentTool,
+  type AgentToolResult
+} from '../contract/types';
 
 /**
  * WebMCP (W3C community group draft, Chrome behind `--enable-features=WebMCP`)
@@ -51,13 +55,7 @@ async function runTool(
     return result;
   } catch (error) {
     logger.error('Agent tool failed', LogCategory.SYSTEM, error);
-    return {
-      ok: false,
-      error: {
-        code: 'unavailable',
-        message: 'Khartis could not run this tool.'
-      }
-    };
+    return failure('unavailable', 'Khartis could not run this tool.');
   }
 }
 
@@ -102,10 +100,7 @@ export function registerAgentTools(tools: readonly AgentTool[]): () => void {
         const tool = tools.find((candidate) => candidate.name === name);
         return tool
           ? runTool(tool, input)
-          : Promise.resolve({
-              ok: false,
-              error: { code: 'not_found', message: `No tool named ${name}.` }
-            });
+          : Promise.resolve(failure('not_found', `No tool named ${name}.`));
       }
     };
   }

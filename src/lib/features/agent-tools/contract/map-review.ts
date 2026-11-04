@@ -46,6 +46,9 @@ export interface MapReviewCheck {
   message: string;
 }
 
+export const COUNTS_MISLEAD_IN_CHOROPLETH =
+  'areas of different sizes make counts misleading in a choropleth';
+
 const MAX_READABLE_CLASSES = 7;
 const SOURCE_WORD = /\bsources?\b/i;
 
@@ -137,8 +140,7 @@ function reviewVisualization(
       severity: 'warning',
       visualization_id: id,
       column: fill.column,
-      message:
-        'The choropleth shows a count: areas of different sizes make counts misleading in a choropleth. Use proportional symbols, or a ratio such as a rate or a density.'
+      message: `The choropleth shows a count: ${COUNTS_MISLEAD_IN_CHOROPLETH}. Use proportional symbols, or a ratio such as a rate or a density.`
     });
   }
   if (proportionalSymbols?.nature === 'ratio') {
@@ -154,7 +156,6 @@ function reviewVisualization(
   if (
     fill &&
     (fill.missingCount ?? 0) > 0 &&
-    !fill.missingShown &&
     !shownMissing.has(missingKey(visualization))
   ) {
     checks.push({

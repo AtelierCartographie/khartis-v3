@@ -415,13 +415,9 @@ describe('agent revision', () => {
       ok: true,
       value: { input: { title: 'Titre' }, expectedRevision: revision }
     });
-    expect(splitExpectedRevision({ title: 'Titre' })).toEqual({
-      ok: true,
-      value: { input: { title: 'Titre' } }
-    });
   });
 
-  it.each([['latest'], [42], [null], ['ABCDEF12']])(
+  it.each([[undefined], ['latest'], [42], [null], ['ABCDEF12']])(
     'should refuse an expected revision when it is %s',
     (expectedRevision) => {
       expect(

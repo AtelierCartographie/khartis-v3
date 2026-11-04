@@ -1,23 +1,11 @@
 import { tick } from 'svelte';
-import { splitExpectedRevision } from '../contract/revision';
-import {
-  invalidInput,
-  type AgentToolErrorCode,
-  type AgentToolResult,
-  type Parsed
-} from '../contract/types';
+import { REVISION_PATTERN, splitExpectedRevision } from '../contract/revision';
+import { failure, type AgentToolResult, type Parsed } from '../contract/types';
 import { readProjectSnapshot } from './read-tools';
-
-export function failure(
-  code: Exclude<AgentToolErrorCode, 'invalid_input'>,
-  message: string
-): AgentToolResult {
-  return { ok: false, error: { code, message } };
-}
 
 export const REVISION_PROPERTY = {
   type: 'string',
-  pattern: '^[0-9a-f]{8}$',
+  pattern: REVISION_PATTERN.source,
   description:
     'Revision returned by inspect_project: the change is refused if the map changed since that reading.'
 };
@@ -28,33 +16,25 @@ export const STALE_FAILURE = failure(
 );
 
 /**
- * Writes only if the map is still as the tool last saw it, so that a change
- * the user makes while the tool awaits is never overwritten. Resolves to
- * false, without writing, when the map changed in between. What Khartis
- * updates on its own right after the write, such as an automatic legend
- * title, belongs to the tool's change.
+ * Writes only if the map is still as the agent read it, so that a change the
+ * user makes while the tool awaits is never overwritten. Resolves to null,
+ * without writing, when the map changed in between. A tool commits once,
+ * after its last computation.
  */
-export type Commit = (write: () => void) => Promise<boolean>;
+export type Commit = <T>(write: () => T) => Promise<{ value: T } | null>;
 
 /**
- * Takes into the tool's reading the work Khartis finishes on its own after
- * the tool's last write, such as the classes the panel computes for an
- * applied suggestion, so that the returned revision is not already stale.
- */
-export type Settle = () => Promise<void>;
-
-/**
- * Parses the input, refuses a change made without a reading of the map or
- * on a stale one, applies the change and returns the revision right after
- * the tool's own work: a later change by the user makes that revision stale.
+ * Parses the input, refuses a change made on a stale reading of the map,
+ * applies the change and returns the new revision. What Khartis derives on
+ * its own from the tool's writes, such as an automatic legend title or the
+ * classes of an applied suggestion, belongs to that revision.
  */
 export async function runEdit<T>(
   input: unknown,
   parse: (input: unknown) => Parsed<T>,
   apply: (
     change: T,
-    commit: Commit,
-    settle: Settle
+    commit: Commit
   ) => AgentToolResult | Promise<AgentToolResult>
 ): Promise<AgentToolResult> {
   const split = splitExpectedRevision(input);
@@ -63,41 +43,24 @@ export async function runEdit<T>(
   if (!parsed.ok) return parsed;
 
   const { expectedRevision } = split.value;
-  if (expectedRevision === undefined) {
-    return invalidInput(
-      'expected_revision is required: call inspect_project and pass its revision.'
-    );
-  }
-  let known = readProjectSnapshot().revision;
-  if (expectedRevision !== known) {
+  if (readProjectSnapshot().revision !== expectedRevision) {
     return failure(
       'conflict',
       'The map changed since this revision was read: call inspect_project again before retrying.'
     );
   }
-
-  let committed = false;
   const commit: Commit = async (write) => {
-    if (readProjectSnapshot().revision !== known) return false;
-    write();
+    if (readProjectSnapshot().revision !== expectedRevision) return null;
+    const value = write();
     await tick();
-    known = readProjectSnapshot().revision;
-    committed = true;
-    return true;
-  };
-  const settle: Settle = async () => {
-    await tick();
-    if (committed) known = readProjectSnapshot().revision;
+    return { value };
   };
 
-  const result = await apply(parsed.value, commit, settle);
+  const result = await apply(parsed.value, commit);
   if (!result.ok) return result;
-  if (!committed) await tick();
+  await tick();
   return {
     ok: true,
-    data: {
-      ...result.data,
-      revision: committed ? known : readProjectSnapshot().revision
-    }
+    data: { ...result.data, revision: readProjectSnapshot().revision }
   };
 }

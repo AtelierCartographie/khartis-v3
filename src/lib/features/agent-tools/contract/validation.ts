@@ -11,7 +11,13 @@ import {
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.types';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '$lib/features/commons/utils/discretization.utils';
-import { invalidInput, type ColumnNature, type Parsed } from './types';
+import { COUNTS_MISLEAD_IN_CHOROPLETH } from './map-review';
+import {
+  invalidInput,
+  isRecord,
+  type ColumnNature,
+  type Parsed
+} from './types';
 
 // Manual bounds and calendar steps depend on the data, which the agent does
 // not see: it picks among the methods the engine computes on its own.
@@ -99,15 +105,15 @@ export interface SuggestionChoice extends SuggestionsQuery {
   suggestionKey: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function findUnexpectedKey(
-  input: Record<string, unknown>,
+/** The fields of an input object, which holds no other field. */
+function parseFields(
+  input: unknown,
   allowed: readonly string[]
-): string | undefined {
-  return Object.keys(input).find((key) => !allowed.includes(key));
+): Parsed<Record<string, unknown>> {
+  if (!isRecord(input)) return invalidInput('Expected an object.');
+  const unexpected = Object.keys(input).find((key) => !allowed.includes(key));
+  if (unexpected) return invalidInput(`Unexpected field: ${unexpected}.`);
+  return { ok: true, value: input };
 }
 
 function parseIdentifier(value: unknown, field: string): Parsed<string> {
@@ -134,8 +140,7 @@ function parseText(
   return { ok: true, value };
 }
 
-/** Palette ids a classed fill accepts: sequential or diverging ramps. */
-export function listClassPaletteIds(): {
+function listClassPaletteIds(): {
   sequential: string[];
   diverging: string[];
 } {
@@ -157,22 +162,21 @@ export function listClassPaletteIds(): {
   return { sequential: [...sequential], diverging: [...diverging] };
 }
 
+/** Palette ids a classed fill accepts: sequential or diverging ramps. */
+export const CLASS_PALETTE_IDS = listClassPaletteIds();
+
 export function parseUpdateClassificationInput(
-  input: unknown
+  raw: unknown
 ): Parsed<ClassificationChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, [
+  const checked = parseFields(raw, [
     'visualization_id',
     'method',
     'classes',
     'palette_id',
     'inverted'
   ]);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+  if (!checked.ok) return checked;
+  const input = checked.value;
 
   const id = parseIdentifier(input.visualization_id, 'visualization_id');
   if (!id.ok) return id;
@@ -232,17 +236,11 @@ export function parseUpdateClassificationInput(
   return { ok: true, value: change };
 }
 
-export function parseLayoutTextsInput(
-  input: unknown
-): Parsed<LayoutTextsChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
+export function parseLayoutTextsInput(raw: unknown): Parsed<LayoutTextsChange> {
   const fields = ['title', 'subtitle', 'source'] as const;
-  const unexpected = findUnexpectedKey(input, fields);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+  const checked = parseFields(raw, fields);
+  if (!checked.ok) return checked;
+  const input = checked.value;
 
   const change: LayoutTextsChange = {};
   for (const field of fields) {
@@ -258,17 +256,11 @@ export function parseLayoutTextsInput(
   return { ok: true, value: change };
 }
 
-export function parseLegendTextsInput(
-  input: unknown
-): Parsed<LegendTextsChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
+export function parseLegendTextsInput(raw: unknown): Parsed<LegendTextsChange> {
   const fields = ['title', 'subtitle', 'note'] as const;
-  const unexpected = findUnexpectedKey(input, ['legend_id', ...fields]);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+  const checked = parseFields(raw, ['legend_id', ...fields]);
+  if (!checked.ok) return checked;
+  const input = checked.value;
 
   const id = parseIdentifier(input.legend_id, 'legend_id');
   if (!id.ok) return id;
@@ -286,14 +278,10 @@ export function parseLegendTextsInput(
   return { ok: true, value: change };
 }
 
-export function parseSetTextInput(input: unknown): Parsed<TextChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, ['text_id', 'text']);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+export function parseSetTextInput(raw: unknown): Parsed<TextChange> {
+  const checked = parseFields(raw, ['text_id', 'text']);
+  if (!checked.ok) return checked;
+  const input = checked.value;
   const id = parseIdentifier(input.text_id, 'text_id');
   if (!id.ok) return id;
   const text = parseText(input.text, 'text', AGENT_TEXT_LIMITS.note);
@@ -301,14 +289,10 @@ export function parseSetTextInput(input: unknown): Parsed<TextChange> {
   return { ok: true, value: { textId: id.value, text: text.value } };
 }
 
-export function parseGoToStepInput(input: unknown): Parsed<StepChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, ['step']);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+export function parseGoToStepInput(raw: unknown): Parsed<StepChange> {
+  const checked = parseFields(raw, ['step']);
+  if (!checked.ok) return checked;
+  const input = checked.value;
   const step = AGENT_STEPS.find((candidate) => candidate === input.step);
   if (!step) {
     return invalidInput(`step must be one of ${AGENT_STEPS.join(', ')}.`);
@@ -325,28 +309,18 @@ function parseOptionalDatasetId(
 }
 
 export function parseSuggestVisualizationsInput(
-  input: unknown
+  raw: unknown
 ): Parsed<SuggestionsQuery> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, ['dataset_id']);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
-  return parseOptionalDatasetId(input);
+  const checked = parseFields(raw, ['dataset_id']);
+  return checked.ok ? parseOptionalDatasetId(checked.value) : checked;
 }
 
 export function parseApplySuggestionInput(
-  input: unknown
+  raw: unknown
 ): Parsed<SuggestionChoice> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, ['dataset_id', 'suggestion_key']);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+  const checked = parseFields(raw, ['dataset_id', 'suggestion_key']);
+  if (!checked.ok) return checked;
+  const input = checked.value;
   const dataset = parseOptionalDatasetId(input);
   if (!dataset.ok) return dataset;
   const key = input.suggestion_key;
@@ -359,15 +333,11 @@ export function parseApplySuggestionInput(
 }
 
 export function parseSetChoroplethVariableInput(
-  input: unknown
+  raw: unknown
 ): Parsed<ChoroplethVariableChange> {
-  if (!isRecord(input)) {
-    return invalidInput('Expected an object.');
-  }
-  const unexpected = findUnexpectedKey(input, ['visualization_id', 'column']);
-  if (unexpected) {
-    return invalidInput(`Unexpected field: ${unexpected}.`);
-  }
+  const checked = parseFields(raw, ['visualization_id', 'column']);
+  if (!checked.ok) return checked;
+  const input = checked.value;
   const id = parseIdentifier(input.visualization_id, 'visualization_id');
   if (!id.ok) return id;
   const column = parseIdentifier(input.column, 'column');
@@ -388,7 +358,7 @@ export function refuseForChoropleth(
 ): string | null {
   switch (nature) {
     case 'count':
-      return 'is a count: areas of different sizes make counts misleading in a choropleth. Apply the proportional symbols suggestion, or map a ratio such as a rate or a density.';
+      return `is a count: ${COUNTS_MISLEAD_IN_CHOROPLETH}. Apply the proportional symbols suggestion, or map a ratio such as a rate or a density.`;
     case 'category':
     case 'ordered_category':
     case 'label':
