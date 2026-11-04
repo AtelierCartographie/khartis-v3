@@ -284,9 +284,14 @@ jointure, celle des catégories du panneau : joint, à vérifier (`check` et
 ligne, en gris hachuré). Les valeurs non reconnues ou ignorées n'ont pas de
 géométrie et restent dans le panneau.
 
-- L'étape Données se suit dans l'ordre : la jointure n'apparaît sur la carte,
-  en fondu avec son encadré, qu'une fois la sous-étape « 3. Joindre » atteinte
-  dans le panneau, puis reste affichée pour la session.
+- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte avec
+  son encadré quand le panneau défile jusqu'à « Jointure assistée par
+  Khartis ». Le fondu suit le défilement (`setRevealProgress`, qui ne recule
+  jamais) et s'achève seul si le panneau ne peut plus défiler ; la jointure
+  reste ensuite affichée pour la session.
+- La carte ne montre que la jointure par entités : quand les coordonnées
+  géographiques sont la référence choisie, il n'y a pas de jointure assistée
+  et rien n'est dessiné.
 - Le statut de chaque territoire est calculé en SQL
   (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
   finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
@@ -309,9 +314,9 @@ géométrie et restent dans le panneau.
   le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
   la carte, sans reconstruire les couches.
 - L'infobulle donne le statut, puis, côte à côte comme une ligne des tableaux
-  de jointure, la valeur des données tabulaires (ou du fichier importé) avec la
-  variable liée et le nom sur le fond ; épinglée, elle ajoute les autres
-  données jointes.
+  de jointure, la valeur des données tabulaires (ou du fichier importé) et le
+  nom sur le fond ; épinglée, elle ajoute les autres données jointes, une
+  variable par ligne, et ombre ses bords quand elle défile.
 - La carte suit la variable liée du panneau : tant que la jointure finalisée
   porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
   variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.

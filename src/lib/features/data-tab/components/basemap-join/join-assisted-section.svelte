@@ -33,6 +33,7 @@
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
   import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
   import { joinControlStore, type JoinPanelCategory } from '$lib/features/map';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import JoinCategoryHeader from '$lib/features/commons/components/join-category-header.svelte';
   import type {
     EntityValidation,
@@ -838,6 +839,48 @@
   $effect(() => () => {
     joinControlStore.setActiveCategory(null);
     joinControlStore.setHoverTarget(null);
+  });
+
+  // The map shows the join as the user scrolls down to it: it grows visible
+  // while this section rises through the panel, then stays.
+  const REVEAL_SCROLL_SPAN = 0.6;
+
+  function findScrollParent(element: HTMLElement): HTMLElement | null {
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const { overflowY } = getComputedStyle(node);
+      if (overflowY === 'auto' || overflowY === 'scroll') return node;
+    }
+    return null;
+  }
+
+  $effect(() => {
+    const element = sectionElement;
+    const datasetId = datasetsStore.selectedDatasetId;
+    if (!element || !datasetId) return;
+    const scroller = findScrollParent(element);
+    if (!scroller) {
+      untrack(() => joinControlStore.completeReveal(datasetId));
+      return;
+    }
+
+    const update = () => {
+      if (joinControlStore.getRevealProgress(datasetId) >= 1) return;
+      const view = scroller.getBoundingClientRect();
+      const top = element.getBoundingClientRect().top;
+      const progress = (view.bottom - top) / (view.height * REVEAL_SCROLL_SPAN);
+      joinControlStore.setRevealProgress(datasetId, progress);
+      const isAtEnd =
+        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      if (progress > 0 && isAtEnd) joinControlStore.completeReveal(datasetId);
+    };
+    untrack(update);
+    scroller.addEventListener('scroll', update, { passive: true });
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(scroller);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      resizeObserver.disconnect();
+    };
   });
 
   // Hovering or focusing a value outlines its territory on the map.

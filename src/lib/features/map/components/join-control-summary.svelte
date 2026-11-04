@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { fly } from 'svelte/transition';
   import { Button } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -13,6 +12,7 @@
   import JoinCategoryHeader from '$lib/features/commons/components/join-category-header.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { isSingularCount } from '$lib/features/commons/utils/format.utils';
   import {
@@ -42,8 +42,10 @@
   // A window drag resizes the workspace in small steps the box simply
   // follows; a panel width change moves it far enough to glide.
   const SLIDE_MIN_SHIFT_PX = 24;
-  // Shown with the join the first time it is drawn, then shown at once.
-  const REVEAL_MS = 400;
+  // Appears with the join as the panel scrolls down to it.
+  const revealProgress = $derived(
+    joinControlStore.getRevealProgress(datasetsStore.selectedDatasetId ?? '')
+  );
 
   let summaryElement = $state<HTMLElement | null>(null);
 
@@ -106,11 +108,10 @@
   <div class="summary-anchor">
     <section
       bind:this={summaryElement}
-      in:fly={{
-        y: 12,
-        duration:
-          joinControlStore.revealProgress < 1 ? motionDuration(REVEAL_MS) : 0
-      }}
+      style:opacity={revealProgress}
+      style:translate={revealProgress < 1
+        ? `0 ${(1 - revealProgress) * 12}px`
+        : undefined}
       class="join-control-summary"
       aria-label={m.section_join_assisted()}
     >

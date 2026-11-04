@@ -11,7 +11,7 @@
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
@@ -39,6 +39,10 @@
     isInteractive
       ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
       : []
+  );
+  // A heading stays on one line: the tooltip widens to hold it.
+  const hasHeading = $derived(
+    tooltipState.entries.some((entry) => entry.role === 'heading')
   );
   const previewEntries = $derived(
     tooltipState.entries.filter((entry) => !entry.pinnedOnly)
@@ -278,6 +282,7 @@
     bind:this={tooltipElement}
     class="map-tooltip"
     class:hover-preview={!isInteractive}
+    class:fit-heading={hasHeading}
     class:interactive={isInteractive}
     class:pinned={tooltipState.pinned}
     class:mobile-sheet={isMobileLayout}
@@ -319,54 +324,47 @@
       </div>
     {/if}
 
-    <div class="tooltip-shell-body">
-      <div class="tooltip-entries">
-        {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
-          {#if entry.role === 'divider'}
-            <hr class="tooltip-divider" />
-          {:else if entry.role === 'subtitle'}
-            <div class="tooltip-subtitle">{entry.key}</div>
-          {:else if entry.role === 'heading'}
-            <div class="tooltip-heading">
-              <span class="tooltip-heading-key">{entry.key}</span>
-              <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
-                >{entry.value}</span
-              >
-            </div>
-          {:else if entry.role === 'columns'}
-            <div class="tooltip-columns">
-              {#each entry.columns ?? [] as column, columnIndex (columnIndex)}
-                <div class="tooltip-column">
-                  <span class="tooltip-column-label">
+    <div class="kh-scroll-area">
+      <div class="tooltip-shell-body" use:scrollShadows>
+        <div class="tooltip-entries">
+          {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
+            {#if entry.role === 'divider'}
+              <hr class="tooltip-divider" />
+            {:else if entry.role === 'subtitle'}
+              <div class="tooltip-subtitle">{entry.key}</div>
+            {:else if entry.role === 'heading'}
+              <div class="tooltip-heading">
+                <span class="tooltip-heading-key">{entry.key}</span>
+                <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
+                  >{entry.value}</span
+                >
+              </div>
+            {:else if entry.role === 'columns'}
+              <div class="tooltip-columns">
+                {#each entry.columns ?? [] as column, columnIndex (columnIndex)}
+                  <div class="tooltip-column">
                     <span class="tooltip-key">{column.label}</span>
-                    {#if column.badge}
-                      <VariableBadge
-                        label={column.badge}
-                        type="geo-ref"
-                        interactive={false}
-                      />
-                    {/if}
-                  </span>
-                  <span class="tooltip-column-value">{column.value}</span>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="tooltip-row">
-              <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-                >{entry.key}</span
-              >
-              <span class="tooltip-value">{entry.value}</span>
-            </div>
-          {/if}
-        {/each}
-      </div>
-
-      {#if previewOverflowCount > 0}
-        <div class="tooltip-preview-more" aria-hidden="true">
-          +{previewOverflowCount}
+                    <span class="tooltip-column-value">{column.value}</span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="tooltip-row" class:inline={entry.pinnedOnly}>
+                <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+                  >{entry.key}</span
+                >
+                <span class="tooltip-value">{entry.value}</span>
+              </div>
+            {/if}
+          {/each}
         </div>
-      {/if}
+
+        {#if previewOverflowCount > 0}
+          <div class="tooltip-preview-more" aria-hidden="true">
+            +{previewOverflowCount}
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
@@ -402,6 +400,12 @@
     overflow: hidden;
     pointer-events: none;
     user-select: none;
+  }
+
+  .map-tooltip.hover-preview.fit-heading {
+    width: max-content;
+    min-width: min(13rem, calc(100vw - 16px));
+    max-width: min(22rem, calc(100vw - 16px));
   }
 
   .map-tooltip.interactive {
@@ -569,9 +573,9 @@
 
   .tooltip-heading {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 6px;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
   }
 
   .tooltip-heading-key {
@@ -619,28 +623,16 @@
     min-width: 0;
   }
 
-  .tooltip-column-label {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px 4px;
-    min-width: 0;
+  /* Read whole, on two lines when needed. */
+  .tooltip-column .tooltip-key {
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
   }
 
   .tooltip-column-value {
     font-weight: 600;
     overflow-wrap: anywhere;
-  }
-
-  /* The variable reads at the size of the values. */
-  .tooltip-column-label :global(.variable-badge) {
-    min-width: 0;
-    height: 15px;
-  }
-
-  .tooltip-column-label :global(.badge-label) {
-    font-size: 11px;
-    line-height: 13px;
   }
 
   .tooltip-subtitle {
@@ -671,6 +663,18 @@
     grid-template-columns: minmax(0, 1fr);
     row-gap: 2px;
     padding: 5px 0;
+  }
+
+  /* The pinned row's other variables: name and value on one line. */
+  .interactive .tooltip-row.inline {
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: baseline;
+  }
+
+  .interactive .tooltip-row.inline .tooltip-value {
+    justify-self: end;
+    text-align: right;
   }
 
   .interactive .tooltip-row + .tooltip-row {
