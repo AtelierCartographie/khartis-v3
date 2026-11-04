@@ -399,8 +399,6 @@
           stepMultiplier={4}
           on:input={handleOpacityChange}
           on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>

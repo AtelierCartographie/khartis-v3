@@ -167,7 +167,6 @@
         min={FACETS_COLUMNS_MIN}
         max={columnsMax}
         step={1}
-        showMinMax
         onchange={handleColumnsChange}
       />
       <ToggleWithLabel
