@@ -87,6 +87,24 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.insetMap.sphereColor).toEqual(sphereColor);
   });
 
+  it('should keep the former inset background for an inset saved before its settings', () => {
+    const { background, ...savedInsetMap } = geoIndicationsState.insetMap;
+    geoIndicationsActions.setInsetMapBackground({ enabled: false });
+    geoIndicationsActions.reset();
+
+    geoIndicationsActions.setState({
+      insetMap: savedInsetMap as typeof geoIndicationsState.insetMap
+    });
+
+    expect(background).toEqual({
+      enabled: true,
+      color: { hue: 0, saturation: 0, lightness: 100 },
+      opacity: 85,
+      shadow: true
+    });
+    expect(geoIndicationsState.insetMap.background).toEqual(background);
+  });
+
   it('should draw a scale line saved before its thickness at the former width', () => {
     const { lineWidth, ...savedScale } = geoIndicationsState.scale;
     geoIndicationsActions.setScaleLineWidth(6);

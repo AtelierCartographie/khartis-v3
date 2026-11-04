@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
@@ -185,6 +186,24 @@
           />
         </Column>
       </Row>
+
+      <Row>
+        <Column>
+          <div class="section-divider"></div>
+          <BackgroundSettings
+            enabled={geoState.insetMap.background.enabled}
+            color={geoState.insetMap.background.color}
+            opacity={geoState.insetMap.background.opacity}
+            shadow={geoState.insetMap.background.shadow}
+            onEnabledChange={(enabled) =>
+              store.setInsetMapBackground({ enabled })}
+            onColorChange={(color) => store.setInsetMapBackground({ color })}
+            onOpacityChange={(opacity) =>
+              store.setInsetMapBackground({ opacity })}
+            onShadowChange={(shadow) => store.setInsetMapBackground({ shadow })}
+          />
+        </Column>
+      </Row>
     </Grid>
   </div>
 </ExpandableSection>
@@ -192,6 +211,12 @@
 <style>
   .section-content :global(.bx--row + .bx--row) {
     margin-top: var(--cds-spacing-05);
+  }
+
+  .section-divider {
+    height: 1px;
+    margin-bottom: var(--cds-spacing-05);
+    background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .colors-row {

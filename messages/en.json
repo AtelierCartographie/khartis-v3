@@ -519,6 +519,7 @@
   "legend_background": "Background",
   "legend_background_color": "Color",
   "legend_opacity": "Opacity",
+  "background_drop_shadow": "Drop shadow",
   "legend_entry_label": "Entry label",
   "legend_layout": "Layout",
   "legend_proportional_classes": "Width proportional to values",

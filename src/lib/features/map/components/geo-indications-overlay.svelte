@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     DistanceUnit,
+    layoutDropShadow,
     LegendPosition,
     OrientationIndicatorStyle,
     ScaleForm
@@ -747,6 +748,15 @@
       getDefaultInsetStyle(placementContext)
     )
   );
+  const insetBackgroundStyle = $derived.by(() => {
+    const { enabled, color, opacity, shadow } =
+      geoIndicationsState.insetMap.background;
+    if (!enabled) {
+      return 'background: transparent; box-shadow: none;';
+    }
+
+    return `background: hsl(${color.hue} ${color.saturation}% ${color.lightness}% / ${opacity / 100}); box-shadow: ${shadow ? layoutDropShadow(opacity / 100) : 'none'};`;
+  });
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -1702,7 +1712,7 @@
       class:resizing={insetResize !== null}
       class:tool-active={isGeoIndicationsActive}
       data-workspace-pan-ignore="true"
-      style={insetPanelStyle}
+      style={`${insetPanelStyle} ${insetBackgroundStyle}`}
       style:--_handle-scale={1 / getPageScale()}
       role="button"
       tabindex="0"
@@ -1869,10 +1879,8 @@
     position: absolute;
     bottom: 12px;
     right: 12px;
-    background: rgba(255, 255, 255, 0.85);
     padding: 4px;
     border-radius: 3px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;

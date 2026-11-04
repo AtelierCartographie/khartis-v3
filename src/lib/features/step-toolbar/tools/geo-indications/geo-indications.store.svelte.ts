@@ -73,6 +73,12 @@ const DEFAULT_STATE: GeoIndicationsState = {
     continentColor: DEFAULT_INSET_CONTINENT_COLOR,
     seaColor: DEFAULT_INSET_SEA_COLOR,
     sphereColor: DEFAULT_INSET_SPHERE_COLOR,
+    background: {
+      enabled: true,
+      color: { hue: 0, saturation: 0, lightness: 100 },
+      opacity: 85,
+      shadow: true
+    },
     useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
@@ -238,6 +244,26 @@ function normalizeState(
         nextInsetMap?.sphereColor,
         current.insetMap.sphereColor
       ),
+      background: {
+        enabled:
+          typeof nextInsetMap?.background?.enabled === 'boolean'
+            ? nextInsetMap.background.enabled
+            : current.insetMap.background.enabled,
+        color: normalizeColorState(
+          nextInsetMap?.background?.color,
+          current.insetMap.background.color
+        ),
+        opacity: clampNumber(
+          nextInsetMap?.background?.opacity,
+          0,
+          100,
+          current.insetMap.background.opacity
+        ),
+        shadow:
+          typeof nextInsetMap?.background?.shadow === 'boolean'
+            ? nextInsetMap.background.shadow
+            : current.insetMap.background.shadow
+      },
       useBasemapColors: false,
       zoom: DEFAULT_STATE.insetMap.zoom,
       centerLongitude: clampNumber(
@@ -296,6 +322,9 @@ type GeoIndicationsActions = {
   setOrientationColor: (colorState: ColorState) => void;
   setOrientationColorFromHex: (hex: string) => void;
   setInsetMapSize: (size: number) => void;
+  setInsetMapBackground: (
+    updates: Partial<GeoIndicationsState['insetMap']['background']>
+  ) => void;
   setInsetMapWindowColor: (colorState: ColorState) => void;
   setInsetMapWindowColorFromHex: (hex: string) => void;
   setInsetMapContinentColor: (colorState: ColorState) => void;
@@ -450,6 +479,22 @@ const { state, actions } = createToolStore<
     },
     setOrientationColorFromHex: (hex: string) => {
       s.orientation.color = hexToHsl(hex);
+    },
+    setInsetMapBackground: (updates) => {
+      const current = s.insetMap.background;
+      s.insetMap.background = {
+        enabled: updates.enabled ?? current.enabled,
+        color: updates.color
+          ? normalizeColorState(updates.color, current.color)
+          : current.color,
+        opacity: clampNumber(
+          Math.round(updates.opacity ?? current.opacity),
+          0,
+          100,
+          current.opacity
+        ),
+        shadow: updates.shadow ?? current.shadow
+      };
     },
     setInsetMapSize: (size: number) => {
       s.insetMap.size = clampNumber(
