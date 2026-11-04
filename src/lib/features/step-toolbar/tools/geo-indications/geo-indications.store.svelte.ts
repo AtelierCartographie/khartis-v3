@@ -49,6 +49,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     enabled: false,
     form: ScaleForm.LINE,
     lineWidth: 2,
+    opacity: 100,
     distance: 0,
     autoTuned: true,
     units: DistanceUnit.KILOMETERS,
@@ -62,6 +63,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     enabled: false,
     style: OrientationIndicatorStyle.ARROW,
     size: 10,
+    opacity: 100,
     color: { hue: 0, saturation: 0, lightness: 0 },
     dragPosition: null
   },
@@ -170,6 +172,7 @@ function normalizeState(
         SCALE_LINE_WIDTH_LIMITS.max,
         current.scale.lineWidth
       ),
+      opacity: clampNumber(nextScale?.opacity, 0, 100, current.scale.opacity),
       distance: clampScaleDistance(
         toFiniteNumber(nextScale?.distance, current.scale.distance),
         nextScaleUnits,
@@ -207,6 +210,12 @@ function normalizeState(
           ? nextOrientation.style
           : current.orientation.style,
       size: clampNumber(nextOrientation?.size, 5, 30, current.orientation.size),
+      opacity: clampNumber(
+        nextOrientation?.opacity,
+        0,
+        100,
+        current.orientation.opacity
+      ),
       color: normalizeColorState(
         nextOrientation?.color,
         current.orientation.color
@@ -319,6 +328,8 @@ type GeoIndicationsActions = {
   setScaleFontSize: (fontSize: number) => void;
   setOrientationStyle: (style: OrientationIndicatorStyle) => void;
   setOrientationSize: (size: number) => void;
+  setOrientationOpacity: (opacity: number) => void;
+  setScaleOpacity: (opacity: number) => void;
   setOrientationColor: (colorState: ColorState) => void;
   setOrientationColorFromHex: (hex: string) => void;
   setInsetMapSize: (size: number) => void;
@@ -473,6 +484,22 @@ const { state, actions } = createToolStore<
     },
     setOrientationSize: (size: number) => {
       s.orientation.size = clampNumber(size, 5, 30, s.orientation.size);
+    },
+    setOrientationOpacity: (opacity: number) => {
+      s.orientation.opacity = clampNumber(
+        Math.round(opacity),
+        0,
+        100,
+        s.orientation.opacity
+      );
+    },
+    setScaleOpacity: (opacity: number) => {
+      s.scale.opacity = clampNumber(
+        Math.round(opacity),
+        0,
+        100,
+        s.scale.opacity
+      );
     },
     setOrientationColor: (colorState: ColorState) => {
       s.orientation.color = colorState;
