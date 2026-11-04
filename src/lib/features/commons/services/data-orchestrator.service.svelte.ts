@@ -1401,7 +1401,8 @@ function createDataOrchestratorService() {
                 lastSelectedTiledStyle: basemapSettings.lastSelectedTiledStyle,
                 referenceBasemapId: basemapSettings.referenceBasemapId,
                 showLabels: basemapSettings.showLabels,
-                groupVisibility: basemapSettings.groupVisibility
+                groupVisibility: basemapSettings.groupVisibility,
+                opacity: basemapSettings.opacity
               }
             });
           }

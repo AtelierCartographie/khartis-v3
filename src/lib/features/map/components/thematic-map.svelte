@@ -1243,6 +1243,7 @@
       mapBasemap.syncBasemapLanguage();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
+      mapBasemap.syncBasemapOpacity();
 
       mapBasemap.syncProjection();
       applyPendingMapLibreViewportPreset();
@@ -2051,6 +2052,11 @@
   $effect(() => {
     void basemapStyleStore.groupVisibilityVersion;
     untrack(() => mapBasemap.syncGroupVisibility());
+  });
+
+  $effect(() => {
+    void basemapStyleStore.opacity;
+    untrack(() => mapBasemap.syncBasemapOpacity());
   });
 
   $effect(() => {
