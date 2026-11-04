@@ -114,6 +114,7 @@
       items={tabItems}
       onchange={handleTabChange}
       className="geocode-tabs"
+      hideInactiveLabel={false}
     />
   </div>
 

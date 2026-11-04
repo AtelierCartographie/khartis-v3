@@ -139,6 +139,7 @@
 <div
   class="khartis-toggle-tabs toggle-tabs {className}"
   class:size-md={size === 'md'}
+  class:all-labels={!hideInactiveLabel}
   role="group"
   onpointerleave={handleGroupPointerLeave}
 >
@@ -257,6 +258,13 @@
      that unfolds next to it: the bar keeps its width. */
   .toggle-tab.full-width {
     flex: 1 1 0;
+  }
+
+  /* With every label shown, the tabs share the width evenly and each label
+     is cut with an ellipsis rather than squeezing the active tab. */
+  .toggle-tabs.all-labels .toggle-tab {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .toggle-label {
