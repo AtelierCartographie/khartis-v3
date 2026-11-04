@@ -728,6 +728,43 @@
     await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
   }
 
+  async function refinalizeGPSJoin(
+    basemap: BasemapMetadata,
+    resolvedDatasetId: string,
+    abortSignal: AbortSignal
+  ): Promise<void> {
+    const sourceSnapshot = resolveSourceSnapshot();
+    const stepIndex = basemapStepIndex;
+    try {
+      const preFinalizeColumns =
+        await capturePreFinalizeAnalysis(sourceSnapshot);
+      await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
+      if (abortSignal.aborted) return;
+
+      await persistJoinSnapshot(
+        resolveGPSJoinSnapshot(basemap.file, resolvedDatasetId),
+        sourceSnapshot,
+        preFinalizeColumns
+      );
+      if (abortSignal.aborted) return;
+
+      syncSelectedDatasetJoinedBasemap(basemap.file);
+      dataTabStore.markStepComplete(stepIndex);
+    } catch (error) {
+      if (
+        abortSignal.aborted ||
+        isDatasetNotFoundError(error, resolvedDatasetId)
+      )
+        return;
+      logger.error(
+        'Failed to finalize GPS mode after a reference change',
+        LogCategory.MAP,
+        error
+      );
+      showError(m.join_error_title(), m.join_error_message());
+    }
+  }
+
   async function capturePreFinalizeAnalysis(
     sourceSnapshot: SourceSnapshot | null
   ): Promise<AnalysisResults | undefined> {
@@ -1959,7 +1996,25 @@
     if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates) {
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
-      previousLinkedVariableName = linkedVariableName || null;
+      // Back to entities, the linked variable joins again.
+      previousLinkedVariableName = null;
+      // Back to coordinates, the points replace the entity join.
+      const basemap = allBasemapsForLookup.find(
+        (b) => b.file === selectedBasemapId
+      );
+      if (
+        hasGPSCoordinates &&
+        basemap &&
+        !isGPSJoinFinalizedForBasemap(basemap.file, resolvedDatasetId)
+      ) {
+        abortCurrentJoin();
+        currentJoinAbortController = new AbortController();
+        void refinalizeGPSJoin(
+          basemap,
+          resolvedDatasetId,
+          currentJoinAbortController.signal
+        );
+      }
       return;
     }
 

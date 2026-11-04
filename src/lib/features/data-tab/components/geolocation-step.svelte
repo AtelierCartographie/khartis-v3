@@ -317,9 +317,15 @@
       return;
     }
 
+    // A table holding both is geolocated by its coordinates by default, unless
+    // the project already links an entity variable.
+    const keepsLinkedEntities =
+      !dataTabState.geolocation.autoDetected &&
+      Boolean(dataTabState.geolocation.linkedVariableName);
     if (
       !hasAutoGeoreferenceInitialization &&
       hasLatLon &&
+      !keepsLinkedEntities &&
       dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES
     ) {
       dataTabActions.setGeolocationState({
