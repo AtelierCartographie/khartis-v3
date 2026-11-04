@@ -850,6 +850,17 @@
     };
   });
 
+  // The linked variable is chosen at the geolocation step: its badge leads
+  // back to that field.
+  function showLinkedVariableField(): void {
+    const step = document.getElementById('geolocation-step');
+    if (!step) return;
+    step.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    step
+      .querySelector<HTMLInputElement>('.geocode-field input')
+      ?.focus({ preventScroll: true });
+  }
+
   // Hovering or focusing a value outlines its territory on the map.
   function mapHoverValue(node: HTMLElement, dataValue: string) {
     let value = dataValue;
@@ -1082,7 +1093,12 @@
     <div class="table-header-data">
       <span class="table-header-label">{m.join_data_column()}</span>
       {#if linkedVariableName}
-        <VariableBadge label={linkedVariableName} type="geo-ref" />
+        <VariableBadge
+          label={linkedVariableName}
+          type="geo-ref"
+          ariaLabel={m.join_linked_variable_edit()}
+          onclick={showLinkedVariableField}
+        />
       {/if}
     </div>
     {#if relation}
@@ -2013,9 +2029,15 @@
     border-bottom: none;
   }
 
-  /* Alternating rows and a hovered row, as in the data table. */
+  /* Alternating rows and a hovered row, as in the data table. The alternate
+     row only leans towards the field color, so its dropdown still stands
+     out. */
   .join-table .table-row:nth-child(even of .table-row) {
-    --join-row-stripe: var(--cds-ui-02, #ffffff);
+    --join-row-stripe: color-mix(
+      in srgb,
+      var(--join-row-bg) 65%,
+      var(--cds-field-02, #ffffff)
+    );
   }
 
   .join-table .table-row:hover {

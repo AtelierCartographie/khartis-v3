@@ -886,6 +886,7 @@
   "join_fuzzy_pass_error": "La recherche de correspondances approchantes a échoué",
   "join_entities_unrecognized_one": "entité non reconnue",
   "join_unrecognized_correction_placeholder": "Entité du fond de carte",
+  "join_linked_variable_edit": "Modifier la variable liée",
   "join_data_column": "Données tabulaires",
   "join_basemap_column": "Fond de carte",
   "join_error_detected_title": "Attention",

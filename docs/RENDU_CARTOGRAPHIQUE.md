@@ -307,7 +307,8 @@ non reconnues n'ont pas de géométrie et restent dans le panneau.
 - L'encadré de synthèse (`join-control-summary.svelte`), en bas à droite de
   l'espace de travail et non dans la page, reprend les catégories non vides du
   panneau avec leurs comptes et le même en-tête (`join-category-header.svelte`),
-  puis les entités hors carte et, en gris, les entités du fond sans données.
+  chacune précédée du caisson de légende de son rendu sur la carte, puis les
+  entités hors carte et, en gris, les entités du fond sans données.
   Cliquer son titre amène le panneau sur la jointure assistée, cliquer une
   catégorie y ouvre son accordéon, le seul ouvert. Ouvrir une catégorie ne
   filtre pas la carte. L'encadré glisse avec le bord du panneau quand celui-ci
@@ -322,6 +323,9 @@ non reconnues n'ont pas de géométrie et restent dans le panneau.
 - La carte suit la variable liée du panneau : tant que la jointure finalisée
   porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
   variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.
+- En entrant dans l'étape Données ou en la quittant, la dernière image de la
+  carte s'efface en fondu au-dessus de la nouvelle
+  (`join-control-step-fade.svelte`), sauf mouvement réduit.
 - Rien de cela n'entre dans un export.
 
 ## Habillage et facettes

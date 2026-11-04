@@ -2,6 +2,7 @@
   import { Button } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
+    Error as NotAllowed,
     ErrorFilled,
     MagicWandFilled,
     WarningAltFilled,
@@ -122,6 +123,7 @@
             <JoinCategoryHeader
               compact
               tone="success"
+              legend={getJoinControlSwatchBackground('matched')}
               icon={CheckmarkFilled}
               count={basemapJoin.joinedEntities}
               label={isSingularCount(basemapJoin.joinedEntities)
@@ -135,6 +137,7 @@
             <JoinCategoryHeader
               compact
               tone="warning"
+              legend={getJoinControlSwatchBackground('check')}
               icon={WarningFilled}
               count={basemapJoin.entitiesToVerify}
               label={isSingularCount(basemapJoin.entitiesToVerify)
@@ -148,6 +151,7 @@
             <JoinCategoryHeader
               compact
               tone="error"
+              legend={getJoinControlSwatchBackground('duplicate')}
               icon={WarningAltFilled}
               count={basemapJoin.duplicateTotal}
               label={isSingularCount(basemapJoin.duplicateTotal)
@@ -161,7 +165,8 @@
             <JoinCategoryHeader
               compact
               tone="ignored"
-              swatch={getJoinControlSwatchBackground('ignored')}
+              legend={getJoinControlSwatchBackground('ignored')}
+              icon={NotAllowed}
               count={ignoredCount}
               label={isSingularCount(ignoredCount)
                 ? m.join_entities_ignored_one()
@@ -179,6 +184,7 @@
           <JoinCategoryHeader
             compact
             tone="error"
+            legend={null}
             icon={ErrorFilled}
             count={basemapJoin.unrecognizedTotal}
             label={isSingularCount(basemapJoin.unrecognizedTotal)
@@ -196,7 +202,7 @@
             compact
             muted
             tone="missing"
-            swatch={getJoinControlSwatchBackground('no_data')}
+            legend={getJoinControlSwatchBackground('no_data')}
             count={mapCounts.no_data}
             label={isSingularCount(mapCounts.no_data)
               ? m.join_entities_no_data_one()

@@ -886,6 +886,7 @@
   "join_fuzzy_pass_error": "The approximate match search failed",
   "join_entities_unrecognized_one": "unrecognized entity",
   "join_unrecognized_correction_placeholder": "Basemap entity",
+  "join_linked_variable_edit": "Change the linked variable",
   "join_data_column": "Tabular data",
   "join_basemap_column": "Basemap",
   "join_error_detected_title": "Warning",
