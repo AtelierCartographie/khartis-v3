@@ -118,8 +118,11 @@ part en pas calendaire.
   classée, `suggestVisualizations()` lui réserve une suggestion (une place
   libre, sinon la dernière, jamais la première). Elle est classée en couleur
   (aplats, symboles, lignes, textes), jamais en taille.
-- **Hors périmètre.** Pas de taille proportionnelle sur une date : il faudrait
-  d'abord une durée (ancienneté), qui est une variable de rapport.
+- **Ancienneté.** Pas de taille proportionnelle sur une date. La calculatrice
+  propose « Ancienneté en années » : `date_sub('year', colonne, DATE '…')`
+  donne les années révolues à la date du jour, figée dans la formule parce
+  qu'elle est rejouée à chaque rechargement. Le résultat est un nombre
+  ordinaire, qui rouvre la taille proportionnelle.
 
 La reconnaissance des dates à l'import est décrite dans
 [Import DuckDB](IMPORT_DUCKDB.md).
