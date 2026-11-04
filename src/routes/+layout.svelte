@@ -13,7 +13,10 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
-  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    StylingTools,
+    ToolbarStep
+  } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
@@ -43,7 +46,6 @@
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import {
-    colorBlindnessActions,
     getColorBlindnessState,
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
@@ -369,8 +371,12 @@
       !globalState.selectedTool &&
       !mobileColorBlindnessNotificationDismissed
   );
-  function handleDeactivateColorBlindness() {
-    colorBlindnessActions.reset();
+  function openColorBlindnessTool(): void {
+    if (globalState.selectedStep !== ToolbarStep.Styling) {
+      globalActions.setNavigationState(ToolbarStep.Styling);
+    }
+    globalActions.openMobileToolbar();
+    globalActions.setSelectedTool(StylingTools.ColorBlindness);
   }
 
   $effect(() => {
@@ -482,7 +488,7 @@
         {#if showMobileColorBlindnessNotification}
           <div class="colorblind-notification">
             <ColorBlindnessNotification
-              ondeactivate={handleDeactivateColorBlindness}
+              onopentool={openColorBlindnessTool}
               onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
             />
           </div>

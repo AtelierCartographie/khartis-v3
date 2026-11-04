@@ -254,8 +254,6 @@
           stepMultiplier={1}
           on:input={handleThicknessChange}
           on:change={handleThicknessChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>
@@ -274,8 +272,6 @@
             stepMultiplier={15}
             on:input={handleRotationChange}
             on:change={handleRotationChange}
-            minLabel=""
-            maxLabel=""
           />
         </div>
       </Column>
@@ -378,8 +374,6 @@
           stepMultiplier={5}
           on:input={handleOpacityChange}
           on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>

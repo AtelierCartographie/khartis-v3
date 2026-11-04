@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -123,6 +128,11 @@
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
   }
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
 
   function handleClose() {
     open = false;
@@ -265,6 +275,8 @@
   <div use:portal class="palette-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="palette-popover"
       style:right={popoverRight}
       role="dialog"

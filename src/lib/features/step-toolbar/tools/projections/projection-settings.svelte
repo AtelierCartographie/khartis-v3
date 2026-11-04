@@ -45,7 +45,6 @@
       projectionState.latitude !== defaultOrientation[1] ||
       projectionState.rotation !== 0
   );
-  const deg = (n: number) => `${n}°`;
 
   function handleLongitudeChange(value: number): void {
     if (!canApplyProjectionSettings) return;
@@ -86,9 +85,6 @@
           min={-180}
           max={180}
           step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-180)}
-          maxLabel={deg(180)}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
@@ -101,9 +97,6 @@
           min={-90}
           max={90}
           step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-90)}
-          maxLabel={deg(90)}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
@@ -116,9 +109,6 @@
           min={-180}
           max={180}
           step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-180)}
-          maxLabel={deg(180)}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
@@ -169,12 +159,6 @@
     min-width: 3.5rem !important;
     flex-shrink: 0;
     text-align: center;
-  }
-
-  #khartis-projection-settings-tool
-    :global(.controls .bx--slider__range-label) {
-    min-width: 2rem;
-    font-size: 0.75rem;
   }
 
   #khartis-projection-settings-tool :global(.reset) {

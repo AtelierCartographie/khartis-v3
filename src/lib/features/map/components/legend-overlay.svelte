@@ -7,7 +7,10 @@
     StylingTools,
     ToolbarStep
   } from '$lib/features/commons/types/global';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
+  import {
+    layoutDropShadow,
+    LegendPosition
+  } from '$lib/features/commons/constants/ui.constants';
   import {
     type VisualizationConfig,
     visualizationStore
@@ -297,7 +300,9 @@
 
     if (hasBackground) {
       styles.push(`background-color: ${bgHsl}`);
-      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
+      styles.push(
+        `box-shadow: ${legendState.style.background.shadow ? layoutDropShadow(bgOpacity) : 'none'}`
+      );
     } else {
       styles.push('background-color: transparent');
       styles.push('box-shadow: none');
@@ -749,7 +754,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function resetFrameCentering(): void {
@@ -758,7 +763,7 @@
     }
 
     centeredItemId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
@@ -782,7 +787,13 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleFrameBlur(): void {
+    if (isLegendActive) {
+      return;
+    }
+
     resetFrameCentering();
   }
 

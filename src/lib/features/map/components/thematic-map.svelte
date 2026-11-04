@@ -178,15 +178,13 @@
       (globalState.selectedStep === ToolbarStep.Styling ||
         globalState.isMapExporting)
   );
-  const isVisualizationMode = $derived(
-    globalState.selectedStep === ToolbarStep.Visualizations &&
-      !globalState.isMapExporting
+  const isDataStep = $derived(
+    globalState.selectedStep === ToolbarStep.Data && !globalState.isMapExporting
   );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling ||
       globalState.isMapExporting
   );
-  const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
   const logicalMapCanvasWidth = $derived(
     Math.max(1, logicalWidth - mapFrame.left - mapFrame.right)
   );
@@ -1246,6 +1244,7 @@
       mapBasemap.syncBasemapLanguage();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
+      mapBasemap.syncBasemapOpacity();
 
       mapBasemap.syncProjection();
       applyPendingMapLibreViewportPreset();
@@ -2060,6 +2059,11 @@
   });
 
   $effect(() => {
+    void basemapStyleStore.opacity;
+    untrack(() => mapBasemap.syncBasemapOpacity());
+  });
+
+  $effect(() => {
     void basemapStyleStore.viewportRequestVersion;
 
     const requestedStyle = basemapStyleStore.requestedViewportStyle;
@@ -2331,19 +2335,19 @@
       <div class="layout-stage" style={layoutStageStyle}>
         <GeoIndicationsOverlay
           interactive={isStylingMode}
-          hidden={!isStylingMode}
+          hidden={isDataStep}
         />
       </div>
     {/if}
 
     {#if showLegendOverlay}
       <div class="layout-stage" style={layoutStageStyle}>
-        <LegendOverlay hidden={!showLegendPreview} />
+        <LegendOverlay hidden={isDataStep} />
       </div>
     {/if}
 
     {#if showAnnotationOverlay}
-      <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
+      <AnnotationOverlay interactive={isStylingMode} hidden={isDataStep} />
     {/if}
 
     {#if labelEditing.editRequest}

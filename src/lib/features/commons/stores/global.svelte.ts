@@ -109,7 +109,7 @@ function createGlobalStore() {
       pageZoomLevel: 100,
       minPageZoom: 10,
       maxPageZoom: 500,
-      pageZoomStep: 10,
+      pageZoomStep: 5,
       pagePanOffset: { x: 0, y: 0 },
       pageZoomScale: 1
     },
@@ -380,8 +380,25 @@ function createGlobalStore() {
   }
 
   function resetPagePan(): void {
+    panBeforeCentering = null;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     notifyPersistence();
+  }
+
+  // Selecting a layout object pans the page to show it beside its tool;
+  // closing the tool brings back the page where the user had moved it.
+  let panBeforeCentering: { x: number; y: number } | null = null;
+
+  function centerPageBy(deltaX: number, deltaY: number): void {
+    panBeforeCentering ??= { ...state.zoom.pagePanOffset };
+    panPageBy(deltaX, deltaY);
+  }
+
+  function restorePagePan(): void {
+    if (!panBeforeCentering) return;
+
+    setPagePanOffset(panBeforeCentering);
+    panBeforeCentering = null;
   }
 
   function setToolbarTransitioning(value: boolean): void {
@@ -594,8 +611,10 @@ function createGlobalStore() {
     setPageZoom,
     setPageZoomScale,
     panPageBy,
+    centerPageBy,
     setPagePanOffset,
     resetPagePan,
+    restorePagePan,
     setToolbarTransitioning,
     setMapExporting,
     resetNavigationState,
@@ -619,8 +638,10 @@ export const globalActions = {
   setPageZoom: globalState.setPageZoom,
   setPageZoomScale: globalState.setPageZoomScale,
   panPageBy: globalState.panPageBy,
+  centerPageBy: globalState.centerPageBy,
   setPagePanOffset: globalState.setPagePanOffset,
   resetPagePan: globalState.resetPagePan,
+  restorePagePan: globalState.restorePagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,
   closeMobileToolbar: globalState.closeMobileToolbar,

@@ -1162,8 +1162,10 @@
     {ariaLiveMessage}
   </div>
   <div class="section-header">
-    <span class="section-title">{m.section_join_assisted()}</span>
-    <span class="section-header-icon">
+    <span class="section-title kh-thinking-text"
+      >{m.section_join_assisted()}</span
+    >
+    <span class="section-header-icon kh-thinking-icon">
       <MagicWandFilled size={20} />
     </span>
     <InfoPopover text={m.join_assisted_info()} />
