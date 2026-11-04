@@ -459,9 +459,16 @@ function createGlobalStore() {
     state.selectedTool = isSelectedTool(persisted.selectedTool)
       ? persisted.selectedTool
       : undefined;
-    state.toolbarState = isToolbarState(persisted.toolbarState)
+    const persistedToolbarState = isToolbarState(persisted.toolbarState)
       ? persisted.toolbarState
       : ToolbarState.Full;
+    // The Données panel cannot be collapsed; a state saved while Escape still
+    // collapsed it reopens.
+    state.toolbarState =
+      state.selectedStep === ToolbarStep.Data &&
+      persistedToolbarState === ToolbarState.Collapsed
+        ? ToolbarState.Full
+        : persistedToolbarState;
     state.projectionFilter = isProjectionFilterId(persisted.projectionFilter)
       ? persisted.projectionFilter
       : 'all';

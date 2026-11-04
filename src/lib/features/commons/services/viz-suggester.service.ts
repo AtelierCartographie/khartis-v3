@@ -921,12 +921,60 @@ function suggestVisualizations(
     ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
   ];
 
-  return dedupeSuggestionsByImplementation(
+  const ranked = dedupeSuggestionsByImplementation(
     suggestions.sort(compareSuggestionPriority),
     simplifiedGeomType
-  )
-    .sort(compareSuggestionPriority)
-    .slice(0, maxSuggestions);
+  ).sort(compareSuggestionPriority);
+  return reserveDateSuggestion(
+    ranked.slice(0, maxSuggestions),
+    maxSuggestions,
+    rankedColumns,
+    simplifiedGeomType
+  );
+}
+
+function isDateColumn(column: EnrichedColumn): boolean {
+  return mapTypeToSimple(column.type) === DuckDBSimplifiedType.DATE;
+}
+
+/**
+ * A date carries a fixed, middling semiology score, so ratios always outrank
+ * it and the first columns alone never surface it. When the data holds a date
+ * spread enough to be classed, one suggestion maps it: in a free slot, or in
+ * the last one as long as the best suggestion stays first.
+ */
+function reserveDateSuggestion(
+  shown: VizSuggestion[],
+  maxSuggestions: number,
+  rankedColumns: EnrichedColumn[],
+  geometryType: SimplifiedGeometryType
+): VizSuggestion[] {
+  const dateColumns = rankedColumns.filter(isDateColumn);
+  if (shown.length === 0 || maxSuggestions < 2 || dateColumns.length === 0) {
+    return shown;
+  }
+  const dateNames = new Set(dateColumns.map((column) => column.name));
+  if (
+    shown.some((suggestion) =>
+      suggestion.columns?.some((name) => dateNames.has(name))
+    )
+  ) {
+    return shown;
+  }
+  const dateColumn = dateColumns.find(
+    (column) => column.semioType === SEMIO_TYPES.QTR
+  );
+  const dateSuggestion = dateColumn
+    ? searchVizByType(dateColumn, geometryType, 1).sort(
+        compareSuggestionPriority
+      )[0]
+    : undefined;
+  if (!dateSuggestion) {
+    return shown;
+  }
+  return shown.length < maxSuggestions
+    ? [...shown, dateSuggestion]
+    : [...shown.slice(0, -1), dateSuggestion];
 }
 
 export const vizSuggester = {

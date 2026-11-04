@@ -97,6 +97,8 @@
     ) => void;
     onColumnDeleted?: (columnName: string) => void;
     onTableMutation?: (mutation: TableMutation) => Promise<void> | void;
+    /** The row under the pointer, `null` once it leaves the rows. */
+    onRowHover?: (rowId: number | null) => void;
   }
 
   let {
@@ -118,8 +120,26 @@
     onSelectionChange,
     onSortChange,
     onColumnDeleted,
-    onTableMutation
+    onTableMutation,
+    onRowHover
   }: Props = $props();
+
+  let hoveredRowId: number | null = null;
+
+  function setHoveredRow(rowId: number | null): void {
+    if (rowId === hoveredRowId) return;
+    hoveredRowId = rowId;
+    onRowHover?.(rowId);
+  }
+
+  function handleRowsPointerOver(event: PointerEvent): void {
+    const row =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('tr[data-row-id]')
+        : null;
+    const rowId = Number(row?.dataset.rowId);
+    setHoveredRow(Number.isFinite(rowId) && rowId >= 0 ? rowId : null);
+  }
 
   let histogramVisible = $state(true);
   const effectiveShowSummaryPlots = $derived(
@@ -881,7 +901,10 @@
               {/each}
             </tr>
           </thead>
-          <tbody>
+          <tbody
+            onpointerover={onRowHover ? handleRowsPointerOver : undefined}
+            onpointerleave={onRowHover ? () => setHoveredRow(null) : undefined}
+          >
             {#each tableData.tableData as row, i (virtualScroll.rows[i] ?? `row-${i}`)}
               {@const rowIndex = virtualScroll.rows[i] ?? i}
               {@const rowId = (row.__id as number | undefined) ?? rowIndex + 1}

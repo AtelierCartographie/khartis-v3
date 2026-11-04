@@ -24,7 +24,8 @@
     InfoPopover,
     MissingDataSection,
     SliderWithInput,
-    StrokeSection
+    StrokeSection,
+    ToggleWithLabel
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from '../../types/symbol.types';
@@ -102,6 +103,7 @@
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let commonScale = $state<boolean>(true);
+  let knockout = $state<boolean>(true);
   let positionMode = $state<SymbolDoublePosition>(SymbolDoublePosition.OVERLAY);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
@@ -237,6 +239,7 @@
     }
     if (visualization?.symbol) {
       commonScale = visualization.symbol.commonScale ?? true;
+      knockout = visualization.symbol.knockout ?? true;
       const nextPositionMode =
         visualization.symbol.positionMode ?? SymbolDoublePosition.OVERLAY;
       positionMode =
@@ -461,6 +464,13 @@
     runUserChange(() => {
       commonScale = value;
       onSymbolPrimitiveChange?.({ commonScale: value });
+    });
+  }
+
+  function handleKnockoutChange(value: boolean) {
+    runUserChange(() => {
+      knockout = value;
+      onSymbolPrimitiveChange?.({ knockout: value });
     });
   }
 
@@ -712,7 +722,16 @@
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_STROKE_CATEGORY}
   onMissingDataShowChange={handleMissingDataShowChange}
   onMissingDataColorChange={handleMissingDataColorChange}
-/>
+>
+  {#snippet beforeOpacity()}
+    <ToggleWithLabel
+      label={m.symbol_knockout()}
+      infoText={m.symbol_knockout_info()}
+      toggled={knockout}
+      ontoggle={handleKnockoutChange}
+    />
+  {/snippet}
+</StrokeSection>
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
