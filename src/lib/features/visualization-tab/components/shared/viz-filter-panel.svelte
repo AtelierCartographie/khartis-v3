@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
@@ -101,8 +106,12 @@
     };
 
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
+    const releaseFloatingPanel = claimFloatingPanel(() =>
+      untrack(() => onClose)()
+    );
 
     return () => {
+      releaseFloatingPanel();
       resizeObserver?.disconnect();
       window.removeEventListener(EVENT.RESIZE, updatePanelPosition);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
@@ -169,6 +178,8 @@
 
 <aside
   use:portal
+  in:floatingPanelIn|global
+  out:floatingPanelOut|global
   class="viz-filter-panel"
   style:right={panelRight}
   aria-label={title ?? m.filter_panel_title()}
