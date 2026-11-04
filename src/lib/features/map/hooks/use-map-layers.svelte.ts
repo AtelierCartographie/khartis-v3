@@ -58,7 +58,10 @@ import type {
   SplitRenderingTable
 } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
-import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import {
+  BasemapLayerType,
+  GeoreferenceType
+} from '$lib/features/commons/constants/ui.constants';
 import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   selectRowsByIndices,
@@ -297,6 +300,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       !joinedBasemapFile ||
       metadata?.file !== joinedBasemapFile ||
       datasetId !== datasetsStore.selectedDatasetId ||
+      dataTabState.geolocation.geoReference !== GeoreferenceType.ENTITIES ||
       untrack(() => globalState.isMapExporting) ||
       !split.dataset.schema.fields.some(
         (field) => field.name === JOINED_BASEMAP_COLUMN.ID
@@ -326,7 +330,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         (entity) => entity.dataValue
       )
     });
-    if (!statuses || !joinControlStore.isRevealed(datasetId)) {
+    if (!statuses || joinControlStore.getRevealProgress(datasetId) === 0) {
       return null;
     }
     // The finalized join belongs to the variable it was built on. Once the
@@ -336,7 +340,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       statuses.geoColumn === geoColumn &&
       dataTabState.geolocation.linkedVariableName === geoColumn;
 
-    joinControlStore.startRevealAnimation(datasetId);
     return createJoinControlLayers({
       layerId: `${JOIN_CONTROL_LAYER_PREFIX}${datasetId}${
         ctx.projectionSuffix ? `-${ctx.projectionSuffix}` : ''
@@ -465,7 +468,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function withJoinControlReveal(
     layers: Layer<DeckDataRow>[]
   ): Layer<DeckDataRow>[] {
-    const progress = untrack(() => joinControlStore.revealProgress);
+    const progress = untrack(() =>
+      joinControlStore.getRevealProgress(datasetsStore.selectedDatasetId ?? '')
+    );
     if (progress >= 1) return layers;
     return layers.map((layer) =>
       layer.id.startsWith(JOIN_CONTROL_LAYER_PREFIX)
@@ -480,7 +485,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     void mapHoverHighlightStore.overlay;
     void labelLayoutStore.dragPreview;
     void joinControlStore.hoverTarget;
-    void joinControlStore.revealProgress;
+    void joinControlStore.getRevealProgress(
+      datasetsStore.selectedDatasetId ?? ''
+    );
     untrack(() => {
       if (lastAppliedLayers.length > 0) {
         setLayers(lastAppliedLayers);

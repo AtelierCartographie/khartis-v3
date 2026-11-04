@@ -49,7 +49,7 @@ export interface JoinControlHoverTarget {
   rowIds?: number[];
 }
 
-const REVEAL_MOTION_MS = 600;
+const REVEAL_COMPLETION_MS = 1500;
 
 const TERRITORY_STATUSES = new Set<JoinControlCategory>([
   'matched',
@@ -102,8 +102,10 @@ function createJoinControlStore() {
   // The join appears on the map once the user reaches the join step, and
   // stays for the session; it fades in the first time it is drawn.
   let revealedDatasetIds = $state.raw(new Set<string>());
-  let revealProgress = $state(1);
-  const animatedDatasetIds = new Set<string>();
+  let revealing = $state.raw<{ datasetId: string; progress: number } | null>(
+    null
+  );
+  const completingDatasetIds = new Set<string>();
   let loadedKey: string | null = null;
   let pendingKey: string | null = null;
 
@@ -202,23 +204,44 @@ function createJoinControlStore() {
     };
   }
 
-  function reveal(datasetId: string): void {
-    if (revealedDatasetIds.has(datasetId)) return;
-    revealedDatasetIds = new Set(revealedDatasetIds).add(datasetId);
-    version++;
+  function getRevealProgress(datasetId: string): number {
+    if (revealedDatasetIds.has(datasetId)) return 1;
+    return revealing?.datasetId === datasetId ? revealing.progress : 0;
   }
 
-  /** Fades the join in, once per dataset, from its first drawing on. */
-  function startRevealAnimation(datasetId: string): void {
-    if (animatedDatasetIds.has(datasetId)) return;
-    animatedDatasetIds.add(datasetId);
-    const duration = motionDuration(REVEAL_MOTION_MS);
-    if (duration === 0 || typeof requestAnimationFrame !== 'function') return;
-    revealProgress = 0;
+  /**
+   * Follows the scroll towards the join panel: the join only grows more
+   * visible, and once whole it stays for the session.
+   */
+  function setRevealProgress(datasetId: string, progress: number): void {
+    const previous = getRevealProgress(datasetId);
+    const next = Math.min(1, Math.max(previous, progress));
+    if (next === previous) return;
+    if (next >= 1) {
+      revealedDatasetIds = new Set(revealedDatasetIds).add(datasetId);
+      revealing = null;
+    } else {
+      revealing = { datasetId, progress: next };
+    }
+    if (previous === 0) version++;
+  }
+
+  /** Ends the reveal on its own when the panel cannot scroll any further. */
+  function completeReveal(datasetId: string): void {
+    const from = getRevealProgress(datasetId);
+    if (from >= 1 || completingDatasetIds.has(datasetId)) return;
+    const duration = motionDuration(REVEAL_COMPLETION_MS) * (1 - from);
+    if (duration === 0 || typeof requestAnimationFrame !== 'function') {
+      setRevealProgress(datasetId, 1);
+      return;
+    }
+    completingDatasetIds.add(datasetId);
     const start = performance.now();
     const step = (now: number) => {
-      revealProgress = Math.min(1, (now - start) / duration);
-      if (revealProgress < 1) requestAnimationFrame(step);
+      const progress = from + ((1 - from) * (now - start)) / duration;
+      setRevealProgress(datasetId, progress);
+      if (progress < 1) requestAnimationFrame(step);
+      else completingDatasetIds.delete(datasetId);
     };
     requestAnimationFrame(step);
   }
@@ -246,10 +269,11 @@ function createJoinControlStore() {
     },
     /**
      * Changes whenever the join-control layers must be redrawn, including when
-     * the join panel links another variable.
+     * the join panel links another variable or geolocates by coordinates.
      */
     get renderKey(): string {
-      return `${version}:${dataTabState.geolocation.linkedVariableName}`;
+      const { geoReference, linkedVariableName } = dataTabState.geolocation;
+      return `${version}:${geoReference}:${linkedVariableName}`;
     },
     request,
     publishCounts,
@@ -257,12 +281,9 @@ function createJoinControlStore() {
     requestPanelCategory,
     requestPanelSection,
     setHoverTarget,
-    reveal,
-    startRevealAnimation,
-    isRevealed: (datasetId: string) => revealedDatasetIds.has(datasetId),
-    get revealProgress(): number {
-      return revealProgress;
-    }
+    getRevealProgress,
+    setRevealProgress,
+    completeReveal
   };
 }
 

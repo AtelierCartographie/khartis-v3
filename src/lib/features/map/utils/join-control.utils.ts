@@ -65,9 +65,9 @@ const STATUS_TONES: Record<JoinTerritoryStatus, JoinCategoryTone> = {
 };
 
 /**
- * The hovered territory's join status, the value that joined it under the
- * variable it was joined on, and its name on the basemap. The pinned inspector
- * adds the row's other variables.
+ * The hovered territory's join status, then the value that joined it beside
+ * its name on the basemap. The pinned inspector adds the row's other
+ * variables.
  */
 export function buildJoinControlTooltipEntries(
   pickData: JoinControlPickData,
@@ -100,7 +100,6 @@ export function buildJoinControlTooltipEntries(
           label: pickData.sourceIsFile
             ? m.join_control_tooltip_file()
             : m.join_data_column(),
-          badge: pickData.geoColumn,
           value: hasData ? joinValues(row.dataValues, row.valueCount) : '—'
         },
         {

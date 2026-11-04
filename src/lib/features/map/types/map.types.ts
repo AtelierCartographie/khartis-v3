@@ -25,8 +25,6 @@ export type RGBColor = [number, number, number];
 export interface TooltipColumn {
   label: string;
   value: string;
-  /** A variable drawn as a badge beside the label, as in the join tables. */
-  badge?: string;
 }
 
 export interface TooltipEntry {
