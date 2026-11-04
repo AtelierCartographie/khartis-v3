@@ -607,3 +607,45 @@ describe('suggestVisualizations — labels', () => {
     expect(frozen).toEqual([]);
   });
 });
+
+describe('suggestVisualizations — dates', () => {
+  const dateCol = col({
+    name: 'date_adhesion',
+    type: 'date',
+    stats: { totalCount: 100, uniqueCount: 80, nullCount: 0 }
+  });
+
+  it('should keep one slot for a date column that ratios would otherwise push out', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, qtrCol, qtaCol, dateCol],
+      'Polygon'
+    );
+
+    expect(results).toHaveLength(3);
+    expect(results.at(-1)).toMatchObject({
+      id: 'choropleth',
+      columns: ['date_adhesion']
+    });
+    expect(results[0].columns).not.toContain('date_adhesion');
+  });
+
+  it('should never suggest a date as a proportional quantity', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [qtaCol, dateCol],
+      'Point',
+      { maxSuggestions: 20 }
+    );
+
+    const dateSizes = results.filter(
+      (suggestion) =>
+        suggestion.id.includes('proportional') &&
+        suggestion.columns?.[0] === 'date_adhesion'
+    );
+    expect(dateSizes).toEqual([]);
+    expect(
+      results.some((suggestion) =>
+        suggestion.columns?.includes('date_adhesion')
+      )
+    ).toBe(true);
+  });
+});
