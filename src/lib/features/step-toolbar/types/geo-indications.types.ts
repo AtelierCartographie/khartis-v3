@@ -55,6 +55,13 @@ export interface GeoIndicationsState {
     zoom: number;
     centerLongitude: number;
     centerLatitude: number;
+    background: {
+      enabled: boolean;
+      color: ColorState;
+      /** 0 to 100. */
+      opacity: number;
+      shadow: boolean;
+    };
     dragPosition: DragPosition | null;
   };
 }

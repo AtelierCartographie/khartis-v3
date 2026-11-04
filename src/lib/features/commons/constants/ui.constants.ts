@@ -159,3 +159,11 @@ export enum SimplificationTarget {
   BASEMAP = 'basemap',
   GEODATA = 'geodata'
 }
+
+/**
+ * The drop shadow shared by layout objects (legend, inset map, text
+ * backgrounds). It fades with the background it sits under: `opacity` is 0–1.
+ */
+export function layoutDropShadow(opacity = 1): string {
+  return `0 2px 8px rgba(0, 0, 0, ${Number((0.15 * opacity).toFixed(3))})`;
+}
