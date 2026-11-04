@@ -962,7 +962,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function getDragPosition(
@@ -1265,7 +1265,7 @@
     }
 
     centeredGeoTarget = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleGeoIndicationsClick(
@@ -1292,8 +1292,10 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleGeoIndicationsBlur(target: DragTarget): void {
-    if (centeredGeoTarget !== target) {
+    if (centeredGeoTarget !== target || isGeoIndicationsActive) {
       return;
     }
 

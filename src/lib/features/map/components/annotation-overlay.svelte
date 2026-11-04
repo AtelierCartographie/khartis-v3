@@ -1192,7 +1192,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function getAnnotationKeyboardBounds(
@@ -1305,7 +1305,7 @@
     }
 
     centeredAnnotationId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function cancelFocusedAnnotationReset(): void {
@@ -1328,6 +1328,12 @@
 
       if (dragState || resizeState || rotateState) {
         scheduleCenteredAnnotationReset(itemId);
+        return;
+      }
+
+      // Focus moving into the tool panel keeps the selection, and the page
+      // centred on it; deselecting resets the pan.
+      if (isAnnotationEditing && selectedId === itemId) {
         return;
       }
 

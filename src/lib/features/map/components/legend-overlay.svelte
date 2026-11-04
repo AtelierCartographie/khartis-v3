@@ -754,7 +754,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function resetFrameCentering(): void {
@@ -763,7 +763,7 @@
     }
 
     centeredItemId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
@@ -787,7 +787,13 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleFrameBlur(): void {
+    if (isLegendActive) {
+      return;
+    }
+
     resetFrameCentering();
   }
 

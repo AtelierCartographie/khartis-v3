@@ -297,7 +297,7 @@ function resetPagePanWhenLastIndicationIsDisabled(
   state: GeoIndicationsState
 ): void {
   if (hadActiveIndication && !hasActiveGeoIndication(state)) {
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 }
 
