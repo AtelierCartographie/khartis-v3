@@ -26,7 +26,7 @@ vi.mock('$lib/features/duckdb', () => ({
 }));
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
-  ClassificationMethod: { EQUAL_INTERVAL: 'equal_interval' }
+  ClassificationMethod: { EQUAL_INTERVAL: 'equal_interval', KMEANS: 'kmeans' }
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
@@ -46,12 +46,14 @@ import {
   calculateBreaks,
   calculateCalendarBreakCounts,
   calculateCalendarBreaks,
+  calculateDateDataBreaks,
   isTemporalColumn,
   detectDivergingBreakpoint
 } from '$lib/features/commons/services/classification.service';
 import type { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const EQUAL_INTERVAL = 'equal_interval' as ClassificationMethod;
+const KMEANS = 'kmeans' as ClassificationMethod;
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 beforeAll(async () => {
@@ -229,5 +231,60 @@ describe('calculateBreaks over pooled columns', () => {
       "SELECT table_name FROM duckdb_tables() WHERE table_name LIKE 'kh_classification_%'"
     );
     expect(tables).toEqual([]);
+  });
+});
+
+describe('date classification around a pivot and from the data', () => {
+  const pivot = Date.parse('2020-09-01T00:00:00Z');
+  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+  const isMidnight = (ms: number) => ms % 86_400_000 === 0;
+
+  it('should count calendar steps from the pivot date and split the ramp there', async () => {
+    const result = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 6,
+      anchor: pivot
+    });
+
+    expect(result?.breaks).toContain(pivot);
+    expect(result!.breaks.map(isoDay).every((day) => day.endsWith('-01'))).toBe(
+      true
+    );
+    expect(result?.breakpointLowerClassCount).toBe(
+      result!.breaks.indexOf(pivot) + 1
+    );
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should snap k-means date thresholds to calendar days and keep every value', async () => {
+    const result = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      method: KMEANS,
+      numClasses: 3
+    });
+
+    expect(result?.breaks).toHaveLength(2);
+    expect(result!.breaks.every(isMidnight)).toBe(true);
+    expect(result!.counts).toHaveLength(3);
+    expect(result!.counts.every((count) => count > 0)).toBe(true);
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should run k-means on each side of a pivot date', async () => {
+    const result = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      method: KMEANS,
+      numClasses: 4,
+      breakpointValue: pivot,
+      lowerClassCount: 1
+    });
+
+    expect(result?.breaks[0]).toBe(pivot);
+    expect(result?.breakpointLowerClassCount).toBe(1);
+    expect(result?.counts).toHaveLength(4);
+    expect(sum(result!.counts)).toBe(10);
   });
 });

@@ -21,7 +21,8 @@ import {
   chooseCalendarStep,
   countCalendarClasses,
   floorToCalendarStep,
-  inferCalendarGranularity
+  inferCalendarGranularity,
+  snapBreaksToCalendar
 } from '../utils/calendar-breaks.utils';
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';
@@ -812,6 +813,8 @@ export interface CalendarClassificationOptions {
   /** Current step, kept while it gives 2 to `stepClassLimit` classes. */
   step?: CalendarStep;
   stepClassLimit?: number;
+  /** Pivot date: steps are counted from it, so it is always a threshold. */
+  anchor?: number | null;
   rowScopeClause?: string | null;
   pooledColumnNames?: string[];
 }
@@ -942,17 +945,27 @@ export async function calculateCalendarBreaks(
       2,
       options.stepClassLimit ?? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
     );
+    const anchor =
+      options.anchor != null && Number.isFinite(options.anchor)
+        ? options.anchor
+        : null;
     const currentClassCount = options.step
-      ? countCalendarClasses(min, max, options.step, stepClassLimit)
+      ? countCalendarClasses(min, max, options.step, stepClassLimit, anchor)
       : 0;
     const step =
       options.step &&
       currentClassCount >= 2 &&
       currentClassCount <= stepClassLimit
         ? options.step
-        : chooseCalendarStep(min, max, Math.max(2, options.maxClasses));
-    const { breaks, lower, upper } = buildCalendarBreaks(min, max, step);
+        : chooseCalendarStep(min, max, Math.max(2, options.maxClasses), anchor);
+    const { breaks, lower, upper } = buildCalendarBreaks(
+      min,
+      max,
+      step,
+      anchor
+    );
     const counts = await queryEpochCounts(source, [lower, ...breaks, upper]);
+    const pivotIndex = anchor === null ? -1 : breaks.indexOf(anchor);
 
     return {
       breaks,
@@ -961,7 +974,8 @@ export async function calculateCalendarBreaks(
       max,
       roundedMin: lower,
       roundedMax: upper,
-      calendarStep: step
+      calendarStep: step,
+      ...(pivotIndex >= 0 ? { breakpointLowerClassCount: pivotIndex + 1 } : {})
     };
   } catch (error) {
     logCalendarFailure(
@@ -1039,6 +1053,159 @@ export async function calculateCalendarBreakCounts(
       error
     );
     return null;
+  }
+}
+
+export interface DateDataClassificationOptions {
+  datasetId: string;
+  columnName: string;
+  method: ClassificationMethod;
+  numClasses: number;
+  /** Pivot date: each side is classified on its own, as for a numeric breakpoint. */
+  breakpointValue?: number | null;
+  lowerClassCount?: number;
+  rowScopeClause?: string | null;
+  pooledColumnNames?: string[];
+}
+
+/**
+ * Data-driven breaks (k-means…) on a DATE or TIMESTAMP column: the macro runs
+ * on epoch milliseconds, then each threshold snaps to a calendar boundary so
+ * no raw instant is ever shown. Labels follow the coarsest unit the snapped
+ * thresholds share, as for manual dates.
+ */
+export async function calculateDateDataBreaks(
+  options: DateDataClassificationOptions
+): Promise<BreaksResult | null> {
+  const context = getQueryContext(options.datasetId, options.columnName);
+  const macroName = mapMethodToMacro(options.method);
+  if (!context || !macroName) {
+    return null;
+  }
+
+  const source = buildEpochValuesSource(
+    context,
+    resolvePooledColumnNames(options.pooledColumnNames) ?? [options.columnName],
+    options.rowScopeClause
+  );
+  const temporaryTables: string[] = [];
+  const createValuesTable = async (where: string): Promise<string> => {
+    temporaryClassificationTableSequence += 1;
+    const tableName = `kh_date_classification_${Date.now()}_${temporaryClassificationTableSequence}`;
+    temporaryTables.push(tableName);
+    await Duck.query(
+      `CREATE TEMP TABLE "${escapeIdentifier(tableName)}" AS SELECT v::DOUBLE AS v FROM ${source} AS s WHERE v IS NOT NULL${where}`
+    );
+    return tableName;
+  };
+  const macroBreaks = async (
+    where: string,
+    classCount: number
+  ): Promise<{ breaks: number[]; min: number; max: number } | null> => {
+    const tableName = await createValuesTable(where);
+    const statsResult = (await Duck.query(
+      `SELECT COUNT(DISTINCT v) AS distinct_count, MIN(v) AS min_val, MAX(v) AS max_val FROM "${escapeIdentifier(tableName)}"`
+    )) as Table;
+    const distinctCount = Number(
+      statsResult.getChild?.('distinct_count')?.get(0) ?? 0
+    );
+    const min = Number(statsResult.getChild?.('min_val')?.get(0));
+    const max = Number(statsResult.getChild?.('max_val')?.get(0));
+    if (!distinctCount || !Number.isFinite(min) || !Number.isFinite(max)) {
+      return null;
+    }
+    const classes = Math.min(Math.max(1, classCount), distinctCount - 1);
+    if (classes < 2) {
+      return { breaks: [], min, max };
+    }
+    const result = (await Duck.query(
+      `SELECT ${macroName}('${escapeSqlString(tableName)}', 'v', ${classes}) AS breaks`
+    )) as Table;
+    const extracted = toIterableValues(result.getChild?.('breaks')?.get(0));
+    return {
+      breaks: extracted ? sanitizeBreaks(extracted, min, max) : [],
+      min,
+      max
+    };
+  };
+
+  try {
+    const stats = await queryEpochStats(source);
+    if (!stats) {
+      return null;
+    }
+    const { min, max } = stats;
+    const numClasses = Math.max(1, Math.floor(options.numClasses));
+    const pivot = options.breakpointValue;
+    const lowerClassCount = Math.floor(options.lowerClassCount ?? 0);
+
+    let breaks: number[];
+    let breakpointLowerClassCount: number | undefined;
+    if (
+      pivot != null &&
+      Number.isFinite(pivot) &&
+      pivot > min &&
+      pivot <= max &&
+      lowerClassCount >= 1 &&
+      numClasses - lowerClassCount >= 1
+    ) {
+      const lower = await macroBreaks(` AND v < ${pivot}`, lowerClassCount);
+      const upper = await macroBreaks(
+        ` AND v >= ${pivot}`,
+        numClasses - lowerClassCount
+      );
+      // A side snaps within its own half, so no threshold crosses the pivot.
+      const lowerBreaks = lower
+        ? snapBreaksToCalendar(lower.breaks, min, pivot - 1)
+        : [];
+      const upperBreaks = upper
+        ? snapBreaksToCalendar(upper.breaks, pivot, max)
+        : [];
+      breaks = [...lowerBreaks, pivot, ...upperBreaks];
+      breakpointLowerClassCount = lowerBreaks.length + 1;
+    } else {
+      const all = await macroBreaks('', numClasses);
+      breaks = all ? snapBreaksToCalendar(all.breaks, min, max) : [];
+    }
+
+    // The pivot keeps its own precision in labels; the snapped thresholds set the series'.
+    const granularity = inferCalendarGranularity(
+      breaks.filter((value) => value !== pivot)
+    );
+    const lower = floorToCalendarStep(min, granularity);
+    const upper = addCalendarStep(
+      floorToCalendarStep(max, granularity),
+      granularity
+    );
+    const counts = await queryEpochCounts(source, [lower, ...breaks, upper]);
+
+    return {
+      breaks,
+      counts,
+      min,
+      max,
+      roundedMin: lower,
+      roundedMax: upper,
+      calendarStep: granularity,
+      ...(breakpointLowerClassCount != null
+        ? { breakpointLowerClassCount }
+        : {})
+    };
+  } catch (error) {
+    logCalendarFailure(
+      'Failed to calculate data-driven date breaks',
+      'classification_date_data_breaks',
+      context,
+      options.datasetId,
+      error
+    );
+    return null;
+  } finally {
+    for (const tableName of temporaryTables) {
+      await Duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`
+      ).catch(() => {});
+    }
   }
 }
 
