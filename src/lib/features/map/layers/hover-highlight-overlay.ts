@@ -261,6 +261,22 @@ function buildTextBoxOverlay(info: PickingInfo, id: string): Layer | null {
   }) as Layer;
 }
 
+/** Outlines whole polygon features of a binary geometry, holes included. */
+export function createFeatureOutlineOverlay(
+  id: string,
+  geometry: object,
+  featureIds: readonly number[],
+  placement: Record<string, unknown>
+): Layer | null {
+  if (!isPolygonGeometry(geometry)) {
+    return null;
+  }
+  const rings = featureIds.flatMap((featureId) =>
+    collectPolygonRings(geometry, featureId)
+  );
+  return rings.length > 0 ? buildPathOverlay(id, rings, placement) : null;
+}
+
 export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
   const hovered = resolveHoveredFeature(info);
   if (!hovered) {
