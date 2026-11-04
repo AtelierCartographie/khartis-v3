@@ -596,7 +596,6 @@
                       min={1}
                       max={100}
                       value={draftCommonAspect.size}
-                      showMinMax
                       inputWidth="96px"
                       onchange={(value) =>
                         handleCommonAspectChange('size', value)}

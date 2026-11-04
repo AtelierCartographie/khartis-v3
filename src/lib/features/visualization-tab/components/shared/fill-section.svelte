@@ -62,7 +62,6 @@
     missingDataPattern?: boolean;
     missingDataPatternConfig?: PatternPaletteConfig;
     showOpacitySlider?: boolean;
-    showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
     opacityInputWidth?: string;
     sectionTitle?: string;
@@ -118,7 +117,6 @@
     missingDataPattern = false,
     missingDataPatternConfig,
     showOpacitySlider = true,
-    showOpacityBounds = false,
     showMissingDataSection = true,
     opacityInputWidth = '128px',
     sectionTitle,
@@ -392,7 +390,6 @@
     max={SLIDER_LIMITS.opacity.max}
     step={SLIDER_LIMITS.opacity.step}
     value={fillOpacity}
-    showMinMax={showOpacityBounds}
     inputWidth={opacityInputWidth}
     onchange={onFillOpacityChange}
   />

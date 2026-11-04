@@ -471,6 +471,11 @@ label {
   flex-shrink: 0;
 }
 
+/* Sliders show their value, never their bounds. */
+.bx--slider__range-label {
+  display: none;
+}
+
 /* Carbon hard-codes kind="secondary" on the Modal cancel button; the design
    pairs a primary main action with a tertiary secondary one. */
 .bx--modal-footer .bx--btn--secondary {

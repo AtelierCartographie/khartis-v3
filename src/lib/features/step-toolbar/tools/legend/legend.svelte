@@ -436,9 +436,6 @@
                   min={0}
                   max={100}
                   step={5}
-                  showMinMax
-                  minLabel="0"
-                  maxLabel="100"
                   inputWidth="72px"
                   showSteppers={false}
                   onchange={(value) =>
