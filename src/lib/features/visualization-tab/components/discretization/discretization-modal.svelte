@@ -17,6 +17,7 @@
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
+  import { isDateDataMethod } from '$lib/features/commons/services/classification.service';
   import {
     DEFAULT_CLASSIFICATION_CLASS_COUNT,
     type ShapeType,
@@ -46,6 +47,7 @@
     resolveClassificationBreakColors
   } from '../../hooks/use-classification-breaks.svelte';
   import {
+    type CalendarPrecision,
     type CalendarStep,
     formatCalendarBoundary,
     inferCalendarGranularity,
@@ -144,7 +146,11 @@
   let currentBreakpointLowerClassCount = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
   let currentCalendarStep = $state<CalendarStep | undefined>(undefined);
-  let calendarExtent = $state<{ min: number; max: number } | null>(null);
+  let calendarExtent = $state<{
+    min: number;
+    max: number;
+    precision: CalendarPrecision | null;
+  } | null>(null);
   // Calendar and manual date results both carry a step; before the first one, the stored config tells.
   const isDateValue = $derived(
     calendarExtent !== null || Boolean(activeClassification?.calendarStep)
@@ -155,7 +161,8 @@
           calendarExtent.min,
           calendarExtent.max,
           DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
-          currentBreakpoint
+          currentBreakpoint,
+          calendarExtent.precision
         ).map((step) => ({
           id: toCalendarStepId(step),
           text: formatCalendarStepName(step)
@@ -378,7 +385,7 @@
 
     // A calendar step or manual dates set their own class count: fewer classes than requested is no loss.
     discretizationNote =
-      result.calendarStep && normalizedMethod !== ClassificationMethod.KMEANS
+      result.calendarStep && !isDateDataMethod(normalizedMethod)
         ? null
         : resolveDiscretizationNote({
             method: normalizedMethod,
@@ -389,7 +396,11 @@
           });
     currentCalendarStep = result.calendarStep;
     calendarExtent = result.calendarStep
-      ? { min: result.min, max: result.max }
+      ? {
+          min: result.min,
+          max: result.max,
+          precision: result.calendarPrecision ?? null
+        }
       : null;
 
     // A method with a fixed class count cannot be applied to a series that refuses it.
@@ -790,7 +801,8 @@
           calendarExtent.min,
           calendarExtent.max,
           DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
-          currentBreakpoint
+          currentBreakpoint,
+          calendarExtent.precision
         ).find((step) => toCalendarStepId(step) === id)
       : undefined;
     if (!option) return;
