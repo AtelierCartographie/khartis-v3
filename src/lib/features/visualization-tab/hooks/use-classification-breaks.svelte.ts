@@ -5,6 +5,7 @@ import {
   calculateCalendarBreakCounts,
   calculateCalendarBreaks,
   calculateDateDataBreaks,
+  isDateDataMethod,
   calculateDivergingBreaks,
   computeDivergingSplit,
   detectDivergingBreakpoint,
@@ -390,8 +391,8 @@ export async function computeClassificationBreaks(
   const requestedMethod = normalizeClassificationMethod(
     options.method ?? classification?.method ?? ClassificationMethod.KMEANS
   );
-  // The column decides: a date is classed on calendar steps, k-means or manual
-  // dates, a number never on calendar steps. K-means is also every preset's
+  // The column decides: a date is classed on calendar steps, k-means, quantiles
+  // or manual dates, a number never on calendar steps. K-means is also every preset's
   // default, so on a date it counts only once the classification already
   // holds date results (a calendar step); otherwise the date starts on steps.
   const temporal = await isTemporalColumn(
@@ -400,6 +401,7 @@ export async function computeClassificationBreaks(
   );
   const storeMethod = temporal
     ? requestedMethod === ClassificationMethod.MANUAL ||
+      requestedMethod === ClassificationMethod.QUANTILES ||
       (requestedMethod === ClassificationMethod.KMEANS &&
         classification?.calendarStep != null)
       ? requestedMethod
@@ -579,7 +581,7 @@ async function computeCalendarClassificationBreaks(
           breaks: manualBreaks,
           classCount: requestedClassCount
         })
-      : method === ClassificationMethod.KMEANS
+      : isDateDataMethod(method)
         ? await calculateDateDataBreaks({
             ...scope,
             method,

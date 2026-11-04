@@ -1589,6 +1589,7 @@
   "discretization_desc_kmeans": "K-means (natural breaks): computes classes so as to minimize the differences inside each group and maximize the differences between groups. It is the method of choice to respect the distribution of your data, with results close to the Jenks method.",
   "discretization_desc_kmeans_dates": "K-means on dates: classes group dates that lie close to each other, as for a number. Each break then moves to the nearest calendar landmark (1 January, start of a quarter, first of the month…), as round as it can be without losing a class.",
   "discretization_desc_quantile": "Quantiles: each class gathers the same number of geographic features. An effective method to get an \"even\" map, but it can hide large gaps between values.",
+  "discretization_desc_quantile_dates": "Quantiles on dates: each class gathers the same number of features, as for a number. Each break then moves to the nearest calendar landmark (1 January, start of a quarter, first of the month…), as round as it can be without losing a class, so class sizes are no longer exactly equal.",
   "discretization_desc_equal_interval": "Equal intervals: the range of the series (from min to max) is divided by the number of classes you want. This method gives a legend with a regular step.",
   "discretization_desc_manual": "Manual: you set the class breaks yourself.",
   "discretization_desc_q6": "Q6: a variant of quartiles with two added classes for extreme values (5 and 95%), resulting in 6 classes. This method suits series with extreme values.",

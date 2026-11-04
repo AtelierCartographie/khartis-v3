@@ -136,6 +136,9 @@
     if (isDateValue && normalized === ClassificationMethod.KMEANS) {
       return m.discretization_desc_kmeans_dates();
     }
+    if (isDateValue && normalized === ClassificationMethod.QUANTILES) {
+      return m.discretization_desc_quantile_dates();
+    }
     return METHOD_DESCRIPTIONS[normalized]();
   }
 
@@ -194,7 +197,9 @@
   );
   const canUseBreakpointPosition = $derived(
     isBreakpointValueValid &&
-      (!isDateValue || method === ClassificationMethod.KMEANS)
+      (!isDateValue ||
+        method === ClassificationMethod.KMEANS ||
+        method === ClassificationMethod.QUANTILES)
   );
   const breakpointSliderValue = $derived(
     resolveBreakpointLowerClassCount(numClasses, breakpointLowerClassCount)
@@ -393,6 +398,10 @@
         <SelectItem
           value={ClassificationMethod.KMEANS}
           text={m.discretization_method_kmeans()}
+        />
+        <SelectItem
+          value={ClassificationMethod.QUANTILES}
+          text={m.discretization_method_quantile()}
         />
         <SelectItem
           value={ClassificationMethod.MANUAL}

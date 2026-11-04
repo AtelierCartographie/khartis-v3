@@ -46,10 +46,10 @@ série : `head_tail` à partir de 3, `quantiles` à partir de 1,5 en valeur
 absolue, sinon la méthode courante. Le nombre de classes est plafonné à
 max(2, lignes / 3). L'utilisateur reste libre de ce choix.
 
-## Dates : pas calendaire, k-means ou bornes manuelles
+## Dates : pas calendaire, k-means, quantiles ou bornes manuelles
 
 Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire,
-par k-means ou par bornes manuelles ; une colonne numérique ne se classe jamais
+par k-means, par quantiles ou par bornes manuelles ; une colonne numérique ne se classe jamais
 par pas calendaire. `computeClassificationBreaks()` lit le type DuckDB de la
 colonne (`isTemporalColumn()`) et impose la méthode, quel que soit l'appelant
 (panneau, suggestion, rafraîchissement, exemple). K-means est aussi la méthode
@@ -58,8 +58,10 @@ classification porte déjà un résultat daté (`calendarStep`), sinon la date
 part en pas calendaire.
 
 - **Calcul.** `calculateCalendarBreaks()` lit `epoch_ms(colonne)` dans DuckDB
-  (min, max, effectifs). Le choix et l'alignement du pas sont des fonctions
-  pures de `commons/utils/calendar-breaks.utils.ts`, en UTC : jour, semaine
+  (min, max, précision, effectifs). Le choix et l'alignement du pas sont des
+  fonctions pures de `commons/utils/calendar-breaks.utils.ts`, en UTC (ce
+  n'est que de l'arithmétique sur deux nombres, la lecture des données reste
+  dans DuckDB) : jour, semaine
   ISO (lundi), mois, 2 mois, trimestre, semestre, puis 1, 2, 5, 10, 20, 25,
   50, 100… ans. Les seuils tombent sur le premier jour d'une période (années
   multiples du pas, trimestres en janvier, avril, juillet et octobre).
@@ -77,22 +79,29 @@ part en pas calendaire.
   année, tous au 1er du mois → mois, sinon jour) devient `calendarStep` : elle
   fixe les bornes extérieures et les libellés. `parseCalendarBoundary()` relit
   les saisies (« 1975 », « 04/1975 », « 12/04/1975 », « avr. 1975 »…).
-- **K-means.** `calculateDateDataBreaks()` lance la macro sur
+- **Précision.** La même requête lit l'unité la plus grossière commune à
+  toutes les dates (`calendarPrecision`) : toutes au 1er janvier → année,
+  toutes au 1er du mois → mois (une colonne année-mois importée), sinon jour.
+  Aucun pas, aucun accrochage plus fin que cette précision n'est proposé : des
+  semaines sur des mois couperaient des classes vides. Elle n'est pas
+  persistée, elle se relit à chaque calcul.
+- **K-means et quantiles.** `calculateDateDataBreaks()` lance la macro sur
   `epoch_ms(colonne)::DOUBLE`, puis `snapBreaksToCalendar()` ramène chaque
   seuil au repère calendaire le plus proche. L'accrochage part deux crans sous
   le pas qu'aurait le pas calendaire pour ce nombre de classes (une série sur
   70 ans accroche aux 10 ans, une série sur un an aux 2 mois) et descend
   jusqu'au premier pas qui garde tous les seuils distincts : une classe ne se
   perd que si deux seuils tombent le même jour, et la note de fusion l'annonce.
-  `calendarStep` reçoit la granularité des seuils, comme en manuel.
+  `calendarStep` reçoit la granularité des seuils, comme en manuel. Après
+  accrochage, les quantiles ne sont plus tout à fait égaux en effectifs.
 - **Date pivot.** `breakpointValue` porte une date (epoch ms) et rend la palette
   divergente, avec un sens propre à chaque méthode :
   - pas calendaire : les périodes sont comptées depuis la pivot
     (`buildCalendarBreaks(…, anchor)`), qui est donc toujours un seuil ; un mois
     compté depuis le 31 garde le dernier jour des mois courts. Le pas fixe le
     nombre de classes de chaque côté, le curseur de position est inactif ;
-  - k-means : chaque côté est classé à part, comme pour un nombre, avec le
-    nombre de classes du curseur ;
+  - k-means et quantiles : chaque côté est classé à part, comme pour un
+    nombre, avec le nombre de classes du curseur ;
   - manuel : la pivot ne fait que répartir les couleurs, comme pour un nombre
     (classe centrale neutre si elle tombe dans une classe).
     Les seuils sont libellés à leur propre précision : dans une série en années,
