@@ -1,3 +1,4 @@
+import type { DuckClient } from '$lib/features/duckdb';
 import { describe, expect, it, vi } from 'vitest';
 import {
   assertImportRowCountWithinLimit,
@@ -35,7 +36,9 @@ describe('import volume guard', () => {
       query: vi.fn().mockResolvedValue([{ num_rows: 1_754_470n }])
     };
 
-    await expect(readParquetRowCount(duck, 'file-id')).resolves.toBe(1_754_470);
+    await expect(
+      readParquetRowCount(duck as unknown as DuckClient, 'file-id')
+    ).resolves.toBe(1_754_470);
     expect(duck.query.mock.calls[0][0]).toContain(
       "parquet_file_metadata('file-id')"
     );
@@ -46,7 +49,9 @@ describe('import volume guard', () => {
       query: vi.fn().mockResolvedValue([{ num_rows: 400n }, { num_rows: 600n }])
     };
 
-    await expect(readParquetRowCount(duck, 'file-id')).resolves.toBe(1000);
+    await expect(
+      readParquetRowCount(duck as unknown as DuckClient, 'file-id')
+    ).resolves.toBe(1000);
   });
 
   it('should fall back to the post-read count when the footer is unreadable', async () => {
@@ -54,6 +59,8 @@ describe('import volume guard', () => {
       query: vi.fn().mockRejectedValue(new Error('not a parquet file'))
     };
 
-    await expect(readParquetRowCount(duck, 'file-id')).resolves.toBeNull();
+    await expect(
+      readParquetRowCount(duck as unknown as DuckClient, 'file-id')
+    ).resolves.toBeNull();
   });
 });

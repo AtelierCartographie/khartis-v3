@@ -27,7 +27,6 @@ import {
   readFileHead
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
 import { normalizeGeoParquetTable } from '../operations/geoparquet';
 import { normalizeGeometryColumnName } from '../operations/geometry-column';
@@ -233,7 +232,7 @@ async function readUploadedGeoParquetMetadata(fileInfo: FileInfo, file: File) {
 
   return readGeoParquetMetadataFromDuck(
     Duck,
-    escapeSqlString(fileId),
+    fileId,
     'Failed to read uploaded GeoParquet metadata'
   );
 }

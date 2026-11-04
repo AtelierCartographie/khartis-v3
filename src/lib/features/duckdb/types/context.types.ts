@@ -1,10 +1,7 @@
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { TableMetadata } from './table.types';
 import type { DescribeResult } from './query.types';
-import type {
-  ExtensionLoadPromises,
-  ExtensionsLoaded
-} from './extension.types';
+import type { ExtensionName } from './extension.types';
 
 export interface DuckDBContext {
   db: duckdb.AsyncDuckDB;
@@ -15,8 +12,7 @@ export interface DuckDBContext {
   table_metadata: Map<string, TableMetadata>;
   describeCache: Map<string, DescribeResult>;
   rowCountCache: Map<string, number>;
-  extensionsLoaded: ExtensionsLoaded;
-  extensionLoadPromises: ExtensionLoadPromises;
+  extensionLoads: Map<ExtensionName, Promise<void>>;
   localExtensionRepositoryConfigured: boolean;
   bundleVariant: 'eh' | 'mvp';
 }

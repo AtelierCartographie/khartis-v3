@@ -33,10 +33,10 @@ import {
   ensureDatasetGeometryBasemap,
   forgetDatasetGeometryBasemap
 } from '$lib/features/map/services/dataset-geometry-basemap.service';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 const DEFAULT_STATE: SimplificationState = {
   source: SimplificationSource.Basemap,
@@ -80,8 +80,9 @@ const { actions, getState } = createToolStore<
       // The import keeps no copy of the source geometry: the first
       // simplification saves it, so every later rate and the undo start from
       // the imported geometry.
-      await Duck.query(
-        `CREATE TABLE IF NOT EXISTS "${escapeIdentifier(rawBasemapTableName)}" AS SELECT * FROM "${escapeIdentifier(basemapTableName)}"`
+      await Duck.mutate(
+        rawBasemapTableName,
+        `CREATE TABLE IF NOT EXISTS ${sqlIdentifier(rawBasemapTableName)} AS SELECT * FROM ${sqlIdentifier(basemapTableName)}`
       );
 
       const tolerance = calculateToleranceFromRate(s.rate);
@@ -482,8 +483,9 @@ const { actions, getState } = createToolStore<
               lastApplied.previousBasemapTableName ??
               getBasemapRawTableName(tableName);
 
-            await Duck.query(
-              `CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS SELECT * FROM "${escapeIdentifier(rawTableName)}"`
+            await Duck.mutate(
+              tableName,
+              `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT * FROM ${sqlIdentifier(rawTableName)}`
             );
 
             if (lastApplied.primaryLayerType) {

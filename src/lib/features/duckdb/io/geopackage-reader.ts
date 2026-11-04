@@ -2,11 +2,12 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 import * as m from '$lib/paraglide/messages';
-import { DUCK_CONST, EXTENSIONS } from '../constants';
+import { DUCK_CONST } from '../constants';
+import { ensureExtension } from '../core/extensions';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { dropRegisteredFile, registerSqliteSidecars } from './file-registry';
@@ -31,10 +32,6 @@ interface GeoPackageGeometryColumn {
 
 let attachCounter = 0;
 
-function quoteSqliteIdentifier(identifier: string): string {
-  return `"${identifier.replaceAll('"', '""')}"`;
-}
-
 /**
  * A GeoPackage geometry is an 8-byte header, an envelope whose size the flags
  * byte encodes (none, xy, xyz, xym or xyzm), then standard WKB.
@@ -52,33 +49,19 @@ function resolveEpsgCrs(column: GeoPackageGeometryColumn): string | null {
     : null;
 }
 
-async function ensureSqliteExtension(ctx: DuckDBContext): Promise<void> {
-  try {
-    await executeQuery(ctx.connection, `LOAD ${EXTENSIONS.SQLITE};`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
-  } catch {
-    await executeQuery(
-      ctx.connection,
-      `INSTALL ${EXTENSIONS.SQLITE}; LOAD ${EXTENSIONS.SQLITE};`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-    );
-  }
-}
-
 async function queryGeometryColumn(
   ctx: DuckDBContext,
   alias: string,
   layer: string | null
 ): Promise<GeoPackageGeometryColumn | undefined> {
   const layerFilter = layer
-    ? `WHERE lower(g.table_name) = lower('${escapeSqlString(layer)}')`
+    ? `WHERE lower(g.table_name) = lower(${sqlString(layer)})`
     : '';
   const rows = (await executeQuery(
     ctx.connection,
     `SELECT g.table_name, g.column_name, s.organization, s.organization_coordsys_id
-     FROM "${alias}".gpkg_geometry_columns g
-     LEFT JOIN "${alias}".gpkg_spatial_ref_sys s ON s.srs_id = g.srs_id
+     FROM ${sqlIdentifier(alias)}.gpkg_geometry_columns g
+     LEFT JOIN ${sqlIdentifier(alias)}.gpkg_spatial_ref_sys s ON s.srs_id = g.srs_id
      ${layerFilter}
      ORDER BY g.table_name
      LIMIT 1`,
@@ -92,10 +75,10 @@ async function queryPrimaryKey(
   alias: string,
   geometry: GeoPackageGeometryColumn
 ): Promise<string | null> {
-  const pragma = `SELECT name FROM pragma_table_info('${geometry.table_name.replaceAll("'", "''")}') WHERE pk > 0`;
+  const pragma = `SELECT name FROM pragma_table_info(${sqlString(geometry.table_name)}) WHERE pk > 0`;
   const rows = (await executeQuery(
     ctx.connection,
-    `FROM sqlite_query('${alias}', '${escapeSqlString(pragma)}')`,
+    `FROM sqlite_query(${sqlString(alias)}, ${sqlString(pragma)})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ name: string }>;
   return rows.length === 1 ? rows[0].name : null;
@@ -110,8 +93,8 @@ async function queryAttributeColumns(
     ctx.connection,
     `SELECT column_name
      FROM duckdb_columns()
-     WHERE database_name = '${alias}'
-       AND table_name = '${escapeSqlString(geometry.table_name)}'
+     WHERE database_name = ${sqlString(alias)}
+       AND table_name = ${sqlString(geometry.table_name)}
      ORDER BY column_index`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ column_name: string }>;
@@ -122,7 +105,7 @@ async function queryAttributeColumns(
 
 function buildGeometryColumnSql(geometry: GeoPackageGeometryColumn): string {
   const crs = resolveEpsgCrs(geometry);
-  const geometryType = crs ? `GEOMETRY('${crs}')` : 'GEOMETRY';
+  const geometryType = crs ? `GEOMETRY(${sqlString(crs)})` : 'GEOMETRY';
   return `${buildGeoPackageGeometryExpression(GEOMETRY_HEX_COLUMN)}::${geometryType} AS "${INTERNAL_COLUMN.GEOM}"`;
 }
 
@@ -138,22 +121,21 @@ function buildTypedReadQuery(
   geometry: GeoPackageGeometryColumn,
   primaryKey: string
 ): string {
-  const table = quoteSqliteIdentifier(geometry.table_name);
-  const key = quoteSqliteIdentifier(primaryKey);
-  const sqliteQuery = `SELECT ${key} AS ${GEOMETRY_KEY_COLUMN}, hex(${quoteSqliteIdentifier(geometry.column_name)}) AS ${GEOMETRY_HEX_COLUMN} FROM ${table}`;
-  const duckKey = `"${escapeIdentifier(primaryKey)}"`;
+  const table = sqlIdentifier(geometry.table_name);
+  const key = sqlIdentifier(primaryKey);
+  const sqliteQuery = `SELECT ${key} AS ${GEOMETRY_KEY_COLUMN}, hex(${sqlIdentifier(geometry.column_name)}) AS ${GEOMETRY_HEX_COLUMN} FROM ${table}`;
 
-  return `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS
+  return `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS
     WITH geometry AS (
       SELECT ${GEOMETRY_KEY_COLUMN}::BIGINT AS ${GEOMETRY_KEY_COLUMN},
         unhex(${GEOMETRY_HEX_COLUMN}) AS ${GEOMETRY_HEX_COLUMN}
-      FROM sqlite_query('${alias}', '${escapeSqlString(sqliteQuery)}')
+      FROM sqlite_query(${sqlString(alias)}, ${sqlString(sqliteQuery)})
     )
-    SELECT a.* EXCLUDE ("${escapeIdentifier(geometry.column_name)}"),
+    SELECT a.* EXCLUDE (${sqlIdentifier(geometry.column_name)}),
       ${buildGeometryColumnSql(geometry)}
-    FROM "${alias}"."${escapeIdentifier(geometry.table_name)}" a
-    JOIN geometry g ON g.${GEOMETRY_KEY_COLUMN} = a.${duckKey}
-    ORDER BY a.${duckKey}`;
+    FROM ${sqlIdentifier(alias)}.${table} a
+    JOIN geometry g ON g.${GEOMETRY_KEY_COLUMN} = a.${key}
+    ORDER BY a.${key}`;
 }
 
 /** A layer without a single primary key (a view) is read as text. */
@@ -164,16 +146,16 @@ function buildTextReadQuery(
   attributeColumns: string[]
 ): string {
   const sqliteSelect = [
-    ...attributeColumns.map(quoteSqliteIdentifier),
-    `hex(${quoteSqliteIdentifier(geometry.column_name)}) AS ${GEOMETRY_HEX_COLUMN}`
+    ...attributeColumns.map((column) => sqlIdentifier(column)),
+    `hex(${sqlIdentifier(geometry.column_name)}) AS ${GEOMETRY_HEX_COLUMN}`
   ].join(', ');
-  const sqliteQuery = `SELECT ${sqliteSelect} FROM ${quoteSqliteIdentifier(geometry.table_name)}`;
+  const sqliteQuery = `SELECT ${sqliteSelect} FROM ${sqlIdentifier(geometry.table_name)}`;
 
-  return `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS
+  return `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS
     WITH source AS (
       SELECT * EXCLUDE (${GEOMETRY_HEX_COLUMN}),
         unhex(${GEOMETRY_HEX_COLUMN}) AS ${GEOMETRY_HEX_COLUMN}
-      FROM sqlite_query('${alias}', '${escapeSqlString(sqliteQuery)}')
+      FROM sqlite_query(${sqlString(alias)}, ${sqlString(sqliteQuery)})
     )
     SELECT * EXCLUDE (${GEOMETRY_HEX_COLUMN}), ${buildGeometryColumnSql(geometry)}
     FROM source`;
@@ -223,7 +205,7 @@ export async function readGeoPackageLayer(
   finalTablename: string,
   layer: string | null
 ): Promise<void> {
-  await ensureSqliteExtension(ctx);
+  await ensureExtension(ctx, 'sqlite_scanner');
   const sidecarIds = await registerSqliteSidecars(
     ctx.db,
     ctx.registered_files,
@@ -234,7 +216,7 @@ export async function readGeoPackageLayer(
   try {
     await executeQuery(
       ctx.connection,
-      `ATTACH '${escapeSqlString(fileId)}' AS "${alias}" (TYPE sqlite, READ_ONLY);`,
+      `ATTACH ${sqlString(fileId)} AS ${sqlIdentifier(alias)} (TYPE sqlite, READ_ONLY);`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
     try {
@@ -257,7 +239,7 @@ export async function readGeoPackageLayer(
           );
       await runReadQuery(ctx, readQuery);
     } finally {
-      await executeQuery(ctx.connection, `DETACH "${alias}";`, {
+      await executeQuery(ctx.connection, `DETACH ${sqlIdentifier(alias)};`, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
     }

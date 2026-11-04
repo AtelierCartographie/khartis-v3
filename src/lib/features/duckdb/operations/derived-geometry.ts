@@ -2,9 +2,10 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 // The repair grid is a fraction of the average perimeter, so it holds whether
 // the coverage is in degrees or in metres. 1e-6 re-nodes what GEOS rejects while
@@ -15,11 +16,6 @@ const NODING_REPAIR_FACTOR = 0.000001;
 // thousand pixels wide has cells under two pixels: its shared borders, at any
 // stroke width, paint over the fill they separate (a 1 km grid of France).
 const MAX_MESH_CELLS_ACROSS_EXTENT = 500;
-
-interface DuckDBClientForDerivedGeometry {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
 
 export function getDerivedLandTableName(sourceTable: string): string {
   return `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.LAND}`;
@@ -34,19 +30,21 @@ export function getDerivedOuterlinesTableName(sourceTable: string): string {
 }
 
 async function createEmptyGeometryTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   tableName: string
 ): Promise<void> {
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
-    SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
+  await duck.mutate(
+    tableName,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
+    SELECT NULL::GEOMETRY AS ${sqlIdentifier(INTERNAL_COLUMN.GEOM)}
     WHERE FALSE
-  `);
-  duck.invalidateTableCache?.(tableName);
+  `
+  );
 }
 
 async function createDerivedTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   candidateSelects: string[]
 ): Promise<void> {
@@ -74,12 +72,12 @@ async function createDerivedTable(
 }
 
 async function isValidPolygonCoverage(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<boolean> {
   try {
     const rows = (await duck.query(
-      `FROM is_valid_polygon_coverage('${escapeSqlString(sourceTable)}')`,
+      `FROM is_valid_polygon_coverage(${sqlString(sourceTable)})`,
       { format: 'array' }
     )) as Array<{ is_valid: boolean | null }>;
     return rows[0]?.is_valid === true;
@@ -94,10 +92,10 @@ async function isValidPolygonCoverage(
 }
 
 export async function isMeshTooFineForInnerLimits(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<boolean> {
-  const geom = `"${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`;
+  const geom = sqlIdentifier(INTERNAL_COLUMN.GEOM);
   try {
     const rows = (await duck.query(
       `SELECT sqrt(sum(ST_Area(${geom})) / count(*)) * ${MAX_MESH_CELLS_ACROSS_EXTENT}
@@ -105,7 +103,7 @@ export async function isMeshTooFineForInnerLimits(
               max(ST_XMax(${geom})) - min(ST_XMin(${geom})),
               max(ST_YMax(${geom})) - min(ST_YMin(${geom}))
             ) AS too_fine
-       FROM "${escapeIdentifier(sourceTable)}"
+       FROM ${sqlIdentifier(sourceTable)}
        WHERE ${geom} IS NOT NULL`,
       { format: 'array' }
     )) as Array<{ too_fine: boolean | null }>;
@@ -121,15 +119,17 @@ export async function isMeshTooFineForInnerLimits(
 }
 
 async function runDerivedTableQuery(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   select: string
 ): Promise<void> {
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(targetTable)}" AS
+  await duck.mutate(
+    targetTable,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(targetTable)} AS
     ${select}
-  `);
-  duck.invalidateTableCache?.(targetTable);
+  `
+  );
 }
 
 function buildLineSelect(macroCall: string): string {
@@ -153,11 +153,10 @@ function buildLineSelect(macroCall: string): string {
  * GEOS dissolve, re-noded on a second attempt.
  */
 export async function rebuildDerivedGeometryTables(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string,
   { isCurrent = () => true }: { isCurrent?: () => boolean } = {}
 ): Promise<void> {
-  const escapedSource = escapeSqlString(sourceTable);
   const landTable = getDerivedLandTableName(sourceTable);
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
   if (!isCurrent()) return;
@@ -173,21 +172,24 @@ export async function rebuildDerivedGeometryTables(
 
   await createDerivedTable(duck, landTable, [
     ...(coverageIsValid
-      ? [landSelect(`extract_coverage_land('${escapedSource}')`)]
+      ? [landSelect(`extract_coverage_land(${sqlString(sourceTable)})`)]
       : []),
     ...withNodingRetry((noding) =>
-      landSelect(`extract_land('${escapedSource}', ${noding})`)
+      landSelect(`extract_land(${sqlString(sourceTable)}, ${noding})`)
     )
   ]);
   if (!isCurrent()) return;
 
-  const escapedLand = escapeSqlString(landTable);
   await createDerivedTable(duck, getDerivedOuterlinesTableName(sourceTable), [
     ...(coverageIsValid
-      ? [buildLineSelect(`extract_coverage_outerlines('${escapedLand}')`)]
+      ? [
+          buildLineSelect(
+            `extract_coverage_outerlines(${sqlString(landTable)})`
+          )
+        ]
       : []),
     ...withNodingRetry((noding) =>
-      buildLineSelect(`extract_outerlines('${escapedLand}', ${noding})`)
+      buildLineSelect(`extract_outerlines(${sqlString(landTable)}, ${noding})`)
     )
   ]);
 
@@ -201,10 +203,16 @@ export async function rebuildDerivedGeometryTables(
 
   await createDerivedTable(duck, innerlinesTable, [
     ...(coverageIsValid
-      ? [buildLineSelect(`extract_coverage_innerlines('${escapedSource}')`)]
+      ? [
+          buildLineSelect(
+            `extract_coverage_innerlines(${sqlString(sourceTable)})`
+          )
+        ]
       : []),
     ...withNodingRetry((noding) =>
-      buildLineSelect(`extract_innerlines('${escapedSource}', ${noding})`)
+      buildLineSelect(
+        `extract_innerlines(${sqlString(sourceTable)}, ${noding})`
+      )
     )
   ]);
 }

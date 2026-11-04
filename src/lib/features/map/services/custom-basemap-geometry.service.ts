@@ -1,10 +1,10 @@
 import { GEO_CONSTANTS } from '$lib/features/duckdb';
 import {
   addGeoArrowMetadataFromDuckDB,
-  type DuckDBClientForArrow,
   fetchArrowTableWithGeometry
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type { DuckClient } from '$lib/features/duckdb';
 
 export interface CustomBasemapGeometryTableOptions {
   projectColumns?: readonly string[] | null;
@@ -14,7 +14,7 @@ export interface CustomBasemapGeometryTableOptions {
 }
 
 export async function createCustomBasemapGeometryTableFromDuck(
-  duck: DuckDBClientForArrow,
+  duck: DuckClient,
   tableName: string,
   options: CustomBasemapGeometryTableOptions = {}
 ): Promise<ArrowTable> {

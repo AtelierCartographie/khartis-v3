@@ -2,7 +2,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import * as m from '$lib/paraglide/messages';
 import { MIME } from '../constants';
 import { DataValidationError, PipelineError } from '../pipeline.errors';
-import { escapeIdentifier } from './sanitize.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 type SqliteModule = Awaited<ReturnType<typeof sqlite3InitModule>>;
 type SqliteDatabase = InstanceType<SqliteModule['oo1']['DB']>;
@@ -76,7 +76,7 @@ async function getSqliteModule(): Promise<SqliteModule> {
 }
 
 function quoteIdentifier(identifier: string): string {
-  return `"${escapeIdentifier(identifier)}"`;
+  return sqlIdentifier(identifier);
 }
 
 function normalizeLayerName(layerName: string): string {

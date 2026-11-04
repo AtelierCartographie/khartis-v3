@@ -6,10 +6,6 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detection.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   extractGeoArrowMetadata,
@@ -44,8 +40,7 @@ import {
   RefineOperation,
   type SearchStats
 } from '../types';
-import { registerTableMutationCallback } from '../cache/cache-manager';
-import { isMissingDuckTableError } from '../utils/duckdb-error.utils';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 
 import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
@@ -57,7 +52,12 @@ import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import * as geoDetectionOps from './geo-detection-ops';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export {
   RefineOperation,
@@ -221,7 +221,7 @@ function shouldIgnoreFinalizeJoinError(
   expectedTableName: string,
   error: unknown
 ): boolean {
-  if (!isMissingDuckTableError(error)) {
+  if (!matchesDuckDBError(error, 'missing-table')) {
     return false;
   }
 
@@ -245,27 +245,21 @@ function invalidateJoinedArrowCacheForTable(tableName: string): void {
   }
 }
 
-function invalidateDatasetCache(
-  tableName: string,
-  options?: { preserveJoinSimilarity?: boolean }
-): void {
+registerTableMutationCallback((tableName, _ctx, options) => {
   const dataset = state.getDatasetByTable(tableName);
   if (dataset) {
     dataset.arrowTableWithMetadata = undefined;
     dataset.geoArrowMetadata = undefined;
-  }
-  if (Duck) {
-    Duck.invalidateTableCache(tableName);
   }
   invalidateJoinedArrowCacheForTable(tableName);
   // Row/value mutations change which entities exist, so the cached join
   // similarity (used to grade joined/unrecognized buckets) is now stale.
   // Join finalization is the exception: it only appends __basemap_* columns
   // and leaves source values intact, so its similarity cache stays valid.
-  if (!options?.preserveJoinSimilarity) {
+  if (!options.preserveJoinSimilarity) {
     joinOps.invalidateSimilarityCache(tableName, Duck ?? undefined);
   }
-}
+});
 
 async function getRowCountInternal(tableName: string): Promise<number> {
   if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -367,9 +361,6 @@ async function computeGeometryExtent(
     }
     const geometryColumn = tableInfo.name[geometryIndex];
 
-    const escapedTable = escapeIdentifier(tableName);
-    const escapedGeometryColumn = escapeIdentifier(geometryColumn);
-
     // The suggester ranks projections for a WGS84 bbox. Reproject the geometry
     // through PROJ (ST_Transform) when its source CRS is not already EPSG:4326,
     // keeping the bounds path on the bundled PROJ engine instead of the
@@ -378,16 +369,16 @@ async function computeGeometryExtent(
       tableInfo.type[geometryIndex].match(/\(\s*'([^']+)'\s*\)/)?.[1] ?? null;
     const geometryExpression =
       sourceCrs && !/^epsg:4326$/i.test(sourceCrs)
-        ? `ST_Transform("${escapedGeometryColumn}", '${escapeSqlString(
+        ? `ST_Transform(${sqlIdentifier(geometryColumn)}, ${sqlString(
             sourceCrs
-          )}', 'EPSG:4326', true)`
-        : `"${escapedGeometryColumn}"`;
+          )}, 'EPSG:4326', true)`
+        : sqlIdentifier(geometryColumn);
 
     const rows = (await Duck.query(
       `WITH __extent_geom AS (
          SELECT ${geometryExpression} AS geom
-         FROM "${escapedTable}"
-         WHERE "${escapedGeometryColumn}" IS NOT NULL
+         FROM ${sqlIdentifier(tableName)}
+         WHERE ${sqlIdentifier(geometryColumn)} IS NOT NULL
        )
        SELECT
          MIN(ST_XMin(geom)) AS minx,
@@ -447,7 +438,7 @@ export const duckDBOrchestrator = {
   async invalidateAndReanalyse(tableName: string): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-    invalidateDatasetCache(tableName);
+    Duck.invalidateTableCache(tableName);
     await Duck.analyse(tableName, { force: true });
     state.bumpDatasetsVersion();
   },
@@ -775,7 +766,6 @@ export const duckDBOrchestrator = {
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
-    invalidateDatasetCache(dataset.tableName);
     const columns = await Duck.analyse(dataset.tableName);
     datasetOps.updateDatasetColumns(dataset.id, columns);
   },
@@ -833,9 +823,6 @@ export const duckDBOrchestrator = {
 
           datasetOps.updateDatasetJoinInfo(currentDataset.id, result, {
             bumpVersion: false
-          });
-          invalidateDatasetCache(currentDataset.tableName, {
-            preserveJoinSimilarity: true
           });
           state.bumpDatasetsVersion();
         } catch (error) {
@@ -1088,15 +1075,13 @@ export const duckDBOrchestrator = {
         return null;
       }
 
-      const escapedTable = escapeIdentifier(dataset.tableName);
-      const escapedGeometryColumn = escapeIdentifier(geometryColumn);
       // proj-suggest expects WGS84 lon/lat. Geometry is never reprojected on
       // import, so for a non-WGS84 dataset transform each feature in DuckDB
       // using the geometry's own embedded CRS (the third arg keeps lon/lat axis
       // order). proj.db resolves the source; proj4-JS often lacks the definition.
       const projectedGeometry = options?.reprojectToWgs84
-        ? `ST_Transform("${escapedGeometryColumn}", 'EPSG:4326', true)`
-        : `"${escapedGeometryColumn}"`;
+        ? `ST_Transform(${sqlIdentifier(geometryColumn)}, 'EPSG:4326', true)`
+        : sqlIdentifier(geometryColumn);
       const rows = (await Duck.query(
         `SELECT
            ST_XMin(g) AS minx,
@@ -1105,8 +1090,8 @@ export const duckDBOrchestrator = {
            ST_YMax(g) AS maxy
          FROM (
            SELECT ${projectedGeometry} AS g
-           FROM "${escapedTable}"
-           WHERE "${escapedGeometryColumn}" IS NOT NULL
+           FROM ${sqlIdentifier(dataset.tableName)}
+           WHERE ${sqlIdentifier(geometryColumn)} IS NOT NULL
          )`,
         { format: 'array' }
       )) as Array<{
@@ -1297,7 +1282,6 @@ export const duckDBOrchestrator = {
     }
 
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1319,7 +1303,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
     return result;
@@ -1335,7 +1318,6 @@ export const duckDBOrchestrator = {
 
     await columnOps.dropColumn(tableName, columnName, Duck, options);
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1350,7 +1332,6 @@ export const duckDBOrchestrator = {
 
     await columnOps.dropRows(tableName, rowIds, Duck, options);
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1366,7 +1347,6 @@ export const duckDBOrchestrator = {
     if (rowIds.length === 0) return { count: 0, rowIds: [] };
 
     await columnOps.dropRows(tableName, rowIds, Duck);
-    invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
     return { count: rowIds.length, rowIds };
   },
@@ -1388,7 +1368,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },
@@ -1412,7 +1391,6 @@ export const duckDBOrchestrator = {
       options
     );
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
     return count;
@@ -1440,7 +1418,6 @@ export const duckDBOrchestrator = {
       datasetOps.updateDatasetColumns(dataset.id, updatedColumns);
     }
     if (!options?.skipAnalysis) {
-      invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
   },

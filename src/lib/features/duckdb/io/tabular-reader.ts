@@ -2,10 +2,6 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
@@ -19,6 +15,10 @@ import {
 } from './file-registry';
 import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 const SAFE_CSV_DELIMITERS = new Set([';', ',', '\t', '|']);
 const SAFE_CSV_DECIMAL_SEPARATORS = new Set(['.', ',']);
@@ -122,8 +122,6 @@ export async function readTabular(
           }
 
           if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
-            const escapedFileId = escapeSqlString(fileid);
-
             const buildCsvOptions = (
               retryOptions: {
                 ignoreErrors?: boolean;
@@ -132,17 +130,17 @@ export async function readTabular(
             ): string[] => {
               const csvOptions: string[] = [
                 `header=${header}`,
-                `decimal_separator="${decimal_separator}"`,
+                `decimal_separator=${sqlString(decimal_separator)}`,
                 'normalize_names=true',
                 `nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES}`
               ];
 
               if (thousands_separator) {
-                csvOptions.push(`thousands="${thousands_separator}"`);
+                csvOptions.push(`thousands=${sqlString(thousands_separator)}`);
               }
 
               if (delimiter) {
-                csvOptions.push(`delim='${delimiter}'`);
+                csvOptions.push(`delim=${sqlString(delimiter)}`);
               }
 
               if (ignoreErrors || retryOptions.ignoreErrors) {
@@ -163,7 +161,7 @@ export async function readTabular(
               } = {}
             ): Promise<void> => {
               const csvOptions = buildCsvOptions(retryOptions);
-              const query = `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
+              const query = `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM read_csv(${sqlString(fileid)}, ${csvOptions.join(', ')});`;
               await executeQuery(ctx.connection, query, {
                 format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
               });
@@ -178,7 +176,7 @@ export async function readTabular(
             if (shouldRetryWithIgnoreErrors && !recoveryMode) {
               const rowCountResult = (await executeQuery(
                 ctx.connection,
-                `SELECT COUNT(*) AS cnt FROM "${escapeIdentifier(finalTablename)}"`,
+                `SELECT COUNT(*) AS cnt FROM ${sqlIdentifier(finalTablename)}`,
                 { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
               )) as Array<{ cnt: number | string }>;
               const parsedRowCount = Number(rowCountResult?.[0]?.cnt ?? 0);
@@ -193,10 +191,9 @@ export async function readTabular(
           }
 
           if (format === DUCK_CONST.TYPE.PARQUET) {
-            const escapedFileIdBinary = escapeSqlString(fileid);
             await executeQuery(
               ctx.connection,
-              `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS FROM read_parquet('${escapedFileIdBinary}');`,
+              `CREATE OR REPLACE TABLE ${sqlIdentifier(finalTablename)} AS FROM read_parquet(${sqlString(fileid)});`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
           }

@@ -1,11 +1,12 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlNamePart
+} from '$lib/features/commons/utils/sql.utils';
 
 let duckDBKeywordsCache: Set<string> | null = null;
 
@@ -37,10 +38,9 @@ export async function restoreNormalizedColumnNames(
   connection: AsyncDuckDBConnection,
   table: string
 ): Promise<void> {
-  const escapedTable = escapeIdentifier(table);
   const columns = (await executeQuery(
     connection,
-    `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(table)}';`,
+    `SELECT column_name FROM information_schema.columns WHERE table_name = ${sqlString(table)};`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ column_name: string }>;
 
@@ -58,7 +58,7 @@ export async function restoreNormalizedColumnNames(
     try {
       await executeQuery(
         connection,
-        `ALTER TABLE "${escapedTable}" RENAME COLUMN "${escapeIdentifier(name)}" TO "${escapeIdentifier(stripped)}";`,
+        `ALTER TABLE ${sqlIdentifier(table)} RENAME COLUMN ${sqlIdentifier(name)} TO ${sqlIdentifier(stripped)};`,
         { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
       );
       existing.delete(name);
@@ -70,7 +70,7 @@ export async function restoreNormalizedColumnNames(
 }
 
 export function rowIdSequenceName(table: string): string {
-  return `id_${table.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  return `id_${sqlNamePart(table)}`;
 }
 
 export async function addRowId(
@@ -78,15 +78,14 @@ export async function addRowId(
   table: string
 ): Promise<void> {
   const sequenceName = rowIdSequenceName(table);
-  const escapedTable = escapeIdentifier(table);
   await executeQuery(
     connection,
-    `CREATE OR REPLACE SEQUENCE "${sequenceName}" START 1;`,
+    `CREATE OR REPLACE SEQUENCE ${sqlIdentifier(sequenceName)} START 1;`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
   await executeQuery(
     connection,
-    `ALTER TABLE "${escapedTable}" ADD COLUMN IF NOT EXISTS ${INTERNAL_COLUMN.ID} INTEGER DEFAULT nextval('${sequenceName}');`,
+    `ALTER TABLE ${sqlIdentifier(table)} ADD COLUMN IF NOT EXISTS ${INTERNAL_COLUMN.ID} INTEGER DEFAULT nextval('${sequenceName}');`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }
@@ -105,12 +104,11 @@ export async function dropSyntheticFeatureIdColumn(
 ): Promise<void> {
   const columns = (await executeQuery(
     connection,
-    `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(table)}' AND column_name = '${GDAL_FID_COLUMN}';`,
+    `SELECT column_name FROM information_schema.columns WHERE table_name = ${sqlString(table)} AND column_name = '${GDAL_FID_COLUMN}';`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ column_name: string }>;
   if (columns.length === 0) return;
 
-  const escapedTable = escapeIdentifier(table);
   const fid = `TRY_CAST("${GDAL_FID_COLUMN}" AS BIGINT)`;
   const [result] = (await executeQuery(
     connection,
@@ -119,14 +117,14 @@ export async function dropSyntheticFeatureIdColumn(
          AND max(${fid}) = count(*) - 1
          AND count(DISTINCT ${fid}) = count(*)
        )) AS synthetic
-     FROM "${escapedTable}";`,
+     FROM ${sqlIdentifier(table)};`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ synthetic: boolean | null }>;
   if (result?.synthetic !== true) return;
 
   await executeQuery(
     connection,
-    `ALTER TABLE "${escapedTable}" DROP COLUMN "${GDAL_FID_COLUMN}";`,
+    `ALTER TABLE ${sqlIdentifier(table)} DROP COLUMN "${GDAL_FID_COLUMN}";`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }

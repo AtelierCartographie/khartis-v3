@@ -51,7 +51,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
-  Duck: { query: mocks.duckQuery },
+  Duck: {
+    query: mocks.duckQuery,
+    mutate: (_tables: unknown, ...args: unknown[]) => mocks.duckQuery(...args)
+  },
   duckDBOrchestrator: {
     updateDatasetTableName: mocks.updateDuckDatasetTableName,
     updateDatasetJoinInfo: vi.fn(),

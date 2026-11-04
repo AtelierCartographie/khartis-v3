@@ -452,8 +452,6 @@
         delimiter: options.delimiter
       });
 
-      Duck.invalidateTableCache(currentDuckTable);
-
       // A wrong delimiter can collapse a multi-column CSV into a single column.
       // Propagating that degenerate shape to the reactive store loops the join
       // effects and freezes the UI, so roll back to the previous options and
@@ -471,13 +469,11 @@
           thousands_separator: previousOptions.thousandsSeparator,
           delimiter: previousOptions.delimiter
         });
-        Duck.invalidateTableCache(currentDuckTable);
         showWarning(m.csv_warning_delimiter_collapsed(), '');
         return;
       }
 
       await normalizeFormattedNumericColumns(currentDuckTable, Duck);
-      Duck.invalidateTableCache(currentDuckTable);
 
       const snapshot = await syncDatasetMetadataFromDuck({ force: true });
       const newRowCount = snapshot?.rowCount ?? 0;

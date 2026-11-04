@@ -11,7 +11,6 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';
 import {
   createReadonlyStateFacade,
@@ -25,6 +24,7 @@ import {
   type TooltipEntry
 } from '$lib/features/map';
 import type { SearchState } from '../../types/search.types';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 const MIN_SEARCH_LENGTH = 2;
 const ALL_SOURCES_ID = 'all';
@@ -169,9 +169,8 @@ async function showTooltipForResult(
   if (!Number.isInteger(rowId)) return;
 
   try {
-    const escapedTable = escapeIdentifier(searchContext.tableName);
     const rows = (await Duck.query(
-      `SELECT * FROM "${escapedTable}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
+      `SELECT * FROM ${sqlIdentifier(searchContext.tableName)} WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 

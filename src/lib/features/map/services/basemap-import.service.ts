@@ -31,10 +31,7 @@ import {
   getDerivedOuterlinesTableName as getBasemapOuterlinesTableName,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { zipSync } from 'fflate';
 import { FILE_EXTENSION_GROUPS } from '$lib/features/commons/constants/file-types.constants';
@@ -55,6 +52,10 @@ import {
   fetchWithTimeout
 } from '$lib/features/commons/utils/fetch-with-timeout';
 import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export {
   getBasemapInnerlinesTableName,
@@ -150,10 +151,10 @@ export async function processBasemapImport(
     // Restore skips a basemap whose table exists, so a failed import must not
     // leave a partial one behind.
     await dropBasemapImportTables(tableName);
-    if (error instanceof Error && error.message.includes('Out of Memory')) {
+    if (matchesDuckDBError(error, 'out-of-memory')) {
       throw new DuckDBError(m.basemap_import_error_out_of_memory(), undefined, {
         fileName: file.name,
-        cause: error.message
+        cause: error instanceof Error ? error.message : String(error)
       });
     }
     throw error;
@@ -165,15 +166,15 @@ async function dropBasemapImportTables(tableName: string): Promise<void> {
   try {
     const rows = (await Duck.query(
       `SELECT table_name FROM information_schema.tables
-       WHERE table_name = '${escapeSqlString(tableName)}'
-         OR starts_with(table_name, '${escapeSqlString(tableName)}__')`,
+       WHERE table_name = ${sqlString(tableName)}
+         OR starts_with(table_name, ${sqlString(`${tableName}__`)})`,
       { format: 'array' }
     )) as Array<{ table_name: string }>;
     for (const { table_name } of rows) {
-      await Duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(String(table_name))}"`
+      await Duck.mutate(
+        String(table_name),
+        `DROP TABLE IF EXISTS ${sqlIdentifier(String(table_name))}`
       );
-      Duck.invalidateTableCache(String(table_name));
     }
   } catch (error) {
     logger.warn(
@@ -269,8 +270,9 @@ async function readAndPrepareBasemap(
   const duck = Duck;
   const read = await readFileIntoTable(file, { tableName, companionFiles });
   if (read.tableName !== tableName) {
-    await duck.query(
-      `ALTER TABLE "${escapeIdentifier(read.tableName)}" RENAME TO "${escapeIdentifier(tableName)}"`
+    await duck.mutate(
+      [read.tableName, tableName],
+      `ALTER TABLE ${sqlIdentifier(read.tableName)} RENAME TO ${sqlIdentifier(tableName)}`
     );
   }
 
@@ -431,22 +433,20 @@ function getRepresentativePointExpression(
   geometryColumn: string,
   layerType: BasemapLayerType
 ): string {
-  const escapedGeometryColumn = `"${escapeIdentifier(geometryColumn)}"`;
-
   if (isPolygonBasemapLayerType(layerType)) {
     return `CASE
-      WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-      WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+      WHEN ST_IsEmpty(${sqlIdentifier(geometryColumn)}) THEN NULL
+      WHEN NOT ST_IsValid(${sqlIdentifier(geometryColumn)}) THEN ST_PointOnSurface(${sqlIdentifier(geometryColumn)})
       ELSE COALESCE(
-        ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
-        ST_PointOnSurface(${escapedGeometryColumn})
+        ST_MaximumInscribedCircle(${sqlIdentifier(geometryColumn)}).center,
+        ST_PointOnSurface(${sqlIdentifier(geometryColumn)})
       )
     END`;
   }
 
   return `CASE
-    WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-    ELSE ST_PointOnSurface(${escapedGeometryColumn})
+    WHEN ST_IsEmpty(${sqlIdentifier(geometryColumn)}) THEN NULL
+    ELSE ST_PointOnSurface(${sqlIdentifier(geometryColumn)})
   END`;
 }
 
@@ -458,12 +458,11 @@ async function prepareRepresentativePointTable(
   after?: Promise<unknown>
 ): Promise<void> {
   const centroidsTableName = getBasemapCentroidsTableName(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const projection = `* REPLACE (
       CASE
-        WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
+        WHEN ${sqlIdentifier(geometryColumn)} IS NULL THEN NULL
         ELSE ${getRepresentativePointExpression(geometryColumn, layerType)}
-      END AS "${escapedGeometryColumn}"
+      END AS ${sqlIdentifier(geometryColumn)}
     )`;
 
   if (isPolygonBasemapLayerType(layerType)) {
@@ -476,11 +475,14 @@ async function prepareRepresentativePointTable(
     return;
   }
 
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(centroidsTableName)}" AS
+  await duck.mutate(
+    centroidsTableName,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(centroidsTableName)} AS
     SELECT ${projection}
-    FROM "${escapeIdentifier(tableName)}"
-  `);
+    FROM ${sqlIdentifier(tableName)}
+  `
+  );
 }
 
 // The territory and limits only dress the map: the data step opens without
@@ -566,16 +568,16 @@ async function ensureFeatureIdColumn(
   duck: typeof Duck,
   tableName: string
 ): Promise<void> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
-
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapedTable}" AS
+  await duck.mutate(
+    tableName,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
     SELECT
-      (ROW_NUMBER() OVER () - 1)::BIGINT AS "${escapedFeatureId}",
+      (ROW_NUMBER() OVER () - 1)::BIGINT AS ${sqlIdentifier(INTERNAL_COLUMN.FEATURE_ID)},
       *
-    FROM "${escapedTable}"
-  `);
+    FROM ${sqlIdentifier(tableName)}
+  `
+  );
 }
 
 export interface DatasetGeometryBasemapOptions {
@@ -740,12 +742,10 @@ async function queryBasemapBounds(
   tableName: string,
   geometryColumn: string
 ): Promise<BasemapBounds | null> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const bboxQuery = (await duck.query(
     `WITH agg AS (
-      SELECT ST_Extent_Agg("${escapedGeometryColumn}") AS extent
-      FROM "${escapedTable}"
+      SELECT ST_Extent_Agg(${sqlIdentifier(geometryColumn)}) AS extent
+      FROM ${sqlIdentifier(tableName)}
     )
     SELECT
       ST_XMin(extent) as minX,
@@ -785,12 +785,10 @@ async function queryGeometryType(
   tableName: string,
   geometryColumn: string
 ): Promise<BasemapLayerType> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const geomTypeQuery = (await duck.query(
-    `SELECT DISTINCT ST_GeometryType("${escapedGeometryColumn}") as geom_type
-     FROM "${escapedTable}"
-     WHERE "${escapedGeometryColumn}" IS NOT NULL
+    `SELECT DISTINCT ST_GeometryType(${sqlIdentifier(geometryColumn)}) as geom_type
+     FROM ${sqlIdentifier(tableName)}
+     WHERE ${sqlIdentifier(geometryColumn)} IS NOT NULL
      LIMIT 1`,
     { format: 'array', useProxy: false }
   )) as Array<{ geom_type?: string }>;

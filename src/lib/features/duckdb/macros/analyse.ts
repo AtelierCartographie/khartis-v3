@@ -99,7 +99,7 @@ const value_sample_macro = `CREATE OR REPLACE MACRO value_sample(tabname, colnam
 			hi,
 			min(value) FILTER (WHERE value > lo) AS next_above_min,
 			max(value) FILTER (WHERE value < hi) AS next_below_max,
-			quantile_disc(value, list_transform(range(1, 20), i -> i / 20.0)) AS quantiles
+			quantile_disc(value, list_transform(range(1, 20), lambda i: i / 20.0)) AS quantiles
 		GROUP BY lo, hi
 	)
 	FROM facts

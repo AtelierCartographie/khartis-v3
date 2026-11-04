@@ -27,6 +27,7 @@ vi.mock('$lib/features/duckdb', async () => ({
   )),
   Duck: {
     query: mocks.queryMock,
+    mutate: (_tables: unknown, ...args: unknown[]) => mocks.queryMock(...args),
     analyse: mocks.analyseMock,
     describe_table: mocks.describeTableMock,
     invalidateTableCache: vi.fn()

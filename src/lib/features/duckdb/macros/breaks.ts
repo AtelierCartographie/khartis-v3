@@ -13,18 +13,18 @@ import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constant
 const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb := 5) AS (
   WITH values AS (
     FROM query_table(tabname::VARCHAR)
-    SELECT COLUMNS(c -> c = colname) AS value
-    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+    SELECT COLUMNS(lambda c: c = colname) AS value
+    WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
   )
   FROM values
-  SELECT quantile_disc(value, list_transform(range(1, nb), c -> c::DOUBLE / nb))
+  SELECT quantile_disc(value, list_transform(range(1, nb), lambda c: c::DOUBLE / nb))
 );`;
 
 const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
     WITH values AS (
       FROM query_table(tabname::VARCHAR)
-      SELECT COLUMNS(c -> c = colname) AS value
-      WHERE COLUMNS(c -> c = colname) IS NOT NULL
+      SELECT COLUMNS(lambda c: c = colname) AS value
+      WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
     )
     FROM values
     SELECT quantile_disc(value, [0.05,0.275,0.5,0.725,0.95])
@@ -43,8 +43,8 @@ const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
 const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, nb := 5, nice := false) AS (
   WITH values AS (
     FROM query_table(tabname::VARCHAR)
-    SELECT COLUMNS(c -> c = colname) AS value
-    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+    SELECT COLUMNS(lambda c: c = colname) AS value
+    WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
   )
   FROM values
   SELECT equi_width_bins(MIN(value), MAX(value), nb, nice)
@@ -67,8 +67,8 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 
     WITH RECURSIVE values AS (
       FROM query_table(tabname::VARCHAR)
-      SELECT COLUMNS(c -> c = colname) AS value
-      WHERE COLUMNS(c -> c = colname) IS NOT NULL
+      SELECT COLUMNS(lambda c: c = colname) AS value
+      WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
     ), means(iter, breaks) AS (
 
       FROM values
@@ -108,8 +108,8 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 const headtail2_macro = `CREATE OR REPLACE MACRO headtail2(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE values AS (
                   FROM query_table(tabname::VARCHAR)
-                  SELECT COLUMNS(c -> c = colname) AS value
-                  WHERE COLUMNS(c -> c = colname) IS NOT NULL
+                  SELECT COLUMNS(lambda c: c = colname) AS value
+                  WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
               ), headtail(break, values_count, l_pct_head) AS (
                   FROM values
                   SELECT avg(value),
@@ -156,13 +156,13 @@ const headtail2_macro = `CREATE OR REPLACE MACRO headtail2(tabname, colname, nb 
 const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, maxiter := 30) AS (
   WITH RECURSIVE values AS (
     FROM query_table(tabname::VARCHAR)
-    SELECT COLUMNS(c -> c = colname)::DOUBLE AS value, count(*) AS cnt
-    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+    SELECT COLUMNS(lambda c: c = colname)::DOUBLE AS value, count(*) AS cnt
+    WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
     GROUP BY ALL
   ), seeds AS (
     FROM values
     SELECT list_sort(list_distinct(
-      quantile_disc(value, list_transform(range(0, nb), i -> (2*i + 1)::DOUBLE / (2*nb)))
+      quantile_disc(value, list_transform(range(0, nb), lambda i: (2*i + 1)::DOUBLE / (2*nb)))
     )) AS centroids
   ), iters(iter, centroids) AS (
     FROM seeds SELECT 0, centroids
@@ -272,15 +272,15 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   CREATE OR REPLACE MACRO best_value_rounded(n, lower_limit, upper_limit) AS (
     list_filter(
       generate_roundings(n),
-      value_rounded -> value_rounded BETWEEN lower_limit AND upper_limit
+      lambda value_rounded: value_rounded BETWEEN lower_limit AND upper_limit
     )[1]
   );
 
   CREATE OR REPLACE MACRO round_thresholds(breaks, tname, colname) AS (
   WITH values AS (
     FROM query_table(tname::VARCHAR)
-    SELECT COLUMNS(c -> c = colname) AS value
-    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+    SELECT COLUMNS(lambda c: c = colname) AS value
+    WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
   ), t1 AS (
     SELECT unnest(breaks) AS break
   ), t2 AS (
@@ -327,8 +327,8 @@ const round_bounds_macro = `CREATE OR REPLACE MACRO significant_rounding_limit(n
   CREATE OR REPLACE MACRO round_bounds(low, high, tname, colname) AS (
   WITH values AS (
     FROM query_table(tname::VARCHAR)
-    SELECT COLUMNS(c -> c = colname) AS value
-    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+    SELECT COLUMNS(lambda c: c = colname) AS value
+    WHERE COLUMNS(lambda c: c = colname) IS NOT NULL
   ), neighbours AS (
     FROM values
     SELECT
@@ -340,7 +340,7 @@ const round_bounds_macro = `CREATE OR REPLACE MACRO significant_rounding_limit(n
     coalesce(
       list_filter(
         generate_roundings(low),
-        candidate -> candidate < above_low
+        lambda candidate: candidate < above_low
           AND abs(candidate - low) <= significant_rounding_limit(low)
       )[1],
       low::DOUBLE
@@ -348,7 +348,7 @@ const round_bounds_macro = `CREATE OR REPLACE MACRO significant_rounding_limit(n
     coalesce(
       list_filter(
         generate_roundings(high),
-        candidate -> candidate > below_high
+        lambda candidate: candidate > below_high
           AND abs(candidate - high) <= significant_rounding_limit(high)
       )[1],
       high::DOUBLE

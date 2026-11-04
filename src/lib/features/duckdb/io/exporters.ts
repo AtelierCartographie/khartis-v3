@@ -1,11 +1,14 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import { CSV_DELIMITERS } from '$lib/features/commons/constants/file-types.constants';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 export async function exportToCsv(
   ctx: DuckDBContext,
@@ -23,7 +26,7 @@ export async function exportToCsv(
   try {
     await executeQuery(
       ctx.connection,
-      `COPY "${escapeIdentifier(table)}" TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
+      `COPY ${sqlIdentifier(table)} TO ${sqlString(filename)} (FORMAT CSV, DELIMITER ${sqlString(delimiter)}, HEADER ${header})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
 
@@ -51,14 +54,12 @@ export async function exportToParquet(
   columns: string[]
 ): Promise<Uint8Array> {
   const filename = `export_${Date.now()}_${crypto.randomUUID()}.parquet`;
-  const selectColumns = columns
-    .map((column) => `"${escapeIdentifier(column)}"`)
-    .join(', ');
+  const selectColumns = columns.map(sqlIdentifier).join(', ');
 
   try {
     await executeQuery(
       ctx.connection,
-      `COPY (SELECT ${selectColumns} FROM "${escapeIdentifier(table)}") TO '${filename}' (FORMAT parquet)`,
+      `COPY (SELECT ${selectColumns} FROM ${sqlIdentifier(table)}) TO ${sqlString(filename)} (FORMAT parquet)`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
 

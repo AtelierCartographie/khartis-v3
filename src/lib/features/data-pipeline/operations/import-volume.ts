@@ -3,15 +3,9 @@ import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { resolveLocale } from '$lib/features/commons/utils/format.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
-
-interface DuckDBImportVolumeClient {
-  query(
-    sql: string,
-    options: { format: 'array'; useProxy?: boolean }
-  ): Promise<unknown>;
-}
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '$lib/features/duckdb';
 
 export function assertImportRowCountWithinLimit(
   rowCount: number,
@@ -49,12 +43,12 @@ export function warnOnLargeImport(rowCount: number): void {
 }
 
 export async function readParquetRowCount(
-  duck: DuckDBImportVolumeClient,
+  duck: DuckClient,
   fileId: string
 ): Promise<number | null> {
   try {
     const result = (await duck.query(
-      `SELECT num_rows FROM parquet_file_metadata('${escapeSqlString(fileId)}')`,
+      `SELECT num_rows FROM parquet_file_metadata(${sqlString(fileId)})`,
       { format: 'array', useProxy: false }
     )) as Array<{ num_rows?: number | bigint }>;
 

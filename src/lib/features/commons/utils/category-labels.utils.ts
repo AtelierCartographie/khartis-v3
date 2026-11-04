@@ -1,6 +1,6 @@
 import type { ClassificationConfig } from '../stores/visualization.store.svelte';
 import { Duck } from '$lib/features/duckdb';
-import { escapeIdentifier } from './sanitize.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 type CategoryDatasetLike = {
   tableName?: string;
@@ -52,12 +52,10 @@ export async function loadDistinctCategoryLabels(
   }
 
   try {
-    const escapedTable = escapeIdentifier(dataset.tableName);
-    const escapedColumn = escapeIdentifier(columnName);
     const rows = (await Duck.query(
-      `SELECT DISTINCT "${escapedColumn}" AS category_value
-       FROM "${escapedTable}"
-       WHERE "${escapedColumn}" IS NOT NULL
+      `SELECT DISTINCT ${sqlIdentifier(columnName)} AS category_value
+       FROM ${sqlIdentifier(dataset.tableName)}
+       WHERE ${sqlIdentifier(columnName)} IS NOT NULL
        ORDER BY 1`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;

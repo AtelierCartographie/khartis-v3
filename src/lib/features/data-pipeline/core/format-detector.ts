@@ -1,5 +1,6 @@
 import { PIPELINE_CONST } from '../constants';
 import type { FileFormat } from '../types';
+import { sqlNamePart } from '$lib/features/commons/utils/sql.utils';
 
 const { TABULAR, GEO, PARQUET } = PIPELINE_CONST.EXTENSIONS;
 
@@ -7,7 +8,7 @@ export function generateTableName(
   filename: string,
   sourceFileId?: string
 ): string {
-  let name = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+  let name = sqlNamePart(filename.replace(/\.[^/.]+$/, ''));
   if (!/^[a-zA-Z]/.test(name)) {
     name = 't_' + name;
   }

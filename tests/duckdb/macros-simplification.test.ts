@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { normalizeGeometryColumnName } from '$lib/features/data-pipeline/operations/geometry-column';
+import type { DuckClient } from '$lib/features/duckdb';
 import { simplification_macros } from '$lib/features/duckdb/macros/simplification';
 import {
   createTestInstance,
@@ -303,15 +304,15 @@ describe('extract_innerlines macro', () => {
     rmSync(parquetPath);
 
     await normalizeGeometryColumnName('geoparquet_coverage', {
-      query: (sql) => run(db, sql),
-      describe_table: async (tableName) => {
+      mutate: (_tables: unknown, sql: string) => run(db, sql),
+      describe_table: async (tableName: string) => {
         const columns = await query(db, `DESCRIBE "${tableName}"`);
         return {
           name: columns.map((column) => String(column.column_name)),
           type: columns.map((column) => String(column.column_type))
         };
       }
-    });
+    } as unknown as DuckClient);
 
     const rows = await query(
       db,

@@ -16,10 +16,6 @@ import {
   perfMeasure
 } from '$lib/features/commons/utils/perf-marks.utils';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import {
   ArrowExtension,
   GeometryType
 } from '$lib/features/map/constants/map.constants';
@@ -29,6 +25,13 @@ import {
 } from '$lib/features/commons/utils/proj4-crs.utils';
 import { Field, Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import * as m from '$lib/paraglide/messages';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 let maximumInscribedCircleSupported = true;
 
@@ -67,15 +70,6 @@ function buildGeoArrowCrs(
   return { name: normalized };
 }
 
-export interface DuckDBClientForArrow {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-  queryStreaming?(sql: string): Promise<Uint8Array>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-}
-
 interface GeoArrowMetadataOverrides {
   geometryType?: string;
 }
@@ -88,7 +82,7 @@ export interface GeomColumnInfo {
 
 async function getTableColumns(
   tableName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckClient
 ): Promise<GeomColumnInfo[]> {
   const tableInfo = await Duck.describe_table(tableName);
   return tableInfo.name.map((name: string, index: number) => ({
@@ -106,15 +100,13 @@ function findGeometryColumn(
 async function resolveGeometryTypeForTable(
   tableName: string,
   geomColumnName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckClient
 ): Promise<string> {
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeometryColumn = escapeIdentifier(geomColumnName);
   const geomTypeResult = (await Duck.query(
     `SELECT DISTINCT geom_type FROM (
-       SELECT ST_GeometryType("${escapedGeometryColumn}") as geom_type
-       FROM "${escapedTable}"
-       WHERE "${escapedGeometryColumn}" IS NOT NULL
+       SELECT ST_GeometryType(${sqlIdentifier(geomColumnName)}) as geom_type
+       FROM ${sqlIdentifier(tableName)}
+       WHERE ${sqlIdentifier(geomColumnName)} IS NOT NULL
        LIMIT 1000
      )`,
     { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
@@ -151,7 +143,7 @@ async function resolveGeometryTypeForTable(
 }
 
 async function executeArrowIpcQuery(
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   query: string,
   _tableName: string,
   options?: { skipStreaming?: boolean }
@@ -166,7 +158,7 @@ async function executeArrowIpcQuery(
   perfMark(PERF_PHASE.ARROW_TABLE);
   let ipcBuffer: Uint8Array;
 
-  if (Duck.queryStreaming && !options?.skipStreaming) {
+  if (!options?.skipStreaming) {
     ipcBuffer = await Duck.queryStreaming(query);
     const streamTable = tableFromIPC(ipcBuffer);
     if (streamTable.numRows > 0) {
@@ -194,23 +186,21 @@ function getRepresentativePointExpression(
   geometryType: string,
   options?: { simple?: boolean }
 ): string | null {
-  const escapedGeometryColumn = `"${escapeIdentifier(geometryColumnName)}"`;
-
   switch (geometryType) {
     case GeometryType.POLYGON:
     case GeometryType.MULTIPOLYGON:
       if (options?.simple) {
         return `CASE
-          WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-          ELSE ST_PointOnSurface(${escapedGeometryColumn})
+          WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+          ELSE ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         END`;
       }
       return `CASE
-        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-        WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+        WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+        WHEN NOT ST_IsValid(${sqlIdentifier(geometryColumnName)}) THEN ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         ELSE COALESCE(
-          ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
-          ST_PointOnSurface(${escapedGeometryColumn})
+          ST_MaximumInscribedCircle(${sqlIdentifier(geometryColumnName)}).center,
+          ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
         )
       END`;
     case GeometryType.LINESTRING:
@@ -218,8 +208,8 @@ function getRepresentativePointExpression(
     case GeometryType.POINT:
     case GeometryType.MULTIPOINT:
       return `CASE
-        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
-        ELSE ST_PointOnSurface(${escapedGeometryColumn})
+        WHEN ST_IsEmpty(${sqlIdentifier(geometryColumnName)}) THEN NULL
+        ELSE ST_PointOnSurface(${sqlIdentifier(geometryColumnName)})
       END`;
     default:
       return null;
@@ -233,7 +223,7 @@ function getRepresentativePointExpression(
  */
 export async function fetchArrowTableWithGeometry(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null,
   targetCrs?: string | null,
   projectColumns?: readonly string[] | null,
@@ -248,9 +238,8 @@ export async function fetchArrowTableWithGeometry(
   const geomColumn = columns.find((c: { column_type: string }) =>
     isGeometryColumnType(c.column_type)
   );
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeomColumn = geomColumn
-    ? escapeIdentifier(geomColumn.column_name)
+  const geomIdentifier = geomColumn
+    ? sqlIdentifier(geomColumn.column_name)
     : null;
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
@@ -263,32 +252,37 @@ export async function fetchArrowTableWithGeometry(
       )
     : null;
 
+  // Spatial cannot reproject a geometry that carries no CRS.
+  if (geomColumn && normalizedTargetCrs && !geometrySourceCrs) {
+    throw new DuckDBError(
+      m.error_unsupported_source_projection({
+        fromCRS: geomColumn.column_type
+      }),
+      undefined,
+      { tableName, targetCrs: normalizedTargetCrs }
+    );
+  }
+
   const geometryProjection =
-    escapedGeomColumn && normalizedTargetCrs && geometrySourceCrs
-      ? `ST_Transform("${escapedGeomColumn}", '${escapeSqlString(
+    geomIdentifier && normalizedTargetCrs && geometrySourceCrs
+      ? `ST_Transform(${geomIdentifier}, ${sqlString(
           geometrySourceCrs
-        )}', '${escapeSqlString(normalizedTargetCrs)}', true) AS "${escapedGeomColumn}"`
-      : escapedGeomColumn && normalizedTargetCrs
-        ? `ST_Transform("${escapedGeomColumn}", '${escapeSqlString(
-            normalizedTargetCrs
-          )}') AS "${escapedGeomColumn}"`
-        : escapedGeomColumn
-          ? `"${escapedGeomColumn}"`
-          : null;
+        )}, ${sqlString(normalizedTargetCrs)}, true) AS ${geomIdentifier}`
+      : geomIdentifier;
 
   let query: string;
   if (projectedColumnNames && projectedColumnNames.length > 0) {
-    const columnExpressions = projectedColumnNames.map(
-      (name) => `"${escapeIdentifier(name)}"`
+    const columnExpressions = projectedColumnNames.map((name) =>
+      sqlIdentifier(name)
     );
     if (geometryProjection) {
       columnExpressions.push(geometryProjection);
     }
-    query = `SELECT ${columnExpressions.join(', ')} FROM "${escapedTable}"`;
-  } else if (escapedGeomColumn && normalizedTargetCrs) {
-    query = `SELECT * EXCLUDE ("${escapedGeomColumn}"), ${geometryProjection} FROM "${escapedTable}"`;
+    query = `SELECT ${columnExpressions.join(', ')} FROM ${sqlIdentifier(tableName)}`;
+  } else if (geomIdentifier && normalizedTargetCrs) {
+    query = `SELECT * EXCLUDE (${geomIdentifier}), ${geometryProjection} FROM ${sqlIdentifier(tableName)}`;
   } else {
-    query = `SELECT * FROM "${escapedTable}"`;
+    query = `SELECT * FROM ${sqlIdentifier(tableName)}`;
   }
 
   if (whereClause) {
@@ -304,7 +298,7 @@ export async function fetchArrowTableWithGeometry(
       normalizedTargetCrs && geomColumn
         ? {
             ...geomColumn,
-            column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
+            column_type: `${GEOMETRY_COLUMN_TYPE}(${sqlString(normalizedTargetCrs)})`
           }
         : geomColumn
   };
@@ -313,7 +307,7 @@ export async function fetchArrowTableWithGeometry(
 export async function fetchArrowRepresentativePointTable(
   tableName: string,
   geometryType: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
@@ -327,10 +321,9 @@ export async function fetchArrowRepresentativePointTable(
   );
 
   if (!geomColumn) {
-    const escapedTable = escapeIdentifier(tableName);
     const query = whereClause
-      ? `SELECT * FROM "${escapedTable}" WHERE ${whereClause}`
-      : `SELECT * FROM "${escapedTable}"`;
+      ? `SELECT * FROM ${sqlIdentifier(tableName)} WHERE ${whereClause}`
+      : `SELECT * FROM ${sqlIdentifier(tableName)}`;
     return {
       table: await executeArrowIpcQuery(Duck, query, tableName),
       geomColumn: undefined
@@ -343,8 +336,6 @@ export async function fetchArrowRepresentativePointTable(
     geometryType,
     { simple: useSimpleExpression }
   );
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedGeomColumn = escapeIdentifier(geomColumn.column_name);
 
   if (!pointExpression) {
     return fetchArrowTableWithGeometry(tableName, Duck, whereClause);
@@ -353,10 +344,10 @@ export async function fetchArrowRepresentativePointTable(
   const buildQuery = (expression: string): string => {
     let q = `SELECT * REPLACE (
       CASE
-        WHEN "${escapedGeomColumn}" IS NULL THEN NULL
+        WHEN ${sqlIdentifier(geomColumn.column_name)} IS NULL THEN NULL
         ELSE ${expression}
-      END AS "${escapedGeomColumn}"
-    ) FROM "${escapedTable}"`;
+      END AS ${sqlIdentifier(geomColumn.column_name)}
+    ) FROM ${sqlIdentifier(tableName)}`;
     if (whereClause) {
       q += ` WHERE ${whereClause}`;
     }
@@ -367,7 +358,7 @@ export async function fetchArrowRepresentativePointTable(
   const finalGeomColumn = {
     ...geomColumn,
     column_type: geometryCrs
-      ? `${GEOMETRY_COLUMN_TYPE}('${geometryCrs}')`
+      ? `${GEOMETRY_COLUMN_TYPE}(${sqlString(geometryCrs)})`
       : GEOMETRY_COLUMN_TYPE
   };
 
@@ -407,7 +398,7 @@ export async function fetchArrowRepresentativePointTable(
 export async function addGeoArrowMetadataFromDuckDB(
   table: Table,
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   cachedGeoArrowMetadata?: GeoArrowMetadata,
   /** Pre-fetched geometry column info from fetchArrowTableWithGeometry — avoids redundant describe_table() call */
   prefetchedGeomColumn?: GeomColumnInfo,
@@ -528,7 +519,7 @@ export async function addGeoArrowMetadataFromDuckDB(
 
 export async function createArrowTableWithMetadata(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   extractMetadata: (table: Table) => GeoArrowMetadata | null
 ): Promise<{
   arrowTableWithMetadata: Table;
@@ -551,7 +542,7 @@ export async function createArrowTableWithMetadata(
 
 export async function getArrowTableWithCache(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   extractMetadata: (table: Table) => GeoArrowMetadata | null,
   getCachedTable: () => Table | undefined,
   setCache: (table: Table, metadata: GeoArrowMetadata | null) => void
@@ -571,7 +562,7 @@ export async function getArrowTableWithCache(
 
 export async function getArrowTableDirect(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   getCachedTable: () => Table | undefined,
   setCache: (table: Table) => void
 ): Promise<Table> {
@@ -603,7 +594,7 @@ export async function getArrowTableDirect(
 
 export async function getArrowTableReprojected(
   tableName: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   targetCrs: string
 ): Promise<Table> {
   const reproject = async (sourceCrs?: string) => {
@@ -649,7 +640,7 @@ export async function getArrowTableReprojected(
 export async function getRepresentativePointArrowTable(
   tableName: string,
   geometryType: string,
-  Duck: DuckDBClientForArrow,
+  Duck: DuckClient,
   whereClause?: string | null
 ): Promise<Table> {
   const { table: baseTable, geomColumn } =

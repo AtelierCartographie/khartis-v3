@@ -1,5 +1,4 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { buildOrderClause } from '../utils/html-like-text.utils';
@@ -7,6 +6,11 @@ import { registerTableMutationCallback } from '../cache/cache-manager';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 const filteredRowCountCache = new Map<string, number>();
 
@@ -18,17 +22,6 @@ registerTableMutationCallback((table: string) => {
     }
   }
 });
-
-export interface DuckDBClientForTableData {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-  analyse(
-    tableName: string,
-    options?: { force?: boolean }
-  ): Promise<AnalysisResult[]>;
-}
 
 export interface GetTableDataOptions {
   offset?: number;
@@ -57,15 +50,13 @@ function normalizeRowId(value: unknown): number | null {
 
 async function buildSelectClauseWithoutGeometry(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<string> {
   try {
     const tableInfo = await Duck.describe_table(tableName);
     const geomCols = tableInfo.name.flatMap((name, index) => {
       const type = String(tableInfo.type[index] ?? '').toUpperCase();
-      return type.startsWith(GEOMETRY_COLUMN_TYPE)
-        ? [`"${escapeIdentifier(name)}"`]
-        : [];
+      return type.startsWith(GEOMETRY_COLUMN_TYPE) ? [sqlIdentifier(name)] : [];
     });
 
     if (geomCols.length > 0) {
@@ -80,7 +71,7 @@ async function buildSelectClauseWithoutGeometry(
 
 export async function getTableData(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   options?: GetTableDataOptions
 ): Promise<ArrowTableLike> {
   try {
@@ -90,8 +81,7 @@ export async function getTableData(
       Duck
     );
 
-    const escapedTableName = escapeIdentifier(tableName);
-    let query = `SELECT ${selectClause} FROM "${escapedTableName}"`;
+    let query = `SELECT ${selectClause} FROM ${sqlIdentifier(tableName)}`;
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     if (whereClause) {
       query += ` WHERE ${whereClause}`;
@@ -122,12 +112,11 @@ export async function getTableData(
 
 export async function countRows(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   applyFilters: boolean
 ): Promise<number> {
   const filters = getFiltersMap();
-  const escapedTableName = escapeIdentifier(tableName);
-  let query = `SELECT COUNT(*) as count FROM "${escapedTableName}"`;
+  let query = `SELECT COUNT(*) as count FROM ${sqlIdentifier(tableName)}`;
   const whereClause = applyFilters
     ? buildFilterWhereClause(filters.get(tableName))
     : null;
@@ -142,7 +131,7 @@ export async function countRows(
 
 export async function getFilteredRowCount(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
@@ -170,7 +159,7 @@ export async function getFilteredRowCount(
 export async function getRowPosition(
   tableName: string,
   rowId: number | bigint | string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   options?: {
     orderBy?: string | null;
     orderByType?: string | null;
@@ -188,8 +177,6 @@ export async function getRowPosition(
       return -1;
     }
 
-    const escapedTable = escapeIdentifier(tableName);
-
     if (options?.orderBy && options?.order) {
       const orderClause = buildOrderClause(
         options.orderBy,
@@ -199,7 +186,7 @@ export async function getRowPosition(
       const query = `
         WITH filtered_rows AS (
           SELECT *
-          FROM "${escapedTable}"
+          FROM ${sqlIdentifier(tableName)}
           ${whereClause ? `WHERE ${whereClause}` : ''}
         ),
         ordered_rows AS (
@@ -222,7 +209,7 @@ export async function getRowPosition(
     } else {
       const query = `
         SELECT COUNT(*) as position
-        FROM "${escapedTable}"
+        FROM ${sqlIdentifier(tableName)}
         WHERE ${INTERNAL_COLUMN.ID} < ${normalizedRowId}
         ${filterCondition}
       `;
@@ -242,14 +229,13 @@ export async function getRowPosition(
 
 export async function getRowStats(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<FilterStats> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
 
   if (whereClause) {
-    const escapedTable = escapeIdentifier(tableName);
-    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${escapedTable}"`;
+    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM ${sqlIdentifier(tableName)}`;
     const result = (await Duck.query(query)) as ArrowTableLike;
     const row = result.get(0) as Record<string, unknown>;
     return {
@@ -266,12 +252,11 @@ const ROW_IDENTITY_COLUMNS = [INTERNAL_COLUMN.ID, INTERNAL_COLUMN.FEATURE_ID];
 
 export async function countDuplicateRows(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number> {
-  const escapedTable = escapeIdentifier(tableName);
-  const identityList = ROW_IDENTITY_COLUMNS.map((c) => `'${c}'`).join(', ');
+  const identityList = ROW_IDENTITY_COLUMNS.map(sqlString).join(', ');
   const result = (await Duck.query(
-    `SELECT (SELECT COUNT(*) FROM "${escapedTable}") - (SELECT COUNT(*) FROM (SELECT DISTINCT COLUMNS(c -> c NOT IN (${identityList})) FROM "${escapedTable}")) AS duplicates`
+    `SELECT (SELECT COUNT(*) FROM ${sqlIdentifier(tableName)}) - (SELECT COUNT(*) FROM (SELECT DISTINCT COLUMNS(lambda c: c NOT IN (${identityList})) FROM ${sqlIdentifier(tableName)})) AS duplicates`
   )) as ArrowTableLike;
   const row = result.get(0) as Record<string, unknown>;
   return Number(row?.duplicates) || 0;
@@ -286,24 +271,23 @@ export async function getColumnDomainsInScope(
   tableName: string,
   clause: string | null,
   columns: string[],
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<Map<string, ColumnDomain>> {
   const domains = new Map<string, ColumnDomain>();
   if (columns.length === 0) {
     return domains;
   }
 
-  const escapedTable = escapeIdentifier(tableName);
   const projections = columns
     .map((column, index) => {
-      const numericRef = `TRY_CAST("${escapeIdentifier(column)}" AS DOUBLE)`;
+      const numericRef = `TRY_CAST(${sqlIdentifier(column)} AS DOUBLE)`;
       return `MIN(${numericRef}) AS min_${index}, MAX(${numericRef}) AS max_${index}`;
     })
     .join(', ');
   const where = clause ? ` WHERE COALESCE(${clause}, FALSE)` : '';
 
   const result = (await Duck.query(
-    `SELECT ${projections} FROM "${escapedTable}"${where}`
+    `SELECT ${projections} FROM ${sqlIdentifier(tableName)}${where}`
   )) as ArrowTableLike;
   if (result.numRows === 0) {
     return domains;
@@ -338,7 +322,7 @@ function buildMissingValuePredicate({
   column,
   numeric
 }: MissingValueColumn): string {
-  const ref = `"${escapeIdentifier(column)}"`;
+  const ref = sqlIdentifier(column);
   // A classed column is a number or a date: a date does not cast to DOUBLE.
   return numeric
     ? `NOT COALESCE(isfinite(TRY_CAST(${ref} AS DOUBLE)), isfinite(TRY_CAST(${ref} AS TIMESTAMP)), FALSE)`
@@ -349,13 +333,12 @@ export async function getMissingValueCountsInScope(
   tableName: string,
   clause: string | null,
   columns: MissingValueColumn[],
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number[]> {
   if (columns.length === 0) {
     return [];
   }
 
-  const escapedTable = escapeIdentifier(tableName);
   const projections = columns
     .map(
       (column, index) =>
@@ -365,7 +348,7 @@ export async function getMissingValueCountsInScope(
   const where = clause ? ` WHERE COALESCE(${clause}, FALSE)` : '';
 
   const result = (await Duck.query(
-    `SELECT ${projections} FROM "${escapedTable}"${where}`
+    `SELECT ${projections} FROM ${sqlIdentifier(tableName)}${where}`
   )) as ArrowTableLike;
   const row = result.numRows > 0 ? result.get(0) : {};
   return columns.map((_, index) => Number(row[`missing_${index}`] ?? 0));
@@ -380,16 +363,15 @@ function buildScopedCountExpression(clause: string | null): string {
 export async function getScopedRowStats(
   tableName: string,
   scopeClause: string | null,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<FilterStats> {
   // The denominator a primitive filter works against is what the table filter
   // already let through, not the whole table.
   const tableClause = buildFilterWhereClause(getFiltersMap().get(tableName));
-  const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
     `SELECT ${buildScopedCountExpression(tableClause)} AS total,
             ${buildScopedCountExpression(scopeClause ?? tableClause)} AS filtered
-     FROM "${escapedTable}"`
+     FROM ${sqlIdentifier(tableName)}`
   )) as ArrowTableLike;
 
   if (result.numRows === 0) {
@@ -406,10 +388,9 @@ export async function getScopedRowStats(
 export async function getRowIdsInScope(
   tableName: string,
   clause: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<Set<number>> {
-  const escapedTable = escapeIdentifier(tableName);
-  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM "${escapedTable}" WHERE COALESCE(${clause}, FALSE)`;
+  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM ${sqlIdentifier(tableName)} WHERE COALESCE(${clause}, FALSE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
   const rowIds = new Set<number>();
 
@@ -426,17 +407,16 @@ export async function getRowIdsInScope(
 
 export async function getExcludedRowIds(
   tableName: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<number[]> {
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
   if (!whereClause) return [];
 
-  const escapedTable = escapeIdentifier(tableName);
   // Treat NULL predicate results as excluded rows too.
   // Example: rows with NULL values on filtered columns should be removable
   // when deleting "excluded" rows from a filter.
-  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
+  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM ${sqlIdentifier(tableName)} WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
   const rowIds: number[] = [];
 
@@ -455,7 +435,7 @@ export async function getExcludedRowIds(
 
 export async function getFullAnalysis(
   tableName: string,
-  Duck: DuckDBClientForTableData,
+  Duck: DuckClient,
   detectSemioType: (col: AnalysisResult) => {
     semioType: AnalysisResult['semioType'];
     semioScore: number;
@@ -476,7 +456,7 @@ export async function getFullAnalysis(
 
 export async function runQuery(
   query: string,
-  Duck: DuckDBClientForTableData
+  Duck: DuckClient
 ): Promise<ArrowTableLike> {
   return Duck.query(query) as Promise<ArrowTableLike>;
 }

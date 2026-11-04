@@ -1,4 +1,3 @@
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   Duck,
@@ -13,6 +12,7 @@ import {
   GEOMETRY_COLUMN_TYPE,
   GEOMETRY_WKT_TYPES
 } from '$lib/features/commons/constants';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
   {
@@ -89,16 +89,14 @@ export async function extractGeometryInfo(
       return { warnings: [] };
     }
 
-    const escapedGeomCol = escapeIdentifier(geometryColumn.name);
-    const escapedTable = escapeIdentifier(tableName);
     const geometryCrs = extractGeometryColumnCrs(geometryColumn.type);
 
     const consolidatedQuery = `
 			WITH bbox AS (
-				SELECT ST_Extent_Agg("${escapedGeomCol}") AS extent FROM "${escapedTable}"
+				SELECT ST_Extent_Agg(${sqlIdentifier(geometryColumn.name)}) AS extent FROM ${sqlIdentifier(tableName)}
 			),
 			first_row AS (
-				SELECT "${escapedGeomCol}" AS geom FROM "${escapedTable}" WHERE "${escapedGeomCol}" IS NOT NULL LIMIT 1
+				SELECT ${sqlIdentifier(geometryColumn.name)} AS geom FROM ${sqlIdentifier(tableName)} WHERE ${sqlIdentifier(geometryColumn.name)} IS NOT NULL LIMIT 1
 			)
 			SELECT
 				ST_GeometryType((SELECT geom FROM first_row)) AS geom_type,

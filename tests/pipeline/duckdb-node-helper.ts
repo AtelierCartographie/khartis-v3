@@ -9,7 +9,9 @@ export async function createTestInstance(): Promise<TestDuckDB> {
   const instance = await DuckDBInstance.create(':memory:', {
     threads: '2',
     autoinstall_known_extensions: 'true',
-    autoload_known_extensions: 'true'
+    autoload_known_extensions: 'true',
+    // DuckDB 2.0 rejects `x -> …` lambdas; fail on them here first.
+    lambda_syntax: 'disable_single_arrow'
   });
   const connection = await instance.connect();
   return { instance, connection };
