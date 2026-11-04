@@ -280,9 +280,8 @@ jamais cette marque.
 À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
 fond qui porte ses territoires. Chacun prend la couleur de son statut de
 jointure, celle des catégories du panneau : joint, à vérifier (`check` et
-`ambiguous`), répété (plusieurs lignes pour un territoire), ignoré (le
-territoire qu'une valeur ignorée désignait, en gris moyen pointillé de blanc),
-sans donnée (aucune ligne, en gris clair hachuré, plus discret). Les valeurs
+`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune ligne, en gris clair hachuré, plus discret), y compris le
+territoire qu'une valeur ignorée désignait. Les valeurs
 non reconnues n'ont pas de géométrie et restent dans le panneau.
 
 - L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte
@@ -299,8 +298,7 @@ non reconnues n'ont pas de géométrie et restent dans le panneau.
   le projet.
 - `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
   fond, entre son sol et ses limites. Les répétés portent une trame de croix,
-  car rouge et vert se confondent pour un daltonien ; les deux gris se
-  distinguent aussi par leur motif. Motifs, contours et repères suivent le
+  car rouge et vert se confondent pour un daltonien. Motifs, contours et repères suivent le
   zoom de la page (`pageDisplayScale`), comme les autres marques.
 - Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
   repère ponctuel.

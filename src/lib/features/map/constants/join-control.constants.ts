@@ -9,28 +9,24 @@ export const JOIN_CONTROL_STATUSES: readonly JoinTerritoryStatus[] = [
   'matched',
   'check',
   'duplicate',
-  'ignored',
   'no_data'
 ];
 
 // The join panel's category colors, so the map reads like the panel. The
-// territories without data stay in the background, lighter than the ignored
-// ones.
+// territories without data, ignored values included, stay in the background.
 export const JOIN_CONTROL_FILL_COLORS: Record<JoinTerritoryStatus, string> = {
   matched: '#24a148',
   check: '#f1c21b',
   duplicate: '#da1e28',
-  ignored: '#a8a8a8',
   no_data: '#ebebeb'
 };
 
 // Red and green read alike under deuteranopia: repeated territories also carry
-// a motif. The two greys differ by their motif too.
+// a motif.
 export const JOIN_CONTROL_PATTERNS: Partial<
   Record<JoinTerritoryStatus, PatternPaletteConfig>
 > = {
   duplicate: { shape: 'cross', scale: 0.7, color: '#ffffff' },
-  ignored: { shape: 'circle', scale: 0.6, color: '#ffffff' },
   no_data: {
     shape: 'line',
     angle: 45,

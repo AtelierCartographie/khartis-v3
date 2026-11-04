@@ -853,12 +853,8 @@ describe('join status per basemap entity', () => {
     const options = { excludedValues: ['Marseille'] };
     await finalizeJoin(dataset, basemap, 'geo', Duck, options);
 
-    // Lyon also names an ignored value, yet another row still joins it.
     const statuses = byTerritory(
-      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck, {
-        ...options,
-        ignoredBasemapValues: ['Marseille', 'Lyon']
-      })
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck, options)
     );
 
     expect(Object.keys(statuses).sort()).toEqual([
@@ -908,7 +904,7 @@ describe('join status per basemap entity', () => {
     expect(statuses.MA).toEqual({
       territoryId: 'MA',
       territoryName: 'Marseille',
-      status: 'ignored',
+      status: 'no_data',
       rowCount: 0,
       dataValues: [],
       valueCount: 0
