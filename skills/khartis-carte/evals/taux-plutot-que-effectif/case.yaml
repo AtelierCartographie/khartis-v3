@@ -1,0 +1,4 @@
+schema_version: '1.1'
+name: taux-plutot-que-effectif
+expected_outcome: |
+  Une choroplèthe (aplats en classes) du taux de chômage, pas des effectifs ; les étapes de Khartis avec ses vrais libellés ; la source demandée plutôt qu'inventée ; aucune demande de coller tout le tableau.
