@@ -48,6 +48,7 @@
   import {
     type CalendarStep,
     formatCalendarBoundary,
+    inferCalendarGranularity,
     listCalendarStepOptions,
     parseCalendarBoundary
   } from '$lib/features/commons/utils/calendar-breaks.utils';
@@ -153,7 +154,8 @@
       ? listCalendarStepOptions(
           calendarExtent.min,
           calendarExtent.max,
-          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+          currentBreakpoint
         ).map((step) => ({
           id: toCalendarStepId(step),
           text: formatCalendarStepName(step)
@@ -169,6 +171,15 @@
     return role === 'end'
       ? formatCalendarBoundary(value - DAY_MS, undefined, resolveLocale())
       : formatCalendarBoundary(value, currentCalendarStep, resolveLocale());
+  }
+
+  // The pivot shows at its own precision: a pivot on 10 May never reads as the year alone.
+  function formatCalendarPivot(value: number): string {
+    return formatCalendarBoundary(
+      value,
+      inferCalendarGranularity([value]),
+      resolveLocale()
+    );
   }
 
   function parseCalendarBound(text: string): number | null {
@@ -365,16 +376,17 @@
 
     const { actualClassCount, colors, normalizedMethod, result } = computation;
 
-    // A calendar step sets its own class count: fewer classes than requested is no loss.
-    discretizationNote = result.calendarStep
-      ? null
-      : resolveDiscretizationNote({
-          method: normalizedMethod,
-          requestedClassCount: computation.requestedClassCount,
-          actualClassCount,
-          naturalClassCount: result.naturalClassCount,
-          emptyClassCount: result.counts.filter((count) => count === 0).length
-        });
+    // A calendar step or manual dates set their own class count: fewer classes than requested is no loss.
+    discretizationNote =
+      result.calendarStep && normalizedMethod !== ClassificationMethod.KMEANS
+        ? null
+        : resolveDiscretizationNote({
+            method: normalizedMethod,
+            requestedClassCount: computation.requestedClassCount,
+            actualClassCount,
+            naturalClassCount: result.naturalClassCount,
+            emptyClassCount: result.counts.filter((count) => count === 0).length
+          });
     currentCalendarStep = result.calendarStep;
     calendarExtent = result.calendarStep
       ? { min: result.min, max: result.max }
@@ -653,6 +665,10 @@
 
   function handleMethodChange(method: ClassificationMethod) {
     currentMethod = method;
+    // Back on calendar steps, the step is chosen again for the current class count.
+    if (method === ClassificationMethod.CALENDAR) {
+      currentCalendarStep = undefined;
+    }
     currentNumClasses = resolveRequestedClassCount(
       normalizeClassificationMethod(method),
       method === ClassificationMethod.HEAD_TAIL
@@ -773,7 +789,8 @@
       ? listCalendarStepOptions(
           calendarExtent.min,
           calendarExtent.max,
-          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+          DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+          currentBreakpoint
         ).find((step) => toCalendarStepId(step) === id)
       : undefined;
     if (!option) return;
@@ -825,6 +842,7 @@
             oncalendarstepchange={handleCalendarStepChange}
             isDateValue={isDateValue}
             formatBound={isDateValue ? formatCalendarBound : undefined}
+            formatBreakpoint={isDateValue ? formatCalendarPivot : undefined}
             parseBound={isDateValue ? parseCalendarBound : undefined}
             classCountMax={currentMethod === ClassificationMethod.HEAD_TAIL
               ? headTailClassCountMax

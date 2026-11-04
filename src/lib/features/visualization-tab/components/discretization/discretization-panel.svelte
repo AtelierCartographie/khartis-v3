@@ -66,6 +66,7 @@
     oncalendarstepchange?: (id: string) => void;
     formatBound?: (value: number, role: 'start' | 'end') => string;
     parseBound?: (text: string) => number | null;
+    formatBreakpoint?: (value: number) => string;
     onmethodchange?: (method: ClassificationMethod) => void;
     onclasseschange?: (num: number) => void;
     onbreakpointchange?: (value: number | null) => void;
@@ -98,6 +99,7 @@
     oncalendarstepchange,
     formatBound,
     parseBound,
+    formatBreakpoint,
     onmethodchange,
     onclasseschange,
     onbreakpointchange,
@@ -130,7 +132,11 @@
   function getMethodDescription(
     methodValue: string | null | undefined
   ): string {
-    return METHOD_DESCRIPTIONS[normalizePanelMethod(methodValue)]();
+    const normalized = normalizePanelMethod(methodValue);
+    if (isDateValue && normalized === ClassificationMethod.KMEANS) {
+      return m.discretization_desc_kmeans_dates();
+    }
+    return METHOD_DESCRIPTIONS[normalized]();
   }
 
   const maxHistogramCount = $derived.by(() => {
@@ -180,7 +186,16 @@
       breakpointValue > dataMin &&
       breakpointValue < dataMax
   );
-  const canUseBreakpointPosition = $derived(isBreakpointValueValid);
+  // On dates the step (or the typed bounds) places the pivot; only k-means splits its classes around it.
+  const breakpointLabel = $derived(
+    isDateValue
+      ? m.discretization_breakpoint_date()
+      : m.discretization_breakpoint_value()
+  );
+  const canUseBreakpointPosition = $derived(
+    isBreakpointValueValid &&
+      (!isDateValue || method === ClassificationMethod.KMEANS)
+  );
   const breakpointSliderValue = $derived(
     resolveBreakpointLowerClassCount(numClasses, breakpointLowerClassCount)
   );
@@ -188,7 +203,7 @@
   let validationErrors = $state<string[]>([]);
   let breakpointInputValue = $derived(
     breakpointValue !== null && Number.isFinite(breakpointValue)
-      ? String(breakpointValue)
+      ? (formatBreakpoint?.(breakpointValue) ?? String(breakpointValue))
       : ''
   );
 
@@ -258,8 +273,13 @@
       return;
     }
 
-    const parsed = Number(rawValue);
-    if (Number.isFinite(parsed) && parsed > dataMin && parsed < dataMax) {
+    const parsed = parseBound ? parseBound(rawValue) : Number(rawValue);
+    if (
+      parsed !== null &&
+      Number.isFinite(parsed) &&
+      parsed > dataMin &&
+      parsed < dataMax
+    ) {
       breakpointValue = parsed;
       onbreakpointchange?.(parsed);
     }
@@ -371,6 +391,10 @@
           text={m.discretization_method_calendar()}
         />
         <SelectItem
+          value={ClassificationMethod.KMEANS}
+          text={m.discretization_method_kmeans()}
+        />
+        <SelectItem
           value={ClassificationMethod.MANUAL}
           text={m.discretization_method_manual()}
         />
@@ -462,19 +486,23 @@
     </div>
   {/if}
 
-  {#if showBreakpointControls && !isDateValue}
+  {#if showBreakpointControls}
     <div class="section breakpoint-section">
       <div class="breakpoint-row">
         <div class="breakpoint-input-col">
           <p class="input-label">
-            {m.discretization_breakpoint_value()}
-            <InfoPopover text={m.discretization_breakpoint_info()} />
+            {breakpointLabel}
+            <InfoPopover
+              text={isDateValue
+                ? m.discretization_breakpoint_date_info()
+                : m.discretization_breakpoint_info()}
+            />
           </p>
           <TextInput
             id="breakpoint-value"
             size="sm"
             hideLabel
-            labelText={m.discretization_breakpoint_value()}
+            labelText={breakpointLabel}
             placeholder={m.discretization_none_placeholder()}
             value={breakpointInputValue}
             on:input={handleBreakpointValueInput}
