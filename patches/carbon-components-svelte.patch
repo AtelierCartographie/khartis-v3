@@ -1,8 +1,8 @@
 diff --git a/src/Select/SelectItem.svelte b/src/Select/SelectItem.svelte
-index abedf3f130586469ab463903bf16ad84176c31c0..17872eab321e00fe29f5a94eade6e0ebb8b26c7c 100644
+index 94869dd2c58553e438b3d2ce047e05e8eb1b26f4..653a0fc9d40664cbb6d8b312f020bfb8535723d6 100644
 --- a/src/Select/SelectItem.svelte
 +++ b/src/Select/SelectItem.svelte
-@@ -42,21 +42,17 @@
+@@ -20,21 +20,17 @@
    const id = uniqueId();
    const ctx =
      getContext("carbon:Select") || getContext("carbon:TimePickerSelect");
@@ -26,21 +26,12 @@ index abedf3f130586469ab463903bf16ad84176c31c0..17872eab321e00fe29f5a94eade6e0eb
        ctx?.syncNativeSelectValue?.();
      };
    });
-diff --git a/src/ComboBox/ComboBox.svelte b/src/ComboBox/ComboBox.svelte
---- a/src/ComboBox/ComboBox.svelte
-+++ b/src/ComboBox/ComboBox.svelte
-@@ -754,7 +754,6 @@
-   <ListBox
-     class={comboBoxListBoxClass}
-     id={comboId}
--    aria-label={ariaLabel}
-     aria-disabled={readonly || undefined}
-     {disabled}
-     invalid={showInvalid}
 diff --git a/src/Slider/Slider.svelte b/src/Slider/Slider.svelte
+index 47698528ad69be3534faa02d742bc10167200b8e..b11b34ebe8823fd0a73d74e14da2f4244b786914 100644
 --- a/src/Slider/Slider.svelte
 +++ b/src/Slider/Slider.svelte
-@@ -225,7 +225,7 @@
+@@ -193,7 +193,7 @@
+   on:mouseleave
  >
    <label
 -    for={inputId}
@@ -48,4 +39,3 @@ diff --git a/src/Slider/Slider.svelte b/src/Slider/Slider.svelte
      id={labelId}
      class:bx--label={true}
      class:bx--label--disabled={disabled}
-     class:bx--visually-hidden={hideLabel}

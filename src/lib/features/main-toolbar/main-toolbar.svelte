@@ -32,19 +32,19 @@
   import { Visualization as VizualisationTab } from '$lib/features/visualization-tab';
   import { mainToolbarActions } from './stores/main-toolbar.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     motionDuration,
+    PANEL_EASING,
+    PANEL_MOTION_MS,
     trackStepDirection
   } from '$lib/features/commons/utils/step-transition.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
   let panelElement = $state<HTMLElement | null>(null);
-
-  const PANEL_MOTION_MS = 300;
-  const PANEL_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
 
   // Habillage slides the panel out. It keeps the width it had, rather than
   // the collapsed state the step sets, so that it does not shrink first.
@@ -280,7 +280,9 @@
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
     {@const canVisualizeNow =
-      dataTabStore.isReadyForVisualization || isAttachedTable}
+      (dataTabStore.isReadyForVisualization || isAttachedTable) &&
+      joinControlStore.getClearedValues(datasetsStore.selectedDatasetId ?? '')
+        .size === 0}
 
     <footer
       class={clsx(

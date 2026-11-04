@@ -6,6 +6,7 @@ import type {
   PrimitiveFilter,
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
 
 export type DeckDataRow = Record<string, unknown>;
 
@@ -21,11 +22,28 @@ export interface GeometryInfo {
 
 export type RGBColor = [number, number, number];
 
+export interface TooltipColumn {
+  label: string;
+  value: string;
+}
+
 export interface TooltipEntry {
   key: string;
   value: string;
   /** The column drives one of the hovered layer's visualizations. */
   isVizColumn?: boolean;
+  /** A heading's value drawn as a join category count. */
+  tone?: JoinCategoryTone;
+  /** The fields of a `columns` entry, side by side like a join table row. */
+  columns?: TooltipColumn[];
+  /**
+   * A heading (key in the accent color, then its value), a subtitle (the key
+   * alone, muted), a divider, or fields side by side, instead of a key/value
+   * row.
+   */
+  role?: 'heading' | 'subtitle' | 'divider' | 'columns';
+  /** Shown only once the inspector is pinned. */
+  pinnedOnly?: boolean;
 }
 
 export interface OrthographicMainViewState {

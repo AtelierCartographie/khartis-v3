@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dataTabStore } from './data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
@@ -57,16 +59,32 @@ describe('[S06] dataTabStore — workflow mode detection', () => {
     expect(dataTabStore.stepNames).toEqual(['control', 'enrich']);
   });
 
-  it('reports "tabular-gps" when GPS coordinate columns are present', () => {
+  it('should report "tabular-gps" when GPS columns are geolocated by coordinates', () => {
     setSelected({
       geometry: null,
       columns: [],
       geoDetection: { gpsCoordinates: { latitude: 'lat', longitude: 'lon' } }
     });
+    dataTabActions.setGeolocationState({
+      geoReference: GeoreferenceType.COORDINATES
+    });
     expect(dataTabStore.effectiveWorkflowMode).toBe('tabular-gps');
     expect(dataTabStore.isTabularGPSMode).toBe(true);
     expect(dataTabStore.stepCount).toBe(3);
     expect(dataTabStore.stepNames).toEqual(['control', 'geolocate', 'basemap']);
+  });
+
+  it('should report "tabular" when GPS columns are geolocated by entities', () => {
+    setSelected({
+      geometry: null,
+      columns: [],
+      geoDetection: { gpsCoordinates: { latitude: 'lat', longitude: 'lon' } }
+    });
+    dataTabActions.setGeolocationState({
+      geoReference: GeoreferenceType.ENTITIES
+    });
+    expect(dataTabStore.effectiveWorkflowMode).toBe('tabular');
+    expect(dataTabStore.stepNames).toEqual(['control', 'geolocate', 'join']);
   });
 
   it('reports "tabular" as default for CSV without geometry or GPS', () => {
