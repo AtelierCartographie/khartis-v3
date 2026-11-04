@@ -100,6 +100,16 @@
   --khartis-additions-text-disabled-suggestions: #003a6d40;
   --khartis-additions-icon-disabled-suggestions: #003a6d40;
 
+  /* Khartis additions - Join categories, shared by the join panel and the map */
+  --khartis-additions-join-label: #00539a;
+  --khartis-additions-join-row-hover: #f4f4f4;
+  --khartis-additions-join-success: #24a148;
+  --khartis-additions-join-success-bg: #defbe6;
+  --khartis-additions-join-warning: #f1c21b;
+  --khartis-additions-join-warning-bg: #fcf4d6;
+  --khartis-additions-join-error: #da1e28;
+  --khartis-additions-join-error-bg: #fff1f1;
+
   /* Tag colors - Purple */
   --tag-purple-tag-background: #e8daff;
   --tag-purple-tag-border-operational: #be95ff;
@@ -193,6 +203,15 @@
   --khartis-additions-layer-hover-02-suggestions: #01315b;
   --khartis-additions-text-disabled-suggestions: #82cfff66;
   --khartis-additions-icon-disabled-suggestions: #82cfff66;
+
+  /* Khartis additions - Join categories (dark theme) */
+  --khartis-additions-join-label: #78a9ff;
+  --khartis-additions-join-row-hover: #262626;
+  --khartis-additions-join-success: #42be65;
+  --khartis-additions-join-success-bg: #022d0d;
+  --khartis-additions-join-warning-bg: #302400;
+  --khartis-additions-join-error: #fa4d56;
+  --khartis-additions-join-error-bg: #2d0709;
 
   /* Tag colors - Purple (dark theme) */
   --tag-purple-tag-background: #3e1d66;

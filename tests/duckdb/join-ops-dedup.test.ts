@@ -18,13 +18,16 @@ import {
 } from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
 import {
+  applyJoinCorrections,
   computeJoinSynthesis,
   computeJoinStats,
   finalizeJoin,
   getJoinedBasemapValues,
   getJoinedEntitiesPage,
+  getJoinTerritoryStatuses,
   invalidateSimilarityCache,
-  type DuckDBClientForJoin
+  type DuckDBClientForJoin,
+  type JoinTerritoryStatusRow
 } from '$lib/features/duckdb/orchestrator/join-ops';
 import {
   JOINED_BASEMAP_COLUMN,
@@ -791,5 +794,226 @@ describe('exact_claimed_ids deduplication', () => {
       { excludedValues: ['Lyon', '69123'] }
     );
     expect(joinedValuesExcluded).not.toContain('Lyon');
+  });
+});
+
+describe('join status per basemap entity', () => {
+  const STRING_COLUMN = DuckDBSimplifiedType.STRING;
+  const basemap: BasemapMetadata = {
+    ...FAKE_BASEMAP_METADATA,
+    display_id_fr: 'nom',
+    display_id_en: 'nom'
+  };
+
+  function byTerritory(
+    rows: JoinTerritoryStatusRow[]
+  ): Record<string, JoinTerritoryStatusRow> {
+    return Object.fromEntries(rows.map((row) => [row.territoryId, row]));
+  }
+
+  beforeEach(async () => {
+    invalidateSimilarityCache();
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE basemap_attributes (
+        id VARCHAR, raw VARCHAR, variant VARCHAR,
+        normalized VARCHAR, basemap VARCHAR, basemap_count INTEGER
+      )`
+    );
+    await run(
+      db,
+      `INSERT INTO basemap_attributes
+      SELECT id, raw, variant, normalize_text_join(raw), '${TEST_BASEMAP}', 8
+      FROM (VALUES
+        ('LY', 'Lyon', 'nom'), ('LY', '69123', 'code'),
+        ('PA', 'Paris', 'nom'), ('PA', '75056', 'code'),
+        ('BO', 'Bordeaux', 'nom'), ('BO', '33063', 'code'),
+        ('TO', 'Toulouse', 'nom'), ('TO', '31555', 'code'),
+        ('MA', 'Marseille', 'nom'), ('MA', '13055', 'code'),
+        ('NA', 'Nantes', 'nom'), ('NA', '44109', 'code'),
+        ('SC1', 'Sainte-Colombe', 'nom'), ('SC1', '05144', 'code'),
+        ('SC2', 'Sainte-Colombe', 'nom'), ('SC2', '33397', 'code')
+      ) AS entities(id, raw, variant)`
+    );
+  });
+
+  it('should grade every basemap entity when the join is finalized', async () => {
+    await run(db, `CREATE OR REPLACE TABLE villes (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO villes VALUES
+        ('Lyon'), ('Paris'), ('Paris'), ('Bordaux'), ('Toulouse'),
+        ('31555'), ('Sainte-Colombe'), ('Marseille'), ('Atlantide')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('villes', [
+      { name: 'geo', type_simple: STRING_COLUMN }
+    ] as DuckDBDataset['columns']);
+    const options = { excludedValues: ['Marseille'] };
+    await finalizeJoin(dataset, basemap, 'geo', Duck, options);
+
+    const statuses = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck, options)
+    );
+
+    expect(Object.keys(statuses).sort()).toEqual([
+      'BO',
+      'LY',
+      'MA',
+      'NA',
+      'PA',
+      'SC1',
+      'SC2',
+      'TO'
+    ]);
+    expect(statuses.LY).toEqual({
+      territoryId: 'LY',
+      territoryName: 'Lyon',
+      status: 'matched',
+      rowCount: 1,
+      dataValues: ['Lyon'],
+      valueCount: 1
+    });
+    // A typo joined through a fuzzy match is to verify.
+    expect(statuses.BO).toMatchObject({
+      territoryName: 'Bordeaux',
+      status: 'check',
+      rowCount: 1,
+      dataValues: ['Bordaux']
+    });
+    // An exact name shared by two entities joins one of them, still to verify.
+    expect(
+      [statuses.SC1.status, statuses.SC2.status].sort((a, b) =>
+        a.localeCompare(b)
+      )
+    ).toEqual(['check', 'no_data']);
+    // Several rows on one entity, from one repeated value or from two values.
+    expect(statuses.PA).toMatchObject({
+      status: 'duplicate',
+      rowCount: 2,
+      dataValues: ['Paris']
+    });
+    expect(statuses.TO).toMatchObject({
+      status: 'duplicate',
+      rowCount: 2,
+      dataValues: ['31555', 'Toulouse'],
+      valueCount: 2
+    });
+    // Ignored and absent entities carry no row, named by the display variant.
+    expect(statuses.MA).toEqual({
+      territoryId: 'MA',
+      territoryName: 'Marseille',
+      status: 'no_data',
+      rowCount: 0,
+      dataValues: [],
+      valueCount: 0
+    });
+    expect(statuses.NA.status).toBe('no_data');
+  });
+
+  it('should join a corrected value to the picked entity without rewriting the source data', async () => {
+    await run(db, `CREATE OR REPLACE TABLE villes_corrigees (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO villes_corrigees VALUES ('Lyon'), ('Atlantide'), ('Bordaux')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('villes_corrigees', [
+      { name: 'geo', type_simple: STRING_COLUMN }
+    ] as DuckDBDataset['columns']);
+    // An unrecognized value picks an entity; a value to verify picks another
+    // one than the suggestion.
+    applyJoinCorrections(
+      dataset,
+      'geo',
+      { Atlantide: 'Nantes', Bordaux: 'Toulouse' },
+      Duck
+    );
+    await finalizeJoin(dataset, basemap, 'geo', Duck);
+
+    const statuses = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck)
+    );
+    expect(statuses.NA).toMatchObject({
+      status: 'matched',
+      dataValues: ['Atlantide']
+    });
+    expect(statuses.TO).toMatchObject({
+      status: 'matched',
+      dataValues: ['Bordaux']
+    });
+    expect(statuses.BO.status).toBe('no_data');
+
+    const sourceValues = (
+      await db.connection.runAndReadAll(
+        `SELECT geo FROM villes_corrigees ORDER BY geo`
+      )
+    ).getRowObjects();
+    expect(sourceValues.map((row) => row.geo)).toEqual([
+      'Atlantide',
+      'Bordaux',
+      'Lyon'
+    ]);
+
+    // Correcting a value to itself hands it back to scoring.
+    applyJoinCorrections(dataset, 'geo', { Bordaux: 'Bordaux' }, Duck);
+    await finalizeJoin(dataset, basemap, 'geo', Duck);
+    const rescored = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck)
+    );
+    expect(rescored.BO.status).toBe('check');
+    expect(rescored.NA.status).toBe('matched');
+
+    // Picks not applied yet move a value, or leave it unjoined.
+    const pending = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck, {
+        pendingMappings: { Bordaux: 'Marseille', Lyon: '' }
+      })
+    );
+    expect(pending.MA).toMatchObject({
+      status: 'check',
+      dataValues: ['Bordaux']
+    });
+    expect(pending.BO.status).toBe('no_data');
+    expect(pending.LY.status).toBe('no_data');
+  });
+
+  it('should read the whole table when a table filter is active', async () => {
+    await run(db, `CREATE OR REPLACE TABLE villes_filtrees (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO villes_filtrees VALUES ('Lyon'), ('Bordaux'), ('Nantes')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('villes_filtrees', [
+      { name: 'geo', type_simple: STRING_COLUMN }
+    ] as DuckDBDataset['columns']);
+    setFilters('villes_filtrees', [
+      {
+        id: 'lyon',
+        label: 'geo = Lyon',
+        column: 'geo',
+        operator: FilterOperatorEnum.EQUALS,
+        value: 'Lyon',
+        sql: `"geo" = 'Lyon'`
+      }
+    ]);
+
+    try {
+      await finalizeJoin(dataset, basemap, 'geo', Duck);
+      const statuses = byTerritory(
+        await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck)
+      );
+
+      expect(statuses.LY.status).toBe('matched');
+      expect(statuses.BO.status).toBe('check');
+      expect(statuses.NA.status).toBe('matched');
+      expect(statuses.PA.status).toBe('no_data');
+    } finally {
+      clearFiltersForTable('villes_filtrees');
+    }
   });
 });

@@ -1,6 +1,8 @@
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
 
 export type DataTabStep =
   'control' | 'geolocate' | 'join' | 'basemap' | 'enrich';
@@ -50,7 +52,9 @@ function getEffectiveWorkflowMode(): WorkflowMode {
   if (selectedDataset.geometry) {
     return 'geographic';
   }
+  // Coordinates the user geolocates by entities instead leave a plain table.
   if (
+    dataTabState.geolocation.geoReference === GeoreferenceType.COORDINATES &&
     hasGPSCoordinateColumns(
       selectedDataset.columns,
       selectedDataset.geoDetection
