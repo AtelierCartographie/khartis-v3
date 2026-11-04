@@ -27,6 +27,9 @@
   import ProjectTab from './components/project-tab.svelte';
   import TryWithExample from './components/try-with-example.svelte';
   import { KEY } from '../commons/constants/dom.constants';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { buildLastProjectRestoreFallbackUrl } from '$lib/features/commons/utils/pwa-reset';
 
   function linkDialogToTitle(node: HTMLElement) {
     const dialog = node.querySelector<HTMLElement>('[role="dialog"]');
@@ -75,6 +78,40 @@
     onClose?.();
   }
 
+  // While a project opens, the modal stays: the user can only stop it.
+  function handleModalClose(event: CustomEvent): void {
+    if (createProjectState.isOpeningProject) {
+      event.preventDefault();
+      return;
+    }
+    handleClose();
+  }
+
+  const STOP_OPENING_DELAY_MS = 8_000;
+  let canStopOpening = $state(false);
+
+  $effect(() => {
+    if (!createProjectState.isOpeningProject) {
+      canStopOpening = false;
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      canStopOpening = true;
+    }, STOP_OPENING_DELAY_MS);
+    return () => clearTimeout(timeoutId);
+  });
+
+  // Opening may hang in the data engine, so stopping reloads Khartis without
+  // restoring that project, back on this modal.
+  function stopOpeningProject(): void {
+    window.location.replace(
+      buildLastProjectRestoreFallbackUrl(
+        window.location.href,
+        projectStore.currentProject?.id
+      )
+    );
+  }
+
   function selectTile(index: number) {
     paneShift =
       index < createProjectState.selectedTab ? -PANE_SHIFT : PANE_SHIFT;
@@ -111,7 +148,11 @@
   data-testid="create-project-modal"
   use:linkDialogToTitle
 >
-  <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
+  <ComposedModal
+    preventCloseOnClickOutside
+    open={open}
+    on:close={handleModalClose}
+  >
     <ModalHeader title={m.create_project_welcome()} iconDescription={m.close()}>
       <div class="mb-3"></div>
       <p class="text-grey">
@@ -216,8 +257,19 @@
 
         {#if createProjectState.isOpeningProject}
           <div class="opening-overlay" role="status">
-            <Loading withOverlay={false} small />
-            <span>{m.create_project_opening_project()}</span>
+            <div class="opening-status">
+              <Loading withOverlay={false} small />
+              <span>{m.create_project_opening_project()}</span>
+            </div>
+            {#if canStopOpening}
+              <Button
+                kind="tertiary"
+                size="small"
+                on:click={stopOpeningProject}
+              >
+                {m.create_project_stop_opening()}
+              </Button>
+            {/if}
           </div>
         {/if}
 
@@ -337,12 +389,19 @@
     inset: 0;
     z-index: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--cds-spacing-03);
+    gap: var(--cds-spacing-05);
     background: color-mix(in srgb, var(--cds-background) 85%, transparent);
     color: var(--cds-text-primary);
     animation: opening-fade-in 200ms 150ms both;
+  }
+
+  .opening-status {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
   }
 
   @keyframes opening-fade-in {
