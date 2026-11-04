@@ -18,6 +18,7 @@ import {
 } from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
 import {
+  applyJoinCorrections,
   computeJoinSynthesis,
   computeJoinStats,
   finalizeJoin,
@@ -913,6 +914,74 @@ describe('join status per basemap entity', () => {
       valueCount: 0
     });
     expect(statuses.NA.status).toBe('no_data');
+  });
+
+  it('should join a corrected value to the picked entity without rewriting the source data', async () => {
+    await run(db, `CREATE OR REPLACE TABLE villes_corrigees (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO villes_corrigees VALUES ('Lyon'), ('Atlantide'), ('Bordaux')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('villes_corrigees', [
+      { name: 'geo', type_simple: STRING_COLUMN }
+    ] as DuckDBDataset['columns']);
+    // An unrecognized value picks an entity; a value to verify picks another
+    // one than the suggestion.
+    applyJoinCorrections(
+      dataset,
+      'geo',
+      { Atlantide: 'Nantes', Bordaux: 'Toulouse' },
+      Duck
+    );
+    await finalizeJoin(dataset, basemap, 'geo', Duck);
+
+    const statuses = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck)
+    );
+    expect(statuses.NA).toMatchObject({
+      status: 'matched',
+      dataValues: ['Atlantide']
+    });
+    expect(statuses.TO).toMatchObject({
+      status: 'matched',
+      dataValues: ['Bordaux']
+    });
+    expect(statuses.BO.status).toBe('no_data');
+
+    const sourceValues = (
+      await db.connection.runAndReadAll(
+        `SELECT geo FROM villes_corrigees ORDER BY geo`
+      )
+    ).getRowObjects();
+    expect(sourceValues.map((row) => row.geo)).toEqual([
+      'Atlantide',
+      'Bordaux',
+      'Lyon'
+    ]);
+
+    // Correcting a value to itself hands it back to scoring.
+    applyJoinCorrections(dataset, 'geo', { Bordaux: 'Bordaux' }, Duck);
+    await finalizeJoin(dataset, basemap, 'geo', Duck);
+    const rescored = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck)
+    );
+    expect(rescored.BO.status).toBe('check');
+    expect(rescored.NA.status).toBe('matched');
+
+    // Picks not applied yet move a value, or leave it unjoined.
+    const pending = byTerritory(
+      await getJoinTerritoryStatuses(dataset, basemap, 'geo', Duck, {
+        pendingMappings: { Bordaux: 'Marseille', Lyon: '' }
+      })
+    );
+    expect(pending.MA).toMatchObject({
+      status: 'check',
+      dataValues: ['Bordaux']
+    });
+    expect(pending.BO.status).toBe('no_data');
+    expect(pending.LY.status).toBe('no_data');
   });
 
   it('should read the whole table when a table filter is active', async () => {

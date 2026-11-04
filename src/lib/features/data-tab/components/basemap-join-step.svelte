@@ -1290,15 +1290,8 @@
   ): Record<string, string> {
     const merged: Record<string, string> = { ...(existing ?? {}) };
     for (const [original, corrected] of Object.entries(addition)) {
-      const previous = merged[original];
-      if (previous && previous !== corrected) {
-        merged[previous] = corrected;
-        delete merged[original];
-      } else if (corrected === original) {
-        delete merged[original];
-      } else {
-        merged[original] = corrected;
-      }
+      if (corrected === original) delete merged[original];
+      else merged[original] = corrected;
     }
     return merged;
   }
@@ -1812,6 +1805,22 @@
           );
           if (controller.signal.aborted || !datasetReady) return;
 
+          // Corrections live beside the source data, which keeps its values:
+          // every later grading or finalization of this column reads them.
+          const persistedCorrections =
+            getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
+          if (
+            persistedCorrections &&
+            Object.keys(persistedCorrections).length > 0
+          ) {
+            await duckDBOrchestrator.applyJoinCorrections(
+              resolvedDatasetId,
+              linkedVariableName,
+              persistedCorrections
+            );
+            if (controller.signal.aborted) return;
+          }
+
           const joinContext = `${resolvedDatasetId}::${basemap.file}`;
           if (
             isCatalogJoinFinalizedForBasemap(
@@ -1841,20 +1850,6 @@
 
           const loadingRequestId = beginJoinLoading();
           try {
-            const persistedCorrections =
-              getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
-            if (
-              persistedCorrections &&
-              Object.keys(persistedCorrections).length > 0
-            ) {
-              await duckDBOrchestrator.applyJoinCorrections(
-                resolvedDatasetId,
-                linkedVariableName,
-                persistedCorrections
-              );
-              if (controller.signal.aborted) return;
-            }
-
             const stats = await duckDBOrchestrator.computeJoinStats(
               resolvedDatasetId,
               basemap,

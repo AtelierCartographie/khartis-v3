@@ -21,7 +21,6 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
 }));
 
 const {
-  applyJoinCorrections,
   computeJoinSynthesis,
   finalizeJoin,
   getJoinedArrowTable,
@@ -314,34 +313,5 @@ describe('join-ops similarity cache keying and eviction', () => {
 
     await computeJoinSynthesis(createDataset('table_a'), 'geo', duck);
     expect(creates).toHaveLength(3);
-  });
-});
-
-describe('join-ops correction cleanup', () => {
-  it('drops the temporary correction table when the update fails', async () => {
-    const queries: string[] = [];
-    const updateError = new Error('update failed');
-    const duck = {
-      query: vi.fn(async (sql: string) => {
-        queries.push(sql);
-        if (sql.includes('UPDATE "user_data"')) {
-          throw updateError;
-        }
-        return [];
-      })
-    } satisfies DuckDBClientForJoin;
-
-    await expect(
-      applyJoinCorrections(
-        createDataset('user_data'),
-        'geo',
-        { France: 'FR' },
-        duck
-      )
-    ).rejects.toThrow(updateError);
-
-    expect(queries.at(-1)).toMatch(
-      /^DROP TABLE IF EXISTS "corrections_[a-f0-9_]+"/
-    );
   });
 });

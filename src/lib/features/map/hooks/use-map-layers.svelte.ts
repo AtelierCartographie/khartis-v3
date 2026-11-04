@@ -115,10 +115,7 @@ import { resolveRepresentativePointTableName } from '../utils/representative-poi
 import { getBasemapCentroidsTableName } from '../services/basemap-import.service';
 import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
-import {
-  type JoinControlCounts,
-  joinControlStore
-} from '../stores/join-control.store.svelte';
+import { joinControlStore } from '../stores/join-control.store.svelte';
 import {
   createJoinControlHoverLayers,
   createJoinControlLayers,
@@ -126,6 +123,7 @@ import {
   type JoinControlHoverSource,
   type JoinControlLayers
 } from '../layers/join-control-layers';
+import { buildPendingJoinMappings } from '../utils/join-control.utils';
 
 const JOIN_CONTROL_LAYER_PREFIX = 'join-control-';
 
@@ -331,6 +329,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       ),
       ignoredBasemapValues: dataTabState.basemapJoin.ignoredEntities.flatMap(
         (entity) => (entity.basemapValue ? [entity.basemapValue] : [])
+      ),
+      pendingMappings: buildPendingJoinMappings(
+        dataTabState.basemapJoin.joinMappings,
+        joinControlStore.getClearedValues(datasetId)
       )
     });
     if (!statuses || joinControlStore.getRevealProgress(datasetId) === 0) {
@@ -1662,7 +1664,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       }
 
       const joinControlTerritoryLayers: Layer<DeckDataRow>[] = [];
-      let joinControlCounts: JoinControlCounts | null = null;
       joinControlHoverSource = null;
 
       if (shouldRenderDatasetFallbacks) {
@@ -1766,7 +1767,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           if (joinControl) {
             joinControlTerritoryLayers.push(...joinControl.territoryLayers);
             layers.push(...joinControl.markerLayers);
-            joinControlCounts = joinControl.counts;
             joinControlHoverSource = joinControl.hoverSource;
           }
           if (
@@ -1783,8 +1783,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           }
         }
       }
-
-      joinControlStore.publishCounts(joinControlCounts);
 
       // The projected-sphere ocean mask should appear for any non-identity
       // projection driving the render — both manual overrides and a basemap's

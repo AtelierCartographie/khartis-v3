@@ -32,6 +32,7 @@
   import { Visualization as VizualisationTab } from '$lib/features/visualization-tab';
   import { mainToolbarActions } from './stores/main-toolbar.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
@@ -279,7 +280,9 @@
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
     {@const canVisualizeNow =
-      dataTabStore.isReadyForVisualization || isAttachedTable}
+      (dataTabStore.isReadyForVisualization || isAttachedTable) &&
+      joinControlStore.getClearedValues(datasetsStore.selectedDatasetId ?? '')
+        .size === 0}
 
     <footer
       class={clsx(
