@@ -1192,7 +1192,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function getAnnotationKeyboardBounds(
@@ -1305,7 +1305,7 @@
     }
 
     centeredAnnotationId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function cancelFocusedAnnotationReset(): void {
@@ -1328,6 +1328,12 @@
 
       if (dragState || resizeState || rotateState) {
         scheduleCenteredAnnotationReset(itemId);
+        return;
+      }
+
+      // Focus moving into the tool panel keeps the selection, and the page
+      // centred on it; deselecting resets the pan.
+      if (isAnnotationEditing && selectedId === itemId) {
         return;
       }
 
@@ -2834,6 +2840,12 @@
      carries its own colour and opacity inline. */
   .annotation-item[data-khartis-export-placeholder='true'] .annotation-text {
     filter: grayscale(1) opacity(0.45);
+  }
+
+  /* Outside Habillage, page texts not written yet are left out, as in exports. */
+  .annotation-overlay.non-interactive
+    .annotation-item[data-khartis-export-placeholder='true'] {
+    visibility: hidden;
   }
 
   .annotation-item.has-text-width .annotation-text {

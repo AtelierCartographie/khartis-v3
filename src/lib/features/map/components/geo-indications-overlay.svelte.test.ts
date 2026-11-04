@@ -550,7 +550,7 @@ describe('geo indications overlay dragging', () => {
     expect(container.querySelector('.scale-bar')).toBeNull();
   });
 
-  it('recenters the page when a centered geo indication loses focus', async () => {
+  it('keeps the page centred on a geo indication until its tool closes', async () => {
     geoIndicationsActions.toggleScale();
 
     const { scale } = setupGeoViewport();
@@ -562,6 +562,10 @@ describe('geo indications overlay dragging', () => {
     });
 
     await fireEvent.blur(scale);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 30 });
+
+    globalActions.setSelectedTool(undefined);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });

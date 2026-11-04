@@ -66,45 +66,58 @@
   data-testid="project-title"
   title={inputValue || m.project_placeholder()}
 >
-  <TextInput
-    light
-    size="sm"
-    labelText={m.project_title_label()}
-    hideLabel
-    value={inputValue}
-    placeholder={m.project_placeholder()}
-    on:input={handleTitleInput}
-    on:blur={handleBlur}
-    on:keydown={handleKeydown}
-    disabled={!projectStore.currentProject}
-  />
-
-  <div class="project-title-save">
-    <IconButton
-      size="small"
-      tooltipPosition="bottom"
-      tooltipAlignment="end"
-      iconDescription={m.save_tooltip()}
-      portalTooltip
-      showDisabledTooltip
-      kind="ghost"
-      icon={Save}
-      disabled={!canSave}
-      on:click={handleSave}
+  <div class="project-title-field">
+    <TextInput
+      light
+      size="sm"
+      labelText={m.project_title_label()}
+      hideLabel
+      value={inputValue}
+      placeholder={m.project_placeholder()}
+      on:input={handleTitleInput}
+      on:blur={handleBlur}
+      on:keydown={handleKeydown}
+      disabled={!projectStore.currentProject}
     />
+
+    <div class="project-title-save">
+      <IconButton
+        size="small"
+        tooltipPosition="bottom"
+        tooltipAlignment="end"
+        iconDescription={m.save_tooltip()}
+        portalTooltip
+        showDisabledTooltip
+        kind="ghost"
+        icon={Save}
+        disabled={!canSave}
+        on:click={handleSave}
+      />
+    </div>
   </div>
 </div>
 
 <style>
+  /* In the header's flow, the field and its save button centre between the
+     logo and the actions, with equal space on both sides. The left padding
+     leaves out the 2px focus border the logo link keeps. */
   .project-title {
-    position: absolute;
-    top: 9px;
-    bottom: 9px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 250px;
-    max-width: calc(100vw - 280px);
-    min-width: 140px;
+    --_gap: var(--cds-spacing-07);
+    --_save-width: 2rem;
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    min-width: 0;
+    padding-inline: calc(var(--_gap) - 2px)
+      calc(var(--_save-width) + var(--_gap));
+  }
+
+  .project-title-field {
+    position: relative;
+    width: min(100%, 40rem);
+    height: 2rem;
   }
 
   .project-title-save {
@@ -128,8 +141,8 @@
 
   @media (max-width: 1023px) {
     .project-title {
-      width: 180px;
-      max-width: calc(100vw - 176px);
+      --_gap: var(--cds-spacing-05);
+      --_save-width: 0px;
     }
 
     .project-title-save {
@@ -138,15 +151,6 @@
   }
 
   @media (max-width: 639px) {
-    .project-title {
-      left: calc(3rem + var(--cds-spacing-05) + 68px + var(--cds-spacing-04));
-      right: 6rem;
-      width: auto;
-      max-width: 168px;
-      min-width: 0;
-      transform: none;
-    }
-
     #khartis-project-title :global(input) {
       font-size: 0.75rem;
       padding-inline: var(--cds-spacing-02);

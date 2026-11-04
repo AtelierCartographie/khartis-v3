@@ -551,10 +551,10 @@
         title={m.section_suggestions()}
         open={suggestionsExpanded}
         onToggle={(expanded) => (suggestionsExpanded = expanded)}
-        titleClass="suggestions-title"
+        titleClass="suggestions-title kh-thinking-text"
       >
         {#snippet icon()}
-          <span class="suggestions-title-icon">
+          <span class="suggestions-title-icon kh-thinking-icon">
             <MagicWandFilled size={20} />
           </span>
         {/snippet}

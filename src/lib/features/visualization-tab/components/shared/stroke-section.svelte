@@ -92,7 +92,6 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     showMissingDataSection?: boolean;
-    showSliderBounds?: boolean;
     sliderInputWidth?: string;
     maxStrokeWidth?: number;
     facetsValueSlotPath?: FacetSlotPath;
@@ -123,7 +122,6 @@
     showMissingData,
     missingDataColor,
     showMissingDataSection = true,
-    showSliderBounds = true,
     sliderInputWidth = '128px',
     maxStrokeWidth = SLIDER_LIMITS.strokeWidth.max,
     facetsValueSlotPath,
@@ -396,7 +394,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -446,7 +443,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -504,7 +500,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -549,7 +544,6 @@
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
     step={SLIDER_LIMITS.opacity.step}
-    showMinMax={showSliderBounds}
     inputWidth={sliderInputWidth}
     onchange={handleStrokeOpacityChange}
   />

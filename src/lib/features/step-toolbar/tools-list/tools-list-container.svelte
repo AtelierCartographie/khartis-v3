@@ -6,7 +6,7 @@
 
 <div id="khartis-tools-list-container" class="tools-section">
   <header class="tools-header">
-    <span class="tools-title">{m.step_toolbar_tools()}</span>
+    <span>{m.step_toolbar_tools()}</span>
   </header>
 
   {@render children()}
@@ -19,17 +19,13 @@
     align-items: center;
     justify-content: center;
     padding-top: var(--cds-spacing-03);
-    padding-bottom: var(--cds-spacing-03);
-  }
-
-  .tools-title {
-    padding-bottom: var(--cds-spacing-02);
   }
 
   header span {
     color: var(--cds-text-secondary);
     font-weight: bold;
-    font-size: var(--kh-font-group);
+    font-size: calc(var(--kh-font-label) - 1px);
+    line-height: var(--kh-line-label);
   }
 
   .tools-section {

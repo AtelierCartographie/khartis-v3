@@ -123,11 +123,6 @@
     fitActiveMode();
   }
 
-  function tabTitle(index: number, isActive: boolean): string | undefined {
-    if (!isActive) return undefined;
-    return m.zoom_tab_double_click_hint(zoomShortcutModifiers);
-  }
-
   const currentZoomValue = $derived(
     activeTabIndex === 0
       ? mapInstanceStore.zoomLevel
@@ -340,12 +335,10 @@
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
       ondblclick={handleTabDoubleClick}
-      tabTitle={tabTitle}
-      tooltipPosition="top"
       className="zoom-mode-tabs"
       activeClass="active"
       fullWidthClass="full-width"
-      hideInactiveLabel={true}
+      hideInactiveLabel={false}
     />
 
     <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
@@ -738,7 +731,7 @@
     }
 
     .zoom-toolbar {
-      width: 150px;
+      width: 172px;
     }
 
     .zoom-section {
@@ -746,6 +739,11 @@
     }
 
     .zoom-value {
+      display: none;
+    }
+
+    /* Without the zoom value beside it, the reset button needs no divider. */
+    .zoom-controls::before {
       display: none;
     }
 

@@ -125,7 +125,8 @@
           iconDescription={m.tool_color_blindness()}
           icon={SettingsView}
           size="small"
-          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
+          isSelected={globalState.selectedTool ===
+            StylingTools.ColorBlindness || showColorBlindnessBadge}
           onclick={() => selectTool(StylingTools.ColorBlindness)}
           aria-describedby={showColorBlindnessBadge
             ? 'color-blindness-tool-badge'

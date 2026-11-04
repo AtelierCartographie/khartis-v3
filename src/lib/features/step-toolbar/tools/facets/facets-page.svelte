@@ -87,12 +87,7 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
-  const isVisualizationMode = $derived(
-    globalState.selectedStep === ToolbarStep.Visualizations
-  );
-  // Legends preview from the Visualizations step onward (parity with the
-  // single-map thematic view), and stay visible through Habillage/export.
-  const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
+  const isDataStep = $derived(globalState.selectedStep === ToolbarStep.Data);
   // With an independent scale, each facet owns an anchored legend rendered in
   // its cell, so the single global legend is hidden; a shared scale keeps one.
   const isIndependentScale = $derived(
@@ -133,17 +128,14 @@
   <!-- Layout items sit in the margin box, independent of the map frame, so
        they live outside the clipped map stage. -->
   <div class="layout-stage" style={layoutStageStyle}>
-    <GeoIndicationsOverlay
-      interactive={isStylingMode}
-      hidden={!isStylingMode}
-    />
+    <GeoIndicationsOverlay interactive={isStylingMode} hidden={isDataStep} />
   </div>
 
   <div class="layout-stage" style={layoutStageStyle}>
-    <LegendOverlay hidden={!showLegendPreview || isIndependentScale} />
+    <LegendOverlay hidden={isDataStep || isIndependentScale} />
   </div>
 
-  <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
+  <AnnotationOverlay interactive={isStylingMode} hidden={isDataStep} />
 </div>
 
 <style lang="scss">

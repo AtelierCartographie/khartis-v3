@@ -3,7 +3,7 @@ export const ORTHOGRAPHIC_MAP_BASE_ZOOM = 0;
 export const DEFAULT_MAP_ZOOM_PERCENT = 100;
 export const MIN_MAP_ZOOM_PERCENT = 10;
 export const MAX_MAP_ZOOM_PERCENT = 2000;
-export const MAP_ZOOM_INPUT_STEP = 10;
+export const MAP_ZOOM_INPUT_STEP = 5;
 const ZOOM_STEP_EPSILON = 1e-6;
 
 export const MIN_MAPLIBRE_ZOOM = -2;

@@ -66,6 +66,8 @@ export interface SerializedBasemapSettings {
   referenceBasemapId?: string | null;
   showLabels?: boolean;
   groupVisibility?: Record<string, boolean>;
+  /** Reference basemap opacity, 0 to 100. */
+  opacity?: number;
   mapViewState?: SerializedMapViewState;
   osmBasemap?: string | null;
 }

@@ -475,7 +475,6 @@
       max={SLIDER_LIMITS.lineOpacity.max}
       step={SLIDER_LIMITS.lineOpacity.step}
       value={opacity}
-      showMinMax
       inputWidth="128px"
       onchange={handleOpacityChange}
     />

@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
   import { Dropdown, TextInput } from 'carbon-components-svelte';
@@ -212,6 +217,11 @@
     sortMode = 'manual';
     popoverRight = toolbarWidth;
   }
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
 
   function handleClose() {
     open = false;
@@ -512,6 +522,8 @@
   <div use:portal class="categories-aspect-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="categories-aspect-popover"
       style:right={popoverRight}
       role="dialog"
@@ -596,7 +608,6 @@
                       min={1}
                       max={100}
                       value={draftCommonAspect.size}
-                      showMinMax
                       inputWidth="96px"
                       onchange={(value) =>
                         handleCommonAspectChange('size', value)}

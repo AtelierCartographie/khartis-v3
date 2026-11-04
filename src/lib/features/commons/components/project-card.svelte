@@ -73,7 +73,7 @@
   );
 
   const bottomSectionClasses = $derived(
-    clsx('pb-5 pl-5 pt-5 pr-2 bottom-section', {
+    clsx('p-5 bottom-section', {
       'variant-gray': isGrayVariant,
       'bg-light-gray color-text-01': disabled || isGrayVariant,
       'bg-pale-blue color-dark-blue':
@@ -221,7 +221,9 @@
     opacity: 1;
   }
 
+  /* Two lines kept even for a short title, so that cards share a height. */
   .title-text {
+    min-height: 2lh;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;

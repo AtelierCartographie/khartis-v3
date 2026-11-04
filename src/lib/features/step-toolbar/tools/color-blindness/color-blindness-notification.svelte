@@ -6,10 +6,10 @@
   } from 'carbon-components-svelte';
 
   let {
-    ondeactivate,
+    onopentool,
     onclose
   }: {
-    ondeactivate: () => void;
+    onopentool?: () => void;
     onclose: () => void;
   } = $props();
 </script>
@@ -23,7 +23,9 @@
   hideCloseButton={false}
   on:close={onclose}
 >
-  <NotificationActionButton on:click={ondeactivate}>
-    {m.colorblind_deactivate()}
-  </NotificationActionButton>
+  {#if onopentool}
+    <NotificationActionButton on:click={onopentool}>
+      {m.colorblind_open_tool()}
+    </NotificationActionButton>
+  {/if}
 </InlineNotification>

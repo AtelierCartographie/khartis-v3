@@ -533,8 +533,6 @@
               step={1}
               disabled={!canUseBreakpointPosition}
               hideTextInput
-              minLabel=""
-              maxLabel=""
               on:input={(e) => scheduleBreakpointPosition(e.detail)}
             />
           </div>
@@ -642,10 +640,6 @@
     gap: var(--kh-gap-label);
     flex: 1;
     min-width: 0;
-  }
-
-  .breakpoint-slider-col :global(.bx--slider__range-label) {
-    display: none;
   }
 
   .palette-strip {

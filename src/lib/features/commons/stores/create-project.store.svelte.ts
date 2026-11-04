@@ -55,6 +55,7 @@ const REQUIRED_SHAPEFILE_EXTENSIONS = ['.shp', '.shx', '.dbf'];
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
+  isOpeningProject: false,
 
   newProject: {
     uploadedFiles: [],
@@ -132,6 +133,10 @@ function nextPastedDataName(): string {
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
     createProjectInternalState.selectedTab = tab;
+  },
+
+  setOpeningProject(opening: boolean): void {
+    createProjectInternalState.isOpeningProject = opening;
   },
 
   addUploadedFile(file: UploadedFile): void {

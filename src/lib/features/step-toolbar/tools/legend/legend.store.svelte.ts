@@ -47,7 +47,8 @@ const DEFAULT_STATE: LegendState = {
     background: {
       enabled: true,
       color: { hue: 0, saturation: 0, lightness: 100 },
-      opacity: LEGEND_DEFAULTS.OPACITY
+      opacity: LEGEND_DEFAULTS.OPACITY,
+      shadow: true
     }
   },
   activeTab: LegendTab.CONTENT,

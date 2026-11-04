@@ -138,7 +138,6 @@
   min={sizeMin}
   max={sizeMax}
   value={size}
-  showMinMax
   inputWidth="64px"
   onchange={onSizeChange}
 />

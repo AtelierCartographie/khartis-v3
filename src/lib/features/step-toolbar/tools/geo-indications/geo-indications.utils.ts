@@ -12,6 +12,8 @@ export type ColorPickerValidateEvent = {
   lightness: number;
 };
 
+export const SCALE_LINE_WIDTH_LIMITS = { min: 0.5, max: 8, step: 0.5 };
+
 export const INSET_MAP_SIZE_LIMITS: Record<
   InsetMapType,
   { min: number; max: number }

@@ -27,7 +27,8 @@ import {
   clampScaleDistance,
   convertDistanceValue,
   INSET_MAP_SIZE_LIMITS,
-  normalizeScaleDistanceValue
+  normalizeScaleDistanceValue,
+  SCALE_LINE_WIDTH_LIMITS
 } from './geo-indications.utils';
 import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
 import type {
@@ -47,6 +48,8 @@ const DEFAULT_STATE: GeoIndicationsState = {
   scale: {
     enabled: false,
     form: ScaleForm.LINE,
+    lineWidth: 2,
+    opacity: 100,
     distance: 0,
     autoTuned: true,
     units: DistanceUnit.KILOMETERS,
@@ -60,6 +63,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     enabled: false,
     style: OrientationIndicatorStyle.ARROW,
     size: 10,
+    opacity: 100,
     color: { hue: 0, saturation: 0, lightness: 0 },
     dragPosition: null
   },
@@ -71,6 +75,12 @@ const DEFAULT_STATE: GeoIndicationsState = {
     continentColor: DEFAULT_INSET_CONTINENT_COLOR,
     seaColor: DEFAULT_INSET_SEA_COLOR,
     sphereColor: DEFAULT_INSET_SPHERE_COLOR,
+    background: {
+      enabled: true,
+      color: { hue: 0, saturation: 0, lightness: 100 },
+      opacity: 85,
+      shadow: true
+    },
     useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
@@ -156,6 +166,13 @@ function normalizeState(
         nextScale?.form === ScaleForm.LINE || nextScale?.form === ScaleForm.BOX
           ? nextScale.form
           : current.scale.form,
+      lineWidth: clampNumber(
+        nextScale?.lineWidth,
+        SCALE_LINE_WIDTH_LIMITS.min,
+        SCALE_LINE_WIDTH_LIMITS.max,
+        current.scale.lineWidth
+      ),
+      opacity: clampNumber(nextScale?.opacity, 0, 100, current.scale.opacity),
       distance: clampScaleDistance(
         toFiniteNumber(nextScale?.distance, current.scale.distance),
         nextScaleUnits,
@@ -193,6 +210,12 @@ function normalizeState(
           ? nextOrientation.style
           : current.orientation.style,
       size: clampNumber(nextOrientation?.size, 5, 30, current.orientation.size),
+      opacity: clampNumber(
+        nextOrientation?.opacity,
+        0,
+        100,
+        current.orientation.opacity
+      ),
       color: normalizeColorState(
         nextOrientation?.color,
         current.orientation.color
@@ -230,6 +253,26 @@ function normalizeState(
         nextInsetMap?.sphereColor,
         current.insetMap.sphereColor
       ),
+      background: {
+        enabled:
+          typeof nextInsetMap?.background?.enabled === 'boolean'
+            ? nextInsetMap.background.enabled
+            : current.insetMap.background.enabled,
+        color: normalizeColorState(
+          nextInsetMap?.background?.color,
+          current.insetMap.background.color
+        ),
+        opacity: clampNumber(
+          nextInsetMap?.background?.opacity,
+          0,
+          100,
+          current.insetMap.background.opacity
+        ),
+        shadow:
+          typeof nextInsetMap?.background?.shadow === 'boolean'
+            ? nextInsetMap.background.shadow
+            : current.insetMap.background.shadow
+      },
       useBasemapColors: false,
       zoom: DEFAULT_STATE.insetMap.zoom,
       centerLongitude: clampNumber(
@@ -263,7 +306,7 @@ function resetPagePanWhenLastIndicationIsDisabled(
   state: GeoIndicationsState
 ): void {
   if (hadActiveIndication && !hasActiveGeoIndication(state)) {
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 }
 
@@ -277,6 +320,7 @@ type GeoIndicationsActions = {
   toggleInsetMap: () => void;
   toggleScaleExpanded: () => void;
   setScaleForm: (form: ScaleForm) => void;
+  setScaleLineWidth: (lineWidth: number) => void;
   setScaleUnits: (units: DistanceUnit) => void;
   setScaleColor: (colorState: ColorState) => void;
   setScaleColorFromHex: (hex: string) => void;
@@ -284,9 +328,14 @@ type GeoIndicationsActions = {
   setScaleFontSize: (fontSize: number) => void;
   setOrientationStyle: (style: OrientationIndicatorStyle) => void;
   setOrientationSize: (size: number) => void;
+  setOrientationOpacity: (opacity: number) => void;
+  setScaleOpacity: (opacity: number) => void;
   setOrientationColor: (colorState: ColorState) => void;
   setOrientationColorFromHex: (hex: string) => void;
   setInsetMapSize: (size: number) => void;
+  setInsetMapBackground: (
+    updates: Partial<GeoIndicationsState['insetMap']['background']>
+  ) => void;
   setInsetMapWindowColor: (colorState: ColorState) => void;
   setInsetMapWindowColorFromHex: (hex: string) => void;
   setInsetMapContinentColor: (colorState: ColorState) => void;
@@ -390,6 +439,14 @@ const { state, actions } = createToolStore<
     setScaleForm: (form: ScaleForm) => {
       s.scale.form = form;
     },
+    setScaleLineWidth: (lineWidth: number) => {
+      s.scale.lineWidth = clampNumber(
+        lineWidth,
+        SCALE_LINE_WIDTH_LIMITS.min,
+        SCALE_LINE_WIDTH_LIMITS.max,
+        s.scale.lineWidth
+      );
+    },
     setScaleUnits: (units: DistanceUnit) => {
       if (units === s.scale.units) {
         return;
@@ -428,11 +485,43 @@ const { state, actions } = createToolStore<
     setOrientationSize: (size: number) => {
       s.orientation.size = clampNumber(size, 5, 30, s.orientation.size);
     },
+    setOrientationOpacity: (opacity: number) => {
+      s.orientation.opacity = clampNumber(
+        Math.round(opacity),
+        0,
+        100,
+        s.orientation.opacity
+      );
+    },
+    setScaleOpacity: (opacity: number) => {
+      s.scale.opacity = clampNumber(
+        Math.round(opacity),
+        0,
+        100,
+        s.scale.opacity
+      );
+    },
     setOrientationColor: (colorState: ColorState) => {
       s.orientation.color = colorState;
     },
     setOrientationColorFromHex: (hex: string) => {
       s.orientation.color = hexToHsl(hex);
+    },
+    setInsetMapBackground: (updates) => {
+      const current = s.insetMap.background;
+      s.insetMap.background = {
+        enabled: updates.enabled ?? current.enabled,
+        color: updates.color
+          ? normalizeColorState(updates.color, current.color)
+          : current.color,
+        opacity: clampNumber(
+          Math.round(updates.opacity ?? current.opacity),
+          0,
+          100,
+          current.opacity
+        ),
+        shadow: updates.shadow ?? current.shadow
+      };
     },
     setInsetMapSize: (size: number) => {
       s.insetMap.size = clampNumber(

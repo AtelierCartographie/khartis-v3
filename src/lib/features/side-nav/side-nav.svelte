@@ -36,7 +36,6 @@
     CopyFile,
     DocumentAdd,
     Download,
-    Education,
     FolderOpen,
     Information,
     Launch,
@@ -501,7 +500,7 @@
             <Button
               size="small"
               kind="ghost"
-              icon={Education}
+              icon={Launch}
               class="menu-bar-item"
               disabled
             >

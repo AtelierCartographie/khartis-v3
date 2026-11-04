@@ -59,8 +59,15 @@
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
+      hideInactiveLabel={false}
     />
   </div>
+
+  {#if activeBasemapBanner}
+    <div class="active-basemap-slot">
+      {@render activeBasemapBanner()}
+    </div>
+  {/if}
 
   <div class="basemap-tab-body">
     {#if activeTabIndex === 0}
@@ -72,13 +79,8 @@
     {/if}
   </div>
 
-  {#if activeBasemapBanner || (showJoinSection && joinSection)}
+  {#if showJoinSection && joinSection}
     <hr class="join-separator" />
-  {/if}
-  {#if activeBasemapBanner}
-    <div class="active-basemap-slot">
-      {@render activeBasemapBanner()}
-    </div>
   {/if}
   {#if showJoinSection && joinSection}
     {@render joinSection()}
@@ -111,7 +113,7 @@
   }
 
   .active-basemap-slot {
-    padding-top: var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-05);
   }
 
   .join-separator {

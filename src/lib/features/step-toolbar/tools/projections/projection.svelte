@@ -58,11 +58,11 @@
     <ExpandableSection
       title={title}
       defaultOpen={true}
-      titleClass="projection-suggestions-title"
+      titleClass="projection-suggestions-title kh-thinking-text"
       scrollIntoViewOnOpen
     >
       {#snippet icon()}
-        <MagicWandFilled size={20} />
+        <MagicWandFilled size={20} class="kh-thinking-icon" />
       {/snippet}
       <ProjectionMain />
     </ExpandableSection>

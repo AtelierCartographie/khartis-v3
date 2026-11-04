@@ -792,7 +792,10 @@
     max-width: 400px;
   }
 
+  /* The map frame and the page resize from their edges; a colour each tells
+     the two apart. */
   .resize-handles-frame {
+    --_resize-color: #0f62fe;
     --resize-hit-reach: 8px;
     position: absolute;
     pointer-events: none;
@@ -804,13 +807,15 @@
   }
 
   .resize-handles-frame.highlighted {
-    border-color: rgba(15, 98, 254, 0.55);
-    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
+    border-color: color-mix(in srgb, var(--_resize-color) 55%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--_resize-color) 15%, transparent);
   }
 
   /* Page handles sit outside the page, so they never cover the frame handles
      of a map that reaches the page edge. */
   .resize-handles-page {
+    --_resize-color: #8a3ffc;
     --resize-hit-reach: 8px;
     position: absolute;
     top: 0;
@@ -820,8 +825,16 @@
     transition: outline-color 120ms ease;
   }
 
+  :global(html[theme='g100']) .resize-handles-frame {
+    --_resize-color: #4589ff;
+  }
+
+  :global(html[theme='g100']) .resize-handles-page {
+    --_resize-color: #a56eff;
+  }
+
   .resize-handles-page.highlighted {
-    outline-color: rgba(15, 98, 254, 0.55);
+    outline-color: color-mix(in srgb, var(--_resize-color) 55%, transparent);
   }
 
   .page-resize-handle.resize-n,
@@ -879,7 +892,7 @@
   .resize-handle::after {
     position: absolute;
     border-radius: 1px;
-    background: var(--cds-interactive-01, #0f62fe);
+    background: var(--_resize-color);
     opacity: 0;
     transition: opacity 120ms ease;
     content: '';
