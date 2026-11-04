@@ -59,6 +59,7 @@
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
+      hideInactiveLabel={false}
     />
   </div>
 
