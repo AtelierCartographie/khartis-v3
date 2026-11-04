@@ -158,7 +158,10 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
           method: primitive.classification.method,
           classes: primitive.classification.classes,
           palette_id: primitive.classification.paletteId,
-          inverted: primitive.classification.inverted ?? false
+          inverted: primitive.classification.inverted ?? false,
+          // Classes split at a breakpoint take a diverging palette; the
+          // breakpoint value itself stays out.
+          diverging: Number.isFinite(primitive.classification.breakpointValue)
         }
       }))
     })),

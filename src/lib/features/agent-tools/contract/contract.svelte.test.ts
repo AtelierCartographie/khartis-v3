@@ -271,8 +271,36 @@ describe('agent project snapshot', () => {
       method: 'quantiles',
       classes: 5,
       palette_id: SEQUENTIAL_ID,
-      inverted: false
+      inverted: false,
+      diverging: false
     });
+  });
+
+  it('should say that classes split at a breakpoint without giving its value', () => {
+    const [visualization] = SNAPSHOT_INPUT.visualizations;
+    const [primitive] = visualization.primitives;
+    const split = buildProjectSnapshot({
+      ...SNAPSHOT_INPUT,
+      visualizations: [
+        {
+          ...visualization,
+          primitives: [
+            {
+              ...primitive,
+              classification: {
+                ...primitive.classification,
+                breakpointValue: 18.5
+              }
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(
+      split.visualizations[0].primitives[0].classification?.diverging
+    ).toBe(true);
+    expect(JSON.stringify(split)).not.toContain('18.5');
   });
 
   it('should report a page text as empty when it is still a placeholder', () => {
@@ -449,9 +477,15 @@ describe('agent map review', () => {
   });
 
   it('should warn when a count is shown as a choropleth or a ratio as proportional symbols', () => {
-    expect(ids(withFill({ column: 'population', nature: 'count' }))).toEqual([
+    const counted = reviewMap(
+      withFill({ column: 'population', nature: 'count' })
+    );
+    expect(counted.checks.map((check) => check.id)).toEqual([
       'count_as_choropleth'
     ]);
+    // The column name, taken from the user file, stays out of the sentence.
+    expect(counted.checks[0]).toMatchObject({ column: 'population' });
+    expect(counted.checks[0].message).not.toContain('population');
     expect(
       ids({
         ...READY_MAP,
