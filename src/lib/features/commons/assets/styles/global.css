@@ -577,3 +577,21 @@ label {
     -webkit-text-fill-color: currentColor;
   }
 }
+
+/* Notification actions follow Carbon's tertiary (outline) button; the
+   notification prefix outranks Carbon's ghost and low-contrast rules. */
+.bx--inline-notification .bx--inline-notification__action-button.bx--btn--ghost,
+.bx--toast-notification .bx--toast-notification__action-button.bx--btn--ghost {
+  border: 1px solid var(--cds-text-primary);
+  background-color: transparent;
+  color: var(--cds-text-primary);
+}
+
+.bx--inline-notification
+  .bx--inline-notification__action-button.bx--btn--ghost:hover,
+.bx--toast-notification
+  .bx--toast-notification__action-button.bx--btn--ghost:hover {
+  border-color: var(--cds-hover-tertiary);
+  background-color: var(--cds-hover-tertiary);
+  color: var(--cds-text-inverse);
+}

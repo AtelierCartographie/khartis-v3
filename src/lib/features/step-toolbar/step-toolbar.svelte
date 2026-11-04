@@ -4,10 +4,10 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import {
+    StylingTools as StylingToolId,
     ToolbarStep,
     VisualizationTools as VisualizationToolId
   } from '$lib/features/commons/types/global';
-  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import {
@@ -16,12 +16,11 @@
   } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
-  import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import type { Component } from 'svelte';
   import { tick, untrack } from 'svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
-  import { fly, slide } from 'svelte/transition';
+  import { fade, fly, slide } from 'svelte/transition';
   import {
     motionDuration,
     trackStepDirection
@@ -40,12 +39,14 @@
   import ToolsListContainer from './tools-list/tools-list-container.svelte';
   import ColorBlindnessNotification from './tools/color-blindness/color-blindness-notification.svelte';
   import {
-    colorBlindnessActions,
     getColorBlindnessState,
     isColorBlindnessActive
   } from './tools/color-blindness/color-blindness.store.svelte';
   import { annotationsActions } from './tools/annotations/annotations.store.svelte';
-  import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
+  import {
+    closeSelectedToolPanel,
+    selectTool
+  } from './tools-list/tool-list.utils.svelte';
 
   const MAIN_TOOLBAR_CONTENT_SELECTOR =
     '#khartis-main-toolbar .toolbar-content';
@@ -60,10 +61,27 @@
   const colorBlindnessState = $derived(getColorBlindnessState());
   let notificationDismissed = $state(false);
 
+  function openColorBlindnessTool(): void {
+    if (globalState.selectedStep !== ToolbarStep.Styling) {
+      globalActions.setNavigationState(ToolbarStep.Styling);
+    }
+    selectTool(StylingToolId.ColorBlindness);
+  }
+  let noticeElement = $state<HTMLDivElement | null>(null);
+  let noticeHeight = $state(0);
+  let navHeight = $state(0);
+
+  // The bar is centred in the viewer; with the notice in the top-left corner,
+  // it moves down just enough to start below it.
+  const navTop = $derived.by(() => {
+    if (!noticeElement || noticeHeight === 0) return undefined;
+    const noticeBottom = noticeElement.offsetTop + noticeHeight;
+    return `max(50%, ${noticeBottom + noticeElement.offsetTop + navHeight / 2}px)`;
+  });
+
   const showColorBlindnessNotification = $derived(
     isColorBlindnessActive(colorBlindnessState) &&
-      globalState.selectedStep !== ToolbarStep.Styling &&
-      !globalState.selectedTool &&
+      globalState.selectedStep !== ToolbarStep.Data &&
       !notificationDismissed
   );
 
@@ -179,6 +197,8 @@
 
 <nav
   id={DOM_IDS.STEP_TOOLBAR}
+  bind:offsetHeight={navHeight}
+  style:top={navTop}
   class="app-shadow"
   class:tool-open={!!globalState.selectedTool}
   data-outline
@@ -279,20 +299,26 @@
       <ToolContainer />
     {/snippet}
   </ToolPopover>
+</nav>
 
+<!-- Outside the step toolbar: the notice sits in the viewer's top-left corner. -->
+{#if showColorBlindnessNotification}
   <div
     id={DOM_IDS.COLORBLINDNESS_NOTIFICATION}
+    bind:this={noticeElement}
+    bind:offsetHeight={noticeHeight}
+    class="app-shadow"
     style="--cb-notif-width:{POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}px;"
+    transition:fade={{ duration: motionDuration(160) }}
   >
-    <Popover open={showColorBlindnessNotification} align="right-top" light>
-      <ColorBlindnessNotification
-        ondeactivate={() =>
-          colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE)}
-        onclose={() => (notificationDismissed = true)}
-      />
-    </Popover>
+    <ColorBlindnessNotification
+      onopentool={globalState.selectedTool === StylingToolId.ColorBlindness
+        ? undefined
+        : openColorBlindnessTool}
+      onclose={() => (notificationDismissed = true)}
+    />
   </div>
-</nav>
+{/if}
 
 <style>
   :global(#khartis-step-toolbar) {
@@ -464,14 +490,13 @@
     );
   }
 
-  :global(#khartis-colorblindness-notification .bx--popover--right-top) {
-    top: 0 !important;
-  }
-
-  :global(#khartis-colorblindness-notification .bx--popover-contents) {
-    width: var(--cb-notif-width) !important;
-    max-width: var(--cb-notif-width) !important;
-    padding: 0;
+  :global(#khartis-colorblindness-notification) {
+    position: absolute;
+    top: var(--cds-spacing-05);
+    left: var(--cds-spacing-05);
+    z-index: var(--z-toolbar);
+    width: var(--cb-notif-width);
+    max-width: calc(100% - 2 * var(--cds-spacing-05));
   }
 
   :global(#khartis-colorblindness-notification .bx--inline-notification) {
