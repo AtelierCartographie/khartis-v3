@@ -141,8 +141,10 @@
 
 <div class="palette-suggestions">
   <div class="section-heading">
-    <span class="section-heading-text">{m.palette_suggestions()}</span>
-    <span class="section-heading-icon">
+    <span class="section-heading-text kh-thinking-text"
+      >{m.palette_suggestions()}</span
+    >
+    <span class="section-heading-icon kh-thinking-icon">
       <MagicWandFilled size={16} />
     </span>
     <div class="section-heading-line"></div>
