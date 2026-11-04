@@ -180,7 +180,7 @@
           >
             <span id="scale-form-label" class="bx--label">{m.geo_style()}</span>
             <ToggleTabs
-              size="md"
+              size="sm"
               items={formOptions.map((option) => ({ label: option.text }))}
               activeIndex={formOptions.findIndex(
                 (option) => option.value === geoState.scale.form
@@ -192,21 +192,6 @@
           </div>
         </Column>
       </Row>
-
-      {#if geoState.scale.form === ScaleForm.LINE}
-        <Row>
-          <Column>
-            <SliderWithInput
-              label={m.thickness()}
-              min={SCALE_LINE_WIDTH_LIMITS.min}
-              max={SCALE_LINE_WIDTH_LIMITS.max}
-              step={SCALE_LINE_WIDTH_LIMITS.step}
-              value={geoState.scale.lineWidth}
-              onchange={store.setScaleLineWidth}
-            />
-          </Column>
-        </Row>
-      {/if}
 
       <Row>
         <Column>
@@ -239,6 +224,21 @@
           />
         </Column>
       </Row>
+
+      {#if geoState.scale.form === ScaleForm.LINE}
+        <Row>
+          <Column>
+            <SliderWithInput
+              label={m.thickness()}
+              min={SCALE_LINE_WIDTH_LIMITS.min}
+              max={SCALE_LINE_WIDTH_LIMITS.max}
+              step={SCALE_LINE_WIDTH_LIMITS.step}
+              value={geoState.scale.lineWidth}
+              onchange={store.setScaleLineWidth}
+            />
+          </Column>
+        </Row>
+      {/if}
 
       <Row>
         <Column>
@@ -304,6 +304,20 @@
             }: ColorPickerValidateEvent) => {
               store.setScaleColor({ hue, saturation, lightness });
             }}
+          />
+        </Column>
+      </Row>
+      <Row>
+        <Column>
+          <SliderWithInput
+            label={m.legend_opacity()}
+            value={geoState.scale.opacity}
+            min={0}
+            max={100}
+            step={1}
+            inputWidth="72px"
+            showSteppers={false}
+            onchange={store.setScaleOpacity}
           />
         </Column>
       </Row>

@@ -118,6 +118,23 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.scale.lineWidth).toBe(2);
   });
 
+  it('should keep a scale and a north arrow saved before their opacity opaque', () => {
+    const { opacity: _scaleOpacity, ...savedScale } = geoIndicationsState.scale;
+    const { opacity: _orientationOpacity, ...savedOrientation } =
+      geoIndicationsState.orientation;
+    geoIndicationsActions.setScaleOpacity(30);
+    geoIndicationsActions.setOrientationOpacity(30);
+    geoIndicationsActions.reset();
+
+    geoIndicationsActions.setState({
+      scale: savedScale as typeof geoIndicationsState.scale,
+      orientation: savedOrientation as typeof geoIndicationsState.orientation
+    });
+
+    expect(geoIndicationsState.scale.opacity).toBe(100);
+    expect(geoIndicationsState.orientation.opacity).toBe(100);
+  });
+
   it('should keep a restored scale line thickness within its limits', () => {
     geoIndicationsActions.setState({
       scale: { ...geoIndicationsState.scale, lineWidth: 40 }

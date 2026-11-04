@@ -1572,6 +1572,7 @@
       <svg
         width={scaleSvgWidth}
         height={scaleSvgHeight}
+        opacity={geoIndicationsState.scale.opacity / 100}
         aria-label={m.geo_scale_bar_aria()}
       >
         {#if geoIndicationsState.scale.form === ScaleForm.BOX}
@@ -1642,6 +1643,7 @@
         width={orientationSize}
         height={orientationSize}
         viewBox="0 0 40 50"
+        opacity={geoIndicationsState.orientation.opacity / 100}
         style="overflow: visible;"
         aria-label={m.geo_north_indicator_aria()}
       >
