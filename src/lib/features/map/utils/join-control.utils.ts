@@ -26,6 +26,8 @@ export function getJoinControlStatusLabel(status: JoinTerritoryStatus): string {
       return capitalize(m.join_entities_to_verify_one());
     case 'duplicate':
       return capitalize(m.join_entities_duplicate_one());
+    case 'ignored':
+      return capitalize(m.join_entities_ignored_one());
     case 'no_data':
       return capitalize(m.join_entities_no_data_one());
   }
@@ -61,6 +63,7 @@ const STATUS_TONES: Record<JoinTerritoryStatus, JoinCategoryTone> = {
   matched: 'success',
   check: 'warning',
   duplicate: 'error',
+  ignored: 'ignored',
   no_data: 'missing'
 };
 

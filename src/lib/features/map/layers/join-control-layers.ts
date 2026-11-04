@@ -25,9 +25,6 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
 import {
   JOIN_CONTROL_FILL_COLORS,
-  JOIN_CONTROL_FOCUS_MARKER_STATUSES,
-  JOIN_CONTROL_FOCUS_OUTLINE_COLOR,
-  JOIN_CONTROL_FOCUS_OUTLINE_WIDTH_PX,
   JOIN_CONTROL_MARKER_RADIUS_PX,
   JOIN_CONTROL_MARKER_STATUSES,
   JOIN_CONTROL_MARKER_STROKE_COLOR,
@@ -36,8 +33,7 @@ import {
   JOIN_CONTROL_OUTLINE_WIDTH_PX,
   JOIN_CONTROL_PATTERNS,
   JOIN_CONTROL_SMALL_TERRITORY_RATIO,
-  JOIN_CONTROL_STATUSES,
-  JOIN_CONTROL_UNFOCUSED_ALPHA
+  JOIN_CONTROL_STATUSES
 } from '../constants/join-control.constants';
 import type {
   JoinControlCounts,
@@ -50,6 +46,7 @@ import {
 } from '../utils/geoarrow-stream-bridge.utils';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import { createFeatureOutlineOverlay } from './hover-highlight-overlay';
+import { resolvePageDisplayScale } from './layer-style.utils';
 import {
   HIGHLIGHT_POINT_RING_RADIUS,
   HIGHLIGHT_STROKE_COLOR,
@@ -101,10 +98,12 @@ export interface JoinControlLayerInput {
   geoColumn: string;
   sourceIsFile: boolean;
   rows: JoinTerritoryStatusRow[];
-  focusedStatus: JoinTerritoryStatus | null;
   /** A basemap without boundary layers leaves the territories unseparated. */
   outlineTerritories: boolean;
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId' | 'customProjection'>;
+  ctx: Pick<
+    LayerContext,
+    'modelMatrix' | 'beforeId' | 'customProjection' | 'pageDisplayScale'
+  >;
 }
 
 export interface JoinControlLayers {
@@ -294,16 +293,6 @@ function resolveStatusPattern(
   return resolved;
 }
 
-function withFocusAlpha(
-  color: Rgba,
-  status: JoinTerritoryStatus,
-  focusedStatus: JoinTerritoryStatus | null
-): Rgba {
-  return focusedStatus && focusedStatus !== status
-    ? [color[0], color[1], color[2], JOIN_CONTROL_UNFOCUSED_ALPHA]
-    : color;
-}
-
 const FILL_COLORS = Object.fromEntries(
   JOIN_CONTROL_STATUSES.map((status) => [
     status,
@@ -316,8 +305,8 @@ type BinaryLayerData = Record<string, unknown> & {
   attributes: Record<string, unknown>;
 };
 
-// Binary attributes are rebuilt only when the geometry, the statuses or the
-// focus change: deck then compares the data by reference and skips the upload.
+// Binary attributes are rebuilt only when the geometry or the statuses
+// change: deck then compares the data by reference and skips the upload.
 const layerDataCache = new WeakMap<
   object,
   WeakMap<JoinTerritoryStatusRow[], Map<string, BinaryLayerData>>
@@ -361,14 +350,18 @@ function createOutlineLayer(
   pathData: BinaryPathData,
   rows: JoinTerritoryStatusRow[],
   key: string,
-  colorOf: (featureId: number) => Rgba,
-  widthOf: (featureId: number) => number,
   ctx: JoinControlLayerInput['ctx']
 ): Layer<DeckDataRow> {
   const data = memoLayerData(pathData, rows, key, () => {
     const built = createPathLayerProps(pathData).data as BinaryLayerData;
-    built.attributes.getColor = pathColorAttr(pathData, colorOf);
-    built.attributes.getWidth = pathWidthAttr(pathData, widthOf);
+    built.attributes.getColor = pathColorAttr(
+      pathData,
+      () => JOIN_CONTROL_OUTLINE_COLOR
+    );
+    built.attributes.getWidth = pathWidthAttr(
+      pathData,
+      () => JOIN_CONTROL_OUTLINE_WIDTH_PX
+    );
     return built;
   });
 
@@ -377,6 +370,7 @@ function createOutlineLayer(
     ...({ data } as Record<string, unknown>),
     _pathType: 'open',
     widthUnits: 'pixels',
+    widthScale: resolvePageDisplayScale(ctx),
     widthMinPixels: 0,
     pickable: false,
     parameters: THEMATIC_OVERLAY_PARAMETERS,
@@ -396,10 +390,10 @@ export function createJoinControlLayers(
     geoColumn,
     sourceIsFile,
     rows,
-    focusedStatus,
     outlineTerritories,
     ctx
   } = input;
+  const pageScale = resolvePageDisplayScale(ctx);
   const territories = resolveJoinControlTerritories(
     geometry,
     featureIdColumn,
@@ -418,7 +412,6 @@ export function createJoinControlLayers(
   const { statusByGeomRow } = territories;
   const statusOf = (featureId: number): JoinTerritoryStatus =>
     statusByGeomRow[featureId] ?? 'no_data';
-  const focusKey = `${featureIdColumn}:${focusedStatus ?? ''}`;
   const pickData: JoinControlPickData = {
     rows,
     territories,
@@ -429,20 +422,22 @@ export function createJoinControlLayers(
     sourceIsFile
   };
 
-  const fillData = memoLayerData(polyData, rows, `fill:${focusKey}`, () => {
-    const built = createCompatibleSolidPolygonLayerProps(polyData)
-      .data as unknown as BinaryLayerData;
-    built.attributes.getFillColor = createPolygonFillColorAttribute(
-      polyData,
-      (featureId) => {
-        const status = statusOf(featureId);
-        return withFocusAlpha(FILL_COLORS[status], status, focusedStatus);
-      }
-    );
-    built.featureIds = polyData.featureIds;
-    built.khartisPickGeometry = polyData;
-    return built;
-  });
+  const fillData = memoLayerData(
+    polyData,
+    rows,
+    `fill:${featureIdColumn}`,
+    () => {
+      const built = createCompatibleSolidPolygonLayerProps(polyData)
+        .data as unknown as BinaryLayerData;
+      built.attributes.getFillColor = createPolygonFillColorAttribute(
+        polyData,
+        (featureId) => FILL_COLORS[statusOf(featureId)]
+      );
+      built.featureIds = polyData.featureIds;
+      built.khartisPickGeometry = polyData;
+      return built;
+    }
+  );
   // Reused buffers still describe the latest finalized table.
   fillData.khartisJoinControl = pickData;
 
@@ -461,16 +456,23 @@ export function createJoinControlLayers(
   for (const status of JOIN_CONTROL_STATUSES) {
     const pattern = resolveStatusPattern(status);
     if (!pattern || territories.counts[status] === 0) continue;
-    const color = withFocusAlpha(pattern.color, status, focusedStatus);
+    // The motif keeps its size on the page as the page zooms.
+    const props =
+      pageScale === 1
+        ? pattern.props
+        : {
+            ...pattern.props,
+            getFillPatternScale: pattern.props.getFillPatternScale * pageScale
+          };
     const overlay = createBinaryPolygonPatternOverlayLayer(
       layerId,
       status,
       polyData,
-      pattern.props,
+      props,
       ctx,
       (featureId) =>
         statusOf(featureId) === status
-          ? color
+          ? pattern.color
           : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
       `${status}-pattern`,
       status === 'duplicate' ? DUPLICATE_PATTERN_OPACITY : undefined
@@ -478,56 +480,25 @@ export function createJoinControlLayers(
     if (overlay) territoryLayers.push(overlay);
   }
 
-  const hasFocusedTerritory =
-    focusedStatus !== null && territories.counts[focusedStatus] > 0;
-  const pathData =
-    outlineTerritories || hasFocusedTerritory
-      ? resolvePathParser(ctx.customProjection)(geometry)
-      : null;
+  const pathData = outlineTerritories
+    ? resolvePathParser(ctx.customProjection)(geometry)
+    : null;
   if (pathData && pathData.length > 0) {
-    if (outlineTerritories) {
-      territoryLayers.push(
-        createOutlineLayer(
-          `${layerId}-outline`,
-          pathData,
-          rows,
-          `outline:${featureIdColumn}`,
-          () => JOIN_CONTROL_OUTLINE_COLOR,
-          () => JOIN_CONTROL_OUTLINE_WIDTH_PX,
-          ctx
-        )
-      );
-    }
-    if (hasFocusedTerritory) {
-      territoryLayers.push(
-        createOutlineLayer(
-          `${layerId}-focus-outline`,
-          pathData,
-          rows,
-          `focus:${focusKey}`,
-          (featureId) =>
-            statusOf(featureId) === focusedStatus
-              ? JOIN_CONTROL_FOCUS_OUTLINE_COLOR
-              : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
-          (featureId) =>
-            statusOf(featureId) === focusedStatus
-              ? JOIN_CONTROL_FOCUS_OUTLINE_WIDTH_PX
-              : 0,
-          ctx
-        )
-      );
-    }
+    territoryLayers.push(
+      createOutlineLayer(
+        `${layerId}-outline`,
+        pathData,
+        rows,
+        `outline:${featureIdColumn}`,
+        ctx
+      )
+    );
   }
 
   const markerLayers: Layer<DeckDataRow>[] = [];
   const extents = resolveFeatureExtents(polyData, geometry.numRows);
   const smallSize = extents.extent * JOIN_CONTROL_SMALL_TERRITORY_RATIO;
-  const markerStatuses =
-    focusedStatus && JOIN_CONTROL_FOCUS_MARKER_STATUSES.includes(focusedStatus)
-      ? [focusedStatus]
-      : JOIN_CONTROL_MARKER_STATUSES;
-  for (const status of markerStatuses) {
-    if (focusedStatus && focusedStatus !== status) continue;
+  for (const status of JOIN_CONTROL_MARKER_STATUSES) {
     if (territories.counts[status] === 0) continue;
     const markerData = memoLayerData(
       polyData,
@@ -565,8 +536,10 @@ export function createJoinControlLayers(
         filled: true,
         stroked: true,
         radiusUnits: 'pixels',
+        radiusScale: pageScale,
         getRadius: JOIN_CONTROL_MARKER_RADIUS_PX,
         lineWidthUnits: 'pixels',
+        lineWidthScale: pageScale,
         getLineWidth: JOIN_CONTROL_MARKER_STROKE_WIDTH_PX,
         getFillColor: FILL_COLORS[status],
         getLineColor: JOIN_CONTROL_MARKER_STROKE_COLOR,

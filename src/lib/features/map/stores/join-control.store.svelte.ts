@@ -19,6 +19,8 @@ export interface JoinControlRequest {
   basemap: BasemapMetadata;
   geoColumn: string;
   excludedValues: string[];
+  /** Basemap values the ignored source values were matched to. */
+  ignoredBasemapValues: string[];
 }
 
 export interface JoinControlStatuses {
@@ -31,8 +33,7 @@ export interface JoinControlStatuses {
 export type JoinControlCounts = Record<JoinTerritoryStatus, number>;
 
 /** A join panel category, or the territories left without data. */
-export type JoinControlCategory =
-  JoinTerritoryStatus | 'unrecognized' | 'ignored';
+export type JoinControlCategory = JoinTerritoryStatus | 'unrecognized';
 
 export type JoinPanelCategory = Exclude<JoinControlCategory, 'no_data'>;
 
@@ -50,13 +51,6 @@ export interface JoinControlHoverTarget {
 }
 
 const REVEAL_COMPLETION_MS = 1500;
-
-const TERRITORY_STATUSES = new Set<JoinControlCategory>([
-  'matched',
-  'check',
-  'duplicate',
-  'no_data'
-]);
 
 const tableIdentities = new WeakMap<ArrowTable, number>();
 let nextTableIdentity = 0;
@@ -77,6 +71,7 @@ function buildRequestKey(request: JoinControlRequest): string {
     request.basemap.file,
     request.geoColumn,
     [...request.excludedValues].sort(),
+    [...request.ignoredBasemapValues].sort(),
     getLocale()
   ]);
 }
@@ -95,7 +90,6 @@ function areCountsEqual(
 function createJoinControlStore() {
   let statuses = $state.raw<JoinControlStatuses | null>(null);
   let counts = $state.raw<JoinControlCounts | null>(null);
-  let activeCategory = $state<JoinControlCategory | null>(null);
   let panelRequest = $state.raw<JoinPanelRequest | null>(null);
   let hoverTarget = $state.raw<JoinControlHoverTarget | null>(null);
   let version = $state(0);
@@ -118,7 +112,10 @@ function createJoinControlStore() {
         request.orchestratorDatasetId,
         request.basemap,
         request.geoColumn,
-        { excludedValues: request.excludedValues }
+        {
+          excludedValues: request.excludedValues,
+          ignoredBasemapValues: request.ignoredBasemapValues
+        }
       );
       if (pendingKey !== key) return;
       statuses = {
@@ -169,23 +166,6 @@ function createJoinControlStore() {
   function publishCounts(next: JoinControlCounts | null): void {
     if (areCountsEqual(counts, next)) return;
     counts = next;
-  }
-
-  function toFocusedStatus(
-    category: JoinControlCategory | null
-  ): JoinTerritoryStatus | null {
-    return category && TERRITORY_STATUSES.has(category)
-      ? (category as JoinTerritoryStatus)
-      : null;
-  }
-
-  /** The open category; a territory status also highlights the map. */
-  function setActiveCategory(category: JoinControlCategory | null): void {
-    if (activeCategory === category) return;
-    const redraws =
-      toFocusedStatus(activeCategory) !== toFocusedStatus(category);
-    activeCategory = category;
-    if (redraws) version++;
   }
 
   /** Asks the join panel to open or close one of its categories. */
@@ -255,12 +235,6 @@ function createJoinControlStore() {
     get counts(): JoinControlCounts | null {
       return counts;
     },
-    get activeCategory(): JoinControlCategory | null {
-      return activeCategory;
-    },
-    get focusedStatus(): JoinTerritoryStatus | null {
-      return toFocusedStatus(activeCategory);
-    },
     get panelRequest(): JoinPanelRequest | null {
       return panelRequest;
     },
@@ -277,7 +251,6 @@ function createJoinControlStore() {
     },
     request,
     publishCounts,
-    setActiveCategory,
     requestPanelCategory,
     requestPanelSection,
     setHoverTarget,

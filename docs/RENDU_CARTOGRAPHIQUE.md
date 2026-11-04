@@ -280,9 +280,10 @@ jamais cette marque.
 À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
 fond qui porte ses territoires. Chacun prend la couleur de son statut de
 jointure, celle des catégories du panneau : joint, à vérifier (`check` et
-`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune
-ligne, en gris hachuré). Les valeurs non reconnues ou ignorées n'ont pas de
-géométrie et restent dans le panneau.
+`ambiguous`), répété (plusieurs lignes pour un territoire), ignoré (le
+territoire qu'une valeur ignorée désignait, en gris moyen pointillé de blanc),
+sans donnée (aucune ligne, en gris clair hachuré, plus discret). Les valeurs
+non reconnues n'ont pas de géométrie et restent dans le panneau.
 
 - L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte avec
   son encadré quand le panneau défile jusqu'à « Jointure assistée par
@@ -297,19 +298,20 @@ géométrie et restent dans le panneau.
   finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
   le projet.
 - `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
-  fond, entre son sol et ses limites. Les répétés portent une trame de croix et
-  les territoires sans donnée le hachuré des valeurs manquantes : rouge et vert
-  se confondent pour un daltonien.
+  fond, entre son sol et ses limites. Les répétés portent une trame de croix,
+  car rouge et vert se confondent pour un daltonien ; les deux gris se
+  distinguent aussi par leur motif. Motifs, contours et repères suivent le
+  zoom de la page (`pageDisplayScale`), comme les autres marques.
 - Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
-  repère ponctuel ; un territoire sans donnée seulement quand ce statut est mis
-  en évidence.
+  repère ponctuel.
 - L'encadré de synthèse (`join-control-summary.svelte`), en bas à droite de
-  l'espace de travail et non dans la page, reprend les catégories du panneau
-  avec leurs comptes et le même en-tête (`join-category-header.svelte`), puis
-  les entités hors carte et les entités du fond sans données. Cliquer son titre
-  amène le panneau sur la jointure assistée, cliquer une catégorie y ouvre son
-  accordéon ; ouvrir une catégorie met ses territoires en évidence. Il glisse
-  avec le bord du panneau quand celui-ci change de largeur.
+  l'espace de travail et non dans la page, reprend les catégories non vides du
+  panneau avec leurs comptes et le même en-tête (`join-category-header.svelte`),
+  puis les entités hors carte et, en gris, les entités du fond sans données.
+  Cliquer son titre amène le panneau sur la jointure assistée, cliquer une
+  catégorie y ouvre son accordéon, le seul ouvert. Ouvrir une catégorie ne
+  filtre pas la carte. L'encadré glisse avec le bord du panneau quand celui-ci
+  change de largeur.
 - Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
   le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
   la carte, sans reconstruire les couches.

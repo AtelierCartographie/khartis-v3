@@ -903,7 +903,6 @@
   "join_entities_no_data_one": "entity without data",
   "join_control_off_map": "Off the map",
   "join_control_open_category": "Open in the join panel",
-  "join_control_focus": "Highlight on the map",
   "join_control_open_section": "Show the assisted join in the panel",
   "join_control_tooltip_status": "Assisted join",
   "join_control_tooltip_file": "Imported file",

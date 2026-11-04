@@ -592,7 +592,7 @@ export const duckDBOrchestrator = {
     datasetId: string,
     basemap: BasemapMetadata,
     geoColumn: string,
-    options?: joinOps.JoinGradingOptions
+    options?: joinOps.JoinTerritoryStatusOptions
   ): Promise<joinOps.JoinTerritoryStatusRow[]> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());

@@ -1117,7 +1117,13 @@ export async function getTargetJoinedValues(
  * joined through a value to verify (`check` or `ambiguous`), several rows on
  * the same entity, or no row at all.
  */
-export type JoinTerritoryStatus = 'matched' | 'check' | 'duplicate' | 'no_data';
+export type JoinTerritoryStatus =
+  'matched' | 'check' | 'duplicate' | 'ignored' | 'no_data';
+
+export interface JoinTerritoryStatusOptions extends JoinGradingOptions {
+  /** Basemap values the ignored source values were matched to. */
+  ignoredBasemapValues?: string[];
+}
 
 export interface JoinTerritoryStatusRow {
   territoryId: string;
@@ -1142,9 +1148,16 @@ export async function getJoinTerritoryStatuses(
   basemap: BasemapMetadata,
   geoColumn: string,
   Duck: DuckDBClientForJoin,
-  options: JoinGradingOptions = {}
+  options: JoinTerritoryStatusOptions = {}
 ): Promise<JoinTerritoryStatusRow[]> {
   const basemapId = getBasemapAttributesId(basemap);
+  const ignoredBasemapValues = [...new Set(options.ignoredBasemapValues ?? [])];
+  const ignoredValuesList =
+    ignoredBasemapValues.length > 0
+      ? ignoredBasemapValues
+          .map((value) => `'${escapeSqlString(value)}'`)
+          .join(', ')
+      : 'NULL';
   await ensureBasemapHasAttributes(basemapId, Duck);
 
   const cacheTableName = await ensureSimilarityCached(
@@ -1177,6 +1190,13 @@ export async function getJoinTerritoryStatuses(
         getBasemapDisplayVariants(basemap)
       )}
     ),
+    ignored_territories AS (
+      SELECT DISTINCT CAST(id AS VARCHAR) AS territory_id
+      FROM "${escapeIdentifier(CATALOG_ATTRIBUTES_TABLE)}"
+      WHERE basemap = '${escapeSqlString(basemapId)}'
+        AND id IS NOT NULL
+        AND raw IN (${ignoredValuesList})
+    ),
     joined_rows AS (
       SELECT
         CAST(t."${escapedIdColumn}" AS VARCHAR) AS territory_id,
@@ -1200,6 +1220,8 @@ export async function getJoinTerritoryStatuses(
       t.territory_id,
       COALESCE(CAST(n.raw AS VARCHAR), t.territory_id) AS territory_name,
       CASE
+        WHEN p.territory_id IS NULL AND i.territory_id IS NOT NULL
+          THEN 'ignored'
         WHEN p.territory_id IS NULL THEN 'no_data'
         WHEN p.row_count > 1 THEN 'duplicate'
         WHEN p.needs_check THEN 'check'
@@ -1211,6 +1233,7 @@ export async function getJoinTerritoryStatuses(
     FROM territories t
     LEFT JOIN display_names n ON CAST(n.id AS VARCHAR) = t.territory_id
     LEFT JOIN per_territory p ON p.territory_id = t.territory_id
+    LEFT JOIN ignored_territories i ON i.territory_id = t.territory_id
     ORDER BY t.territory_id`,
     { format: 'array' }
   )) as Array<{
