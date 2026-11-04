@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
@@ -786,6 +791,11 @@
     void computeBreaks();
   }
 
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
+
   function handleClose() {
     wasOpen = false;
     open = false;
@@ -796,6 +806,8 @@
 {#if open}
   <aside
     use:portal
+    in:floatingPanelIn
+    out:floatingPanelOut
     class="discretization-floating-panel"
     style:right={panelRight}
     aria-label={m.discretization()}
