@@ -109,7 +109,7 @@ function createGlobalStore() {
       pageZoomLevel: 100,
       minPageZoom: 10,
       maxPageZoom: 500,
-      pageZoomStep: 10,
+      pageZoomStep: 5,
       pagePanOffset: { x: 0, y: 0 },
       pageZoomScale: 1
     },
