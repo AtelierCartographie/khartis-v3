@@ -122,3 +122,7 @@ export interface SerializedDataTabState extends Omit<
 > {
   basemapJoin: SerializedBasemapJoinState;
 }
+
+/** Color of a join category, shared by the join panel and the map. */
+export type JoinCategoryTone =
+  'success' | 'warning' | 'error' | 'ignored' | 'missing';

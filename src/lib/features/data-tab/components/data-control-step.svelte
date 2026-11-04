@@ -46,6 +46,7 @@
     Modal
   } from 'carbon-components-svelte';
   import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import CalculatorPanel from './calculator-panel.svelte';
@@ -157,6 +158,8 @@
   });
 
   let confirmReimportOpen = $state(false);
+
+  $effect(() => () => joinControlStore.setHoverTarget(null));
   let pendingCsvOptions = $state<CsvOptions | null>(null);
 
   $effect(() => {
@@ -934,6 +937,10 @@
           onTableMutation={handleTableMutation}
           onSelectionChange={handleSelectionChange}
           onSortChange={handleSortChange}
+          onRowHover={(rowId) =>
+            joinControlStore.setHoverTarget(
+              rowId === null ? null : { rowIds: [rowId] }
+            )}
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}

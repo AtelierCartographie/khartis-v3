@@ -42,6 +42,7 @@
   import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+  import { joinControlStore } from '../stores/join-control.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -1642,6 +1643,9 @@
               pageDisplayScale / previousRenderScale
             );
           }
+          if (previousRenderScale !== pageDisplayScale) {
+            scheduleLayerUpdate('effect:canvasResize', { immediate: true });
+          }
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           // The resized canvas is redrawn on the next frame, with the
           // rescaled view: its drawing buffer and its layers must carry the
@@ -2115,6 +2119,7 @@
     basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
+    joinControlKey: joinControlStore.renderKey,
     labelLayoutVersion: labelLayoutStore.version,
     dataVersion,
     dataSize: `${tables.size}`,

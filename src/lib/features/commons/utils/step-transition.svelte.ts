@@ -11,6 +11,10 @@ const STEP_ORDER: readonly ToolbarStep[] = [
 
 export type StepDirection = 1 | -1;
 
+/** The side panel's slide when its width changes; what follows it moves alike. */
+export const PANEL_MOTION_MS = 300;
+export const PANEL_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
+
 /** A transition duration, or 0 when the system asks for reduced motion. */
 export function motionDuration(ms: number): number {
   return prefersReducedMotion.current ? 0 : ms;

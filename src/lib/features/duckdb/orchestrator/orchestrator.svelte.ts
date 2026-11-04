@@ -588,6 +588,31 @@ export const duckDBOrchestrator = {
     );
   },
 
+  async getJoinTerritoryStatuses(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string,
+    options?: joinOps.JoinTerritoryStatusOptions
+  ): Promise<joinOps.JoinTerritoryStatusRow[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.getJoinTerritoryStatuses(
+      dataset,
+      basemap,
+      geoColumn,
+      Duck,
+      options
+    );
+  },
+
   async computeJoinSynthesis(
     datasetId: string,
     geoColumn: string
@@ -773,11 +798,7 @@ export const duckDBOrchestrator = {
       });
     }
 
-    await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
-
-    invalidateDatasetCache(dataset.tableName);
-    const columns = await Duck.analyse(dataset.tableName);
-    datasetOps.updateDatasetColumns(dataset.id, columns);
+    joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
   },
 
   async finalizeJoin(

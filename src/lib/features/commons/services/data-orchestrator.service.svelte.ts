@@ -197,6 +197,15 @@ function createDataOrchestratorService() {
     }
 
     try {
+      // The source data keeps its values: the corrections are read by the
+      // join, so they must be known before it is rebuilt or graded.
+      if (restoredJoinState.joinCorrections) {
+        await duckDBOrchestrator.applyJoinCorrections(
+          duckDatasetId,
+          restoredJoinState.geoColumn,
+          restoredJoinState.joinCorrections
+        );
+      }
       await duckDBOrchestrator.finalizeJoin(
         duckDatasetId,
         basemap,

@@ -177,7 +177,6 @@ import {
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyLineCategorical,
-  shouldApplyLineChoropleth,
   shouldApplyProportionalSymbols
 } from '$lib/features/map/utils/data-styling.utils';
 
@@ -998,8 +997,14 @@ function assertRenderInvariant(
     expect(shouldApplyLineCategorical(updatedVisualization!)).toBe(true);
   }
 
+  // Breaks are computed after the suggestion is applied, by the classification
+  // orchestrator on DuckDB, which this audit does not run: a classed line is
+  // checked to be ready for them (classed color, value column, method).
   if (LINE_CLASSED_SUGGESTION_IDS.has(suggestion.id)) {
-    expect(shouldApplyLineChoropleth(updatedVisualization!)).toBe(true);
+    const line = updatedVisualization!.line;
+    expect(line?.colorMode).toBe('classes');
+    expect(line?.valueColumn).toBe(suggestion.columns?.at(-1));
+    expect(line?.classification?.method).toBeDefined();
   }
 
   if (POLYGON_CATEGORICAL_SUGGESTION_IDS.has(suggestion.id)) {
