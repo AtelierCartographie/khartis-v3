@@ -8,10 +8,13 @@
     tone: JoinCategoryTone;
     count: number;
     label: string;
-    /** Carbon icon of the category; `swatch` replaces it with a map swatch. */
+    /** Carbon icon of the category. */
     icon?: Component<{ size?: number }>;
-    /** CSS background of the swatch drawn instead of an icon. */
-    swatch?: string;
+    /**
+     * CSS background of a map legend box drawn before the icon; `null` keeps
+     * the box's place empty, for a category the map does not draw.
+     */
+    legend?: string | null;
     /** An accordion header: shows the chevron and sets `aria-expanded`. */
     expanded?: boolean;
     compact?: boolean;
@@ -27,7 +30,7 @@
     count,
     label,
     icon: Icon,
-    swatch,
+    legend,
     expanded,
     compact = false,
     muted = false,
@@ -39,10 +42,16 @@
 </script>
 
 {#snippet content()}
-  <span class="category-icon" aria-hidden="true">
-    {#if swatch}
-      <span class="category-swatch" style:background={swatch}></span>
-    {:else if Icon}
+  {#if legend !== undefined}
+    <span
+      class="category-legend"
+      class:is-empty={legend === null}
+      style:background={legend ?? undefined}
+      aria-hidden="true"
+    ></span>
+  {/if}
+  <span class="category-icon" style:min-width="{iconSize}px" aria-hidden="true">
+    {#if Icon}
       <Icon size={iconSize} />
     {/if}
   </span>
@@ -142,10 +151,15 @@
     fill: var(--category-color);
   }
 
-  .category-swatch {
+  .category-legend {
+    flex-shrink: 0;
     width: 1.125rem;
     height: 1.125rem;
     box-shadow: inset 0 0 0 1px rgba(22, 22, 22, 0.25);
+  }
+
+  .category-legend.is-empty {
+    box-shadow: none;
   }
 
   .category-count {
@@ -198,7 +212,7 @@
     font-size: 0.75rem;
   }
 
-  .compact .category-swatch {
+  .compact .category-legend {
     width: 0.875rem;
     height: 0.875rem;
   }

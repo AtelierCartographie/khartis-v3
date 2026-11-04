@@ -37,6 +37,7 @@
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import JoinControlSummary from '$lib/features/map/components/join-control-summary.svelte';
+  import JoinControlStepFade from '$lib/features/map/components/join-control-step-fade.svelte';
   import Sidenav from '$lib/features/side-nav/side-nav.svelte';
   import {
     annotationsActions,
@@ -474,6 +475,8 @@
         <ZoomToolbar />
 
         <JoinControlSummary />
+
+        <JoinControlStepFade />
 
         <MobileOpenPanelButton />
 
