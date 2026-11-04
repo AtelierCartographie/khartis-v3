@@ -2180,6 +2180,7 @@
     ignoredEntities={ignoredEntities}
     duplicateLines={dataTabState.basemapJoin.duplicateLines}
     basemapAliasesByValue={basemapAttributes.aliasesByValue}
+    basemapValuesLoading={basemapAttributes.loading}
     onRequestBasemapValues={basemapAttributes.requestValues}
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}

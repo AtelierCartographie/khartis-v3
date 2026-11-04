@@ -10,6 +10,7 @@
     DEFAULT_PAGE_COLOR,
     getFormatState
   } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import { resolvePageInsetBox } from '$lib/features/step-toolbar/tools/format/page-insets.utils';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -63,41 +64,25 @@
   const pageBackgroundColor = $derived(
     hslToHex(pageColor.hue, pageColor.saturation, pageColor.lightness)
   );
-  const pageMargins = $derived(fmtState.margins);
   const pageDisplayScale = $derived(
     Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
   );
-  const renderedPageMargins = $derived({
-    top: pageMargins.top * pageDisplayScale,
-    right: pageMargins.right * pageDisplayScale,
-    bottom: pageMargins.bottom * pageDisplayScale,
-    left: pageMargins.left * pageDisplayScale
-  });
-  const mapStageWidth = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (logicalWidth - pageMargins.left - pageMargins.right) * pageDisplayScale
-      )
-    )
+  const pageSize = $derived({ width: logicalWidth, height: logicalHeight });
+  const marginBox = $derived(
+    resolvePageInsetBox(pageSize, fmtState.margins, pageDisplayScale)
   );
-  const mapStageHeight = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (logicalHeight - pageMargins.top - pageMargins.bottom) *
-          pageDisplayScale
-      )
-    )
+  // The collection is drawn in the map frame, layout items in the margin box.
+  const mapFrameBox = $derived(
+    resolvePageInsetBox(pageSize, fmtState.mapFrame, pageDisplayScale)
   );
   const pageStyle = $derived(
-    `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
+    `background-color: ${pageBackgroundColor}; width: ${width}px; height: ${height}px;`
   );
   const mapStageStyle = $derived(
-    `width: ${mapStageWidth}px; height: ${mapStageHeight}px; background-color: ${pageBackgroundColor};`
+    `left: ${mapFrameBox.left}px; top: ${mapFrameBox.top}px; width: ${mapFrameBox.width}px; height: ${mapFrameBox.height}px; background-color: ${pageBackgroundColor};`
   );
   const layoutStageStyle = $derived(
-    `left: ${renderedPageMargins.left}px; top: ${renderedPageMargins.top}px; width: ${mapStageWidth}px; height: ${mapStageHeight}px;`
+    `left: ${marginBox.left}px; top: ${marginBox.top}px; width: ${marginBox.width}px; height: ${marginBox.height}px;`
   );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
@@ -139,13 +124,13 @@
       densityTables={densityTables}
       splitData={splitData}
       layout={layout}
-      containerWidth={mapStageWidth}
-      containerHeight={mapStageHeight}
+      containerWidth={mapFrameBox.width}
+      containerHeight={mapFrameBox.height}
       onReady={onReady}
     />
   </div>
 
-  <!-- Layout items sit over the map area but may move into the margins, so
+  <!-- Layout items sit in the margin box, independent of the map frame, so
        they live outside the clipped map stage. -->
   <div class="layout-stage" style={layoutStageStyle}>
     <GeoIndicationsOverlay
@@ -169,7 +154,7 @@
   }
 
   .facets-map-stage {
-    position: relative;
+    position: absolute;
     overflow: hidden;
   }
 
