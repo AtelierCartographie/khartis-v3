@@ -18,7 +18,7 @@
   import {
     fuzzyMatch,
     highlightSegments
-  } from 'carbon-components-svelte/src/utils/fuzzyMatch.js';
+  } from 'carbon-components-svelte/src/utils/fuzzy-match.js';
   import {
     CheckmarkFilled,
     ChevronDown,
