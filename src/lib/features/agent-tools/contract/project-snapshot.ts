@@ -1,5 +1,9 @@
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.types';
+import {
+  COLUMN_TRANSFORMATION_TYPES,
+  type ColumnTransformation
+} from '$lib/features/commons/types/create-project.types';
+import { isVisualizableDataColumn } from '$lib/features/commons/utils/visualization-columns.utils';
 import type { EnrichedColumn } from '$lib/features/data-pipeline';
 import { computeRevision } from './revision';
 import type { ColumnNature } from './types';
@@ -7,7 +11,7 @@ import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
   AGENT_STEPS,
-  listClassPaletteIds
+  CLASS_PALETTE_IDS
 } from './validation';
 
 /**
@@ -21,11 +25,10 @@ export type SnapshotColumnInput = Pick<EnrichedColumn, 'name' | 'type'> & {
   nature?: ColumnNature;
 };
 
-export interface ColumnChange {
-  type: string;
-  column: string;
-  newValue?: string;
-}
+export type ColumnChange = Pick<
+  ColumnTransformation,
+  'type' | 'column' | 'newValue'
+>;
 
 export interface SnapshotDatasetInput {
   id: string;
@@ -90,10 +93,6 @@ function countOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-export const INTERNAL_COLUMN_NAMES = new Set<string>(
-  Object.values(INTERNAL_COLUMN)
-);
-
 function readText(text: SnapshotTextInput | undefined): string | null {
   if (!text || text.placeholder || typeof text.content !== 'string') {
     return null;
@@ -109,12 +108,12 @@ function readText(text: SnapshotTextInput | undefined): string | null {
 export function listCalculatedColumns(changes: ColumnChange[] = []): string[] {
   const names = new Set<string>();
   for (const change of changes) {
-    if (change.type === 'calculate') {
+    if (change.type === COLUMN_TRANSFORMATION_TYPES.CALCULATE) {
       names.add(change.column);
-    } else if (change.type === 'drop') {
+    } else if (change.type === COLUMN_TRANSFORMATION_TYPES.DROP) {
       names.delete(change.column);
     } else if (
-      change.type === 'rename' &&
+      change.type === COLUMN_TRANSFORMATION_TYPES.RENAME &&
       change.newValue &&
       names.delete(change.column)
     ) {
@@ -132,8 +131,9 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
       row_count: dataset.rowCount,
       has_geometry: dataset.hasGeometry,
       joined_basemap: dataset.joinedBasemap ?? null,
+      // The columns the variable picker of the panel offers.
       columns: dataset.columns
-        .filter((column) => !INTERNAL_COLUMN_NAMES.has(column.name))
+        .filter(isVisualizableDataColumn)
         .map((column) => ({
           name: column.name,
           type: column.type,
@@ -200,7 +200,7 @@ export function buildProjectSnapshot(input: ProjectSnapshotInput) {
       steps: [...AGENT_STEPS],
       classification_methods: [...AGENT_CLASSIFICATION_METHODS],
       class_count: { ...AGENT_CLASS_COUNT },
-      class_palettes: listClassPaletteIds()
+      class_palettes: CLASS_PALETTE_IDS
     }
   };
 }

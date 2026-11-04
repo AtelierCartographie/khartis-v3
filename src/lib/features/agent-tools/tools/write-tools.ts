@@ -2,7 +2,10 @@ import { tick } from 'svelte';
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
 import { SCALE_MODE } from '$lib/features/commons/constants/facets.constants';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
-import { FillMode } from '$lib/features/commons/constants/visualization.constants';
+import {
+  DEFAULT_DISCRETIZATION_CLASS_COUNT,
+  FillMode
+} from '$lib/features/commons/constants/visualization.constants';
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
@@ -16,14 +19,16 @@ import {
 import {
   ClassificationMethod,
   type ClassificationConfig,
-  PrimitiveFilterType
+  type PolygonPrimitiveConfig,
+  PrimitiveFilterType,
+  type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.types';
-import { DEFAULT_DISCRETIZATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import {
   DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
   resolveRequestedClassCount
 } from '$lib/features/commons/utils/discretization.utils';
+import { filterVisualizableDataColumns } from '$lib/features/commons/utils/visualization-columns.utils';
 import {
   annotationsActions,
   closeSelectedToolPanel,
@@ -39,17 +44,20 @@ import {
   resetClassificationComputedValues,
   syncLegendSubtitleAfterMappingChange
 } from '$lib/features/visualization-tab';
+import { listCalculatedColumns } from '../contract/project-snapshot';
 import {
-  INTERNAL_COLUMN_NAMES,
-  listCalculatedColumns
-} from '../contract/project-snapshot';
-import type { AgentTool, AgentToolResult } from '../contract/types';
+  failure,
+  NO_PROJECT,
+  type AgentTool,
+  type AgentToolResult,
+  type Parsed
+} from '../contract/types';
 import {
   AGENT_CLASS_COUNT,
   AGENT_CLASSIFICATION_METHODS,
   AGENT_STEPS,
   AGENT_TEXT_LIMITS,
-  listClassPaletteIds,
+  CLASS_PALETTE_IDS,
   parseGoToStepInput,
   parseLayoutTextsInput,
   parseLegendTextsInput,
@@ -66,14 +74,57 @@ import {
 import { listColumnNatures } from './column-natures';
 import {
   type Commit,
-  failure,
   REVISION_PROPERTY,
   runEdit,
-  type Settle,
   STALE_FAILURE
 } from './edit-guard';
 import { listVisualizationLegends } from './legends';
 import { readProjectSnapshot } from './read-tools';
+
+type Dataset = (typeof datasetsStore.datasets)[number];
+
+interface Choropleth {
+  visualization: VisualizationConfig;
+  polygon: PolygonPrimitiveConfig;
+  dataset: Dataset;
+  sourceFileId: string;
+}
+
+// A polygon fill in classes, on a visualization the agent reads: the maps
+// generated for a collection repeat their base.
+function findChoropleth(visualizationId: string): Parsed<Choropleth> {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === visualizationId && !item.facet
+  );
+  if (!visualization) {
+    return failure('not_found', 'No visualization has this id.');
+  }
+  const polygon = getPolygonPrimitive(visualization);
+  if (!polygon?.enabled || polygon.fillMode !== FillMode.CLASSES) {
+    return failure(
+      'unsupported',
+      'This tool works on a polygon fill in classes (choropleth) only.'
+    );
+  }
+  const dataset = datasetsStore.datasets.find(
+    (item) => item.id === visualization.datasetId
+  );
+  if (!dataset?.sourceFileId) {
+    return failure(
+      'unavailable',
+      'The dataset of this visualization is not loaded yet.'
+    );
+  }
+  return {
+    ok: true,
+    value: {
+      visualization,
+      polygon,
+      dataset,
+      sourceFileId: dataset.sourceFileId
+    }
+  };
+}
 
 // As in the discretization panel, the base of a collection with shared
 // classes is classed on all its variables; the maps of the collection then
@@ -90,58 +141,29 @@ function resolvePooledColumnNames(
     : undefined;
 }
 
-function findClassedPolygon(visualizationId: string) {
-  const visualization = visualizationStore.visualizations.find(
-    (item) => item.id === visualizationId && !item.facet
-  );
-  const polygon = visualization && getPolygonPrimitive(visualization);
-  if (!visualization || !polygon?.enabled) return null;
-  return {
-    visualization,
-    classed: polygon.fillMode === FillMode.CLASSES,
-    valueColumn: getPrimitiveValueColumn(
-      visualization,
-      PrimitiveFilterType.POLYGON
-    )
+interface ComputedClasses {
+  update: Partial<ClassificationConfig>;
+  summary: {
+    method: ClassificationMethod;
+    classes: number;
+    palette_id: string | null;
+    inverted: boolean;
   };
 }
 
-async function applyClassificationChange(
-  change: ClassificationChange,
-  commit: Commit,
-  settle: Settle
-): Promise<AgentToolResult> {
-  if (
-    !visualizationStore.visualizations.some(
-      (item) => item.id === change.visualizationId && !item.facet
-    )
-  ) {
-    return failure('not_found', 'No visualization has this id.');
-  }
-
-  const target = findClassedPolygon(change.visualizationId);
-  if (!target?.classed) {
-    return failure(
-      'unsupported',
-      'This prototype changes the classes of a polygon fill in classes only.'
-    );
-  }
-
-  const { visualization, valueColumn } = target;
-  const dataset = datasetsStore.datasets.find(
-    (item) => item.id === visualization.datasetId
-  );
-  if (!valueColumn || !dataset?.sourceFileId) {
-    return failure('unavailable', 'The classed column is not loaded yet.');
-  }
-
-  const current = getPrimitiveClassification(
-    visualization,
-    PrimitiveFilterType.POLYGON
-  );
+/**
+ * Computes, without writing, the classes of a column from the requested
+ * settings and the current ones, as the classification panel does.
+ */
+async function computeClasses(
+  { visualization, sourceFileId }: Choropleth,
+  valueColumn: string,
+  current: ClassificationConfig | undefined,
+  settings: Omit<ClassificationChange, 'visualizationId'>
+): Promise<Parsed<ComputedClasses>> {
   // Manual bounds depend on values the agent does not see. A calendar method
   // is left to the engine, which keeps it for dates and drops it for numbers.
-  const method = change.method ?? current?.method;
+  const method = settings.method ?? current?.method;
   if (!method || method === ClassificationMethod.MANUAL) {
     return failure(
       'unsupported',
@@ -151,10 +173,10 @@ async function applyClassificationChange(
 
   const classes = resolveRequestedClassCount(
     method,
-    change.classes ??
+    settings.classes ??
       // As in the discretization panel, head/tail asks for the largest
       // count and keeps the classes the distribution gives.
-      (change.method === ClassificationMethod.HEAD_TAIL
+      (settings.method === ClassificationMethod.HEAD_TAIL
         ? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
         : undefined) ??
       current?.numClasses ??
@@ -164,20 +186,20 @@ async function applyClassificationChange(
   // Classes split at a breakpoint are drawn with a diverging ramp: the engine
   // would replace a sequential palette by its default diverging one.
   if (
-    change.paletteId !== undefined &&
+    settings.paletteId !== undefined &&
     Number.isFinite(current?.breakpointValue) &&
-    !listClassPaletteIds().diverging.includes(change.paletteId)
+    !CLASS_PALETTE_IDS.diverging.includes(settings.paletteId)
   ) {
     return failure(
       'unsupported',
       'These classes split at a breakpoint, so the map draws a diverging palette: choose one from capabilities.class_palettes.diverging.'
     );
   }
-  const paletteId = change.paletteId ?? current?.paletteId;
+  const paletteId = settings.paletteId ?? current?.paletteId;
   // A palette picked from the menu starts the right way round.
   const inverted =
-    change.inverted ??
-    (change.paletteId !== undefined ? false : (current?.inverted ?? false));
+    settings.inverted ??
+    (settings.paletteId !== undefined ? false : (current?.inverted ?? false));
   // A hand-built ramp has no palette id: inverting flips its colors, as the
   // panel does. A palette is regenerated instead, since the engine keeps the
   // stored colors while the breaks do not change.
@@ -185,7 +207,7 @@ async function applyClassificationChange(
   const flipped = inverted !== (current?.inverted ?? false);
   const recolor =
     !handBuilt &&
-    (change.paletteId !== undefined || change.inverted !== undefined);
+    (settings.paletteId !== undefined || settings.inverted !== undefined);
   const next: ClassificationConfig = {
     ...current,
     method,
@@ -202,10 +224,10 @@ async function applyClassificationChange(
   };
 
   const computation = await computeClassificationBreaks({
-    datasetSourceFileId: dataset.sourceFileId,
+    datasetSourceFileId: sourceFileId,
     valueColumn,
     rowScopeClause: resolveValueScopeClause({
-      datasetId: dataset.sourceFileId,
+      datasetId: sourceFileId,
       vizFilters: visualization.dataFilters,
       primitive: PrimitiveFilterType.POLYGON
     }),
@@ -220,26 +242,18 @@ async function applyClassificationChange(
       'The engine could not compute classes for this column.'
     );
   }
-
-  const written = await commit(() => {
-    visualizationStore.updateClassification(visualization.id, {
-      method,
-      classes,
-      numClasses: classes,
-      paletteId,
-      inverted,
-      ...buildClassificationUpdate(computation, next, method)
-    });
-  });
-  if (!written) return STALE_FAILURE;
-  await facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
-  await settle();
-
   return {
     ok: true,
-    data: {
-      visualization_id: visualization.id,
-      classification: {
+    value: {
+      update: {
+        method,
+        classes,
+        numClasses: classes,
+        paletteId,
+        inverted,
+        ...buildClassificationUpdate(computation, next, method)
+      },
+      summary: {
         method: computation.normalizedMethod,
         classes: computation.actualClassCount,
         palette_id: paletteId ?? null,
@@ -249,24 +263,59 @@ async function applyClassificationChange(
   };
 }
 
-// Same writes as the variable picker of the panel, then the classes are
-// computed for the new column with the current settings.
-async function applyChoroplethVariable(
-  change: ChoroplethVariableChange,
-  commit: Commit,
-  settle: Settle
+async function applyClassificationChange(
+  change: ClassificationChange,
+  commit: Commit
 ): Promise<AgentToolResult> {
-  const target = findClassedPolygon(change.visualizationId);
-  if (!target) {
-    return failure('not_found', 'No visualization has this id.');
-  }
-  if (!target.classed) {
+  const found = findChoropleth(change.visualizationId);
+  if (!found.ok) return found;
+  const { visualization } = found.value;
+  const valueColumn = getPrimitiveValueColumn(
+    visualization,
+    PrimitiveFilterType.POLYGON
+  );
+  if (!valueColumn) {
     return failure(
-      'unsupported',
-      'This tool changes the variable of a polygon fill in classes (choropleth) only.'
+      'unavailable',
+      'This choropleth maps no column yet: give one with set_choropleth_variable.'
     );
   }
-  const { visualization } = target;
+
+  const classes = await computeClasses(
+    found.value,
+    valueColumn,
+    getPrimitiveClassification(visualization, PrimitiveFilterType.POLYGON),
+    change
+  );
+  if (!classes.ok) return classes;
+  const written = await commit(() => {
+    visualizationStore.updateClassification(
+      visualization.id,
+      classes.value.update
+    );
+  });
+  if (!written) return STALE_FAILURE;
+  await facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
+
+  return {
+    ok: true,
+    data: {
+      visualization_id: visualization.id,
+      classification: classes.value.summary
+    }
+  };
+}
+
+// The writes of the variable picker of the panel, with the classes it then
+// computes, in one go: the map never shows the new column without classes,
+// and a column the engine cannot class leaves the map as it was.
+async function applyChoroplethVariable(
+  change: ChoroplethVariableChange,
+  commit: Commit
+): Promise<AgentToolResult> {
+  const found = findChoropleth(change.visualizationId);
+  if (!found.ok) return found;
+  const { visualization, polygon, dataset } = found.value;
   if (
     facetsStore.enabled &&
     facetsStore.baseVisualizationId === visualization.id
@@ -276,25 +325,18 @@ async function applyChoroplethVariable(
       'This visualization is the base of a map collection: its variables are chosen in the collection panel.'
     );
   }
-  const dataset = datasetsStore.datasets.find(
-    (item) => item.id === visualization.datasetId
-  );
-  if (!dataset) {
-    return failure('unavailable', 'The dataset is not loaded yet.');
-  }
 
   const calculated = listCalculatedColumns(
     projectStore.currentProject?.data?.sourceFiles?.find(
       (file) => file.id === dataset.sourceFileId
     )?.columnTransformations
   );
-  const columns = new Set([
-    ...dataset.columns
-      .map((column) => column.name)
-      .filter((name) => !INTERNAL_COLUMN_NAMES.has(name)),
-    ...calculated
-  ]);
-  if (!columns.has(change.column)) {
+  if (
+    !calculated.includes(change.column) &&
+    !filterVisualizableDataColumns(dataset.columns).some(
+      (column) => column.name === change.column
+    )
+  ) {
     return failure(
       'not_found',
       'No column has this name: give a column or a calculated column from inspect_project.'
@@ -305,13 +347,9 @@ async function applyChoroplethVariable(
   if (refusal) {
     return failure('unsupported', `${change.column} ${refusal}`);
   }
-  // A column already mapped whose classes were never computed, after an
-  // interrupted change, gets its classes instead of an "unchanged" answer.
-  const sameColumn = target.valueColumn === change.column;
   if (
-    sameColumn &&
-    getPrimitiveClassification(visualization, PrimitiveFilterType.POLYGON)
-      ?.breaks?.length
+    getPrimitiveValueColumn(visualization, PrimitiveFilterType.POLYGON) ===
+    change.column
   ) {
     return {
       ok: true,
@@ -323,77 +361,55 @@ async function applyChoroplethVariable(
     };
   }
 
-  const polygon = getPolygonPrimitive(visualization);
-  if (!polygon) {
-    return failure('unsupported', 'This visualization has no polygon fill.');
-  }
-  const findCurrent = () =>
-    visualizationStore.visualizations.find(
+  // As in the picker, what belonged to the previous column goes: manual
+  // bounds, breakpoint and colors.
+  const classes = await computeClasses(
+    found.value,
+    change.column,
+    resetClassificationComputedValues(
+      getPrimitiveClassification(visualization, PrimitiveFilterType.POLYGON)
+    ),
+    {}
+  );
+  if (!classes.ok) return classes;
+  const written = await commit(() => {
+    visualizationStore.updateVisualization(visualization.id, {
+      classification: resetClassificationComputedValues(
+        visualization.classification
+      ),
+      polygon: {
+        ...polygon,
+        valueColumn: change.column,
+        classification: resetClassificationComputedValues(
+          polygon.classification
+        )
+      },
+      mapping: { ...visualization.mapping, valueColumn: change.column }
+    });
+    visualizationStore.updateClassification(
+      visualization.id,
+      classes.value.update
+    );
+    const updated = visualizationStore.visualizations.find(
       (item) => item.id === visualization.id
     );
-  const columnWritten =
-    sameColumn ||
-    (await commit(() => {
-      visualizationStore.updateVisualization(visualization.id, {
-        classification: resetClassificationComputedValues(
-          visualization.classification
-        ),
-        polygon: {
-          ...polygon,
-          valueColumn: change.column,
-          classification: resetClassificationComputedValues(
-            polygon.classification
-          )
-        },
-        mapping: { ...visualization.mapping, valueColumn: change.column }
-      });
-      const updated = findCurrent();
-      if (updated) {
-        syncLegendSubtitleAfterMappingChange(
-          PrimitiveFilterType.POLYGON,
-          visualization,
-          updated
-        );
-      }
-    }));
-  if (!columnWritten) return STALE_FAILURE;
-
-  const classes = await applyClassificationChange(
-    { visualizationId: visualization.id },
-    commit,
-    settle
-  );
-  if (!classes.ok) {
-    // A column the engine cannot class leaves the map as it was; a change
-    // the user made meanwhile is kept.
-    if (classes.error.code !== 'conflict' && !sameColumn) {
-      await commit(() => {
-        const changed = findCurrent();
-        visualizationStore.updateVisualization(visualization.id, {
-          origin: visualization.origin,
-          classification: visualization.classification,
-          polygon,
-          mapping: visualization.mapping
-        });
-        const restored = findCurrent();
-        if (changed && restored) {
-          syncLegendSubtitleAfterMappingChange(
-            PrimitiveFilterType.POLYGON,
-            changed,
-            restored
-          );
-        }
-      });
+    if (updated) {
+      syncLegendSubtitleAfterMappingChange(
+        PrimitiveFilterType.POLYGON,
+        visualization,
+        updated
+      );
     }
-    return classes;
-  }
+  });
+  if (!written) return STALE_FAILURE;
+
   return {
     ok: true,
     data: {
       visualization_id: visualization.id,
       column: change.column,
       nature: nature ?? null,
-      classification: classes.data.classification,
+      classification: classes.value.summary,
       legend_title_kept: listVisualizationLegends(visualization.id).some(
         (legend) => legend.titleMode === 'custom'
       )
@@ -417,9 +433,7 @@ const LAYOUT_ROLES = {
 } as const;
 
 function applyLayoutTexts(change: LayoutTextsChange): AgentToolResult {
-  if (!projectStore.currentProject) {
-    return failure('unavailable', 'No project is open.');
-  }
+  if (!projectStore.currentProject) return NO_PROJECT;
   // Same first-time setup as the Styling step: page texts exist once laid out.
   if (!getAnnotationsState().items.some((item) => item.role != null)) {
     annotationsActions.initPageElements({
@@ -500,9 +514,7 @@ function applyLegendTexts(change: LegendTextsChange): AgentToolResult {
 
 async function goToStep(step: ToolbarStep): Promise<AgentToolResult> {
   const project = projectStore.currentProject;
-  if (!project) {
-    return failure('unavailable', 'No project is open.');
-  }
+  if (!project) return NO_PROJECT;
   if (step !== ToolbarStep.Data && !project.data?.sourceFiles?.length) {
     return failure('unavailable', 'Import data before leaving the Data step.');
   }

@@ -26,7 +26,13 @@ import {
   isVisualizationMatchingSuggestion,
   resolveBlankVisualizationType
 } from '$lib/features/visualization-tab';
-import type { AgentTool, AgentToolResult } from '../contract/types';
+import {
+  failure,
+  NO_PROJECT,
+  type AgentTool,
+  type AgentToolResult,
+  type Parsed
+} from '../contract/types';
 import {
   parseApplySuggestionInput,
   parseSuggestVisualizationsInput,
@@ -36,8 +42,6 @@ import {
 import { toColumnNature } from './column-natures';
 import {
   type Commit,
-  type Settle,
-  failure,
   REVISION_PROPERTY,
   runEdit,
   STALE_FAILURE
@@ -54,29 +58,23 @@ function listDatasetsToVisualize(): Dataset[] {
   );
 }
 
-function resolveDataset(
-  query: SuggestionsQuery
-): { ok: true; dataset: Dataset } | { ok: false; result: AgentToolResult } {
-  if (!projectStore.currentProject) {
-    return { ok: false, result: failure('unavailable', 'No project is open.') };
-  }
+function resolveDataset(query: SuggestionsQuery): Parsed<Dataset> {
+  if (!projectStore.currentProject) return NO_PROJECT;
   const datasets = listDatasetsToVisualize();
   const dataset = query.datasetId
     ? datasets.find((item) => item.id === query.datasetId)
     : (datasets.find((item) => item.id === datasetsStore.selectedDatasetId) ??
       datasets[0]);
-  if (!dataset) {
-    return {
-      ok: false,
-      result: failure(
-        query.datasetId ? 'not_found' : 'unavailable',
-        query.datasetId
-          ? 'This dataset cannot be visualized: a table joined to a geographic file is visualized from that file.'
-          : 'No dataset can be visualized yet: import data and place it on a basemap first.'
+  if (dataset) return { ok: true, value: dataset };
+  return query.datasetId
+    ? failure(
+        'not_found',
+        'This dataset cannot be visualized: a table joined to a geographic file is visualized from that file.'
       )
-    };
-  }
-  return { ok: true, dataset };
+    : failure(
+        'unavailable',
+        'No dataset can be visualized yet: import data and place it on a basemap first.'
+      );
 }
 
 // The visualization a suggestion card applies to in the Visualizations step.
@@ -113,8 +111,8 @@ function describeSuggestion(suggestion: VizSuggestion) {
 
 function listSuggestions(query: SuggestionsQuery): AgentToolResult {
   const resolved = resolveDataset(query);
-  if (!resolved.ok) return resolved.result;
-  const { dataset } = resolved;
+  if (!resolved.ok) return resolved;
+  const dataset = resolved.value;
   return {
     ok: true,
     data: {
@@ -155,12 +153,11 @@ async function waitForPolygonClasses(
 
 async function applySuggestion(
   choice: SuggestionChoice,
-  commit: Commit,
-  settle: Settle
+  commit: Commit
 ): Promise<AgentToolResult> {
   const resolved = resolveDataset(choice);
-  if (!resolved.ok) return resolved.result;
-  const { dataset } = resolved;
+  if (!resolved.ok) return resolved;
+  const dataset = resolved.value;
   const suggestion = computeVisualizationSuggestions(dataset).find(
     (candidate) => getSuggestionSignature(candidate) === choice.suggestionKey
   );
@@ -173,11 +170,7 @@ async function applySuggestion(
 
   // The card is applied from the Visualizations step, whose panel then
   // computes the classes and colors, as after a click.
-  const applied: {
-    target?: ReturnType<typeof findTargetVisualization>;
-    unchanged: boolean;
-  } = { unchanged: false };
-  const written = await commit(() => {
+  const applied = await commit(() => {
     if (globalState.selectedStep !== ToolbarStep.Visualizations) {
       closeSelectedToolPanel();
       globalActions.setNavigationState(ToolbarStep.Visualizations);
@@ -189,10 +182,10 @@ async function applySuggestion(
         resolveBlankVisualizationType(dataset),
         dataset.id
       );
-    applied.unchanged =
+    const unchanged =
       visualization.origin?.suggestionKey === choice.suggestionKey &&
       isVisualizationMatchingSuggestion(visualization, dataset, suggestion);
-    if (!applied.unchanged) {
+    if (!unchanged) {
       applySuggestionToVisualization(visualization.id, suggestion, {
         origin: buildSuggestionOrigin(visualization, {
           mode: 'manual-suggestion',
@@ -201,15 +194,14 @@ async function applySuggestion(
       });
     }
     visualizationStore.selectVisualization(visualization.id);
-    applied.target = visualization;
+    return { target: visualization, unchanged };
   });
-  const { target, unchanged } = applied;
-  if (!written || !target) return STALE_FAILURE;
+  if (!applied) return STALE_FAILURE;
+  const { target, unchanged } = applied.value;
 
   // The panel computes the classes and Khartis lays out the legend after the
   // click: the returned revision includes them.
   const classesReady = await waitForPolygonClasses(target.id);
-  await settle();
   return {
     ok: true,
     data: {

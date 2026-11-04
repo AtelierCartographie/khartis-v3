@@ -17,12 +17,12 @@ export interface AgentToolError {
   message: string;
 }
 
-export type Parsed<T> =
-  { ok: true; value: T } | { ok: false; error: AgentToolError };
+type Refusal = { ok: false; error: AgentToolError };
+
+export type Parsed<T> = { ok: true; value: T } | Refusal;
 
 export type AgentToolResult =
-  | { ok: true; data: Record<string, unknown> }
-  | { ok: false; error: AgentToolError };
+  { ok: true; data: Record<string, unknown> } | Refusal;
 
 export interface AgentToolAnnotations {
   readOnlyHint?: boolean;
@@ -38,9 +38,19 @@ export interface AgentTool {
   execute: (input: unknown) => Promise<AgentToolResult>;
 }
 
-export function invalidInput(message: string): {
-  ok: false;
-  error: AgentToolError;
-} {
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function invalidInput(message: string): Refusal {
   return { ok: false, error: { code: 'invalid_input', message } };
 }
+
+export function failure(
+  code: Exclude<AgentToolErrorCode, 'invalid_input'>,
+  message: string
+): Refusal {
+  return { ok: false, error: { code, message } };
+}
+
+export const NO_PROJECT = failure('unavailable', 'No project is open.');

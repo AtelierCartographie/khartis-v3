@@ -26,7 +26,7 @@ import {
   buildProjectSnapshot,
   type SnapshotPrimitiveInput
 } from '../contract/project-snapshot';
-import type { AgentTool } from '../contract/types';
+import { NO_PROJECT, type AgentTool } from '../contract/types';
 import { listColumnNatures } from './column-natures';
 import { listRenderedLegends, resolveLegendVisualizationId } from './legends';
 
@@ -153,12 +153,7 @@ export const inspectProjectTool: AgentTool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { readOnlyHint: true, untrustedContentHint: true },
   async execute() {
-    if (!projectStore.currentProject) {
-      return {
-        ok: false,
-        error: { code: 'unavailable', message: 'No project is open.' }
-      };
-    }
+    if (!projectStore.currentProject) return NO_PROJECT;
     return { ok: true, data: readProjectSnapshot() };
   }
 };
