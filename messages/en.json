@@ -1690,7 +1690,7 @@
   "size": "Size",
   "colorblind_notification_title": "Color blindness",
   "colorblind_notification_message": "A filter simulating a form of color blindness is active. To change or turn it off, find the tool in the Layout step.",
-  "colorblind_deactivate": "Deactivate",
+  "colorblind_open_tool": "Open the tool",
   "validation_content_check_failed": "Unable to validate file content",
   "validation_file_count_exceeded": "Maximum number of files exceeded ({max})",
   "validation_total_size_exceeded": "The total file size exceeds {size} MB",

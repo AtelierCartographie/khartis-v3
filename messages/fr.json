@@ -1690,7 +1690,7 @@
   "size": "Taille",
   "colorblind_notification_title": "Déficiences visuelles",
   "colorblind_notification_message": "Un filtre simulant une forme de daltonisme est actif. Pour le modifier ou le désactiver, retrouvez l'outil à l'étape Habillage.",
-  "colorblind_deactivate": "Désactiver",
+  "colorblind_open_tool": "Ouvrir l’outil",
   "validation_content_check_failed": "Impossible de valider le contenu du fichier",
   "validation_file_count_exceeded": "Nombre maximal de fichiers dépassé ({max})",
   "validation_total_size_exceeded": "La taille totale des fichiers dépasse {size} Mo",
