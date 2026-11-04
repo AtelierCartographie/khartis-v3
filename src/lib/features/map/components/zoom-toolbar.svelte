@@ -338,7 +338,7 @@
       className="zoom-mode-tabs"
       activeClass="active"
       fullWidthClass="full-width"
-      hideInactiveLabel={true}
+      hideInactiveLabel={false}
     />
 
     <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
@@ -731,7 +731,7 @@
     }
 
     .zoom-toolbar {
-      width: 150px;
+      width: 172px;
     }
 
     .zoom-section {
@@ -739,6 +739,11 @@
     }
 
     .zoom-value {
+      display: none;
+    }
+
+    /* Without the zoom value beside it, the reset button needs no divider. */
+    .zoom-controls::before {
       display: none;
     }
 
