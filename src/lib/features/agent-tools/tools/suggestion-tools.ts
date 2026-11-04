@@ -36,6 +36,7 @@ import {
 import { toColumnNature } from './column-natures';
 import {
   type Commit,
+  type Settle,
   failure,
   REVISION_PROPERTY,
   runEdit,
@@ -154,7 +155,8 @@ async function waitForPolygonClasses(
 
 async function applySuggestion(
   choice: SuggestionChoice,
-  commit: Commit
+  commit: Commit,
+  settle: Settle
 ): Promise<AgentToolResult> {
   const resolved = resolveDataset(choice);
   if (!resolved.ok) return resolved.result;
@@ -175,7 +177,7 @@ async function applySuggestion(
     target?: ReturnType<typeof findTargetVisualization>;
     unchanged: boolean;
   } = { unchanged: false };
-  const written = commit(() => {
+  const written = await commit(() => {
     if (globalState.selectedStep !== ToolbarStep.Visualizations) {
       closeSelectedToolPanel();
       globalActions.setNavigationState(ToolbarStep.Visualizations);
@@ -204,13 +206,17 @@ async function applySuggestion(
   const { target, unchanged } = applied;
   if (!written || !target) return STALE_FAILURE;
 
+  // The panel computes the classes and Khartis lays out the legend after the
+  // click: the returned revision includes them.
+  const classesReady = await waitForPolygonClasses(target.id);
+  await settle();
   return {
     ok: true,
     data: {
       visualization_id: target.id,
       kind: suggestion.id,
       unchanged,
-      classes_ready: await waitForPolygonClasses(target.id)
+      classes_ready: classesReady
     }
   };
 }
@@ -255,7 +261,7 @@ export const applyVisualizationSuggestionTool: AgentTool = {
       },
       expected_revision: REVISION_PROPERTY
     },
-    required: ['suggestion_key'],
+    required: ['suggestion_key', 'expected_revision'],
     additionalProperties: false
   },
   annotations: {},

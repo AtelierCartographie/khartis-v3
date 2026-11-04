@@ -49,6 +49,7 @@ import {
   AGENT_CLASSIFICATION_METHODS,
   AGENT_STEPS,
   AGENT_TEXT_LIMITS,
+  listClassPaletteIds,
   parseGoToStepInput,
   parseLayoutTextsInput,
   parseLegendTextsInput,
@@ -68,6 +69,7 @@ import {
   failure,
   REVISION_PROPERTY,
   runEdit,
+  type Settle,
   STALE_FAILURE
 } from './edit-guard';
 import { listVisualizationLegends } from './legends';
@@ -106,7 +108,8 @@ function findClassedPolygon(visualizationId: string) {
 
 async function applyClassificationChange(
   change: ClassificationChange,
-  commit: Commit
+  commit: Commit,
+  settle: Settle
 ): Promise<AgentToolResult> {
   if (
     !visualizationStore.visualizations.some(
@@ -158,6 +161,18 @@ async function applyClassificationChange(
       current?.classes ??
       DEFAULT_DISCRETIZATION_CLASS_COUNT
   );
+  // Classes split at a breakpoint are drawn with a diverging ramp: the engine
+  // would replace a sequential palette by its default diverging one.
+  if (
+    change.paletteId !== undefined &&
+    Number.isFinite(current?.breakpointValue) &&
+    !listClassPaletteIds().diverging.includes(change.paletteId)
+  ) {
+    return failure(
+      'unsupported',
+      'These classes split at a breakpoint, so the map draws a diverging palette: choose one from capabilities.class_palettes.diverging.'
+    );
+  }
   const paletteId = change.paletteId ?? current?.paletteId;
   // A palette picked from the menu starts the right way round.
   const inverted =
@@ -206,7 +221,7 @@ async function applyClassificationChange(
     );
   }
 
-  const written = commit(() => {
+  const written = await commit(() => {
     visualizationStore.updateClassification(visualization.id, {
       method,
       classes,
@@ -218,6 +233,7 @@ async function applyClassificationChange(
   });
   if (!written) return STALE_FAILURE;
   await facetsStore.syncGeneratedVisualizationsFromBase(visualization.id);
+  await settle();
 
   return {
     ok: true,
@@ -237,7 +253,8 @@ async function applyClassificationChange(
 // computed for the new column with the current settings.
 async function applyChoroplethVariable(
   change: ChoroplethVariableChange,
-  commit: Commit
+  commit: Commit,
+  settle: Settle
 ): Promise<AgentToolResult> {
   const target = findClassedPolygon(change.visualizationId);
   if (!target) {
@@ -288,7 +305,14 @@ async function applyChoroplethVariable(
   if (refusal) {
     return failure('unsupported', `${change.column} ${refusal}`);
   }
-  if (target.valueColumn === change.column) {
+  // A column already mapped whose classes were never computed, after an
+  // interrupted change, gets its classes instead of an "unchanged" answer.
+  const sameColumn = target.valueColumn === change.column;
+  if (
+    sameColumn &&
+    getPrimitiveClassification(visualization, PrimitiveFilterType.POLYGON)
+      ?.breaks?.length
+  ) {
     return {
       ok: true,
       data: {
@@ -307,40 +331,43 @@ async function applyChoroplethVariable(
     visualizationStore.visualizations.find(
       (item) => item.id === visualization.id
     );
-  const columnWritten = commit(() => {
-    visualizationStore.updateVisualization(visualization.id, {
-      classification: resetClassificationComputedValues(
-        visualization.classification
-      ),
-      polygon: {
-        ...polygon,
-        valueColumn: change.column,
+  const columnWritten =
+    sameColumn ||
+    (await commit(() => {
+      visualizationStore.updateVisualization(visualization.id, {
         classification: resetClassificationComputedValues(
-          polygon.classification
-        )
-      },
-      mapping: { ...visualization.mapping, valueColumn: change.column }
-    });
-    const updated = findCurrent();
-    if (updated) {
-      syncLegendSubtitleAfterMappingChange(
-        PrimitiveFilterType.POLYGON,
-        visualization,
-        updated
-      );
-    }
-  });
+          visualization.classification
+        ),
+        polygon: {
+          ...polygon,
+          valueColumn: change.column,
+          classification: resetClassificationComputedValues(
+            polygon.classification
+          )
+        },
+        mapping: { ...visualization.mapping, valueColumn: change.column }
+      });
+      const updated = findCurrent();
+      if (updated) {
+        syncLegendSubtitleAfterMappingChange(
+          PrimitiveFilterType.POLYGON,
+          visualization,
+          updated
+        );
+      }
+    }));
   if (!columnWritten) return STALE_FAILURE;
 
   const classes = await applyClassificationChange(
     { visualizationId: visualization.id },
-    commit
+    commit,
+    settle
   );
   if (!classes.ok) {
     // A column the engine cannot class leaves the map as it was; a change
     // the user made meanwhile is kept.
-    if (classes.error.code !== 'conflict') {
-      commit(() => {
+    if (classes.error.code !== 'conflict' && !sameColumn) {
+      await commit(() => {
         const changed = findCurrent();
         visualizationStore.updateVisualization(visualization.id, {
           origin: visualization.origin,
@@ -428,6 +455,17 @@ function applyText(change: TextChange): AgentToolResult {
   if (!item) {
     return failure('not_found', 'No text on the page has this id.');
   }
+  // A file can carry instructions: an agent must not rewrite who made the
+  // map or where its geometry comes from.
+  if (
+    item.role === ANNOTATION_ROLE.BASEMAP_SOURCE ||
+    item.role === ANNOTATION_ROLE.CREDIT
+  ) {
+    return failure(
+      'unsupported',
+      'The basemap source and the credit are attribution texts: only the user edits them.'
+    );
+  }
   annotationsActions.updateAnnotation(item.id, {
     content: resolveTextContent(item.role, change.text)
   });
@@ -505,7 +543,7 @@ export const updateClassificationTool: AgentTool = {
       inverted: { type: 'boolean' },
       expected_revision: REVISION_PROPERTY
     },
-    required: ['visualization_id'],
+    required: ['visualization_id', 'expected_revision'],
     additionalProperties: false
   },
   annotations: {},
@@ -528,7 +566,7 @@ export const setChoroplethVariableTool: AgentTool = {
       },
       expected_revision: REVISION_PROPERTY
     },
-    required: ['visualization_id', 'column'],
+    required: ['visualization_id', 'column', 'expected_revision'],
     additionalProperties: false
   },
   annotations: {},
@@ -552,6 +590,7 @@ export const setLayoutTextsTool: AgentTool = {
       ),
       expected_revision: REVISION_PROPERTY
     },
+    required: ['expected_revision'],
     additionalProperties: false
   },
   annotations: {},
@@ -562,7 +601,7 @@ export const setTextTool: AgentTool = {
   name: 'set_text',
   title: 'Rewrite a text on the page',
   description:
-    'Replace the content of one text on the map page, given its id from the texts list of inspect_project. Use it for a title or source written as a free text, which set_layout_texts reports as missing_on_page. Plain text, may span lines.',
+    'Replace the content of one text on the map page, given its id from the texts list of inspect_project. Use it for a title or source written as a free text, which set_layout_texts reports as missing_on_page. Plain text, may span lines. The basemap source and the credit stay with the user.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -570,7 +609,7 @@ export const setTextTool: AgentTool = {
       text: textProperty('New content of the text.', AGENT_TEXT_LIMITS.note),
       expected_revision: REVISION_PROPERTY
     },
-    required: ['text_id', 'text'],
+    required: ['text_id', 'text', 'expected_revision'],
     additionalProperties: false
   },
   annotations: {},
@@ -594,7 +633,7 @@ export const setLegendTextsTool: AgentTool = {
       note: textProperty('Legend note.', AGENT_TEXT_LIMITS.note),
       expected_revision: REVISION_PROPERTY
     },
-    required: ['legend_id'],
+    required: ['legend_id', 'expected_revision'],
     additionalProperties: false
   },
   annotations: {},

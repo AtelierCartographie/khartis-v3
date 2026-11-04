@@ -41,6 +41,8 @@ export interface MapReviewCheck {
   id: string;
   severity: 'warning' | 'advice';
   visualization_id?: string;
+  /** Kept apart from the message: a column name comes from the user file. */
+  column?: string;
   message: string;
 }
 
@@ -134,7 +136,9 @@ function reviewVisualization(
       id: 'count_as_choropleth',
       severity: 'warning',
       visualization_id: id,
-      message: `The choropleth shows ${fill.column ?? 'a column'}, a count: areas of different sizes make counts misleading in a choropleth. Use proportional symbols, or a ratio such as a rate or a density.`
+      column: fill.column,
+      message:
+        'The choropleth shows a count: areas of different sizes make counts misleading in a choropleth. Use proportional symbols, or a ratio such as a rate or a density.'
     });
   }
   if (proportionalSymbols?.nature === 'ratio') {
@@ -142,7 +146,9 @@ function reviewVisualization(
       id: 'ratio_as_proportional_symbols',
       severity: 'warning',
       visualization_id: id,
-      message: `The proportional symbols show ${proportionalSymbols.column ?? 'a column'}, a ratio: symbol sizes add up quantities, so a ratio reads better as a choropleth.`
+      column: proportionalSymbols.column,
+      message:
+        'The proportional symbols show a ratio: symbol sizes add up quantities, so a ratio reads better as a choropleth.'
     });
   }
   if (
