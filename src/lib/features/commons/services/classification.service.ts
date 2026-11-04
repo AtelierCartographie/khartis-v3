@@ -16,12 +16,16 @@ import type { Table } from '@uwdata/flechette';
 import {
   addCalendarStep,
   buildCalendarBreaks,
+  CALENDAR_UNIT,
+  type CalendarPrecision,
   buildEvenCalendarBreaks,
   type CalendarStep,
   chooseCalendarStep,
   countCalendarClasses,
+  fitsCalendarPrecision,
   floorToCalendarStep,
   inferCalendarGranularity,
+  SNAP_STEPS_BELOW_REGULAR,
   snapBreaksToCalendar
 } from '../utils/calendar-breaks.utils';
 
@@ -43,6 +47,8 @@ export interface BreaksResult {
   naturalClassCount?: number;
   /** Step of a calendar classification; breaks, bounds and min/max are then epoch milliseconds. */
   calendarStep?: CalendarStep;
+  /** Coarsest unit every date of the series falls on; steps finer than it are not offered. */
+  calendarPrecision?: CalendarPrecision;
 }
 
 export interface ClassificationOptions {
@@ -863,11 +869,12 @@ export async function isTemporalColumn(
 interface EpochStats {
   min: number;
   max: number;
+  precision: CalendarPrecision;
 }
 
 async function queryEpochStats(source: string): Promise<EpochStats | null> {
   const statsResult = (await Duck.query(
-    `SELECT COUNT(v) AS row_count, MIN(v) AS min_val, MAX(v) AS max_val FROM ${source} AS s WHERE v IS NOT NULL`
+    `SELECT COUNT(v) AS row_count, MIN(v) AS min_val, MAX(v) AS max_val, bool_and(date_trunc('year', epoch_ms(v)) = epoch_ms(v)) AS on_year, bool_and(date_trunc('month', epoch_ms(v)) = epoch_ms(v)) AS on_month FROM ${source} AS s WHERE v IS NOT NULL`
   )) as Table;
   const rowCount = Number(statsResult.getChild?.('row_count')?.get(0) ?? 0);
   const rawMin = statsResult.getChild?.('min_val')?.get(0);
@@ -877,7 +884,18 @@ async function queryEpochStats(source: string): Promise<EpochStats | null> {
   }
   const min = Number(rawMin);
   const max = Number(rawMax);
-  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+  // A single date tells nothing about the precision of the series.
+  const precision: CalendarPrecision =
+    min === max
+      ? CALENDAR_UNIT.DAY
+      : statsResult.getChild?.('on_year')?.get(0) === true
+        ? CALENDAR_UNIT.YEAR
+        : statsResult.getChild?.('on_month')?.get(0) === true
+          ? CALENDAR_UNIT.MONTH
+          : CALENDAR_UNIT.DAY;
+  return Number.isFinite(min) && Number.isFinite(max)
+    ? { min, max, precision }
+    : null;
 }
 
 /** Values per class `[bounds[i], bounds[i + 1][`; the bounds enclose the series. */
@@ -939,7 +957,7 @@ export async function calculateCalendarBreaks(
     if (!stats) {
       return null;
     }
-    const { min, max } = stats;
+    const { min, max, precision } = stats;
 
     const stepClassLimit = Math.max(
       2,
@@ -954,10 +972,17 @@ export async function calculateCalendarBreaks(
       : 0;
     const step =
       options.step &&
+      fitsCalendarPrecision(options.step, precision) &&
       currentClassCount >= 2 &&
       currentClassCount <= stepClassLimit
         ? options.step
-        : chooseCalendarStep(min, max, Math.max(2, options.maxClasses), anchor);
+        : chooseCalendarStep(
+            min,
+            max,
+            Math.max(2, options.maxClasses),
+            anchor,
+            precision
+          );
     const { breaks, lower, upper } = buildCalendarBreaks(
       min,
       max,
@@ -975,6 +1000,7 @@ export async function calculateCalendarBreaks(
       roundedMin: lower,
       roundedMax: upper,
       calendarStep: step,
+      calendarPrecision: precision,
       ...(pivotIndex >= 0 ? { breakpointLowerClassCount: pivotIndex + 1 } : {})
     };
   } catch (error) {
@@ -1016,7 +1042,7 @@ export async function calculateCalendarBreakCounts(
     if (!stats) {
       return null;
     }
-    const { min, max } = stats;
+    const { min, max, precision } = stats;
     const requested =
       options.classCount && options.breaks.length !== options.classCount - 1
         ? buildEvenCalendarBreaks(min, max, options.classCount)
@@ -1042,7 +1068,8 @@ export async function calculateCalendarBreakCounts(
       max,
       roundedMin: lower,
       roundedMax: upper,
-      calendarStep: granularity
+      calendarStep: granularity,
+      calendarPrecision: precision
     };
   } catch (error) {
     logCalendarFailure(
@@ -1054,6 +1081,14 @@ export async function calculateCalendarBreakCounts(
     );
     return null;
   }
+}
+
+/** Data-driven methods a date column accepts: thresholds snap to the calendar. */
+export function isDateDataMethod(method: ClassificationMethod): boolean {
+  return (
+    method === ClassificationMethod.KMEANS ||
+    method === ClassificationMethod.QUANTILES
+  );
 }
 
 export interface DateDataClassificationOptions {
@@ -1069,7 +1104,7 @@ export interface DateDataClassificationOptions {
 }
 
 /**
- * Data-driven breaks (k-means…) on a DATE or TIMESTAMP column: the macro runs
+ * Data-driven breaks (k-means, quantiles) on a DATE or TIMESTAMP column: the macro runs
  * on epoch milliseconds, then each threshold snaps to a calendar boundary so
  * no raw instant is ever shown. Labels follow the coarsest unit the snapped
  * thresholds share, as for manual dates.
@@ -1134,8 +1169,16 @@ export async function calculateDateDataBreaks(
     if (!stats) {
       return null;
     }
-    const { min, max } = stats;
+    const { min, max, precision } = stats;
     const numClasses = Math.max(1, Math.floor(options.numClasses));
+    // Quantiles promise equal counts: they snap finer than k-means, whose
+    // thresholds sit in gaps of the series and move little when rounded.
+    const stepsBelowRegular =
+      options.method === ClassificationMethod.QUANTILES
+        ? SNAP_STEPS_BELOW_REGULAR + 2
+        : SNAP_STEPS_BELOW_REGULAR;
+    const snap = (breaks: number[], from: number, to: number) =>
+      snapBreaksToCalendar(breaks, from, to, precision, stepsBelowRegular);
     const pivot = options.breakpointValue;
     const lowerClassCount = Math.floor(options.lowerClassCount ?? 0);
 
@@ -1155,17 +1198,13 @@ export async function calculateDateDataBreaks(
         numClasses - lowerClassCount
       );
       // A side snaps within its own half, so no threshold crosses the pivot.
-      const lowerBreaks = lower
-        ? snapBreaksToCalendar(lower.breaks, min, pivot - 1)
-        : [];
-      const upperBreaks = upper
-        ? snapBreaksToCalendar(upper.breaks, pivot, max)
-        : [];
+      const lowerBreaks = lower ? snap(lower.breaks, min, pivot - 1) : [];
+      const upperBreaks = upper ? snap(upper.breaks, pivot, max) : [];
       breaks = [...lowerBreaks, pivot, ...upperBreaks];
       breakpointLowerClassCount = lowerBreaks.length + 1;
     } else {
       const all = await macroBreaks('', numClasses);
-      breaks = all ? snapBreaksToCalendar(all.breaks, min, max) : [];
+      breaks = all ? snap(all.breaks, min, max) : [];
     }
 
     // The pivot keeps its own precision in labels; the snapped thresholds set the series'.
@@ -1187,6 +1226,7 @@ export async function calculateDateDataBreaks(
       roundedMin: lower,
       roundedMax: upper,
       calendarStep: granularity,
+      calendarPrecision: precision,
       ...(breakpointLowerClassCount != null
         ? { breakpointLowerClassCount }
         : {})
