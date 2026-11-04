@@ -14,11 +14,12 @@
     swatch?: string;
     /** An accordion header: shows the chevron and sets `aria-expanded`. */
     expanded?: boolean;
-    /** A toggle: sets `aria-pressed`. */
-    pressed?: boolean;
     compact?: boolean;
+    /** A secondary category, its label in grey. */
+    muted?: boolean;
     title?: string;
-    onclick: () => void;
+    /** Without it the header is a plain row, not a button. */
+    onclick?: () => void;
   }
 
   let {
@@ -28,8 +29,8 @@
     icon: Icon,
     swatch,
     expanded,
-    pressed,
     compact = false,
+    muted = false,
     title,
     onclick
   }: Props = $props();
@@ -37,15 +38,7 @@
   const iconSize = $derived(compact ? 16 : 20);
 </script>
 
-<button
-  type="button"
-  class="join-category-header tone-{tone}"
-  class:compact={compact}
-  aria-expanded={expanded}
-  aria-pressed={pressed}
-  title={title}
-  onclick={onclick}
->
+{#snippet content()}
   <span class="category-icon" aria-hidden="true">
     {#if swatch}
       <span class="category-swatch" style:background={swatch}></span>
@@ -64,7 +57,30 @@
       {/if}
     </span>
   {/if}
-</button>
+{/snippet}
+
+{#if onclick}
+  <button
+    type="button"
+    class="join-category-header tone-{tone}"
+    class:compact={compact}
+    class:muted={muted}
+    aria-expanded={expanded}
+    title={title}
+    onclick={onclick}
+  >
+    {@render content()}
+  </button>
+{:else}
+  <div
+    class="join-category-header is-static tone-{tone}"
+    class:compact={compact}
+    class:muted={muted}
+    title={title}
+  >
+    {@render content()}
+  </div>
+{/if}
 
 <style>
   .join-category-header {
@@ -83,13 +99,12 @@
     transition: background-color 0.15s;
   }
 
-  .join-category-header:hover,
-  .join-category-header[aria-pressed='true'] {
+  button.join-category-header:hover {
     background-color: var(--khartis-additions-join-row-hover, #f4f4f4);
   }
 
-  .join-category-header[aria-pressed='true'] {
-    box-shadow: inset 2px 0 0 var(--khartis-additions-join-label, #00539a);
+  .is-static {
+    cursor: default;
   }
 
   .join-category-header:focus-visible {
@@ -162,6 +177,11 @@
     align-items: center;
     flex-shrink: 0;
     color: var(--cds-text-primary, #161616);
+  }
+
+  .muted .category-label,
+  .muted .category-count {
+    color: var(--cds-text-secondary, #525252);
   }
 
   .compact {

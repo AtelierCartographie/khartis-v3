@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { Button } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
-    Error as NotAllowed,
     ErrorFilled,
     MagicWandFilled,
     WarningAltFilled,
@@ -37,7 +35,12 @@
   // The panel's own counts, so that both read the same.
   const basemapJoin = $derived(dataTabState.basemapJoin);
   const ignoredCount = $derived(basemapJoin.ignoredEntities.length);
-  const activeCategory = $derived(joinControlStore.activeCategory);
+  const hasMapRows = $derived(
+    basemapJoin.joinedEntities > 0 ||
+      basemapJoin.entitiesToVerify > 0 ||
+      basemapJoin.duplicateTotal > 0 ||
+      ignoredCount > 0
+  );
 
   // A window drag resizes the workspace in small steps the box simply
   // follows; a panel width change moves it far enough to glide.
@@ -48,12 +51,6 @@
   );
 
   let summaryElement = $state<HTMLElement | null>(null);
-
-  $effect(() => {
-    if (!mapCounts) {
-      untrack(() => joinControlStore.setActiveCategory(null));
-    }
-  });
 
   // The side panel snaps to its new width and slides its edge back into
   // place; the box, anchored to the workspace edge, slides with it.
@@ -91,16 +88,7 @@
   });
 
   function openPanelCategory(category: JoinPanelCategory): void {
-    joinControlStore.requestPanelCategory(
-      category,
-      activeCategory !== category
-    );
-  }
-
-  function toggleNoData(): void {
-    joinControlStore.setActiveCategory(
-      activeCategory === 'no_data' ? null : 'no_data'
-    );
+    joinControlStore.requestPanelCategory(category, true);
   }
 </script>
 
@@ -128,91 +116,94 @@
         </span>
       </Button>
 
-      <div class="summary-rows">
-        <JoinCategoryHeader
-          compact
-          tone="success"
-          icon={CheckmarkFilled}
-          count={basemapJoin.joinedEntities}
-          label={isSingularCount(basemapJoin.joinedEntities)
-            ? m.join_entities_joined_one()
-            : m.join_entities_joined()}
-          pressed={activeCategory === 'matched'}
-          title={m.join_control_open_category()}
-          onclick={() => openPanelCategory('matched')}
-        />
-        <JoinCategoryHeader
-          compact
-          tone="warning"
-          icon={WarningFilled}
-          count={basemapJoin.entitiesToVerify}
-          label={isSingularCount(basemapJoin.entitiesToVerify)
-            ? m.join_entities_to_verify_one()
-            : m.join_entities_to_verify()}
-          pressed={activeCategory === 'check'}
-          title={m.join_control_open_category()}
-          onclick={() => openPanelCategory('check')}
-        />
-        {#if basemapJoin.duplicateTotal > 0}
+      {#if hasMapRows}
+        <div class="summary-rows">
+          {#if basemapJoin.joinedEntities > 0}
+            <JoinCategoryHeader
+              compact
+              tone="success"
+              icon={CheckmarkFilled}
+              count={basemapJoin.joinedEntities}
+              label={isSingularCount(basemapJoin.joinedEntities)
+                ? m.join_entities_joined_one()
+                : m.join_entities_joined()}
+              title={m.join_control_open_category()}
+              onclick={() => openPanelCategory('matched')}
+            />
+          {/if}
+          {#if basemapJoin.entitiesToVerify > 0}
+            <JoinCategoryHeader
+              compact
+              tone="warning"
+              icon={WarningFilled}
+              count={basemapJoin.entitiesToVerify}
+              label={isSingularCount(basemapJoin.entitiesToVerify)
+                ? m.join_entities_to_verify_one()
+                : m.join_entities_to_verify()}
+              title={m.join_control_open_category()}
+              onclick={() => openPanelCategory('check')}
+            />
+          {/if}
+          {#if basemapJoin.duplicateTotal > 0}
+            <JoinCategoryHeader
+              compact
+              tone="error"
+              icon={WarningAltFilled}
+              count={basemapJoin.duplicateTotal}
+              label={isSingularCount(basemapJoin.duplicateTotal)
+                ? m.join_entities_duplicate_one()
+                : m.join_entities_duplicate()}
+              title={m.join_control_open_category()}
+              onclick={() => openPanelCategory('duplicate')}
+            />
+          {/if}
+          {#if ignoredCount > 0}
+            <JoinCategoryHeader
+              compact
+              tone="ignored"
+              swatch={getJoinControlSwatchBackground('ignored')}
+              count={ignoredCount}
+              label={isSingularCount(ignoredCount)
+                ? m.join_entities_ignored_one()
+                : m.join_entities_ignored()}
+              title={m.join_control_open_category()}
+              onclick={() => openPanelCategory('ignored')}
+            />
+          {/if}
+        </div>
+      {/if}
+
+      {#if basemapJoin.unrecognizedTotal > 0}
+        <p class="summary-caption">{m.join_control_off_map()}</p>
+        <div class="summary-rows">
           <JoinCategoryHeader
             compact
             tone="error"
-            icon={WarningAltFilled}
-            count={basemapJoin.duplicateTotal}
-            label={isSingularCount(basemapJoin.duplicateTotal)
-              ? m.join_entities_duplicate_one()
-              : m.join_entities_duplicate()}
-            pressed={activeCategory === 'duplicate'}
+            icon={ErrorFilled}
+            count={basemapJoin.unrecognizedTotal}
+            label={isSingularCount(basemapJoin.unrecognizedTotal)
+              ? m.join_entities_unrecognized_one()
+              : m.join_entities_unrecognized()}
             title={m.join_control_open_category()}
-            onclick={() => openPanelCategory('duplicate')}
+            onclick={() => openPanelCategory('unrecognized')}
           />
-        {/if}
-      </div>
+        </div>
+      {/if}
 
-      <p class="summary-caption">{m.join_control_off_map()}</p>
-      <div class="summary-rows">
-        <JoinCategoryHeader
-          compact
-          tone="error"
-          icon={ErrorFilled}
-          count={basemapJoin.unrecognizedTotal}
-          label={isSingularCount(basemapJoin.unrecognizedTotal)
-            ? m.join_entities_unrecognized_one()
-            : m.join_entities_unrecognized()}
-          pressed={activeCategory === 'unrecognized'}
-          title={m.join_control_open_category()}
-          onclick={() => openPanelCategory('unrecognized')}
-        />
-        {#if ignoredCount > 0}
+      {#if mapCounts.no_data > 0}
+        <div class="summary-rows summary-rows-separated">
           <JoinCategoryHeader
             compact
-            tone="ignored"
-            icon={NotAllowed}
-            count={ignoredCount}
-            label={isSingularCount(ignoredCount)
-              ? m.join_entities_ignored_one()
-              : m.join_entities_ignored()}
-            pressed={activeCategory === 'ignored'}
-            title={m.join_control_open_category()}
-            onclick={() => openPanelCategory('ignored')}
+            muted
+            tone="missing"
+            swatch={getJoinControlSwatchBackground('no_data')}
+            count={mapCounts.no_data}
+            label={isSingularCount(mapCounts.no_data)
+              ? m.join_entities_no_data_one()
+              : m.join_entities_no_data()}
           />
-        {/if}
-      </div>
-
-      <div class="summary-rows summary-rows-separated">
-        <JoinCategoryHeader
-          compact
-          tone="missing"
-          swatch={getJoinControlSwatchBackground('no_data')}
-          count={mapCounts.no_data}
-          label={isSingularCount(mapCounts.no_data)
-            ? m.join_entities_no_data_one()
-            : m.join_entities_no_data()}
-          pressed={activeCategory === 'no_data'}
-          title={m.join_control_focus()}
-          onclick={toggleNoData}
-        />
-      </div>
+        </div>
+      {/if}
     </section>
   </div>
 {/if}
@@ -292,7 +283,7 @@
     color: var(--cds-text-secondary, #525252);
   }
 
-  .summary-rows-separated {
+  .summary-rows ~ .summary-rows-separated {
     margin-top: 0.375rem;
     padding-top: 0.25rem;
     border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);

@@ -328,6 +328,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       geoColumn,
       excludedValues: dataTabState.basemapJoin.ignoredEntities.map(
         (entity) => entity.dataValue
+      ),
+      ignoredBasemapValues: dataTabState.basemapJoin.ignoredEntities.flatMap(
+        (entity) => (entity.basemapValue ? [entity.basemapValue] : [])
       )
     });
     if (!statuses || joinControlStore.getRevealProgress(datasetId) === 0) {
@@ -350,7 +353,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       geoColumn,
       sourceIsFile: Boolean(datasetEntry?.geometry),
       rows: isCurrentJoin ? statuses.rows : toUnjoinedRows(statuses.rows),
-      focusedStatus: joinControlStore.focusedStatus,
       outlineTerritories:
         !showsBasemapLayers ||
         !metadata.layers.some((layer) => layer.type === BasemapLayerType.LIMIT),

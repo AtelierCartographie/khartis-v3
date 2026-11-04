@@ -903,7 +903,6 @@
   "join_entities_no_data_one": "entité sans données",
   "join_control_off_map": "Hors carte",
   "join_control_open_category": "Ouvrir dans le panneau de jointure",
-  "join_control_focus": "Mettre en évidence sur la carte",
   "join_control_open_section": "Afficher la jointure assistée dans le panneau",
   "join_control_tooltip_status": "Jointure assistée",
   "join_control_tooltip_file": "Fichier importé",
