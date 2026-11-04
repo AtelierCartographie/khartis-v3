@@ -164,4 +164,18 @@ describe('globalState project persistence boundary', () => {
     expect(globalState.selectedStep).toBe(ToolbarStep.Data);
     expect(globalState.isMapExporting).toBe(false);
   });
+
+  it('should bring the page back where the user moved it when a centred object is released', () => {
+    globalActions.setPagePanOffset({ x: 120, y: 60 });
+
+    globalActions.centerPageBy(30, -10);
+    globalActions.centerPageBy(5, 5);
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 155, y: 55 });
+
+    globalActions.restorePagePan();
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 120, y: 60 });
+
+    globalActions.restorePagePan();
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 120, y: 60 });
+  });
 });
