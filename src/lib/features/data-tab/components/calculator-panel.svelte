@@ -138,12 +138,6 @@
         value: 'SUBSTRING("", 1, 3)',
         type: 'function' as const,
         description: m.calc_function_extract()
-      },
-      {
-        label: 'date_sub',
-        value: `date_sub('year', "", ${referenceDateLiteral()})`,
-        type: 'function' as const,
-        description: m.calc_function_age()
       }
     ];
 
@@ -205,18 +199,8 @@
       label: m.calc_function_extract(),
       value: 'SUBSTRING',
       template: 'SUBSTRING({col}, 1, 3)'
-    },
-    {
-      label: m.calc_function_age(),
-      value: 'date_sub',
-      template: "date_sub('year', {col}, {today})"
     }
   ]);
-
-  // A fixed date, not current_date: the formula is replayed on every reload.
-  function referenceDateLiteral(): string {
-    return `DATE '${new Date().toISOString().slice(0, 10)}'`;
-  }
 
   function insertVariable() {
     if (!selectedVariable) return;
@@ -235,9 +219,7 @@
     if (!fn) return;
 
     const col = selectedVariable || m.calc_column_default();
-    const template = fn.template
-      .replace('{col}', `"${escapeIdentifier(col)}"`)
-      .replace('{today}', referenceDateLiteral());
+    const template = fn.template.replace('{col}', `"${escapeIdentifier(col)}"`);
     formula += template;
     dataToolsStore.setCalculatorFormula(formula);
   }
