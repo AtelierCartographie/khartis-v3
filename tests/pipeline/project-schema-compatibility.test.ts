@@ -58,6 +58,44 @@ describe('project schema compatibility', () => {
     expect(migrated.data).toEqual(data);
   });
 
+  it('should give a 3.15.0 project a map frame equal to its margins when it is migrated', () => {
+    const margins = { top: 40, bottom: 20, left: 32, right: 12 };
+    const project = {
+      manifest: { version: '3.15.0', name: 'Framed project' },
+      data: {
+        layoutSettings: {
+          format: { width: 842, height: 595, margins },
+          legend: { items: [] }
+        }
+      }
+    };
+
+    const migrated = migrateIfNeeded(project);
+
+    expect(migrated.manifest).toEqual({
+      version: PROJECT_CONST.SCHEMA_VERSION,
+      name: 'Framed project'
+    });
+    expect(migrated.data).toEqual({
+      layoutSettings: {
+        format: { width: 842, height: 595, margins, mapFrame: margins },
+        legend: { items: [] }
+      }
+    });
+    expect(project.data.layoutSettings.format).not.toHaveProperty('mapFrame');
+  });
+
+  it('should leave a 3.15.0 project without a page format unchanged when it is migrated', () => {
+    const data = { layoutSettings: { legend: { items: [] } } };
+
+    const migrated = migrateIfNeeded({
+      manifest: { version: '3.15.0', name: 'Unformatted project' },
+      data
+    });
+
+    expect(migrated.data).toEqual(data);
+  });
+
   it('should reject a pre-production schema without silently restamping it', () => {
     expect(() =>
       migrateIfNeeded({

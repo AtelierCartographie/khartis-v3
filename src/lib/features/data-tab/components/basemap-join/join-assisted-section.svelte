@@ -123,6 +123,9 @@
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
     basemapAliasesByValue?: Record<string, BasemapAlias[]>;
+    // Rows hold the variant each value matched, often not in the UI
+    // language: they wait for the displayed values instead of switching.
+    basemapValuesLoading?: boolean;
     onRequestBasemapValues?: () => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
@@ -156,6 +159,7 @@
     duplicateLines = [],
     ignoredEntities = [],
     basemapAliasesByValue = {},
+    basemapValuesLoading = false,
     onRequestBasemapValues,
     onFinalizeJoin,
     onManualCorrection,
@@ -200,6 +204,10 @@
     }
     return values;
   });
+
+  const availableBasemapValueSet = $derived.by(
+    () => new Set<string>(availableBasemapValues)
+  );
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
@@ -582,6 +590,15 @@
 
   const pendingUnrecognizedSelections = new SvelteMap<string, string>();
 
+  // A value joined by another row since it was picked leaves the options, so
+  // its combo box cannot show it: it is no longer a validatable selection.
+  function getPendingUnrecognizedSelection(entity: string): string | undefined {
+    const value = pendingUnrecognizedSelections.get(entity);
+    return value !== undefined && availableBasemapValueSet.has(value)
+      ? value
+      : undefined;
+  }
+
   function handleUnrecognizedSelect(
     entity: string,
     item: ComboBoxItem | undefined
@@ -595,7 +612,7 @@
   }
 
   function handleUnrecognizedValidate(entity: string): void {
-    const value = pendingUnrecognizedSelections.get(entity);
+    const value = getPendingUnrecognizedSelection(entity);
     if (!value) return;
     pendingUnrecognizedSelections.delete(entity);
     onManualCorrection?.(entity, value);
@@ -1218,7 +1235,7 @@
                         </div>
                         <div class="table-cell cell-equals">=</div>
                         <div class="table-cell cell-select" use:titleMenuToggle>
-                          {#if visibleJoinedRows.has(row.dataValue)}
+                          {#if visibleJoinedRows.has(row.dataValue) && !basemapValuesLoading}
                             {@const joinedRowOptions = buildJoinedRowOptions(
                               row.basemapValue
                             )}
@@ -1282,7 +1299,7 @@
                             {/key}
                           {:else}
                             <div class="select-placeholder" aria-hidden="true">
-                              {joinedDisplayedValue}
+                              {basemapValuesLoading ? '' : joinedDisplayedValue}
                             </div>
                           {/if}
                         </div>
@@ -1415,7 +1432,7 @@
                         <span class="approx-symbol" aria-hidden="true">≈</span>
                       </div>
                       <div class="table-cell cell-select" use:titleMenuToggle>
-                        {#if visibleToVerifyRows.has(rowKey)}
+                        {#if visibleToVerifyRows.has(rowKey) && !basemapValuesLoading}
                           {@const toVerifyItems = buildToVerifyItems(
                             row.basemapOptions
                           )}
@@ -1470,7 +1487,11 @@
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
-                            {row.selectedMapping ?? ''}
+                            {basemapValuesLoading || !row.selectedMapping
+                              ? ''
+                              : resolveDisplayedBasemapValue(
+                                  row.selectedMapping
+                                )}
                           </div>
                         {/if}
                       </div>
@@ -1583,11 +1604,12 @@
                 )}
                 <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
                   {#each unknowns as entity, unknownIndex (entity)}
+                    {@const pendingSelection =
+                      getPendingUnrecognizedSelection(entity)}
                     {@const hasPendingSelection =
-                      pendingUnrecognizedSelections.has(entity)}
-                    {@const unrecognizedTooltip = buildRowTooltip(
-                      pendingUnrecognizedSelections.get(entity)
-                    )}
+                      pendingSelection !== undefined}
+                    {@const unrecognizedTooltip =
+                      buildRowTooltip(pendingSelection)}
                     <div class="table-row" use:observeUnrecognizedRow={entity}>
                       <div class="table-cell cell-data" title={entity}>
                         {entity}
@@ -1604,6 +1626,7 @@
                                 autoHighlight="first-match"
                                 id={`${comboIdPrefix}-unrecognized-${unknownIndex}`}
                                 items={basemapComboBoxItems}
+                                selectedId={pendingSelection}
                                 placeholder={m.join_unrecognized_correction_placeholder()}
                                 labelText={m.join_select_label_unrecognized({
                                   entity

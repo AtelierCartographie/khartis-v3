@@ -1551,7 +1551,7 @@ function serializePointLayer(
   const barWidth = getLayerNumber(props, 'barWidth', 6);
   const layerId = getLayerId(layer, 0);
   const dedupeId = createSvgIdDeduper();
-  const parts: string[] = [];
+  const symbols: SvgPointSymbol[] = [];
 
   for (let index = 0; index < length; index++) {
     const position = readBinaryTuple(positionAttribute, index);
@@ -1617,18 +1617,161 @@ function serializePointLayer(
       ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
       : '';
 
-    parts.push(
+    symbols.push({
+      shape,
+      x: projected[0],
+      y: projected[1],
+      radius,
+      fillColor,
+      strokeColor,
+      strokeWidth,
+      nameAttribute
+    });
+  }
+
+  if (props.knockout === true) {
+    return serializeKnockoutPointSymbols(symbols, barWidth, layerId);
+  }
+
+  return symbols
+    .map((symbol) =>
       serializePointShape(
-        shape,
-        projected[0],
-        projected[1],
-        radius,
-        fillAttributes(fillColor, null),
-        colorAttributes('stroke', strokeColor),
-        strokeWidth,
+        symbol.shape,
+        symbol.x,
+        symbol.y,
+        symbol.radius,
+        fillAttributes(symbol.fillColor, null),
+        colorAttributes('stroke', symbol.strokeColor),
+        symbol.strokeWidth,
         barWidth,
-        nameAttribute
+        symbol.nameAttribute
       )
+    )
+    .join('');
+}
+
+interface SvgPointSymbol {
+  shape: number;
+  x: number;
+  y: number;
+  radius: number;
+  fillColor: SvgColor;
+  strokeColor: SvgColor;
+  strokeWidth: number;
+  nameAttribute: string;
+}
+
+function sharedOpacity(colors: SvgColor[]): number | null {
+  const first = colors[0]?.opacity;
+  if (first === undefined) return null;
+  return colors.every((color) => Math.abs(color.opacity - first) < 1e-3)
+    ? first
+    : null;
+}
+
+// SVG has no knockout group. Painted opaque in drawing order, fills and strokes
+// each show the topmost symbol's color; two masks, built in the same order,
+// keep the pixels where the topmost symbol is a fill, respectively a stroke.
+// The shared opacity then goes on each group, so the result matches the
+// WebGL knockout exactly whenever fills, and strokes, share one opacity.
+function serializeKnockoutPointSymbols(
+  symbols: SvgPointSymbol[],
+  barWidth: number,
+  layerId: string
+): string {
+  if (symbols.length === 0) return '';
+
+  const shapeOf = (
+    symbol: SvgPointSymbol,
+    fill: string,
+    stroke: string,
+    nameAttribute = ''
+  ) =>
+    serializePointShape(
+      symbol.shape,
+      symbol.x,
+      symbol.y,
+      symbol.radius,
+      fill,
+      stroke,
+      symbol.strokeWidth,
+      barWidth,
+      nameAttribute
+    );
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const symbol of symbols) {
+    // Linear shapes rise two radii above their anchor.
+    const reach = symbol.radius * 2 + symbol.strokeWidth;
+    minX = Math.min(minX, symbol.x - reach);
+    minY = Math.min(minY, symbol.y - reach);
+    maxX = Math.max(maxX, symbol.x + reach);
+    maxY = Math.max(maxY, symbol.y + reach);
+  }
+  const maskBounds = `maskUnits="userSpaceOnUse" x="${roundSvgCoord(minX)}" y="${roundSvgCoord(minY)}" width="${roundSvgCoord(maxX - minX)}" height="${roundSvgCoord(maxY - minY)}"`;
+
+  const baseId = `khartis-knockout-${sanitizeSvgId(layerId)}`;
+  const parts: string[] = [];
+  const visibleFills = symbols.filter((symbol) => symbol.fillColor.opacity > 0);
+  const visibleStrokes = symbols.filter(
+    (symbol) => symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+  );
+  const namesOnStrokes = visibleStrokes.length > 0;
+
+  if (visibleFills.length > 0) {
+    const maskId = `${baseId}-fill-mask`;
+    const groupOpacity = sharedOpacity(visibleFills.map((s) => s.fillColor));
+    const fills = symbols
+      .map((symbol) =>
+        symbol.fillColor.opacity > 0
+          ? shapeOf(
+              symbol,
+              fillAttributes(
+                groupOpacity === null
+                  ? symbol.fillColor
+                  : { ...symbol.fillColor, opacity: 1 },
+                null
+              ),
+              'stroke="none"',
+              namesOnStrokes ? '' : symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#fff"', 'stroke="#000"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${fills}</g>`
+    );
+  }
+
+  if (namesOnStrokes) {
+    const maskId = `${baseId}-stroke-mask`;
+    const groupOpacity = sharedOpacity(
+      visibleStrokes.map((s) => s.strokeColor)
+    );
+    const strokes = symbols
+      .map((symbol) =>
+        symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+          ? shapeOf(
+              symbol,
+              'fill="none"',
+              colorAttributes(
+                'stroke',
+                groupOpacity === null
+                  ? symbol.strokeColor
+                  : { ...symbol.strokeColor, opacity: 1 }
+              ),
+              symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#000"', 'stroke="#fff"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${strokes}</g>`
     );
   }
 

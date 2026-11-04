@@ -1123,6 +1123,70 @@ describe('map export DOM mutations', () => {
     expect(markup).toMatch(/<path d="M 24 30 L 30 10 L 36 30 Z"/);
   });
 
+  it('exports knockout symbols as strokes masked by the symbols drawn above them', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const layer = createDeckLayer('MultiShapeLayer', 'knockout', {
+      data: {
+        length: 2,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([100, 100, 120, 100]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([255, 255, 255, 0, 255, 255, 255, 0]),
+            size: 4
+          },
+          getLineColor: {
+            value: new Uint8Array([0, 0, 0, 255, 0, 0, 0, 255]),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array([30, 10]),
+            size: 1
+          }
+        }
+      },
+      filled: true,
+      stroked: true,
+      lineWidthScale: 2,
+      knockout: true
+    });
+    const deck = createDeckExportFixture([layer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    // A transparent fill paints nothing but still knocks out the stroke below.
+    expect(markup).not.toContain('-fill-mask');
+    const mask = markup.match(
+      /<mask id="khartis-knockout-knockout-stroke-mask"[^>]*>(.*?)<\/mask>/
+    );
+    expect(mask?.[1]).toMatch(
+      /<circle cx="100" cy="100" r="30" fill="#000" stroke="#fff"[^>]*\/><circle cx="120" cy="100" r="10" fill="#000" stroke="#fff"/
+    );
+    expect(markup).toMatch(
+      /<g mask="url\(#khartis-knockout-knockout-stroke-mask\)"><circle cx="100" cy="100" r="30" fill="none" stroke="rgb\(0, 0, 0\)"/
+    );
+  });
+
   it('exports every MultiShapeLayer symbol shape as vector SVG primitives', async () => {
     document.body.innerHTML = `
       <div class="page-container">

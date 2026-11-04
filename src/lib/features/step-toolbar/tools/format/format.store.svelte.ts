@@ -9,8 +9,8 @@ import {
   createReadonlyStateFacade,
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
-import type { FormatState } from '../../types/format.types';
-import { clampPageMargins } from './page-margins.utils';
+import type { FormatState, PageInsets } from '../../types/format.types';
+import { clampPageInsets } from './page-insets.utils';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
@@ -65,6 +65,7 @@ const DEFAULT_STATE: FormatState = {
   height: PAGE_PRESETS[PageModel.A4_LANDSCAPE].height,
   color: { ...DEFAULT_PAGE_COLOR },
   margins: { ...DEFAULT_MARGINS },
+  mapFrame: { ...DEFAULT_MARGINS },
   gridEnabled: true
 };
 
@@ -77,12 +78,9 @@ type FormatActions = {
     saturation: number;
     lightness: number;
   }) => void;
-  setMargins: (margins: {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-  }) => void;
+  setMargins: (margins: PageInsets) => void;
+  setMapFrame: (mapFrame: PageInsets) => void;
+  fitMapFrame: (mapFrame: PageInsets) => void;
   toggleGrid: () => void;
 };
 
@@ -110,12 +108,12 @@ export function getLastPageResize(): PageResize | null {
   return lastPageResize;
 }
 
-// Same rule for the map frame: only a margin edit the user makes crops the
-// map, never margins restored with a project.
-let marginsEditId = $state(0);
+// Same rule for the map frame: only a frame edge the user moves crops the
+// map, never a frame restored with a project or fitted to the map.
+let mapFrameEditId = $state(0);
 
-export function getMarginsEditId(): number {
-  return marginsEditId;
+export function getMapFrameEditId(): number {
+  return mapFrameEditId;
 }
 
 const { state, actions, getState } = createToolStore<
@@ -137,7 +135,8 @@ const { state, actions, getState } = createToolStore<
         );
         s.width = preset.width;
         s.height = preset.height;
-        s.margins = clampPageMargins(s.margins, s.margins, preset);
+        s.margins = clampPageInsets(s.margins, s.margins, preset);
+        s.mapFrame = clampPageInsets(s.mapFrame, s.mapFrame, preset);
       }
     },
     setSize: (width: number, height: number) => {
@@ -145,14 +144,21 @@ const { state, actions, getState } = createToolStore<
       recordPageResize({ width: s.width, height: s.height }, next);
       s.width = next.width;
       s.height = next.height;
-      s.margins = clampPageMargins(s.margins, s.margins, next);
+      s.margins = clampPageInsets(s.margins, s.margins, next);
+      s.mapFrame = clampPageInsets(s.mapFrame, s.mapFrame, next);
     },
     setColor: (color) => {
       s.color = normalizePageColor(color);
     },
     setMargins: (margins) => {
-      s.margins = clampPageMargins(margins, s.margins, s);
-      marginsEditId += 1;
+      s.margins = clampPageInsets(margins, s.margins, s);
+    },
+    setMapFrame: (mapFrame) => {
+      s.mapFrame = clampPageInsets(mapFrame, s.mapFrame, s);
+      mapFrameEditId += 1;
+    },
+    fitMapFrame: (mapFrame) => {
+      s.mapFrame = clampPageInsets(mapFrame, s.mapFrame, s);
     },
     toggleGrid: () => {
       s.gridEnabled = !s.gridEnabled;
