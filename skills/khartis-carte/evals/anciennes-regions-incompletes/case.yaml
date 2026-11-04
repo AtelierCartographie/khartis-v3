@@ -1,0 +1,6 @@
+schema_version: '1.1'
+name: anciennes-regions-incompletes
+expected_outcome: |
+  La réponse regroupe les anciennes régions dans les actuelles en additionnant les effectifs et en recalculant les taux, constate que le Limousin manque et laisse la Nouvelle-Aquitaine sans valeur plutôt que de la calculer sur une partie de son territoire, et retire la ligne de total.
+context:
+  scaffold_script: place-files.sh

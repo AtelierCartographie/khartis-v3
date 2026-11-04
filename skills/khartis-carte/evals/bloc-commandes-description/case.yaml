@@ -1,0 +1,4 @@
+schema_version: '1.1'
+name: bloc-commandes-description
+expected_outcome: |
+  Des explications courtes, puis un seul bloc JSON sur la révision 114121fd : changement de variable vers participation_2024, palette séquentielle adaptée aux daltoniens, titre réécrit par set_text sur le texte libre existant, rien d'inventé.

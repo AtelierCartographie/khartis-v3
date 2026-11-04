@@ -1,0 +1,6 @@
+schema_version: '1.1'
+name: choisir-discretisation
+expected_outcome: |
+  La réponse constate une distribution très étirée vers les fortes densités, recommande une méthode adaptée (Head/Tail, quantiles ou moyennes emboîtées) avec 4 à 7 classes en s'appuyant sur des calculs, et signale les cellules « s » et les codes communaux privés de leur zéro de tête.
+context:
+  scaffold_script: place-files.sh

@@ -1,0 +1,6 @@
+schema_version: '1.1'
+name: anciennes-regions-taux
+expected_outcome: |
+  La réponse explique la réforme régionale de 2016, regroupe les anciennes régions dans les actuelles en additionnant les effectifs et en recalculant le taux (Auvergne-Rhône-Alpes autour de 11,8 pour mille), écarte la ligne de total et déconseille de rattacher une ancienne région seule à sa région actuelle.
+context:
+  scaffold_script: place-files.sh
