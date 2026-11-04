@@ -176,42 +176,53 @@ const contentRevision = (staticPath: string): string => {
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
-  name: 'verify-sw-precache',
-  apply: 'build',
-  closeBundle: {
-    sequential: true,
-    order: 'post',
-    handler() {
-      const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
-      const requiredPrecacheUrls = [
-        navigationFallbackUrl,
-        `${basePath}/basemaps/all-basemaps-metadata.json`,
-        `${basePath}/basemaps/projection-presets.json`,
-        `${basePath}/basemaps/style-presets.json`,
-        `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`
-      ];
-      const candidates = [
-        resolve(process.cwd(), '.svelte-kit/output/client/sw.js'),
-        resolve(process.cwd(), 'build/sw.js')
-      ];
-      const swPath = candidates.find((path) => existsSync(path));
-      if (!swPath) return;
-      const content = readFileSync(swPath, 'utf8');
-      const missingPrecacheUrls = requiredPrecacheUrls.filter(
-        (url) =>
-          !new RegExp(`["']?url["']?:["']${escapeRegExp(url)}["']`).test(
-            content
-          )
-      );
-      if (missingPrecacheUrls.length > 0) {
-        throw new Error(
-          `[verify-sw-precache] ${swPath} does not precache ${missingPrecacheUrls.join(', ')}; refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
+const verifyServiceWorkerPrecache = (basePath: string): Plugin => {
+  let isServerBuild = false;
+
+  return {
+    name: 'verify-sw-precache',
+    apply: 'build',
+    configResolved(config) {
+      isServerBuild = Boolean(config.build.ssr);
+    },
+    closeBundle: {
+      sequential: true,
+      order: 'post',
+      handler() {
+        // SvelteKit writes build/ with the adapter when the server build
+        // closes, after its nested client build: only then can the Service
+        // Worker that ships be checked.
+        if (!isServerBuild) return;
+        const swPath = resolve(process.cwd(), 'build/sw.js');
+        if (!existsSync(swPath)) {
+          throw new Error(
+            `[verify-sw-precache] ${swPath} is missing; refusing to ship without a Service Worker. Check where VitePWA writes it.`
+          );
+        }
+        const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
+        const requiredPrecacheUrls = [
+          navigationFallbackUrl,
+          `${basePath}/basemaps/all-basemaps-metadata.json`,
+          `${basePath}/basemaps/projection-presets.json`,
+          `${basePath}/basemaps/style-presets.json`,
+          `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`
+        ];
+        const content = readFileSync(swPath, 'utf8');
+        const missingPrecacheUrls = requiredPrecacheUrls.filter(
+          (url) =>
+            !new RegExp(`["']?url["']?:["']${escapeRegExp(url)}["']`).test(
+              content
+            )
         );
+        if (missingPrecacheUrls.length > 0) {
+          throw new Error(
+            `[verify-sw-precache] ${swPath} does not precache ${missingPrecacheUrls.join(', ')}; refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
+          );
+        }
       }
     }
-  }
-});
+  };
+};
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -256,7 +267,15 @@ export default defineConfig(({ mode }) => {
         'maplibre-gl',
         '@deck.gl/core',
         '@deck.gl/layers',
-        'apache-arrow'
+        'apache-arrow',
+        // Imported by the dev Service Worker, which registers after the first
+        // render: discovered then, they would reload the whole page.
+        'workbox-cacheable-response',
+        'workbox-core',
+        'workbox-expiration',
+        'workbox-precaching',
+        'workbox-routing',
+        'workbox-strategies'
       ],
       exclude: ['parquet-wasm', '@sqlite.org/sqlite-wasm']
     },

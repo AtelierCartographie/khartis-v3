@@ -419,6 +419,8 @@
 
     <div class="paste-container" bind:this={pasteContainer}>
       <TextArea
+        labelText={m.create_project_paste_data()}
+        hideLabel
         value={pastedDataValue}
         placeholder={hasPastedFile
           ? m.create_project_paste_another()

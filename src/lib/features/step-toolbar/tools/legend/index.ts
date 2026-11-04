@@ -7,9 +7,7 @@ export {
   type ResolvedLegendItemLayout
 } from './legend-items.utils';
 export {
-  getRenderedLegendSegments,
   setRenderedLegendSegments,
-  type RenderedLegendSegment,
   type RenderedLegendSegmentKind
 } from './legend-rendered-segments.svelte';
-export type { LegendItem, LegendItemLayout } from '../../types/legend.types';
+export type { LegendItem } from '../../types/legend.types';

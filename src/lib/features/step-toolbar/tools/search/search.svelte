@@ -73,6 +73,7 @@
 
 <div id="khartis-search-tool">
   <Search
+    labelText={m.tool_search()}
     closeButtonLabelText={m.a11y_clear_search()}
     value={searchState.searchValue}
     on:input={handleSearchInput}
