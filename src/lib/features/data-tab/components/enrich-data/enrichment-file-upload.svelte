@@ -101,6 +101,8 @@
 
     <div class="paste-section">
       <TextArea
+        labelText={m.enrich_paste_data()}
+        hideLabel
         value={pastedDataValue}
         on:input={(e) => {
           const target = e.target as HTMLTextAreaElement | null;
@@ -124,6 +126,8 @@
     <span class="url-label">{m.enrich_url_label()}</span>
     <div class="url-input-row">
       <TextInput
+        labelText={m.enrich_url_label()}
+        hideLabel
         value={onlineUrlValue}
         on:input={(e) => {
           const target = e.target as HTMLInputElement | null;

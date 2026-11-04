@@ -480,24 +480,6 @@ export function resolveFacetFillSlotPath(
   return fillSlotPath === primarySlotPath ? null : fillSlotPath;
 }
 
-export function resolveFacetFillVariable({
-  baseViz,
-  primarySlotPath,
-  fillVariables,
-  variable
-}: {
-  baseViz: VisualizationConfig;
-  primarySlotPath: FacetSlotPath;
-  fillVariables: FacetFillVariables;
-  variable: string;
-}): string | undefined {
-  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
-  if (!fillSlotPath) {
-    return undefined;
-  }
-  return fillVariables[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath);
-}
-
 function resolveFacetFillColumns(
   baseViz: VisualizationConfig,
   fillSlotPath: FacetSlotPath,

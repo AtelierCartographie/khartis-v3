@@ -296,11 +296,11 @@ importers:
   tools/ragmir:
     devDependencies:
       '@huggingface/transformers':
-        specifier: ^4.3.0
-        version: 4.3.0(@types/node@26.6.6)
+        specifier: ^4.3.2
+        version: 4.3.2(@types/node@26.6.6)
       '@jcode.labs/ragmir':
-        specifier: ^6.0.1
-        version: 6.0.1(@huggingface/transformers@4.3.0(@types/node@26.6.6))(apache-arrow@18.1.0)
+        specifier: ^6.5.0
+        version: 6.5.0(@huggingface/transformers@4.3.2(@types/node@26.6.6))(apache-arrow@18.1.0)
       apache-arrow:
         specifier: 18.1.0
         version: 18.1.0
@@ -1257,8 +1257,8 @@ packages:
   '@huggingface/tokenizers@0.2.0':
     resolution: {integrity: sha512-LidMHe1FpcSYH4vcSjXooda34pC0M8m1gmDOv7SQi6Iv+ib1zX7J3sHBCC9/3FPCkn2k1b55FneVqMRxrr99pg==}
 
-  '@huggingface/transformers@4.3.0':
-    resolution: {integrity: sha512-fL1A/WUZwouPrOlYxU5dzIwD2T5J781JiB2jDR8bFe5DwCj0Gfudq+NEXCMno49kQgajHA7xQkrRLJlqG1veEA==}
+  '@huggingface/transformers@4.3.2':
+    resolution: {integrity: sha512-V3+dqf3iWlRYJ9I9GreM3zGQd0lAXnnoPeddmkOQYWAEE4l/+Fi6p7tx/qVUJlKQgLXGim2W76rTOzz+eC0i7g==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1461,8 +1461,8 @@ packages:
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
     engines: {node: '>=18'}
 
-  '@jcode.labs/ragmir@6.0.1':
-    resolution: {integrity: sha512-YqisdW453nzmOmg36e42BQotwpqURt5iEOhex6M2OQ+3wbbvgxz/fVFsJuQXF52JZ1YWh4tV6Ge60L5uwLimNw==}
+  '@jcode.labs/ragmir@6.5.0':
+    resolution: {integrity: sha512-UPFEJWd8TO/QzbsOYCgFNKOJjm3UeO1qsXC4GtKhsSZIL0C+gMg5+1cQIgE8l66h+i0EEAm6Ne4nX53+f65P4g==}
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
@@ -7580,7 +7580,7 @@ snapshots:
 
   '@huggingface/tokenizers@0.2.0': {}
 
-  '@huggingface/transformers@4.3.0(@types/node@26.6.6)':
+  '@huggingface/transformers@4.3.2(@types/node@26.6.6)':
     dependencies:
       '@huggingface/jinja': 0.5.10
       '@huggingface/tokenizers': 0.2.0
@@ -7749,7 +7749,7 @@ snapshots:
 
   '@isaacs/cliui@9.0.0': {}
 
-  '@jcode.labs/ragmir@6.0.1(@huggingface/transformers@4.3.0(@types/node@26.6.6))(apache-arrow@18.1.0)':
+  '@jcode.labs/ragmir@6.5.0(@huggingface/transformers@4.3.2(@types/node@26.6.6))(apache-arrow@18.1.0)':
     dependencies:
       '@lancedb/lancedb': 0.30.0(apache-arrow@18.1.0)
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
@@ -7759,12 +7759,13 @@ snapshots:
       html-to-text: 10.0.1
       mammoth: 1.13.0
       picocolors: 1.1.1
+      picomatch: 4.0.7
       read-excel-file: 9.3.14
       unpdf: 1.8.1
       yaml: 2.9.1
       zod: 4.6.7
     optionalDependencies:
-      '@huggingface/transformers': 4.3.0(@types/node@26.6.6)
+      '@huggingface/transformers': 4.3.2(@types/node@26.6.6)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - '@napi-rs/canvas'
