@@ -57,6 +57,30 @@ function* yearCounts(): Generator<number> {
 
 const MAX_YEAR_COUNT = 1_000_000;
 
+/**
+ * Coarsest unit every value of a series falls on. A year-month column is
+ * imported as the first day of each month: a step finer than the month would
+ * then cut empty classes between real values.
+ */
+export type CalendarPrecision =
+  | typeof CALENDAR_UNIT.DAY
+  | typeof CALENDAR_UNIT.MONTH
+  | typeof CALENDAR_UNIT.YEAR;
+
+/** Whether a step is at least as coarse as the precision of the series. */
+export function fitsCalendarPrecision(
+  step: CalendarStep,
+  precision: CalendarPrecision | null | undefined
+): boolean {
+  if (precision === CALENDAR_UNIT.YEAR) return step.unit === CALENDAR_UNIT.YEAR;
+  if (precision === CALENDAR_UNIT.MONTH) {
+    return (
+      step.unit === CALENDAR_UNIT.MONTH || step.unit === CALENDAR_UNIT.YEAR
+    );
+  }
+  return true;
+}
+
 /** The calendar step ladder, finest first, up to `maxYearCount` years. */
 export function calendarStepLadder(
   maxYearCount = MAX_YEAR_COUNT
@@ -264,10 +288,13 @@ export function chooseCalendarStep(
   min: number,
   max: number,
   maxClasses: number,
-  anchor?: number | null
+  anchor?: number | null,
+  precision?: CalendarPrecision | null
 ): CalendarStep {
   const limit = Math.max(1, Math.floor(maxClasses));
-  const ladder = calendarStepLadder();
+  const ladder = calendarStepLadder().filter((step) =>
+    fitsCalendarPrecision(step, precision)
+  );
   for (const step of ladder) {
     if (countCalendarClasses(min, max, step, limit, anchor) <= limit) {
       return step;
@@ -281,10 +308,12 @@ export function listCalendarStepOptions(
   min: number,
   max: number,
   maxClasses: number,
-  anchor?: number | null
+  anchor?: number | null,
+  precision?: CalendarPrecision | null
 ): CalendarStep[] {
   const options: CalendarStep[] = [];
   for (const step of calendarStepLadder()) {
+    if (!fitsCalendarPrecision(step, precision)) continue;
     const classes = countCalendarClasses(min, max, step, maxClasses, anchor);
     if (classes > maxClasses) continue;
     if (classes < 2) break;
@@ -524,9 +553,10 @@ export function buildEvenCalendarBreaks(
 const SNAP_LADDER = calendarStepLadder().filter(
   (step) => step.unit !== CALENDAR_UNIT.WEEK
 );
+
 // Snapping starts two ladder steps below the regular step for the same class
 // count: a yearly series snaps to quarters, a decade-wide one to even years.
-const SNAP_STEPS_BELOW_REGULAR = 2;
+export const SNAP_STEPS_BELOW_REGULAR = 2;
 
 function snapToNearest(ms: number, step: CalendarStep): number {
   const floor = floorToCalendarStep(ms, step);
@@ -538,32 +568,35 @@ function snapToNearest(ms: number, step: CalendarStep): number {
 /**
  * Moves data-driven thresholds (k-means on epoch values) to the nearest
  * calendar boundary, on the coarsest step that keeps every class: each
- * threshold distinct and inside `]min, max]`. Only when even single days
- * merge two thresholds does the class count shrink.
+ * threshold distinct and inside `]min, max]`. Only when even the finest step
+ * the precision allows merges two thresholds does the class count shrink.
  */
 export function snapBreaksToCalendar(
   rawBreaks: readonly number[],
   min: number,
-  max: number
+  max: number,
+  precision?: CalendarPrecision | null,
+  stepsBelowRegular = SNAP_STEPS_BELOW_REGULAR
 ): number[] {
   const raw = rawBreaks
     .filter((value) => Number.isFinite(value) && value > min && value <= max)
     .sort((a, b) => a - b);
   if (raw.length === 0) return [];
 
-  const regular = chooseCalendarStep(min, max, raw.length + 1);
-  const regularIndex = SNAP_LADDER.findIndex(
+  const ladder = SNAP_LADDER.filter((step) =>
+    fitsCalendarPrecision(step, precision)
+  );
+  const regular = chooseCalendarStep(min, max, raw.length + 1, null, precision);
+  const regularIndex = ladder.findIndex(
     (step) => step.unit === regular.unit && step.count === regular.count
   );
   const startIndex = Math.max(
     0,
-    (regularIndex < 0 ? 0 : regularIndex) - SNAP_STEPS_BELOW_REGULAR
+    (regularIndex < 0 ? 0 : regularIndex) - stepsBelowRegular
   );
 
   for (let index = startIndex; index >= 0; index -= 1) {
-    const snapped = raw.map((value) =>
-      snapToNearest(value, SNAP_LADDER[index])
-    );
+    const snapped = raw.map((value) => snapToNearest(value, ladder[index]));
     const keepsEveryClass = snapped.every(
       (value, position) =>
         value > min &&
@@ -574,7 +607,7 @@ export function snapBreaksToCalendar(
   }
 
   return raw
-    .map((value) => floorToCalendarStep(value, SNAP_LADDER[0]))
+    .map((value) => floorToCalendarStep(value, ladder[0]))
     .filter(
       (value, position, values) =>
         value > min &&

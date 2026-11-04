@@ -283,4 +283,27 @@ describe('calendar breaks', () => {
     expect(label).not.toBe('1970–1981');
     expect(label).toMatch(/1970.*9 mai 1981/);
   });
+
+  it('should never offer a step finer than the month when every date is a first of the month', () => {
+    const min = d('2021-01-01');
+    const max = d('2021-03-01');
+    expect(chooseCalendarStep(min, max, 12).unit).toBe(CALENDAR_UNIT.WEEK);
+    expect(chooseCalendarStep(min, max, 12, null, CALENDAR_UNIT.MONTH)).toEqual(
+      { unit: CALENDAR_UNIT.MONTH, count: 1 }
+    );
+    expect(
+      listCalendarStepOptions(min, max, 12, null, CALENDAR_UNIT.MONTH).every(
+        (step) =>
+          step.unit === CALENDAR_UNIT.MONTH || step.unit === CALENDAR_UNIT.YEAR
+      )
+    ).toBe(true);
+    expect(
+      snapBreaksToCalendar(
+        [d('2021-01-25'), d('2021-02-20')],
+        min,
+        max,
+        CALENDAR_UNIT.MONTH
+      ).map(iso)
+    ).toEqual(['2021-02-01', '2021-03-01']);
+  });
 });
