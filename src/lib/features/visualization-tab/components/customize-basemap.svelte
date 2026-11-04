@@ -5,9 +5,6 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import { VisualizationTools } from '$lib/features/commons/types/global';
-  import { selectTool } from '$lib/features/step-toolbar/tools-list/tool-list.utils.svelte';
   import { InfoPopover } from './shared';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import BasemapStyleSelector from './basemap-layers/basemap-style-selector.svelte';
@@ -301,14 +298,6 @@
   <div class="reference-basemap-tool">
     <p class="kh-help">{m.basemap_tiled_helper()}</p>
     <BasemapStyleSelector />
-    <Button
-      kind="ghost"
-      size="small"
-      class="projection-shortcut-btn"
-      on:click={() => selectTool(VisualizationTools.Projection)}
-    >
-      {m.basemap_projection_shortcut()}
-    </Button>
   </div>
 {/snippet}
 
@@ -392,10 +381,5 @@
     flex-direction: column;
     gap: var(--kh-gap-group);
     background-color: var(--cds-layer-01);
-  }
-
-  .layers-list :global(.projection-shortcut-btn) {
-    align-self: flex-start;
-    padding-left: 0;
   }
 </style>
