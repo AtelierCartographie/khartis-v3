@@ -1,5 +1,9 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import {
+  APP_LOADING_PHASE,
+  appLoadingStore
+} from '../stores/app-loading.store.svelte';
+import {
   createFileFromUpload,
   dataPipeline,
   isZipDatasetResult
@@ -1355,6 +1359,7 @@ function createDataOrchestratorService() {
             return;
           }
 
+          appLoadingStore.setPhase(APP_LOADING_PHASE.BASEMAPS);
           await restoreCustomBasemapTables();
           throwIfProjectChangeAborted(options.signal);
 
@@ -1363,6 +1368,7 @@ function createDataOrchestratorService() {
           }
 
           if (currentProject?.data?.sourceFiles) {
+            appLoadingStore.setPhase(APP_LOADING_PHASE.DATA);
             await processProjectFiles(
               currentProject.data.sourceFiles,
               restoreRun
@@ -1401,6 +1407,7 @@ function createDataOrchestratorService() {
           }
 
           migrateOrphanedVizDatasetIds();
+          appLoadingStore.setPhase(APP_LOADING_PHASE.VISUALIZATIONS);
           await recomputeMissingBreaks();
           throwIfProjectChangeAborted(options.signal);
 
@@ -1423,6 +1430,7 @@ function createDataOrchestratorService() {
           duckDBOrchestrator.applyPersistedTableFilters();
 
           if (currentProject) {
+            appLoadingStore.setPhase(APP_LOADING_PHASE.JOINS);
             await restorePersistedDataTabState(
               currentProject,
               restoreToken,
@@ -1468,6 +1476,7 @@ function createDataOrchestratorService() {
   ): Promise<void> {
     throwIfProjectChangeAborted(options.signal);
     const projectChangeRun = captureProjectRuntime();
+    appLoadingStore.setPhase(APP_LOADING_PHASE.ENGINE);
     await duckDBOrchestrator.waitForInitialization();
     throwIfProjectChangeAborted(options.signal);
     if (!isCurrentProjectRuntime(projectChangeRun)) {
