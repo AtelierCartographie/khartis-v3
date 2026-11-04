@@ -42,6 +42,7 @@
   import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+  import { joinControlStore } from '../stores/join-control.store.svelte';
   import { labelLayoutStore } from '../stores/label-layout.store.svelte';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -2114,6 +2115,7 @@
     basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
+    joinControlKey: joinControlStore.renderKey,
     labelLayoutVersion: labelLayoutStore.version,
     dataVersion,
     dataSize: `${tables.size}`,

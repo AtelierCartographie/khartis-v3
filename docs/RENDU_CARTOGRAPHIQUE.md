@@ -275,6 +275,56 @@ légendes d'une visualisation tirée du même jeu de données lisent la même li
 ce qui marque le lieu dans chaque carte d'une collection. Les exports ne portent
 jamais cette marque.
 
+## Étape Données : contrôle de la jointure
+
+À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
+fond qui porte ses territoires. Chacun prend la couleur de son statut de
+jointure, celle des catégories du panneau : joint, à vérifier (`check` et
+`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune ligne, en gris clair hachuré, plus discret), y compris le
+territoire qu'une valeur ignorée désignait. Les valeurs
+non reconnues n'ont pas de géométrie et restent dans le panneau.
+
+- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte
+  quand le panneau défile jusqu'à « Jointure assistée par
+  Khartis ». Le fondu suit le défilement (`setRevealProgress`, qui ne recule
+  jamais) et s'achève seul si le panneau ne peut plus défiler ; la jointure
+  reste ensuite affichée pour la session.
+- La carte ne montre que la jointure par entités : quand les coordonnées
+  géographiques sont la référence choisie, il n'y a pas de jointure assistée
+  et rien n'est dessiné.
+- Le statut de chaque territoire est calculé en SQL
+  (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
+  finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
+  le projet.
+- `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
+  fond, entre son sol et ses limites. Les répétés portent une trame de croix,
+  car rouge et vert se confondent pour un daltonien. Motifs, contours et repères suivent le
+  zoom de la page (`pageDisplayScale`), comme les autres marques.
+- Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
+  repère ponctuel.
+- Le panneau ouvre un seul accordéon de catégorie à la fois ; ouvrir une
+  catégorie ne filtre pas la carte.
+- La carte suit aussi ce que le panneau tient sans l'avoir encore appliqué
+  (`buildPendingJoinMappings`) : une suggestion « à vérifier » remplacée par une
+  autre entité, ou une association effacée parmi les entités jointes, qui laisse
+  la valeur sans territoire. Tant qu'une association reste effacée, sa liste est
+  en erreur, une notification d'erreur remplace la validation et le bouton
+  Visualiser est désactivé.
+- Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
+  le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
+  la carte, sans reconstruire les couches.
+- L'infobulle donne le statut, puis, côte à côte comme une ligne des tableaux
+  de jointure, la valeur des données tabulaires (ou du fichier importé) et le
+  nom sur le fond ; épinglée, elle ajoute les autres données jointes, une
+  variable par ligne, et ombre ses bords quand elle défile.
+- La carte suit la variable liée du panneau : tant que la jointure finalisée
+  porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
+  variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.
+- En entrant dans l'étape Données ou en la quittant, la dernière image de la
+  carte s'efface en fondu au-dessus de la nouvelle
+  (`join-control-step-fade.svelte`), sauf mouvement réduit.
+- Rien de cela n'entre dans un export.
+
 ## Habillage et facettes
 
 Légendes, annotations, échelle, orientation, indications géographiques et

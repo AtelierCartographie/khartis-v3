@@ -121,11 +121,6 @@
         return true;
       }
 
-      if (globalState.toolbarState === ToolbarState.Full) {
-        globalActions.setToolbarState(ToolbarState.Collapsed);
-        return true;
-      }
-
       return false;
     }
 
