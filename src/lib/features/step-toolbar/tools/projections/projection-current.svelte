@@ -1,20 +1,12 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    basemapService,
-    mapProjectionStore,
-    osmBasemapStore
-  } from '$lib/features/map';
-  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { m } from '$lib/paraglide/messages';
   import { CodeSnippet } from 'carbon-components-svelte';
   import { Code, SettingsAdjust } from 'carbon-icons-svelte';
   import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { resolveCurrentProjectionDisplay } from './projection-label.utils';
-  import { getNativeCrsEpsg } from './native-projection.utils';
-  import { getProjectionState } from './projection.store.svelte';
+  import { getCurrentProjectionContext } from './projection-georeference.utils';
   import {
     resolveCurrentProjectionDefinition,
     type ProjectionDefinitionNote
@@ -28,42 +20,24 @@
 
   let definitionOpen = $state(false);
 
-  const projectionState = $derived(getProjectionState());
-  const isTiledBasemapEnabled = $derived(
-    shouldUseMapLibreInterleaved({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive
-    })
-  );
-  const basemapProjection = $derived({
-    ...basemapService.currentMetadata?.proj_to,
-    nativeEpsg: getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
-  });
+  const context = $derived(getCurrentProjectionContext());
+  const isTiledBasemapEnabled = $derived(context.tiled !== null);
   const display = $derived(
-    isTiledBasemapEnabled
+    context.tiled
       ? {
-          name: mapProjectionStore.isGlobe
+          name: context.tiled.globe
             ? m.map_projection_globe()
             : m.projection_current_web_mercator(),
           description: m.projection_tiled_helper()
         }
       : resolveCurrentProjectionDisplay(
-          projectionState,
-          basemapProjection,
-          basemapService.projectionPresets
+          context.state,
+          context.basemapProjection,
+          context.projectionPresets
         )
   );
   const definition = $derived(
-    definitionOpen
-      ? resolveCurrentProjectionDefinition({
-          state: projectionState,
-          basemapProjection,
-          projectionPresets: basemapService.projectionPresets,
-          tiled: isTiledBasemapEnabled
-            ? { globe: mapProjectionStore.isGlobe }
-            : null
-        })
-      : undefined
+    definitionOpen ? resolveCurrentProjectionDefinition(context) : undefined
   );
 
   function describeNote(note: ProjectionDefinitionNote): string {

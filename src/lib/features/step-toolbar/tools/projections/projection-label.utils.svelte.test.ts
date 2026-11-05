@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { ProjectionState } from '../../types/projections.types';
 import { resolveCurrentProjectionDisplay } from './projection-label.utils';
-import { resolveCurrentProjectionDefinition } from './projection-definition.utils';
+import {
+  createCurrentProjectionForward,
+  resolveCurrentProjectionDefinition
+} from './projection-definition.utils';
+import { buildUserProjection } from '$lib/features/map/utils/user-projection-build.utils';
+import { fitAffineTransform } from '$lib/features/commons/utils/georeference.utils';
 
 function createState(
   overrides: Partial<ProjectionState> = {}
@@ -191,5 +196,65 @@ describe('resolveCurrentProjectionDefinition', () => {
       resolveCurrentProjectionDefinition({ state, tiled: { globe: true } })
         .notes
     ).toEqual(['globe']);
+  });
+});
+
+describe('createCurrentProjectionForward', () => {
+  // The side-cars hold an affine map from image pixels to the coordinates of
+  // the PROJ string handed out: the drawn map must be an affine image of them.
+  it.each([
+    ['mercator', {}],
+    ['natural-earth', { longitude: 150 }],
+    ['robinson', { longitude: 10 }],
+    ['winkel-tripel', {}],
+    ['equal-earth', { longitude: -30 }],
+    ['gall-peters', {}],
+    ['bonne', {}],
+    ['orthographic', { center: [10, 45] }],
+    ['stereographic', { center: [0, 70] }],
+    ['azimuthal-equal-area', { center: [10, 52] }],
+    ['albers', {}],
+    ['lambert-conformal', { longitude: 3 }],
+    ['transverse-mercator', { longitude: 9 }],
+    ['cassini', { longitude: 9 }]
+  ] as [string, Partial<ProjectionState>][])(
+    'should place %s as an affine image of its CRS',
+    (selected, overrides) => {
+      const state = createState({ selected, ...overrides });
+      const forward = createCurrentProjectionForward({ state });
+      const drawn = buildUserProjection({
+        selected,
+        center: state.center,
+        longitude: state.longitude,
+        latitude: state.latitude,
+        rotation: 0,
+        fitBbox: [-10, 35, 30, 65],
+        width: 800,
+        height: 600,
+        padding: 20
+      });
+      const samples = [];
+      for (let lon = -5; lon <= 25; lon += 5) {
+        for (let lat = 38; lat <= 62; lat += 6) {
+          const pixel = drawn?.([lon, lat]);
+          const crs = forward?.([lon, lat]);
+          if (pixel && crs) {
+            samples.push({ pixel: pixel as [number, number], crs });
+          }
+        }
+      }
+
+      expect(samples.length).toBeGreaterThan(20);
+      // d3 and PROJ interpolate Robinson's table slightly differently.
+      expect(fitAffineTransform(samples)?.maxResidualPx).toBeLessThan(0.1);
+    }
+  );
+
+  it('should refuse a projection without CRS', () => {
+    expect(
+      createCurrentProjectionForward({
+        state: createState({ selected: 'robinson', latitude: 30 })
+      })
+    ).toBeNull();
   });
 });
