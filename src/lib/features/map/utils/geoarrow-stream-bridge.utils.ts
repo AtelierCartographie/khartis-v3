@@ -3,7 +3,8 @@ import {
   RecordBatch,
   Schema,
   type Table as ArrowTable,
-  Table as ArrowTableImpl
+  Table as ArrowTableImpl,
+  tableToIPC
 } from 'apache-arrow/Arrow';
 import type {
   BinaryPathData,
@@ -38,7 +39,6 @@ import {
 import {
   bumpWorkerParseVersion,
   getParseWorkerClient,
-  ipcBytesForTable,
   trackPendingWorkerParse,
   trackWorkerParseVersion,
   withParseWorkerTimeout
@@ -348,12 +348,15 @@ function requestWorkerParse<T>(
 
   if (!workerPendingKeys.has(key)) {
     workerPendingKeys.add(key);
-    const ipcBytes = ipcBytesForTable(normalizeGeomColumnName(table));
+    // Serialized per request and transferred: caching these bytes would pin a
+    // copy of the geometry on the main thread for as long as the table lives.
+    const ipcBytes = tableToIPC(normalizeGeomColumnName(table));
     trackPendingWorkerParse(
       withParseWorkerTimeout(
         client[method](ipcBytes, spec, {
           capacityMultiplier: 1.0,
-          rewind: options.rewind
+          rewind: options.rewind,
+          transferInput: true
         }),
         method
       )
