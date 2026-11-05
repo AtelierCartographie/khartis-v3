@@ -47,7 +47,10 @@ Jointure, analyse ou densité  GeoParquet → DuckDB → table de fond → requ�
 
 L'affichage évite DuckDB pour dessiner vite. Les attributs peuvent être chargés
 dans DuckDB sans la géométrie ; celle-ci n'y est matérialisée que si une
-opération géographique l'exige.
+opération géographique l'exige. `loadGeometryIntoDuckDB` construit alors les
+géométries directement depuis les listes de coordonnées GeoArrow
+(`map/services/catalog-geometry-sql.ts`), sans passer par du WKT, et une seule
+fois par fond même quand plusieurs opérations la demandent en même temps.
 
 `basemapService` met en cache les fonds chargés. `useMapReferenceBasemap`
 associe chaque chargement à un identifiant de requête, pour qu'une réponse
