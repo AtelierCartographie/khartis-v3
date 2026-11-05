@@ -22,6 +22,13 @@ export const EPSG_DEFINITIONS: Record<string, string> = {
   [WGS84_CRS]: '+proj=longlat +datum=WGS84 +no_defs +type=crs'
 };
 
+// proj4js leaves these undefined when a PROJ.4 string omits them, and aea,
+// laea, lcc, cea, somerc… then return NaN for every point. PROJ defaults all
+// four to 0.
+const PROJ_ZERO_DEFAULT_PARAMETERS = ['lat_0', 'lon_0', 'x_0', 'y_0'] as const;
+
+export type Proj4Crs = InstanceType<typeof proj4.Proj>;
+
 let proj4DefinitionsRegistered = false;
 
 export function normalizeProj4CrsCode(crs: string): string {
@@ -29,6 +36,33 @@ export function normalizeProj4CrsCode(crs: string): string {
   const epsgMatch = trimmed.match(/^EPSG:(\d+)$/i);
 
   return epsgMatch ? `EPSG:${epsgMatch[1]}` : trimmed;
+}
+
+export function completeProj4Defaults(definition: string): string {
+  if (!definition.trimStart().startsWith('+')) {
+    return definition;
+  }
+
+  const missing = PROJ_ZERO_DEFAULT_PARAMETERS.filter(
+    (parameter) => !new RegExp(`\\+${parameter}=`).test(definition)
+  );
+
+  return missing.length === 0
+    ? definition
+    : `${definition} ${missing.map((parameter) => `+${parameter}=0`).join(' ')}`;
+}
+
+// Accepts an EPSG code known to proj4, a PROJ.4 string, a WKT (1 or 2) or a
+// PROJJSON text. Throws when proj4 cannot build the CRS.
+export function createProj4Crs(code: string): Proj4Crs {
+  registerKnownProj4Definitions();
+
+  const normalized = normalizeProj4CrsCode(code);
+  if (normalized.startsWith('{')) {
+    return new proj4.Proj(JSON.parse(normalized));
+  }
+
+  return new proj4.Proj(completeProj4Defaults(normalized));
 }
 
 export function registerKnownProj4Definitions(): void {

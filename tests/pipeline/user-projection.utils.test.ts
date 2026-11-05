@@ -494,6 +494,26 @@ describe('user projection utils', () => {
       state: {
         selected: 'mercator',
         overrideActive: true,
+        customCode: '+proj=lcc +lat_1= +ellps=WGS84 +units=m',
+        center: undefined,
+        longitude: 0,
+        latitude: 0,
+        rotation: 0
+      },
+      fitBbox: [-63.09, -21.39, 55.84, 71.12],
+      viewportSize: { width: 789, height: 539 },
+      padding: 40,
+      projectionPresets
+    });
+
+    expect(projection).toBeUndefined();
+  });
+
+  it('should render a custom LAEA that leaves x_0 and y_0 to their PROJ default', () => {
+    const projection = resolveUserProjectionOverride({
+      state: {
+        selected: 'mercator',
+        overrideActive: true,
         customCode:
           '+proj=laea +lon_0=-3.63 +lat_0=24.86 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
         center: undefined,
@@ -507,7 +527,7 @@ describe('user projection utils', () => {
       projectionPresets
     });
 
-    expect(projection).toBeUndefined();
+    expect(projection).toBeDefined();
   });
 
   // Builds and fits one projection per (built-in projection x catalog basemap)

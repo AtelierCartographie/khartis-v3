@@ -1,8 +1,7 @@
 import proj4 from 'proj4';
 import { geoProjection, type GeoProjection } from 'd3-geo';
 import {
-  normalizeProj4CrsCode,
-  registerKnownProj4Definitions,
+  createProj4Crs,
   WGS84_CRS
 } from '$lib/features/commons/utils/proj4-crs.utils';
 
@@ -10,9 +9,7 @@ const RADIANS_TO_DEGREES = 180 / Math.PI;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 export function proj4d3(definition: string): GeoProjection {
-  registerKnownProj4Definitions();
-
-  const converter = proj4(WGS84_CRS, normalizeProj4CrsCode(definition));
+  const converter = proj4(WGS84_CRS, createProj4Crs(definition));
 
   // The raw projection works in radians on input and the proj4 CRS unit on
   // output. Attaching `.invert` to the RAW projection (before geoProjection
