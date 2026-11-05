@@ -135,6 +135,26 @@ export function getProjectionAvailabilityContext() {
   });
 }
 
+// The lon/lat extent the map is fitted to, approximated as the render path
+// does: the reference geometry when it is still in lon/lat, then the WGS84
+// bounds of the selected dataset, then the basemap's curated bbox.
+export function getProjectionCodeCoverageBbox():
+  [number, number, number, number] | null {
+  if (
+    !mapRenderProjectionStore.isProjectedCoordinates &&
+    mapRenderProjectionStore.referenceBbox
+  ) {
+    return mapRenderProjectionStore.referenceBbox;
+  }
+
+  const geometry = datasetsStore.selectedDataset?.geometry;
+  if (geometry?.bounds && canUseBoundsForProjectionSuggestion(geometry.crs)) {
+    return geometry.bounds;
+  }
+
+  return basemapService.currentMetadata?.bbox ?? null;
+}
+
 type SuggestionBounds =
   | { kind: 'single'; bbox: [number, number, number, number] }
   | { kind: 'features'; boxes: Array<[number, number, number, number]> };

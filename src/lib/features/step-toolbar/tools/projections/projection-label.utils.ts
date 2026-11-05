@@ -4,7 +4,11 @@ import type { ProjectionFilterId } from '$lib/features/commons/types/global';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
-import { inferProjectionIdFromCode } from './projection-code.utils';
+import {
+  describeProjectionCode,
+  inferProjectionIdFromCode,
+  type ProjectionCodeCrs
+} from './projection-code.utils';
 import { findNativeSuggestion } from './native-projection.utils';
 import {
   getCatalogueProjectionIdForD3Config,
@@ -155,7 +159,7 @@ export function resolveCurrentProjectionDisplay(
   }
 
   if (state.customCode) {
-    return resolveProjectionCodeDisplay(state.customCode);
+    return resolveUserCodeDisplay(state);
   }
 
   const presetId = getCompositeProjectionPresetId(state.selected);
@@ -184,6 +188,56 @@ function resolveBasemapProjectionDisplay(
         description: `EPSG:${source.nativeEpsg}`
       }
     : { name: m.projection_current_basemap_native() };
+}
+
+export function formatProjectionCodeCrs(crs: ProjectionCodeCrs): string {
+  return [
+    crs.epsg ? `EPSG:${crs.epsg}` : undefined,
+    crs.method,
+    crs.datum ?? crs.ellipsoid,
+    crs.units
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function getProjectionCodeDisplayName(
+  code: string,
+  crs: ProjectionCodeCrs
+): string {
+  return (
+    crs.name ??
+    (crs.epsg ? `EPSG:${crs.epsg}` : undefined) ??
+    getProjectionForId(inferProjectionIdFromCode(code))?.name ??
+    (crs.method || m.projection_current_custom_code())
+  );
+}
+
+// A pasted CRS is named after itself (EPSG registry, WKT/PROJJSON name), so an
+// expert can match it against the CRS of a QGIS or ArcGIS export; the
+// orientation settings rotate the sphere before proj4 and break that match.
+function resolveUserCodeDisplay(
+  state: ProjectionState
+): CurrentProjectionDisplay {
+  const code = state.customCode ?? '';
+  const crs = describeProjectionCode(code);
+  if (!crs) {
+    return resolveProjectionCodeDisplay(code);
+  }
+
+  const name = getProjectionCodeDisplayName(code, crs);
+  const reoriented =
+    state.longitude !== 0 || state.latitude !== 0 || state.rotation !== 0;
+
+  return {
+    name,
+    description: [
+      formatProjectionCodeCrs(crs),
+      reoriented ? m.projection_current_crs_reoriented() : undefined
+    ]
+      .filter(Boolean)
+      .join(' — ')
+  };
 }
 
 function resolveProjectionCodeDisplay(code: string): CurrentProjectionDisplay {

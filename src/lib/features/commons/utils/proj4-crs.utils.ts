@@ -22,6 +22,17 @@ export const EPSG_DEFINITIONS: Record<string, string> = {
   [WGS84_CRS]: '+proj=longlat +datum=WGS84 +no_defs +type=crs'
 };
 
+export const EPSG_NAMES: Record<string, string> = {
+  'EPSG:2154': 'RGF93 v1 / Lambert-93',
+  'EPSG:3035': 'ETRS89-extended / LAEA Europe',
+  'EPSG:27700': 'OSGB36 / British National Grid',
+  'EPSG:2157': 'IRENET95 / Irish Transverse Mercator',
+  'EPSG:2056': 'CH1903+ / LV95',
+  'EPSG:3857': 'WGS 84 / Pseudo-Mercator',
+  'EPSG:27572': 'NTF (Paris) / Lambert zone II',
+  [WGS84_CRS]: 'WGS 84'
+};
+
 // proj4js leaves these undefined when a PROJ.4 string omits them, and aea,
 // laea, lcc, cea, somerc… then return NaN for every point. PROJ defaults all
 // four to 0.
@@ -63,6 +74,15 @@ export function createProj4Crs(code: string): Proj4Crs {
   }
 
   return new proj4.Proj(completeProj4Defaults(normalized));
+}
+
+export function getKnownEpsgName(epsgCode: string): string | undefined {
+  const code = normalizeProj4CrsCode(epsgCode);
+  const utm = code.match(/^EPSG:32([67])(\d{2})$/);
+  if (utm) {
+    return `WGS 84 / UTM zone ${Number(utm[2])}${utm[1] === '6' ? 'N' : 'S'}`;
+  }
+  return EPSG_NAMES[code];
 }
 
 export function registerKnownProj4Definitions(): void {

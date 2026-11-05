@@ -16,155 +16,131 @@ vi.mock('$lib/features/commons/utils/projection.utils', () => ({
   ]
 }));
 
-import { parseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
+import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
+import { diagnoseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
 
-// ─── null cases ────────────────────────────────────────────────────────────
+const LAMBERT_93_ESRI_PRJ = `PROJCS["RGF_1993_Lambert_93",GEOGCS["GCS_RGF_1993",DATUM["D_RGF_1993",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",700000.0],PARAMETER["False_Northing",6600000.0],PARAMETER["Central_Meridian",3.0],PARAMETER["Standard_Parallel_1",49.0],PARAMETER["Standard_Parallel_2",44.0],PARAMETER["Latitude_Of_Origin",46.5],UNIT["Meter",1.0]]`;
+const LAMBERT_93_WKT2 = `PROJCRS["RGF93 v1 / Lambert-93",BASEGEOGCRS["RGF93 v1",DATUM["Reseau Geodesique Francais 1993 v1",ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4171]],CONVERSION["Lambert-93",METHOD["Lambert Conic Conformal (2SP)",ID["EPSG",9802]],PARAMETER["Latitude of false origin",46.5,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Longitude of false origin",3,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Latitude of 1st standard parallel",49,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Latitude of 2nd standard parallel",44,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Easting at false origin",700000,LENGTHUNIT["metre",1]],PARAMETER["Northing at false origin",6600000,LENGTHUNIT["metre",1]]],CS[Cartesian,2],AXIS["easting (X)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["northing (Y)",north,ORDER[2],LENGTHUNIT["metre",1]],ID["EPSG",2154]]`;
 
-describe('parseProjectionCode — null cases', () => {
-  it('returns null for empty string', () => {
-    expect(parseProjectionCode('')).toBeNull();
+const FRANCE: [number, number, number, number] = [-5, 41, 10, 51.5];
+const ATLANTIC: [number, number, number, number] = [-120, -40, 40, 70];
+const AUSTRALIA: [number, number, number, number] = [113, -44, 154, -10];
+
+describe('diagnoseProjectionCode', () => {
+  it('should project an Albers or LAEA definition that omits x_0, y_0 or lat_0', () => {
+    for (const code of [
+      '+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +datum=NAD83 +units=m',
+      '+proj=laea +lat_0=90 +lon_0=0 +datum=WGS84 +units=m'
+    ]) {
+      expect(diagnoseProjectionCode(code).status).toBe('valid');
+      expect(proj4d3(code)([2, 60])?.every(Number.isFinite)).toBe(true);
+    }
   });
 
-  it('returns null for whitespace-only input', () => {
-    expect(parseProjectionCode('   ')).toBeNull();
-  });
+  it('should name a registered EPSG code typed as a bare number', () => {
+    const diagnosis = diagnoseProjectionCode(' 2154 ', FRANCE);
 
-  it('returns null when no WKT or proj4 hint is detected', () => {
-    expect(parseProjectionCode('hello world')).toBeNull();
-  });
-});
-
-// ─── format detection ──────────────────────────────────────────────────────
-
-describe('parseProjectionCode — format detection', () => {
-  it('detects proj4 format for +proj= prefix', () => {
-    const result = parseProjectionCode('+proj=merc +datum=WGS84');
-    expect(result?.format).toBe('proj4');
-  });
-
-  it('detects proj4 format for EPSG: prefix', () => {
-    const result = parseProjectionCode('EPSG:3857');
-    expect(result?.format).toBe('proj4');
-  });
-
-  it('detects wkt format for PROJCS keyword', () => {
-    const wkt =
-      'PROJCS["WGS_1984_Web_Mercator_Auxiliary_Sphere",' +
-      'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],' +
-      'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],' +
-      'PROJECTION["Mercator_Auxiliary_Sphere"],PARAMETER["False_Easting",0.0],' +
-      'PARAMETER["False_Northing",0.0],PARAMETER["Central_Meridian",0.0],' +
-      'PARAMETER["Standard_Parallel_1",0.0],PARAMETER["Auxiliary_Sphere_Type",0.0],' +
-      'UNIT["Meter",1.0]]';
-    const result = parseProjectionCode(wkt);
-    expect(result?.format).toBe('wkt');
-  });
-
-  it('detects wkt format for GEOGCS keyword', () => {
-    const wkt =
-      'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],' +
-      'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]';
-    const result = parseProjectionCode(wkt);
-    expect(result?.format).toBe('wkt');
-  });
-});
-
-// ─── projection ID inference ───────────────────────────────────────────────
-
-describe('parseProjectionCode — projection ID inference', () => {
-  it('infers mercator for +proj=merc', () => {
-    expect(parseProjectionCode('+proj=merc +datum=WGS84')?.projectionId).toBe(
-      'mercator'
-    );
-  });
-
-  it('infers equirectangular for +proj=eqc', () => {
-    expect(parseProjectionCode('+proj=eqc +datum=WGS84')?.projectionId).toBe(
-      'equirectangular'
-    );
-  });
-
-  it('infers equirectangular for +proj=longlat', () => {
-    expect(
-      parseProjectionCode('+proj=longlat +datum=WGS84')?.projectionId
-    ).toBe('equirectangular');
-  });
-
-  it('infers orthographic for +proj=ortho', () => {
-    expect(parseProjectionCode('+proj=ortho +datum=WGS84')?.projectionId).toBe(
-      'orthographic'
-    );
-  });
-
-  it('infers robinson for +proj=robin', () => {
-    expect(parseProjectionCode('+proj=robin +datum=WGS84')?.projectionId).toBe(
-      'robinson'
-    );
-  });
-
-  it('infers mollweide for +proj=moll', () => {
-    expect(parseProjectionCode('+proj=moll +datum=WGS84')?.projectionId).toBe(
-      'mollweide'
-    );
-  });
-
-  it('infers albers for +proj=aea', () => {
-    expect(
-      parseProjectionCode('+proj=aea +lat_1=29.5 +lat_2=45.5 +datum=WGS84')
-        ?.projectionId
-    ).toBe('albers');
-  });
-
-  it('infers stereographic for +proj=stere', () => {
-    expect(parseProjectionCode('+proj=stere +datum=WGS84')?.projectionId).toBe(
-      'stereographic'
-    );
-  });
-
-  it('infers mercator for EPSG:3857', () => {
-    expect(parseProjectionCode('EPSG:3857')?.projectionId).toBe('mercator');
-  });
-
-  it('accepts Lambert-93 EPSG code and infers the closest catalogue projection', () => {
-    const result = parseProjectionCode('epsg:2154');
-
-    expect(result).toEqual({
+    expect(diagnosis).toMatchObject({
+      status: 'valid',
+      format: 'authority',
       normalizedCode: 'EPSG:2154',
-      format: 'proj4',
-      projectionId: 'lambert-conformal'
+      coverage: 'full',
+      crs: { name: 'RGF93 v1 / Lambert-93', epsg: '2154' }
     });
   });
 
-  it('accepts ETRS89-LAEA EPSG code and infers the equal-area projection', () => {
-    const result = parseProjectionCode('EPSG:3035');
-
-    expect(result?.format).toBe('proj4');
-    expect(result?.projectionId).toBe('azimuthal-equal-area');
+  it('should read the CRS name of an ESRI .prj and the EPSG id of a WKT2', () => {
+    expect(diagnoseProjectionCode(LAMBERT_93_ESRI_PRJ)).toMatchObject({
+      status: 'valid',
+      format: 'wkt',
+      crs: { name: 'RGF 1993 Lambert 93', epsg: undefined }
+    });
+    expect(diagnoseProjectionCode(LAMBERT_93_WKT2)).toMatchObject({
+      status: 'valid',
+      crs: { name: 'RGF93 v1 / Lambert-93', epsg: '2154' }
+    });
   });
 
-  it('accepts explicit national EPSG codes from the projection CDC', () => {
-    expect(parseProjectionCode('EPSG:27700')?.format).toBe('proj4');
-    expect(parseProjectionCode('EPSG:2157')?.format).toBe('proj4');
-    expect(parseProjectionCode('EPSG:2056')?.format).toBe('proj4');
+  it('should report an EPSG code that is not bundled', () => {
+    expect(diagnoseProjectionCode('EPSG:5070')).toEqual({
+      status: 'unknown-authority-code',
+      code: 'EPSG:5070'
+    });
   });
 
-  it('recognizes a raw Lambert conformal conic code', () => {
-    const lcc =
-      '+proj=lcc +lat_1=43 +lat_2=62 +lat_0=30 +lon_0=10 +datum=WGS84 +units=m';
-    expect(parseProjectionCode(lcc)?.projectionId).toBe('lambert-conformal');
+  it('should route a method proj4 lacks to its catalogue equivalent', () => {
+    expect(diagnoseProjectionCode('+proj=natearth +lon_0=10')).toEqual({
+      status: 'catalogue-equivalent',
+      method: 'natearth',
+      catalogueId: 'natural-earth',
+      longitude: 10
+    });
+    expect(diagnoseProjectionCode('+proj=foo')).toEqual({
+      status: 'unsupported-method',
+      method: 'foo'
+    });
   });
 
-  it('falls back to mercator for a valid but unrecognized projection', () => {
-    const gnomonic = '+proj=gnom +lat_0=45 +lon_0=10 +datum=WGS84 +units=m';
-    expect(parseProjectionCode(gnomonic)?.projectionId).toBe('mercator');
+  it('should reject text that is not a CRS and a definition that projects nothing', () => {
+    expect(diagnoseProjectionCode('Lambert 93').status).toBe('unrecognized');
+    expect(diagnoseProjectionCode('+proj=lcc +lat_1=').status).toBe('invalid');
+  });
+
+  it('should grade how much of the extent an orthographic view can draw', () => {
+    const code = '+proj=ortho +lat_0=45 +lon_0=10 +datum=WGS84';
+
+    expect(diagnoseProjectionCode(code, ATLANTIC)).toMatchObject({
+      coverage: 'partial'
+    });
+    expect(diagnoseProjectionCode(code, AUSTRALIA)).toMatchObject({
+      coverage: 'none'
+    });
   });
 });
 
-// ─── normalizedCode ────────────────────────────────────────────────────────
+describe('diagnoseProjectionCode — closest catalogue projection', () => {
+  it.each([
+    ['+proj=merc +datum=WGS84', 'mercator'],
+    ['+proj=eqc +datum=WGS84', 'equirectangular'],
+    ['+proj=longlat +datum=WGS84', 'equirectangular'],
+    ['+proj=ortho +datum=WGS84', 'orthographic'],
+    ['+proj=robin +datum=WGS84', 'robinson'],
+    ['+proj=moll +datum=WGS84', 'mollweide'],
+    ['+proj=aea +lat_1=29.5 +lat_2=45.5 +datum=WGS84', 'albers'],
+    ['+proj=stere +datum=WGS84', 'stereographic'],
+    ['EPSG:3857', 'mercator'],
+    ['epsg:2154', 'lambert-conformal'],
+    ['EPSG:3035', 'azimuthal-equal-area'],
+    [
+      '+proj=lcc +lat_1=43 +lat_2=62 +lat_0=30 +lon_0=10 +datum=WGS84 +units=m',
+      'lambert-conformal'
+    ],
+    ['+proj=gnom +lat_0=45 +lon_0=10 +datum=WGS84 +units=m', 'mercator']
+  ])('should map %s to %s', (code, projectionId) => {
+    expect(diagnoseProjectionCode(code)).toMatchObject({
+      status: 'valid',
+      projectionId
+    });
+  });
 
-describe('parseProjectionCode — normalizedCode', () => {
-  it('trims surrounding whitespace from the input', () => {
-    const result = parseProjectionCode('  +proj=merc +datum=WGS84  ');
-    expect(result?.normalizedCode).toBe('+proj=merc +datum=WGS84');
+  it('should accept the national EPSG codes of the projection CDC', () => {
+    for (const code of ['EPSG:27700', 'EPSG:2157', 'EPSG:2056']) {
+      expect(diagnoseProjectionCode(code)).toMatchObject({
+        status: 'valid',
+        format: 'authority'
+      });
+    }
+  });
+
+  it('should detect WKT for PROJCS and GEOGCS and trim the input', () => {
+    const geogcs =
+      'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],' +
+      'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]';
+
+    expect(diagnoseProjectionCode(geogcs)).toMatchObject({ format: 'wkt' });
+    expect(diagnoseProjectionCode('  +proj=merc +datum=WGS84  ')).toMatchObject(
+      { format: 'proj4', normalizedCode: '+proj=merc +datum=WGS84' }
+    );
+    expect(diagnoseProjectionCode('   ')).toEqual({ status: 'empty' });
   });
 });

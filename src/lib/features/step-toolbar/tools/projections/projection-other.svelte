@@ -1,6 +1,10 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { basemapService } from '$lib/features/map';
+  import {
+    basemapService,
+    hasPendingWorkerParse,
+    mapLoadingStore
+  } from '$lib/features/map';
   import {
     getAvailableProjectionIds,
     supportsCustomProjectionCode
@@ -10,22 +14,35 @@
   import {
     Button,
     ComboBox,
+    InlineLoading,
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
-  import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import {
+    CheckmarkOutline,
+    Code,
+    List as ListIcon
+  } from 'carbon-icons-svelte';
+  import {
+    getProjectionById,
     type ProjectionInfo,
     PROJECTIONS as PROJECTION_CATALOG
   } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {
     getProjectionAvailabilityContext,
+    getProjectionCodeCoverageBbox,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
   import {
+    diagnoseProjectionCode,
+    type ProjectionCodeDiagnosis
+  } from './projection-code.utils';
+  import {
+    formatProjectionCodeCrs,
     getPresetOfficialProjectionName,
+    getProjectionCodeDisplayName,
     getProjectionShapeFilterId,
     type ProjectionShapeFilterId
   } from './projection-label.utils';
@@ -39,7 +56,7 @@
   };
 
   type Props = {
-    onapply?: (payload: { code: string }) => void;
+    onapply?: (diagnosis: ProjectionCodeDiagnosis) => void;
     onreset?: () => void;
   };
 
@@ -56,6 +73,52 @@
   );
   const activeTabIndex = $derived(customCodeEnabled ? requestedTabIndex : 0);
   const isCodeView = $derived(customCodeEnabled && activeTabIndex === 1);
+  const diagnosis = $derived(
+    isCodeView
+      ? diagnoseProjectionCode(crsCode, getProjectionCodeCoverageBbox())
+      : ({ status: 'empty' } as ProjectionCodeDiagnosis)
+  );
+  const canApply = $derived(
+    diagnosis.status === 'catalogue-equivalent' ||
+      (diagnosis.status === 'valid' && diagnosis.coverage !== 'none')
+  );
+  const isDiagnosisApplied = $derived.by(() => {
+    if (diagnosis.status === 'valid') {
+      return projectionState.customCode === diagnosis.normalizedCode;
+    }
+    if (diagnosis.status === 'catalogue-equivalent') {
+      return (
+        projectionState.overrideActive === true &&
+        !projectionState.customCode &&
+        !projectionState.suggestionD3Config &&
+        projectionState.selected === diagnosis.catalogueId
+      );
+    }
+    return false;
+  });
+  const isMapReprojecting = $derived(
+    mapLoadingStore.isPreparingLayers || hasPendingWorkerParse()
+  );
+  const diagnosisError = $derived.by((): string | undefined => {
+    switch (diagnosis.status) {
+      case 'unrecognized':
+        return m.projection_code_unrecognized();
+      case 'unknown-authority-code':
+        return m.projection_code_unknown_authority({ code: diagnosis.code });
+      case 'unsupported-method':
+        return m.projection_code_unsupported_method({
+          method: diagnosis.method ?? '?'
+        });
+      case 'invalid':
+        return m.projection_code_invalid();
+      case 'valid':
+        return diagnosis.coverage === 'none'
+          ? m.projection_code_coverage_none()
+          : undefined;
+      default:
+        return undefined;
+    }
+  });
   const compositeItems = $derived([
     {
       id: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
@@ -190,8 +253,8 @@
   }
 
   function onApply() {
-    if (isEmpty()) return;
-    onapply?.({ code: crsCode.trim() });
+    if (!canApply) return;
+    onapply?.(diagnosis);
   }
 
   function handleCrsCodeInput(event: CustomEvent<string> | Event): void {
@@ -323,6 +386,68 @@
             light={true}
             on:input={handleCrsCodeInput}
           />
+          <div class="code-status" role="status" aria-live="polite">
+            {#if diagnosis.status === 'valid'}
+              {#if isDiagnosisApplied}
+                <InlineLoading
+                  status={isMapReprojecting ? 'active' : 'finished'}
+                  description={isMapReprojecting
+                    ? m.projection_code_status_computing()
+                    : m.projection_code_status_applied()}
+                />
+              {:else if diagnosis.coverage !== 'none'}
+                <p class="code-status-recognized">
+                  <CheckmarkOutline size={16} />
+                  {m.projection_code_status_recognized()}
+                </p>
+              {/if}
+              <p class="code-crs-name">
+                {getProjectionCodeDisplayName(crsCode, diagnosis.crs)}
+              </p>
+              <p class="code-crs-details">
+                {formatProjectionCodeCrs(diagnosis.crs)}
+              </p>
+              {#if diagnosis.coverage === 'partial'}
+                <InlineNotification
+                  kind="warning"
+                  lowContrast
+                  hideCloseButton
+                  title=""
+                  subtitle={m.projection_code_coverage_partial()}
+                />
+              {/if}
+            {:else if diagnosis.status === 'catalogue-equivalent'}
+              {#if isDiagnosisApplied}
+                <InlineLoading
+                  status={isMapReprojecting ? 'active' : 'finished'}
+                  description={isMapReprojecting
+                    ? m.projection_code_status_computing()
+                    : m.projection_code_status_applied()}
+                />
+              {/if}
+              <InlineNotification
+                kind="info"
+                lowContrast
+                hideCloseButton
+                title=""
+                subtitle={m.projection_code_catalogue_equivalent({
+                  method: diagnosis.method,
+                  name:
+                    getProjectionById(diagnosis.catalogueId)?.name ??
+                    diagnosis.catalogueId
+                })}
+              />
+            {/if}
+            {#if diagnosisError}
+              <InlineNotification
+                kind="error"
+                lowContrast
+                hideCloseButton
+                title=""
+                subtitle={diagnosisError}
+              />
+            {/if}
+          </div>
           <div class="actions">
             <Button
               kind="tertiary"
@@ -333,7 +458,7 @@
             <Button
               kind="primary"
               size="small"
-              disabled={isEmpty()}
+              disabled={!canApply || isDiagnosisApplied}
               on:click={onApply}>{submitLabel}</Button
             >
           </div>
@@ -371,6 +496,43 @@
       display: flex;
       flex-direction: column;
       gap: var(--cds-spacing-05);
+    }
+
+    .code-status {
+      display: flex;
+      flex-direction: column;
+      gap: var(--cds-spacing-02);
+      min-width: 0;
+
+      p {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      :global(.bx--inline-notification) {
+        margin: 0;
+        max-width: 100%;
+      }
+    }
+
+    .code-status-recognized {
+      display: flex;
+      align-items: center;
+      gap: var(--cds-spacing-02);
+      color: var(--cds-support-success, #24a148);
+      font-size: 0.75rem;
+    }
+
+    .code-crs-name {
+      color: var(--cds-text-primary, #161616);
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .code-crs-details {
+      color: var(--cds-text-secondary, #525252);
+      font-size: 0.75rem;
+      line-height: 1rem;
     }
 
     .actions {

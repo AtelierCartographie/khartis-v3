@@ -25,7 +25,11 @@ Projections are suggested from the extent of the data or basemap and applied wit
 
 ## Accept real CRS input
 
-A CRS can be pasted as WKT or PROJ.4. Codes are normalized to `EPSG:XXXX`, proj4 definitions are registered once at boot, and PROJ.4 strings go through the proj4 to d3 bridge rather than a special case per projection.
+A CRS can be pasted as an EPSG code, PROJ.4, WKT 1 or 2 (a `.prj`) or PROJJSON. Codes are normalized to `EPSG:XXXX`, proj4 definitions are registered once at boot, and PROJ.4 strings go through the proj4 to d3 bridge rather than a special case per projection.
+
+- Build a CRS through `createProj4Crs` (`proj4-crs.utils.ts`): proj4js leaves `lat_0`, `lon_0`, `x_0` and `y_0` undefined when a PROJ.4 string omits them, and aea, laea, lcc, cea, somerc… then return NaN everywhere. PROJ defaults them to 0, and so does `completeProj4Defaults`.
+- The code panel shows `diagnoseProjectionCode` live: recognized (name, EPSG, method, datum, units), share of the extent the CRS can draw, unknown EPSG code, method missing from proj4js (routed to the d3 catalogue when it draws it identically), invalid. A code that draws nothing cannot be applied, because a failed override silently falls back to the basemap projection.
+- The orientation settings rotate the sphere before proj4, so a reoriented CRS no longer matches the same CRS in QGIS or ArcGIS. The current-projection popover says so.
 
 ## Build from config
 
