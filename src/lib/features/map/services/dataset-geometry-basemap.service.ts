@@ -1,13 +1,10 @@
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck } from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { basemapCatalogService } from './basemap-catalog.service.svelte';
 import { basemapService } from './basemap.service.svelte';
-import {
-  createArrowTableFromDuckTable,
-  createBasemapFromGeometryTable
-} from './basemap-import.service';
+import { createBasemapFromGeometryTable } from './basemap-import.service';
 
 interface DatasetGeometrySource {
   name: string;
@@ -119,7 +116,9 @@ export async function activateDatasetGeometryBasemap(
     return false;
   }
 
-  const geometryTable = await createArrowTableFromDuckTable(Duck, targetTable);
+  // The visualization already streams this table: reading it again would
+  // double its memory and the geometry parse.
+  const geometryTable = await duckDBOrchestrator.getArrowTable(targetTable);
   await basemapService.registerCustomBasemap(basemap, geometryTable);
   basemapStyleStore.setReferenceBasemap(basemap.file);
   return true;
