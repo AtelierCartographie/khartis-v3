@@ -118,7 +118,6 @@ vi.mock('$lib/paraglide/messages', () => ({
     size: string;
     max: string;
   }) => `too-large:${size}:${max}`,
-  error_shapefile_read_failed_message: () => 'shapefile-read-failed',
   error_pasted_data_invalid_message: () => 'pasted-invalid',
   dataset_pasted_name: () => 'pasted',
   error_url_required: () => 'url-required',
@@ -183,17 +182,17 @@ describe('createProjectActions.removeUploadedFile', () => {
 
   it('keeps the total-size error while the remaining files still exceed the limit', () => {
     createProjectState.newProject.uploadedFiles = [
-      makeUploadedFile('file-a', 150 * 1024 * 1024),
-      makeUploadedFile('file-b', 100 * 1024 * 1024),
+      makeUploadedFile('file-a', 300 * 1024 * 1024),
+      makeUploadedFile('file-b', 150 * 1024 * 1024),
       makeUploadedFile('file-c', 60 * 1024 * 1024)
     ];
-    createProjectState.newProject.validationErrors = ['total-size:200'];
+    createProjectState.newProject.validationErrors = ['total-size:400'];
 
     createProjectActions.removeUploadedFile('file-c');
 
     expect(createProjectState.newProject.uploadedFiles).toHaveLength(2);
     expect(createProjectState.newProject.validationErrors).toEqual([
-      'total-size:200'
+      'total-size:400'
     ]);
   });
 

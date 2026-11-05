@@ -1,10 +1,8 @@
-import * as m from '$lib/paraglide/messages';
 import { FILE_EXTENSIONS, FileStatus } from '$lib/features/commons/constants';
 import {
   FILE_ENCODING,
   TABULAR_DELIMITERS
 } from '$lib/features/commons/constants/file-types.constants';
-import { ParseError } from '../pipeline.errors';
 import {
   DataSourceType,
   FileType,
@@ -50,42 +48,45 @@ export function groupShapefiles(files: File[]): Map<string, File[]> {
   return groups;
 }
 
-export async function readFileContent(
-  file: File,
-  onProgress?: (progress: number) => void
-): Promise<string | ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+// Matches no longer than the overlap are found even when they straddle two
+// chunks; the file is never held whole in memory.
+const PATTERN_SCAN_OVERLAP = 256;
 
-    reader.onload = () => {
-      if (reader.result) {
-        if (onProgress) onProgress(100);
-        resolve(reader.result);
-      } else {
-        reject(
-          new ParseError(m.error_file_read_failed(), detectFileType(file))
-        );
-      }
-    };
+export async function chunksContainPattern(
+  chunks: AsyncIterable<string> | Iterable<string>,
+  pattern: RegExp
+): Promise<boolean> {
+  let tail = '';
+  for await (const chunk of chunks) {
+    const haystack = tail + chunk;
+    if (pattern.test(haystack)) return true;
+    tail = haystack.slice(-PATTERN_SCAN_OVERLAP);
+  }
+  return false;
+}
 
-    reader.onerror = () => {
-      reject(new ParseError(m.error_file_read_failed(), detectFileType(file)));
-    };
+export async function fileContainsPattern(
+  file: Blob,
+  pattern: RegExp
+): Promise<boolean> {
+  const reader = file
+    .stream()
+    .pipeThrough(new TextDecoderStream(UTF8_ENCODING))
+    .getReader();
 
-    reader.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) {
-        const progress = (event.loaded / event.total) * 100;
-        onProgress(progress);
-      }
-    };
-
-    const fileType = detectFileType(file);
-    if (fileType === FileType.CSV || fileType === FileType.GEOJSON) {
-      reader.readAsText(file, UTF8_ENCODING);
-    } else {
-      reader.readAsArrayBuffer(file);
+  async function* readChunks(): AsyncGenerator<string> {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
     }
-  });
+  }
+
+  try {
+    return await chunksContainPattern(readChunks(), pattern);
+  } finally {
+    await reader.cancel();
+  }
 }
 
 export function createUploadedFile(
