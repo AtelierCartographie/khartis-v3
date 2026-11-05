@@ -53,9 +53,13 @@ vi.mock(
       }
       return stored.bytes;
     },
-    async persistAssetBytes(bytes: Uint8Array, ref: AssetRef) {
-      fakes.assets.set(ref.assetId, { ref, bytes: new Uint8Array(bytes) });
-      return ref;
+    async persistAssetStream(
+      source: ReadableStream<Uint8Array>,
+      ref: AssetRef
+    ) {
+      const bytes = new Uint8Array(await new Response(source).arrayBuffer());
+      fakes.assets.set(ref.assetId, { ref, bytes });
+      return { ...ref, size: bytes.length };
     },
     ensureUploadedFileAssets: async (file: unknown) => file,
     deleteOrphanAssets: async () => undefined

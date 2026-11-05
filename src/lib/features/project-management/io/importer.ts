@@ -1,4 +1,3 @@
-import { type UnzipFileInfo, unzipSync } from 'fflate';
 import { m } from '$lib/paraglide/messages';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
@@ -7,7 +6,7 @@ import type { AssetRef } from '$lib/features/commons/types/create-project.types'
 import type { SerializedProject } from '$lib/types/serialization.types';
 import {
   deleteOrphanAssets,
-  persistAssetBytes
+  persistAssetStream
 } from '../services/asset-store.service';
 import {
   loadSerializedProject,
@@ -18,8 +17,15 @@ import { migrateIfNeeded } from '../core/schema-migration';
 import { deserialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
 import { PROJECT_CONST } from '../constants';
+import {
+  getKhArchiveEntryOutputSize,
+  KHARTIS_PROJECT_FILE_TYPE,
+  type KhArchiveEntry,
+  openKhArchiveEntryStream,
+  readKhArchiveDirectory,
+  readKhArchiveEntry
+} from './kh-archive-reader';
 
-const KHARTIS_PROJECT_FILE_TYPE = 'khartis-project';
 const ARCHIVE_ASSET_PATH_PREFIX = 'assets/';
 const ARCHIVE_JSON_ENTRIES = ['manifest.json', 'project.json'];
 
@@ -59,24 +65,20 @@ function throwArchiveTooLarge(
   );
 }
 
-function unzipArchive(
-  archiveBytes: Uint8Array,
-  fileName: string
-): Record<string, Uint8Array> {
+async function listArchiveEntries(
+  file: File
+): Promise<Map<string, KhArchiveEntry>> {
+  const directory = await readKhArchiveDirectory(file);
+  const archiveEntries = new Map<string, KhArchiveEntry>();
   let entryCount = 0;
   let totalBytes = 0;
-  let oversizedEntry: string | null = null;
 
-  const filter = (entry: UnzipFileInfo): boolean => {
-    if (oversizedEntry) {
-      return false;
-    }
-
+  for (const entry of directory) {
     const isExpectedEntry =
       ARCHIVE_JSON_ENTRIES.includes(entry.name) ||
       entry.name.startsWith(ARCHIVE_ASSET_PATH_PREFIX);
     if (!isExpectedEntry) {
-      return false;
+      continue;
     }
 
     entryCount += 1;
@@ -87,33 +89,14 @@ function unzipArchive(
       entry.originalSize > ARCHIVE_IMPORT_LIMITS.maxEntryBytes ||
       totalBytes > ARCHIVE_IMPORT_LIMITS.maxTotalBytes
     ) {
-      oversizedEntry = entry.name;
-      return false;
+      throwArchiveTooLarge(file.name, {
+        entry: entry.name,
+        entryCount,
+        totalBytes
+      });
     }
 
-    return true;
-  };
-
-  let archiveEntries: Record<string, Uint8Array>;
-  try {
-    archiveEntries = unzipSync(archiveBytes, { filter });
-  } catch (error) {
-    throw new ParseError(
-      m.error_invalid_kh_archive_structure(),
-      KHARTIS_PROJECT_FILE_TYPE,
-      {
-        fileName,
-        cause: error instanceof Error ? error.message : String(error)
-      }
-    );
-  }
-
-  if (oversizedEntry) {
-    throwArchiveTooLarge(fileName, {
-      entry: oversizedEntry,
-      entryCount,
-      totalBytes
-    });
+    archiveEntries.set(entry.name, entry);
   }
 
   return archiveEntries;
@@ -197,12 +180,13 @@ function assertArchiveManifest(
 }
 
 async function restoreArchiveAssets(
-  archiveEntries: Record<string, Uint8Array>,
+  file: File,
+  archiveEntries: Map<string, KhArchiveEntry>,
   manifest: ProjectArchiveManifest
 ): Promise<void> {
   for (const asset of manifest.assets) {
-    const payload = archiveEntries[asset.path];
-    if (!payload) {
+    const entry = archiveEntries.get(asset.path);
+    if (!entry) {
       throw new ParseError(
         m.error_missing_archived_asset({ originalName: asset.originalName }),
         KHARTIS_PROJECT_FILE_TYPE,
@@ -214,7 +198,10 @@ async function restoreArchiveAssets(
       );
     }
 
-    await persistAssetBytes(payload, asset);
+    await persistAssetStream(await openKhArchiveEntryStream(file, entry), {
+      ...asset,
+      size: getKhArchiveEntryOutputSize(entry)
+    });
   }
 }
 
@@ -272,19 +259,20 @@ export async function importProject(file: File): Promise<KhartisProject> {
     throwArchiveTooLarge(file.name, { archiveBytes: file.size });
   }
 
-  const archiveBuffer = await file.arrayBuffer();
-  const archiveEntries = unzipArchive(new Uint8Array(archiveBuffer), file.name);
+  const archiveEntries = await listArchiveEntries(file);
+  const manifestEntry = archiveEntries.get('manifest.json');
+  const projectEntry = archiveEntries.get('project.json');
 
-  const manifestPayload = archiveEntries['manifest.json'];
-  const projectPayload = archiveEntries['project.json'];
-
-  if (!manifestPayload || !projectPayload) {
+  if (!manifestEntry || !projectEntry) {
     throw new ParseError(
       m.error_invalid_kh_archive_structure(),
       KHARTIS_PROJECT_FILE_TYPE,
       { fileName: file.name }
     );
   }
+
+  const manifestPayload = await readKhArchiveEntry(file, manifestEntry);
+  const projectPayload = await readKhArchiveEntry(file, projectEntry);
 
   const archiveManifest = decodeJson<unknown>(manifestPayload, 'manifest.json');
   assertArchiveManifest(archiveManifest);
@@ -298,7 +286,7 @@ export async function importProject(file: File): Promise<KhartisProject> {
   const projectId = await resolveImportedProjectId(migrated);
 
   try {
-    await restoreArchiveAssets(archiveEntries, archiveManifest);
+    await restoreArchiveAssets(file, archiveEntries, archiveManifest);
 
     const project = await deserialize({
       ...migrated,
