@@ -131,7 +131,7 @@ describe('simplifyGeometryTable', () => {
     );
     // The outer contour reuses the dissolved land table, not the source rows.
     expect(outerlinesQuery).toContain(
-      `extract_outerlines('target'' "table"__land', noding_factor := 0)`
+      `extract_outerlines('target'' "table"__land')`
     );
     expect(landQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__land"`
