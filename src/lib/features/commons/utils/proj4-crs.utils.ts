@@ -1,4 +1,5 @@
 import proj4 from 'proj4';
+import { get_intersecting_countries } from '@ateliercartographie/proj-suggest';
 
 export const WGS84_CRS = 'EPSG:4326';
 
@@ -30,9 +31,17 @@ export const EPSG_NAMES: Record<string, string> = {
   'EPSG:2056': 'CH1903+ / LV95',
   'EPSG:3857': 'WGS 84 / Pseudo-Mercator',
   'EPSG:27572': 'NTF (Paris) / Lambert zone II',
+  'EPSG:31370': 'BD72 / Belgian Lambert 72',
+  'EPSG:28992': 'Amersfoort / RD New',
+  'EPSG:25832': 'ETRS89 / UTM zone 32N',
+  'EPSG:5070': 'NAD83 / Conus Albers',
+  'EPSG:3347': 'NAD83 / Statistics Canada Lambert',
+  'EPSG:9473': 'GDA2020 / Australian Albers',
+  'EPSG:3576': 'WGS 84 / North Pole LAEA Russia',
   [WGS84_CRS]: 'WGS 84'
 };
 
+const WORLD_BBOX: [number, number, number, number] = [-180, -90, 180, 90];
 const RADIANS_TO_DEGREES = 180 / Math.PI;
 
 // Past these angles from its centre an azimuthal CRS returns no coordinate
@@ -166,11 +175,22 @@ export function getProjectionCodeCentralMeridian(code: string): number {
   }
 }
 
+// The national CRS that proj-suggest can suggest, so a code pasted by hand
+// resolves like the suggestion card does. Khartis' own definitions win.
+function listNationalProj4Definitions(): Array<[string, string]> {
+  return get_intersecting_countries(WORLD_BBOX)
+    .filter((country) => country.epsg && country.proj4)
+    .map((country) => [`EPSG:${country.epsg}`, country.proj4]);
+}
+
 export function registerKnownProj4Definitions(): void {
   if (proj4DefinitionsRegistered) {
     return;
   }
 
+  for (const [code, definition] of listNationalProj4Definitions()) {
+    proj4.defs(code, completeProj4Defaults(definition));
+  }
   for (const [code, definition] of Object.entries(EPSG_DEFINITIONS)) {
     proj4.defs(code, definition);
   }

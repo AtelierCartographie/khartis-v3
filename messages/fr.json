@@ -55,6 +55,7 @@
   "projection_code_helper": "Formats acceptés : code EPSG (EPSG:2154 ou 2154), PROJ.4, WKT (contenu d'un fichier .prj) ou PROJJSON.",
   "projection_code_reset": "Réinitialiser",
   "projection_code_submit": "Valider",
+  "projection_code_unavailable_tiled": "Avec un fond tuilé (OpenStreetMap, IGN), la carte reste en Web Mercator (EPSG:3857) ou en globe. Pour appliquer un autre SCR, choisissez un fond du catalogue ou importez votre fond de carte.",
   "projection_code_status_recognized": "SCR reconnu",
   "projection_code_status_applied": "Appliqué à la carte",
   "projection_code_status_computing": "Reprojection de la carte…",
