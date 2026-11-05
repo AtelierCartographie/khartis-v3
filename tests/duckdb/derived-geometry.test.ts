@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  arePolygonsOverlapping,
   isMeshTooFineForInnerLimits,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
@@ -174,5 +175,54 @@ describe('isMeshTooFineForInnerLimits', () => {
     await createStripOfCells('coarse_grid', 100);
 
     expect(await isMeshTooFineForInnerLimits(duck, 'coarse_grid')).toBe(false);
+  });
+});
+
+describe('arePolygonsOverlapping', () => {
+  let db: TestDuckDB;
+  const duck = {
+    query: (sql: string) => query(db, sql)
+  } as unknown as DuckMock;
+
+  beforeAll(async () => {
+    db = await createTestInstance();
+    await run(db, 'LOAD spatial');
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  async function createSquares(tableName: string, secondSquareX: number) {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE ${tableName} AS
+       SELECT * FROM (VALUES
+         (ST_MakeEnvelope(0, 0, 10, 10)),
+         (ST_MakeEnvelope(${secondSquareX}, 0, ${secondSquareX} + 10, 10))
+       ) t(geom)`
+    );
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE ${tableName}__land AS
+       SELECT ST_Union_Agg(geom) AS geom FROM ${tableName}`
+    );
+  }
+
+  it('should flag polygons that cover each other', async () => {
+    await createSquares('overlapping', 5);
+
+    expect(
+      await arePolygonsOverlapping(duck, 'overlapping', 'overlapping__land')
+    ).toBe(true);
+  });
+
+  it('should let a sliver between neighbours through', async () => {
+    // 0.01 of overlap on a 10x10 edge: 0.05 % of the territory.
+    await createSquares('sliver', 9.99);
+
+    expect(await arePolygonsOverlapping(duck, 'sliver', 'sliver__land')).toBe(
+      false
+    );
   });
 });

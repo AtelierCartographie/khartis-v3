@@ -17,6 +17,13 @@ const NODING_REPAIR_FACTOR = 0.000001;
 // stroke width, paint over the fill they separate (a 1 km grid of France).
 const MAX_MESH_CELLS_ACROSS_EXTENT = 500;
 
+// Polygons whose areas add up to more than their territory overlap: their
+// borders cross each other instead of separating anything, the mark of a file
+// that is not a partition. Real coverages with slivers stay far below this:
+// 1.0007 for the EEZ, 1.00009 for a land-use file, against 1.05 and more for
+// overlapping circles.
+const MAX_OVERLAP_AREA_RATIO = 1.01;
+
 interface DuckDBClientForDerivedGeometry {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
   invalidateTableCache?(tableName: string): void;
@@ -141,6 +148,30 @@ export async function isMeshTooFineForInnerLimits(
   }
 }
 
+export async function arePolygonsOverlapping(
+  duck: DuckDBClientForDerivedGeometry,
+  sourceTable: string,
+  landTable: string
+): Promise<boolean> {
+  const geom = `"${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`;
+  try {
+    const rows = (await duck.query(
+      `SELECT (SELECT sum(ST_Area(${geom})) FROM "${escapeIdentifier(sourceTable)}")
+          > (SELECT sum(ST_Area(geom)) FROM "${escapeIdentifier(landTable)}")
+            * ${MAX_OVERLAP_AREA_RATIO} AS overlapping`,
+      { format: 'array' }
+    )) as Array<{ overlapping: boolean | null }>;
+    return rows[0]?.overlapping === true;
+  } catch (error) {
+    logger.warn(
+      `Could not compare the area of ${sourceTable} with its territory`,
+      LogCategory.DUCKDB,
+      error
+    );
+    return false;
+  }
+}
+
 async function runDerivedTableQuery(
   duck: DuckDBClientForDerivedGeometry,
   targetTable: string,
@@ -172,8 +203,9 @@ function buildLineSelect(macroCall: string): string {
  * coverage. A valid coverage is derived from its shared vertices, without any
  * overlay; any other coverage, or a failure of that path, goes through GEOS,
  * re-noded on a second attempt. The contour and the GEOS borders are read off
- * the territory, so they need it built. Running out of memory ends the
- * derivation: the remaining tables are left empty.
+ * the territory, so they need it built. Overlapping polygons get no shared
+ * borders: theirs only cross. Running out of memory ends the derivation: the
+ * remaining tables are left empty.
  */
 export async function rebuildDerivedGeometryTables(
   duck: DuckDBClientForDerivedGeometry,
@@ -221,7 +253,9 @@ export async function rebuildDerivedGeometryTables(
 
   if (
     outerlines.outcome === 'out-of-memory' ||
-    (await isMeshTooFineForInnerLimits(duck, sourceTable))
+    (await isMeshTooFineForInnerLimits(duck, sourceTable)) ||
+    (!coverageIsValid &&
+      (await arePolygonsOverlapping(duck, sourceTable, landTable)))
   ) {
     await createEmptyGeometryTable(duck, innerlinesTable);
     return;
