@@ -86,7 +86,10 @@ describe('globalState project persistence boundary', () => {
     expect(globalState.selectedTool).toBe(VisualizationTools.Layers);
     expect(globalState.toolbarState).toBe(ToolbarState.Compact);
     expect(globalState.selectedDataButtonId).toBe('source-2');
-    expect(globalState.zoom.pageZoomLevel).toBe(180);
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
+    globalActions.setPageFitScale(1.5);
+    expect(globalState.zoom.isPageZoomFitted).toBe(false);
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(270);
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 12, y: -8 });
     expect(globalState.isSideNavOpen).toBe(true);
     expect(globalState.isCreateProjectModalOpen).toBe(true);
@@ -110,7 +113,7 @@ describe('globalState project persistence boundary', () => {
     expect(globalState.projectionFilter).toBe('all');
     expect(globalState.projectionViewMode).toBe('list');
     expect(globalState.selectedDataButtonId).toBeUndefined();
-    expect(globalState.zoom.pageZoomLevel).toBe(100);
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 15 });
   });
 
@@ -136,7 +139,8 @@ describe('globalState project persistence boundary', () => {
     globalState.selectedStep = ToolbarStep.Styling;
     globalActions.setSelectedTool(VisualizationTools.Search);
     globalActions.setMapExporting(true);
-    globalActions.setPageZoom(140);
+    globalActions.setPageFitScale(2);
+    globalActions.setPageZoomPercent(140);
     globalActions.setPagePanOffset({ x: 5, y: 7 });
 
     const serialized = globalUiEntry?.serialize() as Record<string, unknown>;
@@ -144,12 +148,37 @@ describe('globalState project persistence boundary', () => {
     expect(serialized).toMatchObject({
       selectedStep: ToolbarStep.Styling,
       selectedTool: VisualizationTools.Search,
-      pageZoomLevel: 140,
+      pageZoomLevel: 70,
+      isPageZoomFitted: false,
+      pageZoomPercent: 140,
       pagePanOffset: { x: 5, y: 7 }
     });
     expect(serialized).not.toHaveProperty('isSideNavOpen');
     expect(serialized).not.toHaveProperty('isCreateProjectModalOpen');
     expect(serialized).not.toHaveProperty('isMapExporting');
+  });
+
+  it('should step the absolute page zoom on the step grid when the page is fitted', () => {
+    globalActions.setPageFitScale(2.18);
+
+    globalActions.zoomInPage();
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(220);
+
+    globalActions.fitPageZoom();
+    globalActions.zoomOutPage();
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(215);
+  });
+
+  it('should keep a chosen page zoom when the fit changes', () => {
+    globalActions.setPageFitScale(1.33);
+    globalActions.setPageZoomPercent(160);
+
+    globalActions.setPageFitScale(3);
+    expect(globalState.zoom.isPageZoomFitted).toBe(false);
+    expect(globalState.zoom.pageZoomPercent).toBe(160);
+
+    globalActions.resetPageZoom();
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
   });
 
   it('keeps map export mode transient and resettable', () => {
