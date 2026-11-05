@@ -146,35 +146,25 @@ describe('estimateProjectStorageSize', () => {
     expect(estimateProjectStorageSize(project)).toBeGreaterThan(0);
   });
 
-  it('ignores inline ArrayBuffer payloads and measures metadata only', () => {
-    const buf = new ArrayBuffer(1000);
+  it('ignores archive layer snapshots and measures metadata only', () => {
+    const snapshot = new Uint8Array(1000);
     const project = {
       data: {
-        sourceFiles: [{ content: buf, assetRef: { assetId: 'a1' } }]
+        sourceFiles: [
+          { archiveLayerSnapshot: snapshot, assetRef: { assetId: 'a1' } }
+        ]
       }
     };
     const size = estimateProjectStorageSize(project);
     expect(size).toBeLessThan(300);
   });
 
-  it('ignores inline string content when computing persisted size', () => {
-    const str = 'x'.repeat(100);
-    const withString = estimateProjectStorageSize({
-      data: { sourceFiles: [{ content: str, assetRef: { assetId: 'a1' } }] }
-    });
-    const withoutString = estimateProjectStorageSize({
-      data: { sourceFiles: [{ assetRef: { assetId: 'a1' } }] }
-    });
-    expect(withString - withoutString).toBeLessThan(50);
-  });
-
   it('keeps lightweight persisted metadata like asset refs', () => {
-    const buf = new ArrayBuffer(10000);
     const project = {
       data: {
         sourceFiles: [
           {
-            content: buf,
+            archiveLayerSnapshot: new Uint8Array(10000),
             name: 'file.csv',
             assetRef: {
               assetId: 'asset-1',

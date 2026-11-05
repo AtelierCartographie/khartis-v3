@@ -25,10 +25,8 @@ export interface UploadedFilePayload {
   size: number;
   type: string;
   datasetId?: string;
-  content?: string | ArrayBuffer;
   fileType?: string;
   relatedFileObjects?: File[];
-  relatedFilesData?: Record<string, ArrayBuffer | number[]>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
   csvOptions?: CsvImportOptions;

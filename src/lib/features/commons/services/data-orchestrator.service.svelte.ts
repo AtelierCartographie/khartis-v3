@@ -3,11 +3,7 @@ import {
   APP_LOADING_PHASE,
   appLoadingStore
 } from '../stores/app-loading.store.svelte';
-import {
-  createFileFromUpload,
-  dataPipeline,
-  isZipDatasetResult
-} from '$lib/features/data-pipeline';
+import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
 import {
   Duck,
   duckDBOrchestrator,
@@ -264,9 +260,8 @@ function createDataOrchestratorService() {
 
         if (registered === null) {
           let restoredDuckDatasetId: string | null = null;
-          if (file.content || file.originalFile) {
-            const restoredSourceFile =
-              file.originalFile ?? (await createFileFromUpload(file));
+          if (file.originalFile) {
+            const restoredSourceFile = file.originalFile;
             const processedResult = await dataPipeline.processUploadedFile(
               file,
               restoredSourceFile
@@ -682,68 +677,6 @@ function createDataOrchestratorService() {
               );
               file.relatedFileObjects = [];
             }
-          }
-
-          if (file.relatedFilesData) {
-            const companionFiles: File[] = [];
-            for (const [name, buffer] of Object.entries(
-              file.relatedFilesData
-            )) {
-              try {
-                const restoredFile = new File([buffer as ArrayBuffer], name);
-                companionFiles.push(restoredFile);
-              } catch (error) {
-                logger.error(
-                  'Failed to recreate shapefile companion file during project restore',
-                  LogCategory.DATA,
-                  error,
-                  {
-                    flow: 'project_restore',
-                    extra: {
-                      ...buildFileErrorContext(file),
-                      companionFileName: name
-                    }
-                  }
-                );
-                showWarning(
-                  m.project_restore_companion_files_warning_title(),
-                  m.project_restore_companion_files_warning_message({
-                    fileName: file.name
-                  })
-                );
-                continue;
-              }
-            }
-            if (companionFiles.length > 0) {
-              file.relatedFileObjects = companionFiles;
-            }
-          }
-        }
-
-        if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
-
-        if (!file.originalFile && file.content) {
-          try {
-            file.originalFile = await createFileFromUpload(file);
-          } catch (error) {
-            logger.error(
-              'Failed to recreate source file during project restore',
-              LogCategory.DATA,
-              error,
-              {
-                flow: 'project_restore',
-                extra: buildFileErrorContext(file)
-              }
-            );
-            showWarning(
-              m.project_restore_source_file_warning_title(),
-              m.project_restore_source_file_warning_message({
-                fileName: file.name
-              })
-            );
-            return;
           }
         }
 

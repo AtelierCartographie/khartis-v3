@@ -223,11 +223,7 @@
   const canReimportCsv = $derived(
     isCsvFile &&
       !!sourceFile &&
-      Boolean(
-        sourceFile.originalFile ||
-        sourceFile.content ||
-        hasReimportableSourceAsset(sourceFile)
-      )
+      Boolean(sourceFile.originalFile || hasReimportableSourceAsset(sourceFile))
   );
 
   let forceRefreshKey = $state(0);
@@ -415,16 +411,6 @@
     }
 
     let file = sourceFile.originalFile;
-
-    if (!file && sourceFile.content) {
-      const content =
-        typeof sourceFile.content === 'string'
-          ? sourceFile.content
-          : new TextDecoder().decode(sourceFile.content as ArrayBuffer);
-      file = new File([content], sourceFile.name, {
-        type: sourceFile.type || 'text/csv'
-      });
-    }
 
     // A restored project keeps the source bytes in IndexedDB only.
     if (!file && hasReimportableSourceAsset(sourceFile)) {
