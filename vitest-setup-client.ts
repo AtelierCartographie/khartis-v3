@@ -57,7 +57,8 @@ vi.mock('$env/dynamic/public', () => ({
   env: {}
 }));
 
-vi.mock('$lib/features/duckdb', () => ({
+vi.mock('$lib/features/duckdb', async () => ({
+  ...(await import('$lib/features/duckdb/utils/duckdb-error.utils')),
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),

@@ -104,15 +104,28 @@ Un fond polygonal importé n'apporte qu'une couverture. Pour qu'il se style
 comme un fond du catalogue, `rebuildDerivedGeometryTables()` en dérive trois
 tables sœurs :
 
-| Table           | Macro                | Contenu                                         |
-| --------------- | -------------------- | ----------------------------------------------- |
-| `…__land`       | `extract_land`       | territoire dissous                              |
-| `…__outerlines` | `extract_outerlines` | contour extérieur, calculé à partir de `__land` |
-| `…__innerlines` | `extract_innerlines` | limites internes partagées                      |
+| Table           | Macro                | Contenu                                 |
+| --------------- | -------------------- | --------------------------------------- |
+| `…__land`       | `extract_land`       | territoire dissous                      |
+| `…__outerlines` | `extract_outerlines` | contour extérieur : le bord de `__land` |
+| `…__innerlines` | `extract_innerlines` | limites internes partagées              |
 
 Sur une couverture valide, `extract_coverage_land` et
-`extract_coverage_innerlines` évitent la dissolution, et le contour est le bord
-du territoire (`extract_coverage_outerlines`).
+`extract_coverage_innerlines` évitent la dissolution. Le contour ne dissout
+jamais rien : le territoire est déjà une union valide, son bord suffit. Hors
+couverture valide, les limites internes sont les arêtes du nodage de tous les
+contours qui ne portent pas un segment du bord du territoire : une jointure
+exacte en SQL, sans superposition GEOS entre deux géométries géantes.
+Des polygones qui se chevauchent (somme des aires supérieure de plus de 1 % à
+celle du territoire) n'ont pas de limites internes : leurs contours se
+croisent sans rien séparer, signe d'un fichier qui n'est pas une partition. Les
+couvertures réelles imparfaites restent loin du seuil (1,0007 pour les ZEE).
+
+Chaque table dérivée tient une ligne par partie (polygone du territoire, ligne
+de contour ou de limite) : une géométrie unique demanderait au tas WASM un bloc
+contigu de toute sa taille au moment du stream. L'export SVG rassemble les
+parties du territoire en un seul tracé composé, comme il fusionne déjà les
+lignes consécutives de même style.
 
 Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
 arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
@@ -132,6 +145,10 @@ représentatifs.
   mètres). Si cela échoue encore, la table est créée **vide** : la couche
   disparaît sans casser le fond. `ST_MakeValid` ne corrige pas ce cas, qui est
   un problème de nodage.
+- **Un manque de mémoire n'est jamais retenté** et arrête la dérivation : les
+  tables restantes sont créées vides. La mémoire WASM ne rétrécit pas, et après
+  un second échec de ce type le tas ne sert plus les grosses allocations : le
+  territoire déjà calculé ne se streame plus.
 
 ## Colonnes géographiques
 
