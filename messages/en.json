@@ -1810,6 +1810,7 @@
   "palette_categories_list_label": "Categories",
   "annotations_rotation": "Rotation",
   "data_quality_perf_large_dataset": "Large dataset: {rowCount} rows (warning threshold: {warningRows}). Processing may take some time.",
+  "data_quality_perf_dense_geometry": "Large geometry: {vertexCount} vertices (warning threshold: {warningVertices}). The map may be slow to display, or fail to display for lack of memory. Simplifying the geometry reduces the vertex count.",
   "import_error_row_limit_exceeded": "“{fileName}” holds {rowCount} rows, beyond the {maxRows} row limit Khartis can handle. Reduce the file (filter, aggregate, sample) before importing it.",
   "open_project_error_load_projects": "Failed to load projects",
   "open_project_error_load_project": "Failed to load project",

@@ -1,4 +1,7 @@
-import { IMPORT_ROW_LIMITS } from '$lib/features/commons/constants/validation.config';
+import {
+  IMPORT_ROW_LIMITS,
+  IMPORT_VERTEX_LIMITS
+} from '$lib/features/commons/constants/validation.config';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { resolveLocale } from '$lib/features/commons/utils/format.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -44,6 +47,21 @@ export function warnOnLargeImport(rowCount: number): void {
     m.data_quality_perf_large_dataset({
       rowCount: rowCount.toLocaleString(locale),
       warningRows: IMPORT_ROW_LIMITS.WARNING.toLocaleString(locale)
+    })
+  );
+}
+
+export function warnOnDenseGeometry(vertexCount: number): void {
+  if (vertexCount <= IMPORT_VERTEX_LIMITS.WARNING) {
+    return;
+  }
+
+  const locale = resolveLocale();
+  showWarning(
+    m.warning_performance_title(),
+    m.data_quality_perf_dense_geometry({
+      vertexCount: vertexCount.toLocaleString(locale),
+      warningVertices: IMPORT_VERTEX_LIMITS.WARNING.toLocaleString(locale)
     })
   );
 }

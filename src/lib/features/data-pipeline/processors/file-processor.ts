@@ -34,6 +34,7 @@ import { normalizeGeometryColumnName } from '../operations/geometry-column';
 import {
   assertImportRowCountWithinLimit,
   readParquetRowCount,
+  warnOnDenseGeometry,
   warnOnLargeImport
 } from '../operations/import-volume';
 
@@ -174,7 +175,7 @@ export async function processFileInternal(
     csvOptions: options.csvOptions
   });
 
-  const dataset = await buildDatasetFromDuckTable({
+  const { dataset, vertexCount } = await buildDatasetFromDuckTable({
     file: read.fileInfo,
     tableName: read.tableName,
     isGeoFile: read.isGeoFile,
@@ -183,6 +184,7 @@ export async function processFileInternal(
 
   assertImportRowCountWithinLimit(dataset.rowCount, read.fileInfo.name);
   warnOnLargeImport(dataset.rowCount);
+  warnOnDenseGeometry(vertexCount);
 
   if (read.csvOptions) {
     dataset.metadata.csvOptions = read.csvOptions;

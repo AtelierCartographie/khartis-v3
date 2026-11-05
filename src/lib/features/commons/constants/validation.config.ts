@@ -43,6 +43,12 @@ export const IMPORT_ROW_LIMITS = {
   MAX: 1_000_000
 } as const;
 
+// Measured in Chrome on 161-vertex polygons: 6.4 M vertices render, 9.7 M
+// exhaust DuckDB WASM memory while the layer streams.
+export const IMPORT_VERTEX_LIMITS = {
+  WARNING: 5_000_000
+} as const;
+
 export const FILE_VALIDATION_INSPECTION = {
   CSV_LARGE_WARNING_SIZE_BYTES: 10 * 1024 * 1024,
   GEOJSON_LARGE_WARNING_SIZE_BYTES: 20 * 1024 * 1024,

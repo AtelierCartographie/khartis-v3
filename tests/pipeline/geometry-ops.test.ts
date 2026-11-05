@@ -26,12 +26,20 @@ describe('extractGeometryInfo (F10)', () => {
 
   it('returns bounds and centroid when the extent is available', async () => {
     duckQueryMock.mockResolvedValue([
-      { geom_type: 'POLYGON', minX: 0, minY: 10, maxX: 4, maxY: 20 }
+      {
+        geom_type: 'POLYGON',
+        minX: 0,
+        minY: 10,
+        maxX: 4,
+        maxY: 20,
+        vertex_count: 9_660_000n
+      }
     ]);
 
     const inspection = await extractGeometryInfo('geo_table');
 
     expect(inspection.warnings).toEqual([]);
+    expect(inspection.vertexCount).toBe(9_660_000);
     expect(inspection.geometry?.bounds).toEqual([0, 10, 4, 20]);
     expect(inspection.geometry?.centroid).toEqual([2, 15]);
   });
