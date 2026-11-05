@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { ProjectionState } from '../../types/projections.types';
 import { resolveCurrentProjectionDisplay } from './projection-label.utils';
+import { resolveCurrentProjectionDefinition } from './projection-definition.utils';
 
 function createState(
   overrides: Partial<ProjectionState> = {}
@@ -126,5 +127,69 @@ describe('resolveCurrentProjectionDisplay', () => {
 
     expect(display.name).toBe('Code SCR personnalisé');
     expect(display.description).toBe('+proj=zzz');
+  });
+});
+
+describe('resolveCurrentProjectionDefinition', () => {
+  const definitionOf = (overrides: Partial<ProjectionState>) =>
+    resolveCurrentProjectionDefinition({ state: createState(overrides) });
+
+  it('should express a catalogue projection as a spherical PROJ string', () => {
+    expect(definitionOf({ selected: 'natural-earth', longitude: 150 })).toEqual(
+      {
+        proj4:
+          '+proj=natearth +lon_0=150 +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs',
+        rotation: undefined,
+        notes: ['spherical']
+      }
+    );
+  });
+
+  it('should carry parallels, latitude of origin and standard parallel', () => {
+    expect(definitionOf({ selected: 'lambert-conformal' }).proj4).toMatch(
+      /\+proj=lcc \+lon_0=0 \+lat_1=\S+ \+lat_2=\S+/
+    );
+    expect(
+      definitionOf({ selected: 'orthographic', center: [10, 45] }).proj4
+    ).toMatch(/^\+proj=ortho \+lat_0=45 \+lon_0=10 /);
+    expect(definitionOf({ selected: 'gall-peters' }).proj4).toMatch(
+      /\+lat_ts=45 /
+    );
+  });
+
+  it('should flag a tilted or rotated projection and one PROJ cannot draw', () => {
+    expect(
+      definitionOf({ selected: 'robinson', latitude: 20, rotation: 15 })
+    ).toMatchObject({
+      notes: ['spherical', 'oblique', 'rotated'],
+      rotation: 15
+    });
+    expect(definitionOf({ selected: 'armadillo' }).notes).toEqual([
+      'no-equivalent'
+    ]);
+  });
+
+  it('should give back a pasted CRS, and a derived lon_0 once offset', () => {
+    expect(definitionOf({ customCode: 'EPSG:2154' })).toMatchObject({
+      epsg: '2154',
+      proj4: expect.stringMatching(/^\+proj=lcc .*\+lon_0=3 /)
+    });
+    const offset = definitionOf({ customCode: 'EPSG:2154', longitude: 5 });
+    expect(offset.epsg).toBeUndefined();
+    expect(offset.proj4).toContain('+lon_0=8');
+    expect(
+      definitionOf({ customCode: 'EPSG:32631', longitude: 2 }).proj4
+    ).toMatch(/^\+proj=tmerc \+lat_0=0 \+k=0\.9996 \+x_0=500000 .*\+lon_0=5$/);
+  });
+
+  it('should give Web Mercator for the tiled engine and nothing for the globe', () => {
+    const state = createState();
+    expect(
+      resolveCurrentProjectionDefinition({ state, tiled: { globe: false } })
+    ).toMatchObject({ epsg: '3857' });
+    expect(
+      resolveCurrentProjectionDefinition({ state, tiled: { globe: true } })
+        .notes
+    ).toEqual(['globe']);
   });
 });

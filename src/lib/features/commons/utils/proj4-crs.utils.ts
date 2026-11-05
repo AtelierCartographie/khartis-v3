@@ -101,6 +101,25 @@ export function createProj4Crs(code: string): Proj4Crs {
   return new proj4.Proj(completeProj4Defaults(normalized));
 }
 
+/** PROJ.4 string of a code proj4 knows by name (EPSG registry, UTM). */
+export function getKnownProj4Definition(epsgCode: string): string | undefined {
+  registerKnownProj4Definitions();
+  const code = normalizeProj4CrsCode(epsgCode);
+  const registered = EPSG_DEFINITIONS[code];
+  if (registered) {
+    return registered;
+  }
+  const projStr = (proj4.defs(code) as { projStr?: string } | undefined)
+    ?.projStr;
+  if (projStr) {
+    return projStr;
+  }
+  const utm = code.match(/^EPSG:32([67])(\d{2})$/);
+  return utm
+    ? `+proj=utm +zone=${Number(utm[2])}${utm[1] === '7' ? ' +south' : ''} +datum=WGS84 +units=m +no_defs`
+    : undefined;
+}
+
 export function getKnownEpsgName(epsgCode: string): string | undefined {
   const code = normalizeProj4CrsCode(epsgCode);
   const utm = code.match(/^EPSG:32([67])(\d{2})$/);

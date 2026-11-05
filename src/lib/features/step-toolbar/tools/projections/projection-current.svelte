@@ -9,16 +9,24 @@
   } from '$lib/features/map';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { m } from '$lib/paraglide/messages';
-  import { SettingsAdjust } from 'carbon-icons-svelte';
+  import { CodeSnippet } from 'carbon-components-svelte';
+  import { Code, SettingsAdjust } from 'carbon-icons-svelte';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { resolveCurrentProjectionDisplay } from './projection-label.utils';
   import { getNativeCrsEpsg } from './native-projection.utils';
   import { getProjectionState } from './projection.store.svelte';
+  import {
+    resolveCurrentProjectionDefinition,
+    type ProjectionDefinitionNote
+  } from './projection-definition.utils';
 
   interface Props {
     onopensettings: () => void;
   }
 
   let { onopensettings }: Props = $props();
+
+  let definitionOpen = $state(false);
 
   const projectionState = $derived(getProjectionState());
   const isTiledBasemapEnabled = $derived(
@@ -27,6 +35,10 @@
       hasOSMBasemap: osmBasemapStore.isActive
     })
   );
+  const basemapProjection = $derived({
+    ...basemapService.currentMetadata?.proj_to,
+    nativeEpsg: getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
+  });
   const display = $derived(
     isTiledBasemapEnabled
       ? {
@@ -37,15 +49,45 @@
         }
       : resolveCurrentProjectionDisplay(
           projectionState,
-          {
-            ...basemapService.currentMetadata?.proj_to,
-            nativeEpsg: getNativeCrsEpsg(
-              basemapService.currentBasemap?.metadata
-            )
-          },
+          basemapProjection,
           basemapService.projectionPresets
         )
   );
+  const definition = $derived(
+    definitionOpen
+      ? resolveCurrentProjectionDefinition({
+          state: projectionState,
+          basemapProjection,
+          projectionPresets: basemapService.projectionPresets,
+          tiled: isTiledBasemapEnabled
+            ? { globe: mapProjectionStore.isGlobe }
+            : null
+        })
+      : undefined
+  );
+
+  function describeNote(note: ProjectionDefinitionNote): string {
+    switch (note) {
+      case 'spherical':
+        return m.projection_definition_note_spherical();
+      case 'oblique':
+        return m.projection_definition_note_oblique();
+      case 'rotated':
+        return m.projection_definition_note_rotated({
+          rotation: formatValue(definition?.rotation ?? 0, {
+            maxFractionDigits: 2
+          })
+        });
+      case 'composite':
+        return m.projection_definition_note_composite();
+      case 'no-equivalent':
+        return m.projection_definition_note_no_equivalent();
+      case 'globe':
+        return m.projection_definition_note_globe();
+      case 'derived-wkt':
+        return m.projection_definition_note_derived_wkt();
+    }
+  }
 </script>
 
 <div class="projection-current">
@@ -60,16 +102,70 @@
       {/if}
     </div>
 
-    {#if !isTiledBasemapEnabled}
+    <div class="projection-current-actions">
       <Button
         kind="ghost"
         size="small"
-        icon={SettingsAdjust}
-        class="projection-current-settings"
-        on:click={onopensettings}>{m.projection_current_settings()}</Button
-      >
-    {/if}
+        icon={Code}
+        iconDescription={m.projection_definition_toggle()}
+        tooltipPosition="bottom"
+        aria-expanded={definitionOpen}
+        on:click={() => (definitionOpen = !definitionOpen)}
+      />
+      {#if !isTiledBasemapEnabled}
+        <Button
+          kind="ghost"
+          size="small"
+          icon={SettingsAdjust}
+          class="projection-current-settings"
+          on:click={onopensettings}>{m.projection_current_settings()}</Button
+        >
+      {/if}
+    </div>
   </div>
+
+  {#if definition}
+    <div class="projection-definition">
+      {#if definition.epsg}
+        <p class="projection-definition-epsg">EPSG:{definition.epsg}</p>
+      {/if}
+      {#if definition.proj4}
+        <span class="projection-definition-label"
+          >{m.projection_definition_proj4_label()}</span
+        >
+        <CodeSnippet
+          type="multi"
+          wrapText
+          code={definition.proj4}
+          feedback={m.projection_definition_copied()}
+          errorFeedback={m.projection_definition_copy_failed()}
+          copyButtonDescription={m.projection_definition_copy()}
+          showMoreLess={false}
+        />
+      {/if}
+      {#if definition.wkt}
+        <span class="projection-definition-label"
+          >{m.projection_definition_wkt_label()}</span
+        >
+        <CodeSnippet
+          type="multi"
+          wrapText
+          code={definition.wkt}
+          feedback={m.projection_definition_copied()}
+          errorFeedback={m.projection_definition_copy_failed()}
+          copyButtonDescription={m.projection_definition_copy()}
+        />
+      {/if}
+      {#if definition.proj4 || definition.wkt || definition.epsg}
+        <p class="projection-definition-note">
+          {m.projection_definition_note_affine()}
+        </p>
+      {/if}
+      {#each definition.notes as note (note)}
+        <p class="projection-definition-note">{describeNote(note)}</p>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style lang="scss">
@@ -84,6 +180,7 @@
 
   .projection-current-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--kh-gap-inline);
@@ -98,10 +195,50 @@
   }
 
   .projection-current-name-row {
+    flex: 1 1 10rem;
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
     min-width: 0;
+  }
+
+  .projection-current-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .projection-definition {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    margin-top: var(--cds-spacing-03);
+    min-width: 0;
+
+    p {
+      margin: 0;
+    }
+
+    :global(.bx--snippet) {
+      max-width: 100%;
+    }
+  }
+
+  .projection-definition-epsg {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .projection-definition-label {
+    color: var(--cds-text-secondary, #525252);
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+  }
+
+  .projection-definition-note {
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .projection-current-name {
