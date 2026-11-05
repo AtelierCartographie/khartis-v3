@@ -34,6 +34,7 @@ import { normalizeGeometryColumnName } from '../operations/geometry-column';
 import {
   assertImportRowCountWithinLimit,
   readParquetRowCount,
+  warnOnDenseGeometry,
   warnOnLargeImport
 } from '../operations/import-volume';
 
@@ -174,7 +175,7 @@ export async function processFileInternal(
     csvOptions: options.csvOptions
   });
 
-  const dataset = await buildDatasetFromDuckTable({
+  const { dataset, vertexCount } = await buildDatasetFromDuckTable({
     file: read.fileInfo,
     tableName: read.tableName,
     isGeoFile: read.isGeoFile,
@@ -183,6 +184,7 @@ export async function processFileInternal(
 
   assertImportRowCountWithinLimit(dataset.rowCount, read.fileInfo.name);
   warnOnLargeImport(dataset.rowCount);
+  warnOnDenseGeometry(vertexCount);
 
   if (read.csvOptions) {
     dataset.metadata.csvOptions = read.csvOptions;
@@ -323,53 +325,23 @@ export async function createFileFromUpload(
     return createFileFromAssetRef(uploadedFile.assetRef);
   }
 
-  if (!uploadedFile.content) {
-    logger.error('Uploaded file is missing inline content', LogCategory.DATA, {
+  logger.error('Uploaded file has no persisted source', LogCategory.DATA, {
+    fileId: uploadedFile.id,
+    fileName: uploadedFile.name
+  });
+  throw new ParseError(
+    m.pipeline_error_no_content(),
+    uploadedFile.fileType ?? FileType.UNKNOWN,
+    {
       fileId: uploadedFile.id,
       fileName: uploadedFile.name
-    });
-    throw new ParseError(
-      m.pipeline_error_no_content(),
-      uploadedFile.fileType ?? FileType.UNKNOWN,
-      {
-        fileId: uploadedFile.id,
-        fileName: uploadedFile.name
-      }
-    );
-  }
-  return createFileFromUploadContent(
-    uploadedFile.content,
-    uploadedFile.name,
-    uploadedFile.type
+    }
   );
 }
 
-export function createCompanionFilesFromUpload(
+export async function createCompanionFilesFromUpload(
   uploadedFile: UploadedFilePayload
-): File[] | undefined | Promise<File[] | undefined> {
-  if (uploadedFile.companionAssetRefs?.length) {
-    return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
-  }
-
-  if (!uploadedFile.relatedFilesData) {
-    return undefined;
-  }
-
-  const mainFileName = uploadedFile.name.toLowerCase();
-  const companionFiles: File[] = [];
-
-  for (const [fileName, data] of Object.entries(
-    uploadedFile.relatedFilesData
-  )) {
-    if (fileName.toLowerCase() === mainFileName) continue;
-
-    const buffer =
-      data instanceof ArrayBuffer
-        ? data
-        : new Uint8Array(data as number[]).buffer;
-    const blob = new Blob([buffer], { type: MIME.BINARY });
-    companionFiles.push(new File([blob], fileName));
-  }
-
-  return companionFiles.length > 0 ? companionFiles : undefined;
+): Promise<File[] | undefined> {
+  if (!uploadedFile.companionAssetRefs?.length) return undefined;
+  return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
 }

@@ -10,10 +10,12 @@ interface StorageLimits {
   maxFileCount: number;
 }
 
+// Sources reach DuckDB as file handles, so these bound DuckDB WASM memory, not
+// the JS heap. Geometry formats are bounded by vertex count rather than bytes.
 export const FILE_SIZE_LIMITS: Record<FileType, number> = {
-  [FileType.CSV]: 150 * 1024 * 1024,
-  [FileType.TSV]: 150 * 1024 * 1024,
-  [FileType.GEOJSON]: 150 * 1024 * 1024,
+  [FileType.CSV]: 400 * 1024 * 1024,
+  [FileType.TSV]: 400 * 1024 * 1024,
+  [FileType.GEOJSON]: 250 * 1024 * 1024,
   [FileType.SHAPEFILE]: 200 * 1024 * 1024,
   [FileType.GEOPACKAGE]: 200 * 1024 * 1024,
   [FileType.GEOPARQUET]: 200 * 1024 * 1024,
@@ -25,12 +27,12 @@ export const FILE_SIZE_LIMITS: Record<FileType, number> = {
 };
 
 export const STORAGE_LIMITS: StorageLimits = {
-  maxFileSize: 200 * 1024 * 1024,
+  maxFileSize: 400 * 1024 * 1024,
   warningFileSize: 120 * 1024 * 1024,
   maxProjectSize: 150 * 1024 * 1024,
   maxProjectCount: 50,
   maxStorageSize: 500 * 1024 * 1024,
-  maxTotalFileSize: 200 * 1024 * 1024,
+  maxTotalFileSize: 400 * 1024 * 1024,
   maxFileCount: 20
 };
 
@@ -39,6 +41,12 @@ export const STORAGE_LIMITS: StorageLimits = {
 export const IMPORT_ROW_LIMITS = {
   WARNING: 250_000,
   MAX: 1_000_000
+} as const;
+
+// Measured in Chrome on 161-vertex polygons: 6.4 M vertices render, 9.7 M
+// exhaust DuckDB WASM memory while the layer streams.
+export const IMPORT_VERTEX_LIMITS = {
+  WARNING: 5_000_000
 } as const;
 
 export const FILE_VALIDATION_INSPECTION = {

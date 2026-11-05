@@ -33,7 +33,6 @@ import {
   fetchWithTimeout,
   REMOTE_FILE_FETCH_TIMEOUT_MS
 } from '../utils/fetch-with-timeout';
-import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { createReadonlyStateFacade } from '../utils/store.utils.svelte';
 import type {
@@ -95,8 +94,6 @@ function discardUploadedFiles(files: readonly UploadedFile[]): void {
   for (const file of files) {
     file.originalFile = undefined;
     file.relatedFileObjects = undefined;
-    file.content = undefined;
-    file.relatedFilesData = undefined;
     if (file.duckdbTableName) {
       dropPendingTable(file.duckdbTableName);
     }
@@ -507,23 +504,6 @@ export const createProjectActions = {
 
     const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
-    const relatedFilesData: Record<string, ArrayBuffer> = {};
-    let shpContent: ArrayBuffer = new ArrayBuffer(0);
-
-    try {
-      for (const f of files) {
-        const buffer = await f.arrayBuffer();
-        relatedFilesData[f.name] = buffer;
-        if (f.name === shpFile.name) {
-          shpContent = buffer;
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      this.setNewProjectError(m.error_shapefile_read_failed_message());
-      return;
-    }
-
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
@@ -534,9 +514,7 @@ export const createProjectActions = {
       sourceType,
       relatedFiles: files.map((f) => f.name),
       relatedFileObjects: files,
-      originalFile: shpFile,
-      content: shpContent,
-      relatedFilesData
+      originalFile: shpFile
     };
 
     this.addUploadedFile(uploadedFile);
