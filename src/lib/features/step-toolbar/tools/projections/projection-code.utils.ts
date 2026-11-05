@@ -398,6 +398,11 @@ export function diagnoseProjectionCode(
   };
 }
 
+export function wrapLongitude(longitude: number): number {
+  const wrapped = ((((longitude + 180) % 360) + 360) % 360) - 180;
+  return wrapped === -180 && longitude > 0 ? 180 : wrapped;
+}
+
 /** The CRS behind a valid code, or undefined when it cannot be built. */
 export function describeProjectionCode(
   code: string

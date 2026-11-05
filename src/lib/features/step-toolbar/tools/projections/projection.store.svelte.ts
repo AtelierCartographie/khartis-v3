@@ -477,3 +477,16 @@ const { actions, getState } = createToolStore<
 
 export const projectionActions = actions;
 export const getProjectionState = getState;
+
+// The CRS the orientation settings act on: the applied code, or the basemap's
+// own proj4 projection, which the first setting change captures as a code.
+export function getOrientableCrsCode(): string | undefined {
+  const state = getState();
+  if (state.customCode) {
+    return state.customCode;
+  }
+  const projTo = basemapService.currentMetadata?.proj_to;
+  return !state.overrideActive && projTo?.type === 'simple' && projTo.proj4
+    ? projTo.proj4
+    : undefined;
+}

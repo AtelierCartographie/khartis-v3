@@ -7,8 +7,11 @@ import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import {
   describeProjectionCode,
   inferProjectionIdFromCode,
-  type ProjectionCodeCrs
+  type ProjectionCodeCrs,
+  wrapLongitude
 } from './projection-code.utils';
+import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { findNativeSuggestion } from './native-projection.utils';
 import {
   getCatalogueProjectionIdForD3Config,
@@ -226,13 +229,21 @@ function resolveUserCodeDisplay(
   }
 
   const name = getProjectionCodeDisplayName(code, crs);
-  const reoriented =
-    state.longitude !== 0 || state.latitude !== 0 || state.rotation !== 0;
+  const reoriented = state.latitude !== 0 || state.rotation !== 0;
+  const centralMeridian =
+    state.longitude !== 0
+      ? wrapLongitude(getProjectionCodeCentralMeridian(code) + state.longitude)
+      : undefined;
 
   return {
     name,
     description: [
       formatProjectionCodeCrs(crs),
+      centralMeridian !== undefined
+        ? m.projection_current_crs_central_meridian({
+            longitude: formatValue(centralMeridian, { maxFractionDigits: 2 })
+          })
+        : undefined,
       reoriented ? m.projection_current_crs_reoriented() : undefined
     ]
       .filter(Boolean)

@@ -16,6 +16,7 @@ vi.mock('$lib/features/commons/utils/projection.utils', () => ({
   ]
 }));
 
+import { geoPath } from 'd3-geo';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import { diagnoseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
 
@@ -62,9 +63,9 @@ describe('diagnoseProjectionCode', () => {
   });
 
   it('should report an EPSG code that is not bundled', () => {
-    expect(diagnoseProjectionCode('EPSG:5070')).toEqual({
+    expect(diagnoseProjectionCode('EPSG:4258')).toEqual({
       status: 'unknown-authority-code',
-      code: 'EPSG:5070'
+      code: 'EPSG:4258'
     });
   });
 
@@ -142,5 +143,97 @@ describe('diagnoseProjectionCode — closest catalogue projection', () => {
       { format: 'proj4', normalizedCode: '+proj=merc +datum=WGS84' }
     );
     expect(diagnoseProjectionCode('   ')).toEqual({ status: 'empty' });
+  });
+});
+
+describe('proj4d3', () => {
+  const LAMBERT_93 = 'EPSG:2154';
+  // d3 reads clockwise rings as the small polygon.
+  const square = (west: number, south: number, size: number) => ({
+    type: 'Polygon' as const,
+    coordinates: [
+      [
+        [west, south],
+        [west, south + size / 2],
+        [west + size, south + size / 2],
+        [west + size, south],
+        [west, south]
+      ]
+    ]
+  });
+  // The frame rotation changes where d3 puts the origin, never the shape:
+  // compare vectors between projected points, which ignore translation.
+  const vector = (
+    projection: (point: [number, number]) => [number, number] | null,
+    from: [number, number],
+    to: [number, number]
+  ) => {
+    const a = projection(from) ?? [NaN, NaN];
+    const b = projection(to) ?? [NaN, NaN];
+    return [b[0] - a[0], b[1] - a[1]];
+  };
+  const sameVector = (a: number[], b: number[]) =>
+    Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+
+  it('should keep the shape of the unrotated bridge once centred on the CRS', () => {
+    for (const code of [
+      LAMBERT_93,
+      'EPSG:3035',
+      '+proj=robin +lon_0=150 +datum=WGS84',
+      '+proj=ortho +lat_0=45 +lon_0=10 +datum=WGS84'
+    ]) {
+      const centred = proj4d3(code);
+      const legacy = proj4d3(code, { orient: false });
+
+      expect(
+        sameVector(
+          vector(centred, [2.35, 48.85], [10, 52]),
+          vector(legacy, [2.35, 48.85], [10, 52])
+        )
+      ).toBe(true);
+    }
+  });
+
+  it('should cut a Pacific-centred CRS at its own opposite meridian', () => {
+    const area = (orient: boolean, west: number) => {
+      const projection = proj4d3('+proj=robin +lon_0=150 +datum=WGS84', {
+        orient
+      }).fitExtent(
+        [
+          [0, 0],
+          [800, 400]
+        ],
+        { type: 'Sphere' }
+      );
+      return geoPath(projection).area(square(west, 0, 20));
+    };
+
+    expect(area(true, -40)).toBeLessThan(area(true, 0) * 1.1);
+    expect(area(false, -40)).toBeGreaterThan(area(false, 0) * 10);
+  });
+
+  it('should clip an orthographic CRS to its visible hemisphere', () => {
+    const projection = proj4d3('+proj=ortho +lat_0=45 +lon_0=10 +datum=WGS84');
+    const bounds = geoPath(projection)
+      .bounds(square(-170, -60, 340))
+      .flat();
+
+    expect(bounds.every(Number.isFinite)).toBe(true);
+  });
+
+  it('should move the central meridian like lon_0 when offset by the settings', () => {
+    const shifted = proj4d3(LAMBERT_93);
+    const [lambda, phi] = shifted.rotate();
+    shifted.rotate([lambda - 5, phi]);
+    const reference = proj4d3(
+      '+proj=lcc +lat_0=46.5 +lon_0=8 +lat_1=49 +lat_2=44 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m'
+    );
+
+    expect(
+      sameVector(
+        vector(shifted, [12, 47], [15, 50]),
+        vector(reference, [12, 47], [15, 50])
+      )
+    ).toBe(true);
   });
 });

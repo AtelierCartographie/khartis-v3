@@ -33,6 +33,22 @@ export const EPSG_NAMES: Record<string, string> = {
   [WGS84_CRS]: 'WGS 84'
 };
 
+const RADIANS_TO_DEGREES = 180 / Math.PI;
+
+// Past these angles from its centre an azimuthal CRS returns no coordinate
+// (orthographic back hemisphere, gnomonic horizon) or one that blows up the
+// fit (stereographic, LAEA and AEQD antipode). Keyed by proj4's short names.
+const AZIMUTHAL_CLIP_ANGLES: Record<string, number | 'horizon'> = {
+  ortho: 90,
+  gnom: 60,
+  stere: 142,
+  sterea: 142,
+  laea: 179.9,
+  aeqd: 179.9,
+  geos: 'horizon',
+  tpers: 'horizon'
+};
+
 // proj4js leaves these undefined when a PROJ.4 string omits them, and aea,
 // laea, lcc, cea, somerc… then return NaN for every point. PROJ defaults all
 // four to 0.
@@ -83,6 +99,71 @@ export function getKnownEpsgName(epsgCode: string): string | undefined {
     return `WGS 84 / UTM zone ${Number(utm[2])}${utm[1] === '6' ? 'N' : 'S'}`;
   }
   return EPSG_NAMES[code];
+}
+
+type Proj4CrsOriginFields = {
+  names?: string[];
+  projName?: string;
+  long0?: number;
+  lat0?: number;
+  lat_ts?: number;
+  from_greenwich?: number;
+  a?: number;
+  h?: number;
+};
+
+export interface Proj4CrsOrigin {
+  longitude: number;
+  latitude: number;
+  clipAngle?: number;
+}
+
+function finiteDegrees(radians: number | undefined): number {
+  const degrees = (radians ?? 0) * RADIANS_TO_DEGREES;
+  return Number.isFinite(degrees) ? degrees : 0;
+}
+
+/**
+ * Centre of a CRS in degrees: its central meridian (prime meridian included)
+ * and, for an azimuthal CRS, its latitude of origin and the clip angle around
+ * that centre.
+ */
+export function readProj4CrsOrigin(crs: Proj4Crs): Proj4CrsOrigin {
+  const fields = crs as unknown as Proj4CrsOriginFields;
+  const longitude = finiteDegrees(
+    (fields.long0 ?? 0) + (fields.from_greenwich ?? 0)
+  );
+  const method = (fields.names ?? [fields.projName ?? '']).find(
+    (name) => name in AZIMUTHAL_CLIP_ANGLES
+  );
+  if (!method) {
+    return { longitude, latitude: 0 };
+  }
+
+  const polarLatitude =
+    fields.lat0 === undefined && fields.lat_ts !== undefined
+      ? Math.sign(fields.lat_ts) * 90
+      : undefined;
+  const clip = AZIMUTHAL_CLIP_ANGLES[method];
+  const horizon =
+    clip === 'horizon' && fields.a && fields.h
+      ? Math.acos(fields.a / (fields.a + fields.h)) * RADIANS_TO_DEGREES
+      : undefined;
+
+  return {
+    longitude,
+    latitude: polarLatitude ?? finiteDegrees(fields.lat0),
+    clipAngle: clip === 'horizon' ? horizon : clip
+  };
+}
+
+/** Central meridian of a CRS code in degrees, 0 when it cannot be built. */
+export function getProjectionCodeCentralMeridian(code: string): number {
+  try {
+    return readProj4CrsOrigin(createProj4Crs(code)).longitude;
+  } catch {
+    return 0;
+  }
 }
 
 export function registerKnownProj4Definitions(): void {

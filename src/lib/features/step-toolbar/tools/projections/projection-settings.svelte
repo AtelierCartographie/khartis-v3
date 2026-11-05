@@ -5,12 +5,15 @@
   import { supportsCustomProjectionCode } from '$lib/features/map/utils/projection-availability.utils';
   import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
   import { resolveProjectionDefaultOrientation } from '$lib/features/commons/utils/projection.utils';
+  import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {
+    getOrientableCrsCode,
     getProjectionAvailabilityContext,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
+  import { wrapLongitude } from './projection-code.utils';
 
   const PROJECTION_ANGLE_STEP = 0.01;
 
@@ -40,6 +43,17 @@
       suggestionD3Config: projectionState.suggestionD3Config
     })
   );
+  // On a CRS the longitude is an offset from its own lon_0 (0 keeps the CRS
+  // as defined); the slider shows the resulting central meridian.
+  const crsCode = $derived(getOrientableCrsCode());
+  const crsCentralMeridian = $derived(
+    crsCode ? getProjectionCodeCentralMeridian(crsCode) : 0
+  );
+  const displayedLongitude = $derived(
+    crsCode
+      ? wrapLongitude(projectionState.longitude + crsCentralMeridian)
+      : projectionState.longitude
+  );
   const isDirty = $derived(
     projectionState.longitude !== defaultOrientation[0] ||
       projectionState.latitude !== defaultOrientation[1] ||
@@ -48,7 +62,10 @@
 
   function handleLongitudeChange(value: number): void {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setCenter(value, projectionState.latitude);
+    const longitude = crsCode
+      ? wrapLongitude(value - crsCentralMeridian)
+      : value;
+    projectionActions.setCenter(longitude, projectionState.latitude);
   }
 
   function handleLatitudeChange(value: number): void {
@@ -81,7 +98,7 @@
       {:else}
         <SliderWithInput
           label={m.projection_settings_longitude()}
-          value={projectionState.longitude}
+          value={displayedLongitude}
           min={-180}
           max={180}
           step={PROJECTION_ANGLE_STEP}
@@ -114,6 +131,10 @@
           debounceMs={0}
           onchange={handleRotationChange}
         />
+
+        {#if crsCode}
+          <p class="crs-helper">{m.projection_settings_crs_helper()}</p>
+        {/if}
 
         <Button
           class="reset"
@@ -159,6 +180,13 @@
     min-width: 3.5rem !important;
     flex-shrink: 0;
     text-align: center;
+  }
+
+  .crs-helper {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   #khartis-projection-settings-tool :global(.reset) {
