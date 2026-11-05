@@ -138,13 +138,18 @@ les assets ajoutés sans compression. L'export n'appelle pas
 **Import.**
 
 1. La taille du fichier est bornée avant lecture.
-2. `unzipSync()` ne décompresse que les entrées attendues, avec un plafond sur
-   leur nombre et sur les tailles déclarées.
+2. Le répertoire central du ZIP est lu par `File.slice`
+   (`io/kh-archive-reader.ts`), sans charger l'archive. Seules les entrées
+   attendues sont retenues, avec un plafond sur leur nombre et sur les tailles
+   déclarées. `manifest.json` et `project.json` sont alors lus seuls.
 3. La structure, la version du conteneur, le manifest (`assetCount`, chemin
    `assets/<assetId>`) et le schéma de `project.json` sont validés ; une
    version incompatible est rejetée avant toute écriture d'asset.
 4. Les assets sont restaurés (un `assetId` déjà présent localement est
-   conservé tel quel), puis le projet est désérialisé et enregistré.
+   conservé tel quel), puis le projet est désérialisé et enregistré. Chaque
+   asset passe en flux du fichier aux morceaux de 8 Mo d'IndexedDB
+   (`persistAssetStream`) : ni l'archive ni un asset entier ne sont copiés en
+   mémoire JS. Un asset compressé ne peut pas dépasser sa taille déclarée.
 5. Si l'identifiant du projet existe déjà localement, le projet importé reçoit
    un nouvel identifiant.
 
