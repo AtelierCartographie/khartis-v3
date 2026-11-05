@@ -154,7 +154,9 @@
   );
   const fitScale = $derived(frozenFitScale ?? workspaceFitScale);
   const renderedPageScale = $derived(
-    fitScale * (globalState.zoom.pageZoomLevel / 100)
+    globalState.zoom.isPageZoomFitted
+      ? fitScale
+      : globalState.zoom.pageZoomPercent / 100
   );
   const renderedPageWidth = $derived(
     Math.max(1, Math.round(formatState.width * renderedPageScale))
@@ -315,6 +317,12 @@
       }, remaining);
     }
   }
+
+  $effect(() => {
+    if (workspaceWidth <= 0 || workspaceHeight <= 0) return;
+    const scale = fitScale;
+    untrack(() => globalActions.setPageFitScale(scale));
+  });
 
   $effect(() => {
     globalActions.setPageZoomScale(renderedPageScale);

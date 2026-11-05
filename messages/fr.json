@@ -1176,6 +1176,8 @@
   "geo_north_indicator_aria": "Flèche Nord",
   "zoom_reset_title": "Niveau de zoom\nRaccourcis : {primary} + Plus/Moins pour zoomer, {primary} + 0 pour réinitialiser, {alt} + Z pour changer de mode",
   "zoom_reset": "Réinitialiser le zoom",
+  "zoom_fit_page": "Ajuster la page à la fenêtre",
+  "zoom_fit_page_title": "Niveau de zoom de la page (100 % : taille réelle)\nRaccourcis : {primary} + Plus/Moins pour zoomer, {primary} + 0 pour ajuster à la fenêtre, {primary} + 1 pour la taille réelle, {alt} + Z pour changer de mode",
   "zoom_value_input_label": "Niveau de zoom",
   "zoom_in": "Zoom avant",
   "zoom_out": "Zoom arrière",
