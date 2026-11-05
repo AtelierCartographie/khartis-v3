@@ -10,7 +10,7 @@
  * 4. `noded_coverage` – re-nodes a polygon coverage GEOS cannot overlay as is.
  * 5. `extract_innerlines` – derives shared internal borders from polygon coverage.
  * 6. `extract_land` – dissolves a polygon coverage into its territory outline.
- * 7. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
+ * 7. `extract_outerlines` – derives the outer contour from the dissolved territory.
  * 8. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
  * 9. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
  * 10. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
@@ -220,16 +220,6 @@ const extract_coverage_land_macro = `CREATE OR REPLACE MACRO extract_coverage_la
     WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
 );`;
 
-// The territory of a coverage is a single valid union, so its outline is its
-// boundary: a second dissolve finds the same lines in seconds instead of ms.
-const extract_coverage_outerlines_macro = `CREATE OR REPLACE MACRO extract_coverage_outerlines(
-    land_table
-) AS TABLE (
-    FROM query_table(land_table)
-    SELECT ST_LineMerge(ST_CollectionExtract(ST_Boundary(geom), 2)) AS geom
-    WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
-);`;
-
 const extract_coverage_innerlines_macro = `CREATE OR REPLACE MACRO extract_coverage_innerlines(
     input_table
 ) AS TABLE (
@@ -274,25 +264,12 @@ const extract_coverage_innerlines_macro = `CREATE OR REPLACE MACRO extract_cover
     ))) AS geom
 );`;
 
+// The territory is a valid union, so its outline is its boundary: dissolving it
+// again only finds the same lines, in seconds instead of milliseconds.
 const extract_outerlines_macro = `CREATE OR REPLACE MACRO extract_outerlines(
-    input_table,
-    noding_factor := 0.0
+    land_table
 ) AS TABLE (
-    WITH
-    source_data AS (
-        FROM query_table(input_table)
-        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
-        WHERE geom IS NOT NULL
-    ),
-    noded AS (
-        FROM noded_coverage(source_data, noding_factor := noding_factor)
-    ),
-    dissolved AS (
-        SELECT ST_Union_Agg(geom) AS geom
-        FROM noded
-        WHERE NOT ST_IsEmpty(geom)
-    )
-    FROM dissolved
+    FROM query_table(land_table)
     SELECT ST_LineMerge(ST_CollectionExtract(ST_Boundary(geom), 2)) AS geom
     WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
 );`;
@@ -401,7 +378,6 @@ export const simplification_macros =
   is_valid_polygon_coverage_macro +
   extract_coverage_land_macro +
   extract_coverage_innerlines_macro +
-  extract_coverage_outerlines_macro +
   extract_outerlines_macro +
   simplify_and_clean_macro +
   snap_linestring_normalized_macro +

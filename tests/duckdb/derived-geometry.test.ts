@@ -53,7 +53,10 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(findQueries(queries, 'extract_land(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(1);
-    for (const sql of findQueries(queries, 'CREATE OR REPLACE TABLE')) {
+    for (const sql of [
+      ...findQueries(queries, 'extract_land('),
+      ...findQueries(queries, 'extract_innerlines(')
+    ]) {
       expect(sql).toContain('noding_factor := 0');
     }
   });
@@ -69,10 +72,7 @@ describe('rebuildDerivedGeometryTables', () => {
     );
     expect(findQueries(queries, 'extract_land(')).toHaveLength(0);
     expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(0);
-    expect(findQueries(queries, 'extract_coverage_outerlines(')).toHaveLength(
-      1
-    );
-    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
   });
 
   it('falls back to the dissolve when the coverage path fails', async () => {

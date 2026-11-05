@@ -104,15 +104,15 @@ Un fond polygonal importé n'apporte qu'une couverture. Pour qu'il se style
 comme un fond du catalogue, `rebuildDerivedGeometryTables()` en dérive trois
 tables sœurs :
 
-| Table           | Macro                | Contenu                                         |
-| --------------- | -------------------- | ----------------------------------------------- |
-| `…__land`       | `extract_land`       | territoire dissous                              |
-| `…__outerlines` | `extract_outerlines` | contour extérieur, calculé à partir de `__land` |
-| `…__innerlines` | `extract_innerlines` | limites internes partagées                      |
+| Table           | Macro                | Contenu                                 |
+| --------------- | -------------------- | --------------------------------------- |
+| `…__land`       | `extract_land`       | territoire dissous                      |
+| `…__outerlines` | `extract_outerlines` | contour extérieur : le bord de `__land` |
+| `…__innerlines` | `extract_innerlines` | limites internes partagées              |
 
 Sur une couverture valide, `extract_coverage_land` et
-`extract_coverage_innerlines` évitent la dissolution, et le contour est le bord
-du territoire (`extract_coverage_outerlines`).
+`extract_coverage_innerlines` évitent la dissolution. Le contour ne dissout
+jamais rien : le territoire est déjà une union valide, son bord suffit.
 
 Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
 arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la

@@ -204,14 +204,7 @@ export async function rebuildDerivedGeometryTables(
   const outerlinesOutcome = await createDerivedTable(
     duck,
     getDerivedOuterlinesTableName(sourceTable),
-    [
-      ...(coverageIsValid
-        ? [buildLineSelect(`extract_coverage_outerlines('${escapedLand}')`)]
-        : []),
-      ...withNodingRetry((noding) =>
-        buildLineSelect(`extract_outerlines('${escapedLand}', ${noding})`)
-      )
-    ]
+    [buildLineSelect(`extract_outerlines('${escapedLand}')`)]
   );
 
   if (!isCurrent()) return;
