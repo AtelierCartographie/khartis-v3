@@ -116,6 +116,10 @@ jamais rien : le territoire est déjà une union valide, son bord suffit. Hors
 couverture valide, les limites internes sont les arêtes du nodage de tous les
 contours qui ne portent pas un segment du bord du territoire : une jointure
 exacte en SQL, sans superposition GEOS entre deux géométries géantes.
+Des polygones qui se chevauchent (somme des aires supérieure de plus de 1 % à
+celle du territoire) n'ont pas de limites internes : leurs contours se
+croisent sans rien séparer, signe d'un fichier qui n'est pas une partition. Les
+couvertures réelles imparfaites restent loin du seuil (1,0007 pour les ZEE).
 
 Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
 arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
