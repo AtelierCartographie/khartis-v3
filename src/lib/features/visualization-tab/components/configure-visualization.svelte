@@ -662,6 +662,7 @@
       open={primitiveAccordion.isOpen('texts')}
       onToggle={(expanded) => primitiveAccordion.setOpen('texts', expanded)}
       dataFields={dataFieldItems}
+      basemapLabelFields={datasetAnalysis.basemapLabelFieldItems}
       visualization={textVisualization}
       disabled={!hasGeometry}
       filters={filtersByPrimitive[PrimitiveFilterType.TEXT]}

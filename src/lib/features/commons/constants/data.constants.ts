@@ -14,8 +14,17 @@ export const JOINED_BASEMAP_COLUMN = {
   LABEL: 'basemap_label',
   // Display name of the joined entity, in the language of the interface.
   NAME: 'basemap_name',
+  // Same name in a fixed language, offered as a map label: unlike NAME, it does
+  // not follow the interface language of whoever reopens the project.
+  NAME_FR: 'basemap_name_fr',
+  NAME_EN: 'basemap_name_en',
   TYPO_MATCH: 'typo_match'
 } as const;
+
+export const JOINED_BASEMAP_LABEL_COLUMNS = [
+  JOINED_BASEMAP_COLUMN.NAME_FR,
+  JOINED_BASEMAP_COLUMN.NAME_EN
+] as const;
 
 // Shared cap between SQL join grading (A6) and the persisted project shape (C1).
 export const MAX_JOIN_BUCKET_LIST_VALUES = 500;
