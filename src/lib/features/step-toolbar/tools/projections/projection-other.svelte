@@ -71,10 +71,9 @@
   const customCodeEnabled = $derived(
     supportsCustomProjectionCode(projectionContext)
   );
-  const activeTabIndex = $derived(customCodeEnabled ? requestedTabIndex : 0);
-  const isCodeView = $derived(customCodeEnabled && activeTabIndex === 1);
+  const isCodeView = $derived(requestedTabIndex === 1);
   const diagnosis = $derived(
-    isCodeView
+    isCodeView && customCodeEnabled
       ? diagnoseProjectionCode(crsCode, getProjectionCodeCoverageBbox())
       : ({ status: 'empty' } as ProjectionCodeDiagnosis)
   );
@@ -220,28 +219,13 @@
     isCatalogueProjectionActive() && activeCatalogueSelectionId === undefined
   );
 
-  const viewTabs = $derived.by(() => {
-    const tabs = [
-      {
-        icon: ListIcon,
-        label: catalogueLabel,
-        iconSize: 16
-      }
-    ];
-
-    if (customCodeEnabled) {
-      tabs.push({
-        icon: Code,
-        label: viewCodeLabel,
-        iconSize: 16
-      });
-    }
-
-    return tabs;
-  });
+  const viewTabs = $derived([
+    { icon: ListIcon, label: catalogueLabel, iconSize: 16 },
+    { icon: Code, label: viewCodeLabel, iconSize: 16 }
+  ]);
 
   function handleViewChange(index: number): void {
-    requestedTabIndex = customCodeEnabled ? index : 0;
+    requestedTabIndex = index;
   }
 
   const isEmpty = () => crsCode.trim().length === 0;
@@ -323,7 +307,7 @@
   <div class="other-proj">
     <ToggleTabs
       items={viewTabs}
-      activeIndex={activeTabIndex}
+      activeIndex={requestedTabIndex}
       onchange={handleViewChange}
       className="projection-view-tabs"
       hideInactiveLabel={true}
@@ -373,6 +357,14 @@
           </div>
         {/if}
       </div>
+    {:else if !customCodeEnabled}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        title=""
+        subtitle={m.projection_code_unavailable_tiled()}
+      />
     {:else}
       <div class="code-view">
         <p class="intro">{codeIntro}</p>

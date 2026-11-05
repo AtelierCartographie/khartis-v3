@@ -55,6 +55,7 @@
   "projection_code_helper": "Accepted formats: EPSG code (EPSG:2154 or 2154), PROJ.4, WKT (content of a .prj file) or PROJJSON.",
   "projection_code_reset": "Reset",
   "projection_code_submit": "Apply",
+  "projection_code_unavailable_tiled": "With a tiled basemap (OpenStreetMap, IGN), the map stays in Web Mercator (EPSG:3857) or globe. To apply another CRS, pick a catalogue basemap or import your own.",
   "projection_code_status_recognized": "CRS recognized",
   "projection_code_status_applied": "Applied to the map",
   "projection_code_status_computing": "Reprojecting the map…",

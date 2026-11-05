@@ -236,4 +236,10 @@ describe('proj4d3', () => {
       )
     ).toBe(true);
   });
+
+  it('should resolve the national EPSG codes proj-suggest can suggest', () => {
+    for (const code of ['EPSG:5070', 'EPSG:28992', 'EPSG:3576']) {
+      expect(diagnoseProjectionCode(code)).toMatchObject({ status: 'valid' });
+    }
+  });
 });
