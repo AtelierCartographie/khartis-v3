@@ -1,4 +1,5 @@
 import { unzipSync, zipSync } from 'fflate';
+import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ParseError,
@@ -497,11 +498,12 @@ describe('project archive format', () => {
       'project.json': createProjectPayload(),
       'assets/asset-1': new Uint8Array([1, 2, 3, 4])
     });
-    Object.defineProperty(file, 'size', { value: 201 * 1024 * 1024 });
+    const oversizedBytes = STORAGE_LIMITS.maxFileSize + 1024 * 1024;
+    Object.defineProperty(file, 'size', { value: oversizedBytes });
 
     await expect(importProject(file)).rejects.toMatchObject({
       code: 'PARSE_ERROR',
-      details: expect.objectContaining({ archiveBytes: 201 * 1024 * 1024 })
+      details: expect.objectContaining({ archiveBytes: oversizedBytes })
     });
     expect(persistAssetBytes).not.toHaveBeenCalled();
   });
