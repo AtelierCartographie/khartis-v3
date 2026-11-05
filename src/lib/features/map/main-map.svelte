@@ -31,6 +31,7 @@
   import { useMapDisplayData } from './hooks';
   import { useBackgroundClassificationRefresh } from '$lib/features/visualization-tab';
   import { getKeyboardMoveDelta } from './utils/keyboard-position.utils';
+  import { formatValue } from '../commons/utils/format.utils';
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
@@ -153,7 +154,9 @@
   );
   const fitScale = $derived(frozenFitScale ?? workspaceFitScale);
   const renderedPageScale = $derived(
-    fitScale * (globalState.zoom.pageZoomLevel / 100)
+    globalState.zoom.isPageZoomFitted
+      ? fitScale
+      : globalState.zoom.pageZoomPercent / 100
   );
   const renderedPageWidth = $derived(
     Math.max(1, Math.round(formatState.width * renderedPageScale))
@@ -316,6 +319,12 @@
   }
 
   $effect(() => {
+    if (workspaceWidth <= 0 || workspaceHeight <= 0) return;
+    const scale = fitScale;
+    untrack(() => globalActions.setPageFitScale(scale));
+  });
+
+  $effect(() => {
     globalActions.setPageZoomScale(renderedPageScale);
   });
 
@@ -446,6 +455,16 @@
     startHeight: number;
   } | null>(null);
   let pendingPageResizeFrame: number | null = null;
+  let pageResizeHandlesEl = $state<HTMLDivElement | null>(null);
+  let pageResizePointer = $state<{ x: number; y: number } | null>(null);
+
+  // The handles box sits inside the translated workspace camera, so the
+  // pointer is placed relative to it rather than with position: fixed.
+  function updatePageResizePointer(clientX: number, clientY: number): void {
+    if (!pageResizeHandlesEl) return;
+    const rect = pageResizeHandlesEl.getBoundingClientRect();
+    pageResizePointer = { x: clientX - rect.left, y: clientY - rect.top };
+  }
 
   function resizePage(
     edge: ResizeEdge,
@@ -494,6 +513,7 @@
       startWidth: formatState.width,
       startHeight: formatState.height
     };
+    updatePageResizePointer(event.clientX, event.clientY);
     window.addEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
     window.addEventListener(EVENT.POINTERUP, handlePageResizeUp);
   }
@@ -509,6 +529,7 @@
     pendingPageResizeFrame = requestAnimationFrame(() => {
       pendingPageResizeFrame = null;
       if (!pageResizeState) return;
+      updatePageResizePointer(clientX, clientY);
       const { edge, startX, startY, startWidth, startHeight } = pageResizeState;
       const scale = Math.max(renderedPageScale, 0.01);
       resizePage(
@@ -527,6 +548,7 @@
       pendingPageResizeFrame = null;
     }
     pageResizeState = null;
+    pageResizePointer = null;
     hoveredPageResizeEdge = null;
     frozenFitScale = null;
     window.removeEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
@@ -630,6 +652,7 @@
 
       {#if showResizeHandles}
         <div
+          bind:this={pageResizeHandlesEl}
           class="resize-handles-page"
           class:highlighted={hoveredPageResizeEdge !== null ||
             pageResizeState !== null}
@@ -652,6 +675,18 @@
               onkeydown={(e: KeyboardEvent) => handlePageResizeKeyDown(e, edge)}
             ></div>
           {/each}
+          {#if pageResizeState && pageResizePointer}
+            <div
+              class="page-resize-tooltip"
+              role="status"
+              style="left: {pageResizePointer.x}px; top: {pageResizePointer.y}px;"
+            >
+              {m.page_resize_size({
+                width: formatValue(formatState.width),
+                height: formatValue(formatState.height)
+              })}
+            </div>
+          {/if}
         </div>
         <div
           class="resize-handles-frame"
@@ -835,6 +870,21 @@
 
   .resize-handles-page.highlighted {
     outline-color: color-mix(in srgb, var(--_resize-color) 55%, transparent);
+  }
+
+  .page-resize-tooltip {
+    position: absolute;
+    z-index: 4;
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--cds-inverse-01, #ffffff);
+    background: var(--cds-inverse-02, #393939);
+    border-radius: 2px;
+    pointer-events: none;
+    transform: translate(12px, 12px);
   }
 
   .page-resize-handle.resize-n,
