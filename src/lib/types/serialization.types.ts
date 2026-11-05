@@ -138,6 +138,8 @@ export interface SerializedGlobalUiState {
   projectionViewMode?: ProjectionViewMode;
   selectedSourceFileId?: string;
   pageZoomLevel: number;
+  isPageZoomFitted?: boolean;
+  pageZoomPercent?: number;
   pagePanOffset: {
     x: number;
     y: number;

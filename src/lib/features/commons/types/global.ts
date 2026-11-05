@@ -5,12 +5,14 @@ export enum ToolbarState {
 }
 
 export interface ZoomState {
-  pageZoomLevel: number;
+  isPageZoomFitted: boolean;
+  pageZoomPercent: number;
   minPageZoom: number;
   maxPageZoom: number;
   pageZoomStep: number;
   pagePanOffset: { x: number; y: number };
   pageZoomScale: number;
+  pageFitScale: number;
 }
 
 export interface GlobalState {

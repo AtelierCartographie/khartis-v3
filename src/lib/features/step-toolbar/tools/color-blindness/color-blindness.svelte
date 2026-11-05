@@ -36,7 +36,7 @@
       labelText={m.colorblind_simulation()}
       selected={colorBlindnessState.simulationType}
       on:change={handleSimulationChange}
-      size="xl"
+      size="sm"
     >
       {#each simulationOptions as option (option.value)}
         <SelectItem value={option.value} text={option.text} />
@@ -71,26 +71,6 @@
 
   .simulation-field :global(.bx--select) {
     width: 100%;
-  }
-
-  .simulation-field :global(.bx--select-input__wrapper) {
-    background: var(--cds-field-01, #f4f4f4);
-  }
-
-  .simulation-field :global(.bx--select-input) {
-    min-height: var(--kh-size-sm);
-    padding: 15px 48px 15px 16px;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
-    color: var(--cds-text-primary, #161616);
-    background: var(--cds-field-01, #f4f4f4);
-    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
-  }
-
-  .simulation-field :global(.bx--select__arrow) {
-    right: 16px;
-    fill: var(--cds-icon-primary, #161616);
   }
 
   .helper-section {

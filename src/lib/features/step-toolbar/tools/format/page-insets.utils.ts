@@ -58,6 +58,19 @@ export function arePageInsetsEqual(a: PageInsets, b: PageInsets): boolean {
   );
 }
 
+export function arePageInsetsWithin(
+  a: PageInsets,
+  b: PageInsets,
+  tolerance: number
+): boolean {
+  return (
+    Math.abs(a.top - b.top) <= tolerance &&
+    Math.abs(a.right - b.right) <= tolerance &&
+    Math.abs(a.bottom - b.bottom) <= tolerance &&
+    Math.abs(a.left - b.left) <= tolerance
+  );
+}
+
 /** Area left by page insets, in page units scaled by `scale`. */
 export function resolvePageInsetBox(
   page: { width: number; height: number },

@@ -194,7 +194,7 @@
     }
 
     void tooltipState.entries.length;
-    void globalState.zoom.pageZoomLevel;
+    void globalState.zoom.pageZoomScale;
     void globalState.zoom.pagePanOffset.x;
     void globalState.zoom.pagePanOffset.y;
     void mapInstanceStore.map;

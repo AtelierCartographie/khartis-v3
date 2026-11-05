@@ -4,6 +4,7 @@
     Add,
     Document,
     Earth,
+    FitToScreen,
     Subtract,
     ZoomReset
   } from 'carbon-icons-svelte';
@@ -126,7 +127,7 @@
   const currentZoomValue = $derived(
     activeTabIndex === 0
       ? mapInstanceStore.zoomLevel
-      : globalState.zoom.pageZoomLevel
+      : Math.round(globalState.zoom.pageZoomScale * 100)
   );
   const activeMinZoomPercent = $derived(
     activeTabIndex === 0 ? MIN_MAP_ZOOM_PERCENT : globalState.zoom.minPageZoom
@@ -144,7 +145,7 @@
     if (activeTabIndex === 0) {
       mapInstanceStore.setZoomPercent(clamped);
     } else {
-      globalActions.setPageZoom(clamped);
+      globalActions.setPageZoomPercent(clamped);
     }
   }
 
@@ -341,7 +342,12 @@
       hideInactiveLabel={false}
     />
 
-    <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
+    <div
+      class="zoom-section"
+      title={activeTabIndex === 0
+        ? m.zoom_reset_title(zoomShortcutModifiers)
+        : m.zoom_fit_page_title(zoomShortcutModifiers)}
+    >
       <div class="zoom-value">
         <input
           id="khartis-zoom-toolbar-input"
@@ -364,8 +370,10 @@
           kind="ghost"
           size="small"
           class="zoom-button"
-          icon={ZoomReset}
-          iconDescription={m.zoom_reset()}
+          icon={activeTabIndex === 0 ? ZoomReset : FitToScreen}
+          iconDescription={activeTabIndex === 0
+            ? m.zoom_reset()
+            : m.zoom_fit_page()}
           tooltipPosition={zoomButtonTooltipPosition}
           on:click={fitActiveMode}
         />

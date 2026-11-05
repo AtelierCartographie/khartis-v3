@@ -10,6 +10,7 @@ export {
 } from './format.store.svelte';
 export {
   arePageInsetsEqual,
+  arePageInsetsWithin,
   MIN_PAGE_AREA_SIZE,
   resolvePageInsetBox
 } from './page-insets.utils';
