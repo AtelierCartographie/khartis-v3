@@ -37,7 +37,7 @@ function makeModalGeoFile(): UploadedFile {
     fileType: FileType.GEOPARQUET,
     status: FileStatus.COMPLETE,
     sourceType: DataSourceType.URL,
-    content: new ArrayBuffer(8),
+    originalFile: new File([new Uint8Array(8)], 'fr-com2025-wgs84.parquet'),
     statistics: {
       codgeo: { type: 'text', count: 34879, nullCount: 0, unique: 34877 }
     },

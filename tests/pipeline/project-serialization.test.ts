@@ -24,9 +24,9 @@ function minimalFile(overrides: Record<string, unknown> = {}) {
 }
 
 describe('serializeUploadedFile — asset refs', () => {
-  it('persists asset refs and omits inline content', () => {
+  it('should persist asset refs and omit the in-memory source file', () => {
     const file = minimalFile({
-      content: 'col1,col2\n1,2',
+      originalFile: new File(['col1,col2\n1,2'], 'data.csv'),
       assetRef: {
         assetId: 'asset-1',
         originalName: 'data.csv',
@@ -38,7 +38,7 @@ describe('serializeUploadedFile — asset refs', () => {
     const serialized = serializeUploadedFile(file);
     expect(serialized.assetRef?.assetId).toBe('asset-1');
     expect(
-      (serialized as unknown as Record<string, unknown>).content
+      (serialized as unknown as Record<string, unknown>).originalFile
     ).toBeUndefined();
   });
 
@@ -166,7 +166,6 @@ describe('deserializeUploadedFile — asset ref round-trip', () => {
     expect(restored.assetRef?.assetId).toBe('asset-1');
     expect(restored.enrichmentSnapshot?.assetId).toBe('asset-enriched');
     expect(restored.companionAssetRefs?.[0]?.assetId).toBe('asset-2');
-    expect(restored.content).toBeUndefined();
   });
 });
 

@@ -81,7 +81,6 @@ export interface UploadedFile {
   size: number;
   type: string;
   fileType: FileType;
-  content?: string | ArrayBuffer;
   originalFile?: File;
   relatedFileObjects?: File[];
 
@@ -92,7 +91,6 @@ export interface UploadedFile {
   validation?: FileValidation;
   sourceType: DataSourceType;
   relatedFiles?: string[];
-  relatedFilesData?: Record<string, ArrayBuffer>;
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
   // Parquet copy of the table after an enrichment join: the enrichment file
