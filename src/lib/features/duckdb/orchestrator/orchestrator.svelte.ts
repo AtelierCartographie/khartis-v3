@@ -1549,6 +1549,8 @@ export const duckDBOrchestrator = {
   async getArrowTable(tableName: string): Promise<Table> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+    // A table streamed for the dataset is the one every caller should share.
+    await state.getMetadataPrefetches().get(tableName);
 
     try {
       return await arrowOps.getArrowTableWithCache(

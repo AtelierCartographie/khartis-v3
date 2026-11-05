@@ -1924,6 +1924,8 @@ function serializePolygonLayer(
     getBinaryAttribute(data, 'vertexValid');
   const layerOpacity = getLayerNumber(props, 'opacity', 1);
   const layerId = getLayerId(layer, 0);
+  // The territory is stored one row per part; it stays one compound path.
+  const mergesParts = layerId.startsWith(DeckLayerId.BASEMAP_TERRE);
   const groups: PolygonFeatureGroup[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1955,7 +1957,9 @@ function serializePolygonLayer(
     );
     if (fillColor.opacity <= 0) continue;
 
-    const featureId = readFeatureId(data.featureIds, index, startIndices);
+    const featureId = mergesParts
+      ? null
+      : readFeatureId(data.featureIds, index, startIndices);
     const groupKey =
       featureId !== null
         ? `feature:${featureId}`
