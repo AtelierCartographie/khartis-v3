@@ -11,9 +11,9 @@ interface StorageLimits {
 }
 
 export const FILE_SIZE_LIMITS: Record<FileType, number> = {
-  [FileType.CSV]: 150 * 1024 * 1024,
-  [FileType.TSV]: 150 * 1024 * 1024,
-  [FileType.GEOJSON]: 150 * 1024 * 1024,
+  [FileType.CSV]: 400 * 1024 * 1024,
+  [FileType.TSV]: 400 * 1024 * 1024,
+  [FileType.GEOJSON]: 250 * 1024 * 1024,
   [FileType.SHAPEFILE]: 200 * 1024 * 1024,
   [FileType.GEOPACKAGE]: 200 * 1024 * 1024,
   [FileType.GEOPARQUET]: 200 * 1024 * 1024,
@@ -25,12 +25,12 @@ export const FILE_SIZE_LIMITS: Record<FileType, number> = {
 };
 
 export const STORAGE_LIMITS: StorageLimits = {
-  maxFileSize: 200 * 1024 * 1024,
+  maxFileSize: 400 * 1024 * 1024,
   warningFileSize: 120 * 1024 * 1024,
   maxProjectSize: 150 * 1024 * 1024,
   maxProjectCount: 50,
   maxStorageSize: 500 * 1024 * 1024,
-  maxTotalFileSize: 200 * 1024 * 1024,
+  maxTotalFileSize: 400 * 1024 * 1024,
   maxFileCount: 20
 };
 
