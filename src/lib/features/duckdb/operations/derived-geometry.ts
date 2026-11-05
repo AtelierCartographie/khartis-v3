@@ -48,19 +48,30 @@ async function createEmptyGeometryTable(
 
 type DerivationOutcome = 'built' | 'failed' | 'out-of-memory';
 
+interface DerivationCandidate {
+  select: string;
+  /** Noding factor of a GEOS candidate; absent on the coverage path. */
+  nodingFactor?: number;
+}
+
+interface DerivationResult {
+  outcome: DerivationOutcome;
+  nodingFactor?: number;
+}
+
 // WASM memory never shrinks, and a second query that exhausts it leaves the
 // heap unable to serve the next large allocation: the territory then fails to
 // stream. Only a topology failure is worth another attempt.
 async function createDerivedTable(
   duck: DuckDBClientForDerivedGeometry,
   targetTable: string,
-  candidateSelects: string[]
-): Promise<DerivationOutcome> {
+  candidates: DerivationCandidate[]
+): Promise<DerivationResult> {
   let lastError: unknown;
-  for (const select of candidateSelects) {
+  for (const { select, nodingFactor } of candidates) {
     try {
       await runDerivedTableQuery(duck, targetTable, select);
-      return 'built';
+      return { outcome: 'built', nodingFactor };
     } catch (error) {
       lastError = error;
       if (isOutOfMemoryError(error)) break;
@@ -78,7 +89,9 @@ async function createDerivedTable(
     lastError
   );
   await createEmptyGeometryTable(duck, targetTable);
-  return isOutOfMemoryError(lastError) ? 'out-of-memory' : 'failed';
+  return {
+    outcome: isOutOfMemoryError(lastError) ? 'out-of-memory' : 'failed'
+  };
 }
 
 async function isValidPolygonCoverage(
@@ -157,8 +170,9 @@ function buildLineSelect(macroCall: string): string {
 /**
  * Builds the territory / outer contour / shared borders siblings of a polygon
  * coverage. A valid coverage is derived from its shared vertices, without any
- * overlay; any other coverage, or a failure of that path, goes through the
- * GEOS dissolve, re-noded on a second attempt. Running out of memory ends the
+ * overlay; any other coverage, or a failure of that path, goes through GEOS,
+ * re-noded on a second attempt. The contour and the GEOS borders are read off
+ * the territory, so they need it built. Running out of memory ends the
  * derivation: the remaining tables are left empty.
  */
 export async function rebuildDerivedGeometryTables(
@@ -168,6 +182,9 @@ export async function rebuildDerivedGeometryTables(
 ): Promise<void> {
   const escapedSource = escapeSqlString(sourceTable);
   const landTable = getDerivedLandTableName(sourceTable);
+  const escapedLand = escapeSqlString(landTable);
+  const outerlinesTable = getDerivedOuterlinesTableName(sourceTable);
+  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
   if (!isCurrent()) return;
   const landSelect = (macroCall: string) => `
@@ -175,54 +192,58 @@ export async function rebuildDerivedGeometryTables(
     FROM ${macroCall}
     WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
   `;
-  const withNodingRetry = (buildMacroCall: (nodingFactor: string) => string) =>
-    [0, NODING_REPAIR_FACTOR].map((nodingFactor) =>
-      buildMacroCall(`noding_factor := ${nodingFactor}`)
-    );
+  const nodingFactors = (from = 0) =>
+    [0, NODING_REPAIR_FACTOR].filter((factor) => factor >= from);
 
-  const landOutcome = await createDerivedTable(duck, landTable, [
+  const land = await createDerivedTable(duck, landTable, [
     ...(coverageIsValid
-      ? [landSelect(`extract_coverage_land('${escapedSource}')`)]
+      ? [{ select: landSelect(`extract_coverage_land('${escapedSource}')`) }]
       : []),
-    ...withNodingRetry((noding) =>
-      landSelect(`extract_land('${escapedSource}', ${noding})`)
-    )
+    ...nodingFactors().map((nodingFactor) => ({
+      select: landSelect(
+        `extract_land('${escapedSource}', noding_factor := ${nodingFactor})`
+      ),
+      nodingFactor
+    }))
   ]);
   if (!isCurrent()) return;
 
-  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
-  if (landOutcome === 'out-of-memory') {
-    await createEmptyGeometryTable(
-      duck,
-      getDerivedOuterlinesTableName(sourceTable)
-    );
+  if (land.outcome !== 'built') {
+    await createEmptyGeometryTable(duck, outerlinesTable);
     await createEmptyGeometryTable(duck, innerlinesTable);
     return;
   }
 
-  const escapedLand = escapeSqlString(landTable);
-  const outerlinesOutcome = await createDerivedTable(
-    duck,
-    getDerivedOuterlinesTableName(sourceTable),
-    [buildLineSelect(`extract_outerlines('${escapedLand}')`)]
-  );
-
+  const outerlines = await createDerivedTable(duck, outerlinesTable, [
+    { select: buildLineSelect(`extract_outerlines('${escapedLand}')`) }
+  ]);
   if (!isCurrent()) return;
 
   if (
-    outerlinesOutcome === 'out-of-memory' ||
+    outerlines.outcome === 'out-of-memory' ||
     (await isMeshTooFineForInnerLimits(duck, sourceTable))
   ) {
     await createEmptyGeometryTable(duck, innerlinesTable);
     return;
   }
 
+  // The GEOS borders match the outline of the territory vertex for vertex:
+  // they start from the noding the territory needed.
   await createDerivedTable(duck, innerlinesTable, [
     ...(coverageIsValid
-      ? [buildLineSelect(`extract_coverage_innerlines('${escapedSource}')`)]
+      ? [
+          {
+            select: buildLineSelect(
+              `extract_coverage_innerlines('${escapedSource}')`
+            )
+          }
+        ]
       : []),
-    ...withNodingRetry((noding) =>
-      buildLineSelect(`extract_innerlines('${escapedSource}', ${noding})`)
-    )
+    ...nodingFactors(land.nodingFactor).map((nodingFactor) => ({
+      select: buildLineSelect(
+        `extract_innerlines('${escapedSource}', '${escapedLand}', noding_factor := ${nodingFactor})`
+      ),
+      nodingFactor
+    }))
   ]);
 }

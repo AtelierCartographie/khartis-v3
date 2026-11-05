@@ -103,6 +103,10 @@ describe('rebuildDerivedGeometryTables', () => {
     const landQueries = findQueries(queries, 'extract_land(');
     expect(landQueries).toHaveLength(2);
     expect(landQueries[1]).toMatch(/noding_factor := 0\.\d+/);
+    // The borders match the outline of the territory only on the same grid.
+    const innerlinesQueries = findQueries(queries, 'extract_innerlines(');
+    expect(innerlinesQueries).toHaveLength(1);
+    expect(innerlinesQueries[0]).toMatch(/noding_factor := 0\.\d+/);
     expect(queries.some((sql) => sql.includes('WHERE FALSE'))).toBe(false);
   });
 

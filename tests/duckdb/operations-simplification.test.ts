@@ -124,7 +124,7 @@ describe('simplifyGeometryTable', () => {
       `CREATE OR REPLACE TABLE "target' ""table""__innerlines"`
     );
     expect(innerlinesQuery).toContain(
-      `extract_innerlines('target'' "table"', noding_factor := 0)`
+      `extract_innerlines('target'' "table"', 'target'' "table"__land', noding_factor := 0)`
     );
     expect(outerlinesQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__outerlines"`

@@ -234,11 +234,21 @@ describe('prune_triangles macro', () => {
 });
 
 describe('extract_innerlines macro', () => {
-  it('should derive a non-empty inner border line between two adjacent polygons', async () => {
-    const rows = await query(
+  async function innerlinesOf(coverage: string, select: string) {
+    await run(
       db,
-      `FROM extract_innerlines('adjacent_polygons')
-       SELECT ST_AsText(geom) AS wkt, ST_IsEmpty(geom) AS is_empty`
+      `CREATE OR REPLACE TABLE ${coverage}__land AS FROM extract_land('${coverage}')`
+    );
+    return query(
+      db,
+      `FROM extract_innerlines('${coverage}', '${coverage}__land') ${select}`
+    );
+  }
+
+  it('should derive a non-empty inner border line between two adjacent polygons', async () => {
+    const rows = await innerlinesOf(
+      'adjacent_polygons',
+      `SELECT ST_AsText(geom) AS wkt, ST_IsEmpty(geom) AS is_empty`
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].is_empty).toBe(false);
@@ -246,10 +256,9 @@ describe('extract_innerlines macro', () => {
   });
 
   it('should keep only the shared edge, not the outline of the coverage', async () => {
-    const rows = await query(
-      db,
-      `FROM extract_innerlines('adjacent_polygons')
-       SELECT ST_Length(geom) AS length`
+    const rows = await innerlinesOf(
+      'adjacent_polygons',
+      `SELECT ST_Length(geom) AS length`
     );
     // The x=10 edge is 10 long; the 20x10 outline would add 60.
     expect(Number(rows[0].length)).toBeCloseTo(10, 6);
@@ -267,19 +276,37 @@ describe('extract_innerlines macro', () => {
         (2, ST_GeomFromText('POLYGON((30 0, 40 0, 40 10, 30 10, 30 0))'))`
     );
 
-    const rows = await query(
-      db,
-      `FROM extract_innerlines('disjoint_polygons')
-       SELECT ST_IsEmpty(geom) AS is_empty`
+    const rows = await innerlinesOf(
+      'disjoint_polygons',
+      `SELECT geom IS NULL OR ST_IsEmpty(geom) AS is_empty`
     );
     expect(rows[0].is_empty).toBe(true);
   });
 
-  it('should not throw on an OGC-invalid polygon and still derive inner borders', async () => {
-    const rows = await query(
+  it('should keep the edges of overlapping polygons that fall inside the territory', async () => {
+    await run(
       db,
-      `FROM extract_innerlines('invalid_coverage')
-       SELECT ST_AsText(geom) AS wkt, ST_IsEmpty(geom) AS is_empty`
+      'CREATE OR REPLACE TABLE overlapping_squares (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO overlapping_squares VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
+        (2, ST_GeomFromText('POLYGON((5 5, 15 5, 15 15, 5 15, 5 5))'))`
+    );
+
+    const rows = await innerlinesOf(
+      'overlapping_squares',
+      `SELECT ST_Length(geom) AS length`
+    );
+    // Each square crosses the other along two 5-long edges; the outline goes.
+    expect(Number(rows[0].length)).toBeCloseTo(20, 6);
+  });
+
+  it('should not throw on an OGC-invalid polygon and still derive inner borders', async () => {
+    const rows = await innerlinesOf(
+      'invalid_coverage',
+      `SELECT ST_AsText(geom) AS wkt, ST_IsEmpty(geom) AS is_empty`
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].is_empty).toBe(false);
@@ -313,10 +340,9 @@ describe('extract_innerlines macro', () => {
       }
     });
 
-    const rows = await query(
-      db,
-      `FROM extract_innerlines('geoparquet_coverage')
-       SELECT ST_Length(geom) AS length`
+    const rows = await innerlinesOf(
+      'geoparquet_coverage',
+      `SELECT ST_Length(geom) AS length`
     );
     expect(Number(rows[0].length)).toBeCloseTo(10, 6);
   });
@@ -500,6 +526,11 @@ describe('coverage macros', () => {
         9
       );
 
+      await run(
+        db,
+        `CREATE OR REPLACE TABLE ${table}__land AS FROM extract_land('${table}')`
+      );
+
       const lines = await query(
         db,
         `SELECT
@@ -508,7 +539,7 @@ describe('coverage macros', () => {
            c.geom IS NULL OR d.geom IS NULL OR ST_IsEmpty(d.geom)
              OR ST_Equals(c.geom, d.geom) AS same_lines
          FROM extract_coverage_innerlines('${table}') c,
-              extract_innerlines('${table}') d`
+              extract_innerlines('${table}', '${table}__land') d`
       );
       expect(Number(lines[0].coverage_length)).toBeCloseTo(
         Number(lines[0].dissolve_length),
