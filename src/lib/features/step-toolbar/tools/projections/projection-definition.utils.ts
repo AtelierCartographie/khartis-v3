@@ -5,9 +5,12 @@ import {
 } from '$lib/features/commons/utils/projection.utils';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 import {
+  createProj4Crs,
   getKnownProj4Definition,
-  getProjectionCodeCentralMeridian
+  getProjectionCodeCentralMeridian,
+  WGS84_CRS
 } from '$lib/features/commons/utils/proj4-crs.utils';
+import proj4 from 'proj4';
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import type { GeoProjection } from 'd3-geo';
@@ -49,7 +52,8 @@ export interface ProjectionDefinitionContext {
 }
 
 // d3 draws on the sphere; the same radius in PROJ gives the same shape.
-const SPHERE_RADIUS = '+R=6371000';
+const SPHERE_RADIUS_METRES = 6371000;
+const SPHERE_RADIUS = `+R=${SPHERE_RADIUS_METRES}`;
 const PROJ_SUFFIX = `+x_0=0 +y_0=0 ${SPHERE_RADIUS} +units=m +no_defs`;
 const WEB_MERCATOR = 'EPSG:3857';
 
@@ -121,16 +125,26 @@ function readParallels(projection: GeoProjection): number[] | undefined {
   return undefined;
 }
 
-function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
+function resolveD3Source(
+  state: ProjectionState
+): { method: D3ProjMethod; projection: GeoProjection } | null {
   const config =
     state.suggestionD3Config ?? getProjectionD3ConfigById(state.selected);
   const method = config ? D3_PROJ_METHODS[config.projection] : undefined;
   const projection = state.suggestionD3Config
     ? buildD3ProjectionFromConfig(state.suggestionD3Config)
     : buildProjectionFromCatalogueId(state.selected);
-  if (!method || !projection || typeof projection.rotate !== 'function') {
+  return method && projection && typeof projection.rotate === 'function'
+    ? { method, projection }
+    : null;
+}
+
+function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
+  const source = resolveD3Source(state);
+  if (!source) {
     return { notes: ['no-equivalent'] };
   }
+  const { method, projection } = source;
 
   const [longitude, latitude] = state.center ?? [
     state.longitude,
@@ -167,13 +181,16 @@ function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
   }
 
   // A latitude moves the centre of an azimuthal (lat_0) and only translates a
-  // transverse aspect; anywhere else it tilts the projection.
+  // transverse aspect; anywhere else it tilts the projection. The intrinsic
+  // roll of a transverse aspect (d3 builds Cassini that way) is its aspect.
   const tilted =
     (latitude !== 0 &&
       method.aspect !== 'azimuthal' &&
       method.aspect !== 'transverse' &&
       !method.fixedOrientation) ||
-    (gamma !== 0 && method.aspect !== 'azimuthal');
+    (gamma !== 0 &&
+      method.aspect !== 'azimuthal' &&
+      method.aspect !== 'transverse');
   if (tilted) {
     notes.push('oblique');
   }
@@ -323,4 +340,117 @@ export function resolveCurrentProjectionDefinition({
   }
 
   return resolveD3Definition(state);
+}
+
+export type ProjectionForward = (
+  lonLat: [number, number]
+) => [number, number] | null;
+
+const UNGEOREFERENCEABLE_NOTES: ProjectionDefinitionNote[] = [
+  'oblique',
+  'composite',
+  'no-equivalent',
+  'globe'
+];
+
+/** Whether the definition is a CRS the map follows up to an affine map. */
+export function isGeoreferenceableDefinition(
+  definition: ProjectionDefinition
+): boolean {
+  return (
+    Boolean(definition.proj4 || definition.wkt || definition.epsg) &&
+    !definition.notes.some((note) => UNGEOREFERENCEABLE_NOTES.includes(note))
+  );
+}
+
+function finitePoint(point: unknown): [number, number] | null {
+  return Array.isArray(point) &&
+    Number.isFinite(point[0]) &&
+    Number.isFinite(point[1])
+    ? [point[0], point[1]]
+    : null;
+}
+
+// The d3 catalogue projection itself, without its screen fit. d3 does not
+// always normalise like PROJ (Robinson ×1/0.8487, stereographic ×½, Bonne
+// shifted by R·φ1): only the shape is shared, so this stands in for proj4
+// only for the methods proj4js lacks (natearth, wintri, eck4, aitoff, times).
+function createD3Forward(state: ProjectionState): ProjectionForward | null {
+  const source = resolveD3Source(state);
+  if (!source || source.method.fixedOrientation) {
+    return null;
+  }
+  const { method, projection } = source;
+  const [longitude, latitude] = state.center ?? [
+    state.longitude,
+    state.latitude
+  ];
+  projection
+    .rotate([-longitude, method.aspect === 'azimuthal' ? -latitude : 0, 0])
+    .center([0, 0])
+    .scale(SPHERE_RADIUS_METRES)
+    .translate([0, 0]);
+  if (typeof projection.angle === 'function') {
+    projection.angle(0);
+  }
+
+  return (lonLat) => {
+    const point = finitePoint(projection(lonLat));
+    return point ? [point[0], -point[1]] : null;
+  };
+}
+
+function createProj4Forward(code: string): ProjectionForward | null {
+  const build = (definition: string) =>
+    proj4(WGS84_CRS, createProj4Crs(definition));
+  let converter: ReturnType<typeof build>;
+  try {
+    converter = build(code);
+  } catch {
+    // proj4js only runs a spherical transverse Mercator with +approx; PROJ
+    // reads the string without it.
+    try {
+      converter = build(`${code} +approx`);
+    } catch {
+      return null;
+    }
+  }
+  return (lonLat) => {
+    try {
+      return finitePoint(converter.forward(lonLat));
+    } catch {
+      return null;
+    }
+  };
+}
+
+/**
+ * Coordinates, in the CRS of `resolveCurrentProjectionDefinition`, of a
+ * lon/lat point drawn on the map. Null when the map follows no CRS.
+ */
+export function createCurrentProjectionForward(
+  context: ProjectionDefinitionContext,
+  definition: ProjectionDefinition = resolveCurrentProjectionDefinition(context)
+): ProjectionForward | null {
+  if (!isGeoreferenceableDefinition(definition)) {
+    return null;
+  }
+
+  const code =
+    definition.proj4 ??
+    definition.wkt ??
+    (definition.epsg ? `EPSG:${definition.epsg}` : undefined);
+  const forward = code ? createProj4Forward(code) : null;
+  if (forward) {
+    return forward;
+  }
+
+  const { state, tiled } = context;
+  const drawnByD3 =
+    !tiled &&
+    state.overrideActive === true &&
+    state.overrideSource === 'manual' &&
+    !state.customCode &&
+    !getCompositeProjectionPresetId(state.selected);
+  return drawnByD3 ? createD3Forward(state) : null;
 }

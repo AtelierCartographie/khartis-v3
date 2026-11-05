@@ -2045,5 +2045,21 @@
   "a11y_clear_search": "Effacer la recherche",
   "a11y_open_options": "Afficher les options",
   "a11y_tool_badge_new": "Nouveauté à découvrir",
-  "a11y_tool_badge_active": "Filtre actif"
+  "a11y_tool_badge_active": "Filtre actif",
+  "download_map_georeference": "Joindre le géoréférencement (SIG)",
+  "download_map_georeference_helper": "Télécharge un .zip : la carte, son SCR et sa position, lus par QGIS et ArcGIS, et un mémo pour caler un export de mise en page.",
+  "download_map_georeference_unavailable_facets": "Indisponible pour une collection de cartes.",
+  "download_map_georeference_unavailable_crs": "Indisponible : la projection actuelle ne correspond à aucun SCR (composite, oblique ou sans équivalent PROJ).",
+  "export_georeference_failed_title": "Géoréférencement impossible",
+  "export_georeference_failed": "La carte n'a pas pu être calée sur son SCR : elle est exportée sans fichiers de géoréférencement.",
+  "georeference_readme_title": "Géoréférencement de {image}",
+  "georeference_readme_crs": "Système de coordonnées : {name}",
+  "georeference_readme_srs": "Définition : {srs}",
+  "georeference_readme_proj4": "PROJ.4 : {proj4}",
+  "georeference_readme_extent": "Cadre de la carte dans ce SCR : x de {xmin} à {xmax}, y de {ymin} à {ymax}",
+  "georeference_readme_pixel": "Taille d'un pixel de l'image : {size} unités du SCR",
+  "georeference_readme_svg_unit": "Une unité du SVG vaut {size} unités du SCR",
+  "georeference_readme_rotated": "La carte est pivotée dans le plan : le calage contient cette rotation.",
+  "georeference_readme_open_raster": "QGIS, ArcGIS : ouvrez {image}, {aux} lui donne son SCR et sa position ({world} pour les autres logiciels).",
+  "georeference_readme_layout": "Pour superposer un export de mise en page QGIS du même SCR : réglez l'emprise de l'élément carte sur le cadre ci-dessus, avec les mêmes proportions."
 }

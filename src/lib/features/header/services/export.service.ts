@@ -38,8 +38,19 @@ import {
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import {
   exportMapToJpg,
-  exportMapToSvg
+  exportMapToSvg,
+  type MapExportPlacement
 } from '$lib/features/commons/utils/map-export.utils';
+import {
+  formatGdalAuxXml,
+  formatWorldFile
+} from '$lib/features/commons/utils/georeference.utils';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import {
+  buildMapGeoreference,
+  formatGeoreferenceReadme
+} from '$lib/features/step-toolbar/tools/projections';
+import { strToU8, zipSync } from 'fflate';
 import {
   DataValidationError,
   DuckDBError
@@ -85,30 +96,106 @@ export async function exportProject(fileName: string): Promise<void> {
   await projectStore.exportProject(fileName);
 }
 
+export interface MapFileExportOptions {
+  /** Ship the image in a .zip with its CRS, position and a memo. */
+  georeference?: boolean;
+}
+
 export async function exportMapAsSvg(
   fileName: string,
   width: number = 1920,
-  height: number = 1080
+  height: number = 1080,
+  { georeference = false }: MapFileExportOptions = {}
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToSvg({ width, height });
+  let placement: MapExportPlacement | undefined;
+  const blob = await exportMapToSvg({
+    width,
+    height,
+    onMapPlacement: (value) => (placement = value)
+  });
   const filename = generateExportFilename(fileName, 'svg');
 
-  downloadFile(blob, filename);
+  await downloadMapExport(blob, filename, {
+    georeference,
+    placement,
+    raster: false
+  });
 }
 
 export async function exportMapAsJpg(
   fileName: string,
   width: number = 1920,
-  height: number = 1080
+  height: number = 1080,
+  { georeference = false }: MapFileExportOptions = {}
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToJpg({ width, height });
+  let placement: MapExportPlacement | undefined;
+  const blob = await exportMapToJpg({
+    width,
+    height,
+    onMapPlacement: (value) => (placement = value)
+  });
   const filename = generateExportFilename(fileName, 'jpg');
 
-  downloadFile(blob, filename);
+  await downloadMapExport(blob, filename, {
+    georeference,
+    placement,
+    raster: true
+  });
+}
+
+async function downloadMapExport(
+  blob: Blob,
+  filename: string,
+  {
+    georeference,
+    placement,
+    raster
+  }: {
+    georeference: boolean;
+    placement: MapExportPlacement | undefined;
+    raster: boolean;
+  }
+): Promise<void> {
+  if (!georeference) {
+    downloadFile(blob, filename);
+    return;
+  }
+
+  const result = placement ? buildMapGeoreference(placement) : null;
+  if (result?.status !== 'ok') {
+    showWarning(
+      m.export_georeference_failed_title(),
+      m.export_georeference_failed()
+    );
+    downloadFile(blob, filename);
+    return;
+  }
+
+  const { georeference: fit } = result;
+  const baseName = filename.replace(/\.[^.]+$/, '');
+  const files: Record<string, Uint8Array> = {
+    [filename]: new Uint8Array(await blob.arrayBuffer())
+  };
+  // GDAL reads the CRS and the geotransform from the .aux.xml; the world
+  // file is for the software that only reads that.
+  const aux = raster ? `${filename}.aux.xml` : undefined;
+  const world = raster ? `${baseName}.jgw` : undefined;
+  if (aux && world) {
+    files[aux] = strToU8(formatGdalAuxXml(fit.srs, fit.transform));
+    files[world] = strToU8(formatWorldFile(fit.transform));
+  }
+  files[`${baseName}.txt`] = strToU8(
+    formatGeoreferenceReadme(fit, { image: filename, aux, world })
+  );
+
+  downloadFile(
+    new Blob([zipSync(files, { level: 0 })], { type: 'application/zip' }),
+    `${baseName}.zip`
+  );
 }
 
 export async function exportData(

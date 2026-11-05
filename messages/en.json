@@ -2045,5 +2045,21 @@
   "a11y_clear_search": "Clear the search",
   "a11y_open_options": "Show options",
   "a11y_tool_badge_new": "New, not yet opened",
-  "a11y_tool_badge_active": "Filter active"
+  "a11y_tool_badge_active": "Filter active",
+  "download_map_georeference": "Include georeferencing (GIS)",
+  "download_map_georeference_helper": "Downloads a .zip: the map, its CRS and position, read by QGIS and ArcGIS, and a memo to line up a layout export.",
+  "download_map_georeference_unavailable_facets": "Not available for a collection of maps.",
+  "download_map_georeference_unavailable_crs": "Not available: the current projection matches no CRS (composite, oblique or without a PROJ equivalent).",
+  "export_georeference_failed_title": "Georeferencing failed",
+  "export_georeference_failed": "The map could not be fitted to its CRS: it is exported without georeferencing files.",
+  "georeference_readme_title": "Georeferencing of {image}",
+  "georeference_readme_crs": "Coordinate reference system: {name}",
+  "georeference_readme_srs": "Definition: {srs}",
+  "georeference_readme_proj4": "PROJ.4: {proj4}",
+  "georeference_readme_extent": "Map frame in this CRS: x from {xmin} to {xmax}, y from {ymin} to {ymax}",
+  "georeference_readme_pixel": "Image pixel size: {size} CRS units",
+  "georeference_readme_svg_unit": "One SVG unit is {size} CRS units",
+  "georeference_readme_rotated": "The map is turned in the plane: the georeferencing includes this rotation.",
+  "georeference_readme_open_raster": "QGIS, ArcGIS: open {image}, {aux} gives its CRS and position ({world} for other software).",
+  "georeference_readme_layout": "To overlay a QGIS layout export in the same CRS: set the map item extent to the frame above, with the same proportions."
 }
