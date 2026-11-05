@@ -1810,6 +1810,7 @@
   "palette_categories_list_label": "Catégories",
   "annotations_rotation": "Rotation",
   "data_quality_perf_large_dataset": "Jeu de données volumineux : {rowCount} lignes (seuil d'avertissement : {warningRows}). Le traitement peut prendre un certain temps.",
+  "data_quality_perf_dense_geometry": "Géométrie volumineuse : {vertexCount} sommets (seuil d'avertissement : {warningVertices}). L'affichage de la carte peut être lent, voire échouer faute de mémoire. Simplifier la géométrie réduit le nombre de sommets.",
   "import_error_row_limit_exceeded": "« {fileName} » contient {rowCount} lignes, au-delà de la limite de {maxRows} lignes que Khartis peut traiter. Réduisez le fichier (filtre, agrégation, échantillon) avant de l'importer.",
   "open_project_error_load_projects": "Échec du chargement des projets",
   "open_project_error_load_project": "Échec du chargement du projet",
