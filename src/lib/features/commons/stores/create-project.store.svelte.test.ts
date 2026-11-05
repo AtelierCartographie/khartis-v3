@@ -118,7 +118,6 @@ vi.mock('$lib/paraglide/messages', () => ({
     size: string;
     max: string;
   }) => `too-large:${size}:${max}`,
-  error_shapefile_read_failed_message: () => 'shapefile-read-failed',
   error_pasted_data_invalid_message: () => 'pasted-invalid',
   dataset_pasted_name: () => 'pasted',
   error_url_required: () => 'url-required',

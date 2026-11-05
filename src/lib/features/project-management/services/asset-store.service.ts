@@ -157,21 +157,6 @@ export async function persistAssetBlob(
   return ref;
 }
 
-export async function persistAssetContent(
-  content: string | ArrayBuffer,
-  params: Omit<AssetRef, 'assetId'>
-): Promise<AssetRef> {
-  const blob = new Blob([content], { type: params.mimeType });
-
-  const ref: AssetRef = {
-    ...params,
-    assetId: crypto.randomUUID(),
-    size: blob.size
-  };
-
-  return persistAssetBlob(blob, ref);
-}
-
 export async function persistAssetBytes(
   bytes: Uint8Array,
   ref: AssetRef
@@ -206,20 +191,6 @@ function findCompanionFiles(file: UploadedFile): File[] {
 
   return file.relatedFileObjects.filter(
     (candidate) => candidate.name.toLowerCase() !== mainFileName
-  );
-}
-
-function buildCompanionContentEntries(
-  file: UploadedFile
-): Array<[string, ArrayBuffer]> {
-  if (!file.relatedFilesData) {
-    return [];
-  }
-
-  const mainFileName = file.name.toLowerCase();
-
-  return Object.entries(file.relatedFilesData).filter(
-    ([name]) => name.toLowerCase() !== mainFileName
   );
 }
 
@@ -273,13 +244,6 @@ export async function ensureUploadedFileAssets(
         'primary',
         preparedFile.name
       );
-    } else if (preparedFile.content) {
-      preparedFile.assetRef = await persistAssetContent(preparedFile.content, {
-        originalName: preparedFile.name,
-        mimeType: preparedFile.type || 'application/octet-stream',
-        size: preparedFile.size,
-        kind: 'primary'
-      });
     }
   }
 
@@ -292,7 +256,7 @@ export async function ensureUploadedFileAssets(
           )
         )
       ).every(Boolean)) ||
-    (!preparedFile.relatedFileObjects && !preparedFile.relatedFilesData)
+    !preparedFile.relatedFileObjects
   ) {
     return preparedFile;
   }
@@ -307,25 +271,6 @@ export async function ensureUploadedFileAssets(
         await createAssetRefFromFile(companion, 'companion')
       );
     }
-
-    return preparedFile;
-  }
-
-  const companionEntries = buildCompanionContentEntries(preparedFile);
-  if (companionEntries.length === 0) {
-    return preparedFile;
-  }
-
-  preparedFile.companionAssetRefs = [];
-  for (const [name, buffer] of companionEntries) {
-    preparedFile.companionAssetRefs.push(
-      await persistAssetContent(buffer, {
-        originalName: name,
-        mimeType: 'application/octet-stream',
-        size: buffer.byteLength,
-        kind: 'companion'
-      })
-    );
   }
 
   return preparedFile;
