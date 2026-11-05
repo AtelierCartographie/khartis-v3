@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import { extractDataFromPaste } from './file-import.utils';
+import {
+  chunksContainPattern,
+  extractDataFromPaste
+} from './file-import.utils';
 
 describe('file import utils', () => {
   it('preserves an empty final pasted cell instead of dropping the last delimiter', () => {
@@ -26,5 +29,23 @@ describe('file import utils', () => {
       fileType: FileType.CSV,
       content: 'Pays,Num\nFrance,10000\nSuisse,'
     });
+  });
+
+  it('should find a pattern when it straddles two chunks', async () => {
+    const found = await chunksContainPattern(
+      ['<Placemark><Exten', 'dedData><Data name="pop">'],
+      /<ExtendedData\b/
+    );
+
+    expect(found).toBe(true);
+  });
+
+  it('should not find a pattern absent from every chunk', async () => {
+    const found = await chunksContainPattern(
+      ['<Placemark><Name>a</Name>', '</Placemark>'],
+      /<ExtendedData\b/
+    );
+
+    expect(found).toBe(false);
   });
 });

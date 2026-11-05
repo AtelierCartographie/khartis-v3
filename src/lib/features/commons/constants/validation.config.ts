@@ -10,6 +10,8 @@ interface StorageLimits {
   maxFileCount: number;
 }
 
+// Sources reach DuckDB as file handles, so these bound DuckDB WASM memory, not
+// the JS heap. Geometry formats are bounded by vertex count rather than bytes.
 export const FILE_SIZE_LIMITS: Record<FileType, number> = {
   [FileType.CSV]: 400 * 1024 * 1024,
   [FileType.TSV]: 400 * 1024 * 1024,
