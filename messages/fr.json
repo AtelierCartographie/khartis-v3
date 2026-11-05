@@ -1154,6 +1154,8 @@
   "column_warning_label": "Alerte qualité des données",
   "column_origin_label": "Colonne jointe depuis « {file} »",
   "table_joined_entity_column": "Entité du fond",
+  "viz_basemap_entity_name_fr": "Entité du fond (français)",
+  "viz_basemap_entity_name_en": "Entité du fond (anglais)",
   "column_menu_options": "Options pour la colonne {column}",
   "column_type_badge_label": "{column} – {type}",
   "column_type_numeric_tooltip": "Colonne numérique (entiers ou décimaux)",

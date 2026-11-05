@@ -1973,8 +1973,16 @@ const FALLBACK_DISPLAY_VARIANTS: Record<'fr' | 'en', string[]> = {
   en: ['name_engl', 'name_fren']
 };
 
-function getBasemapDisplayVariants(basemap: BasemapMetadata): string[] {
-  const locale = getLocale() === 'fr' ? 'fr' : 'en';
+type DisplayLocale = 'fr' | 'en';
+
+function getInterfaceDisplayLocale(): DisplayLocale {
+  return getLocale() === 'fr' ? 'fr' : 'en';
+}
+
+function getBasemapDisplayVariants(
+  basemap: BasemapMetadata,
+  locale: DisplayLocale = getInterfaceDisplayLocale()
+): string[] {
   const configured =
     locale === 'fr'
       ? [basemap.display_id_fr, basemap.display_id_en]
@@ -2106,8 +2114,8 @@ async function applyCachedJoinAssociation(
   basemapId: string,
   cacheTableName: string,
   Duck: DuckDBClientForJoin,
-  excludedValues: string[] = [],
-  displayVariants: string[] = []
+  excludedValues: string[],
+  basemap: BasemapMetadata
 ): Promise<void> {
   const escapedDatasetTable = escapeIdentifier(datasetTableName);
   const escapedGeoColumn = escapeIdentifier(geoColumn);
@@ -2124,10 +2132,16 @@ async function applyCachedJoinAssociation(
           .join(', ')})`
       : '';
 
+  const interfaceNamesAlias =
+    getInterfaceDisplayLocale() === 'fr' ? 'd_fr' : 'd_en';
+
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
-    WITH display_names AS (
-      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, displayVariants)}
+    WITH display_names_fr AS (
+      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, getBasemapDisplayVariants(basemap, 'fr'))}
+    ),
+    display_names_en AS (
+      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, getBasemapDisplayVariants(basemap, 'en'))}
     ),
     all_basemap_matches AS (
       SELECT
@@ -2170,12 +2184,16 @@ async function applyCachedJoinAssociation(
       j.id AS "${JOINED_BASEMAP_COLUMN.ID}",
       j.label AS "${JOINED_BASEMAP_COLUMN.LABEL}",
       j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}",
-      COALESCE(d.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME}"
+      COALESCE(${interfaceNamesAlias}.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME}",
+      COALESCE(d_fr.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME_FR}",
+      COALESCE(d_en.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME_EN}"
     FROM "${escapedDatasetTable}" t
     LEFT JOIN ranked_join j
       ON t."${escapedGeoColumn}" = j.geoname
-    LEFT JOIN display_names d
-      ON d.id = j.id
+    LEFT JOIN display_names_fr d_fr
+      ON d_fr.id = j.id
+    LEFT JOIN display_names_en d_en
+      ON d_en.id = j.id
   `);
 }
 
@@ -2235,7 +2253,7 @@ export async function finalizeJoin(
     cacheTableName,
     Duck,
     options.excludedValues ?? [],
-    getBasemapDisplayVariants(basemap)
+    basemap
   );
 
   perfMeasure(PERF_PHASE.JOIN_FINALIZE);
