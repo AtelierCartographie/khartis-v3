@@ -1942,7 +1942,6 @@
   "history_column_type_changed": "Type changed ({newType}) on {columnName}",
   "history_column_deleted": "Column deleted: {columnName}",
   "discretization_classes_suffix": "classes",
-  "ellipsis_indicator": "…",
   "toolbar_tabs_scroll_left": "Scroll tabs left",
   "toolbar_tabs_scroll_right": "Scroll tabs right",
   "toolbar_tab_ellipsis": "...",
