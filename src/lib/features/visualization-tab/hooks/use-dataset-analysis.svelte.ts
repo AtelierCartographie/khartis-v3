@@ -6,17 +6,25 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   COLUMN_TYPE_GEOMETRY,
-  GEO_COLUMN_TYPE
+  GEO_COLUMN_TYPE,
+  JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { filterVisualizableDataColumns } from '$lib/features/commons/utils/visualization-columns.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import * as m from '$lib/paraglide/messages';
 
 export interface DataFieldItem {
   id: number;
   text: string;
   type?: string;
   stats?: { uniques?: number };
+}
+
+/** A label field shows `label` in its picker and maps to the column `text`. */
+export interface LabelFieldItem extends DataFieldItem {
+  label?: string;
 }
 
 const NUMERIC_DATA_FIELD_TYPES = new Set(['number', 'numeric']);
@@ -47,6 +55,8 @@ export interface DatasetAnalysis {
     typeof datasetsStore.datasets.find
   > | null;
   readonly dataFieldItems: DataFieldItem[];
+  /** Names of the joined basemap entities, offered as map labels only. */
+  readonly basemapLabelFieldItems: LabelFieldItem[];
   readonly hasGeometry: boolean;
   readonly availablePrimitiveFilters: PrimitiveFilter[];
   readonly showsSymbolsConfig: boolean;
@@ -79,6 +89,47 @@ export function useDatasetAnalysis(
       type: col.type,
       stats: col.stats ? { uniques: col.stats.uniques } : undefined
     }));
+  });
+
+  const basemapLabelFieldItems = $derived.by((): LabelFieldItem[] => {
+    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
+    const duckDataset = dataset?.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+    if (!duckDataset?.hasJoinKey || !duckDataset.joinedBasemap) return [];
+
+    const basemap = basemapCatalogService.getBasemapById(
+      duckDataset.joinedBasemap
+    );
+    const firstId = dataFieldItems.length;
+    const isBilingual =
+      !!basemap?.display_id_fr &&
+      !!basemap.display_id_en &&
+      basemap.display_id_fr !== basemap.display_id_en;
+    if (!isBilingual) {
+      return [
+        {
+          id: firstId,
+          text: JOINED_BASEMAP_COLUMN.NAME_FR,
+          type: 'string',
+          label: m.table_joined_entity_column()
+        }
+      ];
+    }
+    return [
+      {
+        id: firstId,
+        text: JOINED_BASEMAP_COLUMN.NAME_FR,
+        type: 'string',
+        label: m.viz_basemap_entity_name_fr()
+      },
+      {
+        id: firstId + 1,
+        text: JOINED_BASEMAP_COLUMN.NAME_EN,
+        type: 'string',
+        label: m.viz_basemap_entity_name_en()
+      }
+    ];
   });
 
   const hasGeometry = $derived.by(() => {
@@ -142,6 +193,9 @@ export function useDatasetAnalysis(
     },
     get dataFieldItems() {
       return dataFieldItems;
+    },
+    get basemapLabelFieldItems() {
+      return basemapLabelFieldItems;
     },
     get hasGeometry() {
       return hasGeometry;

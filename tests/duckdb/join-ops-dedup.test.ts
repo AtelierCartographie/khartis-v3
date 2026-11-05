@@ -307,6 +307,47 @@ describe('exact_claimed_ids deduplication', () => {
     ]);
   });
 
+  it('should name the joined entity in both languages whatever the interface locale', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('LY_01', 'Lyons', 'name_engl', 'lyons', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_bilingual (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_bilingual VALUES ('69123'), ('22222')`);
+
+    const Duck = makeDuckClient(db);
+    await finalizeJoin(
+      makeDataset('user_bilingual', [
+        { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+      ] as DuckDBDataset['columns']),
+      {
+        ...FAKE_BASEMAP_METADATA,
+        display_id_fr: 'nom',
+        display_id_en: 'name_engl'
+      },
+      'geo',
+      Duck
+    );
+
+    const joined = (await Duck.query(
+      `SELECT geo,
+         "${JOINED_BASEMAP_COLUMN.NAME_FR}" AS fr,
+         "${JOINED_BASEMAP_COLUMN.NAME_EN}" AS en
+       FROM user_bilingual ORDER BY geo`,
+      { format: 'array' }
+    )) as Array<{ geo: string; fr: string | null; en: string | null }>;
+    // Saint-Colombe-sur-Rhône has no English name: the French one stands in.
+    expect(joined).toEqual([
+      {
+        geo: '22222',
+        fr: 'Saint-Colombe-sur-Rhône',
+        en: 'Saint-Colombe-sur-Rhône'
+      },
+      { geo: '69123', fr: 'Lyon', en: 'Lyons' }
+    ]);
+  });
+
   it('disables fuzzy suggestions when the source column holds numeric codes', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_codes (geo VARCHAR)`);
     await run(
