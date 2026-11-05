@@ -5,6 +5,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { isOutOfMemoryError } from '../utils/duckdb-error.utils';
 
 // The repair grid is a fraction of the average perimeter, so it holds whether
 // the coverage is in degrees or in metres. 1e-6 re-nodes what GEOS rejects while
@@ -45,18 +46,24 @@ async function createEmptyGeometryTable(
   duck.invalidateTableCache?.(tableName);
 }
 
+type DerivationOutcome = 'built' | 'failed' | 'out-of-memory';
+
+// WASM memory never shrinks, and a second query that exhausts it leaves the
+// heap unable to serve the next large allocation: the territory then fails to
+// stream. Only a topology failure is worth another attempt.
 async function createDerivedTable(
   duck: DuckDBClientForDerivedGeometry,
   targetTable: string,
   candidateSelects: string[]
-): Promise<void> {
+): Promise<DerivationOutcome> {
   let lastError: unknown;
   for (const select of candidateSelects) {
     try {
       await runDerivedTableQuery(duck, targetTable, select);
-      return;
+      return 'built';
     } catch (error) {
       lastError = error;
+      if (isOutOfMemoryError(error)) break;
       logger.warn(
         `Retrying the derivation of ${targetTable}`,
         LogCategory.DUCKDB,
@@ -71,6 +78,7 @@ async function createDerivedTable(
     lastError
   );
   await createEmptyGeometryTable(duck, targetTable);
+  return isOutOfMemoryError(lastError) ? 'out-of-memory' : 'failed';
 }
 
 async function isValidPolygonCoverage(
@@ -150,7 +158,8 @@ function buildLineSelect(macroCall: string): string {
  * Builds the territory / outer contour / shared borders siblings of a polygon
  * coverage. A valid coverage is derived from its shared vertices, without any
  * overlay; any other coverage, or a failure of that path, goes through the
- * GEOS dissolve, re-noded on a second attempt.
+ * GEOS dissolve, re-noded on a second attempt. Running out of memory ends the
+ * derivation: the remaining tables are left empty.
  */
 export async function rebuildDerivedGeometryTables(
   duck: DuckDBClientForDerivedGeometry,
@@ -171,7 +180,7 @@ export async function rebuildDerivedGeometryTables(
       buildMacroCall(`noding_factor := ${nodingFactor}`)
     );
 
-  await createDerivedTable(duck, landTable, [
+  const landOutcome = await createDerivedTable(duck, landTable, [
     ...(coverageIsValid
       ? [landSelect(`extract_coverage_land('${escapedSource}')`)]
       : []),
@@ -181,20 +190,36 @@ export async function rebuildDerivedGeometryTables(
   ]);
   if (!isCurrent()) return;
 
+  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
+  if (landOutcome === 'out-of-memory') {
+    await createEmptyGeometryTable(
+      duck,
+      getDerivedOuterlinesTableName(sourceTable)
+    );
+    await createEmptyGeometryTable(duck, innerlinesTable);
+    return;
+  }
+
   const escapedLand = escapeSqlString(landTable);
-  await createDerivedTable(duck, getDerivedOuterlinesTableName(sourceTable), [
-    ...(coverageIsValid
-      ? [buildLineSelect(`extract_coverage_outerlines('${escapedLand}')`)]
-      : []),
-    ...withNodingRetry((noding) =>
-      buildLineSelect(`extract_outerlines('${escapedLand}', ${noding})`)
-    )
-  ]);
+  const outerlinesOutcome = await createDerivedTable(
+    duck,
+    getDerivedOuterlinesTableName(sourceTable),
+    [
+      ...(coverageIsValid
+        ? [buildLineSelect(`extract_coverage_outerlines('${escapedLand}')`)]
+        : []),
+      ...withNodingRetry((noding) =>
+        buildLineSelect(`extract_outerlines('${escapedLand}', ${noding})`)
+      )
+    ]
+  );
 
   if (!isCurrent()) return;
 
-  const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
-  if (await isMeshTooFineForInnerLimits(duck, sourceTable)) {
+  if (
+    outerlinesOutcome === 'out-of-memory' ||
+    (await isMeshTooFineForInnerLimits(duck, sourceTable))
+  ) {
     await createEmptyGeometryTable(duck, innerlinesTable);
     return;
   }

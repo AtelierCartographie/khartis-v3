@@ -132,6 +132,10 @@ représentatifs.
   mètres). Si cela échoue encore, la table est créée **vide** : la couche
   disparaît sans casser le fond. `ST_MakeValid` ne corrige pas ce cas, qui est
   un problème de nodage.
+- **Un manque de mémoire n'est jamais retenté** et arrête la dérivation : les
+  tables restantes sont créées vides. La mémoire WASM ne rétrécit pas, et après
+  un second échec de ce type le tas ne sert plus les grosses allocations : le
+  territoire déjà calculé ne se streame plus.
 
 ## Colonnes géographiques
 

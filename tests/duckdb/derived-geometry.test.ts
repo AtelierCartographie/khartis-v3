@@ -15,7 +15,10 @@ type DuckMock = Parameters<typeof rebuildDerivedGeometryTables>[0];
 
 function createDuck(
   shouldFail: (sql: string) => boolean = () => false,
-  { validCoverage = false }: { validCoverage?: boolean } = {}
+  {
+    validCoverage = false,
+    failure = 'TopologyException: found non-noded intersection'
+  }: { validCoverage?: boolean; failure?: string } = {}
 ): {
   duck: DuckMock;
   queries: string[];
@@ -25,7 +28,7 @@ function createDuck(
     query: vi.fn(async (sql: string) => {
       queries.push(sql);
       if (shouldFail(sql)) {
-        throw new Error('TopologyException: found non-noded intersection');
+        throw new Error(failure);
       }
       if (sql.includes('is_valid_polygon_coverage(')) {
         return [{ is_valid: validCoverage }];
@@ -115,6 +118,21 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(emptyTableQuery).toContain(
       'CREATE OR REPLACE TABLE "regions__innerlines"'
     );
+  });
+
+  it('neither retries nor goes on once a derivation runs out of memory', async () => {
+    const { duck, queries } = createDuck(
+      (sql) => sql.includes('extract_land('),
+      { failure: 'Out of Memory Error: Allocation failure' }
+    );
+
+    await rebuildDerivedGeometryTables(duck, 'regions');
+
+    expect(findQueries(queries, 'extract_land(')).toHaveLength(1);
+    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(0);
+    const emptyTables = queries.filter((sql) => sql.includes('WHERE FALSE'));
+    expect(emptyTables).toHaveLength(3);
   });
 });
 
