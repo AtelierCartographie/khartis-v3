@@ -61,6 +61,7 @@
   } from '../types';
   import {
     arePageInsetsEqual,
+    arePageInsetsWithin,
     DEFAULT_PAGE_COLOR,
     formatActions,
     getFormatLayoutSizingContext,
@@ -1565,7 +1566,10 @@
       if (isBaseViewChanged) {
         mapInstanceStore.setOrthographicBaseView(zoom, centerRatio);
       }
-      if (!arePageInsetsEqual(frame, fmtState.mapFrame)) {
+      // The reference is refitted to the frame's canvas and is not a plain
+      // rescale of the previous one, so the fitted frame can flip by a pixel
+      // with each refit and never settle: a pixel off is kept.
+      if (!arePageInsetsWithin(frame, fmtState.mapFrame, 1)) {
         // The resized frame refits the map, on the new base view.
         formatActions.fitMapFrame(frame);
       } else if (isBaseViewChanged) {
