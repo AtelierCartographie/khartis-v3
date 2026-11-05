@@ -112,7 +112,10 @@ tables sœurs :
 
 Sur une couverture valide, `extract_coverage_land` et
 `extract_coverage_innerlines` évitent la dissolution. Le contour ne dissout
-jamais rien : le territoire est déjà une union valide, son bord suffit.
+jamais rien : le territoire est déjà une union valide, son bord suffit. Hors
+couverture valide, les limites internes sont les arêtes du nodage de tous les
+contours qui ne portent pas un segment du bord du territoire : une jointure
+exacte en SQL, sans superposition GEOS entre deux géométries géantes.
 
 Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
 arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
