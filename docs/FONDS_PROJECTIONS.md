@@ -121,6 +121,12 @@ celle du territoire) n'ont pas de limites internes : leurs contours se
 croisent sans rien séparer, signe d'un fichier qui n'est pas une partition. Les
 couvertures réelles imparfaites restent loin du seuil (1,0007 pour les ZEE).
 
+Chaque table dérivée tient une ligne par partie (polygone du territoire, ligne
+de contour ou de limite) : une géométrie unique demanderait au tas WASM un bloc
+contigu de toute sa taille au moment du stream. L'export SVG rassemble les
+parties du territoire en un seul tracé composé, comme il fusionne déjà les
+lignes consécutives de même style.
+
 Pour un jeu qui porte sa propre géométrie, la dérivation tourne **en
 arrière-plan** (`runTableBuildInBackground`), après 500 ms d'inactivité de la
 connexion, puis les `__centroids` par lots : la création du projet ouvre

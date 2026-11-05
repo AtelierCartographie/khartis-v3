@@ -184,17 +184,23 @@ async function runDerivedTableQuery(
   duck.invalidateTableCache?.(targetTable);
 }
 
+// One row per part: a territory or a set of limits held in a single geometry
+// asks the WASM heap for one contiguous block of its whole size (82 MB for
+// 60k circles) when it is streamed, against a few hundred KB per part.
 function buildLineSelect(macroCall: string): string {
   return `
     WITH extracted AS (
       SELECT ST_CollectionExtract(geom, 2) AS geom
       FROM ${macroCall}
       WHERE geom IS NOT NULL
+    ),
+    parts AS (
+      SELECT UNNEST(ST_Dump(geom)).geom AS geom
+      FROM extracted
     )
     SELECT geom
-    FROM extracted
+    FROM parts
     WHERE NOT ST_IsEmpty(geom)
-      AND CAST(ST_GeometryType(geom) AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
   `;
 }
 
@@ -220,7 +226,7 @@ export async function rebuildDerivedGeometryTables(
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
   if (!isCurrent()) return;
   const landSelect = (macroCall: string) => `
-    SELECT geom
+    SELECT UNNEST(ST_Dump(geom)).geom AS geom
     FROM ${macroCall}
     WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
   `;
