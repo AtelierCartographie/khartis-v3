@@ -15,6 +15,8 @@ export interface GeoPackageFeatureRow {
 export interface GeoPackageExportOptions {
   layerName: string;
   sourceCrs: string | null;
+  /** A CRS without EPSG code, described by its WKT. */
+  customSrs?: { name: string; definition: string };
 }
 
 export interface GeoPackageLayerExportOptions extends GeoPackageExportOptions {
@@ -148,7 +150,13 @@ function createPropertyColumnMappings(
   }));
 }
 
-function resolveSrs(sourceCrs: string | null): {
+// First id of the user-defined range: EPSG codes stay below it.
+const CUSTOM_SRS_ID = 100000;
+
+function resolveSrs(
+  sourceCrs: string | null,
+  customSrs?: { name: string; definition: string }
+): {
   srsName: string;
   srsId: number;
   organization: string;
@@ -156,6 +164,17 @@ function resolveSrs(sourceCrs: string | null): {
   definition: string;
   description: string;
 } {
+  if (customSrs) {
+    return {
+      srsName: customSrs.name,
+      srsId: CUSTOM_SRS_ID,
+      organization: 'NONE',
+      organizationCoordsysId: CUSTOM_SRS_ID,
+      definition: customSrs.definition,
+      description: customSrs.name
+    };
+  }
+
   const epsgCode = sourceCrs?.match(/^EPSG:(\d+)$/i)?.[1];
   if (epsgCode) {
     const srsId = Number(epsgCode);
@@ -461,7 +480,7 @@ export async function exportGeoPackageLayers(
     return {
       layerName,
       propertyColumnMappings: createPropertyColumnMappings(propertyColumns),
-      srs: resolveSrs(layer.sourceCrs),
+      srs: resolveSrs(layer.sourceCrs, layer.customSrs),
       geometryType: resolveLayerGeometryType(layer.features),
       features: layer.features
     };

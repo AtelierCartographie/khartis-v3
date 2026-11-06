@@ -35,7 +35,8 @@ import {
   projectionStore as mapRenderProjectionStore
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
-import { getNativeCrsEpsg } from './native-projection.utils';
+import { getNativeCrs, getNativeCrsEpsg } from './native-projection.utils';
+import { diagnoseProjectionCode } from './projection-code.utils';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -68,6 +69,7 @@ type ProjectionActions = {
   suggestProjectionForCurrentData: () => Promise<void>;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
   applyBasemapPreferredProjection: () => void;
+  resetToBasemapProjection: () => void;
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
@@ -133,6 +135,26 @@ export function getProjectionAvailabilityContext() {
       : mapRenderProjectionStore.referenceBbox,
     projectionPresets: basemapService.projectionPresets
   });
+}
+
+// The lon/lat extent the map is fitted to, approximated as the render path
+// does: the reference geometry when it is still in lon/lat, then the WGS84
+// bounds of the selected dataset, then the basemap's curated bbox.
+export function getProjectionCodeCoverageBbox():
+  [number, number, number, number] | null {
+  if (
+    !mapRenderProjectionStore.isProjectedCoordinates &&
+    mapRenderProjectionStore.referenceBbox
+  ) {
+    return mapRenderProjectionStore.referenceBbox;
+  }
+
+  const geometry = datasetsStore.selectedDataset?.geometry;
+  if (geometry?.bounds && canUseBoundsForProjectionSuggestion(geometry.crs)) {
+    return geometry.bounds;
+  }
+
+  return basemapService.currentMetadata?.bbox ?? null;
 }
 
 type SuggestionBounds =
@@ -222,6 +244,13 @@ const { actions, getState } = createToolStore<
         const projTo = basemapService.currentMetadata?.proj_to;
         if (projTo?.type === 'simple' && projTo.proj4) {
           s.customCode = projTo.proj4;
+        } else {
+          // A file drawn in its own CRS: the settings orient that CRS.
+          const nativeCode = getNativeCrsCode();
+          if (nativeCode) {
+            s.customCode = nativeCode.code;
+            s.selected = nativeCode.projectionId;
+          }
         }
       }
       s.activeSuggestionId = undefined;
@@ -300,6 +329,13 @@ const { actions, getState } = createToolStore<
     return {
       setSelected,
       applyBasemapPreferredProjection,
+      // Drops every manual choice (catalogue, suggestion, code, settings):
+      // the basemap draws in its own projection again, a catalogue preset
+      // or the CRS an imported file is projected in.
+      resetToBasemapProjection: () => {
+        clearSelectedInternal(true);
+        applyBasemapPreferredProjection();
+      },
       toggleSelected: (projectionId: string) => {
         if (s.overrideActive && !s.customCode && s.selected === projectionId) {
           clearSelectedInternal(true);
@@ -341,8 +377,10 @@ const { actions, getState } = createToolStore<
         if (
           s.overrideSource === 'manual' &&
           s.customCode &&
-          s.customCode === basemapService.currentMetadata?.proj_to?.proj4
+          (s.customCode === basemapService.currentMetadata?.proj_to?.proj4 ||
+            s.customCode === getNativeCrsCode()?.code)
         ) {
+          s.selected = DEFAULT_PROJECTION;
           s.customCode = undefined;
           s.overrideActive = false;
           s.overrideSource = undefined;
@@ -457,3 +495,30 @@ const { actions, getState } = createToolStore<
 
 export const projectionActions = actions;
 export const getProjectionState = getState;
+
+// The CRS the orientation settings act on: the applied code, or the basemap's
+// own proj4 projection, which the first setting change captures as a code.
+export function getOrientableCrsCode(): string | undefined {
+  const state = getState();
+  if (state.customCode) {
+    return state.customCode;
+  }
+  if (state.overrideActive) {
+    return undefined;
+  }
+  const projTo = basemapService.currentMetadata?.proj_to;
+  return projTo?.type === 'simple' && projTo.proj4
+    ? projTo.proj4
+    : getNativeCrsCode()?.code;
+}
+
+// The CRS of a file drawn as is, in the form a pasted code is applied (an
+// EPSG code read from the PROJ database becomes its PROJJSON).
+function getNativeCrsCode():
+  { code: string; projectionId: string } | undefined {
+  const nativeCrs = getNativeCrs(basemapService.currentBasemap?.metadata);
+  const diagnosis = nativeCrs ? diagnoseProjectionCode(nativeCrs) : undefined;
+  return diagnosis?.status === 'valid'
+    ? { code: diagnosis.normalizedCode, projectionId: diagnosis.projectionId }
+    : undefined;
+}

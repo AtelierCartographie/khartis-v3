@@ -1,3 +1,4 @@
+import * as crsOps from './crs-ops';
 import {
   DataValidationError,
   DuckDBError
@@ -1056,6 +1057,33 @@ export const duckDBOrchestrator = {
 
     return gpsOps.getGPSArrowTable(dataset, Duck, (tn) =>
       duckDBOrchestrator.getArrowTableDirect(tn)
+    );
+  },
+
+  /** Name and PROJJSON of a CRS code from the bundled PROJ database. */
+  async lookupCoordinateSystem(
+    code: string
+  ): Promise<crsOps.CoordinateSystemEntry | null> {
+    await ensureInitialized();
+    if (!Duck?.db) throw new DuckDBError(m.error_duckdb_not_initialized());
+    const duck = Duck;
+    const db = Duck.db;
+    return crsOps.lookupCoordinateSystem(
+      {
+        run: (sql) =>
+          duck.query(sql, { format: 'array' }) as Promise<
+            Array<Record<string, unknown>>
+          >,
+        exec: async (sql) => {
+          await duck.query(sql, { format: 'arrow-ipc' });
+        },
+        scratchFile: (crs) =>
+          `khartis-crs-${crs.replace(/[^A-Za-z0-9]/g, '-')}.parquet`,
+        removeFile: async (path) => {
+          await db.dropFile(path);
+        }
+      },
+      code
     );
   },
 

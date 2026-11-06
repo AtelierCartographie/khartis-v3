@@ -35,6 +35,26 @@ interface ExportOptions {
   height: number;
 }
 
+/**
+ * Where the single map lands in the exported image: an export pixel is
+ * `offset + scale × map viewport pixel` (the logical pixels of
+ * `projectDataToViewportPx` and `map.project`). Absent for a collection of
+ * maps.
+ */
+export interface MapExportPlacement {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+export interface MapExportRequest extends Partial<ExportOptions> {
+  onMapPlacement?: (placement: MapExportPlacement) => void;
+  /** SVG: add the map frame as an empty rectangle layer, to line up exports. */
+  georeferenceFrame?: boolean;
+}
+
 interface RelativeRect {
   x: number;
   y: number;
@@ -3719,6 +3739,59 @@ function buildVisualizationLayer(
   );
 }
 
+// `imageScale` maps page pixels to image pixels: the JPG renders the page
+// unscaled (offsetWidth) at its pixel ratio, the SVG keeps the page's
+// on-screen box as its user units.
+function resolveMapPlacement(
+  pageContainer: HTMLElement,
+  imageScale: number,
+  imageOffset: [number, number],
+  pageUnits: 'unscaled' | 'on-screen'
+): MapExportPlacement | null {
+  if (pageContainer.matches('.facets-page')) {
+    return null;
+  }
+  const canvas = resolveMapCanvas(pageContainer);
+  if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) {
+    return null;
+  }
+
+  const rect = getRelativeRect(canvas, pageContainer);
+  const pageScale =
+    pageUnits === 'unscaled' && pageContainer.offsetWidth > 0
+      ? pageContainer.getBoundingClientRect().width / pageContainer.offsetWidth
+      : 1;
+  const viewportToPage = rect.width / pageScale / canvas.clientWidth;
+
+  return {
+    scale: imageScale * viewportToPage,
+    offsetX: imageOffset[0] + imageScale * (rect.x / pageScale),
+    offsetY: imageOffset[1] + imageScale * (rect.y / pageScale),
+    viewportWidth: canvas.clientWidth,
+    viewportHeight: canvas.clientHeight
+  };
+}
+
+// An empty rectangle on the map frame: the same frame, exported from QGIS
+// out of the georeferencing GeoPackage, lines up on it in a drawing tool.
+function buildGeoreferenceFrameLayer(placement: MapExportPlacement): string {
+  return buildTopLevelLayer(
+    m.svg_export_layer_georeference_frame(),
+    `
+      <rect
+        id="khartis-georeference-frame"
+        x="${roundSvgValue(placement.offsetX)}"
+        y="${roundSvgValue(placement.offsetY)}"
+        width="${roundSvgValue(placement.viewportWidth)}"
+        height="${roundSvgValue(placement.viewportHeight)}"
+        fill="none"
+        stroke="none"
+      />
+    `,
+    createSvgIdDeduper()
+  );
+}
+
 function resolveMapCanvas(
   pageContainer: HTMLElement
 ): HTMLCanvasElement | null {
@@ -3906,7 +3979,7 @@ async function withPreparedMapExport<T>(
 }
 
 export async function exportMapToSvg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   await fontAssetsStore.ensureLoaded();
@@ -3939,15 +4012,32 @@ export async function exportMapToSvg(
       { mapLibreBackgroundDataUrl },
       pageGeometry
     );
+    // The SVG draws deck geometry at its on-screen box plus viewport pixels
+    // (`projectPosition`): placement follows the same convention.
+    const placement =
+      opts.onMapPlacement || opts.georeferenceFrame
+        ? resolveMapPlacement(pageContainer, 1, [0, 0], 'on-screen')
+        : null;
+    if (placement) {
+      opts.onMapPlacement?.({ ...placement, scale: 1 });
+    }
+    const frameLayer =
+      opts.georeferenceFrame && placement
+        ? buildGeoreferenceFrameLayer(placement)
+        : '';
 
-    return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+    const svg = frameLayer
+      ? markup.replace(/<\/svg>\s*$/, `${frameLayer}</svg>`)
+      : markup;
+    return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   });
 }
 
 export async function exportMapToJpg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+  let placement = null as MapExportPlacement | null;
   await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
@@ -3963,6 +4053,9 @@ export async function exportMapToJpg(
       const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
       await prerenderWebgl(pagePixelRatio);
       await freezeCanvases();
+      placement = opts.onMapPlacement
+        ? resolveMapPlacement(pageContainer, pagePixelRatio, [0, 0], 'unscaled')
+        : null;
 
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
@@ -3987,11 +4080,16 @@ export async function exportMapToJpg(
   ctx.fillRect(0, 0, opts.width, opts.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(
-    pageCanvas,
-    Math.round((opts.width - pageCanvas.width) / 2),
-    Math.round((opts.height - pageCanvas.height) / 2)
-  );
+  const drawX = Math.round((opts.width - pageCanvas.width) / 2);
+  const drawY = Math.round((opts.height - pageCanvas.height) / 2);
+  ctx.drawImage(pageCanvas, drawX, drawY);
+  if (placement) {
+    opts.onMapPlacement?.({
+      ...placement,
+      offsetX: placement.offsetX + drawX,
+      offsetY: placement.offsetY + drawY
+    });
+  }
 
   return offscreen.convertToBlob({
     type: 'image/jpeg',

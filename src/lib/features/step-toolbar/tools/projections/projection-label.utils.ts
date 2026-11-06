@@ -1,10 +1,18 @@
 import { getProjectionById } from '$lib/features/commons/utils/projection.utils';
+import { getKnownEpsgName } from '$lib/features/commons/utils/proj4-crs.utils';
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionFilterId } from '$lib/features/commons/types/global';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
-import { inferProjectionIdFromCode } from './projection-code.utils';
+import {
+  describeProjectionCode,
+  inferProjectionIdFromCode,
+  type ProjectionCodeCrs,
+  wrapLongitude
+} from './projection-code.utils';
+import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { findNativeSuggestion } from './native-projection.utils';
 import {
   getCatalogueProjectionIdForD3Config,
@@ -107,6 +115,8 @@ export interface BasemapProjectionSource {
   type?: string;
   preset?: string | null;
   proj4?: string | null;
+  /** CRS the file is drawn in as is: an EPSG code or a PROJJSON. */
+  nativeCrs?: string;
   nativeEpsg?: string;
 }
 
@@ -155,7 +165,7 @@ export function resolveCurrentProjectionDisplay(
   }
 
   if (state.customCode) {
-    return resolveProjectionCodeDisplay(state.customCode);
+    return resolveUserCodeDisplay(state);
   }
 
   const presetId = getCompositeProjectionPresetId(state.selected);
@@ -178,12 +188,83 @@ function resolveBasemapProjectionDisplay(
     return resolveProjectionCodeDisplay(source.proj4);
   }
 
-  return source?.nativeEpsg
-    ? {
-        name: m.projection_current_basemap_native(),
-        description: `EPSG:${source.nativeEpsg}`
-      }
-    : { name: m.projection_current_basemap_native() };
+  if (!source?.nativeEpsg) {
+    // A `.prj` without authority (Esri WKT) still names its CRS.
+    const crs = source?.nativeCrs
+      ? describeProjectionCode(source.nativeCrs)
+      : undefined;
+    return crs
+      ? {
+          name: crs.name ?? m.projection_current_basemap_native(),
+          description: formatProjectionCodeCrs(crs)
+        }
+      : { name: m.projection_current_basemap_native() };
+  }
+  // The file is drawn in its own CRS: name it once the PROJ database has.
+  const code = `EPSG:${source.nativeEpsg}`;
+  const crs = describeProjectionCode(code);
+  return {
+    name: getKnownEpsgName(code) ?? m.projection_current_basemap_native(),
+    description: crs ? formatProjectionCodeCrs(crs) : code
+  };
+}
+
+export function formatProjectionCodeCrs(crs: ProjectionCodeCrs): string {
+  return [
+    crs.epsg ? `EPSG:${crs.epsg}` : undefined,
+    crs.method,
+    crs.datum ?? crs.ellipsoid,
+    crs.units
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+export function getProjectionCodeDisplayName(
+  code: string,
+  crs: ProjectionCodeCrs
+): string {
+  return (
+    crs.name ??
+    (crs.epsg ? `EPSG:${crs.epsg}` : undefined) ??
+    getProjectionForId(inferProjectionIdFromCode(code))?.name ??
+    (crs.method || m.projection_current_custom_code())
+  );
+}
+
+// A pasted CRS is named after itself (EPSG registry, WKT/PROJJSON name), so an
+// expert can match it against the CRS of a QGIS or ArcGIS export; the
+// orientation settings rotate the sphere before proj4 and break that match.
+function resolveUserCodeDisplay(
+  state: ProjectionState
+): CurrentProjectionDisplay {
+  const code = state.customCode ?? '';
+  const crs = describeProjectionCode(code);
+  if (!crs) {
+    return resolveProjectionCodeDisplay(code);
+  }
+
+  const name = getProjectionCodeDisplayName(code, crs);
+  const reoriented = state.latitude !== 0 || state.rotation !== 0;
+  const centralMeridian =
+    state.longitude !== 0
+      ? wrapLongitude(getProjectionCodeCentralMeridian(code) + state.longitude)
+      : undefined;
+
+  return {
+    name,
+    description: [
+      formatProjectionCodeCrs(crs),
+      centralMeridian !== undefined
+        ? m.projection_current_crs_central_meridian({
+            longitude: formatValue(centralMeridian, { maxFractionDigits: 2 })
+          })
+        : undefined,
+      reoriented ? m.projection_current_crs_reoriented() : undefined
+    ]
+      .filter(Boolean)
+      .join(' — ')
+  };
 }
 
 function resolveProjectionCodeDisplay(code: string): CurrentProjectionDisplay {
