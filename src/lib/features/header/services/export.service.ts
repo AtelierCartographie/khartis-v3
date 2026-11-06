@@ -42,6 +42,7 @@ import {
   type MapExportPlacement
 } from '$lib/features/commons/utils/map-export.utils';
 import {
+  encodePolygonWkb,
   formatGdalAuxXml,
   formatWorldFile
 } from '$lib/features/commons/utils/georeference.utils';
@@ -113,6 +114,7 @@ export async function exportMapAsSvg(
   const blob = await exportMapToSvg({
     width,
     height,
+    georeferenceFrame: georeference,
     onMapPlacement: (value) => (placement = value)
   });
   const filename = generateExportFilename(fileName, 'svg');
@@ -188,8 +190,26 @@ async function downloadMapExport(
     files[aux] = strToU8(formatGdalAuxXml(fit.srs, fit.transform));
     files[world] = strToU8(formatWorldFile(fit.transform));
   }
+  const frame = fit.geoPackageSrs ? `${baseName}-cadre.gpkg` : undefined;
+  if (frame && fit.geoPackageSrs) {
+    const srs = fit.geoPackageSrs;
+    const geoPackage = await exportGeoPackageLayers([
+      {
+        layerName: m.georeference_frame_layer(),
+        sourceCrs: 'epsg' in srs ? `EPSG:${srs.epsg}` : null,
+        customSrs: 'epsg' in srs ? undefined : srs,
+        features: [
+          {
+            properties: { image: filename },
+            wkb: encodePolygonWkb(fit.frameRing)
+          }
+        ]
+      }
+    ]);
+    files[frame] = new Uint8Array(await geoPackage.arrayBuffer());
+  }
   files[`${baseName}.txt`] = strToU8(
-    formatGeoreferenceReadme(fit, { image: filename, aux, world })
+    formatGeoreferenceReadme(fit, { image: filename, aux, world, frame })
   );
 
   downloadFile(

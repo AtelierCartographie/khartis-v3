@@ -51,6 +51,8 @@ export interface MapExportPlacement {
 
 export interface MapExportRequest extends Partial<ExportOptions> {
   onMapPlacement?: (placement: MapExportPlacement) => void;
+  /** SVG: add the map frame as an empty rectangle layer, to line up exports. */
+  georeferenceFrame?: boolean;
 }
 
 interface RelativeRect {
@@ -3770,6 +3772,26 @@ function resolveMapPlacement(
   };
 }
 
+// An empty rectangle on the map frame: the same frame, exported from QGIS
+// out of the georeferencing GeoPackage, lines up on it in a drawing tool.
+function buildGeoreferenceFrameLayer(placement: MapExportPlacement): string {
+  return buildTopLevelLayer(
+    m.svg_export_layer_georeference_frame(),
+    `
+      <rect
+        id="khartis-georeference-frame"
+        x="${roundSvgValue(placement.offsetX)}"
+        y="${roundSvgValue(placement.offsetY)}"
+        width="${roundSvgValue(placement.viewportWidth)}"
+        height="${roundSvgValue(placement.viewportHeight)}"
+        fill="none"
+        stroke="none"
+      />
+    `,
+    createSvgIdDeduper()
+  );
+}
+
 function resolveMapCanvas(
   pageContainer: HTMLElement
 ): HTMLCanvasElement | null {
@@ -3992,14 +4014,22 @@ export async function exportMapToSvg(
     );
     // The SVG draws deck geometry at its on-screen box plus viewport pixels
     // (`projectPosition`): placement follows the same convention.
-    const placement = opts.onMapPlacement
-      ? resolveMapPlacement(pageContainer, 1, [0, 0], 'on-screen')
-      : null;
+    const placement =
+      opts.onMapPlacement || opts.georeferenceFrame
+        ? resolveMapPlacement(pageContainer, 1, [0, 0], 'on-screen')
+        : null;
     if (placement) {
       opts.onMapPlacement?.({ ...placement, scale: 1 });
     }
+    const frameLayer =
+      opts.georeferenceFrame && placement
+        ? buildGeoreferenceFrameLayer(placement)
+        : '';
 
-    return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+    const svg = frameLayer
+      ? markup.replace(/<\/svg>\s*$/, `${frameLayer}</svg>`)
+      : markup;
+    return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   });
 }
 

@@ -2,6 +2,7 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import {
   applyAffineTransform,
   fitAffineTransform,
+  wrapProj4AsWkt,
   type AffineTransform
 } from '$lib/features/commons/utils/georeference.utils';
 import type { MapExportPlacement } from '$lib/features/commons/utils/map-export.utils';
@@ -134,6 +135,31 @@ export interface MapGeoreference {
   /** CRS units per image pixel. */
   pixelSize: number;
   rotated: boolean;
+  /** The map frame in CRS coordinates, closed (5 points). */
+  frameRing: Array<[number, number]>;
+  /** How a GeoPackage declares the CRS; null when it cannot. */
+  geoPackageSrs: GeoPackageSrs | null;
+}
+
+export type GeoPackageSrs =
+  { epsg: string } | { name: string; definition: string };
+
+// GDAL resolves an EPSG code by itself; a pasted WKT goes as is; a PROJ.4
+// string rides in the PROJ4 extension of a WKT1.
+function resolveGeoPackageSrs(
+  definition: ProjectionDefinition,
+  name: string
+): GeoPackageSrs | null {
+  if (definition.epsg) {
+    return { epsg: definition.epsg };
+  }
+  if (definition.wkt && !definition.wkt.trimStart().startsWith('{')) {
+    return { name, definition: definition.wkt };
+  }
+  if (definition.proj4) {
+    return { name, definition: wrapProj4AsWkt(name, definition.proj4) };
+  }
+  return null;
 }
 
 export type MapGeoreferenceResult =
@@ -237,6 +263,8 @@ export function buildMapGeoreference(
     georeference: {
       srs,
       crsName,
+      frameRing: [...corners, corners[0]],
+      geoPackageSrs: resolveGeoPackageSrs(definition, crsName),
       definition,
       transform,
       frameExtent: [
@@ -260,6 +288,7 @@ export interface GeoreferenceReadmeFiles {
   image: string;
   aux?: string;
   world?: string;
+  frame?: string;
 }
 
 /** Human-readable memo shipped next to the image. */
@@ -303,6 +332,13 @@ export function formatGeoreferenceReadme(
         aux: files.aux,
         world: files.world
       })
+    );
+  }
+  if (files.frame) {
+    lines.push(
+      files.aux
+        ? m.georeference_readme_frame_raster({ frame: files.frame })
+        : m.georeference_readme_frame_svg({ frame: files.frame })
     );
   }
   lines.push(m.georeference_readme_layout(), '');
