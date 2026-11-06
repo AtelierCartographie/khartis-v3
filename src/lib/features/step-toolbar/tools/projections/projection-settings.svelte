@@ -15,7 +15,7 @@
   } from './projection.store.svelte';
   import { wrapLongitude } from './projection-code.utils';
 
-  const PROJECTION_ANGLE_STEP = 0.01;
+  const PROJECTION_ANGLE_STEP = 1;
 
   const projectionState = $derived(getProjectionState());
 
