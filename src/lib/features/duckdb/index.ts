@@ -1,6 +1,7 @@
 export { Duck, initDuckDB } from './duck';
 export { waitForQueryIdle } from './core/query-activity';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
+export type { CoordinateSystemEntry } from './orchestrator/crs-ops';
 export { detectGPSColumns, validateGPSColumns } from './orchestrator/gps-ops';
 export {
   buildFilterClause,

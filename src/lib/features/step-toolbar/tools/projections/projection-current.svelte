@@ -3,10 +3,25 @@
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import { m } from '$lib/paraglide/messages';
   import { CodeSnippet } from 'carbon-components-svelte';
-  import { Code, SettingsAdjust } from 'carbon-icons-svelte';
+  import {
+    CheckmarkOutline,
+    Code,
+    Reset,
+    SettingsAdjust,
+    WarningAlt
+  } from 'carbon-icons-svelte';
   import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { resolveCurrentProjectionDisplay } from './projection-label.utils';
-  import { getCurrentProjectionContext } from './projection-georeference.utils';
+  import {
+    describeMapGeoreferenceAvailability,
+    getCurrentProjectionContext,
+    getMapGeoreferenceAvailability
+  } from './projection-georeference.utils';
+  import { projectionActions } from './projection.store.svelte';
+  import {
+    getCrsCatalogVersion,
+    resolveCoordinateSystem
+  } from './crs-catalog.store.svelte';
   import {
     resolveCurrentProjectionDefinition,
     type ProjectionDefinitionNote
@@ -20,8 +35,27 @@
 
   let definitionOpen = $state(false);
 
-  const context = $derived(getCurrentProjectionContext());
+  const context = $derived.by(() => {
+    // Names read from the PROJ database land asynchronously.
+    void getCrsCatalogVersion();
+    return getCurrentProjectionContext();
+  });
+
+  $effect(() => {
+    const nativeEpsg = context.basemapProjection?.nativeEpsg;
+    if (nativeEpsg) {
+      void resolveCoordinateSystem(`EPSG:${nativeEpsg}`);
+    }
+  });
   const isTiledBasemapEnabled = $derived(context.tiled !== null);
+  const gisAvailability = $derived.by(() => {
+    void context;
+    return getMapGeoreferenceAvailability();
+  });
+  const hasManualProjection = $derived(
+    context.state.overrideActive === true &&
+      context.state.overrideSource === 'manual'
+  );
   const display = $derived(
     context.tiled
       ? {
@@ -77,6 +111,16 @@
     </div>
 
     <div class="projection-current-actions">
+      {#if hasManualProjection && !isTiledBasemapEnabled}
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Reset}
+          iconDescription={m.projection_current_reset_to_basemap()}
+          tooltipPosition="bottom"
+          on:click={() => projectionActions.resetToBasemapProjection()}
+        />
+      {/if}
       <Button
         kind="ghost"
         size="small"
@@ -97,6 +141,18 @@
       {/if}
     </div>
   </div>
+
+  <p
+    class="projection-current-gis"
+    class:is-unavailable={!gisAvailability.available}
+  >
+    {#if gisAvailability.available}
+      <CheckmarkOutline size={16} />
+    {:else}
+      <WarningAlt size={16} />
+    {/if}
+    <span>{describeMapGeoreferenceAvailability(gisAvailability)}</span>
+  </p>
 
   {#if definition}
     <div class="projection-definition">
@@ -174,6 +230,24 @@
     align-items: center;
     gap: var(--cds-spacing-02);
     min-width: 0;
+  }
+
+  .projection-current-gis {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cds-spacing-02);
+    margin: var(--cds-spacing-02) 0 0;
+    color: var(--cds-support-success, #24a148);
+    font-size: 0.75rem;
+    line-height: 1rem;
+
+    :global(svg) {
+      flex-shrink: 0;
+    }
+
+    &.is-unavailable {
+      color: var(--cds-text-secondary, #525252);
+    }
   }
 
   .projection-current-actions {

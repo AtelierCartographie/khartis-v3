@@ -9,7 +9,10 @@
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
-  import { getMapGeoreferenceAvailability } from '$lib/features/step-toolbar/tools/projections';
+  import {
+    describeMapGeoreferenceAvailability,
+    getMapGeoreferenceAvailability
+  } from '$lib/features/step-toolbar/tools/projections';
   import {
     DataStructured,
     DocumentExport,
@@ -38,14 +41,11 @@
   const georeferenceAvailability = $derived(
     modal.isOpen ? getMapGeoreferenceAvailability() : null
   );
-  const georeferenceHelper = $derived.by(() => {
-    if (!georeferenceAvailability || georeferenceAvailability.available) {
-      return m.download_map_georeference_helper();
-    }
-    return georeferenceAvailability.reason === 'facets'
-      ? m.download_map_georeference_unavailable_facets()
-      : m.download_map_georeference_unavailable_crs();
-  });
+  const georeferenceHelper = $derived(
+    !georeferenceAvailability || georeferenceAvailability.available
+      ? m.download_map_georeference_helper()
+      : describeMapGeoreferenceAvailability(georeferenceAvailability)
+  );
   const currentFormat = $derived(getFormatState());
 
   const currentPageFormatLabel = $derived.by(() => {

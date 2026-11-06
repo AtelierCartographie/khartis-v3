@@ -2,6 +2,7 @@ import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
 import {
   createProj4Crs,
   getKnownEpsgName,
+  getResolvedCoordinateSystem,
   normalizeProj4CrsCode,
   registerKnownProj4Definitions,
   WGS84_CRS,
@@ -165,7 +166,12 @@ export type ProjectionCodeCoverage = 'full' | 'partial' | 'none';
 export type ProjectionCodeDiagnosis =
   | { status: 'empty' }
   | { status: 'unrecognized' }
+  /** Not bundled with proj4: the PROJ database of DuckDB has to be read. */
+  | { status: 'unresolved-authority-code'; code: string }
+  /** Absent from the PROJ database too. */
   | { status: 'unknown-authority-code'; code: string }
+  /** PROJ knows it, but proj4js would draw it wrong. */
+  | { status: 'unrenderable-crs'; code: string; name: string }
   | {
       status: 'catalogue-equivalent';
       method: string;
@@ -349,10 +355,27 @@ export function diagnoseProjectionCode(
     return { status: 'unrecognized' };
   }
 
+  // A code read from the PROJ database is applied as its PROJJSON: the
+  // render worker and a reopened project then need no lookup.
+  let appliedCode = normalizedCode;
   if (format === 'authority') {
     registerKnownProj4Definitions();
     if (!proj4.defs(normalizedCode)) {
-      return { status: 'unknown-authority-code', code: normalizedCode };
+      const resolved = getResolvedCoordinateSystem(normalizedCode);
+      if (resolved === undefined) {
+        return { status: 'unresolved-authority-code', code: normalizedCode };
+      }
+      if (resolved === null) {
+        return { status: 'unknown-authority-code', code: normalizedCode };
+      }
+      if (!resolved.renderable) {
+        return {
+          status: 'unrenderable-crs',
+          code: normalizedCode,
+          name: resolved.name
+        };
+      }
+      appliedCode = resolved.projjson;
     }
   }
 
@@ -388,7 +411,7 @@ export function diagnoseProjectionCode(
   return {
     status: 'valid',
     format,
-    normalizedCode,
+    normalizedCode: appliedCode,
     projectionId:
       inferredProjectionId && isKnownProjectionId(inferredProjectionId)
         ? inferredProjectionId

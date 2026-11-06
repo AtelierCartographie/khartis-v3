@@ -96,14 +96,24 @@ describe('resolveCurrentProjectionDisplay', () => {
     expect(display.description).toContain('EPSG:2154');
   });
 
-  it('should keep the EPSG code of the file when no suggestion matches it', () => {
+  it('should name the CRS of the file when no suggestion matches it', () => {
     const display = resolveCurrentProjectionDisplay(
       createState({ overrideActive: false, overrideSource: undefined }),
       { type: 'identity', nativeEpsg: '32620' }
     );
 
+    expect(display.name).toBe('WGS 84 / UTM zone 20N');
+    expect(display.description).toMatch(/^EPSG:32620 · \+proj=utm/);
+  });
+
+  it('should keep the EPSG code of a file whose CRS is not resolved yet', () => {
+    const display = resolveCurrentProjectionDisplay(
+      createState({ overrideActive: false, overrideSource: undefined }),
+      { type: 'identity', nativeEpsg: '2927' }
+    );
+
     expect(display.name).toBe("Projection d'origine du fond");
-    expect(display.description).toBe('EPSG:32620');
+    expect(display.description).toBe('EPSG:2927');
   });
 
   it('names a suggestion restored from its d3 config alone', () => {

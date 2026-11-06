@@ -68,6 +68,7 @@ type ProjectionActions = {
   suggestProjectionForCurrentData: () => Promise<void>;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
   applyBasemapPreferredProjection: () => void;
+  resetToBasemapProjection: () => void;
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
@@ -320,6 +321,13 @@ const { actions, getState } = createToolStore<
     return {
       setSelected,
       applyBasemapPreferredProjection,
+      // Drops every manual choice (catalogue, suggestion, code, settings):
+      // the basemap draws in its own projection again, a catalogue preset
+      // or the CRS an imported file is projected in.
+      resetToBasemapProjection: () => {
+        clearSelectedInternal(true);
+        applyBasemapPreferredProjection();
+      },
       toggleSelected: (projectionId: string) => {
         if (s.overrideActive && !s.customCode && s.selected === projectionId) {
           clearSelectedInternal(true);

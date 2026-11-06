@@ -1,4 +1,5 @@
 import { getProjectionById } from '$lib/features/commons/utils/projection.utils';
+import { getKnownEpsgName } from '$lib/features/commons/utils/proj4-crs.utils';
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionFilterId } from '$lib/features/commons/types/global';
 import * as m from '$lib/paraglide/messages';
@@ -185,12 +186,16 @@ function resolveBasemapProjectionDisplay(
     return resolveProjectionCodeDisplay(source.proj4);
   }
 
-  return source?.nativeEpsg
-    ? {
-        name: m.projection_current_basemap_native(),
-        description: `EPSG:${source.nativeEpsg}`
-      }
-    : { name: m.projection_current_basemap_native() };
+  if (!source?.nativeEpsg) {
+    return { name: m.projection_current_basemap_native() };
+  }
+  // The file is drawn in its own CRS: name it once the PROJ database has.
+  const code = `EPSG:${source.nativeEpsg}`;
+  const crs = describeProjectionCode(code);
+  return {
+    name: getKnownEpsgName(code) ?? m.projection_current_basemap_native(),
+    description: crs ? formatProjectionCodeCrs(crs) : code
+  };
 }
 
 export function formatProjectionCodeCrs(crs: ProjectionCodeCrs): string {
