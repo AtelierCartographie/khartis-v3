@@ -6,6 +6,7 @@ import {
   buildProjectionFromCatalogueId,
   fitProjectionToBbox,
   getProjectionD3ConfigById,
+  isBeyondHorizon,
   isWorldScaleProjectionId
 } from '$lib/features/commons/utils/projection.utils';
 import {
@@ -225,7 +226,12 @@ function buildFittedUserProjection(
   fitProjectionToRenderTarget(projection, params, isWorldScaleCatalogue);
   applyUserProjectionTransform(projection, params);
 
-  if (isUsableGeoProjection(projection, fitBbox)) {
+  // An orientation the user set may face away from the data: keep it.
+  const isPinned = hasExplicitProjectionOrientation(params);
+  if (
+    isUsableGeoProjection(projection, fitBbox) &&
+    (isPinned || !isBeyondHorizon(projection, getBboxCenter(fitBbox)))
+  ) {
     return projection;
   }
 
@@ -235,7 +241,7 @@ function buildFittedUserProjection(
   // only scales/translates, so it then collapses to a degenerate extent.
   // When the user hasn't pinned an orientation, re-center the projection on
   // the basemap and refit so fitExtent measures the visible hemisphere.
-  if (hasExplicitProjectionOrientation(params)) {
+  if (isPinned) {
     return undefined;
   }
 
