@@ -172,16 +172,36 @@ describe('resolveCurrentProjectionDefinition', () => {
     );
   });
 
-  it('should flag a tilted or rotated projection and one PROJ cannot draw', () => {
+  it('should express a tilt as an ob_tran, flag a rotation and what PROJ cannot draw', () => {
     expect(
       definitionOf({ selected: 'robinson', latitude: 20, rotation: 15 })
     ).toMatchObject({
-      notes: ['spherical', 'oblique', 'rotated'],
+      proj4:
+        '+proj=ob_tran +o_proj=robin +x_0=0 +y_0=0 +R=6371000 +units=m +o_lon_p=0 +o_lat_p=70 +lon_0=0 +no_defs',
+      notes: ['spherical', 'rotated', 'oblique-transformation'],
       rotation: 15
     });
     expect(definitionOf({ selected: 'armadillo' }).notes).toEqual([
       'no-equivalent'
     ]);
+  });
+
+  it('should fold the central meridian of a tilted CRS into o_lon_p', () => {
+    // Checked against PROJ 9: gdaltransform -t_srs <ob_tran> gives the
+    // coordinates Khartis draws, to the millimetre.
+    expect(
+      definitionOf({ customCode: '+proj=eqearth', longitude: 30, latitude: 20 })
+        .proj4
+    ).toBe(
+      '+proj=ob_tran +o_proj=eqearth +ellps=WGS84 +o_lon_p=0 +o_lat_p=70 +lon_0=30 +no_defs'
+    );
+    expect(
+      definitionOf({
+        customCode: '+proj=eqearth +lon_0=40',
+        longitude: 10,
+        latitude: 30
+      }).proj4
+    ).toMatch(/\+o_lon_p=-40 \+o_lat_p=60 \+lon_0=10 /);
   });
 
   it('should give back a pasted CRS, and a derived lon_0 once offset', () => {
@@ -208,6 +228,37 @@ describe('resolveCurrentProjectionDefinition', () => {
     ).toEqual(['globe']);
   });
 });
+
+function maxAffineResidual(
+  state: ProjectionState,
+  source: { selected?: string; customCode?: string }
+): number | undefined {
+  const forward = createCurrentProjectionForward({ state });
+  const drawn = buildUserProjection({
+    selected: source.selected ?? state.selected,
+    customCode: source.customCode,
+    center: state.center,
+    longitude: state.longitude,
+    latitude: state.latitude,
+    rotation: 0,
+    fitBbox: [-10, 35, 30, 65],
+    width: 800,
+    height: 600,
+    padding: 20
+  });
+  const samples = [];
+  for (let lon = -5; lon <= 25; lon += 5) {
+    for (let lat = 38; lat <= 62; lat += 6) {
+      const pixel = drawn?.([lon, lat]);
+      const crs = forward?.([lon, lat]);
+      if (pixel && crs) {
+        samples.push({ pixel: pixel as [number, number], crs });
+      }
+    }
+  }
+  expect(samples.length).toBeGreaterThan(20);
+  return fitAffineTransform(samples)?.maxResidualPx;
+}
 
 describe('createCurrentProjectionForward', () => {
   // The side-cars hold an affine map from image pixels to the coordinates of
@@ -260,10 +311,37 @@ describe('createCurrentProjectionForward', () => {
     }
   );
 
+  it.each([
+    ['robinson', { latitude: 30, longitude: 20 }],
+    ['equal-earth', { latitude: -40 }],
+    ['natural-earth', { latitude: 25, longitude: -60 }],
+    ['lambert-conformal', { latitude: 15 }]
+  ] as [string, Partial<ProjectionState>][])(
+    'should place a tilted %s as an affine image of its ob_tran',
+    (selected, overrides) => {
+      const state = createState({ selected, ...overrides });
+      expect(resolveCurrentProjectionDefinition({ state }).notes).toContain(
+        'oblique-transformation'
+      );
+      expect(maxAffineResidual(state, { selected })).toBeLessThan(0.1);
+    }
+  );
+
+  it('should place a tilted CRS code as an affine image of its ob_tran', () => {
+    const state = createState({
+      customCode: '+proj=eqearth',
+      longitude: 30,
+      latitude: 20
+    });
+    expect(
+      maxAffineResidual(state, { customCode: '+proj=eqearth' })
+    ).toBeLessThan(0.1);
+  });
+
   it('should refuse a projection without CRS', () => {
     expect(
       createCurrentProjectionForward({
-        state: createState({ selected: 'robinson', latitude: 30 })
+        state: createState({ selected: 'armadillo' })
       })
     ).toBeNull();
   });

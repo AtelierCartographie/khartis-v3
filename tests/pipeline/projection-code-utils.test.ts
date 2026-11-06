@@ -12,14 +12,20 @@ vi.mock('$lib/features/commons/utils/projection.utils', () => ({
     { id: 'mollweide' },
     { id: 'winkel-tripel' },
     { id: 'stereographic' },
-    { id: 'azimuthal-equal-area' }
+    { id: 'azimuthal-equal-area' },
+    { id: 'bertin-1953' }
   ]
 }));
 
 import { geoPath } from 'd3-geo';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import { diagnoseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
-import { registerResolvedCoordinateSystem } from '$lib/features/commons/utils/proj4-crs.utils';
+import {
+  createProj4Crs,
+  registerResolvedCoordinateSystem,
+  WGS84_CRS
+} from '$lib/features/commons/utils/proj4-crs.utils';
+import proj4 from 'proj4';
 
 const LAMBERT_93_ESRI_PRJ = `PROJCS["RGF_1993_Lambert_93",GEOGCS["GCS_RGF_1993",DATUM["D_RGF_1993",SPHEROID["GRS_1980",6378137.0,298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic"],PARAMETER["False_Easting",700000.0],PARAMETER["False_Northing",6600000.0],PARAMETER["Central_Meridian",3.0],PARAMETER["Standard_Parallel_1",49.0],PARAMETER["Standard_Parallel_2",44.0],PARAMETER["Latitude_Of_Origin",46.5],UNIT["Meter",1.0]]`;
 const LAMBERT_93_WKT2 = `PROJCRS["RGF93 v1 / Lambert-93",BASEGEOGCRS["RGF93 v1",DATUM["Reseau Geodesique Francais 1993 v1",ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4171]],CONVERSION["Lambert-93",METHOD["Lambert Conic Conformal (2SP)",ID["EPSG",9802]],PARAMETER["Latitude of false origin",46.5,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Longitude of false origin",3,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Latitude of 1st standard parallel",49,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Latitude of 2nd standard parallel",44,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Easting at false origin",700000,LENGTHUNIT["metre",1]],PARAMETER["Northing at false origin",6600000,LENGTHUNIT["metre",1]]],CS[Cartesian,2],AXIS["easting (X)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["northing (Y)",north,ORDER[2],LENGTHUNIT["metre",1]],ID["EPSG",2154]]`;
@@ -130,17 +136,55 @@ describe('diagnoseProjectionCode', () => {
     });
   });
 
-  it('should route a method proj4 lacks to its catalogue equivalent', () => {
-    expect(diagnoseProjectionCode('+proj=natearth +lon_0=10')).toEqual({
+  it('should route a method nothing but the d3 catalogue draws to it', () => {
+    expect(diagnoseProjectionCode('+proj=bertin1953')).toEqual({
       status: 'catalogue-equivalent',
-      method: 'natearth',
-      catalogueId: 'natural-earth',
-      longitude: 10
+      method: 'bertin1953',
+      catalogueId: 'bertin-1953',
+      longitude: undefined
     });
     expect(diagnoseProjectionCode('+proj=foo')).toEqual({
       status: 'unsupported-method',
       method: 'foo'
     });
+  });
+
+  // Reference coordinates of 12.5°E 47.25°N from PROJ 9.9 (gdaltransform).
+  // Goode is iterative in PROJ and closed-form in d3: 22 m apart.
+  it.each([
+    ['+proj=hammer +lon_0=20 +ellps=WGS84', -618398.1304, 5114276.1547, 0.01],
+    ['+proj=wintri +R=6371000', 1224542.1155, 5258128.2112, 0.01],
+    [
+      '+proj=kav7 +lon_0=-30 +x_0=1000 +y_0=-500 +datum=WGS84',
+      3650256.3091,
+      5259345.94,
+      0.01
+    ],
+    ['+proj=wag4 +R=6371000', 979473.035, 5758720.183, 0.01],
+    ['+proj=goode +R=6371000', 982921.737, 5239885.6091, 30]
+  ])(
+    'should draw %s, which proj4js lacks, as PROJ does',
+    (code, x, y, tolerance) => {
+      const diagnosis = diagnoseProjectionCode(code);
+      expect(diagnosis.status).toBe('valid');
+      const converter = proj4(WGS84_CRS, createProj4Crs(code));
+      const [projectedX, projectedY] = converter.forward([12.5, 47.25]);
+      expect(Math.hypot(projectedX - x, projectedY - y)).toBeLessThan(
+        tolerance
+      );
+      const [lon, lat] = converter.inverse([projectedX, projectedY]);
+      expect(lon).toBeCloseTo(12.5, 9);
+      expect(lat).toBeCloseTo(47.25, 9);
+    }
+  );
+
+  it('should refuse a parameter d3 does not reproduce', () => {
+    expect(diagnoseProjectionCode('+proj=hammer +W=0.25').status).toBe(
+      'unsupported-method'
+    );
+    expect(diagnoseProjectionCode('+proj=kav7 +lat_0=10').status).toBe(
+      'unsupported-method'
+    );
   });
 
   it('should reject text that is not a CRS and a definition that projects nothing', () => {

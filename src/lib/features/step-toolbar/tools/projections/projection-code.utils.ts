@@ -9,6 +9,7 @@ import {
   type Proj4Crs
 } from '$lib/features/commons/utils/proj4-crs.utils';
 import proj4 from 'proj4';
+import { getD3Proj4MethodLabel } from '$lib/features/commons/utils/proj4-d3-methods.utils';
 
 const PROJ4_HINT = /^\+|\+proj=/i;
 const WKT_HINT =
@@ -194,18 +195,11 @@ type BBox = [number, number, number, number];
 const AUTHORITY_CODE = /^(?:EPSG|ESRI)\s*:\s*\d+$/i;
 const BARE_EPSG_CODE = /^\d{4,6}$/;
 
-// Projection methods proj4js does not implement but the d3 catalogue draws
-// identically (same spherical formulas, scale aside). Keyed by the PROJ short
-// name or the WKT method name, lowercased without separators.
+// Projection methods neither proj4js nor its d3-backed additions
+// (proj4-d3-methods.utils.ts) implement, but the d3 catalogue draws: Bertin
+// 1953 hard-codes its orientation. Keyed by the PROJ short name or the WKT
+// method name, lowercased without separators.
 const CATALOGUE_EQUIVALENT_METHODS: Record<string, string> = {
-  natearth: 'natural-earth',
-  naturalearth: 'natural-earth',
-  wintri: 'winkel-tripel',
-  winkeltripel: 'winkel-tripel',
-  aitoff: 'aitoff',
-  eck4: 'eckert-4',
-  eckertiv: 'eckert-4',
-  times: 'times',
   bertin1953: 'bertin-1953'
 };
 
@@ -292,7 +286,7 @@ function summarizeCrs(
   const datum = fields.datumName ?? fields.datumCode;
 
   return {
-    name: knownName ?? fileName,
+    name: knownName ?? fileName ?? getD3Proj4MethodLabel(projName),
     epsg,
     method,
     datum: datum && datum !== 'none' ? datum : undefined,

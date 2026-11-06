@@ -80,6 +80,8 @@
         return m.projection_definition_note_spherical();
       case 'oblique':
         return m.projection_definition_note_oblique();
+      case 'oblique-transformation':
+        return m.projection_definition_note_oblique_transformation();
       case 'rotated':
         return m.projection_definition_note_rotated({
           rotation: formatValue(definition?.rotation ?? 0, {

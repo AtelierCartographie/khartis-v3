@@ -13,7 +13,7 @@ import {
 import proj4 from 'proj4';
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
-import type { GeoProjection } from 'd3-geo';
+import { geoRotation, type GeoProjection } from 'd3-geo';
 import type { ProjectionState } from '../../types/projections.types';
 import { diagnoseProjectionCode, wrapLongitude } from './projection-code.utils';
 import type { BasemapProjectionSource } from './projection-label.utils';
@@ -21,8 +21,10 @@ import type { BasemapProjectionSource } from './projection-label.utils';
 export type ProjectionDefinitionNote =
   /** Drawn on a sphere, like d3: exact in QGIS with the same +R. */
   | 'spherical'
-  /** Tilted off its normal aspect: no standard CRS reproduces it. */
+  /** Tilted off its normal aspect in a way PROJ cannot express. */
   | 'oblique'
+  /** Tilted by the latitude: a PROJ oblique transformation (ob_tran). */
+  | 'oblique-transformation'
   /** Turned in the plane: rotate the layout by `rotation`. */
   | 'rotated'
   /** One projection per frame (mainland and insets). */
@@ -41,6 +43,17 @@ export interface ProjectionDefinition {
   epsg?: string;
   rotation?: number;
   notes: ProjectionDefinitionNote[];
+  /**
+   * The map is `base` drawn after a d3 rotation of the sphere by
+   * [-longitude, -latitude]: `proj4` is then the matching ob_tran string.
+   */
+  obliqueBase?: ObliqueBase;
+}
+
+export interface ObliqueBase {
+  proj4: string;
+  longitude: number;
+  latitude: number;
 }
 
 export interface ProjectionDefinitionContext {
@@ -66,6 +79,8 @@ interface D3ProjMethod {
   parallel?: 'lat_ts' | 'lat_1';
   /** PROJ hard-codes the orientation: only the d3 default matches. */
   fixedOrientation?: boolean;
+  /** Parameters d3 fixes where PROJ defaults otherwise. */
+  fixed?: string;
 }
 
 const D3_PROJ_METHODS: Record<string, D3ProjMethod> = {
@@ -74,7 +89,8 @@ const D3_PROJ_METHODS: Record<string, D3ProjMethod> = {
   geoNaturalEarth2: { proj: 'natearth2', aspect: 'normal' },
   geoEquirectangular: { proj: 'eqc', aspect: 'normal' },
   geoRobinson: { proj: 'robin', aspect: 'normal' },
-  geoWinkel3: { proj: 'wintri', aspect: 'normal' },
+  // PROJ 9 defaults Winkel Tripel to lat_1 = 0; d3 uses acos(2/π).
+  geoWinkel3: { proj: 'wintri', aspect: 'normal', fixed: '+lat_1=50.4597752' },
   geoAitoff: { proj: 'aitoff', aspect: 'normal' },
   geoMollweide: { proj: 'moll', aspect: 'normal' },
   geoEckert4: { proj: 'eck4', aspect: 'normal' },
@@ -83,6 +99,34 @@ const D3_PROJ_METHODS: Record<string, D3ProjMethod> = {
   geoSinusoidal: { proj: 'sinu', aspect: 'normal' },
   geoMiller: { proj: 'mill', aspect: 'normal' },
   geoHammer: { proj: 'hammer', aspect: 'normal' },
+  geoKavrayskiy7: { proj: 'kav7', aspect: 'normal' },
+  geoWagner4: { proj: 'wag4', aspect: 'normal' },
+  geoWagner6: { proj: 'wag6', aspect: 'normal' },
+  geoWagner7: { proj: 'wag7', aspect: 'normal' },
+  geoEckert1: { proj: 'eck1', aspect: 'normal' },
+  geoEckert2: { proj: 'eck2', aspect: 'normal' },
+  geoEckert3: { proj: 'eck3', aspect: 'normal' },
+  geoEckert5: { proj: 'eck5', aspect: 'normal' },
+  geoEckert6: { proj: 'eck6', aspect: 'normal' },
+  geoPatterson: { proj: 'patterson', aspect: 'normal' },
+  geoBoggs: { proj: 'boggs', aspect: 'normal' },
+  geoHomolosine: { proj: 'goode', aspect: 'normal' },
+  geoCraster: { proj: 'crast', aspect: 'normal' },
+  geoCollignon: { proj: 'collg', aspect: 'normal' },
+  geoLarrivee: { proj: 'larr', aspect: 'normal' },
+  geoLaskowski: { proj: 'lask', aspect: 'normal' },
+  geoNellHammer: { proj: 'nell_h', aspect: 'normal' },
+  geoMtFlatPolarParabolic: { proj: 'mbtfpp', aspect: 'normal' },
+  geoMtFlatPolarSinusoidal: { proj: 'mbtfps', aspect: 'normal' },
+  geoVanDerGrinten: { proj: 'vandg', aspect: 'normal' },
+  geoVanDerGrinten2: { proj: 'vandg2', aspect: 'normal' },
+  geoVanDerGrinten3: { proj: 'vandg3', aspect: 'normal' },
+  geoVanDerGrinten4: { proj: 'vandg4', aspect: 'normal' },
+  geoRectangularPolyconic: { proj: 'rpoly', aspect: 'normal' },
+  geoFahey: { proj: 'fahey', aspect: 'normal' },
+  geoAugust: { proj: 'august', aspect: 'normal' },
+  geoLagrange: { proj: 'lagrng', aspect: 'normal' },
+  geoGinzburg8: { proj: 'gins8', aspect: 'normal' },
   geoCylindricalEqualArea: {
     proj: 'cea',
     aspect: 'normal',
@@ -108,7 +152,50 @@ const D3_PROJ_METHODS: Record<string, D3ProjMethod> = {
 };
 
 function formatDegrees(value: number): string {
-  return String(Number(value.toFixed(6)));
+  return String(Number(value.toFixed(6)) || 0);
+}
+
+const ELLIPSOID_PARAMETER = /\+(?:ellps|datum|R|a)=/;
+
+// d3 tilts the sphere ([-longitude, -latitude]) before the base projection.
+// In PROJ, ob_tran places the original north pole at (o_lon_p, o_lat_p) of
+// the rotated sphere, and the base's own central meridian shifts o_lon_p:
+// checked against PROJ 9 (gdaltransform) to the millimetre.
+function toObliqueTransformation({
+  proj4: base,
+  longitude,
+  latitude
+}: ObliqueBase): string {
+  const [poleLongitude, poleLatitude] = geoRotation([-longitude, -latitude, 0])(
+    [0, 90]
+  );
+  const baseLongitude = Number(base.match(/\+lon_0=(\S+)/)?.[1] ?? 0);
+  const inner = base
+    .replace(/^\s*\+proj=/, '')
+    .replace(/\s*\+lon_0=\S+/, '')
+    .replace(/\s*\+no_defs\b/, '');
+  return [
+    `+proj=ob_tran +o_proj=${inner}`,
+    // PROJ requires a figure of the Earth where proj4 assumes WGS84.
+    ELLIPSOID_PARAMETER.test(base) ? undefined : '+ellps=WGS84',
+    `+o_lon_p=${formatDegrees(wrapLongitude(-poleLongitude - baseLongitude))}`,
+    `+o_lat_p=${formatDegrees(poleLatitude)}`,
+    `+lon_0=${formatDegrees(wrapLongitude(longitude + poleLongitude))}`,
+    '+no_defs'
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function obliqueDefinition(
+  obliqueBase: ObliqueBase,
+  notes: ProjectionDefinitionNote[]
+): ProjectionDefinition {
+  return {
+    proj4: toObliqueTransformation(obliqueBase),
+    obliqueBase,
+    notes: [...notes, 'oblique-transformation']
+  };
 }
 
 function readParallels(projection: GeoProjection): number[] | undefined {
@@ -170,6 +257,10 @@ function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
     params.push(`+lon_0=${formatDegrees(wrapLongitude(longitude))}`);
   }
 
+  if (method.fixed) {
+    params.push(method.fixed);
+  }
+
   const parallels = readParallels(projection);
   if (parallels && method.aspect === 'conic') {
     params.push(
@@ -181,17 +272,20 @@ function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
   }
 
   // A latitude moves the centre of an azimuthal (lat_0) and only translates a
-  // transverse aspect; anywhere else it tilts the projection. The intrinsic
-  // roll of a transverse aspect (d3 builds Cassini that way) is its aspect.
+  // transverse aspect; anywhere else it tilts the projection, which ob_tran
+  // expresses. An intrinsic roll (Atlantis) has no PROJ equivalent, except
+  // for a transverse aspect (d3 builds Cassini that way), where it is the
+  // aspect itself.
+  const rolled =
+    gamma !== 0 &&
+    method.aspect !== 'azimuthal' &&
+    method.aspect !== 'transverse';
   const tilted =
-    (latitude !== 0 &&
-      method.aspect !== 'azimuthal' &&
-      method.aspect !== 'transverse' &&
-      !method.fixedOrientation) ||
-    (gamma !== 0 &&
-      method.aspect !== 'azimuthal' &&
-      method.aspect !== 'transverse');
-  if (tilted) {
+    latitude !== 0 &&
+    method.aspect !== 'azimuthal' &&
+    method.aspect !== 'transverse' &&
+    !method.fixedOrientation;
+  if (rolled) {
     notes.push('oblique');
   }
 
@@ -200,11 +294,25 @@ function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
     notes.push('rotated');
   }
 
-  return {
-    proj4: [`+proj=${method.proj}`, ...params, PROJ_SUFFIX].join(' '),
-    rotation: rotation !== 0 ? rotation : undefined,
-    notes
-  };
+  const definition: ProjectionDefinition =
+    tilted && !rolled
+      ? obliqueDefinition(
+          {
+            proj4: [
+              `+proj=${method.proj}`,
+              ...params.filter((param) => !param.startsWith('+lon_0=')),
+              PROJ_SUFFIX
+            ].join(' '),
+            longitude,
+            latitude
+          },
+          notes
+        )
+      : {
+          proj4: [`+proj=${method.proj}`, ...params, PROJ_SUFFIX].join(' '),
+          notes: tilted ? [...notes, 'oblique'] : notes
+        };
+  return { ...definition, rotation: rotation !== 0 ? rotation : undefined };
 }
 
 function setCentralMeridian(definition: string, longitude: number): string {
@@ -260,10 +368,25 @@ function resolveCodeDefinition(
   }
 
   if (state.latitude !== 0) {
-    notes.push('oblique');
+    // proj4d3 then leaves the CRS frame alone and the settings rotate the
+    // sphere before it, longitude included (see buildFittedUserProjection).
+    definition = proj4String
+      ? obliqueDefinition(
+          {
+            // UTM carries its central meridian in the zone number.
+            proj4: setCentralMeridian(
+              proj4String,
+              getProjectionCodeCentralMeridian(normalizedCode)
+            ),
+            longitude: state.longitude,
+            latitude: state.latitude
+          },
+          []
+        )
+      : { notes: ['oblique'] };
   }
   if (state.rotation !== 0) {
-    notes.push('rotated');
+    definition.notes.push('rotated');
     definition.rotation = state.rotation;
   }
   return definition;
@@ -372,35 +495,6 @@ function finitePoint(point: unknown): [number, number] | null {
     : null;
 }
 
-// The d3 catalogue projection itself, without its screen fit. d3 does not
-// always normalise like PROJ (Robinson ×1/0.8487, stereographic ×½, Bonne
-// shifted by R·φ1): only the shape is shared, so this stands in for proj4
-// only for the methods proj4js lacks (natearth, wintri, eck4, aitoff, times).
-function createD3Forward(state: ProjectionState): ProjectionForward | null {
-  const source = resolveD3Source(state);
-  if (!source || source.method.fixedOrientation) {
-    return null;
-  }
-  const { method, projection } = source;
-  const [longitude, latitude] = state.center ?? [
-    state.longitude,
-    state.latitude
-  ];
-  projection
-    .rotate([-longitude, method.aspect === 'azimuthal' ? -latitude : 0, 0])
-    .center([0, 0])
-    .scale(SPHERE_RADIUS_METRES)
-    .translate([0, 0]);
-  if (typeof projection.angle === 'function') {
-    projection.angle(0);
-  }
-
-  return (lonLat) => {
-    const point = finitePoint(projection(lonLat));
-    return point ? [point[0], -point[1]] : null;
-  };
-}
-
 function createProj4Forward(code: string): ProjectionForward | null {
   const build = (definition: string) =>
     proj4(WGS84_CRS, createProj4Crs(definition));
@@ -425,6 +519,31 @@ function createProj4Forward(code: string): ProjectionForward | null {
   };
 }
 
+function createDefinitionForward(
+  definition: ProjectionDefinition
+): ProjectionForward | null {
+  const code =
+    definition.proj4 ??
+    definition.wkt ??
+    (definition.epsg ? `EPSG:${definition.epsg}` : undefined);
+  return code ? createProj4Forward(code) : null;
+}
+
+// The map as Khartis draws it: the d3 tilt, then the base CRS. proj4js runs
+// ob_tran for a few inner methods only (cea gives NaN).
+function createObliqueForward({
+  proj4: base,
+  longitude,
+  latitude
+}: ObliqueBase): ProjectionForward | null {
+  const baseForward = createProj4Forward(base);
+  if (!baseForward) {
+    return null;
+  }
+  const tilt = geoRotation([-longitude, -latitude, 0]);
+  return (lonLat) => baseForward(tilt(lonLat) as [number, number]);
+}
+
 /**
  * Coordinates, in the CRS of `resolveCurrentProjectionDefinition`, of a
  * lon/lat point drawn on the map. Null when the map follows no CRS.
@@ -437,21 +556,7 @@ export function createCurrentProjectionForward(
     return null;
   }
 
-  const code =
-    definition.proj4 ??
-    definition.wkt ??
-    (definition.epsg ? `EPSG:${definition.epsg}` : undefined);
-  const forward = code ? createProj4Forward(code) : null;
-  if (forward) {
-    return forward;
-  }
-
-  const { state, tiled } = context;
-  const drawnByD3 =
-    !tiled &&
-    state.overrideActive === true &&
-    state.overrideSource === 'manual' &&
-    !state.customCode &&
-    !getCompositeProjectionPresetId(state.selected);
-  return drawnByD3 ? createD3Forward(state) : null;
+  return definition.obliqueBase
+    ? createObliqueForward(definition.obliqueBase)
+    : createDefinitionForward(definition);
 }
