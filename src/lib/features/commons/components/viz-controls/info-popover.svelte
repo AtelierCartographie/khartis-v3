@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
@@ -11,6 +12,12 @@
     align?: 'top' | 'bottom';
     tags?: string[];
     disabled?: boolean;
+    /** Replaces the (i) icon; give `label` with it. */
+    icon?: Component<{ size?: number }>;
+    /** Accessible name of the button; defaults to « Plus d'informations ». */
+    label?: string;
+    /** Class for the button, to colour a status icon. */
+    buttonClass?: string;
   }
 
   let {
@@ -18,7 +25,10 @@
     title,
     align = 'bottom',
     tags = [],
-    disabled = false
+    disabled = false,
+    icon: Icon = Information,
+    label,
+    buttonClass
   }: Props = $props();
 
   let open = $state(false);
@@ -135,10 +145,10 @@
 <span class="info-popover-wrapper">
   <button
     type="button"
-    class="info-btn"
+    class="info-btn {buttonClass ?? ''}"
     class:info-btn-disabled={disabled}
     bind:this={btnRef}
-    aria-label={m.more_info()}
+    aria-label={label ?? m.more_info()}
     aria-disabled={disabled ? 'true' : undefined}
     disabled={disabled}
     onclick={toggle}
@@ -147,7 +157,7 @@
     onfocus={show}
     onblur={hide}
   >
-    <Information size={16} />
+    <Icon size={16} />
   </button>
 </span>
 

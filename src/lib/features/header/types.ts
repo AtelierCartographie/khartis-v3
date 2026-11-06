@@ -47,6 +47,7 @@ export interface UseExportModalReturn {
   readonly mapFormat: MapExportFormat;
   readonly dataFormat: DataExportFormat;
   readonly resolution: ExportResolution;
+  readonly georeference: boolean;
 
   open: (tab?: ExportTabType) => void;
   close: () => void;
@@ -55,5 +56,6 @@ export interface UseExportModalReturn {
   setMapFormat: (format: MapExportFormat) => void;
   setDataFormat: (format: DataExportFormat) => void;
   setResolution: (resolution: ExportResolution) => void;
+  setGeoreference: (value: boolean) => void;
   executeExport: () => Promise<void>;
 }
