@@ -77,7 +77,10 @@
     getProjectionState
   } from '$lib/features/step-toolbar/tools/projections';
   import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
-  import { trackWorkerParseVersion } from '../utils/worker-parse.svelte';
+  import {
+    hasPendingWorkerParse,
+    trackWorkerParseVersion
+  } from '../utils/worker-parse.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
@@ -359,10 +362,11 @@
     }
 
     mapLoadingStore.setUpdatingLayers(true);
+    const layersReferenceBbox = projectionStore.referenceBbox;
     mapLayers.updateLayers(tables, splitData, densityTables);
     requestAnimationFrame(() => {
       mapLoadingStore.setUpdatingLayers(false);
-      measureDrawnMapExtent();
+      measureDrawnMapExtent(layersReferenceBbox);
     });
   }
 
@@ -1443,10 +1447,16 @@
   let drawnMapExtent = $state.raw<BBox | null>(null);
   let hasMeasuredDrawnMapExtent = $state(false);
 
-  function measureDrawnMapExtent(): void {
+  function measureDrawnMapExtent(layersReferenceBbox: BBox | null): void {
     const referenceBbox = projectionStore.referenceBbox;
     const layers = mapInit.deckInstance?.props.layers;
+    // Layers built against an older reference, or still waiting for the
+    // worker (an empty placeholder), do not show the map of this reference:
+    // framing on them refits the projection, which redraws the layers, which
+    // reframes the map, endlessly. The next layer update measures again.
     if (
+      referenceBbox !== layersReferenceBbox ||
+      hasPendingWorkerParse() ||
       isFacetCell ||
       mapInit.viewMode !== ViewMode.ORTHOGRAPHIC ||
       !referenceBbox ||
