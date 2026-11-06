@@ -3,8 +3,8 @@ import {
   type MapProjectionTypeValue
 } from '$lib/features/commons/constants';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 
 export type MapProjectionType = MapProjectionTypeValue;

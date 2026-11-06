@@ -1,9 +1,8 @@
-import { tableToIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createParseWorkerClient } from '@ateliercartographie/geoarrow-deck-stream/worker';
 import type {
   ParseWorkerClient,
   WorkerLike
 } from '@ateliercartographie/geoarrow-deck-stream/worker';
+import { createParseWorkerClient } from '@ateliercartographie/geoarrow-deck-stream/worker';
 
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -112,15 +111,4 @@ export function withParseWorkerTimeout<T>(
       clearTimeout(timeoutId);
     }
   });
-}
-
-const ipcCache = new WeakMap<ArrowTable, Uint8Array>();
-
-export function ipcBytesForTable(table: ArrowTable): Uint8Array {
-  let bytes = ipcCache.get(table);
-  if (!bytes) {
-    bytes = tableToIPC(table);
-    ipcCache.set(table, bytes);
-  }
-  return bytes;
 }

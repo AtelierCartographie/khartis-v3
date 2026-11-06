@@ -30,10 +30,9 @@ import {
 import { formatFileSize } from '../utils/format.utils';
 import {
   FetchTimeoutError,
-  REMOTE_FILE_FETCH_TIMEOUT_MS,
-  fetchWithTimeout
+  fetchWithTimeout,
+  REMOTE_FILE_FETCH_TIMEOUT_MS
 } from '../utils/fetch-with-timeout';
-import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { createReadonlyStateFacade } from '../utils/store.utils.svelte';
 import type {
@@ -55,6 +54,7 @@ const REQUIRED_SHAPEFILE_EXTENSIONS = ['.shp', '.shx', '.dbf'];
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
+  isOpeningProject: false,
 
   newProject: {
     uploadedFiles: [],
@@ -94,8 +94,6 @@ function discardUploadedFiles(files: readonly UploadedFile[]): void {
   for (const file of files) {
     file.originalFile = undefined;
     file.relatedFileObjects = undefined;
-    file.content = undefined;
-    file.relatedFilesData = undefined;
     if (file.duckdbTableName) {
       dropPendingTable(file.duckdbTableName);
     }
@@ -132,6 +130,10 @@ function nextPastedDataName(): string {
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
     createProjectInternalState.selectedTab = tab;
+  },
+
+  setOpeningProject(opening: boolean): void {
+    createProjectInternalState.isOpeningProject = opening;
   },
 
   addUploadedFile(file: UploadedFile): void {
@@ -502,23 +504,6 @@ export const createProjectActions = {
 
     const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
-    const relatedFilesData: Record<string, ArrayBuffer> = {};
-    let shpContent: ArrayBuffer = new ArrayBuffer(0);
-
-    try {
-      for (const f of files) {
-        const buffer = await f.arrayBuffer();
-        relatedFilesData[f.name] = buffer;
-        if (f.name === shpFile.name) {
-          shpContent = buffer;
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      this.setNewProjectError(m.error_shapefile_read_failed_message());
-      return;
-    }
-
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
@@ -529,9 +514,7 @@ export const createProjectActions = {
       sourceType,
       relatedFiles: files.map((f) => f.name),
       relatedFileObjects: files,
-      originalFile: shpFile,
-      content: shpContent,
-      relatedFilesData
+      originalFile: shpFile
     };
 
     this.addUploadedFile(uploadedFile);

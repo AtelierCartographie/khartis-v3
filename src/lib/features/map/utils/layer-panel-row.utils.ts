@@ -1,13 +1,13 @@
 import {
   BASEMAP_LAYER_ID,
-  getBasemapRenderGroup,
-  type BasemapLayerId
+  type BasemapLayerId,
+  getBasemapRenderGroup
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import {
-  PrimitiveFilterType,
-  type PrimitiveFilter
+  type PrimitiveFilter,
+  PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { DeckLayerId } from '$lib/features/map/constants/map.constants';
 

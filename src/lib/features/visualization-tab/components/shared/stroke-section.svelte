@@ -20,24 +20,24 @@
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import {
-    StrokeMode,
-    SLIDER_LIMITS,
-    VISUALIZATION_DEFAULTS,
+    BasemapDottedPattern,
     DEFAULT_COLORS,
     MIN_VISIBLE_STROKE_WIDTH,
-    BasemapDottedPattern
+    SLIDER_LIMITS,
+    StrokeMode,
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import type {
+    ClassificationConfig,
     VisualizationConfig,
-    VisualizationModes,
-    ClassificationConfig
+    VisualizationModes
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationRow from './discretization-row.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -46,8 +46,8 @@
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {
-    NONE_FIELD_ID,
     filterFieldsByKind,
+    NONE_FIELD_ID,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import {
@@ -61,7 +61,7 @@
     coerceDashedPattern
   } from './dashed-pattern.utils';
   import MissingDataSection from './missing-data-section.svelte';
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -69,6 +69,8 @@
     fillColor?: string | string[];
     infoText?: string;
     showDashed?: boolean;
+    /** Controls rendered between the dash options and the opacity slider. */
+    beforeOpacity?: Snippet;
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -90,7 +92,6 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     showMissingDataSection?: boolean;
-    showSliderBounds?: boolean;
     sliderInputWidth?: string;
     maxStrokeWidth?: number;
     facetsValueSlotPath?: FacetSlotPath;
@@ -105,6 +106,7 @@
     fillColor,
     infoText,
     showDashed = true,
+    beforeOpacity,
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -120,7 +122,6 @@
     showMissingData,
     missingDataColor,
     showMissingDataSection = true,
-    showSliderBounds = true,
     sliderInputWidth = '128px',
     maxStrokeWidth = SLIDER_LIMITS.strokeWidth.max,
     facetsValueSlotPath,
@@ -393,7 +394,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -443,7 +443,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -501,7 +500,6 @@
       min={MIN_VISIBLE_STROKE_WIDTH}
       max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
@@ -538,13 +536,14 @@
     {/if}
   {/if}
 
+  {@render beforeOpacity?.()}
+
   <SliderWithInput
     label={m.opacity()}
     bind:value={strokeOpacity}
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
     step={SLIDER_LIMITS.opacity.step}
-    showMinMax={showSliderBounds}
     inputWidth={sliderInputWidth}
     onchange={handleStrokeOpacityChange}
   />

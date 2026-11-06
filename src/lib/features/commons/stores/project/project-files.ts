@@ -30,7 +30,8 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     uploadProgress: file.uploadProgress,
     errorMessage: file.errorMessage,
     validation: file.validation,
-    content: file.content,
+    originalFile: file.originalFile,
+    relatedFileObjects: file.relatedFileObjects,
     archiveLayerSnapshot: file.archiveLayerSnapshot,
     geometry: file.geometry,
     statistics: file.statistics,
@@ -41,7 +42,6 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     enrichmentSnapshot: file.enrichmentSnapshot,
     joinedColumnOrigins: file.joinedColumnOrigins,
     attachedTo: file.attachedTo,
-    relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
     deletedRowIds: file.deletedRowIds,
     csvOptions: file.csvOptions,
@@ -185,20 +185,28 @@ export async function renameFile(
   const updatedFiles = [...project.data.sourceFiles];
   const updatedFile = { ...updatedFiles[fileIndex], name: newName };
 
-  if (updatedFile.relatedFilesData && oldBaseName !== newBaseName) {
-    const renamedData: Record<string, ArrayBuffer> = {};
-    for (const [fileName, buffer] of Object.entries(
-      updatedFile.relatedFilesData
-    )) {
-      const fileBaseName = getBaseName(fileName);
-      const fileExt = fileName.slice(fileBaseName.length);
-      if (fileBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
-        renamedData[newBaseName + fileExt] = buffer;
-      } else {
-        renamedData[fileName] = buffer;
+  if (updatedFile.relatedFileObjects && oldBaseName !== newBaseName) {
+    const renameCompanion = (file: File): File => {
+      const fileBaseName = getBaseName(file.name);
+      if (fileBaseName.toLowerCase() !== oldBaseName.toLowerCase()) {
+        return file;
       }
+      const fileExt = file.name.slice(fileBaseName.length);
+      return new File([file], newBaseName + fileExt, {
+        type: file.type,
+        lastModified: file.lastModified
+      });
+    };
+    const previousMain = updatedFile.originalFile;
+    updatedFile.relatedFileObjects =
+      updatedFile.relatedFileObjects.map(renameCompanion);
+    if (previousMain) {
+      const index = currentFile.relatedFileObjects?.indexOf(previousMain) ?? -1;
+      updatedFile.originalFile =
+        index >= 0
+          ? updatedFile.relatedFileObjects[index]
+          : renameCompanion(previousMain);
     }
-    updatedFile.relatedFilesData = renamedData;
   }
 
   if (updatedFile.relatedFiles && oldBaseName !== newBaseName) {

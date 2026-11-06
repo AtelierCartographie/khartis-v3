@@ -1,10 +1,10 @@
 import {
+  getTextPrimitive,
   PrimitiveFilterType,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
   type VisualizationConfig,
-  type VisualizationModes,
-  getTextPrimitive
+  type VisualizationModes
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ColorMode,

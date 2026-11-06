@@ -10,8 +10,8 @@ import {
 } from '$lib/features/data-pipeline';
 import type { AssetRef, UploadedFile } from '../../types/create-project.types';
 import { FileType } from '../../types/create-project.types';
-import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
-import { startProcessing, endProcessing } from './datasets-state.svelte';
+import type { DatasetsInternals, DatasetsState } from './datasets-state.svelte';
+import { endProcessing, startProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';
@@ -262,7 +262,6 @@ async function loadUploadedDatasetFile(
   options: { useDuckDbSnapshotWhenAvailable: boolean }
 ): Promise<DatasetResult | ZipDatasetResult> {
   const hasRestorableBinarySource = Boolean(
-    file.content ||
     file.originalFile ||
     file.assetRef ||
     file.companionAssetRefs?.length ||
@@ -272,7 +271,7 @@ async function loadUploadedDatasetFile(
     file.assetRef || file.companionAssetRefs?.length || file.enrichmentSnapshot
   );
   const hasInlineReplaySource = Boolean(
-    file.content || file.originalFile || file.archiveLayerSnapshot
+    file.originalFile || file.archiveLayerSnapshot
   );
 
   if (
@@ -317,8 +316,7 @@ async function loadEnrichmentSnapshot(
       ...file,
       assetRef: snapshot,
       companionAssetRefs: undefined,
-      relatedFileObjects: undefined,
-      relatedFilesData: undefined
+      relatedFileObjects: undefined
     });
   } catch (error) {
     logger.error(

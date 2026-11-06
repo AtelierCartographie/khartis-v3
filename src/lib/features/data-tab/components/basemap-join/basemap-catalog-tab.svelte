@@ -6,9 +6,9 @@
   import {
     countFacet,
     countYears,
+    type FacetOption,
     getBasemapAreaLabel,
-    getBasemapLevelLabel,
-    type FacetOption
+    getBasemapLevelLabel
   } from '$lib/features/map/utils/basemap-catalog-facets.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
@@ -32,8 +32,8 @@
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface SuggestedBasemap {
@@ -345,10 +345,10 @@
       title={m.section_suggestions()}
       open={suggestionsPanelOpen}
       onToggle={onSuggestionsToggle}
-      titleClass="suggestions-title"
+      titleClass="suggestions-title kh-thinking-text"
     >
       {#snippet icon()}
-        <span class="suggestions-title-icon">
+        <span class="suggestions-title-icon kh-thinking-icon">
           <MagicWandFilled size={20} />
         </span>
       {/snippet}

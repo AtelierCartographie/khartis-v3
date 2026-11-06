@@ -1,9 +1,9 @@
 import {
   type KhartisProject,
-  ProjectStorageKey,
   projectFiles,
   projectRepository,
-  projectStorage
+  projectStorage,
+  ProjectStorageKey
 } from '$lib/features/project-management';
 import {
   persistenceRegistry,

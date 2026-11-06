@@ -17,17 +17,14 @@
   import {
     basemapService,
     mapProjectionStore,
-    osmBasemapStore,
-    projectionStore as mapRenderProjectionStore
+    osmBasemapStore
   } from '$lib/features/map';
-  import {
-    resolveProjectionAvailabilityContext,
-    supportsProjectionSuggestions
-  } from '$lib/features/map/utils/projection-availability.utils';
+  import { supportsProjectionSuggestions } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
   import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
   import { getNationalProjectionBadge } from './national-region-label';
   import {
+    getProjectionAvailabilityContext,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
@@ -94,23 +91,7 @@
   });
 
   const projectionState = $derived(getProjectionState());
-  const projectionContext = $derived(
-    resolveProjectionAvailabilityContext({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive,
-      currentStyle: basemapStyleStore.selectedStyle,
-      preferredStyle: basemapStyleStore.preferredTiledStyle,
-      referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
-        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
-        : null,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
-      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
-        ? null
-        : mapRenderProjectionStore.referenceBbox,
-      projectionPresets: basemapService.projectionPresets
-    })
-  );
+  const projectionContext = $derived(getProjectionAvailabilityContext());
   const suggestionCardsEnabled = $derived(
     supportsProjectionSuggestions(projectionContext)
   );

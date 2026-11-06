@@ -4,28 +4,33 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import {
+    StylingTools as StylingToolId,
     ToolbarStep,
     VisualizationTools as VisualizationToolId
   } from '$lib/features/commons/types/global';
-  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import {
+    UI_DENSITY,
+    uiDensityStore
+  } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
-  import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
-  import { tick, untrack } from 'svelte';
   import type { Component } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
-  import { fly, slide } from 'svelte/transition';
+  import { fade, fly, slide } from 'svelte/transition';
   import {
     motionDuration,
     trackStepDirection
   } from '$lib/features/commons/utils/step-transition.svelte';
   import {
-    DOM_IDS,
     CSS_CLASSES,
-    TEST_IDS,
+    DOM_IDS,
+    FILL_HEIGHT_TOOLS,
     POPOVER_DIMENSIONS,
-    FILL_HEIGHT_TOOLS
+    TEST_IDS
   } from './step-toolbar.constants';
   import ToolPopover from './tool-popover.svelte';
   import StylingTools from './tools-list/styling-tools.svelte';
@@ -34,12 +39,14 @@
   import ToolsListContainer from './tools-list/tools-list-container.svelte';
   import ColorBlindnessNotification from './tools/color-blindness/color-blindness-notification.svelte';
   import {
-    colorBlindnessActions,
     getColorBlindnessState,
     isColorBlindnessActive
   } from './tools/color-blindness/color-blindness.store.svelte';
   import { annotationsActions } from './tools/annotations/annotations.store.svelte';
-  import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
+  import {
+    closeSelectedToolPanel,
+    selectTool
+  } from './tools-list/tool-list.utils.svelte';
 
   const MAIN_TOOLBAR_CONTENT_SELECTOR =
     '#khartis-main-toolbar .toolbar-content';
@@ -54,10 +61,27 @@
   const colorBlindnessState = $derived(getColorBlindnessState());
   let notificationDismissed = $state(false);
 
+  function openColorBlindnessTool(): void {
+    if (globalState.selectedStep !== ToolbarStep.Styling) {
+      globalActions.setNavigationState(ToolbarStep.Styling);
+    }
+    selectTool(StylingToolId.ColorBlindness);
+  }
+  let noticeElement = $state<HTMLDivElement | null>(null);
+  let noticeHeight = $state(0);
+  let navHeight = $state(0);
+
+  // The bar is centred in the viewer; with the notice in the top-left corner,
+  // it moves down just enough to start below it.
+  const navTop = $derived.by(() => {
+    if (!noticeElement || noticeHeight === 0) return undefined;
+    const noticeBottom = noticeElement.offsetTop + noticeHeight;
+    return `max(50%, ${noticeBottom + noticeElement.offsetTop + navHeight / 2}px)`;
+  });
+
   const showColorBlindnessNotification = $derived(
     isColorBlindnessActive(colorBlindnessState) &&
-      globalState.selectedStep !== ToolbarStep.Styling &&
-      !globalState.selectedTool &&
+      globalState.selectedStep !== ToolbarStep.Data &&
       !notificationDismissed
   );
 
@@ -83,6 +107,33 @@
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
   }));
+
+  const steps = $derived([
+    {
+      step: ToolbarStep.Data,
+      icon: DataTable,
+      testId: TEST_IDS.STEP_DATA,
+      ariaLabel: m.step_data_aria()
+    },
+    {
+      step: ToolbarStep.Visualizations,
+      icon: ColorPalette,
+      testId: TEST_IDS.STEP_VISUALIZATIONS,
+      ariaLabel: m.step_visualizations_aria()
+    },
+    {
+      step: ToolbarStep.Styling,
+      icon: ToolsAlt,
+      testId: TEST_IDS.STEP_STYLING,
+      ariaLabel: m.step_styling_aria()
+    }
+  ]);
+
+  // In compact density, step labels move into tooltips to narrow the bar.
+  const isCompact = $derived(
+    uiDensityStore.appliedDensity === UI_DENSITY.COMPACT
+  );
+  let hoveredStep = $state<ToolbarStep | null>(null);
 
   let SelectedList = $derived<Component | undefined>(
     globalState.selectedStep === ToolbarStep.Visualizations ||
@@ -146,6 +197,8 @@
 
 <nav
   id={DOM_IDS.STEP_TOOLBAR}
+  bind:offsetHeight={navHeight}
+  style:top={navTop}
   class="app-shadow"
   class:tool-open={!!globalState.selectedTool}
   data-outline
@@ -171,51 +224,40 @@
         ></span>
       {/if}
 
-      <button
-        bind:this={stepButtons[ToolbarStep.Data]}
-        type="button"
-        data-testid={TEST_IDS.STEP_DATA}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
-        })}
-        onclick={() => selectStep(ToolbarStep.Data)}
-        aria-pressed={isStepSelected(ToolbarStep.Data)}
-        aria-label={m.step_data_aria()}
-      >
-        <DataTable size={32} />
-        <span>{stepLabels[ToolbarStep.Data]}</span>
-      </button>
-
-      <button
-        bind:this={stepButtons[ToolbarStep.Visualizations]}
-        type="button"
-        data-testid={TEST_IDS.STEP_VISUALIZATIONS}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
-        })}
-        onclick={() => selectStep(ToolbarStep.Visualizations)}
-        aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
-        aria-label={m.step_visualizations_aria()}
-      >
-        <ColorPalette size={32} />
-        <span>{stepLabels[ToolbarStep.Visualizations]}</span>
-      </button>
-
-      <button
-        bind:this={stepButtons[ToolbarStep.Styling]}
-        type="button"
-        data-testid={TEST_IDS.STEP_STYLING}
-        class={clsx(CSS_CLASSES.NAV_ITEM, {
-          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)
-        })}
-        onclick={() => selectStep(ToolbarStep.Styling)}
-        aria-pressed={isStepSelected(ToolbarStep.Styling)}
-        aria-label={m.step_styling_aria()}
-      >
-        <ToolsAlt size={32} />
-        <span>{stepLabels[ToolbarStep.Styling]}</span>
-      </button>
+      {#each steps as { step, icon: StepIcon, testId, ariaLabel } (step)}
+        <button
+          bind:this={stepButtons[step]}
+          type="button"
+          data-testid={testId}
+          class={clsx(CSS_CLASSES.NAV_ITEM, {
+            [CSS_CLASSES.SELECTED]: isStepSelected(step)
+          })}
+          onclick={() => selectStep(step)}
+          onmouseenter={() => (hoveredStep = step)}
+          onmouseleave={() => (hoveredStep = null)}
+          onfocus={() => (hoveredStep = step)}
+          onblur={() => (hoveredStep = null)}
+          onkeydown={(e: KeyboardEvent) => {
+            if (e.key === KEY.ESCAPE) hoveredStep = null;
+          }}
+          aria-pressed={isStepSelected(step)}
+          aria-label={ariaLabel}
+        >
+          <StepIcon size={32} />
+          {#if !isCompact}
+            <span>{stepLabels[step]}</span>
+          {/if}
+        </button>
+      {/each}
     </div>
+
+    {#if isCompact && hoveredStep !== null}
+      <TooltipBubble
+        text={stepLabels[hoveredStep]}
+        trigger={stepButtons[hoveredStep] ?? null}
+        direction="right"
+      />
+    {/if}
 
     {#if SelectedList}
       <div
@@ -257,20 +299,26 @@
       <ToolContainer />
     {/snippet}
   </ToolPopover>
+</nav>
 
+<!-- Outside the step toolbar: the notice sits in the viewer's top-left corner. -->
+{#if showColorBlindnessNotification}
   <div
     id={DOM_IDS.COLORBLINDNESS_NOTIFICATION}
+    bind:this={noticeElement}
+    bind:offsetHeight={noticeHeight}
+    class="app-shadow"
     style="--cb-notif-width:{POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}px;"
+    transition:fade={{ duration: motionDuration(160) }}
   >
-    <Popover open={showColorBlindnessNotification} align="right-top" light>
-      <ColorBlindnessNotification
-        ondeactivate={() =>
-          colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE)}
-        onclose={() => (notificationDismissed = true)}
-      />
-    </Popover>
+    <ColorBlindnessNotification
+      onopentool={globalState.selectedTool === StylingToolId.ColorBlindness
+        ? undefined
+        : openColorBlindnessTool}
+      onclose={() => (notificationDismissed = true)}
+    />
   </div>
-</nav>
+{/if}
 
 <style>
   :global(#khartis-step-toolbar) {
@@ -372,7 +420,7 @@
   }
 
   :global(#khartis-step-toolbar .tools-grid) {
-    padding: var(--cds-spacing-03) var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-02) var(--cds-spacing-03);
   }
 
   /* The outgoing and incoming tool sets share one cell while they swap, so
@@ -442,14 +490,13 @@
     );
   }
 
-  :global(#khartis-colorblindness-notification .bx--popover--right-top) {
-    top: 0 !important;
-  }
-
-  :global(#khartis-colorblindness-notification .bx--popover-contents) {
-    width: var(--cb-notif-width) !important;
-    max-width: var(--cb-notif-width) !important;
-    padding: 0;
+  :global(#khartis-colorblindness-notification) {
+    position: absolute;
+    top: var(--cds-spacing-05);
+    left: var(--cds-spacing-05);
+    z-index: var(--z-toolbar);
+    width: var(--cb-notif-width);
+    max-width: calc(100% - 2 * var(--cds-spacing-05));
   }
 
   :global(#khartis-colorblindness-notification .bx--inline-notification) {
@@ -466,8 +513,7 @@
   }
 
   .step-title {
-    padding-bottom: var(--cds-spacing-02);
-    padding-top: var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
   }
 
   .step-container {

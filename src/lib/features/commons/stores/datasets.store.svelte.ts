@@ -3,53 +3,53 @@ import type {
   DatasetResult
 } from '$lib/features/data-pipeline';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import { LogCategory, logger } from '../utils/logger';
 import type { UploadedFile } from '../types/create-project.types';
 import { deserializeDatasetsViewState } from '../utils/datasets-view-state.utils';
 import {
-  datasetsState,
-  datasetsInternals,
-  clearState,
-  getSelectedDataset,
-  selectDataset as selectDatasetFn,
-  getDatasetBySourceFile as getDatasetBySourceFileFn,
-  getDatasetsByType as getDatasetsByTypeFn,
-  getAllDatasets as getAllDatasetsFn,
-  isDatasetEnabled as isDatasetEnabledFn,
-  toggleDatasetVisibility as toggleDatasetVisibilityFn,
-  enableDataset as enableDatasetFn,
-  disableDataset as disableDatasetFn,
-  getEnabledDatasets,
-  hideColumn as hideColumnFn,
-  showColumn as showColumnFn,
-  toggleColumnHidden as toggleColumnHiddenFn,
-  isColumnHidden as isColumnHiddenFn,
-  getHiddenColumns as getHiddenColumnsFn,
-  getVisibleColumns as getVisibleColumnsFn,
-  renameDatasetColumn as renameDatasetColumnFn,
-  getColumnStatistics as getColumnStatisticsFn,
-  processFiles as processFilesFn,
   addFile as addFileFn,
   addProcessedDataset as addProcessedDatasetFn,
-  removeDataset as removeDatasetFn,
+  clearState,
+  createVisualizationsForGeoDatasets,
+  datasetsInternals,
+  datasetsState,
   deleteDataset as deleteDatasetFn,
+  disableDataset as disableDatasetFn,
+  duplicateDataset as duplicateDatasetFn,
+  enableDataset as enableDatasetFn,
+  getAllDatasets as getAllDatasetsFn,
+  getColumnStatistics as getColumnStatisticsFn,
+  getDatasetBySourceFile as getDatasetBySourceFileFn,
+  getDatasetsByType as getDatasetsByTypeFn,
+  getEnabledDatasets,
+  getHiddenColumns as getHiddenColumnsFn,
+  getSelectedDataset,
+  getVisibleColumns as getVisibleColumnsFn,
+  hasModifications as hasModificationsFn,
+  hideColumn as hideColumnFn,
+  isColumnHidden as isColumnHiddenFn,
+  isDatasetEnabled as isDatasetEnabledFn,
+  processFiles as processFilesFn,
+  recordTransformation as recordTransformationFn,
+  removeDataset as removeDatasetFn,
+  renameDataset as renameDatasetFn,
+  renameDatasetColumn as renameDatasetColumnFn,
+  resetDataset as resetDatasetFn,
+  selectDataset as selectDatasetFn,
+  showColumn as showColumnFn,
+  toggleColumnHidden as toggleColumnHiddenFn,
+  toggleDatasetVisibility as toggleDatasetVisibilityFn,
   updateDataset as updateDatasetFn,
+  updateDatasetCsvOptions as updateDatasetCsvOptionsFn,
   updateDatasetJoinBasemap as updateDatasetJoinBasemapFn,
   updateDatasetRowCount as updateDatasetRowCountFn,
   updateDatasetTableName as updateDatasetTableNameFn,
-  updateDatasetCsvOptions as updateDatasetCsvOptionsFn,
-  renameDataset as renameDatasetFn,
-  hasModifications as hasModificationsFn,
-  recordTransformation as recordTransformationFn,
-  waitForDatasetBySourceFile as waitForDatasetBySourceFileFn,
-  resetDataset as resetDatasetFn,
-  duplicateDataset as duplicateDatasetFn,
-  createVisualizationsForGeoDatasets,
-  type VisualizationStoreOperations
+  type VisualizationStoreOperations,
+  waitForDatasetBySourceFile as waitForDatasetBySourceFileFn
 } from './datasets';
 
 export type { VisualizationStoreOperations };

@@ -5,11 +5,14 @@ import { extent, ticks as d3_ticks } from 'd3-array';
 import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 import {
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
   fill_candidates_by_proximity,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   linearScale,
   magnitude,
   measureLegendLongestToken,
@@ -17,12 +20,9 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   round_extreme,
-  scaleLegendMetric,
-  sqrtScale,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition,
   type ScaleFn,
-  legendTitleFontSize
+  scaleLegendMetric,
+  sqrtScale
 } from './utils';
 
 export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';

@@ -9,8 +9,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface ProjectGeoBasemapCard {
@@ -124,6 +124,8 @@
     <div class="url-import-row">
       <TextInput
         size="sm"
+        labelText={m.basemap_import_url_label()}
+        hideLabel
         value={importUrl}
         placeholder={m.url_placeholder()}
         on:input={handleImportUrlInput}

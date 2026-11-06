@@ -4,8 +4,8 @@
   import {
     Checkbox,
     CheckboxCheckedFilled,
-    ChevronDown,
-    Checkmark
+    Checkmark,
+    ChevronDown
   } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';

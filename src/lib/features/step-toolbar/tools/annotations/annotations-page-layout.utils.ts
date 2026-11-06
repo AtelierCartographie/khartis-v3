@@ -1,6 +1,6 @@
 import {
-  ANNOTATION_ROLES,
   ANNOTATION_ROLE,
+  ANNOTATION_ROLES,
   getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';

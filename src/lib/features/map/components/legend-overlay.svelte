@@ -7,10 +7,13 @@
     StylingTools,
     ToolbarStep
   } from '$lib/features/commons/types/global';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import {
-    visualizationStore,
-    type VisualizationConfig
+    layoutDropShadow,
+    LegendPosition
+  } from '$lib/features/commons/constants/ui.constants';
+  import {
+    type VisualizationConfig,
+    visualizationStore
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -20,16 +23,16 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
-    PAGE_GRID_SIZE_PX,
-    PAGE_SNAP_STEP_PX,
     clampPointToBounds,
     getDragBounds,
+    PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
+    type PageGridPoint,
+    type PageGridSize,
     remapAreaPointToResizedPage,
     roundToLayoutUnit,
     snapAreaPointWithinPage,
-    snapPointWithinBounds,
-    type PageGridPoint,
-    type PageGridSize
+    snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     getElementCenteringDelta,
@@ -55,7 +58,7 @@
     type PageResize
   } from '$lib/features/step-toolbar/tools/format';
   import * as m from '$lib/paraglide/messages';
-  import { tick, untrack, onDestroy } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
@@ -297,7 +300,9 @@
 
     if (hasBackground) {
       styles.push(`background-color: ${bgHsl}`);
-      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
+      styles.push(
+        `box-shadow: ${legendState.style.background.shadow ? layoutDropShadow(bgOpacity) : 'none'}`
+      );
     } else {
       styles.push('background-color: transparent');
       styles.push('box-shadow: none');
@@ -749,7 +754,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function resetFrameCentering(): void {
@@ -758,7 +763,7 @@
     }
 
     centeredItemId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
@@ -782,7 +787,13 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleFrameBlur(): void {
+    if (isLegendActive) {
+      return;
+    }
+
     resetFrameCentering();
   }
 

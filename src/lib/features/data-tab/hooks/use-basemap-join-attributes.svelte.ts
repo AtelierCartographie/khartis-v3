@@ -63,35 +63,36 @@ export function useBasemapJoinAttributes({
           return;
         }
 
-        values = nextValues;
-        basemapId = currentBasemapId;
-
+        let nextAliases: Record<string, BasemapAlias[]> = {};
         if (
-          nextValues.length === 0 ||
-          nextValues.length > MAX_EAGER_BASEMAP_ALIAS_VALUES
+          nextValues.length > 0 &&
+          nextValues.length <= MAX_EAGER_BASEMAP_ALIAS_VALUES
         ) {
-          aliasesByValue = {};
-          return;
+          try {
+            nextAliases =
+              await duckDBOrchestrator.getBasemapAttributeAliasesByValue(
+                basemap
+              );
+          } catch (error) {
+            if (!isCurrentRequest(currentRequestId, currentBasemapId)) {
+              return;
+            }
+            logger.error(
+              'Failed to fetch basemap attribute aliases',
+              LogCategory.MAP,
+              error
+            );
+          }
+          if (!isCurrentRequest(currentRequestId, currentBasemapId)) {
+            return;
+          }
         }
 
-        try {
-          const aliases =
-            await duckDBOrchestrator.getBasemapAttributeAliasesByValue(basemap);
-          if (!isCurrentRequest(currentRequestId, currentBasemapId)) {
-            return;
-          }
-          aliasesByValue = aliases;
-        } catch (error) {
-          if (!isCurrentRequest(currentRequestId, currentBasemapId)) {
-            return;
-          }
-          logger.error(
-            'Failed to fetch basemap attribute aliases',
-            LogCategory.MAP,
-            error
-          );
-          aliasesByValue = {};
-        }
+        // Published together: values without their aliases cannot translate a
+        // matched variant, so the rows would show it in another language.
+        values = nextValues;
+        aliasesByValue = nextAliases;
+        basemapId = currentBasemapId;
       } catch (error) {
         if (!isCurrentRequest(currentRequestId, currentBasemapId)) {
           return;

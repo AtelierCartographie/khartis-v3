@@ -1,5 +1,41 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
+import {
+  ColumnType,
+  type EnrichedColumn,
+  FileFormatEnum
+} from '$lib/features/data-pipeline/types';
+import {
+  ClassificationMethod,
+  getEnabledPrimitiveFilters,
+  getPrimitiveClassification,
+  getSymbolPrimitive,
+  getTextPrimitive,
+  PrimitiveFilterType,
+  resolveAllowedPrimitiveFilters,
+  ScaleType,
+  type VisualizationConfig,
+  visualizationStore,
+  VisualizationType
+} from './visualization.store.svelte';
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
+import {
+  CategoryShapeMode,
+  ColorMode,
+  FillMode,
+  MissingDataShape,
+  ProportionalType,
+  ShapeType,
+  StrokeMode,
+  SymbolDoublePosition,
+  SymbolMode,
+  ThicknessMode
+} from '$lib/features/commons/constants/visualization.constants';
+import { datasetsStore } from './datasets.store.svelte';
+import {
+  persistenceRegistry,
+  SavePriority
+} from '$lib/features/project-management/core';
 
 const mockedDatasetsState: { datasets: DatasetResult[] } = {
   datasets: []
@@ -24,43 +60,6 @@ vi.mock('$lib/features/commons/services/analytics.service', () => ({
     trackVisualizationCreated: vi.fn()
   }
 }));
-
-import {
-  ClassificationMethod,
-  PrimitiveFilterType,
-  VisualizationType,
-  getEnabledPrimitiveFilters,
-  getPrimitiveClassification,
-  getSymbolPrimitive,
-  getTextPrimitive,
-  resolveAllowedPrimitiveFilters,
-  visualizationStore,
-  type VisualizationConfig
-} from './visualization.store.svelte';
-import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
-import {
-  ColorMode,
-  CategoryShapeMode,
-  FillMode,
-  MissingDataShape,
-  ProportionalType,
-  ShapeType,
-  StrokeMode,
-  SymbolDoublePosition,
-  SymbolMode,
-  ThicknessMode
-} from '$lib/features/commons/constants/visualization.constants';
-import { ScaleType } from './visualization.store.svelte';
-import { datasetsStore } from './datasets.store.svelte';
-import {
-  ColumnType,
-  FileFormatEnum,
-  type EnrichedColumn
-} from '$lib/features/data-pipeline/types';
-import {
-  SavePriority,
-  persistenceRegistry
-} from '$lib/features/project-management/core';
 
 function buildColumn(name: string, type: ColumnType): EnrichedColumn {
   return {

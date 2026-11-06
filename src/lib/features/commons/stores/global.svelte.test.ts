@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  StylingTools,
+  ToolbarState,
+  ToolbarStep,
+  VisualizationTools
+} from '$lib/features/commons/types/global';
+import { globalActions, globalState } from './global.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -42,14 +49,6 @@ vi.mock('./project.store.svelte', () => ({
   projectStore: mocks.projectStoreMock
 }));
 
-import {
-  StylingTools,
-  ToolbarState,
-  ToolbarStep,
-  VisualizationTools
-} from '$lib/features/commons/types/global';
-import { globalActions, globalState } from './global.svelte';
-
 const globalUiEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'globalUi'
 )?.[0] as
@@ -87,7 +86,10 @@ describe('globalState project persistence boundary', () => {
     expect(globalState.selectedTool).toBe(VisualizationTools.Layers);
     expect(globalState.toolbarState).toBe(ToolbarState.Compact);
     expect(globalState.selectedDataButtonId).toBe('source-2');
-    expect(globalState.zoom.pageZoomLevel).toBe(180);
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
+    globalActions.setPageFitScale(1.5);
+    expect(globalState.zoom.isPageZoomFitted).toBe(false);
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(270);
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 12, y: -8 });
     expect(globalState.isSideNavOpen).toBe(true);
     expect(globalState.isCreateProjectModalOpen).toBe(true);
@@ -111,7 +113,7 @@ describe('globalState project persistence boundary', () => {
     expect(globalState.projectionFilter).toBe('all');
     expect(globalState.projectionViewMode).toBe('list');
     expect(globalState.selectedDataButtonId).toBeUndefined();
-    expect(globalState.zoom.pageZoomLevel).toBe(100);
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 15 });
   });
 
@@ -137,7 +139,8 @@ describe('globalState project persistence boundary', () => {
     globalState.selectedStep = ToolbarStep.Styling;
     globalActions.setSelectedTool(VisualizationTools.Search);
     globalActions.setMapExporting(true);
-    globalActions.setPageZoom(140);
+    globalActions.setPageFitScale(2);
+    globalActions.setPageZoomPercent(140);
     globalActions.setPagePanOffset({ x: 5, y: 7 });
 
     const serialized = globalUiEntry?.serialize() as Record<string, unknown>;
@@ -145,12 +148,37 @@ describe('globalState project persistence boundary', () => {
     expect(serialized).toMatchObject({
       selectedStep: ToolbarStep.Styling,
       selectedTool: VisualizationTools.Search,
-      pageZoomLevel: 140,
+      pageZoomLevel: 70,
+      isPageZoomFitted: false,
+      pageZoomPercent: 140,
       pagePanOffset: { x: 5, y: 7 }
     });
     expect(serialized).not.toHaveProperty('isSideNavOpen');
     expect(serialized).not.toHaveProperty('isCreateProjectModalOpen');
     expect(serialized).not.toHaveProperty('isMapExporting');
+  });
+
+  it('should step the absolute page zoom on the step grid when the page is fitted', () => {
+    globalActions.setPageFitScale(2.18);
+
+    globalActions.zoomInPage();
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(220);
+
+    globalActions.fitPageZoom();
+    globalActions.zoomOutPage();
+    expect(globalState.zoom.pageZoomPercent).toBeCloseTo(215);
+  });
+
+  it('should keep a chosen page zoom when the fit changes', () => {
+    globalActions.setPageFitScale(1.33);
+    globalActions.setPageZoomPercent(160);
+
+    globalActions.setPageFitScale(3);
+    expect(globalState.zoom.isPageZoomFitted).toBe(false);
+    expect(globalState.zoom.pageZoomPercent).toBe(160);
+
+    globalActions.resetPageZoom();
+    expect(globalState.zoom.isPageZoomFitted).toBe(true);
   });
 
   it('keeps map export mode transient and resettable', () => {
@@ -164,5 +192,19 @@ describe('globalState project persistence boundary', () => {
 
     expect(globalState.selectedStep).toBe(ToolbarStep.Data);
     expect(globalState.isMapExporting).toBe(false);
+  });
+
+  it('should bring the page back where the user moved it when a centred object is released', () => {
+    globalActions.setPagePanOffset({ x: 120, y: 60 });
+
+    globalActions.centerPageBy(30, -10);
+    globalActions.centerPageBy(5, 5);
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 155, y: 55 });
+
+    globalActions.restorePagePan();
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 120, y: 60 });
+
+    globalActions.restorePagePan();
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 120, y: 60 });
   });
 });

@@ -38,11 +38,27 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// jsdom has no Web Animations API; Svelte transitions run on it. The stub
+// finishes each animation at once.
+if (typeof Element !== 'undefined' && !Element.prototype.animate) {
+  Element.prototype.animate = function animate() {
+    const animation = {
+      onfinish: null as (() => void) | null,
+      finished: Promise.resolve(),
+      cancel: () => {},
+      finish: () => animation.onfinish?.()
+    };
+    queueMicrotask(() => animation.onfinish?.());
+    return animation as unknown as Animation;
+  };
+}
+
 vi.mock('$env/dynamic/public', () => ({
   env: {}
 }));
 
-vi.mock('$lib/features/duckdb', () => ({
+vi.mock('$lib/features/duckdb', async () => ({
+  ...(await import('$lib/features/duckdb/utils/duckdb-error.utils')),
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),

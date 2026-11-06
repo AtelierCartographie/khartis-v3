@@ -2,19 +2,19 @@ import { m } from '$lib/paraglide/messages';
 import {
   DEFAULT_CATEGORICAL_COLORS,
   getEnabledPrimitiveFilters,
-  PrimitiveFilterType,
   type PrimitiveConfigKind,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type VisualizationConfig
 } from '../stores/visualization.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { deepClone } from '../utils/clone.utils';
 import {
   FACET_SLOT,
-  SCALE_MODE,
+  type FacetSlotPath,
   facetSlotRecomputesIndependentBreaks,
   isFacetCategorySlot,
-  type FacetSlotPath,
+  SCALE_MODE,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
 import {
@@ -37,8 +37,8 @@ import {
   findPaletteById,
   generateCategoricalColorsFromSeed,
   generatePaletteColors,
-  PALETTE_TYPE,
-  type Palette
+  type Palette,
+  PALETTE_TYPE
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { DataValidationError } from '../pipeline.errors';
 import { loadDistinctCategoryLabels } from '$lib/features/commons/utils/category-labels.utils';
@@ -478,24 +478,6 @@ export function resolveFacetFillSlotPath(
         : null;
 
   return fillSlotPath === primarySlotPath ? null : fillSlotPath;
-}
-
-export function resolveFacetFillVariable({
-  baseViz,
-  primarySlotPath,
-  fillVariables,
-  variable
-}: {
-  baseViz: VisualizationConfig;
-  primarySlotPath: FacetSlotPath;
-  fillVariables: FacetFillVariables;
-  variable: string;
-}): string | undefined {
-  const fillSlotPath = resolveFacetFillSlotPath(baseViz, primarySlotPath);
-  if (!fillSlotPath) {
-    return undefined;
-  }
-  return fillVariables[variable] ?? getFacetSlotVariable(baseViz, fillSlotPath);
 }
 
 function resolveFacetFillColumns(

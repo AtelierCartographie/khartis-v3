@@ -11,6 +11,7 @@
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
@@ -39,9 +40,16 @@
       ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
       : []
   );
+  // A heading stays on one line: the tooltip widens to hold it.
+  const hasHeading = $derived(
+    tooltipState.entries.some((entry) => entry.role === 'heading')
+  );
+  const previewEntries = $derived(
+    tooltipState.entries.filter((entry) => !entry.pinnedOnly)
+  );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return tooltipState.entries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
+      return previewEntries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
@@ -51,10 +59,14 @@
 
     return tooltipState.entries.filter((entry) => !skippedKeys.has(entry.key));
   });
+  // The pinned inspector shows what the preview leaves out.
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, tooltipState.entries.length - PREVIEW_MAX_ENTRIES_COUNT)
+      : Math.max(0, previewEntries.length - PREVIEW_MAX_ENTRIES_COUNT) +
+          tooltipState.entries.filter(
+            (entry) => entry.pinnedOnly && !entry.role
+          ).length
   );
 
   function getTooltipViewerRect(): {
@@ -182,7 +194,7 @@
     }
 
     void tooltipState.entries.length;
-    void globalState.zoom.pageZoomLevel;
+    void globalState.zoom.pageZoomScale;
     void globalState.zoom.pagePanOffset.x;
     void globalState.zoom.pagePanOffset.y;
     void mapInstanceStore.map;
@@ -270,6 +282,7 @@
     bind:this={tooltipElement}
     class="map-tooltip"
     class:hover-preview={!isInteractive}
+    class:fit-heading={hasHeading}
     class:interactive={isInteractive}
     class:pinned={tooltipState.pinned}
     class:mobile-sheet={isMobileLayout}
@@ -311,23 +324,47 @@
       </div>
     {/if}
 
-    <div class="tooltip-shell-body">
-      <div class="tooltip-entries">
-        {#each visibleEntries as entry (entry.key)}
-          <div class="tooltip-row">
-            <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-              >{entry.key}</span
-            >
-            <span class="tooltip-value">{entry.value}</span>
-          </div>
-        {/each}
-      </div>
-
-      {#if previewOverflowCount > 0}
-        <div class="tooltip-preview-more" aria-hidden="true">
-          +{previewOverflowCount}
+    <div class="kh-scroll-area">
+      <div class="tooltip-shell-body" use:scrollShadows>
+        <div class="tooltip-entries">
+          {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
+            {#if entry.role === 'divider'}
+              <hr class="tooltip-divider" />
+            {:else if entry.role === 'subtitle'}
+              <div class="tooltip-subtitle">{entry.key}</div>
+            {:else if entry.role === 'heading'}
+              <div class="tooltip-heading">
+                <span class="tooltip-heading-key">{entry.key}</span>
+                <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
+                  >{entry.value}</span
+                >
+              </div>
+            {:else if entry.role === 'columns'}
+              <div class="tooltip-columns">
+                {#each entry.columns ?? [] as column, columnIndex (columnIndex)}
+                  <div class="tooltip-column">
+                    <span class="tooltip-key">{column.label}</span>
+                    <span class="tooltip-column-value">{column.value}</span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="tooltip-row" class:inline={entry.pinnedOnly}>
+                <span class="tooltip-key" class:viz-column={entry.isVizColumn}
+                  >{entry.key}</span
+                >
+                <span class="tooltip-value">{entry.value}</span>
+              </div>
+            {/if}
+          {/each}
         </div>
-      {/if}
+
+        {#if previewOverflowCount > 0}
+          <div class="tooltip-preview-more" aria-hidden="true">
+            +{previewOverflowCount}
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
@@ -363,6 +400,12 @@
     overflow: hidden;
     pointer-events: none;
     user-select: none;
+  }
+
+  .map-tooltip.hover-preview.fit-heading {
+    width: max-content;
+    min-width: min(13rem, calc(100vw - 16px));
+    max-width: min(22rem, calc(100vw - 16px));
   }
 
   .map-tooltip.interactive {
@@ -412,7 +455,7 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
   }
 
   .tooltip-badges {
@@ -503,11 +546,11 @@
   }
 
   .tooltip-key {
-    color: #525252;
+    color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 82px;
+    max-width: 104px;
     flex-shrink: 1;
   }
 
@@ -528,6 +571,82 @@
     justify-self: end;
   }
 
+  .tooltip-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .tooltip-heading-key {
+    font-weight: 600;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  /* Drawn like the counts of the join summary and panel. */
+  .tooltip-chip {
+    --chip-color: var(--cds-border-strong-01, #8d8d8d);
+    --chip-background: var(--cds-layer-01, #f4f4f4);
+    padding: 0 4px 1px;
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+    background-color: var(--chip-background);
+    border-bottom: 1px solid var(--chip-color);
+  }
+
+  .tooltip-chip.tone-success {
+    --chip-color: var(--khartis-additions-join-success, #24a148);
+    --chip-background: var(--khartis-additions-join-success-bg, #defbe6);
+  }
+
+  .tooltip-chip.tone-warning {
+    --chip-color: var(--khartis-additions-join-warning, #f1c21b);
+    --chip-background: var(--khartis-additions-join-warning-bg, #fcf4d6);
+  }
+
+  .tooltip-chip.tone-error {
+    --chip-color: var(--khartis-additions-join-error, #da1e28);
+    --chip-background: var(--khartis-additions-join-error-bg, #fff1f1);
+  }
+
+  /* Two fields side by side, like a row of the join tables. */
+  .tooltip-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+
+  .tooltip-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  /* Read whole, on two lines when needed. */
+  .tooltip-column .tooltip-key {
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
+  }
+
+  .tooltip-column-value {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-subtitle {
+    font-size: 10px;
+    color: var(--cds-text-secondary, #525252);
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-divider {
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+
   .interactive .tooltip-key,
   .interactive .tooltip-value {
     white-space: normal;
@@ -546,16 +665,25 @@
     padding: 5px 0;
   }
 
+  /* The pinned row's other variables: name and value on one line. */
+  .interactive .tooltip-row.inline {
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: baseline;
+  }
+
+  .interactive .tooltip-row.inline .tooltip-value {
+    justify-self: end;
+    text-align: right;
+  }
+
   .interactive .tooltip-row + .tooltip-row {
     border-top: 1px solid rgba(22, 22, 22, 0.08);
   }
 
   .interactive .tooltip-key {
-    font-size: 10px;
     line-height: 1.3;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: #6f6f6f;
+    color: var(--cds-text-helper, #6f6f6f);
   }
 
   .interactive .tooltip-key.viz-column {

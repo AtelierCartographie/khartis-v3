@@ -165,8 +165,6 @@
           stepMultiplier={5}
           on:input={handleSizeChange}
           on:change={handleSizeChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>
@@ -184,8 +182,6 @@
           stepMultiplier={5}
           on:input={handleOpacityChange}
           on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>

@@ -1,17 +1,17 @@
 <script lang="ts">
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
-    StylingTools,
-    type ProjectionViewMode
+    type ProjectionViewMode,
+    StylingTools
   } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
   import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
-  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
+  import { tick } from 'svelte';
   import {
-    DOM_IDS,
     CSS_CLASSES,
+    DOM_IDS,
     POPOVER_DIMENSIONS,
     type ToolPopoverSizing
   } from './step-toolbar.constants';
@@ -19,6 +19,7 @@
   import { shouldBlockToolClose } from './tools/tool-close-guard';
   import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
   import { hasRecentDndInteraction } from '$lib/features/map/utils/tool-popover-drag-visibility.utils';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
 
   const {
     open = false,
@@ -106,6 +107,81 @@
     const top = Math.max(areaTop, toolbarTop);
     topOffset = Math.round(top - toolbarTop);
     availableHeight = Math.max(0, Math.round(areaBottom - top));
+  }
+
+  // Closing empties the popover at once (its content follows the selected
+  // tool), so an inert copy of the last frame fades out in its place.
+  let wasOpen = false;
+
+  $effect.pre(() => {
+    const isOpen = open;
+    if (wasOpen && !isOpen) {
+      fadeOutClosedPopover();
+    }
+    wasOpen = isOpen;
+  });
+
+  function fadeOutClosedPopover(): void {
+    const duration = motionDuration(140);
+    const contents = popoverRoot?.querySelector<HTMLElement>(
+      '.bx--popover-contents'
+    );
+    if (!contents || duration === 0) return;
+
+    const rect = contents.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const computed = getComputedStyle(contents);
+    const ghost = contents.cloneNode(true) as HTMLElement;
+    ghost.classList.add('tool-popover-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.inert = true;
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      maxWidth: 'none',
+      maxHeight: 'none',
+      margin: '0',
+      padding: computed.padding,
+      overflow: 'hidden',
+      background: computed.backgroundColor,
+      boxShadow: computed.boxShadow,
+      borderRadius: computed.borderRadius,
+      zIndex: 'var(--z-popover)',
+      pointerEvents: 'none',
+      animation: 'none'
+    });
+    // The copy leaves the popover root, which carries the theme surfaces.
+    const rootStyle = popoverRoot ? getComputedStyle(popoverRoot) : null;
+    for (const property of [
+      '--khartis-expandable-section-background',
+      '--khartis-expandable-section-hover-background'
+    ]) {
+      const value = rootStyle?.getPropertyValue(property);
+      if (value) ghost.style.setProperty(property, value);
+    }
+    document.body.append(ghost);
+
+    ghost
+      .animate(
+        [
+          { opacity: 1, transform: 'none' },
+          {
+            opacity: 0,
+            transform: globalState.isMobileView
+              ? 'translateY(8px)'
+              : 'translateX(-6px)'
+          }
+        ],
+        { duration, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }
+      )
+      .finished.then(
+        () => ghost.remove(),
+        () => ghost.remove()
+      );
   }
 
   function handleOutsideClick(event: CustomEvent) {
@@ -281,6 +357,28 @@
     overflow: visible;
     background: var(--khartis-control-surface-background);
     padding: 0;
+    animation: tool-popover-enter 180ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  @keyframes tool-popover-enter {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+  }
+
+  @keyframes tool-popover-enter-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  @keyframes tool-content-swap {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
   }
 
   @media (max-width: 1023px) {
@@ -317,7 +415,15 @@
       max-height: 70vh;
       border-radius: 8px 8px 0 0;
       box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+      animation-name: tool-popover-enter-up;
     }
+  }
+
+  /* A copy replays nothing: its content stays as the popover left it. */
+  :global(.tool-popover-ghost),
+  :global(.tool-popover-ghost *) {
+    animation: none !important;
+    transition: none !important;
   }
 
   /* The tool body scrolls inside; the frame only passes the height on. */
@@ -327,6 +433,14 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    animation: tool-content-swap 200ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(#khartis-tool-popover .bx--popover-contents),
+    .popover-frame {
+      animation: none;
+    }
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {

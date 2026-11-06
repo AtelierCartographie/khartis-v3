@@ -13,8 +13,7 @@ export {
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type LegendPatternFill,
-  type KhartisLineWidthLegendStep,
-  type KhartisProportionalLineLegendStep
+  type KhartisLineWidthLegendStep
 } from './khartis-extensions';
 export {
   draw_quanti_color_legend,
@@ -29,7 +28,6 @@ export {
   categoryLegendEntry,
   classLegendEntry,
   createLegendSvg,
-  LEGEND_ENTRY_ATTRIBUTE,
   legendTitleFontSize,
   MAX_LEGEND_CATEGORIES,
   MISSING_LEGEND_ENTRY,

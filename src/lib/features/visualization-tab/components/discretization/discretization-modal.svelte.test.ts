@@ -2,6 +2,16 @@
 
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { calculateBreaks } from '$lib/features/commons/services/classification.service';
+import DiscretizationModal from './discretization-modal.svelte';
+import DiscretizationPanel from './discretization-panel.svelte';
+import {
+  ClassificationMethod,
+  PrimitiveFilterType,
+  type VisualizationConfig,
+  VisualizationType
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
   applyPaletteInversion: (colors: string[]) => colors,
@@ -37,17 +47,6 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
     datasets: [{ id: 'dataset-1', sourceFileId: 'source-file-1' }]
   }
 }));
-
-import { calculateBreaks } from '$lib/features/commons/services/classification.service';
-import DiscretizationModal from './discretization-modal.svelte';
-import DiscretizationPanel from './discretization-panel.svelte';
-import {
-  ClassificationMethod,
-  PrimitiveFilterType,
-  VisualizationType,
-  type VisualizationConfig
-} from '$lib/features/commons/stores/visualization.store.svelte';
-import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
 
 function createVisualization(options?: {
   classification?: VisualizationConfig['classification'];

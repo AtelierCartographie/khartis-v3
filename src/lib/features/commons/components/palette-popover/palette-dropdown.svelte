@@ -1,8 +1,8 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Button } from 'carbon-components-svelte';
-  import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { Checkmark, ColorPalette } from 'carbon-icons-svelte';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import { computeFlippedPosition } from '$lib/features/commons/utils/dropdown-position.utils';
@@ -12,14 +12,14 @@
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
 
   import {
-    type DivergingPaletteSplit,
-    type Palette,
-    type PaletteType,
-    getPalettesForType,
-    generatePaletteColors,
     buildPatternBackground,
+    type DivergingPaletteSplit,
+    generatePaletteColors,
+    getPaletteDisplayName,
+    getPalettesForType,
+    type Palette,
     PALETTE_TYPE,
-    getPaletteDisplayName
+    type PaletteType
   } from './palette.constants';
   import PaletteSwatchRow from './palette-swatch-row.svelte';
 

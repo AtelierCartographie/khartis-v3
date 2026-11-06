@@ -1,6 +1,7 @@
 import {
-  DEFAULT_CATEGORICAL_COLORS,
+  type ClassificationConfig,
   ClassificationMethod,
+  DEFAULT_CATEGORICAL_COLORS,
   getLinePrimitive,
   getLineThicknessClassification,
   getPolygonPrimitive,
@@ -13,9 +14,8 @@ import {
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
-  PrimitiveFilterType,
-  type ClassificationConfig,
   type PrimitiveFilter,
+  PrimitiveFilterType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {

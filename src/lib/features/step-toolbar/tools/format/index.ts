@@ -5,6 +5,12 @@ export {
   DEFAULT_PAGE_COLOR,
   getFormatLayoutSizingContext,
   getLastPageResize,
-  getMarginsEditId,
+  getMapFrameEditId,
   type PageResize
 } from './format.store.svelte';
+export {
+  arePageInsetsEqual,
+  arePageInsetsWithin,
+  MIN_PAGE_AREA_SIZE,
+  resolvePageInsetBox
+} from './page-insets.utils';

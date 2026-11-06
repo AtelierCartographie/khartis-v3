@@ -4,6 +4,7 @@
     Add,
     Document,
     Earth,
+    FitToScreen,
     Subtract,
     ZoomReset
   } from 'carbon-icons-svelte';
@@ -123,15 +124,10 @@
     fitActiveMode();
   }
 
-  function tabTitle(index: number, isActive: boolean): string | undefined {
-    if (!isActive) return undefined;
-    return m.zoom_tab_double_click_hint(zoomShortcutModifiers);
-  }
-
   const currentZoomValue = $derived(
     activeTabIndex === 0
       ? mapInstanceStore.zoomLevel
-      : globalState.zoom.pageZoomLevel
+      : Math.round(globalState.zoom.pageZoomScale * 100)
   );
   const activeMinZoomPercent = $derived(
     activeTabIndex === 0 ? MIN_MAP_ZOOM_PERCENT : globalState.zoom.minPageZoom
@@ -149,7 +145,7 @@
     if (activeTabIndex === 0) {
       mapInstanceStore.setZoomPercent(clamped);
     } else {
-      globalActions.setPageZoom(clamped);
+      globalActions.setPageZoomPercent(clamped);
     }
   }
 
@@ -340,15 +336,18 @@
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
       ondblclick={handleTabDoubleClick}
-      tabTitle={tabTitle}
-      tooltipPosition="top"
       className="zoom-mode-tabs"
       activeClass="active"
       fullWidthClass="full-width"
-      hideInactiveLabel={true}
+      hideInactiveLabel={false}
     />
 
-    <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
+    <div
+      class="zoom-section"
+      title={activeTabIndex === 0
+        ? m.zoom_reset_title(zoomShortcutModifiers)
+        : m.zoom_fit_page_title(zoomShortcutModifiers)}
+    >
       <div class="zoom-value">
         <input
           id="khartis-zoom-toolbar-input"
@@ -371,8 +370,10 @@
           kind="ghost"
           size="small"
           class="zoom-button"
-          icon={ZoomReset}
-          iconDescription={m.zoom_reset()}
+          icon={activeTabIndex === 0 ? ZoomReset : FitToScreen}
+          iconDescription={activeTabIndex === 0
+            ? m.zoom_reset()
+            : m.zoom_fit_page()}
           tooltipPosition={zoomButtonTooltipPosition}
           on:click={fitActiveMode}
         />
@@ -738,7 +739,7 @@
     }
 
     .zoom-toolbar {
-      width: 150px;
+      width: 172px;
     }
 
     .zoom-section {
@@ -746,6 +747,11 @@
     }
 
     .zoom-value {
+      display: none;
+    }
+
+    /* Without the zoom value beside it, the reset button needs no divider. */
+    .zoom-controls::before {
       display: none;
     }
 

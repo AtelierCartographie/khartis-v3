@@ -1,11 +1,11 @@
 import type { Layer } from '@deck.gl/core';
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BinaryPathData,
   BinaryPointData
 } from '@ateliercartographie/geoarrow-deck-stream';
+import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

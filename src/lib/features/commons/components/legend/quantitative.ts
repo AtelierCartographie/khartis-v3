@@ -5,22 +5,22 @@ import type { LegendPatternFill } from './khartis-extensions';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   classLegendEntry,
+  type CommonLegendTextOptions,
   createLegendCanvasRect,
   createLegendFont,
-  LEGEND_ENTRY_ATTRIBUTE,
-  MISSING_LEGEND_ENTRY,
-  wrapLegendEntry,
   escapeSvgAttribute,
   escapeSvgText,
+  LEGEND_ENTRY_ATTRIBUTE,
+  type LegendSvgDefinition,
+  legendTitleFontSize,
   linearScale,
   measureLegendLongestToken,
+  MISSING_LEGEND_ENTRY,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
   scaleLegendMetric,
-  type CommonLegendTextOptions,
-  type LegendSvgDefinition,
-  legendTitleFontSize
+  wrapLegendEntry
 } from './utils';
 
 /**

@@ -1,23 +1,23 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { MagicWandFilled, Checkmark } from 'carbon-icons-svelte';
+  import { Checkmark, MagicWandFilled } from 'carbon-icons-svelte';
   import QualitativeColorGrid from './qualitative-color-grid.svelte';
   import {
-    PALETTE_TYPE,
-    type DivergingPaletteSplit,
-    type PaletteType,
-    type Palette,
-    type SuggestionPreset,
-    type QualitativePreset,
-    getSuggestionPresetsForType,
-    getSuggestionPresetLabel,
-    getSuggestionPalettes,
-    getQualitativeColorBands,
-    resolveQualitativeGeneratorPreset,
-    getPaletteDisplayName,
-    generatePaletteColors,
-    generateIntensityShades,
     buildPatternBackground,
+    type DivergingPaletteSplit,
+    generateIntensityShades,
+    generatePaletteColors,
+    getPaletteDisplayName,
+    getQualitativeColorBands,
+    getSuggestionPalettes,
+    getSuggestionPresetLabel,
+    getSuggestionPresetsForType,
+    type Palette,
+    PALETTE_TYPE,
+    type PaletteType,
+    type QualitativePreset,
+    resolveQualitativeGeneratorPreset,
+    type SuggestionPreset,
     VIF_MIXTE_COLORS
   } from './palette.constants';
   import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
@@ -141,8 +141,10 @@
 
 <div class="palette-suggestions">
   <div class="section-heading">
-    <span class="section-heading-text">{m.palette_suggestions()}</span>
-    <span class="section-heading-icon">
+    <span class="section-heading-text kh-thinking-text"
+      >{m.palette_suggestions()}</span
+    >
+    <span class="section-heading-icon kh-thinking-icon">
       <MagicWandFilled size={16} />
     </span>
     <div class="section-heading-line"></div>

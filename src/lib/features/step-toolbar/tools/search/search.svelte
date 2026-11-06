@@ -11,7 +11,7 @@
   import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
-  import { searchState, searchActions } from './search.store.svelte';
+  import { searchActions, searchState } from './search.store.svelte';
 
   const ALL_SOURCES_ID = 'all';
 
@@ -73,6 +73,7 @@
 
 <div id="khartis-search-tool">
   <Search
+    labelText={m.tool_search()}
     closeButtonLabelText={m.a11y_clear_search()}
     value={searchState.searchValue}
     on:input={handleSearchInput}

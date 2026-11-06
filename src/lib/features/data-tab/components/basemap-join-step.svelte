@@ -1,12 +1,15 @@
 <script lang="ts">
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
+  import {
+    GEO_COLUMN_TYPE,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 
   import {
-    Duck,
     type AnalysisResults,
+    Duck,
     type JoinFuzzyPassEstimate
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -27,8 +30,8 @@
     BasemapSuggestion
   } from '$lib/features/map/types/basemap.types';
   import {
-    createOSMBasemap,
     bundleBasemapImportFiles,
+    createOSMBasemap,
     loadBasemapFromUrl,
     processBasemapImport
   } from '$lib/features/map/services/basemap-import.service';
@@ -54,11 +57,11 @@
     shouldResetJoinState
   } from '../utils/dataset-identity.utils';
   import {
-    resolveRelevantPersistedBasemap,
-    restorePersistedBasemapSelection,
-    resolveBasemapSource,
     PERSISTED_BASEMAP_TYPE,
-    type PersistedProjectBasemap
+    type PersistedProjectBasemap,
+    resolveBasemapSource,
+    resolveRelevantPersistedBasemap,
+    restorePersistedBasemapSelection
   } from '../services/persisted-basemap.service';
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
   import { resolveActiveBasemapOrigin } from '../utils/active-basemap.utils';
@@ -68,8 +71,8 @@
   import {
     listProjectGeoBasemapOptions,
     mergeProjectGeoSuggestions,
-    scoreProjectGeoBasemapOptions,
-    type ProjectGeoMatch
+    type ProjectGeoMatch,
+    scoreProjectGeoBasemapOptions
   } from '../services/project-geo-basemap.service';
   import { openDatasetTab } from '../services/dataset-navigation.service';
   import { enrichmentRequestStore } from '../stores/enrichment-request.store.svelte';
@@ -78,8 +81,8 @@
     NotificationActionButton
   } from 'carbon-components-svelte';
   import {
-    SavePriority,
-    persistenceRegistry
+    persistenceRegistry,
+    SavePriority
   } from '$lib/features/project-management/core';
   import { persistCustomBasemapSource } from '$lib/features/project-management';
   import { useBasemapJoinAttributes } from '../hooks/use-basemap-join-attributes.svelte';
@@ -93,8 +96,10 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
-  import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
-  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+  import {
+    BasemapSource,
+    GeoreferenceType
+  } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
@@ -107,6 +112,7 @@
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const datasetIdForOrchestrator = $derived.by(() =>
     resolveDatasetIdForOrchestrator(selectedDataset)
@@ -366,8 +372,11 @@
   let previousLinkedVariableName: string | null = null;
   let loadSuggestionsAbortController: AbortController | null = null;
   let hasDismissedSuggestedBasemap = $state(false);
+  // A table holding coordinates may still be geolocated by its entities.
   const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
+    if (dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES)
+      return false;
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
@@ -696,6 +705,43 @@
     }
 
     await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
+  }
+
+  async function refinalizeGPSJoin(
+    basemap: BasemapMetadata,
+    resolvedDatasetId: string,
+    abortSignal: AbortSignal
+  ): Promise<void> {
+    const sourceSnapshot = resolveSourceSnapshot();
+    const stepIndex = basemapStepIndex;
+    try {
+      const preFinalizeColumns =
+        await capturePreFinalizeAnalysis(sourceSnapshot);
+      await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
+      if (abortSignal.aborted) return;
+
+      await persistJoinSnapshot(
+        resolveGPSJoinSnapshot(basemap.file, resolvedDatasetId),
+        sourceSnapshot,
+        preFinalizeColumns
+      );
+      if (abortSignal.aborted) return;
+
+      syncSelectedDatasetJoinedBasemap(basemap.file);
+      dataTabStore.markStepComplete(stepIndex);
+    } catch (error) {
+      if (
+        abortSignal.aborted ||
+        isDatasetNotFoundError(error, resolvedDatasetId)
+      )
+        return;
+      logger.error(
+        'Failed to finalize GPS mode after a reference change',
+        LogCategory.MAP,
+        error
+      );
+      showError(m.join_error_title(), m.join_error_message());
+    }
   }
 
   async function capturePreFinalizeAnalysis(
@@ -1244,15 +1290,8 @@
   ): Record<string, string> {
     const merged: Record<string, string> = { ...(existing ?? {}) };
     for (const [original, corrected] of Object.entries(addition)) {
-      const previous = merged[original];
-      if (previous && previous !== corrected) {
-        merged[previous] = corrected;
-        delete merged[original];
-      } else if (corrected === original) {
-        delete merged[original];
-      } else {
-        merged[original] = corrected;
-      }
+      if (corrected === original) delete merged[original];
+      else merged[original] = corrected;
     }
     return merged;
   }
@@ -1766,6 +1805,22 @@
           );
           if (controller.signal.aborted || !datasetReady) return;
 
+          // Corrections live beside the source data, which keeps its values:
+          // every later grading or finalization of this column reads them.
+          const persistedCorrections =
+            getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
+          if (
+            persistedCorrections &&
+            Object.keys(persistedCorrections).length > 0
+          ) {
+            await duckDBOrchestrator.applyJoinCorrections(
+              resolvedDatasetId,
+              linkedVariableName,
+              persistedCorrections
+            );
+            if (controller.signal.aborted) return;
+          }
+
           const joinContext = `${resolvedDatasetId}::${basemap.file}`;
           if (
             isCatalogJoinFinalizedForBasemap(
@@ -1795,20 +1850,6 @@
 
           const loadingRequestId = beginJoinLoading();
           try {
-            const persistedCorrections =
-              getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
-            if (
-              persistedCorrections &&
-              Object.keys(persistedCorrections).length > 0
-            ) {
-              await duckDBOrchestrator.applyJoinCorrections(
-                resolvedDatasetId,
-                linkedVariableName,
-                persistedCorrections
-              );
-              if (controller.signal.aborted) return;
-            }
-
             const stats = await duckDBOrchestrator.computeJoinStats(
               resolvedDatasetId,
               basemap,
@@ -1929,7 +1970,25 @@
     if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates) {
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
-      previousLinkedVariableName = linkedVariableName || null;
+      // Back to entities, the linked variable joins again.
+      previousLinkedVariableName = null;
+      // Back to coordinates, the points replace the entity join.
+      const basemap = allBasemapsForLookup.find(
+        (b) => b.file === selectedBasemapId
+      );
+      if (
+        hasGPSCoordinates &&
+        basemap &&
+        !isGPSJoinFinalizedForBasemap(basemap.file, resolvedDatasetId)
+      ) {
+        abortCurrentJoin();
+        currentJoinAbortController = new AbortController();
+        void refinalizeGPSJoin(
+          basemap,
+          resolvedDatasetId,
+          currentJoinAbortController.signal
+        );
+      }
       return;
     }
 
@@ -2178,6 +2237,7 @@
     ignoredEntities={ignoredEntities}
     duplicateLines={dataTabState.basemapJoin.duplicateLines}
     basemapAliasesByValue={basemapAttributes.aliasesByValue}
+    basemapValuesLoading={basemapAttributes.loading}
     onRequestBasemapValues={basemapAttributes.requestValues}
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}

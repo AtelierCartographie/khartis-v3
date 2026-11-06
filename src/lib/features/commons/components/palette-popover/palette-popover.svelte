@@ -1,10 +1,15 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import * as m from '$lib/paraglide/messages';
   import { untrack } from 'svelte';
   import { ArrowRight } from 'carbon-icons-svelte';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
@@ -19,18 +24,18 @@
   import PaletteComparison from './palette-comparison.svelte';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
-    PALETTE_TYPE,
+    DEFAULT_QUALITATIVE_PRESET,
     type DivergingPaletteSplit,
-    type PaletteType,
+    findPaletteById,
+    generateCategoricalColorsFromSeed,
+    generatePaletteColors,
+    getPatternPalettes,
     type Palette,
+    PALETTE_TYPE,
+    type PaletteType,
     type PatternId,
     type PatternParams,
-    type QualitativePreset,
-    DEFAULT_QUALITATIVE_PRESET,
-    generatePaletteColors,
-    generateCategoricalColorsFromSeed,
-    findPaletteById,
-    getPatternPalettes
+    type QualitativePreset
   } from './palette.constants';
 
   interface Props {
@@ -123,6 +128,11 @@
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
   }
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
 
   function handleClose() {
     open = false;
@@ -265,6 +275,8 @@
   <div use:portal class="palette-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="palette-popover"
       style:right={popoverRight}
       role="dialog"

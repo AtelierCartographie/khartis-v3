@@ -11,11 +11,11 @@
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
   import { tick, untrack } from 'svelte';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
-  import { facetsStore, FACETS_FRAME_THICKNESS } from './facets.store.svelte';
+  import { FACETS_FRAME_THICKNESS, facetsStore } from './facets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
@@ -167,7 +167,6 @@
         min={FACETS_COLUMNS_MIN}
         max={columnsMax}
         step={1}
-        showMinMax
         onchange={handleColumnsChange}
       />
       <ToggleWithLabel

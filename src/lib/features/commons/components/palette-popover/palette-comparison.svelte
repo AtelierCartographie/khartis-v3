@@ -1,17 +1,17 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
+  import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
   import { getPatternOverlayColorHex } from '$lib/features/map/layers/pattern-texture';
   import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
   import {
-    PALETTE_TYPE,
-    buildPatternSvgBackground,
     buildClassPatternSvgBackground,
-    resolveEffectivePatternId,
+    buildPatternSvgBackground,
+    PALETTE_TYPE,
     type PaletteType,
     type PatternId,
-    type PatternParams
+    type PatternParams,
+    resolveEffectivePatternId
   } from './palette.constants';
   import PaletteSwatchRow from './palette-swatch-row.svelte';
 

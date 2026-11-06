@@ -1,10 +1,10 @@
 import {
-  PrimitiveFilterType,
   type ClassificationConfig,
+  getSymbolPrimitive,
+  PrimitiveFilterType,
   type SymbolPrimitiveConfig,
   type VisualizationConfig,
-  type VisualizationModes,
-  getSymbolPrimitive
+  type VisualizationModes
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { SymbolMode } from '$lib/features/commons/constants/visualization.constants';
 import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svelte';

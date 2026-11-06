@@ -24,8 +24,8 @@ import {
   FillMode,
   MissingDataShape,
   ProportionalType,
-  SizeMode,
   ShapeType,
+  SizeMode,
   StrokeMode,
   SymbolDoublePosition,
   SymbolMode
@@ -41,6 +41,13 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
+import {
+  getLegendState,
+  legendActions
+} from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import LegendOverlay from './legend-overlay.svelte';
+import { MAX_LEGEND_CATEGORIES } from '$lib/features/commons/components/legend';
+import { m } from '$lib/paraglide/messages';
 
 const mockRowScopeStore = vi.hoisted(() => ({
   getScopedDomain: vi.fn((): { min: number; max: number } | null => null),
@@ -98,12 +105,6 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
       mockDatasetsStore.getColumnStatistics(columnName)
   }
 }));
-
-import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-import LegendOverlay from './legend-overlay.svelte';
-import { MAX_LEGEND_CATEGORIES } from '$lib/features/commons/components/legend';
-import { m } from '$lib/paraglide/messages';
 
 const measureCanvas = {
   getContext: () => ({
@@ -930,7 +931,7 @@ describe('legend overlay visibility', () => {
     });
   });
 
-  it('recenters the page when a centered legend loses focus', async () => {
+  it('keeps the page centred on a legend until its tool closes', async () => {
     const { legend } = setupLegendViewport();
 
     await fireEvent.click(legend);
@@ -940,6 +941,10 @@ describe('legend overlay visibility', () => {
     });
 
     await fireEvent.blur(legend);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 60 });
+
+    globalActions.setSelectedTool(undefined);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });

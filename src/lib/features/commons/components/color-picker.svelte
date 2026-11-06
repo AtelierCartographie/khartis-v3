@@ -11,10 +11,10 @@
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ChevronDown, Eyedropper } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { KEY, EVENT } from '../constants/dom.constants';
+  import { EVENT, KEY } from '../constants/dom.constants';
   import {
-    readCarbonNumberValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonNumberValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   // The EyeDropper API is Chromium-only and missing from the TypeScript DOM lib.

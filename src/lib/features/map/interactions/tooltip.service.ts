@@ -9,13 +9,18 @@ import type { VisualizationConfig } from '$lib/features/commons/stores/visualiza
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
-import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
+import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 import {
-  mapHoverHighlightStore,
-  type HoveredRow
+  type HoveredRow,
+  mapHoverHighlightStore
 } from '../stores/map-hover-highlight.store.svelte';
+import {
+  readJoinControlPickData,
+  resolveJoinControlDatasetRow
+} from '../layers/join-control-layers';
+import { buildJoinControlTooltipEntries } from '../utils/join-control.utils';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {
   if (typeof value === 'string') {
@@ -277,6 +282,31 @@ export function extractTooltipEntries(
 ): TooltipEntry[] {
   if (!info.picked || info.index === undefined || info.index === -1) {
     return [];
+  }
+
+  const joinControl = readJoinControlPickData(info.layer?.props?.data);
+  if (joinControl) {
+    const featureIds = Reflect.get(
+      info.layer?.props?.data as object,
+      'featureIds'
+    ) as ArrayLike<number> | undefined;
+    const geomRow = featureIds?.[info.index];
+    if (geomRow === undefined) return [];
+    const datasetRow = resolveJoinControlDatasetRow(
+      joinControl,
+      Number(geomRow)
+    );
+    const otherVariables =
+      datasetRow === null
+        ? []
+        : extractEntriesFromArrowTable(joinControl.dataset, datasetRow).filter(
+            (entry) => entry.key !== joinControl.geoColumn
+          );
+    return buildJoinControlTooltipEntries(
+      joinControl,
+      Number(geomRow),
+      otherVariables
+    );
   }
 
   const rowIndex = resolvePickedRowIndex(info);

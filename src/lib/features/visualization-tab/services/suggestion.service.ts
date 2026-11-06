@@ -7,6 +7,7 @@ import type {
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  ClassificationMethod,
   getLinePrimitive,
   getPolygonPrimitive,
   getSymbolPrimitive,
@@ -16,15 +17,14 @@ import {
   type PolygonPrimitiveConfig,
   type PrimitiveFilter,
   PrimitiveFilterType,
+  resolveVisualizationPreset,
   type SymbolPrimitiveConfig,
   type TextPrimitiveConfig,
-  type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
+  type VisualizationPreset,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
-  ClassificationMethod,
-  resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -33,8 +33,8 @@ import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/pa
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
-  DEFAULT_COLORS,
   ColorMode,
+  DEFAULT_COLORS,
   FillMode,
   ProportionalType,
   SizeMode,
@@ -54,8 +54,8 @@ import {
   findPreferredTextColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
 import {
-  clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
+  clampFontSize,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -683,17 +683,21 @@ export function resolveSuggestionBehavior(
     allowIdLikeFallback: true,
     excludeLikelyCoordinates: true
   });
-  // Every behavior reading this column classes it, and a date is classed on calendar steps.
-  const preferredDateColumn = dataset.columns?.find(
-    (column) =>
-      column.name === suggestion.columns?.[0] && column.type === 'date'
-  )?.name;
-  const primaryNumericColumn = preferredDateColumn ?? numericColumn;
-  const secondaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
-    preferred: suggestion.columns?.[1],
-    allowIdLikeFallback: true,
-    excludeLikelyCoordinates: true
-  });
+  // A date is suggested only as a classed color (never as a quantity), so
+  // whichever column position names it, the behavior classes that date.
+  const findSuggestedDateColumn = (position: number) =>
+    dataset.columns?.find(
+      (column) =>
+        column.name === suggestion.columns?.[position] && column.type === 'date'
+    )?.name;
+  const primaryNumericColumn = findSuggestedDateColumn(0) ?? numericColumn;
+  const secondaryNumericColumn =
+    findSuggestedDateColumn(1) ??
+    findPreferredNumericColumn(dataset.columns, {
+      preferred: suggestion.columns?.[1],
+      allowIdLikeFallback: true,
+      excludeLikelyCoordinates: true
+    });
   const proportionalSizeColumn =
     findLatestYearNumericColumn(dataset.columns) ?? numericColumn;
   const primaryTextColumn = findPreferredTextColumn(dataset.columns, {
