@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { ProjectionState } from '../../types/projections.types';
 import { resolveCurrentProjectionDisplay } from './projection-label.utils';
+import { readCrsEpsg } from './native-projection.utils';
 import {
   createCurrentProjectionForward,
   resolveCurrentProjectionDefinition
@@ -23,6 +24,10 @@ function createState(
     ...overrides
   };
 }
+
+// DuckDB's reading of an Esri `.prj` (Washington South, US feet): no id.
+const WASHINGTON_SOUTH_ESRI_PROJJSON =
+  '{"$schema":"https://proj.org/schemas/v0.5/projjson.schema.json","type":"ProjectedCRS","name":"NAD83(HARN) / Washington South (ftUS)","base_crs":{"name":"NAD83(HARN)","datum":{"type":"GeodeticReferenceFrame","name":"NAD83 (High Accuracy Reference Network)","ellipsoid":{"name":"GRS 1980","semi_major_axis":6378137,"inverse_flattening":298.257222101},"id":{"authority":"EPSG","code":6152}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Longitude","abbreviation":"lon","direction":"east","unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433}},{"name":"Latitude","abbreviation":"lat","direction":"north","unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433}}]}},"conversion":{"name":"unnamed","method":{"name":"Lambert Conic Conformal (2SP)","id":{"authority":"EPSG","code":9802}},"parameters":[{"name":"Latitude of false origin","value":45.3333333333333,"unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433},"id":{"authority":"EPSG","code":8821}},{"name":"Longitude of false origin","value":-120.5,"unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433},"id":{"authority":"EPSG","code":8822}},{"name":"Latitude of 1st standard parallel","value":45.8333333333333,"unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433},"id":{"authority":"EPSG","code":8823}},{"name":"Latitude of 2nd standard parallel","value":47.3333333333333,"unit":{"type":"AngularUnit","name":"Degree","conversion_factor":0.0174532925199433},"id":{"authority":"EPSG","code":8824}},{"name":"Easting at false origin","value":1640416.66666667,"unit":{"type":"LinearUnit","name":"US survey foot","conversion_factor":0.304800609601219},"id":{"authority":"EPSG","code":8826}},{"name":"Northing at false origin","value":0,"unit":{"type":"LinearUnit","name":"US survey foot","conversion_factor":0.304800609601219},"id":{"authority":"EPSG","code":8827}}]},"coordinate_system":{"subtype":"Cartesian","axis":[{"name":"Easting","abbreviation":"E","direction":"east","unit":{"type":"LinearUnit","name":"US survey foot","conversion_factor":0.304800609601219,"id":{"authority":"EPSG","code":9003}}},{"name":"Northing","abbreviation":"N","direction":"north","unit":{"type":"LinearUnit","name":"US survey foot","conversion_factor":0.304800609601219,"id":{"authority":"EPSG","code":9003}}}]}}';
 
 describe('resolveCurrentProjectionDisplay', () => {
   it('names the reference basemap projection while no override is active', () => {
@@ -116,6 +121,16 @@ describe('resolveCurrentProjectionDisplay', () => {
     expect(display.description).toBe('EPSG:2927');
   });
 
+  it('should name a file CRS that carries no EPSG code', () => {
+    const display = resolveCurrentProjectionDisplay(
+      createState({ overrideActive: false, overrideSource: undefined }),
+      { type: 'identity', nativeCrs: WASHINGTON_SOUTH_ESRI_PROJJSON }
+    );
+
+    expect(display.name).toBe('NAD83(HARN) / Washington South (ftUS)');
+    expect(display.description).toContain('Lambert');
+  });
+
   it('names a suggestion restored from its d3 config alone', () => {
     expect(
       resolveCurrentProjectionDisplay(
@@ -146,6 +161,20 @@ describe('resolveCurrentProjectionDisplay', () => {
 });
 
 describe('resolveCurrentProjectionDefinition', () => {
+  it('should give the PROJJSON of a file CRS that carries no EPSG code', () => {
+    const definition = resolveCurrentProjectionDefinition({
+      state: createState({ overrideActive: false, overrideSource: undefined }),
+      basemapProjection: {
+        type: 'identity',
+        nativeCrs: WASHINGTON_SOUTH_ESRI_PROJJSON
+      },
+      tiled: null
+    });
+
+    expect(definition.wkt).toBe(WASHINGTON_SOUTH_ESRI_PROJJSON);
+    expect(definition.notes).toEqual([]);
+  });
+
   const definitionOf = (overrides: Partial<ProjectionState>) =>
     resolveCurrentProjectionDefinition({ state: createState(overrides) });
 
@@ -259,6 +288,38 @@ function maxAffineResidual(
   expect(samples.length).toBeGreaterThan(20);
   return fitAffineTransform(samples)?.maxResidualPx;
 }
+
+describe('resolveCurrentProjectionDefinition on a PROJJSON CRS', () => {
+  it('should move the central meridian inside the PROJJSON when the longitude changes', () => {
+    const definition = resolveCurrentProjectionDefinition({
+      state: createState({
+        customCode: WASHINGTON_SOUTH_ESRI_PROJJSON,
+        longitude: 10
+      }),
+      tiled: null
+    });
+
+    const crs = JSON.parse(definition.wkt ?? '{}');
+    const meridian = crs.conversion.parameters.find(
+      (parameter: { id: { code: number } }) => parameter.id.code === 8822
+    );
+    expect(meridian.value).toBe(-110.5);
+    expect(crs.id).toBeUndefined();
+    expect(definition.notes).toEqual([]);
+  });
+});
+
+describe('readCrsEpsg', () => {
+  it('should read the EPSG code of a CRS code or of a PROJJSON id', () => {
+    expect(readCrsEpsg('EPSG:2927')).toBe('2927');
+    expect(
+      readCrsEpsg(
+        '{"type":"ProjectedCRS","id":{"authority":"EPSG","code":2927}}'
+      )
+    ).toBe('2927');
+    expect(readCrsEpsg(WASHINGTON_SOUTH_ESRI_PROJJSON)).toBeUndefined();
+  });
+});
 
 describe('createCurrentProjectionForward', () => {
   // The side-cars hold an affine map from image pixels to the coordinates of

@@ -416,7 +416,10 @@ export function diagnoseProjectionCode(
 }
 
 export function wrapLongitude(longitude: number): number {
-  const wrapped = ((((longitude + 180) % 360) + 360) % 360) - 180;
+  // Rounded: an offset added to a fractional meridian leaves float noise.
+  const wrapped = Number(
+    (((((longitude + 180) % 360) + 360) % 360) - 180).toFixed(9)
+  );
   return wrapped === -180 && longitude > 0 ? 180 : wrapped;
 }
 

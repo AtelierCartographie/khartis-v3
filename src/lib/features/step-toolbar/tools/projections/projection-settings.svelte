@@ -47,7 +47,17 @@
   // as defined); the slider shows the resulting central meridian.
   const crsCode = $derived(getOrientableCrsCode());
   const crsCentralMeridian = $derived(
-    crsCode ? getProjectionCodeCentralMeridian(crsCode) : 0
+    // Read back from radians: -120.5 comes out as -120.50000000000001.
+    crsCode ? Number(getProjectionCodeCentralMeridian(crsCode).toFixed(9)) : 0
+  );
+  // The offset moves by whole degrees; a fractional meridian (Washington
+  // South, -120.5) needs a finer step to stay a valid input value.
+  const longitudeStep = $derived(
+    Number.isInteger(crsCentralMeridian)
+      ? PROJECTION_ANGLE_STEP
+      : Number.isInteger(crsCentralMeridian * 2)
+        ? 0.5
+        : 0.01
   );
   const displayedLongitude = $derived(
     crsCode
@@ -101,7 +111,7 @@
           value={displayedLongitude}
           min={-180}
           max={180}
-          step={PROJECTION_ANGLE_STEP}
+          step={longitudeStep}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
