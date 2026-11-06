@@ -39,6 +39,11 @@ import {
   type ClassInterval
 } from './qgis-classes';
 import {
+  resolveClassPatternPalette,
+  resolveMissingDataClassPattern
+} from '$lib/features/map/layers/polygon-pattern-layer.utils';
+import { resolveQgisPattern } from './qgis-patterns';
+import {
   MM_PER_CSS_PX,
   PT_PER_CSS_PX,
   qgisField,
@@ -66,6 +71,7 @@ const LINE_GAP_PX = 2;
 /** Something of the map the export could not carry, said in the memo. */
 export type QgisExportNoteCode =
   | 'pattern-fill'
+  | 'pattern-approximate'
   | 'missing-pattern'
   | 'density'
   | 'double-symbols'
@@ -73,7 +79,8 @@ export type QgisExportNoteCode =
   | 'knockout'
   | 'label-placement'
   | 'font'
-  | 'anchor-points';
+  | 'label-edits'
+  | 'label-leaders';
 
 export interface QgisExportNote {
   code: QgisExportNoteCode;
@@ -83,8 +90,24 @@ export interface QgisExportNote {
 
 export type QgisLayerGeometry = 'polygon' | 'line' | 'point';
 
+/** Double proportional symbols: one exported row per feature and variable. */
+export interface DoubleSymbolRows {
+  /** 'A' for the size variable, 'B' for the second one. */
+  roleField: string;
+  /** The value of the row's own variable. */
+  valueField: string;
+  primary: string;
+  secondary: string;
+}
+
+export const DOUBLE_SYMBOL_FIELDS = {
+  roleField: 'khartis_role',
+  valueField: 'khartis_valeur'
+} as const;
+
 export interface QgisLayerPlan {
   primitive: PrimitiveFilter;
+  doubleSymbols?: DoubleSymbolRows;
   /** Points for symbols and labels: the representative point of each feature. */
   geometry: QgisLayerGeometry;
   /** Data columns the style reads. */
@@ -101,8 +124,6 @@ export interface QgisStyleContext {
   ) => { min: number; max: number } | null;
   formatValue: (value: number) => string;
   missingDataLabel: string;
-  /** Column holding the text drawn as the main label, overrides included. */
-  labelColumn?: string;
 }
 
 function toRgba(
@@ -345,13 +366,61 @@ function polygonStroke(viz: VisualizationConfig): {
 function fillSymbol(
   color: Rgba | null,
   stroke: QmlStroke | null,
-  dataDefined: DataDefinedProperties
+  dataDefined: DataDefinedProperties,
+  patternLayers: QmlSymbolLayer[] = []
 ): QmlSymbol {
+  if (patternLayers.length === 0) {
+    return {
+      type: 'fill',
+      opacity: 1,
+      layers: [{ kind: 'fill', color, stroke, dataDefined }]
+    };
+  }
+  // The map draws outlines over the pattern.
+  const outlineDataDefined: DataDefinedProperties = dataDefined.outlineColor
+    ? { outlineColor: dataDefined.outlineColor }
+    : {};
   return {
     type: 'fill',
     opacity: 1,
-    layers: [{ kind: 'fill', color, stroke, dataDefined }]
+    layers: [
+      { kind: 'fill', color, stroke: null },
+      ...patternLayers,
+      ...(stroke
+        ? [{ kind: 'line' as const, stroke, dataDefined: outlineDataDefined }]
+        : [])
+    ]
   };
+}
+
+/**
+ * The patterns of the map for each class or category, in QGIS layers, or
+ * null when the classification has none. A motif QGIS cannot draw leaves the
+ * class with its colour, and says so.
+ */
+function resolvePolygonPatterns(
+  classification: ClassificationConfig | undefined,
+  fillMode: FillMode,
+  notes: QgisExportNote[]
+): Array<QmlSymbolLayer[] | null> | null {
+  const palette = resolveClassPatternPalette(classification, fillMode);
+  if (!palette) {
+    if (hasPattern(classification)) {
+      notes.push({ code: 'pattern-fill' });
+    }
+    return null;
+  }
+  return palette.map((pattern) => {
+    const qgis = resolveQgisPattern(pattern);
+    if (!qgis) {
+      notes.push({ code: 'pattern-fill' });
+      return null;
+    }
+    if (qgis.approximate) {
+      notes.push({ code: 'pattern-approximate' });
+    }
+    return qgis.layers;
+  });
 }
 
 function buildPolygonPlan(
@@ -372,15 +441,24 @@ function buildPolygonPlan(
     PrimitiveFilterType.POLYGON
   );
   const missing = polygon.missingData;
+  const missingPattern = missingShows(missing)
+    ? resolveMissingDataClassPattern(missing)
+    : null;
+  const missingPatternLayers = missingPattern
+    ? resolveQgisPattern(missingPattern)
+    : null;
+  if (missing?.pattern && missingShows(missing) && !missingPatternLayers) {
+    notes.push({ code: 'missing-pattern' });
+  }
   const missingSymbol = () =>
     fillSymbol(
       toRgba(missing?.color ?? DEFAULT_COLORS.missingData, opacity),
       stroke,
-      dataDefined
+      dataDefined,
+      missingPatternLayers?.layers
     );
-  if (missing?.pattern && missingShows(missing)) {
-    notes.push({ code: 'missing-pattern' });
-  }
+  // Under a pattern the map fills white, the motif tells classes apart.
+  const patternBackground = toRgba('#ffffff', opacity);
 
   let renderer: QmlRenderer;
   if (polygon.fillMode === FillMode.DENSITY) {
@@ -397,12 +475,15 @@ function buildPolygonPlan(
   ) {
     const column = polygon.valueColumn;
     columns.add(column);
-    if (hasPattern(classification)) {
-      notes.push({ code: 'pattern-fill' });
-    }
+    const patterns = resolvePolygonPatterns(
+      classification,
+      polygon.fillMode,
+      notes
+    );
     const intervals = classIntervals(classification) ?? [];
     const rules: QmlRule[] = intervals.flatMap((classIntervalList, index) => {
       const filter = classFilterExpression(column, classIntervalList);
+      const pattern = patterns?.[index];
       return filter
         ? [
             {
@@ -413,11 +494,13 @@ function buildPolygonPlan(
                 index,
                 context
               ),
-              symbol: fillSymbol(
-                toRgba(classification.colors?.[index], opacity),
-                stroke,
-                dataDefined
-              )
+              symbol: pattern
+                ? fillSymbol(patternBackground, stroke, dataDefined, pattern)
+                : fillSymbol(
+                    toRgba(classification.colors?.[index], opacity),
+                    stroke,
+                    dataDefined
+                  )
             }
           ]
         : [];
@@ -437,13 +520,20 @@ function buildPolygonPlan(
   ) {
     const column = polygon.categoryColumn;
     columns.add(column);
-    if (hasPattern(classification)) {
-      notes.push({ code: 'pattern-fill' });
-    }
+    const patterns = resolvePolygonPatterns(
+      classification,
+      polygon.fillMode,
+      notes
+    );
     renderer = categoriesRenderer({
       column,
       classification,
-      symbolFor: (hex) => fillSymbol(toRgba(hex, opacity), stroke, dataDefined),
+      symbolFor: (hex, index) => {
+        const pattern = patterns?.[index];
+        return pattern
+          ? fillSymbol(patternBackground, stroke, dataDefined, pattern)
+          : fillSymbol(toRgba(hex, opacity), stroke, dataDefined);
+      },
       missing: missingShows(missing)
         ? {
             label: missing?.label ?? context.missingDataLabel,
@@ -452,13 +542,23 @@ function buildPolygonPlan(
         : null
     });
   } else {
+    const patterns =
+      polygon.fillMode === FillMode.UNIQUE
+        ? resolvePolygonPatterns(classification, polygon.fillMode, notes)
+        : null;
+    const pattern = patterns?.[0];
     const color =
       polygon.fillMode === FillMode.NONE
         ? null
-        : toRgba(firstColor(polygon.fillColor ?? viz.style.fillColor), opacity);
+        : pattern
+          ? patternBackground
+          : toRgba(
+              firstColor(polygon.fillColor ?? viz.style.fillColor),
+              opacity
+            );
     renderer = {
       type: 'single',
-      symbol: fillSymbol(color, stroke, dataDefined)
+      symbol: fillSymbol(color, stroke, dataDefined, pattern ?? [])
     };
   }
 
@@ -697,6 +797,7 @@ function buildSymbolPlan(
     classification: ClassificationConfig;
   } | null = null;
   let sizeColumn: string | undefined;
+  let doubleSymbols: DoubleSymbolRows | undefined;
   if (symbol.mode === SymbolMode.PROPORTIONAL && symbol.sizeColumn) {
     sizeColumn = symbol.sizeColumn;
     columns.add(sizeColumn);
@@ -716,9 +817,41 @@ function buildSymbolPlan(
         : 0;
     if (
       symbol.proportionalType === ProportionalType.DOUBLE &&
-      symbol.valueColumn
+      symbol.valueColumn &&
+      Number.isFinite(domainMax)
     ) {
-      notes.push({ code: 'double-symbols', detail: symbol.valueColumn });
+      // Both variables on one scale unless the map scales them apart.
+      const secondary = context.domain(
+        PrimitiveFilterType.POINT,
+        symbol.valueColumn
+      );
+      const secondaryMax = secondary
+        ? Math.max(Math.abs(secondary.min), Math.abs(secondary.max))
+        : domainMax;
+      const shared = symbol.commonScale !== false;
+      const maxA = shared ? Math.max(domainMax, secondaryMax) : domainMax;
+      const maxB = shared ? Math.max(domainMax, secondaryMax) : secondaryMax;
+      const { roleField, valueField } = DOUBLE_SYMBOL_FIELDS;
+      const radiusFor = (max: number) =>
+        max > 0
+          ? proportionalRadiusExpression(
+              valueField,
+              max,
+              Math.max(0, symbol.maxSize ?? uniqueRadius),
+              scale
+            )
+          : '0';
+      radius = `CASE WHEN ${qgisField(roleField)} = 'A' THEN ${radiusFor(maxA)} ELSE ${radiusFor(maxB)} END`;
+      doubleSymbols = {
+        roleField,
+        valueField,
+        primary: sizeColumn,
+        secondary: symbol.valueColumn
+      };
+      columns.add(symbol.valueColumn);
+      if ((symbol.positionMode ?? 'overlay') !== 'overlay') {
+        notes.push({ code: 'double-symbols', detail: symbol.valueColumn });
+      }
     }
     if (symbol.knockout !== false && opacity < 1) {
       notes.push({ code: 'knockout' });
@@ -762,8 +895,29 @@ function buildSymbolPlan(
     symbol.fillMode === FillMode.NONE
       ? null
       : toRgba(firstColor(symbol.fillColor), opacity);
-  const signed = Boolean(sizeColumn) && isSignedProportionalSymbol(viz);
+  const signed =
+    !doubleSymbols && Boolean(sizeColumn) && isSignedProportionalSymbol(viz);
   let fillExpression: string | undefined;
+  const colorA = toRgba(firstColor(symbol.fillColor), opacity);
+  const colorB = toRgba(symbol.fillColorB ?? '#ff832b', opacity);
+  const uniqueFill =
+    symbol.fillMode !== FillMode.CLASSES &&
+    symbol.fillMode !== FillMode.CATEGORIES &&
+    symbol.fillMode !== FillMode.NONE;
+  if (doubleSymbols && uniqueFill) {
+    // Each variable takes the other's colour below its break value.
+    const role = qgisField(doubleSymbols.roleField);
+    const value = qgisField(doubleSymbols.valueField);
+    const swap = (
+      breakValue: number | null | undefined,
+      own: Rgba,
+      other: Rgba
+    ) =>
+      typeof breakValue === 'number' && Number.isFinite(breakValue)
+        ? `CASE WHEN ${value} < ${qgisNumber(breakValue)} THEN ${qgisColor(other)} ELSE ${qgisColor(own)} END`
+        : qgisColor(own);
+    fillExpression = `CASE WHEN ${role} = 'A' THEN ${swap(symbol.breakValueA, colorA, colorB)} ELSE ${swap(symbol.breakValueB, colorB, colorA)} END`;
+  }
   if (signed && sizeColumn) {
     const [positive, negative] = resolveSymbolSignColors(viz);
     fillExpression = `CASE WHEN ${qgisField(sizeColumn)} < 0 THEN ${qgisColor(toRgba(negative, opacity))} ELSE ${qgisColor(toRgba(positive, opacity))} END`;
@@ -771,6 +925,7 @@ function buildSymbolPlan(
 
   const missing = symbol.missingData;
   const missingColumn =
+    doubleSymbols?.valueField ??
     sizeColumn ??
     (symbol.fillMode === FillMode.CLASSES
       ? fillValueColumn
@@ -805,7 +960,35 @@ function buildSymbolPlan(
     });
 
   let renderer: QmlRenderer;
-  if (
+  if (doubleSymbols && uniqueFill) {
+    const role = qgisField(doubleSymbols.roleField);
+    const value = qgisField(doubleSymbols.valueField);
+    renderer = {
+      type: 'rules',
+      rules: [
+        {
+          filter: `${role} = 'A' AND ${value} IS NOT NULL`,
+          label: doubleSymbols.primary,
+          symbol: symbolWith(colorA)
+        },
+        {
+          filter: `${role} = 'B' AND ${value} IS NOT NULL`,
+          label: doubleSymbols.secondary,
+          symbol: symbolWith(colorB)
+        },
+        ...(missingSymbol
+          ? [
+              {
+                filter: `${value} IS NULL`,
+                label: missingLabel,
+                symbol: missingSymbol
+              }
+            ]
+          : [])
+      ],
+      orderBy
+    };
+  } else if (
     !signed &&
     (symbol.mode === SymbolMode.CATEGORIES ||
       symbol.fillMode === FillMode.CATEGORIES) &&
@@ -940,6 +1123,7 @@ function buildSymbolPlan(
 
   return {
     primitive: PrimitiveFilterType.POINT,
+    doubleSymbols,
     geometry: 'point',
     columns: [...columns],
     style: { geometryType: 'point', renderer },
@@ -1130,12 +1314,9 @@ function textColorExpression(
   return undefined;
 }
 
-function buildTextPlan(
-  viz: VisualizationConfig,
-  context: QgisStyleContext
-): QgisLayerPlan | null {
+function buildTextPlan(viz: VisualizationConfig): QgisLayerPlan | null {
   const text = getTextPrimitive(viz);
-  const labelColumn = context.labelColumn ?? text?.labelColumn;
+  const labelColumn = text?.labelColumn;
   if (!text?.enabled || !labelColumn) {
     return null;
   }
@@ -1283,7 +1464,7 @@ export function buildVisualizationLayerPlans(
     buildPolygonPlan(viz, context),
     buildLinePlan(viz, context),
     buildSymbolPlan(viz, context),
-    buildTextPlan(viz, context)
+    buildTextPlan(viz)
   ].filter((plan): plan is QgisLayerPlan => plan !== null);
   const rank = (primitive: PrimitiveFilter) => {
     const index = primitiveOrder.indexOf(primitive);
@@ -1371,5 +1552,57 @@ export function buildBasemapLinePlan(
       }
     },
     notes: []
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Labels edited on the map
+// ---------------------------------------------------------------------------
+
+/** Attributes holding the texts typed and the positions dragged in Khartis. */
+export interface LabelEditFields {
+  primary: string;
+  secondary?: string;
+  /** Centre of the label block from the anchor, millimetres, y down. */
+  dx: string;
+  dy: string;
+}
+
+/**
+ * Points the labels at the edited texts, and moves the dragged ones where
+ * the map shows them. A label without an edit keeps its data value and its
+ * place: a NULL data-defined offset falls back to the static one.
+ */
+export function withLabelEdits(
+  plan: QgisLayerPlan,
+  fields: LabelEditFields
+): QgisLayerPlan {
+  const labels = plan.style.labels?.map((label, index) => {
+    const field = index === 0 ? fields.primary : fields.secondary;
+    const dx = qgisField(fields.dx);
+    const dy = qgisField(fields.dy);
+    return {
+      ...label,
+      expression: field ? qgisField(field) : label.expression,
+      format: {
+        ...label.format,
+        dataDefined: {
+          ...label.format.dataDefined,
+          // Both labels stack around the dragged centre, as on the map.
+          OffsetXY: `CASE WHEN ${dx} IS NULL THEN NULL ELSE array(${dx}, ${dy} - ${qgisNumber(label.offsetUpMm)}) END`,
+          OffsetQuad: `CASE WHEN ${dx} IS NULL THEN NULL ELSE 4 END`
+        }
+      }
+    };
+  });
+  return {
+    ...plan,
+    columns: [
+      ...plan.columns,
+      ...[fields.primary, fields.secondary, fields.dx, fields.dy].filter(
+        (field): field is string => Boolean(field)
+      )
+    ],
+    style: { ...plan.style, labels }
   };
 }

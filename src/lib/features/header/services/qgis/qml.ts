@@ -44,6 +44,22 @@ export type QmlSymbolLayer =
       color: Rgba | null;
       stroke: QmlStroke | null;
       dataDefined?: DataDefinedProperties;
+    }
+  | {
+      /** Parallel lines across a polygon (hatching). */
+      kind: 'line-pattern';
+      /** Counter-clockwise from horizontal, as QGIS measures it. */
+      angle: number;
+      distanceMm: number;
+      lineWidthMm: number;
+      color: Rgba;
+    }
+  | {
+      /** A grid of markers across a polygon (dots, squares…). */
+      kind: 'point-pattern';
+      angle: number;
+      distanceMm: number;
+      marker: { shape: string; sizeMm: number; color: Rgba; angle?: number };
     };
 
 export interface QmlSymbol {
@@ -253,6 +269,85 @@ function symbolLayerXml(layer: QmlSymbolLayer): string {
         option('joinstyle', 'round')
       );
       break;
+    case 'line-pattern':
+      return element(
+        'layer',
+        { class: 'LinePatternFill', enabled: 1, locked: 0, pass: 0 },
+        [
+          element('Option', { type: 'Map' }, [
+            option('angle', formatNumber(layer.angle)),
+            option('distance', formatNumber(layer.distanceMm)),
+            option('distance_unit', 'MM'),
+            option('offset', '0'),
+            option('offset_unit', 'MM'),
+            option('coordinate_reference', 'viewport'),
+            option('clip_mode', 'during_render')
+          ]),
+          dataDefinedBlock('data_defined_properties'),
+          symbolXml(
+            {
+              type: 'line',
+              opacity: 1,
+              layers: [
+                {
+                  kind: 'line',
+                  stroke: {
+                    color: layer.color,
+                    widthMm: layer.lineWidthMm,
+                    cap: 'flat'
+                  }
+                }
+              ]
+            },
+            '@pattern@line'
+          )
+        ]
+      );
+    case 'point-pattern':
+      return element(
+        'layer',
+        { class: 'PointPatternFill', enabled: 1, locked: 0, pass: 0 },
+        [
+          element('Option', { type: 'Map' }, [
+            element('Option', {
+              name: 'angle',
+              type: 'double',
+              value: formatNumber(layer.angle)
+            }),
+            option('distance_x', formatNumber(layer.distanceMm)),
+            option('distance_x_unit', 'MM'),
+            option('distance_y', formatNumber(layer.distanceMm)),
+            option('distance_y_unit', 'MM'),
+            option('displacement_x', '0'),
+            option('displacement_x_unit', 'MM'),
+            option('displacement_y', '0'),
+            option('displacement_y_unit', 'MM'),
+            option('coordinate_reference', 'viewport'),
+            option('clip_mode', 'shape')
+          ]),
+          dataDefinedBlock('data_defined_properties'),
+          symbolXml(
+            {
+              type: 'marker',
+              opacity: 1,
+              layers: [
+                {
+                  kind: 'marker',
+                  shape: layer.marker.shape,
+                  sizeMm: layer.marker.sizeMm,
+                  color: layer.marker.color,
+                  stroke: null,
+                  dataDefined:
+                    layer.marker.angle !== undefined
+                      ? { angle: qgisNumber(layer.marker.angle) }
+                      : undefined
+                }
+              ]
+            },
+            '@pattern@marker'
+          )
+        ]
+      );
     case 'ellipse-marker':
       className = 'EllipseMarker';
       options.push(

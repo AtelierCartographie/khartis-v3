@@ -22,6 +22,8 @@ import {
 } from './qgis-style';
 import { buildQml, MM_PER_CSS_PX } from './qml';
 import { transformWkb } from './wkb-transform';
+import { resolveQgisPattern } from './qgis-patterns';
+import { DOUBLE_SYMBOL_FIELDS } from './qgis-style';
 
 function classOf(
   value: number,
@@ -39,15 +41,22 @@ function classOf(
   return index === -1 ? null : index;
 }
 
-// Evaluates the arithmetic subset of the QGIS expressions written for sizes.
+// Evaluates the subset of QGIS expressions written for sizes and colours:
+// arithmetic, comparisons and single-branch CASE.
 function evaluateNumericExpression(
   expression: string | undefined,
-  fields: Record<string, number>
+  fields: Record<string, number | string>
 ): number {
-  const source = (expression ?? 'NaN').replace(
-    /"([^"]+)"/g,
-    (_, name: string) => `(${fields[name]})`
-  );
+  const source = (expression ?? 'NaN')
+    .replace(
+      /"([^"]+)"/g,
+      (_, name: string) => `(${JSON.stringify(fields[name])})`
+    )
+    .replace(/CASE WHEN /g, '((')
+    .replace(/ THEN /g, ') ? (')
+    .replace(/ ELSE /g, ') : (')
+    .replace(/ END/g, '))')
+    .replace(/ = /g, ' === ');
   const evaluate = new Function(
     'sqrt',
     'min',
@@ -358,5 +367,121 @@ describe('WKB reprojection fallback', () => {
         x === 1 && y === 1 ? null : [x, y]
       )
     ).toBeNull();
+  });
+});
+
+describe('QGIS patterns', () => {
+  it('should hatch at the spacing, thickness and slope of the motif', () => {
+    // A 10 px tile, the line covering 20 % of it, turned 45° clockwise.
+    const [hatch] =
+      resolveQgisPattern({
+        type: 'line',
+        angle: 45,
+        scale: 1,
+        size: 20,
+        fill: '#595959',
+        patchSize: false
+      })?.layers ?? [];
+
+    expect(hatch).toMatchObject({
+      kind: 'line-pattern',
+      angle: -45,
+      color: [89, 89, 89, 255]
+    });
+    if (hatch?.kind !== 'line-pattern') return;
+    expect(hatch.distanceMm).toBeCloseTo(10 * MM_PER_CSS_PX);
+    expect(hatch.lineWidthMm).toBeCloseTo(2 * MM_PER_CSS_PX);
+  });
+
+  it('should give dots the area of the motif', () => {
+    const [grid] =
+      resolveQgisPattern({
+        type: 'circle',
+        angle: 0,
+        scale: 2,
+        size: 10,
+        fill: '#000000',
+        patchSize: false
+      })?.layers ?? [];
+
+    expect(grid?.kind).toBe('point-pattern');
+    if (grid?.kind !== 'point-pattern') return;
+    const radiusPx = grid.marker.sizeMm / MM_PER_CSS_PX / 2;
+    expect(Math.PI * radiusPx ** 2).toBeCloseTo(0.1 * 20 * 20);
+  });
+
+  it('should hatch the missing data over its colour by default', () => {
+    const viz = choroplethWithSymbolsAndLabels();
+    if (viz.polygon?.missingData) {
+      viz.polygon.missingData = {
+        ...viz.polygon.missingData,
+        pattern: true,
+        patternConfig: {
+          shape: 'line',
+          angle: 45,
+          scale: 0.7,
+          color: '#595959'
+        }
+      };
+    }
+    const [polygon] = buildVisualizationLayerPlans(viz, context, []);
+    const { renderer } = polygon.style;
+    if (renderer.type !== 'rules') throw new Error('rules expected');
+    const missing = renderer.rules.find((rule) => rule.label === 'No data');
+
+    expect(missing?.symbol.layers.map((layer) => layer.kind)).toEqual([
+      'fill',
+      'line-pattern',
+      'line'
+    ]);
+    expect(polygon.notes.map((note) => note.code)).not.toContain(
+      'missing-pattern'
+    );
+  });
+});
+
+describe('QGIS double symbols', () => {
+  it('should size each variable on the shared scale and swap colours below the break', () => {
+    const viz = choroplethWithSymbolsAndLabels();
+    Object.assign(viz.symbol ?? {}, {
+      proportionalType: 'doubles',
+      valueColumn: 'households',
+      fillColorB: '#ff832b',
+      breakValueB: 50
+    });
+    const plans = buildVisualizationLayerPlans(
+      viz,
+      {
+        ...context,
+        domain: (_, column) =>
+          column === 'households' ? { min: 0, max: 100 } : { min: 0, max: 400 }
+      },
+      []
+    );
+    const symbols = plans.find(
+      (plan) => plan.primitive === PrimitiveFilterType.POINT
+    );
+    const renderer = symbols?.style.renderer;
+    if (renderer?.type !== 'rules') throw new Error('rules expected');
+    const [layer] = renderer.rules[1].symbol.layers;
+    if (layer.kind !== 'marker') throw new Error('marker expected');
+    const { roleField, valueField } = DOUBLE_SYMBOL_FIELDS;
+
+    expect(symbols?.doubleSymbols).toMatchObject({
+      primary: 'population',
+      secondary: 'households'
+    });
+    // Common scale: both variables against the larger domain, 400.
+    expect(
+      evaluateNumericExpression(layer.dataDefined?.size, {
+        [roleField]: 'B',
+        [valueField]: 100
+      })
+    ).toBeCloseTo(
+      2 * getProportionalSymbolSizeForValue(100, 400, 20) * MM_PER_CSS_PX
+    );
+    expect(layer.dataDefined?.fillColor).toContain(
+      `"${valueField}" < 50 THEN color_rgba(49,130,189,255)`
+    );
   });
 });
