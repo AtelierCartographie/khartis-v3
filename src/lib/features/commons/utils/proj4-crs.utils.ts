@@ -1,4 +1,5 @@
 import proj4 from 'proj4';
+import { registerD3Proj4Methods } from './proj4-d3-methods.utils';
 import { get_intersecting_countries } from '@ateliercartographie/proj-suggest';
 
 export const WGS84_CRS = 'EPSG:4326';
@@ -236,6 +237,7 @@ function listNationalProj4Definitions(): Array<[string, string]> {
 }
 
 export function registerKnownProj4Definitions(): void {
+  registerD3Proj4Methods();
   if (proj4DefinitionsRegistered) {
     return;
   }
