@@ -1146,3 +1146,104 @@ async function fetchDatasetsWithGeometry(
 
   return results;
 }
+
+/**
+ * Where the map finds a dataset's geometry, as SQL: its own geometry column,
+ * its GPS columns or the basemap it is joined to. The dataset rows are the
+ * relation `d`, kept to `rowFilter` before the basemap join.
+ */
+export interface DatasetGeometrySource {
+  /** FROM clause; the dataset columns are `d."…"`. */
+  from: string;
+  /** The geometry, in `sourceCrs`. */
+  geometry: string;
+  sourceCrs: string;
+  /** Dataset columns worth exporting as attributes. */
+  attributeColumns: string[];
+  datasetTableName: string;
+}
+
+export async function resolveDatasetGeometrySource(
+  datasetId: string,
+  rowFilter: string | null
+): Promise<DatasetGeometrySource | null> {
+  const original = datasetsStore.datasets.find(
+    (candidate) =>
+      candidate.id === datasetId || candidate.sourceFileId === datasetId
+  );
+  if (!original) {
+    return null;
+  }
+  const [dataset] = normalizeDatasets([original]);
+  const duckDataset = resolveDuckDataset(dataset);
+  const tableName = duckDataset?.tableName ?? dataset.duckdbTableName;
+  if (!dataset || !tableName) {
+    return null;
+  }
+  const geomColumn = resolveDatasetGeometryColumn(dataset);
+  const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
+  const gpsColumns = resolveDatasetGpsColumns(dataset);
+  const escapedTable = escapeIdentifier(tableName);
+  const rows = `(SELECT * FROM "${escapedTable}"${rowFilter ? ` WHERE ${rowFilter}` : ''}) d`;
+  const attributeColumns = dataset.columns
+    .map((column) => column.name)
+    .filter((name) => name !== geomColumn?.name);
+
+  if (geomColumn) {
+    const type = await getDuckDBColumnType(tableName, geomColumn.name);
+    return {
+      from: rows,
+      // `d` is the only relation: bare column names are unambiguous.
+      geometry: buildGeometryValueExpression(geomColumn.name, type),
+      sourceCrs: resolveDatasetGeometryCrs(dataset) ?? WGS84_CRS,
+      attributeColumns,
+      datasetTableName: tableName
+    };
+  }
+
+  if (
+    gpsColumns &&
+    shouldUseGpsGeometryExport({
+      hasGeometryColumn: false,
+      hasJoinedGeometry: Boolean(joinedGeometrySource),
+      hasGpsColumns: true,
+      gpsMode: duckDataset?.gpsMode
+    })
+  ) {
+    return {
+      from: rows,
+      geometry: buildGpsGeometryValueExpression(gpsColumns),
+      sourceCrs: WGS84_CRS,
+      attributeColumns,
+      datasetTableName: tableName
+    };
+  }
+
+  if (!joinedGeometrySource) {
+    return null;
+  }
+  const geometryTable = await basemapService.loadGeometryIntoDuckDB(
+    joinedGeometrySource.joinedBasemap
+  );
+  const geometryColumns = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+    { format: 'array' }
+  )) as Array<{ column_name: string }>;
+  const joinColumn =
+    geometryColumns.find((c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID)
+      ?.column_name ??
+    geometryColumns.find(
+      (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
+    )?.column_name;
+  if (!joinColumn) {
+    return null;
+  }
+  return {
+    from: `${rows} JOIN "${escapeIdentifier(geometryTable)}" g ON CAST(d."${escapeIdentifier(JOINED_BASEMAP_COLUMN.ID)}" AS VARCHAR) = CAST(g."${escapeIdentifier(joinColumn)}" AS VARCHAR)`,
+    geometry: 'g.geom::GEOMETRY',
+    sourceCrs: WGS84_CRS,
+    attributeColumns,
+    datasetTableName: tableName
+  };
+}
