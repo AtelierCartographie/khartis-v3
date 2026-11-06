@@ -4,11 +4,12 @@ import { projectionStore } from '../stores/projection.store.svelte';
 /**
  * Data behind a pixel of the map viewport, read through the chain the layers
  * are actually drawn with: deck viewport, the layers' model matrix, then the
- * render projection. `space` says what the coordinates are: lon/lat, or the
- * source CRS of a dataset drawn as is.
+ * render projection. `space` says what the coordinates are: lon/lat through
+ * the render projection, or the raw data coordinates when nothing projects
+ * them (lon/lat, or the source CRS of a dataset drawn as is).
  */
 export interface MapViewportDataReader {
-  space: 'lonlat' | 'source-crs';
+  space: 'lonlat' | 'data';
   read: (x: number, y: number) => [number, number] | null;
 }
 
@@ -152,8 +153,5 @@ export function createMapViewportDataReader(): MapViewportDataReader | null {
     };
   }
 
-  return {
-    space: projectionStore.isProjectedCoordinates ? 'source-crs' : 'lonlat',
-    read: readProjected
-  };
+  return { space: 'data', read: readProjected };
 }

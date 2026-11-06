@@ -40,6 +40,11 @@
     type ProjectionCodeDiagnosis
   } from './projection-code.utils';
   import {
+    getCrsCatalogVersion,
+    isCoordinateSystemLookupFailed,
+    resolveCoordinateSystem
+  } from './crs-catalog.store.svelte';
+  import {
     formatProjectionCodeCrs,
     getPresetOfficialProjectionName,
     getProjectionCodeDisplayName,
@@ -72,11 +77,24 @@
     supportsCustomProjectionCode(projectionContext)
   );
   const isCodeView = $derived(requestedTabIndex === 1);
-  const diagnosis = $derived(
-    isCodeView && customCodeEnabled
+  const diagnosis = $derived.by((): ProjectionCodeDiagnosis => {
+    // Re-derive when a lookup in the PROJ database lands.
+    void getCrsCatalogVersion();
+    return isCodeView && customCodeEnabled
       ? diagnoseProjectionCode(crsCode, getProjectionCodeCoverageBbox())
-      : ({ status: 'empty' } as ProjectionCodeDiagnosis)
+      : { status: 'empty' };
+  });
+  const lookupFailed = $derived(
+    diagnosis.status === 'unresolved-authority-code' &&
+      isCoordinateSystemLookupFailed(diagnosis.code)
   );
+
+  $effect(() => {
+    if (diagnosis.status === 'unresolved-authority-code') {
+      void resolveCoordinateSystem(diagnosis.code);
+    }
+  });
+
   const canApply = $derived(
     diagnosis.status === 'catalogue-equivalent' ||
       (diagnosis.status === 'valid' && diagnosis.coverage !== 'none')
@@ -102,8 +120,17 @@
     switch (diagnosis.status) {
       case 'unrecognized':
         return m.projection_code_unrecognized();
+      case 'unresolved-authority-code':
+        return lookupFailed
+          ? m.projection_code_lookup_failed({ code: diagnosis.code })
+          : undefined;
       case 'unknown-authority-code':
         return m.projection_code_unknown_authority({ code: diagnosis.code });
+      case 'unrenderable-crs':
+        return m.projection_code_unrenderable({
+          code: diagnosis.code,
+          name: diagnosis.name
+        });
       case 'unsupported-method':
         return m.projection_code_unsupported_method({
           method: diagnosis.method ?? '?'
@@ -427,6 +454,14 @@
                   name:
                     getProjectionById(diagnosis.catalogueId)?.name ??
                     diagnosis.catalogueId
+                })}
+              />
+            {/if}
+            {#if diagnosis.status === 'unresolved-authority-code' && !lookupFailed}
+              <InlineLoading
+                status="active"
+                description={m.projection_code_lookup_pending({
+                  code: diagnosis.code
                 })}
               />
             {/if}

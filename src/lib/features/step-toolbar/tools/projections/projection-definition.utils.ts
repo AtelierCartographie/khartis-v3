@@ -296,9 +296,10 @@ function resolveBasemapDefinition(
     });
   }
   if (source?.nativeEpsg) {
+    const code = `EPSG:${source.nativeEpsg}`;
     return {
       epsg: source.nativeEpsg,
-      proj4: getKnownProj4Definition(`EPSG:${source.nativeEpsg}`),
+      proj4: getKnownProj4Definition(code),
       notes: []
     };
   }

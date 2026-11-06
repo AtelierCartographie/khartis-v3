@@ -13,6 +13,8 @@ import {
 import { createMapViewportDataReader } from '$lib/features/map/utils/map-viewport-data.utils';
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 import { m } from '$lib/paraglide/messages';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { isWgs84LikeCrs } from '$lib/features/map/utils/dataset-crs.utils';
 import { facetsStore } from '../facets/facets.store.svelte';
 import { getNativeCrsEpsg } from './native-projection.utils';
 import {
@@ -20,6 +22,7 @@ import {
   isGeoreferenceableDefinition,
   resolveCurrentProjectionDefinition,
   type ProjectionDefinition,
+  type ProjectionDefinitionNote,
   type ProjectionDefinitionContext
 } from './projection-definition.utils';
 import { resolveCurrentProjectionDisplay } from './projection-label.utils';
@@ -31,6 +34,21 @@ const SAMPLE_GRID_STEPS = 8;
 // Past half a pixel the side-cars would misplace the image visibly.
 const MAX_RESIDUAL_PX = 0.5;
 
+// Without a basemap, a dataset in a projected CRS is drawn as is (no d3
+// projection): its CRS is the map's.
+function getDatasetNativeEpsg(): string | undefined {
+  if (basemapService.currentMetadata) {
+    return undefined;
+  }
+  const dataset =
+    datasetsStore.selectedDataset ??
+    datasetsStore.datasets.find((item) => item.geometry?.crs);
+  const crs = dataset?.geometry?.crs;
+  return crs && !isWgs84LikeCrs(crs)
+    ? crs.trim().match(/^EPSG:(\d+)$/i)?.[1]
+    : undefined;
+}
+
 /** Everything that decides the projection the map is drawn in right now. */
 export function getCurrentProjectionContext(): ProjectionDefinitionContext {
   const tiled = shouldUseMapLibreInterleaved({
@@ -41,7 +59,9 @@ export function getCurrentProjectionContext(): ProjectionDefinitionContext {
     state: getProjectionState(),
     basemapProjection: {
       ...basemapService.currentMetadata?.proj_to,
-      nativeEpsg: getNativeCrsEpsg(basemapService.currentBasemap?.metadata)
+      nativeEpsg:
+        getNativeCrsEpsg(basemapService.currentBasemap?.metadata) ??
+        getDatasetNativeEpsg()
     },
     projectionPresets: basemapService.projectionPresets,
     tiled: tiled ? { globe: mapProjectionStore.isGlobe } : null
@@ -49,11 +69,20 @@ export function getCurrentProjectionContext(): ProjectionDefinitionContext {
 }
 
 export type MapGeoreferenceUnavailableReason =
-  'facets' | 'no-crs' | 'not-affine';
+  'facets' | 'composite' | 'oblique' | 'globe' | 'no-equivalent' | 'not-affine';
 
 export type MapGeoreferenceAvailability =
   | { available: true }
   | { available: false; reason: MapGeoreferenceUnavailableReason };
+
+const NOTE_REASONS: Array<
+  [ProjectionDefinitionNote, MapGeoreferenceUnavailableReason]
+> = [
+  ['globe', 'globe'],
+  ['composite', 'composite'],
+  ['oblique', 'oblique'],
+  ['no-equivalent', 'no-equivalent']
+];
 
 export function getMapGeoreferenceAvailability(): MapGeoreferenceAvailability {
   if (facetsStore.enabled) {
@@ -62,9 +91,36 @@ export function getMapGeoreferenceAvailability(): MapGeoreferenceAvailability {
   const definition = resolveCurrentProjectionDefinition(
     getCurrentProjectionContext()
   );
-  return isGeoreferenceableDefinition(definition)
-    ? { available: true }
-    : { available: false, reason: 'no-crs' };
+  if (isGeoreferenceableDefinition(definition)) {
+    return { available: true };
+  }
+  const reason =
+    NOTE_REASONS.find(([note]) => definition.notes.includes(note))?.[1] ??
+    'no-equivalent';
+  return { available: false, reason };
+}
+
+/** Whether the map can be exported for GIS software, and why not, in words. */
+export function describeMapGeoreferenceAvailability(
+  availability: MapGeoreferenceAvailability
+): string {
+  if (availability.available) {
+    return m.georeference_available();
+  }
+  switch (availability.reason) {
+    case 'facets':
+      return m.georeference_unavailable_facets();
+    case 'composite':
+      return m.georeference_unavailable_composite();
+    case 'oblique':
+      return m.georeference_unavailable_oblique();
+    case 'globe':
+      return m.georeference_unavailable_globe();
+    case 'not-affine':
+      return m.export_georeference_failed();
+    case 'no-equivalent':
+      return m.georeference_unavailable_no_equivalent();
+  }
 }
 
 export interface MapGeoreference {
@@ -83,6 +139,15 @@ export interface MapGeoreference {
 export type MapGeoreferenceResult =
   | { status: 'ok'; georeference: MapGeoreference }
   | { status: 'unavailable'; reason: MapGeoreferenceUnavailableReason };
+
+function isDrawnInNativeCrs(context: ProjectionDefinitionContext): boolean {
+  const { state, basemapProjection, tiled } = context;
+  return (
+    !tiled &&
+    Boolean(basemapProjection?.nativeEpsg) &&
+    (state.overrideActive !== true || state.overrideSource !== 'manual')
+  );
+}
 
 function resolveSrs(definition: ProjectionDefinition): string | undefined {
   return definition.epsg
@@ -107,20 +172,17 @@ export function buildMapGeoreference(
   const srs = resolveSrs(definition);
   const reader = createMapViewportDataReader();
   if (!srs || !reader) {
-    return { status: 'unavailable', reason: 'no-crs' };
+    return { status: 'unavailable', reason: 'no-equivalent' };
   }
 
-  // A dataset drawn as is: the map data space already is its CRS.
+  // A file drawn as is: the map data space already is its CRS.
   let toCrs: (x: number, y: number) => [number, number] | null;
-  if (reader.space === 'source-crs') {
-    if (!context.basemapProjection?.nativeEpsg) {
-      return { status: 'unavailable', reason: 'no-crs' };
-    }
+  if (reader.space === 'data' && isDrawnInNativeCrs(context)) {
     toCrs = reader.read;
   } else {
     const forward = createCurrentProjectionForward(context, definition);
     if (!forward) {
-      return { status: 'unavailable', reason: 'no-crs' };
+      return { status: 'unavailable', reason: 'no-equivalent' };
     }
     toCrs = (x, y) => {
       const lonLat = reader.read(x, y);
@@ -153,8 +215,8 @@ export function buildMapGeoreference(
   const corners = [
     [0, 0],
     [viewportWidth, 0],
-    [0, viewportHeight],
-    [viewportWidth, viewportHeight]
+    [viewportWidth, viewportHeight],
+    [0, viewportHeight]
   ].map(([x, y]) =>
     applyAffineTransform(transform, [offsetX + scale * x, offsetY + scale * y])
   );
@@ -164,15 +226,17 @@ export function buildMapGeoreference(
     Math.abs(transform.a * transform.e - transform.b * transform.d)
   );
 
+  const crsName = resolveCurrentProjectionDisplay(
+    context.state,
+    context.basemapProjection,
+    context.projectionPresets
+  ).name;
+
   return {
     status: 'ok',
     georeference: {
       srs,
-      crsName: resolveCurrentProjectionDisplay(
-        context.state,
-        context.basemapProjection,
-        context.projectionPresets
-      ).name,
+      crsName,
       definition,
       transform,
       frameExtent: [

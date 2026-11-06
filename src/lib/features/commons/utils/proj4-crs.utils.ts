@@ -67,6 +67,33 @@ export type Proj4Crs = InstanceType<typeof proj4.Proj>;
 
 let proj4DefinitionsRegistered = false;
 
+/** A CRS read from the PROJ database of DuckDB (`duckdb_coordinate_systems`). */
+export interface ResolvedCoordinateSystem {
+  name: string;
+  projjson: string;
+  renderable: boolean;
+}
+
+// null: PROJ does not know the code either.
+const resolvedCoordinateSystems = new Map<
+  string,
+  ResolvedCoordinateSystem | null
+>();
+
+export function registerResolvedCoordinateSystem(
+  code: string,
+  entry: ResolvedCoordinateSystem | null
+): void {
+  resolvedCoordinateSystems.set(normalizeProj4CrsCode(code), entry);
+}
+
+/** undefined: not looked up yet. */
+export function getResolvedCoordinateSystem(
+  code: string
+): ResolvedCoordinateSystem | null | undefined {
+  return resolvedCoordinateSystems.get(normalizeProj4CrsCode(code));
+}
+
 export function normalizeProj4CrsCode(crs: string): string {
   const trimmed = crs.trim();
   const epsgMatch = trimmed.match(/^EPSG:(\d+)$/i);
@@ -97,6 +124,12 @@ export function createProj4Crs(code: string): Proj4Crs {
   if (normalized.startsWith('{')) {
     return new proj4.Proj(JSON.parse(normalized));
   }
+  const resolved = proj4.defs(normalized)
+    ? undefined
+    : getResolvedCoordinateSystem(normalized);
+  if (resolved?.renderable) {
+    return new proj4.Proj(JSON.parse(resolved.projjson));
+  }
 
   return new proj4.Proj(completeProj4Defaults(normalized));
 }
@@ -126,7 +159,7 @@ export function getKnownEpsgName(epsgCode: string): string | undefined {
   if (utm) {
     return `WGS 84 / UTM zone ${Number(utm[2])}${utm[1] === '6' ? 'N' : 'S'}`;
   }
-  return EPSG_NAMES[code];
+  return EPSG_NAMES[code] ?? getResolvedCoordinateSystem(code)?.name;
 }
 
 type Proj4CrsOriginFields = {
