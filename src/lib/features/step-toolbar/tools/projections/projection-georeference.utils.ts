@@ -15,9 +15,12 @@ import { createMapViewportDataReader } from '$lib/features/map/utils/map-viewpor
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 import { m } from '$lib/paraglide/messages';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { isWgs84LikeCrs } from '$lib/features/map/utils/dataset-crs.utils';
 import { facetsStore } from '../facets/facets.store.svelte';
-import { getNativeCrsEpsg } from './native-projection.utils';
+import {
+  getNativeCrs,
+  readCrsEpsg,
+  readProjectedCrs
+} from './native-projection.utils';
 import {
   createCurrentProjectionForward,
   isGeoreferenceableDefinition,
@@ -37,17 +40,14 @@ const MAX_RESIDUAL_PX = 0.5;
 
 // Without a basemap, a dataset in a projected CRS is drawn as is (no d3
 // projection): its CRS is the map's.
-function getDatasetNativeEpsg(): string | undefined {
+function getDatasetNativeCrs(): string | undefined {
   if (basemapService.currentMetadata) {
     return undefined;
   }
   const dataset =
     datasetsStore.selectedDataset ??
     datasetsStore.datasets.find((item) => item.geometry?.crs);
-  const crs = dataset?.geometry?.crs;
-  return crs && !isWgs84LikeCrs(crs)
-    ? crs.trim().match(/^EPSG:(\d+)$/i)?.[1]
-    : undefined;
+  return readProjectedCrs(dataset?.geometry?.crs);
 }
 
 /** Everything that decides the projection the map is drawn in right now. */
@@ -56,13 +56,15 @@ export function getCurrentProjectionContext(): ProjectionDefinitionContext {
     requiresMapLibre: basemapStyleStore.requiresMapLibre,
     hasOSMBasemap: osmBasemapStore.isActive
   });
+  const nativeCrs =
+    getNativeCrs(basemapService.currentBasemap?.metadata) ??
+    getDatasetNativeCrs();
   return {
     state: getProjectionState(),
     basemapProjection: {
       ...basemapService.currentMetadata?.proj_to,
-      nativeEpsg:
-        getNativeCrsEpsg(basemapService.currentBasemap?.metadata) ??
-        getDatasetNativeEpsg()
+      nativeCrs,
+      nativeEpsg: readCrsEpsg(nativeCrs)
     },
     projectionPresets: basemapService.projectionPresets,
     tiled: tiled ? { globe: mapProjectionStore.isGlobe } : null
@@ -170,7 +172,7 @@ function isDrawnInNativeCrs(context: ProjectionDefinitionContext): boolean {
   const { state, basemapProjection, tiled } = context;
   return (
     !tiled &&
-    Boolean(basemapProjection?.nativeEpsg) &&
+    Boolean(basemapProjection?.nativeCrs) &&
     (state.overrideActive !== true || state.overrideSource !== 'manual')
   );
 }

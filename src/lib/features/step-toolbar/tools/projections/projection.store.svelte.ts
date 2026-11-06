@@ -35,7 +35,8 @@ import {
   projectionStore as mapRenderProjectionStore
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
-import { getNativeCrsEpsg } from './native-projection.utils';
+import { getNativeCrs, getNativeCrsEpsg } from './native-projection.utils';
+import { diagnoseProjectionCode } from './projection-code.utils';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -243,6 +244,13 @@ const { actions, getState } = createToolStore<
         const projTo = basemapService.currentMetadata?.proj_to;
         if (projTo?.type === 'simple' && projTo.proj4) {
           s.customCode = projTo.proj4;
+        } else {
+          // A file drawn in its own CRS: the settings orient that CRS.
+          const nativeCode = getNativeCrsCode();
+          if (nativeCode) {
+            s.customCode = nativeCode.code;
+            s.selected = nativeCode.projectionId;
+          }
         }
       }
       s.activeSuggestionId = undefined;
@@ -369,8 +377,10 @@ const { actions, getState } = createToolStore<
         if (
           s.overrideSource === 'manual' &&
           s.customCode &&
-          s.customCode === basemapService.currentMetadata?.proj_to?.proj4
+          (s.customCode === basemapService.currentMetadata?.proj_to?.proj4 ||
+            s.customCode === getNativeCrsCode()?.code)
         ) {
+          s.selected = DEFAULT_PROJECTION;
           s.customCode = undefined;
           s.overrideActive = false;
           s.overrideSource = undefined;
@@ -493,8 +503,22 @@ export function getOrientableCrsCode(): string | undefined {
   if (state.customCode) {
     return state.customCode;
   }
+  if (state.overrideActive) {
+    return undefined;
+  }
   const projTo = basemapService.currentMetadata?.proj_to;
-  return !state.overrideActive && projTo?.type === 'simple' && projTo.proj4
+  return projTo?.type === 'simple' && projTo.proj4
     ? projTo.proj4
+    : getNativeCrsCode()?.code;
+}
+
+// The CRS of a file drawn as is, in the form a pasted code is applied (an
+// EPSG code read from the PROJ database becomes its PROJJSON).
+function getNativeCrsCode():
+  { code: string; projectionId: string } | undefined {
+  const nativeCrs = getNativeCrs(basemapService.currentBasemap?.metadata);
+  const diagnosis = nativeCrs ? diagnoseProjectionCode(nativeCrs) : undefined;
+  return diagnosis?.status === 'valid'
+    ? { code: diagnosis.normalizedCode, projectionId: diagnosis.projectionId }
     : undefined;
 }

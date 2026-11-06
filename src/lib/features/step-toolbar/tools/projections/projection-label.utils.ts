@@ -115,6 +115,8 @@ export interface BasemapProjectionSource {
   type?: string;
   preset?: string | null;
   proj4?: string | null;
+  /** CRS the file is drawn in as is: an EPSG code or a PROJJSON. */
+  nativeCrs?: string;
   nativeEpsg?: string;
 }
 
@@ -187,7 +189,16 @@ function resolveBasemapProjectionDisplay(
   }
 
   if (!source?.nativeEpsg) {
-    return { name: m.projection_current_basemap_native() };
+    // A `.prj` without authority (Esri WKT) still names its CRS.
+    const crs = source?.nativeCrs
+      ? describeProjectionCode(source.nativeCrs)
+      : undefined;
+    return crs
+      ? {
+          name: crs.name ?? m.projection_current_basemap_native(),
+          description: formatProjectionCodeCrs(crs)
+        }
+      : { name: m.projection_current_basemap_native() };
   }
   // The file is drawn in its own CRS: name it once the PROJ database has.
   const code = `EPSG:${source.nativeEpsg}`;

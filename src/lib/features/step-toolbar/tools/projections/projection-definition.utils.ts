@@ -329,6 +329,60 @@ function setCentralMeridian(definition: string, longitude: number): string {
     : `${utm} ${lon}`;
 }
 
+// EPSG parameters holding the central meridian of a conversion.
+const CENTRAL_MERIDIAN_PARAMETER_CODES = new Set([8802, 8822]);
+
+interface ProjJsonParameter {
+  value?: unknown;
+  unit?: unknown;
+  id?: { authority?: unknown; code?: unknown };
+}
+
+// PROJJSON writes a unit as "degree" or as an object with its factor.
+function isDegreeUnit(unit: unknown): boolean {
+  if (unit === undefined || unit === 'degree') {
+    return true;
+  }
+  const factor = (unit as { conversion_factor?: unknown } | null)
+    ?.conversion_factor;
+  return typeof factor === 'number' && Math.abs(factor - Math.PI / 180) < 1e-12;
+}
+
+/**
+ * A PROJJSON with its central meridian moved, which GDAL and QGIS read as
+ * is. Its EPSG id no longer applies and is dropped. Undefined when the
+ * conversion names no central meridian.
+ */
+function setProjJsonCentralMeridian(
+  projJson: string,
+  longitude: number
+): string | undefined {
+  let crs: {
+    name?: unknown;
+    id?: unknown;
+    conversion?: { parameters?: ProjJsonParameter[] };
+  };
+  try {
+    crs = JSON.parse(projJson);
+  } catch {
+    return undefined;
+  }
+  const parameter = crs.conversion?.parameters?.find(
+    ({ id }) =>
+      id?.authority === 'EPSG' &&
+      CENTRAL_MERIDIAN_PARAMETER_CODES.has(Number(id.code))
+  );
+  if (!parameter || !isDegreeUnit(parameter.unit)) {
+    return undefined;
+  }
+  parameter.value = Number(formatDegrees(longitude));
+  delete crs.id;
+  if (typeof crs.name === 'string') {
+    crs.name = `${crs.name} (lon_0=${formatDegrees(longitude)})`;
+  }
+  return JSON.stringify(crs);
+}
+
 function resolveCodeDefinition(
   code: string,
   state: Pick<ProjectionState, 'longitude' | 'latitude' | 'rotation'>
@@ -356,13 +410,18 @@ function resolveCodeDefinition(
     const longitude = wrapLongitude(
       getProjectionCodeCentralMeridian(normalizedCode) + state.longitude
     );
-    if (pasted) {
+    // A CRS read from a `.prj` or the PROJ database is held as PROJJSON.
+    const derivedProjJson = normalizedCode.startsWith('{')
+      ? setProjJsonCentralMeridian(normalizedCode, longitude)
+      : undefined;
+    if (pasted && !derivedProjJson) {
       notes.push('derived-wkt');
     }
     definition = {
       proj4: proj4String
         ? setCentralMeridian(proj4String, longitude)
         : undefined,
+      wkt: derivedProjJson,
       notes
     };
   }
@@ -425,6 +484,13 @@ function resolveBasemapDefinition(
       proj4: getKnownProj4Definition(code),
       notes: []
     };
+  }
+  if (source?.nativeCrs) {
+    return resolveCodeDefinition(source.nativeCrs, {
+      longitude: 0,
+      latitude: 0,
+      rotation: 0
+    });
   }
   return { notes: ['no-equivalent'] };
 }
