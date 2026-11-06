@@ -2069,5 +2069,9 @@
   "georeference_unavailable_composite": "No georeferenced export: composite projection, each territory has its own frame.",
   "georeference_unavailable_oblique": "No georeferenced export: the orientation latitude tilts the projection out of any standard CRS.",
   "georeference_unavailable_globe": "No georeferenced export: the globe is a perspective view.",
-  "georeference_unavailable_no_equivalent": "No georeferenced export: this projection is specific to Khartis, no GIS software can reproduce it."
+  "georeference_unavailable_no_equivalent": "No georeferenced export: this projection is specific to Khartis, no GIS software can reproduce it.",
+  "svg_export_layer_georeference_frame": "georeference-frame",
+  "georeference_frame_layer": "map frame",
+  "georeference_readme_frame_raster": "{frame}: the map frame in this CRS, to open in QGIS with the image.",
+  "georeference_readme_frame_svg": "{frame}: the map frame in this CRS. Open it in QGIS, add your layers, then export the layout with this frame: in your drawing tool it lines up with the “georeference-frame” layer of the SVG."
 }

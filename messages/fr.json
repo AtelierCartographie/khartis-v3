@@ -2069,5 +2069,9 @@
   "georeference_unavailable_composite": "Pas d'export géoréférencé : projection composite, chaque territoire a son propre cadre.",
   "georeference_unavailable_oblique": "Pas d'export géoréférencé : la latitude d'orientation incline la projection hors de tout SCR standard.",
   "georeference_unavailable_globe": "Pas d'export géoréférencé : le globe est une vue en perspective.",
-  "georeference_unavailable_no_equivalent": "Pas d'export géoréférencé : cette projection est propre à Khartis, aucun logiciel SIG ne sait la reproduire."
+  "georeference_unavailable_no_equivalent": "Pas d'export géoréférencé : cette projection est propre à Khartis, aucun logiciel SIG ne sait la reproduire.",
+  "svg_export_layer_georeference_frame": "cadre-de-calage",
+  "georeference_frame_layer": "cadre de la carte",
+  "georeference_readme_frame_raster": "{frame} : le cadre de la carte dans ce SCR, à ouvrir dans QGIS avec l'image.",
+  "georeference_readme_frame_svg": "{frame} : le cadre de la carte dans ce SCR. Ouvrez-le dans QGIS, ajoutez-y vos couches, puis exportez la mise en page avec ce cadre : dans votre logiciel de dessin, il se superpose au calque « cadre-de-calage » du SVG."
 }
