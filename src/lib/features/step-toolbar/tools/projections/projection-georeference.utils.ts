@@ -21,11 +21,13 @@ import {
   readCrsEpsg,
   readProjectedCrs
 } from './native-projection.utils';
+import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
 import {
   createCurrentProjectionForward,
   isGeoreferenceableDefinition,
   resolveCurrentProjectionDefinition,
   type ProjectionDefinition,
+  type ProjectionForward,
   type ProjectionDefinitionNote,
   type ProjectionDefinitionContext
 } from './projection-definition.utils';
@@ -278,6 +280,61 @@ export function buildMapGeoreference(
       pixelSize,
       rotated: Math.abs(transform.b) + Math.abs(transform.d) > pixelSize * 1e-9
     }
+  };
+}
+
+/** The CRS vector layers of the map are written in, for GIS software. */
+export type MapVectorCrs =
+  | {
+      status: 'map';
+      crsName: string;
+      definition: ProjectionDefinition;
+      /** For `ST_Transform`: an EPSG code, the pasted WKT or a PROJ.4 string. */
+      target: string;
+      geoPackageSrs: GeoPackageSrs;
+      /** Meridian opposite the cut d3 makes in lon/lat geometry. */
+      centralMeridian: number;
+      /** Lon/lat to CRS, the one the georeferenced image uses. */
+      forward: ProjectionForward | null;
+    }
+  | {
+      status: 'wgs84';
+      reason: Exclude<MapGeoreferenceUnavailableReason, 'facets'>;
+    };
+
+/**
+ * The CRS the map is drawn in, when one exists. A map collection shares one
+ * projection, so it does not prevent vector layers from following it.
+ */
+export function resolveMapVectorCrs(): MapVectorCrs {
+  const context = getCurrentProjectionContext();
+  const definition = resolveCurrentProjectionDefinition(context);
+  const target = resolveSrs(definition);
+  const crsName = resolveCurrentProjectionDisplay(
+    context.state,
+    context.basemapProjection,
+    context.projectionPresets
+  ).name;
+  const geoPackageSrs = resolveGeoPackageSrs(definition, crsName);
+  if (!isGeoreferenceableDefinition(definition) || !target || !geoPackageSrs) {
+    const reason =
+      NOTE_REASONS.find(([note]) => definition.notes.includes(note))?.[1] ??
+      'no-equivalent';
+    return {
+      status: 'wgs84',
+      reason: reason === 'facets' ? 'no-equivalent' : reason
+    };
+  }
+  return {
+    status: 'map',
+    crsName,
+    definition,
+    target,
+    geoPackageSrs,
+    centralMeridian: definition.proj4
+      ? getProjectionCodeCentralMeridian(definition.proj4)
+      : 0,
+    forward: createCurrentProjectionForward(context, definition)
   };
 }
 

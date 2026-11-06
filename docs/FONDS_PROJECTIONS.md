@@ -256,6 +256,38 @@ l'exige. Tant que les tables WGS84 ne sont pas arrivées, la table encore en CRS
 source n'est ni dessinée ni mesurée, et une emprise hors longitude et latitude
 n'ajuste jamais une projection d3.
 
+### Export en couches SIG pour QGIS
+
+Le format de carte « GeoPackage (QGIS) » (`header/services/qgis/`) écrit la
+carte elle-même : les couches de fond dessinées depuis une géométrie (terres,
+lacs, limites, rivières) et une couche par figuré de chaque visualisation
+active, dans l'ordre de la carte. Le .zip contient le GeoPackage, un projet
+QGIS (`.qgs`, chemins relatifs) qui ouvre les couches dans cet ordre et dans le
+SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
+
+- Le SCR est celui de `resolveMapVectorCrs` : la définition de
+  `resolveCurrentProjectionDefinition`, comme pour l'export géoréférencé. Une
+  projection sans équivalent PROJ (composite, oblique, globe, propre à d3)
+  exporte en WGS84, et la boîte d'export comme le mémo le disent.
+- La reprojection passe par `ST_Transform` vers EPSG:4326 puis vers le SCR de
+  la carte. Une géométrie en longitude et latitude est d'abord coupée au
+  méridien opposé au centre, comme le fait d3 ; sinon PROJ étire les anneaux
+  qui le traversent sur toute la carte. Si DuckDB refuse le SCR cible, la
+  projection se fait en JavaScript avec la fonction qui géoréférence l'image.
+  Une entité qui sort du domaine de la projection est écartée et comptée dans
+  le mémo.
+- Les symboles et étiquettes sont posés sur le point de `ST_MaximumInscribedCircle`,
+  le point représentatif que la carte calcule quand le fond ne fournit pas ses
+  centroïdes.
+- Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
+  applique à l'ouverture. Les classes sont des règles qui reprennent
+  exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans
+  la même classe que sur la carte), les tailles proportionnelles une
+  expression sur le domaine de la carte, les tailles des millimètres sur la
+  page Khartis. Ce qui ne se traduit pas (trames, densité, évidement, symboles
+  doubles, étiquettes déplacées, mise en page) est listé dans le mémo, jamais
+  approché sans le dire.
+
 ### Orientation intrinsèque
 
 Beaucoup de projections d3 portent leur propre orientation : Bertin 1953 est

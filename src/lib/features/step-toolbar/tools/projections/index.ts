@@ -9,6 +9,8 @@ export {
   describeMapGeoreferenceAvailability,
   formatGeoreferenceReadme,
   getMapGeoreferenceAvailability,
+  resolveMapVectorCrs,
+  type MapVectorCrs,
   type MapGeoreference,
   type MapGeoreferenceAvailability
 } from './projection-georeference.utils';
