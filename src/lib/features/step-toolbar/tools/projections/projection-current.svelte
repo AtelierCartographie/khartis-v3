@@ -109,6 +109,14 @@
     {#if display.description}
       <InfoPopover text={display.description} />
     {/if}
+    <InfoPopover
+      text={describeMapGeoreferenceAvailability(gisAvailability)}
+      icon={gisAvailability.available ? CheckmarkOutline : WarningAlt}
+      label={describeMapGeoreferenceAvailability(gisAvailability)}
+      buttonClass={gisAvailability.available
+        ? 'projection-gis-status is-available'
+        : 'projection-gis-status'}
+    />
 
     <div class="projection-current-actions">
       {#if hasManualProjection && !isTiledBasemapEnabled}
@@ -144,18 +152,6 @@
       {/if}
     </div>
   </div>
-
-  <p
-    class="projection-current-gis"
-    class:is-unavailable={!gisAvailability.available}
-  >
-    {#if gisAvailability.available}
-      <CheckmarkOutline size={16} />
-    {:else}
-      <WarningAlt size={16} />
-    {/if}
-    <span>{describeMapGeoreferenceAvailability(gisAvailability)}</span>
-  </p>
 
   {#if definition}
     <div class="projection-definition">
@@ -225,22 +221,12 @@
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
   }
 
-  .projection-current-gis {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--cds-spacing-02);
-    margin: var(--cds-spacing-02) 0 0;
+  .projection-current-row :global(.projection-gis-status) {
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .projection-current-row :global(.projection-gis-status.is-available) {
     color: var(--cds-support-success, #24a148);
-    font-size: 0.75rem;
-    line-height: 1rem;
-
-    :global(svg) {
-      flex-shrink: 0;
-    }
-
-    &.is-unavailable {
-      color: var(--cds-text-secondary, #525252);
-    }
   }
 
   .projection-current-actions {
