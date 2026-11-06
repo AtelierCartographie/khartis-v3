@@ -276,17 +276,29 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   projection se fait en JavaScript avec la fonction qui géoréférence l'image.
   Une entité qui sort du domaine de la projection est écartée et comptée dans
   le mémo.
-- Les symboles et étiquettes sont posés sur le point de `ST_MaximumInscribedCircle`,
-  le point représentatif que la carte calcule quand le fond ne fournit pas ses
-  centroïdes.
+- Les symboles et étiquettes sont posés sur les centroïdes que fournit le fond
+  du catalogue, comme sur la carte, et à défaut sur le point de
+  `ST_MaximumInscribedCircle`. Une visualisation de symboles doubles devient
+  deux lignes par entité (rôle A et B), pour que QGIS trie tous les symboles
+  par taille comme la carte.
+- Les étiquettes reprennent les textes retouchés et les positions déplacées
+  (`labelLayoutStore`, même clé d'entité que la carte) dans des attributs
+  `khartis_etiquette`, `khartis_decalage_x_mm` et `khartis_decalage_y_mm`
+  qui pilotent l'étiquetage QGIS.
+- L'ordre des couches est celui du panneau Calques : `mergeLayerOrder` sur les
+  lignes du panneau, ordre manuel compris.
 - Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
   applique à l'ouverture. Les classes sont des règles qui reprennent
   exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans
   la même classe que sur la carte), les tailles proportionnelles une
   expression sur le domaine de la carte, les tailles des millimètres sur la
-  page Khartis. Ce qui ne se traduit pas (trames, densité, évidement, symboles
-  doubles, étiquettes déplacées, mise en page) est listé dans le mémo, jamais
-  approché sans le dire.
+  page Khartis. Les trames motif.js deviennent des hachures ou des grilles de
+  symboles QGIS de même pas, épaisseur et angle (`qgis-patterns.ts`). Ce qui
+  ne se traduit pas (densité, évidement, filets d'étiquettes, certaines
+  trames, mise en page) est listé dans le mémo, jamais approché sans le dire.
+- Une couche qui échoue (géométrie refusée par GEOS, SCR inaccessible) est
+  écartée, nommée dans le mémo et signalée à l'utilisateur ; le reste de la
+  carte est exporté.
 
 ### Orientation intrinsèque
 

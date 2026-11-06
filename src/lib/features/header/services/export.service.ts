@@ -1162,7 +1162,11 @@ export interface DatasetGeometrySource {
   attributeColumns: string[];
   datasetTableName: string;
   /** The basemap the geometry comes from, when the dataset is joined. */
-  joinedBasemap?: string;
+  joined?: {
+    basemap: string;
+    /** Relation `g` of `from`, matched on `joinColumn`. */
+    joinColumn: string;
+  };
 }
 
 export async function resolveDatasetGeometrySource(
@@ -1247,6 +1251,6 @@ export async function resolveDatasetGeometrySource(
     sourceCrs: WGS84_CRS,
     attributeColumns,
     datasetTableName: tableName,
-    joinedBasemap: joinedGeometrySource.joinedBasemap
+    joined: { basemap: joinedGeometrySource.joinedBasemap, joinColumn }
   };
 }

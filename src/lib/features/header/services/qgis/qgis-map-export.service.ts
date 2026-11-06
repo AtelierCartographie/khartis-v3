@@ -14,14 +14,20 @@ import {
   type GeoPackageLayerExportOptions
 } from '$lib/features/commons/utils/geopackage-export.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { resolveRowScope } from '$lib/features/commons/services/row-scope.service';
+import {
+  CANONICAL_ID_COLUMN,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   ALL_PRIMITIVE_FILTERS,
+  getTextPrimitive,
   PrimitiveFilterType,
   visualizationStore,
   type PrimitiveFilter,
@@ -45,16 +51,31 @@ import {
 } from '$lib/features/map/layers/basemap-style-resolve';
 import { isWgs84LikeCrs } from '$lib/features/map/utils/dataset-crs.utils';
 import {
+  buildBasemapSubLayerId,
+  buildVisualizationSubLayerId,
+  isPerKeyAuxLayerType,
+  mergeLayerOrder,
+  resolveBasemapConfigRowId,
+  type LayerOrderRow
+} from '$lib/features/map/utils/layer-panel-row.utils';
+import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
+import {
   describeMapGeoreferenceAvailability,
   resolveMapVectorCrs,
   type MapVectorCrs
 } from '$lib/features/step-toolbar/tools/projections';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-import { ExportError, resolveDatasetGeometrySource } from '../export.service';
+import {
+  ExportError,
+  resolveDatasetGeometrySource,
+  type DatasetGeometrySource
+} from '../export.service';
 import {
   buildBasemapFillPlan,
   buildBasemapLinePlan,
   buildVisualizationLayerPlans,
+  withLabelEdits,
+  type LabelEditFields,
   type QgisExportNote,
   type QgisLayerPlan,
   type QgisStyleContext
@@ -69,7 +90,39 @@ const WGS84 = 'EPSG:4326';
 const WKB_COLUMN = '__khartis_qgis_wkb';
 const GEOMETRY_COLUMN = '__khartis_qgis_geometry';
 
+/** What every layer export of one run shares. */
+interface ExportRun {
+  crs: MapVectorCrs;
+  srs: Pick<GeoPackageLayerExportOptions, 'sourceCrs' | 'customSrs'>;
+  usedNames: Set<string>;
+  /** Layers that could not be written, by title. */
+  failures: string[];
+}
+
+/**
+ * One layer that fails (an invalid geometry GEOS refuses, a CRS DuckDB
+ * cannot reach) is left out and reported; the rest of the map still goes.
+ */
+async function guardLayer<T>(
+  run: ExportRun,
+  title: string,
+  build: () => Promise<T>
+): Promise<T | null> {
+  try {
+    return await build();
+  } catch (error) {
+    logger.error('QGIS export: layer skipped', LogCategory.EXPORT, {
+      title,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    run.failures.push(title);
+    return null;
+  }
+}
+
 interface ExportedLayer {
+  /** The Layers panel row that orders this layer on the map. */
+  row: LayerOrderRow;
   options: GeoPackageLayerExportOptions;
   title: string;
   plan: QgisLayerPlan;
@@ -179,12 +232,19 @@ async function queryFeatures(options: {
   from: string;
   geometry: string;
   columns: string[];
+  /** Computed attributes, by name; listed in `columns` too. */
+  computed?: Record<string, string>;
   reprojection: Reprojection;
 }): Promise<{ features: GeoPackageFeatureRow[]; dropped: number }> {
   const { from, geometry, columns, reprojection } = options;
+  const computed = options.computed ?? {};
   const quoted = columns.map((column) => `"${escapeIdentifier(column)}"`);
   const inner = [
-    ...columns.map((column) => `d."${escapeIdentifier(column)}"`),
+    ...columns.map((column) =>
+      Object.hasOwn(computed, column)
+        ? `${computed[column]} AS "${escapeIdentifier(column)}"`
+        : `d."${escapeIdentifier(column)}"`
+    ),
     `${geometry} AS ${GEOMETRY_COLUMN}`
   ];
   const rows = (await Duck.query(
@@ -244,21 +304,31 @@ async function queryWithReprojection(
   }
 }
 
-// The map anchors symbols and labels on these centroids when the joined
-// basemap ships them; the export computes its own point.
-function hasCatalogCentroids(basemapFile: string | undefined): boolean {
-  if (!basemapFile) {
-    return false;
-  }
+/**
+ * The centroid layer a catalogue basemap ships, loaded into DuckDB, and the
+ * column naming its features; null when the basemap has none.
+ */
+async function loadCatalogCentroids(
+  basemapFile: string
+): Promise<{ tableName: string; idColumn: string } | null> {
   const metadata =
     basemapService.currentMetadata?.file === basemapFile
       ? basemapService.currentMetadata
       : basemapService.availableBasemaps.find(
           (item) => item.file === basemapFile
         );
-  return Boolean(
-    metadata?.layers.some((layer) => layer.type === BasemapLayerType.CENTROID)
+  const layer = metadata?.layers.find(
+    (item) => item.type === BasemapLayerType.CENTROID && item.file
   );
+  if (!layer?.file) {
+    return null;
+  }
+  const tableName = await basemapService.loadGeometryIntoDuckDB(layer.file);
+  const columns = await listTableColumns(tableName);
+  const idColumn = [INTERNAL_COLUMN.FEATURE_ID, CANONICAL_ID_COLUMN].find(
+    (column) => columns.has(column)
+  );
+  return idColumn && columns.has('geom') ? { tableName, idColumn } : null;
 }
 
 async function listTableColumns(tableName: string): Promise<Set<string>> {
@@ -269,11 +339,202 @@ async function listTableColumns(tableName: string): Promise<Set<string>> {
   return new Set(rows.map((row) => row.column_name));
 }
 
+async function exportPlanLayer(
+  viz: VisualizationConfig,
+  plan: QgisLayerPlan,
+  title: string,
+  run: ExportRun
+): Promise<ExportedLayer | null> {
+  const { crs, srs, usedNames } = run;
+  const scope = resolveRowScope({
+    datasetId: viz.datasetId,
+    vizFilters: viz.dataFilters,
+    primitive: plan.primitive
+  });
+  const source = await resolveDatasetGeometrySource(
+    viz.datasetId,
+    scope?.clause ?? null
+  );
+  if (!source) {
+    throw new Error(`No geometry for dataset ${viz.datasetId}`);
+  }
+  const available = await listTableColumns(source.datasetTableName);
+  let from = source.from;
+  let layerPlan = plan;
+  let computed: Record<string, string> = {};
+  if (plan.primitive === PrimitiveFilterType.TEXT) {
+    const edits = resolveLabelEdits(viz, source, available);
+    if (edits === 'unmatched') {
+      plan.notes.push({ code: 'label-edits' });
+    } else if (edits) {
+      from = `${from} ${edits.join}`;
+      computed = edits.computed;
+      layerPlan = withLabelEdits(plan, edits.fields);
+      if (edits.moved) {
+        layerPlan.notes.push({ code: 'label-leaders' });
+      }
+    }
+  }
+  const double = layerPlan.doubleSymbols;
+  if (double) {
+    // One row per feature and variable, so QGIS sorts every symbol by size
+    // whatever its variable, as the map does.
+    from = `${from} CROSS JOIN (VALUES ('A'), ('B')) AS khartis_roles(role)`;
+    computed = {
+      ...computed,
+      [double.roleField]: 'khartis_roles.role',
+      [double.valueField]: `CASE khartis_roles.role WHEN 'A' THEN TRY_CAST(d."${escapeIdentifier(double.primary)}" AS DOUBLE) ELSE TRY_CAST(d."${escapeIdentifier(double.secondary)}" AS DOUBLE) END`
+    };
+  }
+  // Khartis' own columns (`__id`…) mean nothing outside it.
+  const columns = [
+    ...new Set([
+      ...Object.keys(computed),
+      ...layerPlan.columns,
+      ...source.attributeColumns
+    ])
+  ].filter(
+    (column) =>
+      Object.hasOwn(computed, column) ||
+      (available.has(column) && !column.startsWith('__'))
+  );
+  let geometry = source.geometry;
+  if (plan.geometry === 'point') {
+    const centroids = source.joined
+      ? await loadCatalogCentroids(source.joined.basemap)
+      : null;
+    if (centroids && source.joined) {
+      // The map anchors on the centroids the basemap ships; a feature
+      // without one falls back to the point the map computes.
+      from = `${from} LEFT JOIN "${escapeIdentifier(centroids.tableName)}" c ON CAST(c."${escapeIdentifier(centroids.idColumn)}" AS VARCHAR) = CAST(g."${escapeIdentifier(source.joined.joinColumn)}" AS VARCHAR)`;
+      geometry = `COALESCE(c.geom::GEOMETRY, ${representativePoint(geometry)})`;
+    } else {
+      geometry = representativePoint(geometry);
+    }
+  }
+  const { features, dropped } = await queryWithReprojection(
+    crs,
+    source.sourceCrs,
+    (reprojection) =>
+      queryFeatures({ from, geometry, columns, computed, reprojection })
+  );
+  const orderVizId = resolveOrderVizId(viz.id);
+  return {
+    row: {
+      id: buildVisualizationSubLayerId(orderVizId, plan.primitive),
+      kind: 'viz-primitive',
+      primitive: plan.primitive,
+      parentId: orderVizId
+    },
+    title,
+    plan: layerPlan,
+    dropped,
+    options: {
+      layerName: uniqueTableName(
+        `${viz.name}_${primitiveTitle(plan.primitive)}`,
+        usedNames
+      ),
+      ...srs,
+      propertyColumns: columns,
+      features,
+      style: {
+        name: title,
+        qml: buildQml(layerPlan.style),
+        description: title
+      }
+    }
+  };
+}
+
+const LABEL_EDIT_FIELDS: LabelEditFields = {
+  primary: 'khartis_etiquette',
+  secondary: 'khartis_etiquette_2',
+  dx: 'khartis_decalage_x_mm',
+  dy: 'khartis_decalage_y_mm'
+};
+
+function sqlText(value: string | undefined): string {
+  return value === undefined
+    ? 'NULL::VARCHAR'
+    : `'${escapeSqlString(value)}'::VARCHAR`;
+}
+
+function sqlMillimetres(px: number | undefined): string {
+  return px === undefined || !Number.isFinite(px)
+    ? 'NULL::DOUBLE'
+    : `${px * MM_PER_CSS_PX}::DOUBLE`;
+}
+
+/**
+ * The texts typed and the positions dragged on the map for this
+ * visualization, joined by the feature key the map uses (`f:` basemap
+ * feature, `r:` dataset row). 'unmatched' when the features carry no key.
+ */
+function resolveLabelEdits(
+  viz: VisualizationConfig,
+  source: DatasetGeometrySource,
+  available: Set<string>
+):
+  | {
+      join: string;
+      computed: Record<string, string>;
+      fields: LabelEditFields;
+      moved: boolean;
+    }
+  | 'unmatched'
+  | null {
+  const layout = labelLayoutStore.layouts[viz.id];
+  const keys = layout
+    ? [
+        ...new Set([
+          ...Object.keys(layout.offsets),
+          ...Object.keys(layout.texts)
+        ])
+      ]
+    : [];
+  const text = getTextPrimitive(viz);
+  if (!layout || keys.length === 0 || !text?.labelColumn) {
+    return null;
+  }
+  const keyExpression = source.joined
+    ? `'f:' || CAST(g."${escapeIdentifier(source.joined.joinColumn)}" AS VARCHAR)`
+    : available.has(INTERNAL_COLUMN.ID)
+      ? `'r:' || CAST(d."${INTERNAL_COLUMN.ID}" AS VARCHAR)`
+      : null;
+  if (!keyExpression) {
+    return 'unmatched';
+  }
+  const rows = keys.map((key) => {
+    const texts = layout.texts[key];
+    const offset = layout.offsets[key];
+    return `(${sqlText(key)}, ${sqlText(texts?.primary)}, ${sqlText(texts?.secondary)}, ${sqlMillimetres(offset?.[0])}, ${sqlMillimetres(offset?.[1])})`;
+  });
+  const secondaryColumn = text.secondaryLabels?.enabled
+    ? text.secondaryLabels.labelColumn
+    : undefined;
+  const computed: Record<string, string> = {
+    [LABEL_EDIT_FIELDS.primary]: `COALESCE(o.primary_text, CAST(d."${escapeIdentifier(text.labelColumn)}" AS VARCHAR))`,
+    [LABEL_EDIT_FIELDS.dx]: 'o.dx',
+    [LABEL_EDIT_FIELDS.dy]: 'o.dy'
+  };
+  if (secondaryColumn) {
+    computed[LABEL_EDIT_FIELDS.secondary ?? ''] =
+      `COALESCE(o.secondary_text, CAST(d."${escapeIdentifier(secondaryColumn)}" AS VARCHAR))`;
+  }
+  return {
+    join: `LEFT JOIN (VALUES ${rows.join(', ')}) AS o(key, primary_text, secondary_text, dx, dy) ON o.key = ${keyExpression}`,
+    computed,
+    fields: {
+      ...LABEL_EDIT_FIELDS,
+      secondary: secondaryColumn ? LABEL_EDIT_FIELDS.secondary : undefined
+    },
+    moved: Object.keys(layout.offsets).length > 0
+  };
+}
+
 async function exportVisualizationLayers(
   viz: VisualizationConfig,
-  crs: MapVectorCrs,
-  srs: Pick<GeoPackageLayerExportOptions, 'sourceCrs' | 'customSrs'>,
-  usedNames: Set<string>
+  run: ExportRun
 ): Promise<ExportedLayer[]> {
   const plans = buildVisualizationLayerPlans(
     viz,
@@ -282,70 +543,25 @@ async function exportVisualizationLayers(
   );
   const layers: ExportedLayer[] = [];
   for (const plan of plans) {
-    const scope = resolveRowScope({
-      datasetId: viz.datasetId,
-      vizFilters: viz.dataFilters,
-      primitive: plan.primitive
-    });
-    const source = await resolveDatasetGeometrySource(
-      viz.datasetId,
-      scope?.clause ?? null
-    );
-    if (!source) {
-      continue;
-    }
-    const available = await listTableColumns(source.datasetTableName);
-    // Khartis' own columns (`__id`…) mean nothing outside it.
-    const columns = [
-      ...new Set([...plan.columns, ...source.attributeColumns])
-    ].filter((column) => available.has(column) && !column.startsWith('__'));
-    const geometry =
-      plan.geometry === 'point'
-        ? representativePoint(source.geometry)
-        : source.geometry;
-    if (
-      plan.geometry === 'point' &&
-      hasCatalogCentroids(source.joinedBasemap)
-    ) {
-      plan.notes.push({ code: 'anchor-points' });
-    }
-    const { features, dropped } = await queryWithReprojection(
-      crs,
-      source.sourceCrs,
-      (reprojection) =>
-        queryFeatures({ from: source.from, geometry, columns, reprojection })
-    );
     const title = `${viz.name} – ${primitiveTitle(plan.primitive)}`;
-    layers.push({
-      title,
-      plan,
-      dropped,
-      options: {
-        layerName: uniqueTableName(
-          `${viz.name}_${primitiveTitle(plan.primitive)}`,
-          usedNames
-        ),
-        ...srs,
-        propertyColumns: columns,
-        features,
-        style: { name: title, qml: buildQml(plan.style), description: title }
-      }
-    });
+    const layer = await guardLayer(run, title, () =>
+      exportPlanLayer(viz, plan, title, run)
+    );
+    if (layer) {
+      layers.push(layer);
+    }
   }
   return layers;
 }
 
 interface BasemapExport {
-  /** The background group, bottom first: land, lakes. */
-  background: ExportedLayer[];
-  /** Foreground layers set under the thematic layers. */
-  below: ExportedLayer[];
-  above: ExportedLayer[];
+  layers: ExportedLayer[];
   /** Visible basemap layers left out, by name. */
   skipped: string[];
 }
 
 async function exportBasemapTable(options: {
+  row: LayerOrderRow;
   tableName: string;
   title: string;
   plan: QgisLayerPlan;
@@ -370,6 +586,7 @@ async function exportBasemapTable(options: {
       })
   );
   return {
+    row: options.row,
     title: options.title,
     plan: options.plan,
     dropped,
@@ -400,17 +617,9 @@ const BASEMAP_ATTRIBUTE_COLUMNS = [
  * The basemap layers the map draws from geometry (land, lakes, borders,
  * rivers), styled as the basemap panel and the catalogue presets set them.
  */
-async function exportBasemapLayers(
-  crs: MapVectorCrs,
-  srs: Pick<GeoPackageLayerExportOptions, 'sourceCrs' | 'customSrs'>,
-  usedNames: Set<string>
-): Promise<BasemapExport> {
-  const result: BasemapExport = {
-    background: [],
-    below: [],
-    above: [],
-    skipped: []
-  };
+async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
+  const { crs, srs, usedNames } = run;
+  const result: BasemapExport = { layers: [], skipped: [] };
   const metadata = basemapService.currentMetadata;
   if (!metadata || !basemapStyleStore.referenceBasemapId) {
     return result;
@@ -445,30 +654,42 @@ async function exportBasemapLayers(
   // The store lists the panel top first.
   for (const config of [...basemapLayersStore.layers].reverse()) {
     if (!config.visible) continue;
-    const target =
-      getBasemapRenderGroup(config.id) === 'background'
-        ? result.background
-        : config.renderBelowThematic
-          ? result.below
-          : result.above;
     const name = BASEMAP_LAYER_TITLES[config.id]?.() ?? config.id;
     const push = async (
-      tableName: string,
+      tableFile: string,
       title: string,
-      plan: QgisLayerPlan | null
+      plan: QgisLayerPlan | null,
+      metadataLayer: BasemapLayer | null = null
     ) => {
-      if (plan) {
-        target.push(
-          await exportBasemapTable({
-            tableName,
-            title,
-            plan,
-            sourceCrs,
-            crs,
-            srs,
-            usedNames
-          })
-        );
+      if (!plan) {
+        return;
+      }
+      const key = metadataLayer
+        ? (metadataLayer.file ?? `${metadata.file}:${metadataLayer.type}`)
+        : null;
+      const row: LayerOrderRow = {
+        id:
+          key && isPerKeyAuxLayerType(metadataLayer?.type)
+            ? buildBasemapSubLayerId(key)
+            : resolveBasemapConfigRowId(config.id),
+        kind: 'basemap-aux',
+        basemapRenderGroup: getBasemapRenderGroup(config.id),
+        basemapRenderBelowThematic: config.renderBelowThematic
+      };
+      const layer = await guardLayer(run, title, async () =>
+        exportBasemapTable({
+          row,
+          tableName: await basemapService.loadGeometryIntoDuckDB(tableFile),
+          title,
+          plan,
+          sourceCrs,
+          crs,
+          srs,
+          usedNames
+        })
+      );
+      if (layer) {
+        result.layers.push(layer);
       }
     };
 
@@ -479,11 +700,8 @@ async function exportBasemapLayers(
           lands.length > 0 ? lands : [{ layer: null, entry: { style: null } }];
         for (const { layer, entry } of sources) {
           const land = resolveLandConfig(entry, config, presets);
-          const tableName = await basemapService.loadGeometryIntoDuckDB(
-            layer?.file ?? metadata.file
-          );
           await push(
-            tableName,
+            layer?.file ?? metadata.file,
             `${name} – ${layer ? layerTitle(layer, basemapTitle) : basemapTitle}`,
             buildBasemapFillPlan({
               fillColor: land.fillColor,
@@ -497,7 +715,8 @@ async function exportBasemapLayers(
                     dottedPattern: land.strokeDottedPattern
                   }
                 : null
-            })
+            }),
+            layer
           );
         }
         if (config.fillShadow) {
@@ -509,7 +728,7 @@ async function exportBasemapLayers(
         for (const { layer } of ofType(BasemapLayerType.POLYGON)) {
           if (!layer.file) continue;
           await push(
-            await basemapService.loadGeometryIntoDuckDB(layer.file),
+            layer.file,
             `${name} – ${layerTitle(layer, basemapTitle)}`,
             buildBasemapFillPlan({
               fillColor: config.color,
@@ -520,7 +739,8 @@ async function exportBasemapLayers(
                 opacity: config.opacity,
                 dotted: false
               }
-            })
+            }),
+            layer
           );
         }
         break;
@@ -533,9 +753,23 @@ async function exportBasemapLayers(
             : BasemapLayerType.LINE
         );
         if (limits.length === 0) {
-          // Borders derived from the polygons are not written: QGIS can
-          // draw them from the land layer outlines.
-          result.skipped.push(name);
+          const hasLimitLayers = metadata.layers.some(
+            (layer) => layer.type === BasemapLayerType.LIMIT
+          );
+          if (config.id === 'frontieres' && !hasLimitLayers) {
+            // Without limit layers the map outlines the reference polygons.
+            await push(
+              metadata.file,
+              `${name} – ${basemapTitle}`,
+              buildBasemapFillPlan({
+                fillColor: config.color,
+                fillOpacity: 0,
+                stroke: config
+              })
+            );
+          } else if (config.id === 'rivieres') {
+            result.skipped.push(name);
+          }
           break;
         }
         for (const { layer, entry } of limits) {
@@ -545,9 +779,10 @@ async function exportBasemapLayers(
               ? resolveMetadataLineStyle(entry, config, presets)
               : config;
           await push(
-            await basemapService.loadGeometryIntoDuckDB(layer.file),
+            layer.file,
             `${name} – ${layerTitle(layer, basemapTitle)}`,
-            buildBasemapLinePlan(style)
+            buildBasemapLinePlan(style),
+            layer
           );
         }
         break;
@@ -559,10 +794,46 @@ async function exportBasemapLayers(
   return result;
 }
 
+/**
+ * Bottom to top, in the order of the Layers panel: the persisted manual
+ * order, rows it has never seen at their default place (`mergeLayerOrder`,
+ * the function the map draws with).
+ */
+function orderLikeTheMap(
+  layers: ExportedLayer[],
+  vizs: VisualizationConfig[]
+): ExportedLayer[] {
+  const topToBottom = mergeLayerOrder(
+    layers.map((layer) => layer.row),
+    layerOrderStore.order,
+    vizs.map((viz) => viz.id)
+  );
+  const rank = new Map(topToBottom.map((id, index) => [id, index]));
+  return layers
+    .map((layer, index) => ({ layer, index }))
+    .sort(
+      (a, b) =>
+        (rank.get(b.layer.row.id) ?? 0) - (rank.get(a.layer.row.id) ?? 0) ||
+        a.index - b.index
+    )
+    .map(({ layer }) => layer);
+}
+
+function resolveOrderVizId(vizId: string): string {
+  const baseId = facetsStore.baseVisualizationId;
+  return facetsStore.enabled &&
+    baseId &&
+    (vizId === baseId || facetsStore.generatedVisualizationIds.includes(vizId))
+    ? baseId
+    : vizId;
+}
+
 function describeNote(note: QgisExportNote): string {
   switch (note.code) {
     case 'pattern-fill':
       return m.qgis_note_pattern_fill();
+    case 'pattern-approximate':
+      return m.qgis_note_pattern_approximate();
     case 'missing-pattern':
       return m.qgis_note_missing_pattern();
     case 'density':
@@ -577,8 +848,10 @@ function describeNote(note: QgisExportNote): string {
       return m.qgis_note_label_placement();
     case 'font':
       return m.qgis_note_font({ font: note.detail ?? '' });
-    case 'anchor-points':
-      return m.qgis_note_anchor_points();
+    case 'label-edits':
+      return m.qgis_note_label_edits();
+    case 'label-leaders':
+      return m.qgis_note_label_leaders();
   }
 }
 
@@ -601,6 +874,7 @@ function buildMemo(options: {
   crs: MapVectorCrs;
   layers: ExportedLayer[];
   extraNotes: string[];
+  failures: string[];
   /** Page size in millimetres, the one symbol and text sizes are set for. */
   page: { width: number; height: number };
 }): string {
@@ -652,6 +926,10 @@ function buildMemo(options: {
     }
   }
   options.extraNotes.forEach((note) => notes.add(note));
+  if (options.failures.length > 0) {
+    lines.push('', m.qgis_memo_failed());
+    options.failures.forEach((title) => lines.push(`- ${title}`));
+  }
   lines.push('', m.qgis_memo_not_reproduced());
   for (const note of notes) {
     lines.push(`- ${note}`);
@@ -676,17 +954,6 @@ function collectMapNotes(
     notes.push(
       m.qgis_note_basemap_layers({ layers: skippedBasemapLayers.join(', ') })
     );
-  }
-  const editedLabels = vizs.some((viz) => {
-    const layout = labelLayoutStore.layouts[viz.id];
-    return (
-      layout &&
-      (Object.keys(layout.offsets).length > 0 ||
-        Object.keys(layout.texts).length > 0)
-    );
-  });
-  if (editedLabels) {
-    notes.push(m.qgis_note_label_edits());
   }
   return notes;
 }
@@ -718,16 +985,22 @@ export async function exportMapAsQgisGeoPackage(
         ? { sourceCrs: `EPSG:${crs.geoPackageSrs.epsg}` }
         : { sourceCrs: null, customSrs: crs.geoPackageSrs };
 
-  // Bottom to top: the land under the thematic layers.
   const layers: ExportedLayer[] = [];
-  const usedNames = new Set<string>(['layer_styles']);
-  const basemap = await exportBasemapLayers(crs, srs, usedNames);
-  layers.push(...basemap.background, ...basemap.below);
+  const run: ExportRun = {
+    crs,
+    srs,
+    usedNames: new Set<string>(['layer_styles']),
+    failures: []
+  };
+  const basemap = await exportBasemapLayers(run);
+  layers.push(...basemap.layers);
   for (const viz of vizs) {
-    layers.push(...(await exportVisualizationLayers(viz, crs, srs, usedNames)));
+    layers.push(...(await exportVisualizationLayers(viz, run)));
   }
-  layers.push(...basemap.above);
-  const filled = layers.filter((layer) => layer.options.features.length > 0);
+  const filled = orderLikeTheMap(
+    layers.filter((layer) => layer.options.features.length > 0),
+    vizs
+  );
   if (filled.length === 0) {
     throw new ExportError(
       m.export_map_error(),
@@ -748,18 +1021,14 @@ export async function exportMapAsQgisGeoPackage(
     crs,
     layers: filled,
     extraNotes: collectMapNotes(crs, vizs, basemap.skipped),
+    failures: run.failures,
     page: {
       width: format.width * MM_PER_CSS_PX,
       height: format.height * MM_PER_CSS_PX
     }
   });
   const thematicFeatures = filled
-    .filter(
-      (layer) =>
-        !basemap.background.includes(layer) &&
-        !basemap.below.includes(layer) &&
-        !basemap.above.includes(layer)
-    )
+    .filter((layer) => layer.row.kind === 'viz-primitive')
     .flatMap((layer) => layer.options.features);
   const qgs = buildQgisProject({
     title: baseName,
@@ -790,4 +1059,11 @@ export async function exportMapAsQgisGeoPackage(
     ),
     `${baseName}-qgis.zip`
   );
+
+  if (run.failures.length > 0) {
+    showWarning(
+      m.qgis_export_partial_title(),
+      m.qgis_export_partial({ layers: run.failures.join(', ') })
+    );
+  }
 }
