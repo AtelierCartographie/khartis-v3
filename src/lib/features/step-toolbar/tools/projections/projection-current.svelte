@@ -101,14 +101,12 @@
 <div class="projection-current">
   <span class="projection-current-label">{m.projection_current_label()}</span>
   <div class="projection-current-row">
-    <div class="projection-current-name-row">
-      <span class="projection-current-name" title={display.name}
-        >{display.name}</span
-      >
-      {#if display.description}
-        <InfoPopover text={display.description} />
-      {/if}
-    </div>
+    <span class="projection-current-name" title={display.name}
+      >{display.name}</span
+    >
+    {#if display.description}
+      <InfoPopover text={display.description} />
+    {/if}
 
     <div class="projection-current-actions">
       {#if hasManualProjection && !isTiledBasemapEnabled}
@@ -127,6 +125,7 @@
         icon={Code}
         iconDescription={m.projection_definition_toggle()}
         tooltipPosition="bottom"
+        tooltipAlignment="end"
         aria-expanded={definitionOpen}
         on:click={() => (definitionOpen = !definitionOpen)}
       />
@@ -135,9 +134,11 @@
           kind="ghost"
           size="small"
           icon={SettingsAdjust}
-          class="projection-current-settings"
-          on:click={onopensettings}>{m.projection_current_settings()}</Button
-        >
+          iconDescription={m.projection_current_settings()}
+          tooltipPosition="bottom"
+          tooltipAlignment="end"
+          on:click={onopensettings}
+        />
       {/if}
     </div>
   </div>
@@ -210,10 +211,8 @@
 
   .projection-current-row {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--kh-gap-inline);
+    gap: var(--cds-spacing-02);
     min-width: 0;
   }
 
@@ -222,14 +221,6 @@
     font-size: var(--cds-label-01-font-size, 0.75rem);
     line-height: var(--cds-label-01-line-height, 1rem);
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
-  }
-
-  .projection-current-name-row {
-    flex: 1 1 10rem;
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    min-width: 0;
   }
 
   .projection-current-gis {
@@ -290,6 +281,8 @@
   }
 
   .projection-current-name {
+    flex: 0 1 auto;
+    min-width: 0;
     overflow: hidden;
     color: var(--cds-text-primary, #161616);
     font-size: 0.875rem;
