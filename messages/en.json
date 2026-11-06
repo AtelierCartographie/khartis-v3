@@ -2114,6 +2114,7 @@
   "qgis_note_knockout": "The knockout of semi-transparent proportional symbols is not reproduced: symbols overlap, largest to smallest.",
   "qgis_note_label_placement": "QGIS places the labels itself: overlapping ones may differ from the map.",
   "qgis_note_font": "Font {font}: install it (Google Fonts, open license) for QGIS to use it, otherwise QGIS substitutes it.",
+  "qgis_note_anchor_points": "Symbols and labels sit at the centre of the largest circle inscribed in each area; the Khartis map uses the centroids shipped with the basemap, so positions may differ slightly.",
   "qgis_note_layout": "The page layout (title, legend, scale, orientation, annotations, insets, page color) has to be rebuilt in a QGIS print layout.",
   "qgis_note_rotated": "The in-plane rotation of the map is not applied: set it in the QGIS print layout.",
   "qgis_note_facets": "Map collection: each map is exported as separate, stacked layers; show them one at a time.",

@@ -72,7 +72,8 @@ export type QgisExportNoteCode =
   | 'symbol-shapes'
   | 'knockout'
   | 'label-placement'
-  | 'font';
+  | 'font'
+  | 'anchor-points';
 
 export interface QgisExportNote {
   code: QgisExportNoteCode;

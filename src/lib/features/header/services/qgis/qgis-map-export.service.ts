@@ -244,6 +244,23 @@ async function queryWithReprojection(
   }
 }
 
+// The map anchors symbols and labels on these centroids when the joined
+// basemap ships them; the export computes its own point.
+function hasCatalogCentroids(basemapFile: string | undefined): boolean {
+  if (!basemapFile) {
+    return false;
+  }
+  const metadata =
+    basemapService.currentMetadata?.file === basemapFile
+      ? basemapService.currentMetadata
+      : basemapService.availableBasemaps.find(
+          (item) => item.file === basemapFile
+        );
+  return Boolean(
+    metadata?.layers.some((layer) => layer.type === BasemapLayerType.CENTROID)
+  );
+}
+
 async function listTableColumns(tableName: string): Promise<Set<string>> {
   const rows = (await Duck.query(
     `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}'`,
@@ -286,6 +303,12 @@ async function exportVisualizationLayers(
       plan.geometry === 'point'
         ? representativePoint(source.geometry)
         : source.geometry;
+    if (
+      plan.geometry === 'point' &&
+      hasCatalogCentroids(source.joinedBasemap)
+    ) {
+      plan.notes.push({ code: 'anchor-points' });
+    }
     const { features, dropped } = await queryWithReprojection(
       crs,
       source.sourceCrs,
@@ -554,6 +577,8 @@ function describeNote(note: QgisExportNote): string {
       return m.qgis_note_label_placement();
     case 'font':
       return m.qgis_note_font({ font: note.detail ?? '' });
+    case 'anchor-points':
+      return m.qgis_note_anchor_points();
   }
 }
 

@@ -1161,6 +1161,8 @@ export interface DatasetGeometrySource {
   /** Dataset columns worth exporting as attributes. */
   attributeColumns: string[];
   datasetTableName: string;
+  /** The basemap the geometry comes from, when the dataset is joined. */
+  joinedBasemap?: string;
 }
 
 export async function resolveDatasetGeometrySource(
@@ -1244,6 +1246,7 @@ export async function resolveDatasetGeometrySource(
     geometry: 'g.geom::GEOMETRY',
     sourceCrs: WGS84_CRS,
     attributeColumns,
-    datasetTableName: tableName
+    datasetTableName: tableName,
+    joinedBasemap: joinedGeometrySource.joinedBasemap
   };
 }

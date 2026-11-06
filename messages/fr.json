@@ -2114,6 +2114,7 @@
   "qgis_note_knockout": "L'évidement des symboles proportionnels semi-transparents n'est pas reproduit : les symboles se superposent, du plus grand au plus petit.",
   "qgis_note_label_placement": "QGIS place lui-même les étiquettes : celles qui se chevauchent peuvent différer de la carte.",
   "qgis_note_font": "Police {font} : installez-la (Google Fonts, licence libre) pour que QGIS l'utilise, sinon il la remplace.",
+  "qgis_note_anchor_points": "Symboles et étiquettes sont posés au centre du plus grand cercle inscrit dans chaque territoire ; la carte Khartis utilise les centroïdes fournis par le fond, leur position peut légèrement différer.",
   "qgis_note_layout": "La mise en page (titre, légende, échelle, orientation, annotations, encarts, couleur de la page) est à refaire dans une mise en page QGIS.",
   "qgis_note_rotated": "La rotation de la carte dans le plan n'est pas appliquée : réglez-la dans la mise en page QGIS.",
   "qgis_note_facets": "Collection de cartes : chaque carte est exportée comme des couches à part, superposées ; affichez-les une à une.",
