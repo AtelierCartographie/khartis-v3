@@ -14,8 +14,8 @@
   } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
@@ -120,6 +120,8 @@
     <span class="url-label">{m.basemap_import_url_label()}</span>
     <div class="url-import-row">
       <TextInput
+        labelText={m.basemap_import_url_label()}
+        hideLabel
         value={urlInput}
         placeholder={m.url_placeholder()}
         size="sm"

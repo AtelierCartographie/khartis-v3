@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  khartisProjectionFactories,
+  KHARTIS_PROJ4_FACTORY,
   KHARTIS_USER_PROJECTION_FACTORY,
-  KHARTIS_PROJ4_FACTORY
+  khartisProjectionFactories
 } from './khartis-projection-factories.utils';
 import type { UserProjectionBuildParams } from './user-projection-build.utils';
 

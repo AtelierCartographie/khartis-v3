@@ -10,9 +10,6 @@
     min?: number;
     max?: number;
     step?: number;
-    showMinMax?: boolean;
-    minLabel?: string | number;
-    maxLabel?: string | number;
     inputWidth?: string;
     disabled?: boolean;
     id?: string;
@@ -28,9 +25,6 @@
     min = 0,
     max = 100,
     step = 1,
-    showMinMax = false,
-    minLabel,
-    maxLabel,
     inputWidth = '128px',
     disabled = false,
     id,
@@ -101,10 +95,6 @@
   {/if}
 
   <div class="slider-with-input">
-    {#if showMinMax}
-      <span class="slider-bound">{minLabel ?? min}</span>
-    {/if}
-
     <div
       class="slider-container"
       role="presentation"
@@ -126,10 +116,6 @@
         on:input={(e) => handleSliderChange(e.detail)}
       />
     </div>
-
-    {#if showMinMax}
-      <span class="slider-bound">{maxLabel ?? max}</span>
-    {/if}
 
     <CompactNumberInput
       id={inputId}
@@ -158,13 +144,6 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-  }
-
-  .slider-bound {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary);
-    min-width: 20px;
-    font-weight: 400;
   }
 
   .slider-container {
@@ -202,10 +181,6 @@
     :global(.bx--slider__thumb:focus) {
       outline: 2px solid var(--cds-focus);
       outline-offset: 2px;
-    }
-
-    :global(.bx--slider__range-label) {
-      display: none;
     }
   }
 </style>

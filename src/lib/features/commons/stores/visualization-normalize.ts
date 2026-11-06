@@ -3,6 +3,7 @@ import type {
   ProcessedDataset
 } from '$lib/features/data-pipeline';
 import {
+  availableShapesForSymbolMode,
   BasemapDottedPattern,
   CategoryShapeMode,
   ColorMode,
@@ -12,32 +13,31 @@ import {
   ProportionalType,
   ShapeType,
   SizeMode,
+  SLIDER_LIMITS,
   StrokeMode,
   SymbolDoublePosition,
   SymbolMode,
   ThicknessMode,
-  VisualizationType,
   VISUALIZATION_DEFAULTS,
-  SLIDER_LIMITS,
-  availableShapesForSymbolMode
+  VisualizationType
 } from '$lib/features/commons/constants/visualization.constants';
 import { GEO_COLUMN_TYPE } from '../constants/data.constants';
 import { GEOJSON_TYPE } from '../constants/geojson.constants';
 import {
-  clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
+  clampFontSize,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
   ALL_PRIMITIVE_FILTERS,
-  PrimitiveFilterType,
-  ScaleType,
   type ClassificationConfig,
   type LinePrimitiveConfig,
   type PolygonPrimitiveConfig,
   type PrimitiveConfigKind,
   type PrimitiveConfigMap,
   type PrimitiveFilter,
+  PrimitiveFilterType,
+  ScaleType,
   type SymbolPrimitiveConfig,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
@@ -319,6 +319,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.modes?.categoryShape ??
       CategoryShapeMode.UNIQUE,
     commonScale: existing?.commonScale ?? true,
+    knockout: existing?.knockout ?? true,
     positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
     breakValueA: existing?.breakValueA ?? null,
     breakValueB: existing?.breakValueB ?? null,

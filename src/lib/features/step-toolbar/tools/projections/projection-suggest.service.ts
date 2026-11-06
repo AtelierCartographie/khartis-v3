@@ -1,11 +1,11 @@
 import {
-  suggest_projections,
-  validate_bbox,
   type BBox,
   type D3Usage,
   type MatchedCountry,
   type ProjectionSuggestions,
-  type ResolvedProjection
+  type ResolvedProjection,
+  suggest_projections,
+  validate_bbox
 } from '@ateliercartographie/proj-suggest';
 import type { GeoProjection } from 'd3-geo';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';

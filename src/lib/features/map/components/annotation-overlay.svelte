@@ -5,8 +5,8 @@
     SHAPE_TYPE
   } from '$lib/features/commons/constants';
   import {
-    globalState,
-    globalActions
+    globalActions,
+    globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import {
@@ -14,10 +14,18 @@
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { onDestroy, tick } from 'svelte';
+  import type {
+    Annotation,
+    AnnotationDataAnchor,
+    AnnotationPlacementPreview,
+    AnnotationStyle,
+    PageElementRole
+  } from '$lib/features/step-toolbar/tools/annotations';
   import {
     annotationsActions,
     getAnnotationsState,
     isPageElementPlaceholder,
+    resolveAnnotationCoordinateSpace,
     stackBottomRightPageElements
   } from '$lib/features/step-toolbar/tools/annotations';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
@@ -55,14 +63,6 @@
   } from '../utils/annotation-shape-path.utils';
   import { createDraggablePageItemController } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
-  import type {
-    Annotation,
-    AnnotationDataAnchor,
-    AnnotationPlacementPreview,
-    AnnotationStyle,
-    PageElementRole
-  } from '$lib/features/step-toolbar/tools/annotations';
-  import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import {
     buildAnchorFromScreenPx,
@@ -70,7 +70,7 @@
     dataToScreenPx,
     getAnchorScaleFactor
   } from '../utils/map-anchor-projection.utils';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
     PAGE_SNAP_STEP_PX,
@@ -1192,7 +1192,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function getAnnotationKeyboardBounds(
@@ -1305,7 +1305,7 @@
     }
 
     centeredAnnotationId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function cancelFocusedAnnotationReset(): void {
@@ -1328,6 +1328,12 @@
 
       if (dragState || resizeState || rotateState) {
         scheduleCenteredAnnotationReset(itemId);
+        return;
+      }
+
+      // Focus moving into the tool panel keeps the selection, and the page
+      // centred on it; deselecting resets the pan.
+      if (isAnnotationEditing && selectedId === itemId) {
         return;
       }
 
@@ -2834,6 +2840,12 @@
      carries its own colour and opacity inline. */
   .annotation-item[data-khartis-export-placeholder='true'] .annotation-text {
     filter: grayscale(1) opacity(0.45);
+  }
+
+  /* Outside Habillage, page texts not written yet are left out, as in exports. */
+  .annotation-overlay.non-interactive
+    .annotation-item[data-khartis-export-placeholder='true'] {
+    visibility: hidden;
   }
 
   .annotation-item.has-text-width .annotation-text {

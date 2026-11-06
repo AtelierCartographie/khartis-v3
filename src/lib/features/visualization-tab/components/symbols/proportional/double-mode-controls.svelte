@@ -6,8 +6,8 @@
   import { InfoPopover, SliderWithInput } from '../../shared';
   import FacetsVariablePicker from '../../shared/facets-variable-picker.svelte';
   import {
-    SLIDER_LIMITS,
-    type ShapeType
+    type ShapeType,
+    SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import {
     FACET_SLOT,

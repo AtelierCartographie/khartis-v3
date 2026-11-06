@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_SYMBOL_SIGN_COLORS,
+  isSignedProportionalSymbol,
+  resolveSymbolSignColors
+} from './symbol-sign.utils';
 
 const mocks = vi.hoisted(() => ({
   statistics: null as Record<string, unknown> | null
@@ -9,12 +14,6 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
     getColumnStatistics: () => mocks.statistics
   }
 }));
-
-import {
-  DEFAULT_SYMBOL_SIGN_COLORS,
-  isSignedProportionalSymbol,
-  resolveSymbolSignColors
-} from './symbol-sign.utils';
 
 function makeViz(symbol: Record<string, unknown> = {}) {
   return {

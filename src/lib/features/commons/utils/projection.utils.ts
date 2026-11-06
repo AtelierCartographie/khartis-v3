@@ -1,5 +1,5 @@
 import * as m from '$lib/paraglide/messages';
-import type { GeoProjection } from 'd3-geo';
+import { geoDistance, type GeoProjection } from 'd3-geo';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants/geojson.constants';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import type { D3Usage } from '@ateliercartographie/proj-suggest';
@@ -555,7 +555,9 @@ export function fitProjectionToBbox(
   height: number,
   padding = 20
 ): GeoProjection {
-  const fitTarget = createProjectionFitTarget(bbox);
+  const fitTarget = extendsPastHorizon(projection, bbox)
+    ? { type: 'Sphere' as const }
+    : createProjectionFitTarget(bbox);
 
   projection.fitExtent(
     [
@@ -566,6 +568,32 @@ export function fitProjectionToBbox(
   );
 
   return projection;
+}
+
+// An azimuthal projection clipped to a cap (orthographic: the visible
+// hemisphere) drops the points of the extent beyond it, so the fit would
+// frame a part of the disc only and crop the rest: fit the disc instead.
+function extendsPastHorizon(
+  projection: GeoProjection,
+  bbox: [number, number, number, number]
+): boolean {
+  return createBboxBoundaryCoordinates(bbox).some((point) =>
+    isBeyondHorizon(projection, point)
+  );
+}
+
+/** Whether a projection clipped to a cap hides this lon/lat point. */
+export function isBeyondHorizon(
+  projection: GeoProjection,
+  point: [number, number]
+): boolean {
+  const clipAngle =
+    typeof projection.clipAngle === 'function' ? projection.clipAngle() : null;
+  if (typeof clipAngle !== 'number' || !(clipAngle > 0)) {
+    return false;
+  }
+  const [lambda, phi] = projection.rotate();
+  return geoDistance([-lambda, -phi], point) > (clipAngle * Math.PI) / 180;
 }
 
 export function isGlobalBbox(bbox: [number, number, number, number]): boolean {

@@ -1,4 +1,4 @@
-import { Duck, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult, Duck } from '$lib/features/duckdb';
 import type {
   DatasetResult,
   EnrichedColumn,
@@ -172,7 +172,7 @@ export async function buildDatasetFromDuckTable(params: {
   tableName: string;
   isGeoFile: boolean;
   format: FileFormat;
-}): Promise<DatasetResult> {
+}): Promise<{ dataset: DatasetResult; vertexCount: number }> {
   const { file, tableName, isGeoFile, format } = params;
 
   const [snapshot, geometryInspection] = await Promise.all([
@@ -200,7 +200,7 @@ export async function buildDatasetFromDuckTable(params: {
     ];
   }
 
-  return dataset;
+  return { dataset, vertexCount: geometryInspection.vertexCount ?? 0 };
 }
 
 function buildDatasetResult(params: {

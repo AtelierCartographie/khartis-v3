@@ -1,7 +1,7 @@
 import {
-  visualizationStore,
   type PrimitiveFilter,
   type VisualizationConfig,
+  visualizationStore,
   type VizDataFilter
 } from '$lib/features/commons/stores/visualization.store.svelte';
 

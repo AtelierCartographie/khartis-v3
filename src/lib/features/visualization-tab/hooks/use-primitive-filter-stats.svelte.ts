@@ -1,9 +1,9 @@
 import { SvelteMap } from 'svelte/reactivity';
 import {
   ALL_PRIMITIVE_FILTERS,
-  visualizationStore,
   type PrimitiveFilter,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { resolveRowScopeClause } from '$lib/features/commons/services/row-scope.service';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

@@ -3,11 +3,15 @@ import type {
   SavedProjectMetadata
 } from '$lib/features/project-management';
 import {
-  ProjectStorageKey,
-  PROJECT_CONST,
+  APP_LOADING_PHASE,
+  appLoadingStore
+} from '../app-loading.store.svelte';
+import {
   duplicateProject as duplicateProjectEntity,
+  PROJECT_CONST,
   projectRepository,
-  projectStorage
+  projectStorage,
+  ProjectStorageKey
 } from '$lib/features/project-management';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
@@ -292,6 +296,7 @@ export async function loadLastProject(
   const controller = new AbortController();
   let lastProjectId: string | undefined;
   const restoreOperation = (async () => {
+    appLoadingStore.setPhase(APP_LOADING_PHASE.PROJECT);
     lastProjectId =
       (await projectStorage.load<string>(ProjectStorageKey.CURRENT)) ??
       undefined;

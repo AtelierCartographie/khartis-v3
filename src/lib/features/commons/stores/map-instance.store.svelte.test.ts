@@ -10,6 +10,10 @@ import {
   resolveOrthographicZoomBounds,
   resolveOrthographicZoomLevel
 } from '$lib/features/map/utils/map-zoom.utils';
+import {
+  injectProjectionContext,
+  mapInstanceStore
+} from './map-instance.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -40,11 +44,6 @@ vi.mock('$lib/features/map/core/projscreen', () => ({
   get_bbox_center: mocks.getBboxCenterMock,
   get_max_scale: mocks.getMaxScaleMock
 }));
-
-import {
-  injectProjectionContext,
-  mapInstanceStore
-} from './map-instance.store.svelte';
 
 const mapViewStatePersistenceEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'mapViewState'
@@ -454,6 +453,41 @@ describe('mapInstanceStore map zoom bounds', () => {
       zoom: 2,
       targetRatio: [0.1, -0.2]
     });
+  });
+
+  it('should reopen an automatic view at its base zoom as 100 % when it was saved automatic', () => {
+    const { deck } = createDeckMock();
+    const saved = {
+      zoom: 0.5,
+      target: [60, 50, 0] as [number, number, number],
+      targetRatio: [0.1, 0] as [number, number],
+      baseZoom: 0.5,
+      baseTargetRatio: [0.1, 0] as [number, number],
+      auto: true
+    };
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.restoreFromSerialized(saved);
+    mocks.projectionStoreMock.referenceBbox = [0, 0, 100, 100];
+    mocks.getBboxCenterMock.mockReturnValue([50, 50]);
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(mapInstanceStore.isViewportAutoFitManaged).toBe(true);
+    expect(mapInstanceStore.hasPendingOrthographicRestore).toBe(false);
+    expect(mapInstanceStore.zoomLevel).toBe(100);
+    expect(mapViewStatePersistenceEntry?.serialize()).toMatchObject({
+      zoom: 0.5,
+      baseZoom: 0.5,
+      baseTargetRatio: [0.1, 0],
+      auto: true
+    });
+
+    mapInstanceStore.restoreFromSerialized({ zoom: 0.5, target: [60, 50, 0] });
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(mapInstanceStore.isViewportAutoFitManaged).toBe(false);
+    expect(mapInstanceStore.zoomLevel).toBeGreaterThan(100);
   });
 
   it('drops an implausible restored orthographic target and recenters the view', () => {

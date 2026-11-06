@@ -19,8 +19,8 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    filterFieldsByKind,
-    type FieldSelectionWithHandler
+    type FieldSelectionWithHandler,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {
@@ -167,7 +167,6 @@
     max={SLIDER_LIMITS.lineWidth.max}
     step={SLIDER_LIMITS.lineWidth.step}
     value={thickness}
-    showMinMax
     inputWidth="128px"
     onchange={onThicknessChange}
   />
@@ -203,7 +202,6 @@
     max={SLIDER_LIMITS.lineMaxWidth.max}
     step={SLIDER_LIMITS.lineMaxWidth.step}
     value={maxThickness}
-    showMinMax
     inputWidth="128px"
     onchange={onMaxThicknessChange}
   />
@@ -257,7 +255,6 @@
     max={SLIDER_LIMITS.lineMaxWidth.max}
     step={SLIDER_LIMITS.lineMaxWidth.step}
     value={maxThickness}
-    showMinMax
     inputWidth="128px"
     onchange={onMaxThicknessChange}
   />

@@ -4,12 +4,12 @@
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
+    DEFAULT_COLORS,
     FillMode,
     ShapeType,
     SLIDER_LIMITS,
     SymbolMode,
-    VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';

@@ -8,8 +8,8 @@
   import DottedToggle from './dotted-toggle.svelte';
   import {
     BASEMAP_LAYER_CONFIG,
-    BasemapGraticuleMode,
-    BasemapDottedPattern
+    BasemapDottedPattern,
+    BasemapGraticuleMode
   } from '$lib/features/commons/constants/visualization.constants';
   import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import { createLayerConfigValueHandler } from './layer-config-handlers.utils';
@@ -173,7 +173,6 @@
     max={BASEMAP_LAYER_CONFIG.thickness.max}
     step={BASEMAP_LAYER_CONFIG.thickness.step}
     value={thickness}
-    showMinMax
     inputWidth="64px"
     showSteppers={false}
     onchange={handleThicknessChange}
@@ -185,7 +184,6 @@
     max={BASEMAP_LAYER_CONFIG.opacity.max}
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
-    showMinMax
     inputWidth="64px"
     showSteppers={false}
     onchange={handleOpacityChange}

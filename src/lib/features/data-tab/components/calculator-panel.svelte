@@ -2,11 +2,11 @@
   import Button from '$lib/features/commons/components/button-native.svelte';
   import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
+    InlineNotification,
     Link,
     Select,
     SelectItem,
-    TextInput,
-    InlineNotification
+    TextInput
   } from 'carbon-components-svelte';
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
@@ -17,12 +17,12 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import {
-    INTERNAL_COLUMN,
-    COLUMN_TYPE_GEOMETRY
+    COLUMN_TYPE_GEOMETRY,
+    INTERNAL_COLUMN
   } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';

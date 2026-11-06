@@ -7,18 +7,18 @@ import {
 } from '$lib/features/project-management/core';
 import type { SerializedMapViewState } from '$lib/types/serialization.types';
 import {
-  clampOrthographicZoomLevel,
   clampMapZoomLevel,
+  clampOrthographicZoomLevel,
   DEFAULT_MAP_BASE_ZOOM,
   nudgeMapZoomLevel,
   nudgeOrthographicZoomLevel,
   ORTHOGRAPHIC_MAP_BASE_ZOOM,
   resolveMapZoomBounds,
   resolveMapZoomLevel,
+  resolveMapZoomPercent,
   resolveOrthographicZoomBounds,
   resolveOrthographicZoomLevel,
-  resolveOrthographicZoomPercent,
-  resolveMapZoomPercent
+  resolveOrthographicZoomPercent
 } from '$lib/features/map/utils/map-zoom.utils';
 import {
   get_bbox_center,
@@ -175,6 +175,9 @@ interface PendingViewState {
 
   target: [number, number, number];
   targetRatio?: [number, number];
+  baseZoom?: number;
+  baseTargetRatio?: [number, number];
+  auto?: boolean;
 }
 
 interface PendingMapLibreViewState {
@@ -206,6 +209,10 @@ function createMapInstanceStore() {
     zoomLevel: number;
     baseZoomLevel: number;
     deckViewState: DeckViewState;
+    /** Zoom of the automatic fit, shown as 100 %. */
+    orthographicBaseZoom: number;
+    /** Centre of the automatic fit, relative to the reference extent. */
+    orthographicBaseTargetRatio: [number, number];
     viewportFitMode: ViewportFitMode;
     viewportFitReason: ViewportFitReason | null;
   }>({
@@ -217,6 +224,8 @@ function createMapInstanceStore() {
     zoomLevel: 100,
     baseZoomLevel: DEFAULT_MAP_BASE_ZOOM,
     deckViewState: { ...DEFAULT_DECK_VIEW_STATE },
+    orthographicBaseZoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
+    orthographicBaseTargetRatio: [0, 0],
     viewportFitMode: 'auto',
     viewportFitReason: null
   });
@@ -265,7 +274,14 @@ function createMapInstanceStore() {
     const serialized = {
       zoom: state.deckViewState.zoom,
       target,
-      targetRatio: toTargetRatio(target, ctx.referenceBbox)
+      targetRatio: toTargetRatio(target, ctx.referenceBbox),
+      ...(state.orthographicBaseZoom !== ORTHOGRAPHIC_MAP_BASE_ZOOM && {
+        baseZoom: state.orthographicBaseZoom
+      }),
+      ...(hasBaseTargetOffset() && {
+        baseTargetRatio: state.orthographicBaseTargetRatio
+      }),
+      ...(state.viewportFitMode === 'auto' && { auto: true })
     } satisfies SerializedViewState;
 
     lastSerializedViewState = serialized;
@@ -549,15 +565,47 @@ function createMapInstanceStore() {
   function resolveDeckViewState(
     nextViewState: Partial<DeckViewState> = {}
   ): DeckViewState {
-    const bounds = resolveOrthographicZoomBounds();
+    const baseZoom = state.orthographicBaseZoom;
+    const bounds = resolveOrthographicZoomBounds(baseZoom);
     const nextZoom = nextViewState.zoom ?? state.deckViewState.zoom;
 
     return {
       ...state.deckViewState,
       ...nextViewState,
       ...bounds,
-      zoom: clampOrthographicZoomLevel(nextZoom)
+      zoom: clampOrthographicZoomLevel(nextZoom, baseZoom)
     };
+  }
+
+  /**
+   * The automatic fit may zoom past the fit of the reference extent and
+   * centre elsewhere, so that the drawn map fills its frame; that view stays
+   * the 100 % of the map and the one a reset returns to.
+   */
+  function setOrthographicBaseView(
+    zoom: number,
+    targetRatio: [number, number] = [0, 0]
+  ): void {
+    state.orthographicBaseZoom = Number.isFinite(zoom)
+      ? zoom
+      : ORTHOGRAPHIC_MAP_BASE_ZOOM;
+    state.orthographicBaseTargetRatio = isPlausibleTargetRatio(targetRatio)
+      ? [targetRatio[0], targetRatio[1]]
+      : [0, 0];
+  }
+
+  function hasBaseTargetOffset(): boolean {
+    const [x, y] = state.orthographicBaseTargetRatio;
+    return x !== 0 || y !== 0;
+  }
+
+  function resolveBaseTarget(): [number, number, number] {
+    const ctx = projectionContextGetter();
+    return ctx.referenceBbox && hasBaseTargetOffset()
+      ? dataToWorld(
+          fromTargetRatio(state.orthographicBaseTargetRatio, ctx.referenceBbox)
+        )
+      : [0, 0, 0];
   }
 
   function applyDeckZoomBounds(): void {
@@ -584,7 +632,10 @@ function createMapInstanceStore() {
 
     if (state.deckInstance) {
       const deckZoom = state.deckViewState.zoom;
-      const percent = resolveOrthographicZoomPercent(deckZoom);
+      const percent = resolveOrthographicZoomPercent(
+        deckZoom,
+        state.orthographicBaseZoom
+      );
       state.zoomLevel = Math.round(percent);
     }
   }
@@ -690,8 +741,10 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = clampOrthographicZoomLevel(
-        nudgeOrthographicZoomLevel(state.deckViewState.zoom, 1)
+      const newZoom = nudgeOrthographicZoomLevel(
+        state.deckViewState.zoom,
+        1,
+        state.orthographicBaseZoom
       );
       state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
@@ -722,8 +775,10 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = clampOrthographicZoomLevel(
-        nudgeOrthographicZoomLevel(state.deckViewState.zoom, -1)
+      const newZoom = nudgeOrthographicZoomLevel(
+        state.deckViewState.zoom,
+        -1,
+        state.orthographicBaseZoom
       );
       state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
@@ -771,7 +826,7 @@ function createMapInstanceStore() {
   function setZoomPercent(percent: number) {
     const zoom = state.map
       ? resolveMapZoomLevel(state.baseZoomLevel, percent)
-      : resolveOrthographicZoomLevel(percent);
+      : resolveOrthographicZoomLevel(percent, state.orthographicBaseZoom);
     setZoom(zoom);
   }
 
@@ -808,8 +863,8 @@ function createMapInstanceStore() {
       pendingOrthographicRestore = null;
       orthographicResetRevision += 1;
       state.deckViewState = resolveDeckViewState({
-        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
-        target: [0, 0, 0]
+        zoom: state.orthographicBaseZoom,
+        target: resolveBaseTarget()
       });
       applyDeckViewState();
       updateZoomFromMap();
@@ -861,19 +916,29 @@ function createMapInstanceStore() {
           return;
         }
 
+        setOrthographicBaseView(
+          pendingOrthographicRestore.baseZoom ?? ORTHOGRAPHIC_MAP_BASE_ZOOM,
+          pendingOrthographicRestore.baseTargetRatio
+        );
         state.deckViewState = resolveDeckViewState({
           target: dataToWorld(restoredTarget),
           zoom: pendingOrthographicRestore.zoom
         });
-        markViewportManual();
+        if (pendingOrthographicRestore.auto) {
+          // The base view reproduces an automatic view at any later refit.
+          markViewportAutoFit('restore');
+          pendingOrthographicRestore = null;
+        } else {
+          markViewportManual();
+        }
         restoredViewApplied = true;
       }
     }
 
     if (!restoredViewApplied) {
       state.deckViewState = resolveDeckViewState({
-        target: [0, 0, 0],
-        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM
+        target: resolveBaseTarget(),
+        zoom: state.orthographicBaseZoom
       });
       if (reason) {
         markViewportAutoFit(reason);
@@ -942,10 +1007,28 @@ function createMapInstanceStore() {
         ? ([rawRatio[0], rawRatio[1]] as [number, number])
         : undefined;
 
+    const baseZoom =
+      'baseZoom' in data &&
+      typeof data.baseZoom === 'number' &&
+      Number.isFinite(data.baseZoom)
+        ? data.baseZoom
+        : undefined;
+    const rawBaseRatio =
+      'baseTargetRatio' in data ? data.baseTargetRatio : undefined;
+    const baseTargetRatio =
+      Array.isArray(rawBaseRatio) &&
+      rawBaseRatio.length >= 2 &&
+      rawBaseRatio.every((value) => typeof value === 'number')
+        ? ([rawBaseRatio[0], rawBaseRatio[1]] as [number, number])
+        : undefined;
+
     pendingOrthographicRestore = {
       zoom,
       target,
-      ...(targetRatio && { targetRatio })
+      ...(targetRatio && { targetRatio }),
+      ...(baseZoom !== undefined && { baseZoom }),
+      ...(baseTargetRatio && { baseTargetRatio }),
+      ...('auto' in data && data.auto === true && { auto: true })
     };
     lastSerializedViewState = pendingOrthographicRestore;
   }
@@ -955,6 +1038,8 @@ function createMapInstanceStore() {
     pendingMapLibreRestore = null;
     lastSerializedViewState = null;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+    state.orthographicBaseZoom = ORTHOGRAPHIC_MAP_BASE_ZOOM;
+    state.orthographicBaseTargetRatio = [0, 0];
     state.viewportFitMode = 'auto';
     state.viewportFitReason = null;
 
@@ -975,6 +1060,8 @@ function createMapInstanceStore() {
     state.zoomLevel = 100;
     state.baseZoomLevel = DEFAULT_MAP_BASE_ZOOM;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+    state.orthographicBaseZoom = ORTHOGRAPHIC_MAP_BASE_ZOOM;
+    state.orthographicBaseTargetRatio = [0, 0];
     state.viewportFitMode = 'auto';
     state.viewportFitReason = null;
     synchronizedViewportController = null;
@@ -1028,6 +1115,12 @@ function createMapInstanceStore() {
     get deckViewState() {
       return state.deckViewState;
     },
+    get orthographicBaseZoom() {
+      return state.orthographicBaseZoom;
+    },
+    get orthographicBaseTargetRatio() {
+      return state.orthographicBaseTargetRatio;
+    },
     get isViewportAutoFitManaged() {
       return state.viewportFitMode === 'auto';
     },
@@ -1060,6 +1153,7 @@ function createMapInstanceStore() {
     markViewportAutoFit,
     markViewportManual,
     updateDeckViewState,
+    setOrthographicBaseView,
     buildSerializedViewState,
     persistCurrentMapLibreViewState,
     applyPendingMapLibreRestore,

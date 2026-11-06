@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -117,6 +122,11 @@
   const showSecondarySection = $derived(visibleSection !== 'primary');
   const popoverTitle = $derived(m.text_style_popover_title());
 
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
+
   function handleClose() {
     open = false;
     onclose?.();
@@ -191,6 +201,8 @@
   <div use:portal class="text-style-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="text-style-popover"
       style:width={popoverPosition.width}
       style:left={popoverPosition.left}

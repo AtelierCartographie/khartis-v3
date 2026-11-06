@@ -8,6 +8,11 @@
   import { m } from '$lib/paraglide/messages';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import {
+    describeMapGeoreferenceAvailability,
+    getMapGeoreferenceAvailability
+  } from '$lib/features/step-toolbar/tools/projections';
   import {
     DataStructured,
     DocumentExport,
@@ -15,24 +20,32 @@
     Image
   } from 'carbon-icons-svelte';
   import { useExportModal } from '../hooks/use-export-modal.svelte';
+  import type {
+    DataExportFormat,
+    ExportResolution,
+    ExportTabType,
+    MapExportFormat
+  } from '../types';
   import {
-    ExportTab,
-    MAP_FORMAT,
     DATA_FORMAT,
-    EXPORT_RESOLUTION
+    EXPORT_RESOLUTION,
+    ExportTab,
+    MAP_FORMAT
   } from '../types';
   import {
     formatExportDimensions,
     getExportDimensionsForPage
   } from '../export-dimensions.utils';
-  import type {
-    MapExportFormat,
-    DataExportFormat,
-    ExportTabType,
-    ExportResolution
-  } from '../types';
 
   const modal = useExportModal();
+  const georeferenceAvailability = $derived(
+    modal.isOpen ? getMapGeoreferenceAvailability() : null
+  );
+  const georeferenceHelper = $derived(
+    !georeferenceAvailability || georeferenceAvailability.available
+      ? m.download_map_georeference_helper()
+      : describeMapGeoreferenceAvailability(georeferenceAvailability)
+  );
   const currentFormat = $derived(getFormatState());
 
   const currentPageFormatLabel = $derived.by(() => {
@@ -314,6 +327,17 @@
               />
             </div>
           {/if}
+
+          <div class="option-section georeference-option">
+            <SimpleCheckbox
+              labelText={m.download_map_georeference()}
+              checked={modal.georeference &&
+                georeferenceAvailability?.available === true}
+              disabled={georeferenceAvailability?.available !== true}
+              onchange={(checked) => modal.setGeoreference(checked)}
+            />
+            <p class="georeference-helper">{georeferenceHelper}</p>
+          </div>
         {:else}
           <div class="panel-heading">
             <p class="panel-description">{m.download_data_description()}</p>
@@ -541,6 +565,13 @@
   .option-section {
     display: grid;
     gap: var(--cds-spacing-03);
+  }
+
+  .georeference-helper {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .export-summary {

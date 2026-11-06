@@ -2,10 +2,10 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type DataTableFilter, type FilterStats } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
+  type HookValue,
   isMissingRequestedTableError,
   isRequestedTableAvailable,
-  resolveHookValue,
-  type HookValue
+  resolveHookValue
 } from './table-hook.utils';
 
 export interface UseTableFiltersProps {

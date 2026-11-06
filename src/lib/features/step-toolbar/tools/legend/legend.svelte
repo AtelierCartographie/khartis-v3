@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
@@ -15,8 +16,8 @@
   import { onMount, untrack } from 'svelte';
   import {
     AVAILABLE_FONTS,
-    clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
+    clampFontSize,
     normalizeFontFamily,
     resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
@@ -134,9 +135,6 @@
 
   const backgroundEnabled = $derived(legendState.style.background.enabled);
   const bgColor = $derived(legendState.style.background.color);
-  const bgHex = $derived(
-    hslToHex(bgColor.hue, bgColor.saturation, bgColor.lightness)
-  );
   const textColor = $derived(legendState.style.textColor);
   const textColorHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
@@ -335,6 +333,7 @@
             toggleChecked={item.visible}
             open={isItemExpanded(item.id)}
             scrollIntoViewOnOpen
+            animateBody
             onToggle={(expanded) => setItemExpanded(item.id, expanded)}
             onToggleChange={(checked) =>
               handleItemVisibilityChange(item, checked)}
@@ -437,9 +436,6 @@
                   min={0}
                   max={100}
                   step={5}
-                  showMinMax
-                  minLabel="0"
-                  maxLabel="100"
                   inputWidth="72px"
                   showSteppers={false}
                   onchange={(value) =>
@@ -503,51 +499,15 @@
 
       <div class="legend-divider"></div>
 
-      <div class="legend-background-row">
-        <div class="legend-background-toggle">
-          <span class="legend-field-label">{m.legend_background()}</span>
-          <Switch
-            labelText={m.legend_background()}
-            hideLabel
-            size="sm"
-            toggled={backgroundEnabled}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={handleBackgroundEnabledChange}
-          />
-        </div>
-
-        <ColorPicker
-          triggerLabel={m.legend_background_color()}
-          hex={bgHex}
-          hue={bgColor.hue}
-          saturation={bgColor.saturation}
-          lightness={bgColor.lightness}
-          disabled={!backgroundEnabled}
-          onValidate={({
-            hue,
-            saturation,
-            lightness
-          }: ColorPickerValidateEvent) => {
-            handleBackgroundColorChange({ hue, saturation, lightness });
-          }}
-        />
-      </div>
-
-      <SliderWithInput
-        label={m.legend_opacity()}
-        bind:value={localOpacity}
-        disabled={!backgroundEnabled}
-        min={0}
-        max={100}
-        step={1}
-        showMinMax
-        minLabel="0"
-        maxLabel="100"
-        inputWidth="72px"
-        showSteppers={false}
-        onchange={handleOpacityChange}
+      <BackgroundSettings
+        enabled={backgroundEnabled}
+        color={bgColor}
+        opacity={localOpacity}
+        shadow={legendState.style.background.shadow}
+        onEnabledChange={handleBackgroundEnabledChange}
+        onColorChange={handleBackgroundColorChange}
+        onOpacityChange={handleOpacityChange}
+        onShadowChange={(shadow) => legendActions.updateBackground({ shadow })}
       />
     </div>
   {/if}
@@ -598,28 +558,10 @@
     gap: var(--cds-spacing-02);
   }
 
-  .legend-background-row {
-    display: grid;
-    grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
-    gap: var(--cds-spacing-05);
-    align-items: end;
-  }
-
   @media (max-width: 480px) {
     .legend-text-style-row {
       grid-template-columns: 1fr;
     }
-
-    .legend-background-row {
-      grid-template-columns: 1fr;
-      gap: var(--cds-spacing-03);
-    }
-  }
-
-  .legend-background-toggle {
-    display: flex;
-    flex-direction: column;
-    gap: var(--kh-gap-label);
   }
 
   .legend-field-label {
@@ -653,11 +595,6 @@
 
   :global(#khartis-legend-tool .bx--label) {
     margin-bottom: 8px;
-  }
-
-  :global(#khartis-legend-tool .legend-background-toggle .kh-switch-native) {
-    gap: var(--cds-spacing-03);
-    min-height: var(--kh-size-sm);
   }
 
   :global(#khartis-legend-tool .bx--text-area) {

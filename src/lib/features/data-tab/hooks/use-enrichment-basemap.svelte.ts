@@ -31,10 +31,10 @@ import * as m from '$lib/paraglide/messages';
 import { shouldAutoSelectSuggestedBasemap } from '../utils/basemap-auto-selection.utils';
 import {
   PERSISTED_BASEMAP_TYPE,
-  resolveRelevantPersistedBasemap,
-  restorePersistedBasemapSelection,
+  type PersistedProjectBasemap,
   resolveBasemapSource,
-  type PersistedProjectBasemap
+  resolveRelevantPersistedBasemap,
+  restorePersistedBasemapSelection
 } from '../services/persisted-basemap.service';
 import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
 import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';

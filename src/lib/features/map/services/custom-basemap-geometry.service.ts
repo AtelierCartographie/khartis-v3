@@ -1,8 +1,8 @@
 import { GEO_CONSTANTS } from '$lib/features/duckdb';
 import {
   addGeoArrowMetadataFromDuckDB,
-  fetchArrowTableWithGeometry,
-  type DuckDBClientForArrow
+  type DuckDBClientForArrow,
+  fetchArrowTableWithGeometry
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 

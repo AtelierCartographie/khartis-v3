@@ -66,6 +66,7 @@ export interface AnnotationStyle {
   backgroundColor?:
     string | { hue: number; saturation: number; lightness: number };
   backgroundOpacity?: number;
+  backgroundShadow?: boolean;
 
   smoothness?: number;
   drawingType?: DrawingType;

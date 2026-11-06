@@ -1,26 +1,27 @@
 import {
-  type Table as ArrowTable,
-  Schema,
   Field,
   RecordBatch,
-  Table as ArrowTableImpl
+  Schema,
+  type Table as ArrowTable,
+  Table as ArrowTableImpl,
+  tableToIPC
 } from 'apache-arrow/Arrow';
-import {
-  geoIdentity,
-  parseGeometry,
-  parsePolygonsToSolid,
-  parsePoints
-} from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BinaryPathData,
-  BinaryPolygonData,
   BinaryPointData,
+  BinaryPolygonData,
   DeckBinaryAttribute,
   ParserOptions,
   ProjectionLike
 } from '@ateliercartographie/geoarrow-deck-stream';
+import {
+  geoIdentity,
+  parseGeometry,
+  parsePoints,
+  parsePolygonsToSolid
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type { ProjectionSpec } from '@ateliercartographie/geoarrow-deck-stream/worker';
-import { geoArea, geoStream, type GeoProjection, type GeoStream } from 'd3-geo';
+import { geoArea, type GeoProjection, geoStream, type GeoStream } from 'd3-geo';
 
 import type {
   BasemapMetadata,
@@ -30,16 +31,15 @@ import type {
 } from '../types/basemap.types';
 import {
   buildKhartisCompositeProjection,
-  resolveSimpleProjection,
   KHARTIS_COMPOSITE_FACTORY,
   KHARTIS_PROJ4_FACTORY,
-  type KhartisCompositeParams
+  type KhartisCompositeParams,
+  resolveSimpleProjection
 } from './khartis-projection-factories.utils';
 import {
   bumpWorkerParseVersion,
-  trackPendingWorkerParse,
   getParseWorkerClient,
-  ipcBytesForTable,
+  trackPendingWorkerParse,
   trackWorkerParseVersion,
   withParseWorkerTimeout
 } from './worker-parse.svelte';
@@ -348,12 +348,15 @@ function requestWorkerParse<T>(
 
   if (!workerPendingKeys.has(key)) {
     workerPendingKeys.add(key);
-    const ipcBytes = ipcBytesForTable(normalizeGeomColumnName(table));
+    // Serialized per request and transferred: caching these bytes would pin a
+    // copy of the geometry on the main thread for as long as the table lives.
+    const ipcBytes = tableToIPC(normalizeGeomColumnName(table));
     trackPendingWorkerParse(
       withParseWorkerTimeout(
         client[method](ipcBytes, spec, {
           capacityMultiplier: 1.0,
-          rewind: options.rewind
+          rewind: options.rewind,
+          transferInput: true
         }),
         method
       )

@@ -64,6 +64,7 @@ export interface LegendStyle {
       lightness: number;
     };
     opacity: number;
+    shadow: boolean;
   };
 }
 

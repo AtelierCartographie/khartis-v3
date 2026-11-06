@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import DoubleModeControls from './proportional/double-mode-controls.svelte';
@@ -6,38 +7,36 @@
   import ProportionalDoubleSection from './proportional/proportional-double-section.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    DEFAULT_COLORS,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
+    FillMode,
+    isLinearShape,
     MissingDataShape,
     ProportionalType,
     ShapeType,
     SLIDER_LIMITS,
     SymbolDoublePosition,
     SymbolMode,
-    VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS,
-    FillMode,
-    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
-    isLinearShape
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import {
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
     SliderWithInput,
-    StrokeSection
+    StrokeSection,
+    ToggleWithLabel
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from '../../types/symbol.types';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets';
-
-  const SIGN_FILL_MODES: readonly FillMode[] = [FillMode.CATEGORIES];
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    NONE_FIELD_ID,
     filterFieldsByKind,
+    NONE_FIELD_ID,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
@@ -57,6 +56,8 @@
     isSignedProportionalSymbol,
     resolveSymbolSignColors
   } from '$lib/features/commons/utils/symbol-sign.utils';
+
+  const SIGN_FILL_MODES: readonly FillMode[] = [FillMode.CATEGORIES];
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -102,6 +103,7 @@
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let commonScale = $state<boolean>(true);
+  let knockout = $state<boolean>(true);
   let positionMode = $state<SymbolDoublePosition>(SymbolDoublePosition.OVERLAY);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
@@ -237,6 +239,7 @@
     }
     if (visualization?.symbol) {
       commonScale = visualization.symbol.commonScale ?? true;
+      knockout = visualization.symbol.knockout ?? true;
       const nextPositionMode =
         visualization.symbol.positionMode ?? SymbolDoublePosition.OVERLAY;
       positionMode =
@@ -461,6 +464,13 @@
     runUserChange(() => {
       commonScale = value;
       onSymbolPrimitiveChange?.({ commonScale: value });
+    });
+  }
+
+  function handleKnockoutChange(value: boolean) {
+    runUserChange(() => {
+      knockout = value;
+      onSymbolPrimitiveChange?.({ knockout: value });
     });
   }
 
@@ -712,7 +722,16 @@
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_STROKE_CATEGORY}
   onMissingDataShowChange={handleMissingDataShowChange}
   onMissingDataColorChange={handleMissingDataColorChange}
-/>
+>
+  {#snippet beforeOpacity()}
+    <ToggleWithLabel
+      label={m.symbol_knockout()}
+      infoText={m.symbol_knockout_info()}
+      toggled={knockout}
+      ontoggle={handleKnockoutChange}
+    />
+  {/snippet}
+</StrokeSection>
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}

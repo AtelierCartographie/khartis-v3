@@ -90,8 +90,8 @@
     }
   }
 
-  // Below ~757px the centered project-title input overlaps the logo area
-  // once the beta tag is included; hide the tag rather than the logo.
+  // Below 768px the beta tag leaves the header's project title too little
+  // room; hide the tag rather than the logo.
   @media (max-width: 767px) {
     #khartis-logo :global(.beta-tag) {
       display: none;

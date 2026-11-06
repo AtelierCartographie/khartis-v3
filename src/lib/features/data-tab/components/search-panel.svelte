@@ -2,12 +2,12 @@
   import Button from '$lib/features/commons/components/button-native.svelte';
   import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
+    InlineLoading,
+    InlineNotification,
     Search,
     Select,
     SelectItem,
-    TextInput,
-    InlineNotification,
-    InlineLoading
+    TextInput
   } from 'carbon-components-svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { type SearchStats } from '$lib/features/duckdb';
@@ -16,8 +16,8 @@
   import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
@@ -367,6 +367,7 @@
   {:else}
     <div class="field-group">
       <Search
+        labelText={m.data_tool_search()}
         closeButtonLabelText={m.a11y_clear_search()}
         size="sm"
         placeholder={m.search_placeholder()}

@@ -34,9 +34,8 @@
   } from 'carbon-components-svelte';
   import {
     CopyFile,
-    Download,
     DocumentAdd,
-    Education,
+    Download,
     FolderOpen,
     Information,
     Launch,
@@ -501,7 +500,7 @@
             <Button
               size="small"
               kind="ghost"
-              icon={Education}
+              icon={Launch}
               class="menu-bar-item"
               disabled
             >

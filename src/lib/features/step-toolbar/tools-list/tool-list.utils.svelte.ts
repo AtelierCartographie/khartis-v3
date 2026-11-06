@@ -27,7 +27,7 @@ export function closeSelectedToolPanel(): void {
   globalActions.setSelectedTool(undefined);
 
   if (isStylingTool(selectedTool)) {
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 }
 
@@ -38,7 +38,7 @@ export function selectTool(tool?: StylingTools | VisualizationTools): void {
     closeSelectedToolPanel();
   } else {
     if (isStylingTool(selectedTool)) {
-      globalActions.resetPagePan();
+      globalActions.restorePagePan();
     }
 
     globalActions.setSelectedTool(tool);

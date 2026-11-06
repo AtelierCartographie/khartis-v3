@@ -12,11 +12,6 @@
   import * as m from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-
-  const drawingTypeOptions = $derived.by(() => [
-    { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
-    { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
-  ]);
   import { Add } from 'carbon-icons-svelte';
   import {
     annotationsActions,
@@ -24,6 +19,11 @@
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
   import SelectionHeader from './_shared/selection-header.svelte';
+
+  const drawingTypeOptions = $derived.by(() => [
+    { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
+    { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
+  ]);
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -262,8 +262,6 @@
           stepMultiplier={1}
           on:input={handleThicknessChange}
           on:change={handleThicknessChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>
@@ -281,8 +279,6 @@
           stepMultiplier={5}
           on:input={handleSmoothnessChange}
           on:change={handleSmoothnessChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>
@@ -391,8 +387,6 @@
           stepMultiplier={5}
           on:input={handleOpacityChange}
           on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>

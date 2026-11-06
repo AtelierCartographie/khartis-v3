@@ -2,13 +2,13 @@
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
-    visualizationStore,
     ALL_PRIMITIVE_FILTERS,
-    PrimitiveFilterType,
+    type ClassificationConfig,
     getPrimitiveClassification,
     getPrimitiveValueColumn,
-    type ClassificationConfig,
-    type VisualizationConfig
+    PrimitiveFilterType,
+    type VisualizationConfig,
+    visualizationStore
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { useDatasetAnalysis } from '../hooks/use-dataset-analysis.svelte';
@@ -662,6 +662,7 @@
       open={primitiveAccordion.isOpen('texts')}
       onToggle={(expanded) => primitiveAccordion.setOpen('texts', expanded)}
       dataFields={dataFieldItems}
+      basemapLabelFields={datasetAnalysis.basemapLabelFieldItems}
       visualization={textVisualization}
       disabled={!hasGeometry}
       filters={filtersByPrimitive[PrimitiveFilterType.TEXT]}

@@ -4,10 +4,10 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import * as m from '$lib/paraglide/messages';
 import {
-  unzip,
-  type Unzipped,
   type FlateError,
-  type UnzipFileInfo
+  unzip,
+  type UnzipFileInfo,
+  type Unzipped
 } from 'fflate';
 import { MIME } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '../constants';

@@ -4,6 +4,7 @@ import {
   GeoreferenceType,
   TableViewType
 } from '$lib/features/commons/constants/ui.constants';
+import { dataTabActions, dataTabState } from './data-tab.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -20,8 +21,6 @@ vi.mock('$lib/features/project-management/core', () => ({
     notifyChange: mocks.notifyChangeMock
   }
 }));
-
-import { dataTabActions, dataTabState } from './data-tab.store.svelte';
 
 const dataTabPersistenceEntry = mocks.registerMock.mock.calls.find(
   ([entry]) => entry?.key === 'dataTab'

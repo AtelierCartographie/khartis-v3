@@ -1,7 +1,7 @@
 import type { StyleSpecification } from 'maplibre-gl';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 import {
   BasemapStyle,
@@ -10,8 +10,8 @@ import {
   getBasemapStyle
 } from '../../map/constants/basemap-styles';
 import {
-  getStyleConfig,
   getDefaultVisibility,
+  getStyleConfig,
   type LayerGroupId
 } from '../../map/constants/carte-facile-layer-groups';
 
@@ -49,6 +49,8 @@ function createBasemapStyleStore() {
     referenceBasemapId: null as string | null,
     showLabels: true,
     groupVisibility: {} as Record<string, boolean>,
+    /** 0 to 100. */
+    opacity: 100,
     requestedViewportStyle: null as BasemapStyle | null
   });
 
@@ -96,6 +98,11 @@ function createBasemapStyleStore() {
     persistenceRegistry.notifyChange('basemapStyle', SavePriority.IMMEDIATE);
   }
 
+  function setOpacity(opacity: number): void {
+    state.opacity = Math.max(0, Math.min(100, Math.round(opacity)));
+    persistenceRegistry.notifyChange('basemapStyle', SavePriority.DEBOUNCED);
+  }
+
   function requestViewportReset(
     style: BasemapStyle = state.selectedStyle
   ): void {
@@ -110,6 +117,7 @@ function createBasemapStyleStore() {
     state.referenceBasemapId = null;
     state.showLabels = true;
     state.groupVisibility = {};
+    state.opacity = 100;
     state.requestedViewportStyle = null;
     groupVisibilityVersion++;
     viewportRequestVersion = 0;
@@ -121,7 +129,8 @@ function createBasemapStyleStore() {
     lastSelectedTiledStyle?: BasemapStyle | null,
     referenceBasemapId?: string | null,
     showLabels?: boolean,
-    groupVisibility?: Record<string, boolean>
+    groupVisibility?: Record<string, boolean>,
+    opacity?: number
   ): void {
     if (!style) {
       reset();
@@ -163,6 +172,10 @@ function createBasemapStyleStore() {
     if (showLabels !== undefined) {
       state.showLabels = showLabels;
     }
+    state.opacity =
+      typeof opacity === 'number' && Number.isFinite(opacity)
+        ? Math.max(0, Math.min(100, opacity))
+        : 100;
   }
 
   return {
@@ -194,6 +207,9 @@ function createBasemapStyleStore() {
     get groupVisibility(): Readonly<Record<string, boolean>> {
       return state.groupVisibility;
     },
+    get opacity(): number {
+      return state.opacity;
+    },
     get groupVisibilityVersion(): number {
       return groupVisibilityVersion;
     },
@@ -210,6 +226,7 @@ function createBasemapStyleStore() {
     setStyle,
     setShowLabels,
     setGroupVisibility,
+    setOpacity,
     requestViewportReset,
     reset,
     restoreFromSerialized
@@ -225,7 +242,8 @@ persistenceRegistry.register({
     lastSelectedTiledStyle: basemapStyleStore.lastSelectedTiledStyle,
     referenceBasemapId: basemapStyleStore.referenceBasemapId,
     showLabels: basemapStyleStore.showLabels,
-    groupVisibility: basemapStyleStore.groupVisibility
+    groupVisibility: basemapStyleStore.groupVisibility,
+    opacity: basemapStyleStore.opacity
   }),
   deserialize: (data: unknown) => {
     const d = data as {
@@ -234,13 +252,15 @@ persistenceRegistry.register({
       referenceBasemapId?: string | null;
       showLabels?: boolean;
       groupVisibility?: Record<string, boolean>;
+      opacity?: number;
     };
     basemapStyleStore.restoreFromSerialized(
       d.style as Parameters<typeof basemapStyleStore.restoreFromSerialized>[0],
       d.lastSelectedTiledStyle,
       d.referenceBasemapId,
       d.showLabels,
-      d.groupVisibility
+      d.groupVisibility,
+      d.opacity
     );
   },
   reset: () => basemapStyleStore.reset(),

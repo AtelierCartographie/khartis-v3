@@ -5,13 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AnnotationKind,
   DEFAULT_MARGINS,
-  DrawingType
-} from '$lib/features/commons/constants/ui.constants';
-import { SHAPE_TYPE } from '$lib/features/commons/constants';
-import {
+  DrawingType,
   PAGE_PRESETS,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   globalActions,
   globalState
@@ -464,7 +462,7 @@ describe('annotation overlay drawing interactions', () => {
     expect(image.position).toEqual({ x: 0, y: 0 });
   });
 
-  it('recenters the page when a centered annotation loses focus', async () => {
+  it('keeps the page centred on an annotation until its tool closes', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Focus item');
 
     const { item } = setupAnnotationViewport();
@@ -477,16 +475,14 @@ describe('annotation overlay drawing interactions', () => {
 
     vi.useFakeTimers();
     await fireEvent.blur(item);
+    await vi.advanceTimersByTimeAsync(250);
 
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
 
-    await vi.advanceTimersByTimeAsync(199);
-    expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+    globalActions.setSelectedTool(undefined);
+    await vi.advanceTimersByTimeAsync(0);
 
-    await vi.advanceTimersByTimeAsync(1);
-    await waitFor(() => {
-      expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
-    });
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
   });
 
   it('keeps centered annotation pan while a blurred item is being dragged', async () => {
@@ -513,6 +509,8 @@ describe('annotation overlay drawing interactions', () => {
 
     await fireEvent.pointerUp(window, { pointerId: 1 });
     await vi.advanceTimersByTimeAsync(200);
+    globalActions.setSelectedTool(undefined);
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
   });

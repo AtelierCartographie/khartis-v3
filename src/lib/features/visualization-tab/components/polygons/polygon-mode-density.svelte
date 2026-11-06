@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { InlineLoading } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
@@ -7,17 +8,18 @@
   import {
     DENSITY_DEFAULTS,
     DENSITY_LEVEL,
-    DOT_DENSITY,
-    SLIDER_LIMITS,
     type DensityConfig,
     type DensityLevelName,
-    type DensityLevelOption
+    type DensityLevelOption,
+    DOT_DENSITY,
+    SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { InfoPopover, SliderWithInput } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { densityLoadingStore } from '$lib/features/map';
 
   interface Props {
     dataFields: Array<{ id: number; text: string; type?: string }>;
@@ -127,6 +129,7 @@
     lastRequestedColumn = signature;
     const requestId = ++densityLevelsRequestId;
     loadingLevels = true;
+    densityLoadingStore.begin();
 
     (async () => {
       const isStale = () =>
@@ -194,6 +197,7 @@
         );
         levelOptions = [];
       } finally {
+        densityLoadingStore.end();
         if (!isStale()) {
           loadingLevels = false;
         }
@@ -284,7 +288,7 @@
   </div>
 {:else if loadingLevels}
   <div class="field-group">
-    <span class="field-label">{m.ellipsis_indicator()}</span>
+    <InlineLoading status="active" description={m.density_loading()} />
   </div>
 {/if}
 

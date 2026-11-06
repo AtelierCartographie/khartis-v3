@@ -3,6 +3,7 @@ import {
   buildCalendarBreaks,
   buildEvenCalendarBreaks,
   CALENDAR_UNIT,
+  type CalendarStep,
   chooseCalendarStep,
   countCalendarClasses,
   floorToCalendarStep,
@@ -11,7 +12,7 @@ import {
   inferCalendarGranularity,
   listCalendarStepOptions,
   parseCalendarBoundary,
-  type CalendarStep
+  snapBreaksToCalendar
 } from './calendar-breaks.utils';
 
 const d = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
@@ -222,5 +223,87 @@ describe('calendar breaks', () => {
     expect(
       buildEvenCalendarBreaks(d('2021-01-04'), d('2021-06-27'), 3).map(iso)
     ).toEqual(['2021-03-01', '2021-04-01']);
+  });
+
+  it('should count steps from a pivot date, which is then a threshold', () => {
+    const pivot = d('1981-05-10');
+    const step: CalendarStep = { unit: CALENDAR_UNIT.YEAR, count: 5 };
+    const result = buildCalendarBreaks(
+      d('1975-03-01'),
+      d('1990-01-01'),
+      step,
+      pivot
+    );
+    expect(iso(result.lower)).toBe('1971-05-10');
+    expect(result.breaks.map(iso)).toEqual([
+      '1976-05-10',
+      '1981-05-10',
+      '1986-05-10'
+    ]);
+    expect(iso(result.upper)).toBe('1991-05-10');
+    expect(
+      countCalendarClasses(d('1975-03-01'), d('1990-01-01'), step, 99, pivot)
+    ).toBe(result.breaks.length + 1);
+  });
+
+  it('should keep a month-end pivot on the last day of shorter months', () => {
+    const result = buildCalendarBreaks(
+      d('2021-01-31'),
+      d('2021-04-15'),
+      { unit: CALENDAR_UNIT.MONTH, count: 1 },
+      d('2021-01-31')
+    );
+    expect(result.breaks.map(iso)).toEqual(['2021-02-28', '2021-03-31']);
+  });
+
+  it('should snap data-driven thresholds to the coarsest calendar step that keeps every class', () => {
+    expect(
+      snapBreaksToCalendar(
+        [d('1968-07-14'), d('1987-02-03'), d('2004-11-20')],
+        d('1950-04-01'),
+        d('2023-08-01')
+      ).map(iso)
+    ).toEqual(['1970-01-01', '1990-01-01', '2000-01-01']);
+    expect(
+      snapBreaksToCalendar(
+        [d('2021-03-10'), d('2021-03-20')],
+        d('2021-01-01'),
+        d('2021-12-31')
+      ).map(iso)
+    ).toEqual(['2021-03-01', '2021-04-01']);
+  });
+
+  it('should label a class next to an off-grid pivot at day precision', () => {
+    const label = formatCalendarClassLabel(
+      d('1970-01-01'),
+      d('1981-05-10'),
+      YEAR,
+      'fr-FR'
+    );
+    expect(label).not.toBe('1970–1981');
+    expect(label).toMatch(/1970.*9 mai 1981/);
+  });
+
+  it('should never offer a step finer than the month when every date is a first of the month', () => {
+    const min = d('2021-01-01');
+    const max = d('2021-03-01');
+    expect(chooseCalendarStep(min, max, 12).unit).toBe(CALENDAR_UNIT.WEEK);
+    expect(chooseCalendarStep(min, max, 12, null, CALENDAR_UNIT.MONTH)).toEqual(
+      { unit: CALENDAR_UNIT.MONTH, count: 1 }
+    );
+    expect(
+      listCalendarStepOptions(min, max, 12, null, CALENDAR_UNIT.MONTH).every(
+        (step) =>
+          step.unit === CALENDAR_UNIT.MONTH || step.unit === CALENDAR_UNIT.YEAR
+      )
+    ).toBe(true);
+    expect(
+      snapBreaksToCalendar(
+        [d('2021-01-25'), d('2021-02-20')],
+        min,
+        max,
+        CALENDAR_UNIT.MONTH
+      ).map(iso)
+    ).toEqual(['2021-02-01', '2021-03-01']);
   });
 });

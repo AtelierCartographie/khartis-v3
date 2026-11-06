@@ -1,6 +1,21 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest';
+import {
+  getClassedSizeForValue,
+  shouldApplyCategorical,
+  shouldApplyChoropleth
+} from './data-styling.utils';
+import { createClassedSizeAccessor } from '../layers/layer-helpers';
+import {
+  ColorMode,
+  FillMode,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
+import {
+  PrimitiveFilterType,
+  type VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 // The visualization store pulls in the DuckDB worker bootstrap at import time;
 // jsdom has no Worker. Stub it before the store module is evaluated.
@@ -16,22 +31,6 @@ vi.hoisted(() => {
   }
   Object.assign(globalThis, { Worker: WorkerStub });
 });
-
-import {
-  getClassedSizeForValue,
-  shouldApplyChoropleth,
-  shouldApplyCategorical
-} from './data-styling.utils';
-import { createClassedSizeAccessor } from '../layers/layer-helpers';
-import {
-  ColorMode,
-  FillMode,
-  SymbolMode
-} from '$lib/features/commons/constants/visualization.constants';
-import {
-  PrimitiveFilterType,
-  type VisualizationConfig
-} from '$lib/features/commons/stores/visualization.store.svelte';
 
 const QUALITATIVE_COLORS = [
   '#e41a1c',

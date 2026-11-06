@@ -25,10 +25,10 @@ import {
   buildCompositeProjectionFromPresetId,
   computeProjectedBboxForBasemap,
   computeProjectedBboxForProjection,
+  parsePointDataWithProjection,
   pathColorAttr,
   pathWidthAttr,
   pointColorAttr,
-  parsePointDataWithProjection,
   projectGeoJSON
 } from './geoarrow-stream-bridge.utils';
 

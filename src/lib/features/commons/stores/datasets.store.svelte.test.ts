@@ -7,6 +7,7 @@ import {
   FileType
 } from '$lib/features/commons/types/create-project.types';
 import { ColumnType } from '$lib/features/data-pipeline';
+import { datasetsStore } from './datasets.store.svelte';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -112,8 +113,6 @@ vi.mock('$lib/features/step-toolbar/tools/facets/facets-access', () => ({
   getFacetsBaseVisualizationId: mocks.getFacetsBaseVisualizationIdMock
 }));
 
-import { datasetsStore } from './datasets.store.svelte';
-
 function makeDataset(id: string, sourceFileId = `source-${id}`) {
   return {
     id,
@@ -159,7 +158,10 @@ function makeUploadedFile(
     status: FileStatus.COMPLETE,
     uploadProgress: 100,
     sourceType: DataSourceType.FILE_UPLOAD,
-    content: '{"type":"FeatureCollection","features":[]}',
+    originalFile: new File(
+      ['{"type":"FeatureCollection","features":[]}'],
+      name
+    ),
     ...overrides
   };
 }
@@ -172,8 +174,8 @@ describe('datasetsStore persisted view state', () => {
     mocks.registerExistingTableMock.mockResolvedValue(null);
     mocks.getFacetsBaseVisualizationIdMock.mockReturnValue(null);
     mocks.createFileFromUploadMock.mockImplementation(
-      (file: { content?: string; name?: string; type?: string }) =>
-        Promise.resolve(new File([file.content ?? ''], file.name ?? 'data.csv'))
+      (file: { name?: string }) =>
+        Promise.resolve(new File([''], file.name ?? 'data.csv'))
     );
     datasetsStore.clear();
     datasetsStore.restorePersistedViewState(undefined);
@@ -281,7 +283,7 @@ describe('datasetsStore persisted view state', () => {
 
     await datasetsStore.addFile(
       makeUploadedFile('source-asset', 'data.csv', {
-        content: undefined,
+        originalFile: undefined,
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'legacy_data_csv_123',
@@ -316,7 +318,7 @@ describe('datasetsStore persisted view state', () => {
 
     await datasetsStore.addFile(
       makeUploadedFile('source-asset-joined', 'data.csv', {
-        content: undefined,
+        originalFile: undefined,
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'joined_data_csv_123',
@@ -403,7 +405,7 @@ describe('datasetsStore persisted view state', () => {
   it('reuses a fresh preprocessed table when project save already created an asset ref', async () => {
     await datasetsStore.addFile(
       makeUploadedFile('source-fresh-asset', 'data.csv', {
-        content: 'country\nFrance',
+        originalFile: new File(['country\nFrance'], 'data.csv'),
         type: 'text/csv',
         fileType: FileType.CSV,
         duckdbTableName: 'fresh_data_csv_123',

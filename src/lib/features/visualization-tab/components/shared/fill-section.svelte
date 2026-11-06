@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { untrack, type Snippet } from 'svelte';
+  import { type Snippet, untrack } from 'svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -36,9 +36,9 @@
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import { buildFillModeItems } from './fill-mode-presets';
   import {
-    DEFAULT_COMMON_ASPECT,
     type CategoriesAspectVariant,
-    type CategoriesCommonAspect
+    type CategoriesCommonAspect,
+    DEFAULT_COMMON_ASPECT
   } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
@@ -62,7 +62,6 @@
     missingDataPattern?: boolean;
     missingDataPatternConfig?: PatternPaletteConfig;
     showOpacitySlider?: boolean;
-    showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
     opacityInputWidth?: string;
     sectionTitle?: string;
@@ -118,7 +117,6 @@
     missingDataPattern = false,
     missingDataPatternConfig,
     showOpacitySlider = true,
-    showOpacityBounds = false,
     showMissingDataSection = true,
     opacityInputWidth = '128px',
     sectionTitle,
@@ -392,7 +390,6 @@
     max={SLIDER_LIMITS.opacity.max}
     step={SLIDER_LIMITS.opacity.step}
     value={fillOpacity}
-    showMinMax={showOpacityBounds}
     inputWidth={opacityInputWidth}
     onchange={onFillOpacityChange}
   />

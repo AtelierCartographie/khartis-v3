@@ -18,26 +18,12 @@ import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
 import type { DatasetsState } from './datasets-state.svelte';
-import { startProcessing, endProcessing } from './datasets-state.svelte';
+import { endProcessing, startProcessing } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { projectStore } from '../project.store.svelte';
 import { visualizationStore } from '../visualization.store.svelte';
-
-function cloneContent(
-  content: UploadedFile['content']
-): UploadedFile['content'] | undefined {
-  if (typeof content === 'string') {
-    return content;
-  }
-
-  if (content instanceof ArrayBuffer) {
-    return content.slice(0);
-  }
-
-  return undefined;
-}
 
 function clonePlainValue<T>(value: T): T {
   if (
@@ -56,21 +42,6 @@ function clonePlainValue<T>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [key, clonePlainValue(item)])
   ) as T;
-}
-
-function cloneRelatedFilesData(
-  relatedFilesData: UploadedFile['relatedFilesData']
-): UploadedFile['relatedFilesData'] | undefined {
-  if (!relatedFilesData) {
-    return undefined;
-  }
-
-  return Object.fromEntries(
-    Object.entries(relatedFilesData).map(([name, buffer]) => [
-      name,
-      buffer.slice(0)
-    ])
-  );
 }
 
 function buildStatisticsFromDataset(
@@ -105,7 +76,7 @@ export async function resetDataset(
     return false;
   }
 
-  if (!sourceFile.content && !sourceFile.originalFile && !sourceFile.assetRef) {
+  if (!sourceFile.originalFile && !sourceFile.assetRef) {
     return false;
   }
 
@@ -261,7 +232,6 @@ export async function duplicateDataset(
       companionAssetRefs: originalFile?.companionAssetRefs
         ? clonePlainValue(originalFile.companionAssetRefs)
         : undefined,
-      content: cloneContent(originalFile?.content),
       originalFile: originalFile?.originalFile,
       relatedFileObjects: originalFile?.relatedFileObjects
         ? [...originalFile.relatedFileObjects]
@@ -269,7 +239,6 @@ export async function duplicateDataset(
       relatedFiles: originalFile?.relatedFiles
         ? [...originalFile.relatedFiles]
         : undefined,
-      relatedFilesData: cloneRelatedFilesData(originalFile?.relatedFilesData),
       archiveLayerSnapshot: originalFile?.archiveLayerSnapshot,
       enrichmentSnapshot: originalFile?.enrichmentSnapshot,
       joinedColumnOrigins: originalFile?.joinedColumnOrigins

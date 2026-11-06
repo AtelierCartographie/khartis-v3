@@ -9,9 +9,6 @@
     min?: number;
     max?: number;
     step?: number;
-    showMinMax?: boolean;
-    minLabel?: string | number;
-    maxLabel?: string | number;
     inputWidth?: string;
     disabled?: boolean;
     id?: string;
@@ -27,9 +24,6 @@
     min = 0,
     max = 100,
     step = 1,
-    showMinMax = false,
-    minLabel,
-    maxLabel,
     inputWidth = '128px',
     disabled = false,
     id,
@@ -55,9 +49,6 @@
     min={min}
     max={max}
     step={step}
-    showMinMax={showMinMax}
-    minLabel={minLabel}
-    maxLabel={maxLabel}
     inputWidth={inputWidth}
     disabled={disabled}
     id={id}

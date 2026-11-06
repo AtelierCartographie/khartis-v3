@@ -3,21 +3,21 @@ import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
-  visualizationStore,
-  getTextPrimitive
+  getTextPrimitive,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 import type { Deck, View } from '@deck.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { motif } from '@ateliercartographie/motif.js';
 import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
+import { motif } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
-  resolveMotifOptions,
-  stripSvgDefsWrapper,
   PATTERN_TYPE_MAP,
-  type PatternName
+  type PatternName,
+  resolveMotifOptions,
+  stripSvgDefsWrapper
 } from '$lib/features/map/layers/pattern-texture';
 import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
@@ -33,6 +33,26 @@ import { computeTextLines, measureTextWidth } from './text-measure.utils';
 interface ExportOptions {
   width: number;
   height: number;
+}
+
+/**
+ * Where the single map lands in the exported image: an export pixel is
+ * `offset + scale × map viewport pixel` (the logical pixels of
+ * `projectDataToViewportPx` and `map.project`). Absent for a collection of
+ * maps.
+ */
+export interface MapExportPlacement {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+export interface MapExportRequest extends Partial<ExportOptions> {
+  onMapPlacement?: (placement: MapExportPlacement) => void;
+  /** SVG: add the map frame as an empty rectangle layer, to line up exports. */
+  georeferenceFrame?: boolean;
 }
 
 interface RelativeRect {
@@ -1551,7 +1571,7 @@ function serializePointLayer(
   const barWidth = getLayerNumber(props, 'barWidth', 6);
   const layerId = getLayerId(layer, 0);
   const dedupeId = createSvgIdDeduper();
-  const parts: string[] = [];
+  const symbols: SvgPointSymbol[] = [];
 
   for (let index = 0; index < length; index++) {
     const position = readBinaryTuple(positionAttribute, index);
@@ -1617,18 +1637,161 @@ function serializePointLayer(
       ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
       : '';
 
-    parts.push(
+    symbols.push({
+      shape,
+      x: projected[0],
+      y: projected[1],
+      radius,
+      fillColor,
+      strokeColor,
+      strokeWidth,
+      nameAttribute
+    });
+  }
+
+  if (props.knockout === true) {
+    return serializeKnockoutPointSymbols(symbols, barWidth, layerId);
+  }
+
+  return symbols
+    .map((symbol) =>
       serializePointShape(
-        shape,
-        projected[0],
-        projected[1],
-        radius,
-        fillAttributes(fillColor, null),
-        colorAttributes('stroke', strokeColor),
-        strokeWidth,
+        symbol.shape,
+        symbol.x,
+        symbol.y,
+        symbol.radius,
+        fillAttributes(symbol.fillColor, null),
+        colorAttributes('stroke', symbol.strokeColor),
+        symbol.strokeWidth,
         barWidth,
-        nameAttribute
+        symbol.nameAttribute
       )
+    )
+    .join('');
+}
+
+interface SvgPointSymbol {
+  shape: number;
+  x: number;
+  y: number;
+  radius: number;
+  fillColor: SvgColor;
+  strokeColor: SvgColor;
+  strokeWidth: number;
+  nameAttribute: string;
+}
+
+function sharedOpacity(colors: SvgColor[]): number | null {
+  const first = colors[0]?.opacity;
+  if (first === undefined) return null;
+  return colors.every((color) => Math.abs(color.opacity - first) < 1e-3)
+    ? first
+    : null;
+}
+
+// SVG has no knockout group. Painted opaque in drawing order, fills and strokes
+// each show the topmost symbol's color; two masks, built in the same order,
+// keep the pixels where the topmost symbol is a fill, respectively a stroke.
+// The shared opacity then goes on each group, so the result matches the
+// WebGL knockout exactly whenever fills, and strokes, share one opacity.
+function serializeKnockoutPointSymbols(
+  symbols: SvgPointSymbol[],
+  barWidth: number,
+  layerId: string
+): string {
+  if (symbols.length === 0) return '';
+
+  const shapeOf = (
+    symbol: SvgPointSymbol,
+    fill: string,
+    stroke: string,
+    nameAttribute = ''
+  ) =>
+    serializePointShape(
+      symbol.shape,
+      symbol.x,
+      symbol.y,
+      symbol.radius,
+      fill,
+      stroke,
+      symbol.strokeWidth,
+      barWidth,
+      nameAttribute
+    );
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const symbol of symbols) {
+    // Linear shapes rise two radii above their anchor.
+    const reach = symbol.radius * 2 + symbol.strokeWidth;
+    minX = Math.min(minX, symbol.x - reach);
+    minY = Math.min(minY, symbol.y - reach);
+    maxX = Math.max(maxX, symbol.x + reach);
+    maxY = Math.max(maxY, symbol.y + reach);
+  }
+  const maskBounds = `maskUnits="userSpaceOnUse" x="${roundSvgCoord(minX)}" y="${roundSvgCoord(minY)}" width="${roundSvgCoord(maxX - minX)}" height="${roundSvgCoord(maxY - minY)}"`;
+
+  const baseId = `khartis-knockout-${sanitizeSvgId(layerId)}`;
+  const parts: string[] = [];
+  const visibleFills = symbols.filter((symbol) => symbol.fillColor.opacity > 0);
+  const visibleStrokes = symbols.filter(
+    (symbol) => symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+  );
+  const namesOnStrokes = visibleStrokes.length > 0;
+
+  if (visibleFills.length > 0) {
+    const maskId = `${baseId}-fill-mask`;
+    const groupOpacity = sharedOpacity(visibleFills.map((s) => s.fillColor));
+    const fills = symbols
+      .map((symbol) =>
+        symbol.fillColor.opacity > 0
+          ? shapeOf(
+              symbol,
+              fillAttributes(
+                groupOpacity === null
+                  ? symbol.fillColor
+                  : { ...symbol.fillColor, opacity: 1 },
+                null
+              ),
+              'stroke="none"',
+              namesOnStrokes ? '' : symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#fff"', 'stroke="#000"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${fills}</g>`
+    );
+  }
+
+  if (namesOnStrokes) {
+    const maskId = `${baseId}-stroke-mask`;
+    const groupOpacity = sharedOpacity(
+      visibleStrokes.map((s) => s.strokeColor)
+    );
+    const strokes = symbols
+      .map((symbol) =>
+        symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+          ? shapeOf(
+              symbol,
+              'fill="none"',
+              colorAttributes(
+                'stroke',
+                groupOpacity === null
+                  ? symbol.strokeColor
+                  : { ...symbol.strokeColor, opacity: 1 }
+              ),
+              symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#000"', 'stroke="#fff"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${strokes}</g>`
     );
   }
 
@@ -1781,6 +1944,8 @@ function serializePolygonLayer(
     getBinaryAttribute(data, 'vertexValid');
   const layerOpacity = getLayerNumber(props, 'opacity', 1);
   const layerId = getLayerId(layer, 0);
+  // The territory is stored one row per part; it stays one compound path.
+  const mergesParts = layerId.startsWith(DeckLayerId.BASEMAP_TERRE);
   const groups: PolygonFeatureGroup[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1812,7 +1977,9 @@ function serializePolygonLayer(
     );
     if (fillColor.opacity <= 0) continue;
 
-    const featureId = readFeatureId(data.featureIds, index, startIndices);
+    const featureId = mergesParts
+      ? null
+      : readFeatureId(data.featureIds, index, startIndices);
     const groupKey =
       featureId !== null
         ? `feature:${featureId}`
@@ -3572,6 +3739,59 @@ function buildVisualizationLayer(
   );
 }
 
+// `imageScale` maps page pixels to image pixels: the JPG renders the page
+// unscaled (offsetWidth) at its pixel ratio, the SVG keeps the page's
+// on-screen box as its user units.
+function resolveMapPlacement(
+  pageContainer: HTMLElement,
+  imageScale: number,
+  imageOffset: [number, number],
+  pageUnits: 'unscaled' | 'on-screen'
+): MapExportPlacement | null {
+  if (pageContainer.matches('.facets-page')) {
+    return null;
+  }
+  const canvas = resolveMapCanvas(pageContainer);
+  if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) {
+    return null;
+  }
+
+  const rect = getRelativeRect(canvas, pageContainer);
+  const pageScale =
+    pageUnits === 'unscaled' && pageContainer.offsetWidth > 0
+      ? pageContainer.getBoundingClientRect().width / pageContainer.offsetWidth
+      : 1;
+  const viewportToPage = rect.width / pageScale / canvas.clientWidth;
+
+  return {
+    scale: imageScale * viewportToPage,
+    offsetX: imageOffset[0] + imageScale * (rect.x / pageScale),
+    offsetY: imageOffset[1] + imageScale * (rect.y / pageScale),
+    viewportWidth: canvas.clientWidth,
+    viewportHeight: canvas.clientHeight
+  };
+}
+
+// An empty rectangle on the map frame: the same frame, exported from QGIS
+// out of the georeferencing GeoPackage, lines up on it in a drawing tool.
+function buildGeoreferenceFrameLayer(placement: MapExportPlacement): string {
+  return buildTopLevelLayer(
+    m.svg_export_layer_georeference_frame(),
+    `
+      <rect
+        id="khartis-georeference-frame"
+        x="${roundSvgValue(placement.offsetX)}"
+        y="${roundSvgValue(placement.offsetY)}"
+        width="${roundSvgValue(placement.viewportWidth)}"
+        height="${roundSvgValue(placement.viewportHeight)}"
+        fill="none"
+        stroke="none"
+      />
+    `,
+    createSvgIdDeduper()
+  );
+}
+
 function resolveMapCanvas(
   pageContainer: HTMLElement
 ): HTMLCanvasElement | null {
@@ -3759,7 +3979,7 @@ async function withPreparedMapExport<T>(
 }
 
 export async function exportMapToSvg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   await fontAssetsStore.ensureLoaded();
@@ -3792,15 +4012,32 @@ export async function exportMapToSvg(
       { mapLibreBackgroundDataUrl },
       pageGeometry
     );
+    // The SVG draws deck geometry at its on-screen box plus viewport pixels
+    // (`projectPosition`): placement follows the same convention.
+    const placement =
+      opts.onMapPlacement || opts.georeferenceFrame
+        ? resolveMapPlacement(pageContainer, 1, [0, 0], 'on-screen')
+        : null;
+    if (placement) {
+      opts.onMapPlacement?.({ ...placement, scale: 1 });
+    }
+    const frameLayer =
+      opts.georeferenceFrame && placement
+        ? buildGeoreferenceFrameLayer(placement)
+        : '';
 
-    return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+    const svg = frameLayer
+      ? markup.replace(/<\/svg>\s*$/, `${frameLayer}</svg>`)
+      : markup;
+    return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   });
 }
 
 export async function exportMapToJpg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+  let placement = null as MapExportPlacement | null;
   await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
@@ -3816,6 +4053,9 @@ export async function exportMapToJpg(
       const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
       await prerenderWebgl(pagePixelRatio);
       await freezeCanvases();
+      placement = opts.onMapPlacement
+        ? resolveMapPlacement(pageContainer, pagePixelRatio, [0, 0], 'unscaled')
+        : null;
 
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
@@ -3840,11 +4080,16 @@ export async function exportMapToJpg(
   ctx.fillRect(0, 0, opts.width, opts.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(
-    pageCanvas,
-    Math.round((opts.width - pageCanvas.width) / 2),
-    Math.round((opts.height - pageCanvas.height) / 2)
-  );
+  const drawX = Math.round((opts.width - pageCanvas.width) / 2);
+  const drawY = Math.round((opts.height - pageCanvas.height) / 2);
+  ctx.drawImage(pageCanvas, drawX, drawY);
+  if (placement) {
+    opts.onMapPlacement?.({
+      ...placement,
+      offsetX: placement.offsetX + drawX,
+      offsetY: placement.offsetY + drawY
+    });
+  }
 
   return offscreen.convertToBlob({
     type: 'image/jpeg',

@@ -11,8 +11,8 @@ import {
 } from '$lib/features/commons/pipeline.errors';
 import {
   FetchTimeoutError,
-  REMOTE_FILE_FETCH_TIMEOUT_MS,
-  fetchWithTimeout
+  fetchWithTimeout,
+  REMOTE_FILE_FETCH_TIMEOUT_MS
 } from '$lib/features/commons/utils/fetch-with-timeout';
 
 const REMOTE_FILE_FETCH_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';

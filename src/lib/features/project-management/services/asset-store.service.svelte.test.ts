@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type AssetRef,
   DataSourceType,
-  FileType,
-  type AssetRef
+  FileType
 } from '$lib/features/commons/types/create-project.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -19,10 +19,10 @@ vi.mock('./database-access.service', () => ({
 }));
 
 const {
+  createAssetRefFromFile,
   createFileFromAssetRef,
   ensureUploadedFileAssets,
   persistAssetBlob,
-  persistAssetContent,
   readAssetBytes
 } = await import('./asset-store.service');
 
@@ -345,14 +345,13 @@ describe('asset store errors', () => {
       database as unknown as IDBDatabase
     );
     setStorageEstimate(100 * 1024 * 1024, 0);
-    const legacyAssetRef = await persistAssetContent(
-      '{"type":"FeatureCollection","features":[]}',
-      {
-        originalName: 'cities-points.geojson',
-        mimeType: 'application/geo+json',
-        size: 42,
-        kind: 'primary'
-      }
+    const legacyAssetRef = await createAssetRefFromFile(
+      new File(
+        ['{"type":"FeatureCollection","features":[]}'],
+        'cities-points.geojson',
+        { type: 'application/geo+json' }
+      ),
+      'primary'
     );
 
     const preparedFile = await ensureUploadedFileAssets({

@@ -275,12 +275,84 @@ légendes d'une visualisation tirée du même jeu de données lisent la même li
 ce qui marque le lieu dans chaque carte d'une collection. Les exports ne portent
 jamais cette marque.
 
+## Étape Données : contrôle de la jointure
+
+À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
+fond qui porte ses territoires. Chacun prend la couleur de son statut de
+jointure, celle des catégories du panneau : joint, à vérifier (`check` et
+`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune ligne, en gris clair hachuré, plus discret), y compris le
+territoire qu'une valeur ignorée désignait. Les valeurs
+non reconnues n'ont pas de géométrie et restent dans le panneau.
+
+- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte
+  quand le panneau défile jusqu'à « Jointure assistée par
+  Khartis ». Le fondu suit le défilement (`setRevealProgress`, qui ne recule
+  jamais) et s'achève seul si le panneau ne peut plus défiler ; la jointure
+  reste ensuite affichée pour la session.
+- La carte ne montre que la jointure par entités : quand les coordonnées
+  géographiques sont la référence choisie, il n'y a pas de jointure assistée
+  et rien n'est dessiné.
+- Le statut de chaque territoire est calculé en SQL
+  (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
+  finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
+  le projet.
+- `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
+  fond, entre son sol et ses limites. Les répétés portent une trame de croix,
+  car rouge et vert se confondent pour un daltonien. Motifs, contours et repères suivent le
+  zoom de la page (`pageDisplayScale`), comme les autres marques.
+- Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
+  repère ponctuel.
+- Le panneau ouvre un seul accordéon de catégorie à la fois ; ouvrir une
+  catégorie ne filtre pas la carte.
+- La carte suit aussi ce que le panneau tient sans l'avoir encore appliqué
+  (`buildPendingJoinMappings`) : une suggestion « à vérifier » remplacée par une
+  autre entité, ou une association effacée parmi les entités jointes, qui laisse
+  la valeur sans territoire. Tant qu'une association reste effacée, sa liste est
+  en erreur, une notification d'erreur remplace la validation et le bouton
+  Visualiser est désactivé.
+- Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
+  le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
+  la carte, sans reconstruire les couches.
+- L'infobulle donne le statut, puis, côte à côte comme une ligne des tableaux
+  de jointure, la valeur des données tabulaires (ou du fichier importé) et le
+  nom sur le fond ; épinglée, elle ajoute les autres données jointes, une
+  variable par ligne, et ombre ses bords quand elle défile.
+- La carte suit la variable liée du panneau : tant que la jointure finalisée
+  porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
+  variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.
+- En entrant dans l'étape Données ou en la quittant, la dernière image de la
+  carte s'efface en fondu au-dessus de la nouvelle
+  (`join-control-step-fade.svelte`), sauf mouvement réduit.
+- Rien de cela n'entre dans un export.
+
 ## Habillage et facettes
 
 Légendes, annotations, échelle, orientation, indications géographiques et
 éléments de page sont des overlays DOM ou SVG, pas des couches Deck.gl. Ils
 sont persistés et exportés sans toucher la géométrie ni le moteur. L'export
 passe par `globalState.isMapExporting`, jamais par un changement d'étape.
+
+La page porte deux zones distinctes, enregistrées dans l'état du Format en
+unités de page. Les marges (`margins`) délimitent la zone de mise en page :
+grille, textes de page, légendes et indications géographiques s'y placent. Le
+cadre de la carte (`mapFrame`) délimite le canevas de la carte et de la
+collection de cartes, et c'est lui que l'export rend. Changer les marges ne
+déplace pas la carte. Les bords gris de l'étape Habillage modifient le cadre :
+tirer un bord recadre la carte sans la redessiner (vue manuelle). Les bords de
+la page, juste à l'extérieur, la redimensionnent de la même manière ; la page
+reste centrée et grandit des deux côtés.
+
+Tant que la vue est automatique, un réajustement (données, fond, projection,
+format de page) colle le cadre à la carte dessinée, sans espace, dans la zone
+des marges. Après chaque mise à jour des calques, `measureDrawnExtent` mesure
+les positions binaires des calques Deck.gl ; `resolveFittedMapFrame` garde la
+partie de cette emprise que l'ajustement automatique montre, l'agrandit
+jusqu'aux marges et en déduit le cadre et la vue de base : un zoom au-delà de
+l'ajustement de la référence et un centre, affichés à 100 % et rétablis par la
+réinitialisation du zoom. La vue enregistrée garde cette vue de base et le fait
+qu'elle est automatique ; un projet antérieur, sans ces champs, rouvre en vue
+manuelle comme avant. Avec MapLibre, la carte remplit tout cadre et le cadre
+automatique est la zone des marges.
 
 Les facettes (collection de cartes) partagent une instance Deck.gl, avec une
 `OrthographicView` par facette. Elles sont toujours rendues en mode

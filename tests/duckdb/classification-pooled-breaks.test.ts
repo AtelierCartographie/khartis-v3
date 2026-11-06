@@ -26,7 +26,11 @@ vi.mock('$lib/features/duckdb', () => ({
 }));
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
-  ClassificationMethod: { EQUAL_INTERVAL: 'equal_interval' }
+  ClassificationMethod: {
+    EQUAL_INTERVAL: 'equal_interval',
+    KMEANS: 'kmeans',
+    QUANTILES: 'quantiles'
+  }
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
@@ -46,12 +50,15 @@ import {
   calculateBreaks,
   calculateCalendarBreakCounts,
   calculateCalendarBreaks,
+  calculateDateDataBreaks,
   isTemporalColumn,
   detectDivergingBreakpoint
 } from '$lib/features/commons/services/classification.service';
 import type { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const EQUAL_INTERVAL = 'equal_interval' as ClassificationMethod;
+const KMEANS = 'kmeans' as ClassificationMethod;
+const QUANTILES = 'quantiles' as ClassificationMethod;
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 beforeAll(async () => {
@@ -59,7 +66,7 @@ beforeAll(async () => {
   await state.db.connection.run(breaksMacros);
   await run(
     state.db,
-    "CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020, i::DOUBLE AS gain, (-i)::DOUBLE AS loss, DATE '2020-03-15' + (i * 40)::INTEGER AS d2020, DATE '2023-01-01' + (i * 40)::INTEGER AS d2023, TIMESTAMPTZ '2021-06-29 23:30:00+00' + to_days(i::INTEGER) AS ts FROM range(1, 11) t(i)"
+    "CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020, i::DOUBLE AS gain, (-i)::DOUBLE AS loss, DATE '2020-03-15' + (i * 40)::INTEGER AS d2020, DATE '2023-01-01' + (i * 40)::INTEGER AS d2023, DATE '2021-01-01' + to_months(((i - 1) // 2)::INTEGER) AS ym, TIMESTAMPTZ '2021-06-29 23:30:00+00' + to_days(i::INTEGER) AS ts FROM range(1, 11) t(i)"
   );
 });
 
@@ -229,5 +236,96 @@ describe('calculateBreaks over pooled columns', () => {
       "SELECT table_name FROM duckdb_tables() WHERE table_name LIKE 'kh_classification_%'"
     );
     expect(tables).toEqual([]);
+  });
+});
+
+describe('date classification around a pivot and from the data', () => {
+  const pivot = Date.parse('2020-09-01T00:00:00Z');
+  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+  const isMidnight = (ms: number) => ms % 86_400_000 === 0;
+
+  it('should count calendar steps from the pivot date and split the ramp there', async () => {
+    const result = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      maxClasses: 6,
+      anchor: pivot
+    });
+
+    expect(result?.breaks).toContain(pivot);
+    expect(result!.breaks.map(isoDay).every((day) => day.endsWith('-01'))).toBe(
+      true
+    );
+    expect(result?.breakpointLowerClassCount).toBe(
+      result!.breaks.indexOf(pivot) + 1
+    );
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should snap k-means date thresholds to calendar days and keep every value', async () => {
+    const result = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      method: KMEANS,
+      numClasses: 3
+    });
+
+    expect(result?.breaks).toHaveLength(2);
+    expect(result!.breaks.every(isMidnight)).toBe(true);
+    expect(result!.counts).toHaveLength(3);
+    expect(result!.counts.every((count) => count > 0)).toBe(true);
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should run k-means on each side of a pivot date', async () => {
+    const result = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      method: KMEANS,
+      numClasses: 4,
+      breakpointValue: pivot,
+      lowerClassCount: 1
+    });
+
+    expect(result?.breaks[0]).toBe(pivot);
+    expect(result?.breakpointLowerClassCount).toBe(1);
+    expect(result?.counts).toHaveLength(4);
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should snap date quantiles to calendar days and keep both classes populated', async () => {
+    const result = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'd2020',
+      method: QUANTILES,
+      numClasses: 2
+    });
+
+    expect(result?.breaks).toHaveLength(1);
+    expect(isMidnight(result!.breaks[0])).toBe(true);
+    expect(result?.counts).toHaveLength(2);
+    expect(result!.counts.every((count) => count >= 4)).toBe(true);
+    expect(sum(result!.counts)).toBe(10);
+  });
+
+  it('should keep a year-month column on month steps and month thresholds', async () => {
+    const calendar = await calculateCalendarBreaks({
+      datasetId: 'source',
+      columnName: 'ym',
+      maxClasses: 12
+    });
+    expect(calendar?.calendarPrecision).toBe('month');
+    expect(calendar?.calendarStep?.unit).toBe('month');
+
+    const quantiles = await calculateDateDataBreaks({
+      datasetId: 'source',
+      columnName: 'ym',
+      method: QUANTILES,
+      numClasses: 3
+    });
+    expect(quantiles?.calendarPrecision).toBe('month');
+    expect(
+      quantiles!.breaks.map(isoDay).every((day) => day.endsWith('-01'))
+    ).toBe(true);
   });
 });

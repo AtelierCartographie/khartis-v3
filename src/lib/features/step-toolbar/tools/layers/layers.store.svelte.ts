@@ -6,10 +6,10 @@ import {
   getSymbolFillClassification,
   getSymbolPrimitive,
   getTextPrimitive,
-  PrimitiveFilterType,
   type PrimitiveFilter,
-  visualizationStore,
-  type VisualizationConfig
+  PrimitiveFilterType,
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   createReadonlyStateFacade,
@@ -21,19 +21,19 @@ import {
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  BASEMAP_LAYER_ID,
+  basemapAuxLayersStore,
+  type BasemapLayer,
+  type BasemapLayerConfig,
+  type BasemapLayerId,
+  basemapLayersStore,
+  type BasemapMetadata,
+  basemapService,
   BasemapStyle,
   DEFAULT_TILED_BASEMAP_STYLE,
-  basemapAuxLayersStore,
-  basemapLayersStore,
-  basemapService,
-  osmBasemapStore,
-  type BasemapLayer,
-  type BasemapMetadata,
-  BASEMAP_LAYER_ID,
   getBasemapRenderGroup,
   getPreferredBasemapFile,
-  type BasemapLayerConfig,
-  type BasemapLayerId
+  osmBasemapStore
 } from '$lib/features/map';
 import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -64,12 +64,12 @@ import {
   buildTiledBasemapLayerId,
   buildVisualizationSubLayerId,
   getCustomBaseLayerType,
-  TILED_BASEMAP_LABELS_GROUP_ID,
   isBasemapLayersToolRenderableType,
   isPerKeyAuxLayerType,
   mapMetadataLayerTypeToBasemapLayerId,
   mergeLayerOrder,
-  resolveBasemapConfigRowId
+  resolveBasemapConfigRowId,
+  TILED_BASEMAP_LABELS_GROUP_ID
 } from '$lib/features/map/utils/layer-panel-row.utils';
 import { layerOrderStore } from './layer-order.store.svelte';
 

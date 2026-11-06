@@ -7,7 +7,7 @@ en navigateur, la CI et les hooks git.
 
 ## Environnement
 
-Node.js `>=22 <25`, pnpm `>=10` par Corepack. `pnpm install` lance
+Node.js `>=22 <27`, pnpm `>=10` par Corepack. `pnpm install` lance
 `pnpm download:extensions`, qui télécharge les extensions DuckDB `spatial`,
 `httpfs`, `parquet` et `json` pour les deux bundles WASM (`eh` et `mvp`) dans
 `static/duckdb-extensions/`. Ne pas modifier ces fichiers à la main : le
