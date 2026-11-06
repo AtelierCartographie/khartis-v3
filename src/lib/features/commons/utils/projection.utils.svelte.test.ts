@@ -154,6 +154,36 @@ describe('fitProjectionToBbox', () => {
   });
 });
 
+describe('fitProjectionToBbox on a projection that hides part of the sphere', () => {
+  it('fits the visible disc when the extent runs past the horizon', async () => {
+    const { fitProjectionToBbox } = await import('./projection.utils');
+    const projection = d3Geo.geoOrthographic().rotate([-10, -20]);
+
+    fitProjectionToBbox(projection, [-180, -58, 180, 84], 800, 600, 20);
+    const [[minX, minY], [maxX, maxY]] = d3Geo
+      .geoPath(projection)
+      .bounds({ type: 'Sphere' });
+
+    expect(minX).toBeGreaterThanOrEqual(19.9);
+    expect(minY).toBeGreaterThanOrEqual(19.9);
+    expect(maxX).toBeLessThanOrEqual(780.1);
+    expect(maxY).toBeLessThanOrEqual(580.1);
+    expect(maxY - minY).toBeGreaterThan(559);
+  });
+
+  it('keeps fitting an extent that lies inside the visible cap', async () => {
+    const { fitProjectionToBbox } = await import('./projection.utils');
+    const projection = d3Geo.geoOrthographic().rotate([-10, -50]);
+
+    fitProjectionToBbox(projection, [-5, 40, 25, 60], 800, 600, 20);
+    const [[minX], [maxX]] = d3Geo
+      .geoPath(projection)
+      .bounds({ type: 'Sphere' });
+
+    expect(maxX - minX).toBeGreaterThan(1500);
+  });
+});
+
 describe('resolveProjectionDefaultOrientation', () => {
   it('keeps the intrinsic orientation of a d3 suggestion config', async () => {
     const { resolveProjectionDefaultOrientation } =

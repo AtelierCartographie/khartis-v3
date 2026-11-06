@@ -322,6 +322,28 @@ describe('user projection utils', () => {
     expect(projection.rotate()[1]).toBeCloseTo(-8);
   });
 
+  it('keeps an orthographic turned away from the extent the user faced it to', () => {
+    const projection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'orthographic',
+          overrideActive: true,
+          customCode: undefined,
+          center: [120, 0],
+          longitude: 120,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-180, -58, 180, 84],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    expect(projection.rotate()[0]).toBeCloseTo(-120);
+  });
+
   it('applies non-neutral user center values to finite projected coordinates', () => {
     const baseProjection = asGeoProjection(
       resolveUserProjectionOverride({
