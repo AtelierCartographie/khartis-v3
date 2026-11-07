@@ -286,7 +286,13 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   `khartis_etiquette`, `khartis_decalage_x_mm` et `khartis_decalage_y_mm`
   qui pilotent l'étiquetage QGIS.
 - L'ordre des couches est celui du panneau Calques : `mergeLayerOrder` sur les
-  lignes du panneau, ordre manuel compris.
+  lignes du panneau, ordre manuel compris. Une collection de cartes exporte
+  ses cartes (pas la visualisation d'origine), dans une liste unique à l'ordre
+  de la carte, avec un thème de carte QGIS par carte.
+- Une projection composite s'exporte dans le SCR du territoire principal, les
+  encarts à leur position réelle ; le mémo et la boîte d'export le disent.
+- Graticule et équateur : lignes remarquables du catalogue, ou lignes que la
+  carte génère (`getGraticuleGeoJSON`), reprojetées comme le reste.
 - Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
   applique à l'ouverture. Les classes sont des règles qui reprennent
   exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans

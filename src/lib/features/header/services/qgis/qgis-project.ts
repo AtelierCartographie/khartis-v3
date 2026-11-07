@@ -4,6 +4,8 @@ import type { QgisLayerGeometry } from './qgis-style';
 
 export interface QgisProjectLayer {
   name: string;
+  /** The map of a collection the layer draws; a map theme switches maps. */
+  group?: string;
   table: string;
   geometry: QgisLayerGeometry;
   style: QmlLayerStyle;
@@ -49,17 +51,46 @@ export function buildQgisProject(options: {
   layers: QgisProjectLayer[];
   /** What the canvas shows on opening: [xmin, ymin, xmax, ymax]. */
   extent: [number, number, number, number] | null;
+  /** Canvas colour, `#rrggbb`: the seas of the map. */
+  background?: string;
 }): string {
+  const [red, green, blue] = (
+    options.background?.match(/^#?([0-9a-f]{6})$/i)?.[1] ?? 'ffffff'
+  )
+    .match(/../g)
+    ?.map((channel) => parseInt(channel, 16)) ?? [255, 255, 255];
   const srs = spatialRefSys(options.crs);
   const topFirst = [...options.layers].reverse().map((layer, index) => ({
     ...layer,
     id: `khartis_${index}_${layer.table}`,
     source: `./${options.gpkg}|layername=${layer.table}`
   }));
+  const treeLayer = (layer: (typeof topFirst)[number], checked: boolean) =>
+    `<layer-tree-layer id="${escapeXmlText(layer.id)}" name="${escapeXmlText(layer.name)}" source="${escapeXmlText(layer.source)}" providerKey="ogr" checked="${checked ? 'Qt::Checked' : 'Qt::Unchecked'}" expanded="1"/>`;
+  // The maps of a collection are meant one at a time. They stay in one flat
+  // list, in the stacking order of the map, and a map theme per map shows
+  // its layers with the shared ones; only the first map starts visible.
+  // `layers` lists them bottom first, so the maps come in collection order.
+  const groups = [
+    ...new Set(
+      options.layers.flatMap((layer) => (layer.group ? [layer.group] : []))
+    )
+  ];
   const tree = topFirst
+    .map((layer) => treeLayer(layer, !layer.group || layer.group === groups[0]))
+    .join('');
+  const themes = groups
     .map(
-      (layer) =>
-        `<layer-tree-layer id="${escapeXmlText(layer.id)}" name="${escapeXmlText(layer.name)}" source="${escapeXmlText(layer.source)}" providerKey="ogr" checked="Qt::Checked" expanded="1"/>`
+      (group) =>
+        `<visibility-preset name="${escapeXmlText(group)}" has-checked-group-info="1" has-expanded-info="1">${topFirst
+          .filter((layer) => !layer.group || layer.group === group)
+          .map(
+            (layer) =>
+              `<layer id="${escapeXmlText(layer.id)}" style="default" visible="1" expanded="1"/>`
+          )
+          .join(
+            ''
+          )}<checked-group-nodes/><expanded-group-nodes/></visibility-preset>`
     )
     .join('');
   const mapLayers = topFirst
@@ -87,9 +118,11 @@ export function buildQgisProject(options: {
         ]
       : []),
     `<layer-tree-group>${tree}</layer-tree-group>`,
+    ...(themes ? [`<visibility-presets>${themes}</visibility-presets>`] : []),
     `<projectlayers>${mapLayers}</projectlayers>`,
     // Without ProjectionsEnabled QGIS reads the project as having no CRS.
-    '<properties name="properties"><properties name="Paths"><properties name="Absolute" type="bool">false</properties></properties><properties name="SpatialRefSys"><properties name="ProjectionsEnabled" type="int">1</properties></properties></properties>',
+    '<properties name="properties"><properties name="Paths"><properties name="Absolute" type="bool">false</properties></properties><properties name="SpatialRefSys"><properties name="ProjectionsEnabled" type="int">1</properties></properties>' +
+      `<properties name="Gui"><properties name="CanvasColorRedPart" type="int">${red}</properties><properties name="CanvasColorGreenPart" type="int">${green}</properties><properties name="CanvasColorBluePart" type="int">${blue}</properties></properties></properties>`,
     '</qgis>'
   ].join('\n');
 }

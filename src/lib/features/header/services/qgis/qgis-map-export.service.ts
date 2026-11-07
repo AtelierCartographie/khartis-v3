@@ -46,6 +46,11 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 import { BASEMAP_WATER_FILL_OPACITY_RATIO } from '$lib/features/map/layers/basemap-layers';
 import {
+  getEquatorGeoJSON,
+  getGraticuleGeoJSON
+} from '$lib/features/map/layers/basemap-graticule';
+import { BasemapGraticuleMode } from '$lib/features/commons/constants/visualization.constants';
+import {
   resolveLandConfig,
   resolveMetadataLineStyle
 } from '$lib/features/map/layers/basemap-style-resolve';
@@ -65,6 +70,7 @@ import {
   type MapVectorCrs
 } from '$lib/features/step-toolbar/tools/projections';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   ExportError,
   resolveDatasetGeometrySource,
@@ -123,6 +129,8 @@ async function guardLayer<T>(
 interface ExportedLayer {
   /** The Layers panel row that orders this layer on the map. */
   row: LayerOrderRow;
+  /** The map of a collection it belongs to. */
+  group?: string;
   options: GeoPackageLayerExportOptions;
   title: string;
   plan: QgisLayerPlan;
@@ -331,6 +339,21 @@ async function loadCatalogCentroids(
   return idColumn && columns.has('geom') ? { tableName, idColumn } : null;
 }
 
+function resolveSeaColor(): string | undefined {
+  const sea = basemapLayersStore.layers.find((layer) => layer.id === 'mers');
+  return sea?.id === 'mers' && sea.visible ? sea.color : undefined;
+}
+
+function lineCoordinates(collection: {
+  features: Array<{ geometry: { coordinates: number[][] } }>;
+}): Array<Array<[number, number]>> {
+  return collection.features.map((feature) =>
+    feature.geometry.coordinates.map(
+      ([lon, lat]) => [lon, lat] as [number, number]
+    )
+  );
+}
+
 async function listTableColumns(tableName: string): Promise<Set<string>> {
   const rows = (await Duck.query(
     `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}'`,
@@ -534,7 +557,8 @@ function resolveLabelEdits(
 
 async function exportVisualizationLayers(
   viz: VisualizationConfig,
-  run: ExportRun
+  run: ExportRun,
+  facet?: string
 ): Promise<ExportedLayer[]> {
   const plans = buildVisualizationLayerPlans(
     viz,
@@ -543,12 +567,12 @@ async function exportVisualizationLayers(
   );
   const layers: ExportedLayer[] = [];
   for (const plan of plans) {
-    const title = `${viz.name} – ${primitiveTitle(plan.primitive)}`;
+    const title = `${facet ?? viz.name} – ${primitiveTitle(plan.primitive)}`;
     const layer = await guardLayer(run, title, () =>
       exportPlanLayer(viz, plan, title, run)
     );
     if (layer) {
-      layers.push(layer);
+      layers.push({ ...layer, group: facet });
     }
   }
   return layers;
@@ -562,7 +586,8 @@ interface BasemapExport {
 
 async function exportBasemapTable(options: {
   row: LayerOrderRow;
-  tableName: string;
+  /** A DuckDB table, or lines in lon/lat the map generates itself. */
+  tableName: string | { lines: Array<Array<[number, number]>> };
   title: string;
   plan: QgisLayerPlan;
   sourceCrs: string;
@@ -570,16 +595,30 @@ async function exportBasemapTable(options: {
   srs: Pick<GeoPackageLayerExportOptions, 'sourceCrs' | 'customSrs'>;
   usedNames: Set<string>;
 }): Promise<ExportedLayer> {
-  const available = await listTableColumns(options.tableName);
+  const source = options.tableName;
+  const available =
+    typeof source === 'string'
+      ? await listTableColumns(source)
+      : new Set<string>();
   const columns = BASEMAP_ATTRIBUTE_COLUMNS.filter((column) =>
     available.has(column)
   );
+  const from =
+    typeof source === 'string'
+      ? `"${escapeIdentifier(source)}" d`
+      : `(SELECT ST_GeomFromText(wkt) AS geom FROM (VALUES ${source.lines
+          .filter((line) => line.length >= 2)
+          .map(
+            (line) =>
+              `('LINESTRING (${line.map(([x, y]) => `${Number(x)} ${Number(y)}`).join(', ')})')`
+          )
+          .join(', ')}) AS v(wkt)) d`;
   const { features, dropped } = await queryWithReprojection(
     options.crs,
     options.sourceCrs,
     (reprojection) =>
       queryFeatures({
-        from: `"${escapeIdentifier(options.tableName)}" d`,
+        from,
         geometry: 'd.geom::GEOMETRY',
         columns,
         reprojection
@@ -624,7 +663,7 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
   if (!metadata || !basemapStyleStore.referenceBasemapId) {
     return result;
   }
-  const sourceCrs =
+  const basemapSourceCrs =
     metadata.proj_source && !isWgs84LikeCrs(metadata.proj_source)
       ? metadata.proj_source
       : WGS84;
@@ -656,7 +695,7 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
     if (!config.visible) continue;
     const name = BASEMAP_LAYER_TITLES[config.id]?.() ?? config.id;
     const push = async (
-      tableFile: string,
+      tableFile: string | { lines: Array<Array<[number, number]>> },
       title: string,
       plan: QgisLayerPlan | null,
       metadataLayer: BasemapLayer | null = null
@@ -679,10 +718,13 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
       const layer = await guardLayer(run, title, async () =>
         exportBasemapTable({
           row,
-          tableName: await basemapService.loadGeometryIntoDuckDB(tableFile),
+          tableName:
+            typeof tableFile === 'string'
+              ? await basemapService.loadGeometryIntoDuckDB(tableFile)
+              : tableFile,
+          sourceCrs: typeof tableFile === 'string' ? basemapSourceCrs : WGS84,
           title,
           plan,
-          sourceCrs,
           crs,
           srs,
           usedNames
@@ -787,11 +829,94 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
         }
         break;
       }
+      case 'meridiens':
+      case 'equateur': {
+        // The equator is a graticule mode: it takes the graticule's style.
+        const graticule = basemapLayersStore.layers.find(
+          (layer) => layer.id === 'meridiens'
+        );
+        if (!graticule || graticule.id !== 'meridiens') break;
+        const plan = buildBasemapLinePlan(graticule);
+        if (config.id === 'equateur') {
+          await push(
+            { lines: lineCoordinates(getEquatorGeoJSON()) },
+            name,
+            plan
+          );
+          break;
+        }
+        const geographicLines = ofType(BasemapLayerType.GEOGRAPHIC_LINES);
+        if (
+          graticule.mode === BasemapGraticuleMode.REMARKABLE &&
+          geographicLines.length > 0
+        ) {
+          for (const { layer } of geographicLines) {
+            if (!layer.file) continue;
+            await push(
+              layer.file,
+              `${name} – ${layerTitle(layer, basemapTitle)}`,
+              plan,
+              layer
+            );
+          }
+          break;
+        }
+        const equatorShown = basemapLayersStore.layers.some(
+          (layer) => layer.id === 'equateur' && layer.visible
+        );
+        await push(
+          {
+            lines: lineCoordinates(
+              getGraticuleGeoJSON(
+                graticule.spacingDegrees,
+                BasemapGraticuleMode.REGULAR,
+                equatorShown
+              )
+            )
+          },
+          name,
+          plan
+        );
+        break;
+      }
+      case 'mers':
+        result.skipped.push(
+          m.qgis_basemap_sea_color({
+            color: 'color' in config ? config.color : ''
+          })
+        );
+        break;
       default:
         result.skipped.push(name);
     }
   }
   return result;
+}
+
+interface ExportedVisualization {
+  viz: VisualizationConfig;
+  /** The facet title on the page, for a map of a collection. */
+  facet?: string;
+}
+
+/**
+ * What the map draws: the maps of the collection when one is on (not the
+ * visualization it was generated from), the active visualizations otherwise.
+ */
+function resolveExportedVisualizations(): ExportedVisualization[] {
+  const facets = facetsStore.enabled ? facetsStore.facetVisualizations : [];
+  if (facets.length > 0) {
+    const slotPath = facetsStore.primarySlotPath;
+    return facets.map((viz) => {
+      const variable =
+        (slotPath ? getFacetSlotVariable(viz, slotPath) : undefined) ??
+        viz.name;
+      return { viz, facet: facetsStore.getFacetTitle(variable) ?? variable };
+    });
+  }
+  return visualizationStore.activeVisualizations
+    .filter((viz) => viz.enabled !== false)
+    .map((viz) => ({ viz }));
 }
 
 /**
@@ -801,12 +926,12 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
  */
 function orderLikeTheMap(
   layers: ExportedLayer[],
-  vizs: VisualizationConfig[]
+  vizs: ExportedVisualization[]
 ): ExportedLayer[] {
   const topToBottom = mergeLayerOrder(
     layers.map((layer) => layer.row),
     layerOrderStore.order,
-    vizs.map((viz) => viz.id)
+    vizs.map(({ viz }) => viz.id)
   );
   const rank = new Map(topToBottom.map((id, index) => [id, index]));
   return layers
@@ -887,6 +1012,9 @@ function buildMemo(options: {
   ];
   if (crs.status === 'map') {
     lines.push(m.qgis_memo_crs({ name: crs.crsName, srs: crs.target }));
+    if (crs.composite) {
+      lines.push(m.qgis_memo_crs_composite());
+    }
     if (crs.definition.notes.includes('spherical')) {
       lines.push(m.projection_definition_note_spherical());
     }
@@ -940,7 +1068,6 @@ function buildMemo(options: {
 
 function collectMapNotes(
   crs: MapVectorCrs,
-  vizs: VisualizationConfig[],
   skippedBasemapLayers: string[]
 ): string[] {
   const notes: string[] = [];
@@ -966,9 +1093,7 @@ function collectMapNotes(
 export async function exportMapAsQgisGeoPackage(
   fileName: string
 ): Promise<void> {
-  const vizs = visualizationStore.activeVisualizations.filter(
-    (viz) => viz.enabled !== false
-  );
+  const vizs = resolveExportedVisualizations();
   if (vizs.length === 0) {
     throw new ExportError(m.export_map_error(), m.export_map_no_data());
   }
@@ -994,8 +1119,8 @@ export async function exportMapAsQgisGeoPackage(
   };
   const basemap = await exportBasemapLayers(run);
   layers.push(...basemap.layers);
-  for (const viz of vizs) {
-    layers.push(...(await exportVisualizationLayers(viz, run)));
+  for (const { viz, facet } of vizs) {
+    layers.push(...(await exportVisualizationLayers(viz, run, facet)));
   }
   const filled = orderLikeTheMap(
     layers.filter((layer) => layer.options.features.length > 0),
@@ -1020,7 +1145,7 @@ export async function exportMapAsQgisGeoPackage(
     project,
     crs,
     layers: filled,
-    extraNotes: collectMapNotes(crs, vizs, basemap.skipped),
+    extraNotes: collectMapNotes(crs, basemap.skipped),
     failures: run.failures,
     page: {
       width: format.width * MM_PER_CSS_PX,
@@ -1035,11 +1160,13 @@ export async function exportMapAsQgisGeoPackage(
     gpkg,
     crs,
     extent: computeLayerExtent(thematicFeatures),
+    background: resolveSeaColor(),
     layers: filled.map((layer) => ({
       name: layer.title,
       table: layer.options.layerName,
       geometry: layer.plan.geometry,
-      style: layer.plan.style
+      style: layer.plan.style,
+      group: layer.group
     }))
   });
 

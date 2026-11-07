@@ -296,6 +296,11 @@ export type MapVectorCrs =
       centralMeridian: number;
       /** Lon/lat to CRS, the one the georeferenced image uses. */
       forward: ProjectionForward | null;
+      /**
+       * The map is composite: this is the CRS of its main frame, the insets
+       * keep their real place instead of their own frame.
+       */
+      composite: boolean;
     }
   | {
       status: 'wgs84';
@@ -308,7 +313,13 @@ export type MapVectorCrs =
  */
 export function resolveMapVectorCrs(): MapVectorCrs {
   const context = getCurrentProjectionContext();
-  const definition = resolveCurrentProjectionDefinition(context);
+  const drawn = resolveCurrentProjectionDefinition(context);
+  // A composite map has one CRS per frame; layers can only take one, the
+  // main frame's, which is what a GIS user of that territory works in.
+  const composite = drawn.notes.includes('composite');
+  const definition: ProjectionDefinition = composite
+    ? { ...drawn, notes: drawn.notes.filter((note) => note !== 'composite') }
+    : drawn;
   const target = resolveSrs(definition);
   const crsName = resolveCurrentProjectionDisplay(
     context.state,
@@ -334,7 +345,8 @@ export function resolveMapVectorCrs(): MapVectorCrs {
     centralMeridian: definition.proj4
       ? getProjectionCodeCentralMeridian(definition.proj4)
       : 0,
-    forward: createCurrentProjectionForward(context, definition)
+    forward: createCurrentProjectionForward(context, definition),
+    composite
   };
 }
 
