@@ -22,6 +22,7 @@ import {
   readProjectedCrs
 } from './native-projection.utils';
 import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
+import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import {
   createCurrentProjectionForward,
   isGeoreferenceableDefinition,
@@ -307,6 +308,24 @@ export type MapVectorCrs =
       reason: Exclude<MapGeoreferenceUnavailableReason, 'facets'>;
     };
 
+// A composite preset without an EPSG code still names the projection of its
+// main frame (`mainland`), the one the territory is drawn in.
+function resolveMainFrameProj4(
+  context: ProjectionDefinitionContext
+): string | undefined {
+  const { state, basemapProjection, projectionPresets } = context;
+  const presetId =
+    state.overrideActive === true && state.overrideSource === 'manual'
+      ? getCompositeProjectionPresetId(state.selected)
+      : basemapProjection?.type === 'composite'
+        ? basemapProjection.preset
+        : undefined;
+  const entries = presetId ? projectionPresets?.[presetId]?.entries : undefined;
+  const main =
+    entries?.find((entry) => entry.id === 'mainland') ?? entries?.[0];
+  return main?.proj4.replace(/\s*\+type=crs\b/, '').trim() || undefined;
+}
+
 /**
  * The CRS the map is drawn in, when one exists. A map collection shares one
  * projection, so it does not prevent vector layers from following it.
@@ -318,7 +337,11 @@ export function resolveMapVectorCrs(): MapVectorCrs {
   // main frame's, which is what a GIS user of that territory works in.
   const composite = drawn.notes.includes('composite');
   const definition: ProjectionDefinition = composite
-    ? { ...drawn, notes: drawn.notes.filter((note) => note !== 'composite') }
+    ? {
+        ...drawn,
+        proj4: drawn.proj4 ?? resolveMainFrameProj4(context),
+        notes: drawn.notes.filter((note) => note !== 'composite')
+      }
     : drawn;
   const target = resolveSrs(definition);
   const crsName = resolveCurrentProjectionDisplay(
@@ -329,7 +352,7 @@ export function resolveMapVectorCrs(): MapVectorCrs {
   const geoPackageSrs = resolveGeoPackageSrs(definition, crsName);
   if (!isGeoreferenceableDefinition(definition) || !target || !geoPackageSrs) {
     const reason =
-      NOTE_REASONS.find(([note]) => definition.notes.includes(note))?.[1] ??
+      NOTE_REASONS.find(([note]) => drawn.notes.includes(note))?.[1] ??
       'no-equivalent';
     return {
       status: 'wgs84',
