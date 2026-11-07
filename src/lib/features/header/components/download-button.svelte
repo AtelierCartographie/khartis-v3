@@ -65,7 +65,9 @@
           available: false,
           reason: qgisCrs.reason
         })
-      : null
+      : qgisCrs?.composite
+        ? m.qgis_memo_crs_composite()
+        : null
   );
 
   const currentPageFormatLabel = $derived.by(() => {
