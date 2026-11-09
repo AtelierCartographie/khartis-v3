@@ -105,7 +105,7 @@ import {
 import { getExportDimensionsForPage } from '../../export-dimensions.utils';
 import { EXPORT_RESOLUTION } from '../../types';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
-import { cutAtOppositeMeridian, representativePoint } from './qgis-sql';
+import { cutAtSeam, representativePoint } from './qgis-sql';
 import type { ClassValueKind } from './qgis-classes';
 import type { QmlSymbol, Rgba } from './qml';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
@@ -258,8 +258,7 @@ function buildReprojection(
   if (crs.status !== 'map') {
     return { sql: toWgs84, fallback: null };
   }
-  const cut = (geometry: string) =>
-    cutAtOppositeMeridian(toWgs84(geometry), crs.centralMeridian);
+  const cut = (geometry: string) => cutAtSeam(toWgs84(geometry), crs.seam);
   if (projectInJs) {
     const forward = crs.forward;
     return {

@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { geoRotation } from 'd3-geo';
 import {
-  cutAtOppositeMeridian,
-  representativePoint
+  cutAtSeam,
+  representativePoint,
+  resolveSeamLines
 } from '$lib/features/header/services/qgis/qgis-sql';
 import {
   createTestInstance,
@@ -15,6 +17,61 @@ const ROBINSON_ON_10E = '+proj=robin +lon_0=10 +R=6371000 +units=m +no_defs';
 // A box straddling 170° W, the meridian opposite 10° E.
 const STRADDLING_BOX =
   "ST_GeomFromText('POLYGON((-175 10, -165 10, -165 20, -175 20, -175 10))')";
+const UNTILTED_ON_10E = { longitude: 10, latitude: 0, meridian: 180 };
+
+const wrap = (value: number) => ((((value + 180) % 360) + 360) % 360) - 180;
+
+// Same ob_tran as the projection tool: d3 tilts the sphere by
+// [-longitude, -latitude], then draws the base.
+function obliqueProj4(base: string, longitude: number, latitude: number) {
+  const [poleLongitude, poleLatitude] = geoRotation([-longitude, -latitude, 0])(
+    [0, 90]
+  );
+  const baseLongitude = Number(base.match(/\+lon_0=(\S+)/)?.[1] ?? 0);
+  const inner = base
+    .replace(/^\s*\+proj=/, '')
+    .replace(/\s*\+lon_0=\S+/, '')
+    .replace(/\s*\+no_defs\b/, '');
+  return [
+    `+proj=ob_tran +o_proj=${inner}`,
+    `+o_lon_p=${wrap(-poleLongitude - baseLongitude)}`,
+    `+o_lat_p=${poleLatitude}`,
+    `+lon_0=${wrap(longitude + poleLongitude)}`,
+    '+no_defs'
+  ].join(' ');
+}
+
+// The whole sphere in 10° cells and a meridian every 10°, with a vertex
+// every degree: PROJ draws straight segments between vertices.
+const range = (from: number, to: number, step: number) =>
+  Array.from(
+    { length: Math.round((to - from) / step) + 1 },
+    (_, i) => from + i * step
+  );
+const cellWkt = (x: number, y: number) => {
+  const ring = [
+    ...range(x, x + 10, 1).map((lon) => `${lon} ${y}`),
+    ...range(y + 1, y + 10, 1).map((lat) => `${x + 10} ${lat}`),
+    ...range(x + 9, x, -1).map((lon) => `${lon} ${y + 10}`),
+    ...range(y + 9, y, -1).map((lat) => `${x} ${lat}`)
+  ];
+  return `POLYGON((${ring.join(', ')}))`;
+};
+const fromWkt = (wkts: string[]) =>
+  `(SELECT ST_GeomFromText(wkt) AS geom FROM (VALUES ${wkts.map((wkt) => `('${wkt}')`).join(', ')}) t(wkt))`;
+const WORLD_CELLS = fromWkt(
+  range(-180, 170, 10).flatMap((x) =>
+    range(-90, 80, 10).map((y) => cellWkt(x, y))
+  )
+);
+const WORLD_MERIDIANS = fromWkt(
+  range(-170, 170, 10).map(
+    (x) =>
+      `LINESTRING(${range(-90, 90, 1)
+        .map((lat) => `${x} ${lat}`)
+        .join(', ')})`
+  )
+);
 
 describe('QGIS export SQL', () => {
   let db: TestDuckDB;
@@ -38,7 +95,9 @@ describe('QGIS export SQL', () => {
 
   it('should split a ring across the opposite meridian instead of streaking across the map', async () => {
     const uncut = await projectedParts(STRADDLING_BOX);
-    const cut = await projectedParts(cutAtOppositeMeridian(STRADDLING_BOX, 10));
+    const cut = await projectedParts(
+      cutAtSeam(STRADDLING_BOX, UNTILTED_ON_10E)
+    );
 
     // Unsplit, PROJ wraps one side to the far edge of the world.
     expect(uncut).toHaveLength(1);
@@ -50,8 +109,120 @@ describe('QGIS export SQL', () => {
   });
 
   it('should leave geometry alone when the map is centred on Greenwich', () => {
-    expect(cutAtOppositeMeridian(STRADDLING_BOX, 0)).toBe(STRADDLING_BOX);
+    expect(
+      cutAtSeam(STRADDLING_BOX, { longitude: 0, latitude: 0, meridian: 180 })
+    ).toBe(STRADDLING_BOX);
   });
+
+  it('should follow the turned meridian of a tilted map, through the pole', () => {
+    // Centre 57° E, 50° S: the seam climbs 57° E from 40° N to the pole,
+    // then comes down 123° W to 40° S.
+    const lines = resolveSeamLines({
+      longitude: 57,
+      latitude: -50,
+      meridian: 180
+    });
+    const spans = lines.map((line) => ({
+      longitude: line[0][0],
+      south: Math.min(...line.map(([, lat]) => lat)),
+      north: Math.max(...line.map(([, lat]) => lat))
+    }));
+    expect(spans).toHaveLength(2);
+    const byLongitude = Object.fromEntries(
+      spans.map((span) => [Math.round(span.longitude), span])
+    );
+    expect(byLongitude[57].south).toBeCloseTo(40, 6);
+    expect(byLongitude[57].north).toBe(90);
+    expect(byLongitude[-123].south).toBeCloseTo(-40, 6);
+    expect(byLongitude[-123].north).toBe(90);
+  });
+
+  it('should keep the seam on the turned meridian when it misses the poles', () => {
+    const seam = { longitude: 20, latitude: 30, meridian: 190 };
+    const turn = geoRotation([-seam.longitude, -seam.latitude, 0]);
+    const lines = resolveSeamLines(seam);
+    for (const line of lines) {
+      for (let i = 0; i < line.length; i++) {
+        const [lon, lat] = turn(line[i]);
+        if (Math.abs(lat) < 89.9) {
+          expect(Math.abs(wrap(lon - 190))).toBeLessThan(1e-6);
+        }
+        // Planar segments short enough to follow the great circle.
+        if (i > 0) {
+          expect(Math.abs(line[i][0] - line[i - 1][0])).toBeLessThan(1);
+        }
+      }
+    }
+  });
+
+  // Consecutive vertices that land far apart on the map, away from the turned
+  // poles (drawn as a line, which a ring around them follows): a streak.
+  async function streaks(
+    from: string,
+    cut: (geometry: string) => string,
+    target: string,
+    seam: { longitude: number; latitude: number }
+  ) {
+    const rows = (await query(
+      db,
+      `SELECT ST_AsText(part.geom) AS source,
+              ST_AsText(ST_Transform(part.geom, 'EPSG:4326', '${target}', true)) AS projected
+       FROM (SELECT UNNEST(ST_Dump(${cut('geom')})) AS part FROM ${from})`
+    )) as Array<{ source: string; projected: string }>;
+    const turn = geoRotation([-seam.longitude, -seam.latitude, 0]);
+    const points = (wkt: string) =>
+      [...wkt.matchAll(/(-?[\d.e]+) (-?[\d.e]+)/g)].map(
+        (match): [number, number] => [Number(match[1]), Number(match[2])]
+      );
+    let count = 0;
+    for (const row of rows) {
+      const source = points(row.source);
+      const projected = points(row.projected);
+      for (let i = 1; i < projected.length; i++) {
+        const nearPole = [source[i - 1], source[i]].some(
+          (point) => Math.abs(turn(point)[1]) > 89
+        );
+        if (
+          !nearPole &&
+          Math.abs(projected[i][0] - projected[i - 1][0]) > 8_000_000
+        ) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
+  it.each([
+    [
+      'Equal Earth tilted to 57° E, 50° S',
+      '+proj=eqearth +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs',
+      57,
+      -50
+    ],
+    [
+      'Robinson on 10° E tilted to 20° E, 30° N',
+      '+proj=robin +lon_0=10 +R=6371000 +units=m +no_defs',
+      20,
+      30
+    ]
+  ])(
+    'should not streak polygons nor lines across %s',
+    async (_name, base, longitude, latitude) => {
+      const target = obliqueProj4(base, longitude, latitude);
+      const baseLongitude = Number(base.match(/\+lon_0=(\S+)/)?.[1] ?? 0);
+      const seam = { longitude, latitude, meridian: baseLongitude + 180 };
+      const keep = (geometry: string) => geometry;
+      const cut = (geometry: string) => cutAtSeam(geometry, seam);
+
+      expect(await streaks(WORLD_CELLS, keep, target, seam)).toBeGreaterThan(0);
+      expect(await streaks(WORLD_CELLS, cut, target, seam)).toBe(0);
+      expect(
+        await streaks(WORLD_MERIDIANS, keep, target, seam)
+      ).toBeGreaterThan(0);
+      expect(await streaks(WORLD_MERIDIANS, cut, target, seam)).toBe(0);
+    }
+  );
 
   it('should put the symbol inside a polygon whose centroid falls outside it', async () => {
     const horseshoe =

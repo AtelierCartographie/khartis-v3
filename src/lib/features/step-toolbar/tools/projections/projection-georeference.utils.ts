@@ -297,8 +297,8 @@ export type MapVectorCrs =
       /** For `ST_Transform`: an EPSG code, the pasted WKT or a PROJ.4 string. */
       target: string;
       geoPackageSrs: GeoPackageSrs;
-      /** Meridian opposite the cut d3 makes in lon/lat geometry. */
-      centralMeridian: number;
+      /** Where d3 cuts lon/lat geometry before projecting it. */
+      seam: MapSeam;
       /** Lon/lat to CRS, the one the georeferenced image uses. */
       forward: ProjectionForward | null;
       /**
@@ -311,6 +311,35 @@ export type MapVectorCrs =
       status: 'wgs84';
       reason: Exclude<MapGeoreferenceUnavailableReason, 'facets'>;
     };
+
+/**
+ * Where d3 cuts the sphere: the map turns it by [-longitude, -latitude],
+ * then the projection splits it along `meridian` of that turned sphere.
+ */
+export interface MapSeam {
+  longitude: number;
+  latitude: number;
+  meridian: number;
+}
+
+function resolveMapSeam(definition: ProjectionDefinition): MapSeam {
+  const { obliqueBase } = definition;
+  if (obliqueBase) {
+    // The base CRS keeps its own central meridian after the tilt.
+    return {
+      longitude: obliqueBase.longitude,
+      latitude: obliqueBase.latitude,
+      meridian: getProjectionCodeCentralMeridian(obliqueBase.proj4) + 180
+    };
+  }
+  return {
+    longitude: definition.proj4
+      ? getProjectionCodeCentralMeridian(definition.proj4)
+      : 0,
+    latitude: 0,
+    meridian: 180
+  };
+}
 
 // A composite preset without an EPSG code still names the projection of its
 // main frame (`mainland`), the one the territory is drawn in.
@@ -381,9 +410,7 @@ export function resolveMapVectorCrs(): MapVectorCrs {
     definition,
     target,
     geoPackageSrs,
-    centralMeridian: definition.proj4
-      ? getProjectionCodeCentralMeridian(definition.proj4)
-      : 0,
+    seam: resolveMapSeam(definition),
     forward: createCurrentProjectionForward(context, definition),
     composite
   };
