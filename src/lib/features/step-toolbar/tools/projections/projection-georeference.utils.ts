@@ -332,6 +332,10 @@ function resolveMapSeam(definition: ProjectionDefinition): MapSeam {
       meridian: getProjectionCodeCentralMeridian(obliqueBase.proj4) + 180
     };
   }
+  if (definition.builtInOrientation) {
+    const [longitude, latitude] = definition.builtInOrientation;
+    return { longitude, latitude, meridian: 180 };
+  }
   return {
     longitude: definition.proj4
       ? getProjectionCodeCentralMeridian(definition.proj4)
