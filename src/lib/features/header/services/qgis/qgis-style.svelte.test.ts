@@ -20,10 +20,11 @@ import {
   buildVisualizationLayerPlans,
   type QgisStyleContext
 } from './qgis-style';
-import { buildQml, MM_PER_CSS_PX } from './qml';
+import { buildQml, MM_PER_PAGE_UNIT } from './qml';
 import { transformWkb } from './wkb-transform';
 import { resolveQgisPattern } from './qgis-patterns';
 import { DOUBLE_SYMBOL_FIELDS } from './qgis-style';
+import { fitExtent, parseLegendItemId } from './qgis-page-layout';
 
 function classOf(
   value: number,
@@ -255,7 +256,7 @@ describe('QGIS layer plans', () => {
     // Stroke width is stored in style units and drawn at width / 4.
     const stroke = renderer.rules[0].symbol.layers[0];
     expect(stroke.kind === 'fill' && stroke.stroke?.widthMm).toBeCloseTo(
-      0.5 * MM_PER_CSS_PX
+      0.5 * MM_PER_PAGE_UNIT
     );
   });
 
@@ -279,7 +280,7 @@ describe('QGIS layer plans', () => {
       expect(
         evaluateNumericExpression(sizeExpression, { population: value })
       ).toBeCloseTo(
-        2 * getProportionalSymbolSizeForValue(value, 400, 20) * MM_PER_CSS_PX
+        2 * getProportionalSymbolSizeForValue(value, 400, 20) * MM_PER_PAGE_UNIT
       );
     }
     expect(renderer.orderBy?.ascending).toBe(false);
@@ -301,11 +302,11 @@ describe('QGIS layer plans', () => {
     expect(label.expression).toBe('"name"');
     expect(label.format).toMatchObject({
       fontFamily: 'Open Sans',
-      sizePt: 9,
+      sizePt: 12,
       bold: true,
       color: [34, 34, 34, 255]
     });
-    expect(label.format.buffer?.sizeMm).toBeCloseTo(2 * MM_PER_CSS_PX);
+    expect(label.format.buffer?.sizeMm).toBeCloseTo(2 * MM_PER_PAGE_UNIT);
     expect(text?.notes.map((note) => note.code)).toContain('font');
   });
 
@@ -389,8 +390,8 @@ describe('QGIS patterns', () => {
       color: [89, 89, 89, 255]
     });
     if (hatch?.kind !== 'line-pattern') return;
-    expect(hatch.distanceMm).toBeCloseTo(10 * MM_PER_CSS_PX);
-    expect(hatch.lineWidthMm).toBeCloseTo(2 * MM_PER_CSS_PX);
+    expect(hatch.distanceMm).toBeCloseTo(10 * MM_PER_PAGE_UNIT);
+    expect(hatch.lineWidthMm).toBeCloseTo(2 * MM_PER_PAGE_UNIT);
   });
 
   it('should give dots the area of the motif', () => {
@@ -406,7 +407,7 @@ describe('QGIS patterns', () => {
 
     expect(grid?.kind).toBe('point-pattern');
     if (grid?.kind !== 'point-pattern') return;
-    const radiusPx = grid.marker.sizeMm / MM_PER_CSS_PX / 2;
+    const radiusPx = grid.marker.sizeMm / MM_PER_PAGE_UNIT / 2;
     expect(Math.PI * radiusPx ** 2).toBeCloseTo(0.1 * 20 * 20);
   });
 
@@ -478,7 +479,7 @@ describe('QGIS double symbols', () => {
         [valueField]: 100
       })
     ).toBeCloseTo(
-      2 * getProportionalSymbolSizeForValue(100, 400, 20) * MM_PER_CSS_PX
+      2 * getProportionalSymbolSizeForValue(100, 400, 20) * MM_PER_PAGE_UNIT
     );
     expect(layer.dataDefined?.fillColor).toContain(
       `"${valueField}" < 50 THEN color_rgba(49,130,189,255)`
@@ -534,5 +535,114 @@ describe('QGIS date classes', () => {
     expect(renderer.rules[1].filter).toBe(
       `"opened" IS NOT NULL AND (epoch(to_datetime("opened")) >= 10 AND epoch(to_datetime("opened")) < 20)`
     );
+  });
+
+  it('should give QGIS one size expression for every symbol when it draws the size legend', () => {
+    const marker = (
+      color: [number, number, number, number],
+      size?: string
+    ) => ({
+      type: 'marker' as const,
+      opacity: 1,
+      layers: [
+        {
+          kind: 'marker' as const,
+          shape: 'circle',
+          sizeMm: 1.4,
+          color,
+          stroke: null,
+          dataDefined: size ? { size } : {}
+        }
+      ]
+    });
+    const qml = buildQml({
+      geometryType: 'point',
+      renderer: {
+        type: 'rules',
+        rules: [
+          {
+            filter: '"v" < 10',
+            label: 'low',
+            symbol: marker([255, 0, 0, 255], 'sqrt("v")')
+          },
+          {
+            filter: '"v" >= 10',
+            label: 'high',
+            symbol: marker([0, 0, 255, 255], 'sqrt("v")')
+          },
+          {
+            filter: '"v" IS NULL',
+            label: 'missing',
+            symbol: marker([9, 9, 9, 255])
+          }
+        ],
+        sizeLegend: {
+          title: 'en tonnes',
+          classes: [
+            { label: '100', sizeMm: 10 },
+            { label: '1', sizeMm: 1 }
+          ]
+        }
+      }
+    });
+    const doc = new DOMParser().parseFromString(qml, 'application/xml');
+    const renderer = doc.querySelector('renderer-v2');
+    const sizes = Array.from(
+      doc.querySelectorAll('symbols > symbol, source-symbol > symbol')
+    ).map(
+      (symbol) =>
+        symbol
+          .querySelector('Option[name="size"] Option[name="expression"]')
+          ?.getAttribute('value') ?? null
+    );
+
+    // QGIS draws the nested circles only from a categorized renderer whose
+    // symbols all read their size from the same expression.
+    expect(renderer?.getAttribute('type')).toBe('categorizedSymbol');
+    expect(renderer?.getAttribute('attr')).toBe(
+      `CASE WHEN "v" < 10 THEN '0' WHEN "v" >= 10 THEN '1' WHEN "v" IS NULL THEN '2' END`
+    );
+    expect(new Set(sizes)).toEqual(
+      new Set([
+        `CASE WHEN "v" < 10 THEN sqrt("v") WHEN "v" >= 10 THEN sqrt("v") WHEN "v" IS NULL THEN 1.4 END`
+      ])
+    );
+    expect(sizes).toHaveLength(4);
+    expect(
+      Array.from(doc.querySelectorAll('data-defined-size-legend class')).map(
+        (entry) => [entry.getAttribute('label'), entry.getAttribute('size')]
+      )
+    ).toEqual([
+      ['100', '10'],
+      ['1', '1']
+    ]);
+  });
+
+  it('should read the visualization and primitive of a legend frame', () => {
+    expect(parseLegendItemId('legend-viz-a7f5--area')).toEqual({
+      vizId: 'a7f5',
+      primitive: 'polygon'
+    });
+    expect(parseLegendItemId('legend-viz-a7f5--point--size')).toEqual({
+      vizId: 'a7f5',
+      primitive: 'point',
+      channel: 'size'
+    });
+    expect(
+      parseLegendItemId('legend-viz-b521--facet--petrole--point--color')
+    ).toEqual({ vizId: 'b521', primitive: 'point', channel: 'color' });
+    expect(parseLegendItemId('legend-other')).toBeNull();
+  });
+
+  it('should frame an extent at the proportions of the layout box, centred', () => {
+    const [xmin, ymin, xmax, ymax] = fitExtent([0, 0, 100, 10], {
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50
+    });
+
+    expect([xmin, xmax]).toEqual([0, 100]);
+    expect([ymin, ymax]).toEqual([-45, 55]);
   });
 });

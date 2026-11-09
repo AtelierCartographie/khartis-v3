@@ -93,7 +93,7 @@ import {
   type QgisStyleContext
 } from './qgis-style';
 import { buildQgisProject } from './qgis-project';
-import { buildQml, MM_PER_CSS_PX } from './qml';
+import { buildQml, MM_PER_PAGE_UNIT, PT_PER_PAGE_UNIT } from './qml';
 import {
   exportMapToJpg,
   type MapExportPlacement
@@ -105,6 +105,26 @@ import {
 import { getExportDimensionsForPage } from '../../export-dimensions.utils';
 import { EXPORT_RESOLUTION } from '../../types';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
+import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
+import { geoIndicationsState } from '$lib/features/step-toolbar/tools/geo-indications';
+import {
+  measureMapPage,
+  type MeasuredFont,
+  type MeasuredMapPage
+} from '$lib/features/commons/utils/map-export.utils';
+import {
+  DistanceUnit,
+  ScaleForm
+} from '$lib/features/commons/constants/ui.constants';
+import type { LayoutFont } from './qgis-layout';
+import { hslToHex } from '$lib/features/commons/utils/color-utils';
+import {
+  buildPageLayoutSpec,
+  measuredSizeLegend,
+  parseCssColor,
+  parseLegendItemId,
+  type PageLayoutSpec
+} from './qgis-page-layout';
 import { cutAtSeam, densifyLines, representativePoint } from './qgis-sql';
 import type { ClassValueKind } from './qgis-classes';
 import type { QmlSymbol, Rgba } from './qml';
@@ -132,6 +152,8 @@ interface ExportRun {
   usedNames: Set<string>;
   /** Layers that could not be written, by title. */
   failures: string[];
+  /** The page as exported, for the print layout and the size legends. */
+  page: MeasuredMapPage | null;
 }
 
 /**
@@ -387,6 +409,35 @@ async function loadCatalogCentroids(
   return idColumn && columns.has('geom') ? { tableName, idColumn } : null;
 }
 
+/** Lines or rings in lon/lat the export draws itself (graticule, sphere). */
+type GeneratedGeometry =
+  | { lines: Array<Array<[number, number]>> }
+  | { rings: Array<Array<[number, number]>> };
+
+function generatedWkt(source: GeneratedGeometry): string[] {
+  const coordinates = (points: Array<[number, number]>) =>
+    points.map(([x, y]) => `${Number(x)} ${Number(y)}`).join(', ');
+  return 'lines' in source
+    ? source.lines
+        .filter((line) => line.length >= 2)
+        .map((line) => `LINESTRING (${coordinates(line)})`)
+    : source.rings
+        .filter((ring) => ring.length >= 4)
+        .map((ring) => `POLYGON ((${coordinates(ring)}))`);
+}
+
+// The whole sphere, a vertex every degree: cut and projected like the rest,
+// it is the sea of the map, the shape d3 fills.
+function sphereRing(): Array<[number, number]> {
+  const ring: Array<[number, number]> = [];
+  for (let lon = -180; lon < 180; lon += 1) ring.push([lon, -90]);
+  for (let lat = -90; lat < 90; lat += 1) ring.push([180, lat]);
+  for (let lon = 180; lon > -180; lon -= 1) ring.push([lon, 90]);
+  for (let lat = 90; lat > -90; lat -= 1) ring.push([-180, lat]);
+  ring.push(ring[0]);
+  return ring;
+}
+
 function resolveSeaColor(): string | undefined {
   const sea = basemapLayersStore.layers.find((layer) => layer.id === 'mers');
   return sea?.id === 'mers' && sea.visible ? sea.color : undefined;
@@ -574,7 +625,7 @@ function sqlText(value: string | undefined): string {
 function sqlMillimetres(px: number | undefined): string {
   return px === undefined || !Number.isFinite(px)
     ? 'NULL::DOUBLE'
-    : `${px * MM_PER_CSS_PX}::DOUBLE`;
+    : `${px * MM_PER_PAGE_UNIT}::DOUBLE`;
 }
 
 /**
@@ -644,6 +695,43 @@ function resolveLabelEdits(
   };
 }
 
+// QGIS draws the nested circles of proportional symbols with the values of
+// the Khartis legend.
+function withSizeLegend(
+  plan: QgisLayerPlan,
+  viz: VisualizationConfig,
+  page: MeasuredMapPage | null
+): QgisLayerPlan {
+  const { renderer } = plan.style;
+  if (!plan.proportionalSize || renderer.type === 'null') {
+    return plan;
+  }
+  const classes = [viz.id, resolveOrderVizId(viz.id)]
+    .map((id) => measuredSizeLegend(page, id, plan.primitive))
+    .find((entries) => entries.length > 0);
+  if (!classes) {
+    return plan;
+  }
+  // The legend frame carries the title; the circles take its subtitle.
+  const item = getLegendState().items.find((entry) => {
+    const parsed = parseLegendItemId(entry.id);
+    return (
+      parsed?.primitive === plan.primitive &&
+      [viz.id, resolveOrderVizId(viz.id)].includes(parsed.vizId)
+    );
+  });
+  return {
+    ...plan,
+    style: {
+      ...plan.style,
+      renderer: {
+        ...renderer,
+        sizeLegend: { title: item?.subtitle?.trim() ?? '', classes }
+      }
+    }
+  };
+}
+
 async function exportVisualizationLayers(
   viz: VisualizationConfig,
   run: ExportRun,
@@ -657,7 +745,7 @@ async function exportVisualizationLayers(
     viz,
     createStyleContext(viz, temporal),
     viz.primitiveOrder ?? ALL_PRIMITIVE_FILTERS
-  );
+  ).map((plan) => withSizeLegend(plan, viz, run.page));
   const name = facet ?? viz.name;
   const layers: ExportedLayer[] = [];
   const add = async (
@@ -844,12 +932,14 @@ interface BasemapExport {
   layers: ExportedLayer[];
   /** Visible basemap layers left out, by name. */
   skipped: string[];
+  /** The sea is the colour of the canvas, not a layer. */
+  seaAsCanvas?: boolean;
 }
 
 async function exportBasemapTable(options: {
   row: LayerOrderRow;
   /** A DuckDB table, or lines in lon/lat the map generates itself. */
-  tableName: string | { lines: Array<Array<[number, number]>> };
+  tableName: string | GeneratedGeometry;
   /** Graticule lines, which need a vertex every degree. */
   densify?: boolean;
   title: string;
@@ -870,12 +960,10 @@ async function exportBasemapTable(options: {
   const from =
     typeof source === 'string'
       ? `"${escapeIdentifier(source)}" d`
-      : `(SELECT ST_GeomFromText(wkt) AS geom FROM (VALUES ${source.lines
-          .filter((line) => line.length >= 2)
-          .map(
-            (line) =>
-              `('LINESTRING (${line.map(([x, y]) => `${Number(x)} ${Number(y)}`).join(', ')})')`
-          )
+      : `(SELECT ST_GeomFromText(wkt) AS geom FROM (VALUES ${generatedWkt(
+          source
+        )
+          .map((wkt) => `('${wkt}')`)
           .join(', ')}) AS v(wkt)) d`;
   const { features, dropped } = await queryWithReprojection(
     options.crs,
@@ -926,7 +1014,7 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
   const result: BasemapExport = { layers: [], skipped: [] };
   const metadata = basemapService.currentMetadata;
   if (!metadata || !basemapStyleStore.referenceBasemapId) {
-    return result;
+    return { ...result, seaAsCanvas: true };
   }
   const basemapSourceCrs =
     metadata.proj_source && !isWgs84LikeCrs(metadata.proj_source)
@@ -960,7 +1048,7 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
     if (!config.visible) continue;
     const name = BASEMAP_LAYER_TITLES[config.id]?.() ?? config.id;
     const push = async (
-      tableFile: string | { lines: Array<Array<[number, number]>> },
+      tableFile: string | GeneratedGeometry,
       title: string,
       plan: QgisLayerPlan | null,
       metadataLayer: BasemapLayer | null = null,
@@ -1151,13 +1239,28 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
         );
         break;
       }
-      case 'mers':
-        result.skipped.push(
-          m.qgis_basemap_sea_color({
-            color: 'color' in config ? config.color : ''
+      case 'mers': {
+        if (config.id !== 'mers') break;
+        await push(
+          { rings: [sphereRing()] },
+          name,
+          buildBasemapFillPlan({
+            fillColor: config.color,
+            fillOpacity: config.opacity,
+            stroke: null
           })
         );
+        const sea = result.layers.find((layer) => layer.title === name);
+        if (!sea || sea.options.features.length === 0) {
+          // A projection that sends the poles to infinity draws no sphere:
+          // the sea stays the colour of the canvas.
+          result.skipped.push(
+            m.qgis_basemap_sea_color({ color: config.color })
+          );
+          result.seaAsCanvas = true;
+        }
         break;
+      }
       default:
         result.skipped.push(name);
     }
@@ -1206,10 +1309,13 @@ function orderLikeTheMap(
     vizs.map(({ viz }) => viz.id)
   );
   const rank = new Map(topToBottom.map((id, index) => [id, index]));
+  // The sea is the sphere the map is drawn on: under everything.
+  const sea = resolveBasemapConfigRowId('mers');
   return layers
     .map((layer, index) => ({ layer, index }))
     .sort(
       (a, b) =>
+        Number(b.layer.row.id === sea) - Number(a.layer.row.id === sea) ||
         (rank.get(b.layer.row.id) ?? 0) - (rank.get(a.layer.row.id) ?? 0) ||
         a.index - b.index
     )
@@ -1289,7 +1395,7 @@ function describeLegend(
             column,
             value: formatter.format(max),
             diameter: formatter.format(
-              2 * (symbol.maxSize ?? 0) * MM_PER_CSS_PX
+              2 * (symbol.maxSize ?? 0) * MM_PER_PAGE_UNIT
             )
           })
         );
@@ -1403,6 +1509,8 @@ function buildMemo(options: {
   failures: string[];
   /** Page size in millimetres, the one symbol and text sizes are set for. */
   page: { width: number; height: number };
+  /** The project carries a print layout of the page. */
+  layout: boolean;
 }): string {
   const { crs, layers } = options;
   const lines = [
@@ -1414,6 +1522,7 @@ function buildMemo(options: {
         ? m.qgis_memo_image_georeferenced({ image: options.reference.image })
         : m.qgis_memo_image({ image: options.reference.image })
       : m.qgis_memo_image_missing(),
+    ...(options.layout ? [m.qgis_memo_layout()] : []),
     ''
   ];
   if (crs.status === 'map') {
@@ -1473,7 +1582,7 @@ function buildMemo(options: {
   for (const note of notes) {
     lines.push(`- ${note}`);
   }
-  lines.push(`- ${m.qgis_note_layout()}`, '');
+  lines.push('');
   return lines.join('\n');
 }
 
@@ -1496,6 +1605,7 @@ function collectMapNotes(
   return notes;
 }
 
+const PAGE_MEASURE_TIMEOUT_MS = 10_000;
 const REFERENCE_IMAGE_TIMEOUT_MS = 30_000;
 
 interface ReferenceImage {
@@ -1558,6 +1668,181 @@ async function renderReferenceImage(
   }
 }
 
+interface BuiltLayout {
+  spec: PageLayoutSpec;
+  /** The map frame shows exactly the Khartis map frame. */
+  georeferenced: boolean;
+}
+
+function hexToRgba(hex: string | undefined): Rgba | null {
+  const value = hex?.match(/^#?([0-9a-f]{6})$/i)?.[1];
+  return value
+    ? [
+        parseInt(value.slice(0, 2), 16),
+        parseInt(value.slice(2, 4), 16),
+        parseInt(value.slice(4, 6), 16),
+        255
+      ]
+    : null;
+}
+
+function layoutFont(
+  font: MeasuredFont | null,
+  fallbackSize: number
+): LayoutFont {
+  return {
+    family: font?.family || 'Open Sans',
+    sizePt: (font?.size || fallbackSize) * PT_PER_PAGE_UNIT,
+    bold: false,
+    italic: false,
+    color: parseCssColor(font?.color ?? null) ?? [0, 0, 0, 255]
+  };
+}
+
+// With a size legend, QGIS lists its title, the circles, then one entry per
+// category: an untitled one names its expression, and symbols of one colour
+// need no entry beside the circles.
+function legendNodeOrder(
+  plan: QgisLayerPlan,
+  channel?: string
+): number[] | undefined {
+  const { renderer } = plan.style;
+  if (renderer.type === 'null' || !renderer.sizeLegend) {
+    return undefined;
+  }
+  const entries =
+    renderer.type === 'single'
+      ? 0
+      : renderer.type === 'rules'
+        ? renderer.rules.length
+        : renderer.categories.length;
+  // A variable with a legend per channel: the size one shows the circles,
+  // the colour one the categories.
+  const circles = [...(renderer.sizeLegend.title ? [0] : []), 1];
+  const categories = Array.from({ length: entries }, (_, index) => index + 2);
+  if (channel === 'size') {
+    return circles;
+  }
+  if (channel === 'color' && categories.length > 0) {
+    return categories;
+  }
+  return [...circles, ...(plan.uniqueColor ? [] : categories)];
+}
+
+/** The print layout of the page: map frames, texts, legends, indications. */
+function buildLayout(
+  page: MeasuredMapPage,
+  layers: ExportedLayer[],
+  crs: MapVectorCrs,
+  format: { color: { hue: number; saturation: number; lightness: number } },
+  seaAsCanvas: boolean
+): BuiltLayout {
+  const thematic = layers.filter(
+    (layer) => layer.row.kind === 'viz-primitive' && !layer.hidden
+  );
+  const themes = [
+    ...new Set(thematic.flatMap((layer) => (layer.group ? [layer.group] : [])))
+  ];
+  const georeference =
+    page.facets.length === 0 && page.placement && crs.status === 'map'
+      ? buildMapGeoreference(page.placement)
+      : null;
+  const georeferencedExtent =
+    georeference?.status === 'ok' && !georeference.georeference.rotated
+      ? georeference.georeference.frameExtent
+      : null;
+  const legendItems = getLegendState().items;
+  const legends = page.legends.flatMap((frame) => {
+    const parsed = parseLegendItemId(frame.itemId);
+    if (!parsed) {
+      return [];
+    }
+    const matching = thematic.filter(
+      (layer) =>
+        layer.row.kind === 'viz-primitive' &&
+        layer.row.parentId === parsed.vizId &&
+        layer.row.primitive === parsed.primitive
+    );
+    // A shared legend of a collection reads the same for every map.
+    const firstGroup = matching[0]?.group;
+    const item = legendItems.find((entry) => entry.id === frame.itemId);
+    return [
+      {
+        itemId: frame.itemId,
+        title: item?.title || item?.name || '',
+        font: layoutFont(frame.font, 9),
+        titleFont: {
+          ...layoutFont(frame.titleFont ?? frame.font, 10),
+          bold: true
+        },
+        tables: matching
+          .filter((layer) => layer.group === firstGroup)
+          .reverse()
+          .map((layer) => ({
+            table: layer.options.layerName,
+            nodeOrder: legendNodeOrder(layer.plan, parsed.channel)
+          }))
+      }
+    ];
+  });
+  const { scale, orientation } = geoIndicationsState;
+  const spec = buildPageLayoutSpec({
+    page,
+    name: 'Khartis',
+    pageColor: hexToRgba(
+      hslToHex(
+        format.color.hue,
+        format.color.saturation,
+        format.color.lightness
+      )
+    ) ?? [255, 255, 255, 255],
+    mapBackground: seaAsCanvas ? hexToRgba(resolveSeaColor()) : null,
+    georeferencedExtent,
+    // The maps of a collection share one view in Khartis.
+    dataExtent: () =>
+      computeLayerExtent(thematic.flatMap((layer) => layer.options.features)),
+    themes,
+    legends,
+    scaleBar:
+      geoIndicationsState.visible && scale.enabled
+        ? {
+            form: scale.form === ScaleForm.BOX ? 'box' : 'line',
+            unit: scale.units === DistanceUnit.MILES ? 'mi' : 'km',
+            distance: scale.distance,
+            font: layoutFont(page.scaleBarFont, 8)
+          }
+        : null,
+    northArrow: geoIndicationsState.visible && orientation.enabled,
+    textName: (role, index) =>
+      (role ? PAGE_ROLE_TITLES[role]?.() : undefined) ??
+      `${m.qgis_memo_page_annotation()} ${index + 1}`
+  });
+  return { spec, georeferenced: georeferencedExtent !== null };
+}
+
+/** What the print layout leaves out or draws its own way. */
+function describeLayout(
+  layout: BuiltLayout | null,
+  page: MeasuredMapPage | null
+): string[] {
+  if (!layout || !page || layout.spec.maps.length === 0) {
+    return [m.qgis_note_layout()];
+  }
+  const notes = [m.qgis_note_layout_legend()];
+  if (page.facets.length > 0) {
+    notes.push(m.qgis_note_layout_facets());
+  } else if (!layout.georeferenced) {
+    notes.push(m.qgis_note_layout_extent());
+  }
+  if (page.otherAnnotations > 0) {
+    notes.push(m.qgis_note_layout_shapes({ count: page.otherAnnotations }));
+  }
+  if (geoIndicationsState.visible && geoIndicationsState.insetMap.enabled) {
+    notes.push(m.qgis_note_layout_inset());
+  }
+  return notes;
+}
+
 /**
  * Exports the map as a GeoPackage QGIS opens styled: one layer per
  * primitive of each visualization, plus the basemap land, in the map CRS,
@@ -1583,12 +1868,27 @@ export async function exportMapAsQgisGeoPackage(
         ? { sourceCrs: `EPSG:${crs.geoPackageSrs.epsg}` }
         : { sourceCrs: null, customSrs: crs.geoPackageSrs };
 
+  const format = getFormatState();
+  // Like the image, the layout must not hold the layers: a hidden tab draws
+  // no frame and the measure would wait for one.
+  const page = await Promise.race([
+    measureMapPage(format.width),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), PAGE_MEASURE_TIMEOUT_MS)
+    )
+  ]).catch((error: unknown) => {
+    logger.error('QGIS export: page not measured', LogCategory.EXPORT, {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  });
   const layers: ExportedLayer[] = [];
   const run: ExportRun = {
     crs,
     srs,
     usedNames: new Set<string>(['layer_styles']),
-    failures: []
+    failures: [],
+    page
   };
   const basemap = await exportBasemapLayers(run);
   layers.push(...basemap.layers);
@@ -1612,20 +1912,27 @@ export async function exportMapAsQgisGeoPackage(
   const geoPackage = await exportGeoPackageLayers(
     filled.map((layer) => layer.options)
   );
-  const format = getFormatState();
   const reference = await renderReferenceImage(baseName, format);
+  const seaAsCanvas = basemap.seaAsCanvas === true;
+  const layout = page
+    ? buildLayout(page, filled, crs, format, seaAsCanvas)
+    : null;
   const memo = buildMemo({
     gpkg,
     project,
     reference,
     crs,
     layers: filled,
-    extraNotes: collectMapNotes(crs, basemap.skipped),
+    extraNotes: [
+      ...collectMapNotes(crs, basemap.skipped),
+      ...describeLayout(layout, page)
+    ],
     failures: run.failures,
     page: {
-      width: format.width * MM_PER_CSS_PX,
-      height: format.height * MM_PER_CSS_PX
-    }
+      width: format.width * MM_PER_PAGE_UNIT,
+      height: format.height * MM_PER_PAGE_UNIT
+    },
+    layout: (layout?.spec.maps.length ?? 0) > 0
   });
   const thematicFeatures = filled
     .filter((layer) => layer.row.kind === 'viz-primitive')
@@ -1635,7 +1942,7 @@ export async function exportMapAsQgisGeoPackage(
     gpkg,
     crs,
     extent: computeLayerExtent(thematicFeatures),
-    background: resolveSeaColor(),
+    background: seaAsCanvas ? resolveSeaColor() : undefined,
     layers: filled.map((layer) => ({
       name: layer.title,
       table: layer.options.layerName,
@@ -1647,7 +1954,8 @@ export async function exportMapAsQgisGeoPackage(
     image:
       reference?.georeferenced && reference.files[reference.image]
         ? { name: m.qgis_layer_reference_image(), file: reference.image }
-        : undefined
+        : undefined,
+    layout: layout?.spec
   });
 
   downloadFile(

@@ -880,6 +880,7 @@
         class="legend-container {getFrameAnchorClass(item)}"
         class:draggable={isLegendDraggable}
         class:dragging={draggingItemId === item.id}
+        data-legend-item-id={item.id}
         data-workspace-pan-ignore="true"
         style={getFrameStyle(item)}
         role="button"

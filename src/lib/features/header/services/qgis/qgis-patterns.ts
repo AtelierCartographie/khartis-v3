@@ -1,5 +1,5 @@
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
-import { MM_PER_CSS_PX, type QmlSymbolLayer, type Rgba } from './qml';
+import { MM_PER_PAGE_UNIT, type QmlSymbolLayer, type Rgba } from './qml';
 
 // motif.js draws each motif in a tile of `scale × 10` page pixels, covering
 // `size` % of it, the tile turned by `angle` clockwise (y points down).
@@ -27,7 +27,7 @@ export function resolveQgisPattern(pattern: ClassPattern): QgisPattern | null {
   const tile = Math.max(1, pattern.scale * TILE_BASE_SIZE);
   const area = (Math.min(100, Math.max(0, pattern.size)) / 100) * tile * tile;
   const color = hexToRgba(pattern.fill);
-  const distanceMm = tile * MM_PER_CSS_PX;
+  const distanceMm = tile * MM_PER_PAGE_UNIT;
   // A QGIS pattern turns counter-clockwise, motif.js and a QGIS marker
   // clockwise.
   const angle = -pattern.angle;
@@ -36,7 +36,7 @@ export function resolveQgisPattern(pattern: ClassPattern): QgisPattern | null {
     kind: 'line-pattern',
     angle: lineAngle,
     distanceMm,
-    lineWidthMm: widthPx * MM_PER_CSS_PX,
+    lineWidthMm: widthPx * MM_PER_PAGE_UNIT,
     color
   });
   const grid = (
@@ -49,7 +49,7 @@ export function resolveQgisPattern(pattern: ClassPattern): QgisPattern | null {
     distanceMm,
     marker: {
       shape,
-      sizeMm: sizePx * MM_PER_CSS_PX,
+      sizeMm: sizePx * MM_PER_PAGE_UNIT,
       color,
       angle: rotation
     }
