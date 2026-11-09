@@ -105,7 +105,7 @@ import {
 import { getExportDimensionsForPage } from '../../export-dimensions.utils';
 import { EXPORT_RESOLUTION } from '../../types';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
-import { cutAtSeam, representativePoint } from './qgis-sql';
+import { cutAtSeam, densifyLines, representativePoint } from './qgis-sql';
 import type { ClassValueKind } from './qgis-classes';
 import type { QmlSymbol, Rgba } from './qml';
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
@@ -241,10 +241,14 @@ interface Reprojection {
   fallback: ((wkb: Uint8Array) => Uint8Array | null) | null;
 }
 
+// d3 bends a graticule line along the projection; PROJ needs the vertices.
+const GRATICULE_STEP_DEGREES = 1;
+
 function buildReprojection(
   crs: MapVectorCrs,
   sourceCrs: string,
-  projectInJs: boolean
+  projectInJs: boolean,
+  densify = false
 ): Reprojection {
   const target = crs.status === 'map' ? crs.target : WGS84;
   const sourceIsLonLat = isWgs84LikeCrs(sourceCrs);
@@ -258,7 +262,13 @@ function buildReprojection(
   if (crs.status !== 'map') {
     return { sql: toWgs84, fallback: null };
   }
-  const cut = (geometry: string) => cutAtSeam(toWgs84(geometry), crs.seam);
+  const cut = (geometry: string) => {
+    const lonLat = toWgs84(geometry);
+    return cutAtSeam(
+      densify ? densifyLines(lonLat, GRATICULE_STEP_DEGREES) : lonLat,
+      crs.seam
+    );
+  };
   if (projectInJs) {
     const forward = crs.forward;
     return {
@@ -327,10 +337,11 @@ function hasFiniteCoordinates(wkb: Uint8Array): boolean {
 async function queryWithReprojection(
   crs: MapVectorCrs,
   sourceCrs: string,
-  query: (reprojection: Reprojection) => ReturnType<typeof queryFeatures>
+  query: (reprojection: Reprojection) => ReturnType<typeof queryFeatures>,
+  densify = false
 ): ReturnType<typeof queryFeatures> {
   try {
-    return await query(buildReprojection(crs, sourceCrs, false));
+    return await query(buildReprojection(crs, sourceCrs, false, densify));
   } catch (error) {
     if (crs.status !== 'map' || !crs.forward) {
       throw error;
@@ -345,7 +356,7 @@ async function queryWithReprojection(
         error: error instanceof Error ? error.message : String(error)
       }
     );
-    return query(buildReprojection(crs, sourceCrs, true));
+    return query(buildReprojection(crs, sourceCrs, true, densify));
   }
 }
 
@@ -839,6 +850,8 @@ async function exportBasemapTable(options: {
   row: LayerOrderRow;
   /** A DuckDB table, or lines in lon/lat the map generates itself. */
   tableName: string | { lines: Array<Array<[number, number]>> };
+  /** Graticule lines, which need a vertex every degree. */
+  densify?: boolean;
   title: string;
   plan: QgisLayerPlan;
   sourceCrs: string;
@@ -873,7 +886,8 @@ async function exportBasemapTable(options: {
         geometry: 'd.geom::GEOMETRY',
         columns,
         reprojection
-      })
+      }),
+    options.densify
   );
   return {
     row: options.row,
@@ -949,7 +963,8 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
       tableFile: string | { lines: Array<Array<[number, number]>> },
       title: string,
       plan: QgisLayerPlan | null,
-      metadataLayer: BasemapLayer | null = null
+      metadataLayer: BasemapLayer | null = null,
+      densify = false
     ) => {
       if (!plan) {
         return;
@@ -978,7 +993,8 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
           plan,
           crs,
           srs,
-          usedNames
+          usedNames,
+          densify
         })
       );
       if (layer) {
@@ -1092,7 +1108,9 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
           await push(
             { lines: lineCoordinates(getEquatorGeoJSON()) },
             name,
-            plan
+            plan,
+            null,
+            true
           );
           break;
         }
@@ -1107,7 +1125,8 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
               layer.file,
               `${name} – ${layerTitle(layer, basemapTitle)}`,
               plan,
-              layer
+              layer,
+              true
             );
           }
           break;
@@ -1126,7 +1145,9 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
             )
           },
           name,
-          plan
+          plan,
+          null,
+          true
         );
         break;
       }

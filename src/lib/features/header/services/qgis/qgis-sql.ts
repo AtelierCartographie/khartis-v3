@@ -71,14 +71,26 @@ export function resolveSeamLines(seam: MapSeam): LonLat[][] {
     previous = next;
   }
 
-  // At the pole the longitude means nothing.
-  const kept = samples.filter(([, lat]) => Math.abs(lat) < POLE);
+  // At the pole the longitude means nothing: a line reaching it ends there
+  // on its own meridian, and the next one starts there on its own.
   const lines: LonLat[][] = [];
-  let line: LonLat[] = [kept[0]];
-  for (let i = 1; i < kept.length; i++) {
-    const a = kept[i - 1];
-    const b = kept[i];
-    if (longitudeGap(a, b) > MAX_GAP * 20 && Math.abs(a[1]) >= 89) {
+  let line: LonLat[] = [];
+  let poleReached: number | null = null;
+  for (const b of samples) {
+    if (Math.abs(b[1]) >= POLE) {
+      if (line.length > 0) {
+        line.push([line[line.length - 1][0], Math.sign(b[1]) * 90]);
+        lines.push(line);
+        line = [];
+      }
+      poleReached = Math.sign(b[1]) * 90;
+      continue;
+    }
+    const a = line[line.length - 1];
+    if (!a) {
+      line = poleReached === null ? [b] : [[b[0], poleReached], b];
+      poleReached = null;
+    } else if (longitudeGap(a, b) > MAX_GAP * 20 && Math.abs(a[1]) >= 89) {
       // Through the pole: down one meridian to the edge, up another.
       const pole = Math.sign(a[1]) * 90;
       line.push([a[0], pole]);
@@ -97,7 +109,7 @@ export function resolveSeamLines(seam: MapSeam): LonLat[][] {
       line.push(b);
     }
   }
-  lines.push(line);
+  if (line.length > 0) lines.push(line);
   return lines.filter(
     (part) =>
       part.length > 1 &&
@@ -118,6 +130,57 @@ const POLE_CAP = 90 - (Math.acos(SEAM_HALF_WIDTH) * 180) / Math.PI;
 
 function formatNumber(value: number): string {
   return String(Number(value.toFixed(10)));
+}
+
+function polygonSql(ring: LonLat[]): string {
+  const wkt = [...ring, ring[0]]
+    .map(([lon, lat]) => `${formatNumber(lon)} ${formatNumber(lat)}`)
+    .join(', ');
+  return `ST_GeomFromText('POLYGON((${wkt}))')`;
+}
+
+// A cone or a flat-polar projection draws a pole as an arc or a line: a ring
+// cut round it must follow it, one vertex per degree, or QGIS joins its ends
+// with a chord.
+const ARC_STEP = 1;
+
+function poleCap(pole: 1 | -1): string {
+  const edge = pole * (90 - POLE_CAP);
+  const ring: LonLat[] = [];
+  for (let lon = -180; lon <= 180; lon += ARC_STEP) ring.push([lon, edge]);
+  ring.push([180, pole * 90], [-180, pole * 90]);
+  return polygonSql(ring);
+}
+
+/**
+ * The poles of the turned sphere, which the map draws as a line or an arc:
+ * a small disk round each, whose edge follows that line.
+ */
+function turnedPoleDisks(seam: MapSeam): string[] {
+  const unturn = geoRotation([-seam.longitude, -seam.latitude, 0]).invert;
+  return ([1, -1] as const).map((pole) => {
+    const [, centre] = unturn([0, pole * 90]);
+    if (Math.abs(centre) > 90 - POLE_CAP) {
+      return poleCap(pole);
+    }
+    const ring: LonLat[] = [];
+    for (let lon = -180; lon < 180; lon += ARC_STEP) {
+      const [x, y] = unturn([lon, pole * (90 - POLE_CAP)]);
+      const previous = ring[ring.length - 1];
+      // Unwrapped, in case the disk straddles the antimeridian.
+      ring.push([
+        previous ? previous[0] + wrapLongitude(x - previous[0]) : x,
+        y
+      ]);
+    }
+    const disk = polygonSql(ring);
+    const west = Math.min(...ring.map(([lon]) => lon));
+    const east = Math.max(...ring.map(([lon]) => lon));
+    const shift = west < -180 ? 360 : east > 180 ? -360 : 0;
+    return shift === 0
+      ? disk
+      : `ST_Union(${disk}, ST_Translate(${disk}, ${shift}, 0))`;
+  });
 }
 
 function halfWidthAt(latitude: number): number {
@@ -151,16 +214,8 @@ function meridianBand(
     .map(([lon, lat]) => `${formatNumber(lon)} ${formatNumber(lat)}`)
     .join(', ');
   const bands = [`ST_GeomFromText('POLYGON((${wkt}))')`];
-  if (north > 90 - POLE_CAP) {
-    bands.push(
-      `ST_MakeEnvelope(-180, ${formatNumber(90 - POLE_CAP)}, 180, 90)`
-    );
-  }
-  if (south < -90 + POLE_CAP) {
-    bands.push(
-      `ST_MakeEnvelope(-180, -90, 180, ${formatNumber(-90 + POLE_CAP)})`
-    );
-  }
+  if (north > 90 - POLE_CAP) bands.push(poleCap(1));
+  if (south < -90 + POLE_CAP) bands.push(poleCap(-1));
   return bands;
 }
 
@@ -190,12 +245,35 @@ function seamBands(line: LonLat[]): string[] {
  * PROJ does not, and a ring across the seam would streak over the whole map.
  */
 export function cutAtSeam(geometry: string, seam: MapSeam): string {
-  const bands = resolveSeamLines(seam).flatMap(seamBands);
+  const bands = [
+    ...new Set([
+      ...resolveSeamLines(seam).flatMap(seamBands),
+      ...(seam.latitude !== 0 ? turnedPoleDisks(seam) : [])
+    ])
+  ];
   if (bands.length === 0) {
     return geometry;
   }
   const cutter = bands.reduce((union, band) => `ST_Union(${union}, ${band})`);
   return `(CASE WHEN ST_Intersects(${geometry}, ${cutter}) THEN ST_Difference(ST_MakeValid(${geometry}), ${cutter}) ELSE ${geometry} END)`;
+}
+
+/**
+ * Lines in lon/lat with a vertex at least every `step` degrees, the vertices
+ * kept. d3 bends a segment along the projection while drawing; PROJ only
+ * moves vertices, so a graticule line drawn with few of them comes out as
+ * chords.
+ */
+export function densifyLines(geometry: string, step: number): string {
+  const point = (line: string, index: string) =>
+    `ST_PointN(${line}, (${index})::INTEGER)`;
+  const pieces = (line: string, i: string) =>
+    `greatest(1, ceil(ST_Distance(${point(line, i)}, ${point(line, `${i} + 1`)}) / ${step})::INTEGER)`;
+  const along = (line: string, i: string, j: string, axis: 'X' | 'Y') =>
+    `ST_${axis}(${point(line, i)}) + (ST_${axis}(${point(line, `${i} + 1`)}) - ST_${axis}(${point(line, i)})) * ${j} / ${pieces(line, i)}`;
+  const densified = (line: string) =>
+    `ST_MakeLine(list_append(flatten(list_transform(range(1, ST_NPoints(${line})), i -> list_transform(range(${pieces(line, 'i')}), j -> ST_Point(${along(line, 'i', 'j', 'X')}, ${along(line, 'i', 'j', 'Y')})))), ${point(line, `ST_NPoints(${line})`)}))`;
+  return `(CASE WHEN ST_GeometryType(${geometry}) IN ('LINESTRING', 'MULTILINESTRING') THEN ST_Collect(list_transform(ST_Dump(${geometry}), part -> ${densified('part.geom')})) ELSE ${geometry} END)`;
 }
 
 export function representativePoint(geometry: string): string {
