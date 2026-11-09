@@ -270,9 +270,15 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   projection sans équivalent PROJ (composite, oblique, globe, propre à d3)
   exporte en WGS84, et la boîte d'export comme le mémo le disent.
 - La reprojection passe par `ST_Transform` vers EPSG:4326 puis vers le SCR de
-  la carte. Une géométrie en longitude et latitude est d'abord coupée au
-  méridien opposé au centre, comme le fait d3 ; sinon PROJ étire les anneaux
-  qui le traversent sur toute la carte. Si DuckDB refuse le SCR cible, la
+  la carte. Une géométrie en longitude et latitude est d'abord coupée là où d3
+  coupe la sphère (`cutAtSeam`) ; sinon PROJ étire les anneaux qui traversent
+  cette couture sur toute la carte. Sans inclinaison, c'est le méridien opposé
+  au centre. Avec une latitude, c'est le méridien opposé de la sphère tournée :
+  un demi grand cercle, deux tronçons de méridiens par le pôle pour une
+  projection du catalogue. Le pôle qui tombe sur la couture est un point
+  partagé entre les deux bords de la carte : une calotte d'une soixantaine de
+  mètres autour de lui est retirée, comme une bande d'environ un mètre de part
+  et d'autre de la couture. Si DuckDB refuse le SCR cible, la
   projection se fait en JavaScript avec la fonction qui géoréférence l'image.
   Une entité qui sort du domaine de la projection est écartée et comptée dans
   le mémo.
