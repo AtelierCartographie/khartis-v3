@@ -1,7 +1,8 @@
 import { strToU8, zipSync } from 'fflate';
 import { m } from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { Duck, duckDBOrchestrator, initDuckDB } from '$lib/features/duckdb';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import {
   downloadFile,
@@ -27,6 +28,9 @@ import {
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   ALL_PRIMITIVE_FILTERS,
+  getPolygonPrimitive,
+  getPrimitiveClassification,
+  getSymbolPrimitive,
   getTextPrimitive,
   PrimitiveFilterType,
   visualizationStore,
@@ -65,6 +69,7 @@ import {
 } from '$lib/features/map/utils/layer-panel-row.utils';
 import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
 import {
+  buildMapGeoreference,
   describeMapGeoreferenceAvailability,
   resolveMapVectorCrs,
   type MapVectorCrs
@@ -79,6 +84,7 @@ import {
 import {
   buildBasemapFillPlan,
   buildBasemapLinePlan,
+  buildDensityPlan,
   buildVisualizationLayerPlans,
   withLabelEdits,
   type LabelEditFields,
@@ -88,8 +94,31 @@ import {
 } from './qgis-style';
 import { buildQgisProject } from './qgis-project';
 import { buildQml, MM_PER_CSS_PX } from './qml';
+import {
+  exportMapToJpg,
+  type MapExportPlacement
+} from '$lib/features/commons/utils/map-export.utils';
+import {
+  formatGdalAuxXml,
+  formatWorldFile
+} from '$lib/features/commons/utils/georeference.utils';
+import { getExportDimensionsForPage } from '../../export-dimensions.utils';
+import { EXPORT_RESOLUTION } from '../../types';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
 import { cutAtOppositeMeridian, representativePoint } from './qgis-sql';
+import type { ClassValueKind } from './qgis-classes';
+import type { QmlSymbol, Rgba } from './qml';
+import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
+import { ANNOTATION_ROLE } from '$lib/features/commons/constants/annotation.constants';
+import {
+  FillMode,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
+import {
+  getAnnotationsState,
+  isPageElementPlaceholder
+} from '$lib/features/step-toolbar/tools/annotations';
+import { resolveDiscretizationLabel } from '$lib/features/visualization-tab';
 import { transformWkb } from './wkb-transform';
 
 const WGS84 = 'EPSG:4326';
@@ -129,6 +158,10 @@ async function guardLayer<T>(
 interface ExportedLayer {
   /** The Layers panel row that orders this layer on the map. */
   row: LayerOrderRow;
+  /** Exported for further work in QGIS, not drawn on the Khartis map. */
+  hidden?: boolean;
+  /** The legend of the layer in words, for the memo. */
+  legend?: string[];
   /** The map of a collection it belongs to. */
   group?: string;
   options: GeoPackageLayerExportOptions;
@@ -186,14 +219,19 @@ function getDomain(
   return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
 }
 
-function createStyleContext(viz: VisualizationConfig): QgisStyleContext {
+function createStyleContext(
+  viz: VisualizationConfig,
+  temporal: Map<string, TemporalKind>
+): QgisStyleContext {
   const formatter = new Intl.NumberFormat(getLocale(), {
     maximumFractionDigits: 2
   });
   return {
     domain: (primitive, column) => getDomain(viz, primitive, column),
     formatValue: (value) => formatter.format(value),
-    missingDataLabel: m.qgis_missing_data()
+    missingDataLabel: m.qgis_missing_data(),
+    columnKind: (column) => temporal.get(column) ?? 'number',
+    locale: getLocale()
   };
 }
 
@@ -362,11 +400,45 @@ async function listTableColumns(tableName: string): Promise<Set<string>> {
   return new Set(rows.map((row) => row.column_name));
 }
 
+type TemporalKind = Exclude<ClassValueKind, 'number'>;
+
+/** The date and date-time columns of a table, which QGIS must read as dates. */
+async function listTemporalColumns(
+  tableName: string | undefined
+): Promise<Map<string, TemporalKind>> {
+  if (!tableName) {
+    return new Map();
+  }
+  const rows = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}'`,
+    { format: 'array' }
+  )) as Array<{ column_name: string; data_type: string }>;
+  return new Map(
+    rows.flatMap((row): Array<[string, TemporalKind]> => {
+      const type = row.data_type.toUpperCase();
+      return type === 'DATE'
+        ? [[row.column_name, 'date']]
+        : type.startsWith('TIMESTAMP')
+          ? [[row.column_name, 'datetime']]
+          : [];
+    })
+  );
+}
+
+// GeoPackage dates are ISO text in a DATE or DATETIME column.
+function temporalSelect(column: string, kind: TemporalKind): string {
+  const field = `d."${escapeIdentifier(column)}"`;
+  return kind === 'date'
+    ? `strftime(${field}::DATE, '%Y-%m-%d')`
+    : `strftime(${field}::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.%gZ')`;
+}
+
 async function exportPlanLayer(
   viz: VisualizationConfig,
   plan: QgisLayerPlan,
   title: string,
-  run: ExportRun
+  run: ExportRun,
+  temporal: Map<string, TemporalKind>
 ): Promise<ExportedLayer | null> {
   const { crs, srs, usedNames } = run;
   const scope = resolveRowScope({
@@ -421,6 +493,14 @@ async function exportPlanLayer(
       Object.hasOwn(computed, column) ||
       (available.has(column) && !column.startsWith('__'))
   );
+  const columnTypes: Record<string, 'DATE' | 'DATETIME'> = {};
+  for (const column of columns) {
+    const kind = temporal.get(column);
+    if (kind && !Object.hasOwn(computed, column)) {
+      computed = { ...computed, [column]: temporalSelect(column, kind) };
+      columnTypes[column] = kind === 'date' ? 'DATE' : 'DATETIME';
+    }
+  }
   let geometry = source.geometry;
   if (plan.geometry === 'point') {
     const centroids = source.joined
@@ -450,15 +530,14 @@ async function exportPlanLayer(
       parentId: orderVizId
     },
     title,
+    legend: describeLegend(viz, layerPlan),
     plan: layerPlan,
     dropped,
     options: {
-      layerName: uniqueTableName(
-        `${viz.name}_${primitiveTitle(plan.primitive)}`,
-        usedNames
-      ),
+      layerName: uniqueTableName(title, usedNames),
       ...srs,
       propertyColumns: columns,
+      columnTypes,
       features,
       style: {
         name: title,
@@ -560,22 +639,195 @@ async function exportVisualizationLayers(
   run: ExportRun,
   facet?: string
 ): Promise<ExportedLayer[]> {
+  const datasetTable = duckDBOrchestrator.getDatasetBySourceFile(
+    viz.datasetId
+  )?.tableName;
+  const temporal = await listTemporalColumns(datasetTable);
   const plans = buildVisualizationLayerPlans(
     viz,
-    createStyleContext(viz),
+    createStyleContext(viz, temporal),
     viz.primitiveOrder ?? ALL_PRIMITIVE_FILTERS
   );
+  const name = facet ?? viz.name;
   const layers: ExportedLayer[] = [];
-  for (const plan of plans) {
-    const title = `${facet ?? viz.name} – ${primitiveTitle(plan.primitive)}`;
-    const layer = await guardLayer(run, title, () =>
-      exportPlanLayer(viz, plan, title, run)
-    );
+  const add = async (
+    title: string,
+    build: () => Promise<ExportedLayer | null>,
+    hidden = false
+  ) => {
+    const layer = await guardLayer(run, title, build);
     if (layer) {
-      layers.push({ ...layer, group: facet });
+      layers.push({ ...layer, group: facet, hidden });
+    }
+  };
+  for (const plan of plans) {
+    const title = `${name} – ${primitiveTitle(plan.primitive)}`;
+    await add(title, () => exportPlanLayer(viz, plan, title, run, temporal));
+    if (plan.primitive === PrimitiveFilterType.POLYGON) {
+      const density = buildDensityPlan(viz);
+      if (density) {
+        const densityTitle = `${name} – ${m.qgis_layer_density()}`;
+        await add(densityTitle, () =>
+          exportDensityLayer(viz, density, densityTitle, run)
+        );
+      }
     }
   }
+  // Without fills, the joined territories would be lost to QGIS: they come
+  // along with every attribute, hidden so the map looks the same.
+  if (!plans.some((plan) => plan.primitive === PrimitiveFilterType.POLYGON)) {
+    const title = `${name} – ${m.qgis_layer_territories()}`;
+    await add(
+      title,
+      () => exportTerritoriesLayer(viz, title, run, temporal),
+      true
+    );
+  }
   return layers;
+}
+
+async function exportTerritoriesLayer(
+  viz: VisualizationConfig,
+  title: string,
+  run: ExportRun,
+  temporal: Map<string, TemporalKind>
+): Promise<ExportedLayer | null> {
+  const source = await resolveDatasetGeometrySource(viz.datasetId, null);
+  if (!source) {
+    return null;
+  }
+  const [first] = (await Duck.query(
+    `SELECT ST_GeometryType(${source.geometry}) AS type FROM ${source.from} WHERE ${source.geometry} IS NOT NULL LIMIT 1`,
+    { format: 'array' }
+  )) as Array<{ type: string }>;
+  if (!first || !String(first.type).toUpperCase().includes('POLYGON')) {
+    return null;
+  }
+  const plan = buildBasemapFillPlan({
+    fillColor: '#000000',
+    fillOpacity: 0,
+    stroke: { color: '#808080', thickness: 0.5, opacity: 100, dotted: false }
+  });
+  return exportPlanLayer(viz, plan, title, run, temporal);
+}
+
+function readWkbColumn(table: ArrowTable): Uint8Array[] {
+  const field =
+    table.schema.fields.find((candidate) =>
+      candidate.metadata.get('ARROW:extension:name')?.startsWith('geoarrow')
+    ) ??
+    table.schema.fields.find((candidate) =>
+      ['geometry', 'geom'].includes(candidate.name)
+    );
+  const vector = field ? table.getChild(field.name) : null;
+  const values: Uint8Array[] = [];
+  for (let index = 0; index < (vector?.length ?? 0); index += 1) {
+    const value: unknown = vector?.get(index);
+    if (value instanceof Uint8Array) {
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+/**
+ * The dots the map draws for a dot-density fill: the same generation (same
+ * ratio and seed, served from its cache), so the same dots.
+ */
+async function exportDensityLayer(
+  viz: VisualizationConfig,
+  plan: QgisLayerPlan,
+  title: string,
+  run: ExportRun
+): Promise<ExportedLayer | null> {
+  const density = viz.density;
+  const dataset = duckDBOrchestrator.getDatasetBySourceFile(viz.datasetId);
+  const original = datasetsStore.datasets.find(
+    (item) => item.id === viz.datasetId || item.sourceFileId === viz.datasetId
+  );
+  if (!density?.valueColumn || !density.ratio || !dataset?.tableName) {
+    return null;
+  }
+  const seed = density.seed !== undefined ? { seed: density.seed } : undefined;
+  let table: ArrowTable | undefined;
+  let sourceCrs = WGS84;
+  if (original?.geometry) {
+    table = await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
+      dataset.tableName,
+      density.valueColumn,
+      density.ratio,
+      seed
+    );
+    const crs = original.geometry.crs;
+    sourceCrs = crs && !isWgs84LikeCrs(crs) ? crs : WGS84;
+  } else if (dataset.gpsMode && dataset.gpsColumns && dataset.joinedBasemap) {
+    table = await duckDBOrchestrator.generateDotDensityArrowFromGpsJoin(
+      dataset.joinedBasemap,
+      dataset.tableName,
+      density.valueColumn,
+      dataset.gpsColumns,
+      density.ratio,
+      seed
+    );
+  } else if (dataset.joinedBasemap) {
+    table = await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+      dataset.joinedBasemap,
+      dataset.tableName,
+      density.valueColumn,
+      density.ratio,
+      seed
+    );
+  }
+  if (!table) {
+    return null;
+  }
+  const { crs } = run;
+  const target = crs.status === 'map' ? crs.target : WGS84;
+  let project: (wkb: Uint8Array) => Uint8Array | null = (wkb) => wkb;
+  if (target !== sourceCrs) {
+    // The dots are generated in the dataset CRS; points need no cut, the
+    // georeferencing projection carries them like the rest of the map.
+    if (!isWgs84LikeCrs(sourceCrs) || crs.status !== 'map' || !crs.forward) {
+      throw new Error(`Density dots cannot go from ${sourceCrs} to ${target}`);
+    }
+    const forward = crs.forward;
+    project = (wkb) => transformWkb(wkb, forward);
+  }
+  let dropped = 0;
+  const features: GeoPackageFeatureRow[] = [];
+  for (const wkb of readWkbColumn(table)) {
+    const projected = project(wkb);
+    if (projected) {
+      features.push({ properties: {}, wkb: projected });
+    } else {
+      dropped += 1;
+    }
+  }
+  const orderVizId = resolveOrderVizId(viz.id);
+  return {
+    row: {
+      id: buildVisualizationSubLayerId(orderVizId, PrimitiveFilterType.POLYGON),
+      kind: 'viz-primitive',
+      primitive: PrimitiveFilterType.POLYGON,
+      parentId: orderVizId
+    },
+    title,
+    legend: [
+      m.qgis_legend_density({
+        column: density.valueColumn,
+        ratio: new Intl.NumberFormat(getLocale()).format(density.ratio)
+      })
+    ],
+    plan,
+    dropped,
+    options: {
+      layerName: uniqueTableName(title, run.usedNames),
+      ...run.srs,
+      propertyColumns: [],
+      features,
+      style: { name: title, qml: buildQml(plan.style), description: title }
+    }
+  };
 }
 
 interface BasemapExport {
@@ -953,6 +1205,136 @@ function resolveOrderVizId(vizId: string): string {
     : vizId;
 }
 
+function rgbaToHex([r, g, b]: Rgba): string {
+  return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function symbolColor(symbol: QmlSymbol): string | null {
+  for (const layer of symbol.layers) {
+    const color =
+      layer.kind === 'line'
+        ? layer.stroke.color
+        : layer.kind === 'line-pattern'
+          ? layer.color
+          : layer.kind === 'point-pattern'
+            ? layer.marker.color
+            : layer.color;
+    if (color && color[3] > 0) {
+      return rgbaToHex(color);
+    }
+  }
+  return null;
+}
+
+/**
+ * The legend of a layer in words: variable, method, classes or categories
+ * with their colour, the scale of proportional symbols.
+ */
+function describeLegend(
+  viz: VisualizationConfig,
+  plan: QgisLayerPlan
+): string[] {
+  const lines: string[] = [];
+  const formatter = new Intl.NumberFormat(getLocale(), {
+    maximumFractionDigits: 2
+  });
+  const classification = getPrimitiveClassification(viz, plan.primitive);
+  if (plan.primitive === PrimitiveFilterType.POLYGON) {
+    const polygon = getPolygonPrimitive(viz);
+    if (polygon?.fillMode === FillMode.CLASSES && polygon.valueColumn) {
+      lines.push(
+        m.qgis_legend_classes({
+          column: polygon.valueColumn,
+          method: resolveDiscretizationLabel(classification)
+        })
+      );
+    } else if (
+      polygon?.fillMode === FillMode.CATEGORIES &&
+      polygon.categoryColumn
+    ) {
+      lines.push(m.qgis_legend_categories({ column: polygon.categoryColumn }));
+    }
+  }
+  if (plan.primitive === PrimitiveFilterType.POINT) {
+    const symbol = getSymbolPrimitive(viz);
+    const column = symbol?.sizeColumn;
+    if (symbol?.mode === SymbolMode.PROPORTIONAL && column) {
+      const domain = getDomain(viz, PrimitiveFilterType.POINT, column);
+      const max = domain
+        ? Math.max(Math.abs(domain.min), Math.abs(domain.max))
+        : undefined;
+      if (max !== undefined) {
+        lines.push(
+          m.qgis_legend_proportional({
+            column,
+            value: formatter.format(max),
+            diameter: formatter.format(
+              2 * (symbol.maxSize ?? 0) * MM_PER_CSS_PX
+            )
+          })
+        );
+      }
+    }
+  }
+  const { renderer } = plan.style;
+  const entries =
+    renderer.type === 'rules'
+      ? renderer.rules.map((rule) => ({
+          label: rule.label,
+          symbol: rule.symbol
+        }))
+      : renderer.type === 'categories'
+        ? renderer.categories
+            .filter((category) => category.render)
+            .map((category) => ({
+              label: category.label,
+              symbol: category.symbol
+            }))
+        : [];
+  for (const entry of entries) {
+    const color = symbolColor(entry.symbol);
+    lines.push(`    ${entry.label}${color ? ` : ${color}` : ''}`);
+  }
+  return lines;
+}
+
+const PAGE_ROLE_TITLES: Record<string, () => string> = {
+  [ANNOTATION_ROLE.TITLE]: () => m.qgis_memo_page_title(),
+  [ANNOTATION_ROLE.SUBTITLE]: () => m.qgis_memo_page_subtitle(),
+  [ANNOTATION_ROLE.SOURCE]: () => m.qgis_memo_page_source(),
+  [ANNOTATION_ROLE.BASEMAP_SOURCE]: () => m.qgis_memo_page_basemap_source(),
+  [ANNOTATION_ROLE.CREDIT]: () => m.qgis_memo_page_credit(),
+  [ANNOTATION_ROLE.SIGNATURE]: () => m.qgis_memo_page_signature(),
+  [ANNOTATION_ROLE.NOTE]: () => m.qgis_memo_page_note()
+};
+
+function plainText(value: string): string {
+  return value
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The texts of the page (title, sources, notes…), which QGIS does not get. */
+function describePageTexts(): string[] {
+  return getAnnotationsState()
+    .items.filter(
+      (item) =>
+        item.visible !== false &&
+        item.type === AnnotationKind.TEXT &&
+        typeof item.content === 'string' &&
+        !isPageElementPlaceholder(item)
+    )
+    .flatMap((item) => {
+      const text = plainText(String(item.content));
+      if (!text) return [];
+      const role = item.role ? PAGE_ROLE_TITLES[item.role]?.() : undefined;
+      return [`- ${role ?? m.qgis_memo_page_annotation()} : ${text}`];
+    });
+}
+
 function describeNote(note: QgisExportNote): string {
   switch (note.code) {
     case 'pattern-fill':
@@ -961,8 +1343,6 @@ function describeNote(note: QgisExportNote): string {
       return m.qgis_note_pattern_approximate();
     case 'missing-pattern':
       return m.qgis_note_missing_pattern();
-    case 'density':
-      return m.qgis_note_density();
     case 'double-symbols':
       return m.qgis_note_double_symbols({ column: note.detail ?? '' });
     case 'symbol-shapes':
@@ -996,6 +1376,7 @@ const BASEMAP_LAYER_TITLES: Record<string, () => string> = {
 function buildMemo(options: {
   gpkg: string;
   project: string;
+  reference: ReferenceImage | null;
   crs: MapVectorCrs;
   layers: ExportedLayer[];
   extraNotes: string[];
@@ -1008,6 +1389,11 @@ function buildMemo(options: {
     m.qgis_memo_title(),
     '',
     m.qgis_memo_open({ project: options.project, gpkg: options.gpkg }),
+    options.reference
+      ? options.reference.georeferenced
+        ? m.qgis_memo_image_georeferenced({ image: options.reference.image })
+        : m.qgis_memo_image({ image: options.reference.image })
+      : m.qgis_memo_image_missing(),
     ''
   ];
   if (crs.status === 'map') {
@@ -1034,6 +1420,10 @@ function buildMemo(options: {
       height: Math.round(options.page.height)
     })
   );
+  const pageTexts = describePageTexts();
+  if (pageTexts.length > 0) {
+    lines.push('', m.qgis_memo_page(), ...pageTexts);
+  }
   lines.push('', m.qgis_memo_layers());
   for (const layer of [...layers].reverse()) {
     lines.push(
@@ -1041,11 +1431,12 @@ function buildMemo(options: {
         title: layer.title,
         table: layer.options.layerName,
         count: layer.options.features.length
-      })
+      }) + (layer.hidden ? ` ${m.qgis_memo_layer_hidden()}` : '')
     );
     if (layer.dropped > 0) {
       lines.push(m.qgis_memo_layer_dropped({ count: layer.dropped }));
     }
+    lines.push(...(layer.legend ?? []));
   }
   const notes = new Set<string>();
   for (const layer of layers) {
@@ -1083,6 +1474,68 @@ function collectMapNotes(
     );
   }
   return notes;
+}
+
+const REFERENCE_IMAGE_TIMEOUT_MS = 30_000;
+
+interface ReferenceImage {
+  image: string;
+  files: Record<string, Uint8Array>;
+  /** Placed by its .aux.xml and world file, shown in the QGIS project. */
+  georeferenced: boolean;
+}
+
+/**
+ * The page as Khartis draws it, layout included, for comparison in QGIS:
+ * placed in the map CRS when the map has one. Null when it cannot be drawn,
+ * which the memo says; the layers do not depend on it.
+ */
+async function renderReferenceImage(
+  baseName: string,
+  format: { width: number; height: number }
+): Promise<ReferenceImage | null> {
+  try {
+    const { width, height } = getExportDimensionsForPage(
+      format.width,
+      format.height,
+      EXPORT_RESOLUTION.QHD_2K
+    );
+    let placement: MapExportPlacement | undefined;
+    // The layers matter more than the picture: a render that never ends
+    // (a hidden tab draws no frame) must not hold the export.
+    const blob = await Promise.race([
+      exportMapToJpg({
+        width,
+        height,
+        onMapPlacement: (value) => (placement = value)
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Reference image timed out')),
+          REFERENCE_IMAGE_TIMEOUT_MS
+        )
+      )
+    ]);
+    const image = `${baseName}.jpg`;
+    const files: Record<string, Uint8Array> = {
+      [image]: new Uint8Array(await blob.arrayBuffer())
+    };
+    const result = placement ? buildMapGeoreference(placement) : null;
+    if (result?.status !== 'ok') {
+      return { image, files, georeferenced: false };
+    }
+    const { georeference } = result;
+    files[`${image}.aux.xml`] = strToU8(
+      formatGdalAuxXml(georeference.srs, georeference.transform)
+    );
+    files[`${baseName}.jgw`] = strToU8(formatWorldFile(georeference.transform));
+    return { image, files, georeferenced: true };
+  } catch (error) {
+    logger.error('QGIS export: reference image failed', LogCategory.EXPORT, {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  }
 }
 
 /**
@@ -1140,9 +1593,11 @@ export async function exportMapAsQgisGeoPackage(
     filled.map((layer) => layer.options)
   );
   const format = getFormatState();
+  const reference = await renderReferenceImage(baseName, format);
   const memo = buildMemo({
     gpkg,
     project,
+    reference,
     crs,
     layers: filled,
     extraNotes: collectMapNotes(crs, basemap.skipped),
@@ -1166,8 +1621,13 @@ export async function exportMapAsQgisGeoPackage(
       table: layer.options.layerName,
       geometry: layer.plan.geometry,
       style: layer.plan.style,
-      group: layer.group
-    }))
+      group: layer.group,
+      hidden: layer.hidden
+    })),
+    image:
+      reference?.georeferenced && reference.files[reference.image]
+        ? { name: m.qgis_layer_reference_image(), file: reference.image }
+        : undefined
   });
 
   downloadFile(
@@ -1177,7 +1637,8 @@ export async function exportMapAsQgisGeoPackage(
           {
             [gpkg]: new Uint8Array(await geoPackage.arrayBuffer()),
             [project]: strToU8(qgs),
-            [`${baseName}-memo.txt`]: strToU8(memo)
+            [`${baseName}-memo.txt`]: strToU8(memo),
+            ...(reference?.files ?? {})
           },
           { level: 6 }
         )

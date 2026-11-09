@@ -21,7 +21,11 @@ import {
   readCrsEpsg,
   readProjectedCrs
 } from './native-projection.utils';
-import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
+import {
+  findKnownEpsgForProj4,
+  getKnownEpsgName,
+  getProjectionCodeCentralMeridian
+} from '$lib/features/commons/utils/proj4-crs.utils';
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import {
   createCurrentProjectionForward,
@@ -336,19 +340,31 @@ export function resolveMapVectorCrs(): MapVectorCrs {
   // A composite map has one CRS per frame; layers can only take one, the
   // main frame's, which is what a GIS user of that territory works in.
   const composite = drawn.notes.includes('composite');
-  const definition: ProjectionDefinition = composite
-    ? {
-        ...drawn,
-        proj4: drawn.proj4 ?? resolveMainFrameProj4(context),
-        notes: drawn.notes.filter((note) => note !== 'composite')
-      }
-    : drawn;
+  const proj4 = composite
+    ? (drawn.proj4 ?? resolveMainFrameProj4(context))
+    : drawn.proj4;
+  // A PROJ string equal to a known code is declared by that code, so GIS
+  // software does not guess among equivalents (LAEA Europe: 3035 or 5636).
+  const epsg =
+    drawn.epsg ??
+    (proj4 && !drawn.wkt ? findKnownEpsgForProj4(proj4) : undefined);
+  const definition: ProjectionDefinition = {
+    ...drawn,
+    proj4,
+    epsg,
+    notes: drawn.notes.filter((note) => note !== 'composite')
+  };
   const target = resolveSrs(definition);
-  const crsName = resolveCurrentProjectionDisplay(
+  const displayName = resolveCurrentProjectionDisplay(
     context.state,
     context.basemapProjection,
     context.projectionPresets
   ).name;
+  // A code has an official name; a composite map keeps its own, which says
+  // the insets.
+  const crsName =
+    (!composite && epsg ? getKnownEpsgName(`EPSG:${epsg}`) : undefined) ??
+    displayName;
   const geoPackageSrs = resolveGeoPackageSrs(definition, crsName);
   if (!isGeoreferenceableDefinition(definition) || !target || !geoPackageSrs) {
     const reason =

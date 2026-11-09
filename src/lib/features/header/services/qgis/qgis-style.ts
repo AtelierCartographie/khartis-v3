@@ -1,5 +1,6 @@
 import {
   CATEGORY_SHAPE_CYCLE,
+  DENSITY_DEFAULTS,
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
@@ -33,8 +34,13 @@ import {
   resolveSymbolSignColors
 } from '$lib/features/commons/utils/symbol-sign.utils';
 import {
+  formatCalendarBoundary,
+  formatCalendarClassLabel
+} from '$lib/features/commons/utils/calendar-breaks.utils';
+import {
   classCaseExpression,
   classFilterExpression,
+  type ClassValueKind,
   resolveClassIntervals,
   type ClassInterval
 } from './qgis-classes';
@@ -73,7 +79,6 @@ export type QgisExportNoteCode =
   | 'pattern-fill'
   | 'pattern-approximate'
   | 'missing-pattern'
-  | 'density'
   | 'double-symbols'
   | 'symbol-shapes'
   | 'knockout'
@@ -124,6 +129,18 @@ export interface QgisStyleContext {
   ) => { min: number; max: number } | null;
   formatValue: (value: number) => string;
   missingDataLabel: string;
+  /** How a column is exported, for date classes; numbers when absent. */
+  columnKind?: (column: string) => ClassValueKind;
+  locale?: string;
+}
+
+function kindOf(
+  context: QgisStyleContext,
+  column: string,
+  classification: ClassificationConfig | undefined
+): ClassValueKind {
+  const kind = context.columnKind?.(column) ?? 'number';
+  return kind !== 'number' && !classification?.calendarStep ? 'epoch' : kind;
 }
 
 function toRgba(
@@ -205,17 +222,27 @@ function classIntervals(
 
 function intervalLabel(
   intervals: ClassInterval[],
+  classification: ClassificationConfig,
   context: QgisStyleContext
 ): string {
   const interval = intervals[0] ?? {};
+  const step = classification.calendarStep;
+  const locale = context.locale ?? 'fr';
+  // Date breaks are epoch milliseconds: they read as dates, like the legend.
+  const format = (value: number) =>
+    step
+      ? formatCalendarBoundary(value, step, locale)
+      : context.formatValue(value);
   if (interval.min !== undefined && interval.max !== undefined) {
-    return `${context.formatValue(interval.min)} – ${context.formatValue(interval.max)}`;
+    return step
+      ? formatCalendarClassLabel(interval.min, interval.max, step, locale)
+      : `${format(interval.min)} – ${format(interval.max)}`;
   }
   if (interval.min !== undefined) {
-    return `≥ ${context.formatValue(interval.min)}`;
+    return `≥ ${format(interval.min)}`;
   }
   if (interval.max !== undefined) {
-    return `< ${context.formatValue(interval.max)}`;
+    return `< ${format(interval.max)}`;
   }
   return '';
 }
@@ -229,7 +256,7 @@ function classLabel(
   const labels = classification.labels;
   return labels?.length === classCount(classification) && labels[index]
     ? labels[index]
-    : intervalLabel(intervals, context);
+    : intervalLabel(intervals, classification, context);
 }
 
 function categoryValues(
@@ -273,6 +300,7 @@ function colorExpression(options: {
   classification: ClassificationConfig;
   opacity: number;
   fallback: string;
+  kind?: ClassValueKind;
 }): string {
   const { column, classification, opacity, fallback } = options;
   const colorOf = (hex: string | undefined) => qgisColor(toRgba(hex, opacity));
@@ -290,7 +318,8 @@ function colorExpression(options: {
         column,
         intervals,
         (classification.colors ?? []).map(colorOf),
-        fallback
+        fallback,
+        options.kind
       )
     : fallback;
 }
@@ -311,7 +340,10 @@ function missingShows(missing: MissingDataConfig | undefined): boolean {
 // Polygons
 // ---------------------------------------------------------------------------
 
-function polygonStroke(viz: VisualizationConfig): {
+function polygonStroke(
+  viz: VisualizationConfig,
+  context: QgisStyleContext
+): {
   stroke: QmlStroke | null;
   dataDefined: DataDefinedProperties;
   columns: string[];
@@ -353,7 +385,8 @@ function polygonStroke(viz: VisualizationConfig): {
             column,
             classification,
             opacity,
-            fallback: qgisColor(stroke.color)
+            fallback: qgisColor(stroke.color),
+            kind: kindOf(context, column, classification)
           })
         },
         columns: [column]
@@ -433,7 +466,11 @@ function buildPolygonPlan(
   }
   const notes: QgisExportNote[] = [];
   const columns = new Set<string>();
-  const { stroke, dataDefined, columns: strokeColumns } = polygonStroke(viz);
+  const {
+    stroke,
+    dataDefined,
+    columns: strokeColumns
+  } = polygonStroke(viz, context);
   strokeColumns.forEach((column) => columns.add(column));
   const opacity = normalizeOpacity(polygon.fillOpacity);
   const classification = getPrimitiveClassification(
@@ -462,7 +499,7 @@ function buildPolygonPlan(
 
   let renderer: QmlRenderer;
   if (polygon.fillMode === FillMode.DENSITY) {
-    notes.push({ code: 'density' });
+    // The dots are a layer of their own (`buildDensityPlan`).
     renderer = {
       type: 'single',
       symbol: fillSymbol(null, stroke, dataDefined)
@@ -482,7 +519,11 @@ function buildPolygonPlan(
     );
     const intervals = classIntervals(classification) ?? [];
     const rules: QmlRule[] = intervals.flatMap((classIntervalList, index) => {
-      const filter = classFilterExpression(column, classIntervalList);
+      const filter = classFilterExpression(
+        column,
+        classIntervalList,
+        kindOf(context, column, classification)
+      );
       const pattern = patterns?.[index];
       return filter
         ? [
@@ -876,7 +917,8 @@ function buildSymbolPlan(
         sizeColumn,
         intervals,
         radii.map(qgisNumber),
-        qgisNumber(minRadius)
+        qgisNumber(minRadius),
+        kindOf(context, sizeColumn, pointClassification)
       );
     }
   }
@@ -1057,7 +1099,11 @@ function buildSymbolPlan(
     }
     const intervals = classIntervals(fillClassification) ?? [];
     const rules: QmlRule[] = intervals.flatMap((list, index) => {
-      const filter = classFilterExpression(fillValueColumn, list);
+      const filter = classFilterExpression(
+        fillValueColumn,
+        list,
+        kindOf(context, fillValueColumn, fillClassification)
+      );
       return filter
         ? [
             {
@@ -1081,7 +1127,11 @@ function buildSymbolPlan(
   } else if (sizeClasses) {
     const { column, intervals, radii, classification } = sizeClasses;
     const rules: QmlRule[] = intervals.flatMap((list, index) => {
-      const filter = classFilterExpression(column, list);
+      const filter = classFilterExpression(
+        column,
+        list,
+        kindOf(context, column, classification)
+      );
       return filter
         ? [
             {
@@ -1178,7 +1228,8 @@ function buildLinePlan(
         line.valueColumn,
         intervals,
         widths.map(qgisNumber),
-        '1'
+        '1',
+        kindOf(context, line.valueColumn, thicknessClassification)
       );
     }
   }
@@ -1216,7 +1267,11 @@ function buildLinePlan(
     columns.add(column);
     const intervals = classIntervals(colorClassification) ?? [];
     const rules: QmlRule[] = intervals.flatMap((list, index) => {
-      const filter = classFilterExpression(column, list);
+      const filter = classFilterExpression(
+        column,
+        list,
+        kindOf(context, column, colorClassification)
+      );
       return filter
         ? [
             {
@@ -1285,7 +1340,8 @@ function textColorExpression(
   },
   opacity: number,
   fallback: Rgba,
-  columns: Set<string>
+  columns: Set<string>,
+  kindFor: (column: string) => ClassValueKind
 ): string | undefined {
   const { classification } = config;
   if (!classification?.colors?.length) {
@@ -1298,7 +1354,8 @@ function textColorExpression(
       column: config.valueColumn,
       classification,
       opacity,
-      fallback: qgisColor(fallback)
+      fallback: qgisColor(fallback),
+      kind: kindFor(config.valueColumn)
     });
   }
   if (config.colorMode === ColorMode.CATEGORIES && config.categoryColumn) {
@@ -1314,7 +1371,10 @@ function textColorExpression(
   return undefined;
 }
 
-function buildTextPlan(viz: VisualizationConfig): QgisLayerPlan | null {
+function buildTextPlan(
+  viz: VisualizationConfig,
+  context: QgisStyleContext
+): QgisLayerPlan | null {
   const text = getTextPrimitive(viz);
   const labelColumn = text?.labelColumn;
   if (!text?.enabled || !labelColumn) {
@@ -1337,7 +1397,8 @@ function buildTextPlan(viz: VisualizationConfig): QgisLayerPlan | null {
     },
     opacity,
     color,
-    columns
+    columns,
+    (column) => kindOf(context, column, textClassification)
   );
   if (colorDd) {
     dataDefined.Color = colorDd;
@@ -1362,7 +1423,8 @@ function buildTextPlan(viz: VisualizationConfig): QgisLayerPlan | null {
         text.valueColumn,
         intervals,
         sizes,
-        qgisNumber(text.size * PT_PER_CSS_PX)
+        qgisNumber(text.size * PT_PER_CSS_PX),
+        kindOf(context, text.valueColumn, sizeClassification)
       );
     }
   }
@@ -1464,7 +1526,7 @@ export function buildVisualizationLayerPlans(
     buildPolygonPlan(viz, context),
     buildLinePlan(viz, context),
     buildSymbolPlan(viz, context),
-    buildTextPlan(viz)
+    buildTextPlan(viz, context)
   ].filter((plan): plan is QgisLayerPlan => plan !== null);
   const rank = (primitive: PrimitiveFilter) => {
     const index = primitiveOrder.indexOf(primitive);
@@ -1604,5 +1666,49 @@ export function withLabelEdits(
       )
     ],
     style: { ...plan.style, labels }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Dot density
+// ---------------------------------------------------------------------------
+
+/**
+ * The dots of a dot-density fill, as the map draws them: one colour, a
+ * radius in page pixels. Null unless the polygons are drawn in density.
+ */
+export function buildDensityPlan(
+  viz: VisualizationConfig
+): QgisLayerPlan | null {
+  const polygon = getPolygonPrimitive(viz);
+  if (
+    !polygon?.enabled ||
+    polygon.fillMode !== FillMode.DENSITY ||
+    !viz.density?.valueColumn
+  ) {
+    return null;
+  }
+  const radius = Math.max(0.1, viz.density.dotSize ?? DENSITY_DEFAULTS.dotSize);
+  return {
+    primitive: PrimitiveFilterType.POLYGON,
+    geometry: 'point',
+    columns: [],
+    style: {
+      geometryType: 'point',
+      renderer: {
+        type: 'single',
+        symbol: markerSymbol({
+          shape: ShapeType.CIRCLE,
+          radius,
+          color: toRgba(
+            viz.density.color ?? DENSITY_DEFAULTS.color,
+            normalizeOpacity(viz.style.fillOpacity)
+          ),
+          stroke: null,
+          barWidthPx: 0
+        })
+      }
+    },
+    notes: []
   };
 }

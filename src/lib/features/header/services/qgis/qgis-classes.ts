@@ -59,13 +59,34 @@ export function resolveClassIntervals(
   return classes;
 }
 
-function intervalCondition(field: string, interval: ClassInterval): string {
+/**
+ * How the exported column holds the classified values. Date breaks are
+ * epoch milliseconds in Khartis; QGIS compares a date with a date literal,
+ * which keeps clear of time zones.
+ */
+export type ClassValueKind = 'number' | 'date' | 'datetime' | 'epoch';
+
+export function qgisClassLiteral(value: number, kind: ClassValueKind): string {
+  if (kind === 'number' || kind === 'epoch') {
+    return qgisNumber(value);
+  }
+  const iso = new Date(value).toISOString();
+  return kind === 'date'
+    ? `to_date('${iso.slice(0, 10)}')`
+    : `to_datetime('${iso}')`;
+}
+
+function intervalCondition(
+  field: string,
+  interval: ClassInterval,
+  kind: ClassValueKind
+): string {
   const parts: string[] = [];
   if (interval.min !== undefined) {
-    parts.push(`${field} >= ${qgisNumber(interval.min)}`);
+    parts.push(`${field} >= ${qgisClassLiteral(interval.min, kind)}`);
   }
   if (interval.max !== undefined) {
-    parts.push(`${field} < ${qgisNumber(interval.max)}`);
+    parts.push(`${field} < ${qgisClassLiteral(interval.max, kind)}`);
   }
   return parts.length > 0 ? parts.join(' AND ') : `${field} IS NOT NULL`;
 }
@@ -73,9 +94,13 @@ function intervalCondition(field: string, interval: ClassInterval): string {
 /** The QGIS filter selecting a class, `null` when no value falls in it. */
 export function classFilterExpression(
   column: string,
-  intervals: ClassInterval[]
+  intervals: ClassInterval[],
+  kind: ClassValueKind = 'number'
 ): string | null {
   const field = qgisField(column);
+  // Breaks that are not dates on a date column: the map compares the epoch
+  // milliseconds of the dates with them.
+  const value = kind === 'epoch' ? `epoch(to_datetime(${field}))` : field;
   const conditions = intervals
     .filter(
       (interval) =>
@@ -83,7 +108,7 @@ export function classFilterExpression(
         interval.max === undefined ||
         interval.min < interval.max
     )
-    .map((interval) => intervalCondition(field, interval));
+    .map((interval) => intervalCondition(value, interval, kind));
   if (conditions.length === 0) {
     return null;
   }
@@ -103,10 +128,11 @@ export function classCaseExpression(
   column: string,
   classes: ClassInterval[][],
   values: readonly string[],
-  fallback: string
+  fallback: string,
+  kind: ClassValueKind = 'number'
 ): string {
   const branches = classes.flatMap((intervals, index) => {
-    const filter = classFilterExpression(column, intervals);
+    const filter = classFilterExpression(column, intervals, kind);
     const value = values[index];
     return filter && value !== undefined
       ? [`WHEN ${filter} THEN ${value}`]
