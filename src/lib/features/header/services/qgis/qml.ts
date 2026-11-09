@@ -82,15 +82,33 @@ export interface QmlCategory {
   render: boolean;
 }
 
+/** The nested circles QGIS draws for a size read from the data. */
+export interface QmlSizeLegend {
+  title: string;
+  /** Largest first; size is the symbol size QGIS draws, in millimetres. */
+  classes: Array<{ label: string; sizeMm: number }>;
+}
+
 export type QmlRenderer =
   | { type: 'null' }
-  | { type: 'single'; symbol: QmlSymbol; orderBy?: QmlOrderBy }
-  | { type: 'rules'; rules: QmlRule[]; orderBy?: QmlOrderBy }
+  | {
+      type: 'single';
+      symbol: QmlSymbol;
+      orderBy?: QmlOrderBy;
+      sizeLegend?: QmlSizeLegend;
+    }
+  | {
+      type: 'rules';
+      rules: QmlRule[];
+      orderBy?: QmlOrderBy;
+      sizeLegend?: QmlSizeLegend;
+    }
   | {
       type: 'categories';
       attribute: string;
       categories: QmlCategory[];
       orderBy?: QmlOrderBy;
+      sizeLegend?: QmlSizeLegend;
     };
 
 export interface QmlOrderBy {
@@ -127,9 +145,10 @@ export interface QmlLayerStyle {
   geometryType: 'point' | 'line' | 'polygon';
 }
 
-// QGIS reads Point as the label unit and MM for everything else.
-export const MM_PER_CSS_PX = 25.4 / 96;
-export const PT_PER_CSS_PX = 72 / 96;
+// The Khartis page counts in points (A4 is 842 × 595). QGIS reads Point as
+// the label unit and MM for everything else.
+export const MM_PER_PAGE_UNIT = 25.4 / 72;
+export const PT_PER_PAGE_UNIT = 1;
 
 function escapeXml(value: string): string {
   return value
@@ -422,7 +441,140 @@ function orderByXml(orderBy: QmlOrderBy | undefined): string[] {
     : [];
 }
 
-function rendererXml(renderer: QmlRenderer): string {
+type SimpleMarker = Extract<QmlSymbolLayer, { kind: 'marker' }>;
+
+function onlyMarker(symbol: QmlSymbol): SimpleMarker | null {
+  const [layer] = symbol.layers;
+  return symbol.type === 'marker' &&
+    symbol.layers.length === 1 &&
+    layer.kind === 'marker'
+    ? layer
+    : null;
+}
+
+function markerSize(layer: SimpleMarker): string {
+  return layer.dataDefined?.size ?? formatNumber(layer.sizeMm);
+}
+
+function withSize(symbol: QmlSymbol, size: string): QmlSymbol {
+  return {
+    ...symbol,
+    layers: symbol.layers.map((layer) =>
+      layer.kind === 'marker'
+        ? { ...layer, dataDefined: { ...layer.dataDefined, size } }
+        : layer
+    )
+  };
+}
+
+function sizeLegendXml(legend: QmlSizeLegend): string {
+  return element(
+    'data-defined-size-legend',
+    { title: legend.title, type: 'collapsed', valign: 'bottom' },
+    [
+      element(
+        'classes',
+        {},
+        legend.classes.map((entry) =>
+          element('class', {
+            label: entry.label,
+            size: formatNumber(entry.sizeMm)
+          })
+        )
+      )
+    ]
+  );
+}
+
+/**
+ * QGIS draws the size legend of a single or categorized renderer only, and
+ * only when every symbol reads its size from one and the same expression:
+ * exclusive rules become categories of an expression that names the rule,
+ * and the sizes one expression that picks the size of the feature's rule.
+ */
+function withNativeSizeLegend(renderer: QmlRenderer): QmlRenderer {
+  if (renderer.type === 'null' || !renderer.sizeLegend) {
+    return renderer;
+  }
+  const entries =
+    renderer.type === 'single'
+      ? [{ filter: 'TRUE', symbol: renderer.symbol }]
+      : renderer.type === 'rules'
+        ? renderer.rules
+        : renderer.categories.map((category) => ({
+            filter: `${qgisField(renderer.attribute)} = ${qgisString(category.value)}`,
+            symbol: category.symbol
+          }));
+  const markers = entries.map((entry) => onlyMarker(entry.symbol));
+  if (markers.some((marker) => marker === null)) {
+    const { sizeLegend: _, ...rest } = renderer;
+    return rest;
+  }
+  const sizes = (markers as SimpleMarker[]).map(markerSize);
+  const size = sizes.every((value) => value === sizes[0])
+    ? sizes[0]
+    : `CASE ${entries.map((entry, index) => `WHEN ${entry.filter} THEN ${sizes[index]}`).join(' ')} END`;
+  switch (renderer.type) {
+    case 'single':
+      return { ...renderer, symbol: withSize(renderer.symbol, size) };
+    case 'categories':
+      return {
+        ...renderer,
+        categories: renderer.categories.map((category) => ({
+          ...category,
+          symbol: withSize(category.symbol, size)
+        }))
+      };
+    case 'rules':
+      return {
+        type: 'categories',
+        attribute: `CASE ${renderer.rules.map((rule, index) => `WHEN ${rule.filter} THEN '${index}'`).join(' ')} END`,
+        categories: renderer.rules.map((rule, index) => ({
+          value: `${index}`,
+          label: rule.label,
+          symbol: withSize(rule.symbol, size),
+          render: true
+        })),
+        orderBy: renderer.orderBy,
+        sizeLegend: renderer.sizeLegend
+      };
+  }
+}
+
+// The nested circles take the look of the first symbol, in grey when the
+// symbols differ in colour.
+function sizeLegendSymbol(symbols: QmlSymbol[]): QmlSymbol {
+  const [first] = symbols;
+  const colors = new Set(
+    symbols.map((symbol) =>
+      formatRgba(onlyMarker(symbol)?.color ?? TRANSPARENT)
+    )
+  );
+  return colors.size <= 1
+    ? first
+    : {
+        ...first,
+        layers: first.layers.map((layer) =>
+          layer.kind === 'marker'
+            ? {
+                ...layer,
+                color: [255, 255, 255, 255],
+                stroke: {
+                  color: [90, 90, 90, 255],
+                  widthMm: layer.stroke?.widthMm || 0.2
+                }
+              }
+            : layer
+        )
+      };
+}
+
+function rendererXml(input: QmlRenderer): string {
+  const renderer = withNativeSizeLegend(input);
+  const sizeLegend =
+    renderer.type !== 'null' && renderer.sizeLegend
+      ? [sizeLegendXml(renderer.sizeLegend)]
+      : [];
   const common = {
     forceraster: 0,
     symbollevels: 0,
@@ -436,7 +588,8 @@ function rendererXml(renderer: QmlRenderer): string {
     case 'single':
       return element('renderer-v2', { ...common, type: 'singleSymbol' }, [
         element('symbols', {}, [symbolXml(renderer.symbol, '0')]),
-        ...orderByXml(renderer.orderBy)
+        ...orderByXml(renderer.orderBy),
+        ...sizeLegend
       ]);
     case 'rules':
       return element('renderer-v2', { ...common, type: 'RuleRenderer' }, [
@@ -485,7 +638,20 @@ function rendererXml(renderer: QmlRenderer): string {
               symbolXml(category.symbol, `${index}`)
             )
           ),
-          ...orderByXml(renderer.orderBy)
+          ...(sizeLegend.length > 0
+            ? [
+                element('source-symbol', {}, [
+                  symbolXml(
+                    sizeLegendSymbol(
+                      renderer.categories.map((category) => category.symbol)
+                    ),
+                    '0'
+                  )
+                ])
+              ]
+            : []),
+          ...orderByXml(renderer.orderBy),
+          ...sizeLegend
         ]
       );
   }

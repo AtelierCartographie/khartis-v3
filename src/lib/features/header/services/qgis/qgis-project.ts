@@ -1,3 +1,5 @@
+import { buildQgisLayoutXml } from './qgis-layout';
+import type { PageLayoutSpec } from './qgis-page-layout';
 import type { MapVectorCrs } from '$lib/features/step-toolbar/tools/projections';
 import { buildQmlBody, escapeXmlText, type QmlLayerStyle } from './qml';
 import type { QgisLayerGeometry } from './qgis-style';
@@ -64,6 +66,8 @@ export function buildQgisProject(options: {
   background?: string;
   /** The georeferenced image of the Khartis page, unchecked, on top. */
   image?: { name: string; file: string };
+  /** The print layout of the page; legends name the tables they list. */
+  layout?: PageLayoutSpec;
 }): string {
   const [red, green, blue] = (
     options.background?.match(/^#?([0-9a-f]{6})$/i)?.[1] ?? 'ffffff'
@@ -138,6 +142,28 @@ export function buildQgisProject(options: {
     )
     .join('');
 
+  const layout = options.layout
+    ? buildQgisLayoutXml({
+        ...options.layout,
+        legends: options.layout.legends.map(({ tables, ...legend }) => ({
+          ...legend,
+          layers: tables.flatMap(({ table, nodeOrder }) => {
+            const layer = topFirst.find((entry) => entry.table === table);
+            return layer
+              ? [
+                  {
+                    id: layer.id,
+                    name: layer.name,
+                    source: layer.source,
+                    nodeOrder
+                  }
+                ]
+              : [];
+          })
+        }))
+      })
+    : '';
+
   return [
     "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>",
     `<qgis projectname="${escapeXmlText(options.title)}" version="3.34.0">`,
@@ -154,6 +180,7 @@ export function buildQgisProject(options: {
     // Without ProjectionsEnabled QGIS reads the project as having no CRS.
     '<properties name="properties"><properties name="Paths"><properties name="Absolute" type="bool">false</properties></properties><properties name="SpatialRefSys"><properties name="ProjectionsEnabled" type="int">1</properties></properties>' +
       `<properties name="Gui"><properties name="CanvasColorRedPart" type="int">${red}</properties><properties name="CanvasColorGreenPart" type="int">${green}</properties><properties name="CanvasColorBluePart" type="int">${blue}</properties></properties></properties>`,
+    layout,
     '</qgis>'
   ].join('\n');
 }

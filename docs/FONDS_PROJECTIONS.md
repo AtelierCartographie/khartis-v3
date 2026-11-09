@@ -317,7 +317,24 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   (`.aux.xml`, world file) et ajoutée décochée au projet ; le mémo reprend les
   textes de la page et la légende en clair (méthode, classes et couleurs).
 - Graticule et équateur : lignes remarquables du catalogue, ou lignes que la
-  carte génère (`getGraticuleGeoJSON`), reprojetées comme le reste.
+  carte génère (`getGraticuleGeoJSON`), reprojetées comme le reste. Les mers
+  sont la sphère entière (un rectangle lon/lat à un sommet par degré), coupée et
+  projetée comme le reste : la forme que d3 remplit. Si la projection envoie
+  les pôles à l'infini, la couleur des mers passe au fond du canevas.
+- La page Khartis compte en points (A4 = 842 × 595) : tailles en millimètres
+  = unités × 25,4/72, textes en points = unités.
+- Le projet contient une mise en page QGIS « Khartis » au format de la page.
+  `measureMapPage` (`map-export.utils.ts`) mesure la page telle qu'elle
+  s'exporte : cadre de la carte, textes avec leur style calculé, cadres de
+  légende (`data-legend-item-id`), échelle, nord, titres des cartes d'une
+  collection. Le cadre de la carte prend l'emprise exacte de
+  `buildMapGeoreference` ; à défaut (collection, projection sans SCR commun),
+  celle des données. La légende est celle de QGIS : la taille des symboles
+  proportionnels y devient la légende de taille native (cercles emboîtés,
+  valeurs lues sur la légende Khartis), ce qui demande un renderer catégorisé
+  dont tous les symboles lisent leur taille d'une même expression
+  (`withNativeSizeLegend`, `qml.ts`). La mesure abandonne après 10 s : un
+  onglet masqué ne dessine aucune image.
 - Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
   applique à l'ouverture. Les classes sont des règles qui reprennent
   exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans
@@ -325,8 +342,9 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   expression sur le domaine de la carte, les tailles des millimètres sur la
   page Khartis. Les trames motif.js deviennent des hachures ou des grilles de
   symboles QGIS de même pas, épaisseur et angle (`qgis-patterns.ts`). Ce qui
-  ne se traduit pas (densité, évidement, filets d'étiquettes, certaines
-  trames, mise en page) est listé dans le mémo, jamais approché sans le dire.
+  ne se traduit pas (évidement, filets d'étiquettes, certaines trames, formes
+  des annotations, présentation de la légende) est listé dans le mémo, jamais
+  approché sans le dire.
 - Une couche qui échoue (géométrie refusée par GEOS, SCR inaccessible) est
   écartée, nommée dans le mémo et signalée à l'utilisateur ; le reste de la
   carte est exporté.

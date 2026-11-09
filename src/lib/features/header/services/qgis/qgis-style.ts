@@ -50,8 +50,8 @@ import {
 } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import { resolveQgisPattern } from './qgis-patterns';
 import {
-  MM_PER_CSS_PX,
-  PT_PER_CSS_PX,
+  MM_PER_PAGE_UNIT,
+  PT_PER_PAGE_UNIT,
   qgisField,
   qgisNumber,
   qgisString,
@@ -119,6 +119,10 @@ export interface QgisLayerPlan {
   columns: string[];
   style: QmlLayerStyle;
   notes: QgisExportNote[];
+  /** Symbol sizes proportional to one variable: QGIS can draw their legend. */
+  proportionalSize?: boolean;
+  /** One colour for every symbol: the size alone carries the legend. */
+  uniqueColor?: boolean;
 }
 
 export interface QgisStyleContext {
@@ -185,7 +189,7 @@ function qgisColor(rgba: Rgba): string {
 }
 
 function pxToMm(px: number): number {
-  return px * MM_PER_CSS_PX;
+  return px * MM_PER_PAGE_UNIT;
 }
 
 const DASH_ARRAYS: Record<string, [number, number]> = {
@@ -685,10 +689,12 @@ interface MarkerOptions {
   barWidthPx: number;
 }
 
+const LEGEND_SYMBOL_SIZE_MM = 3;
+
 function radiusMmExpression(radius: number | string): string {
   return typeof radius === 'number'
     ? qgisNumber(pxToMm(radius))
-    : `(${radius}) * ${qgisNumber(MM_PER_CSS_PX)}`;
+    : `(${radius}) * ${qgisNumber(MM_PER_PAGE_UNIT)}`;
 }
 
 function markerLayer(options: MarkerOptions): QmlSymbolLayer {
@@ -744,7 +750,12 @@ function markerLayer(options: MarkerOptions): QmlSymbolLayer {
   return {
     kind: 'marker',
     shape: name,
-    sizeMm: typeof radius === 'number' ? sizeFactor * pxToMm(radius) : 0,
+    // A size read from the data replaces it on the map; the legend draws
+    // categories and classes at this one.
+    sizeMm:
+      typeof radius === 'number'
+        ? sizeFactor * pxToMm(radius)
+        : LEGEND_SYMBOL_SIZE_MM,
     color,
     stroke,
     dataDefined
@@ -1002,6 +1013,7 @@ function buildSymbolPlan(
     });
 
   let renderer: QmlRenderer;
+  let colorIsUnique = false;
   if (doubleSymbols && uniqueFill) {
     const role = qgisField(doubleSymbols.roleField);
     const value = qgisField(doubleSymbols.valueField);
@@ -1151,6 +1163,7 @@ function buildSymbolPlan(
     }
     renderer = { type: 'rules', rules, orderBy };
   } else if (sizeColumn && missingSymbol) {
+    colorIsUnique = true;
     renderer = {
       type: 'rules',
       rules: [
@@ -1168,6 +1181,7 @@ function buildSymbolPlan(
       orderBy
     };
   } else {
+    colorIsUnique = true;
     renderer = { type: 'single', symbol: symbolWith(uniqueColor), orderBy };
   }
 
@@ -1177,7 +1191,9 @@ function buildSymbolPlan(
     geometry: 'point',
     columns: [...columns],
     style: { geometryType: 'point', renderer },
-    notes
+    notes,
+    proportionalSize: Boolean(sizeColumn) && !sizeClasses && !doubleSymbols,
+    uniqueColor: colorIsUnique
   };
 }
 
@@ -1234,7 +1250,7 @@ function buildLinePlan(
     }
   }
   if (typeof widthPx === 'string') {
-    dataDefined.outlineWidth = `(${widthPx}) * ${qgisNumber(MM_PER_CSS_PX)}`;
+    dataDefined.outlineWidth = `(${widthPx}) * ${qgisNumber(MM_PER_PAGE_UNIT)}`;
   }
   const widthMm =
     typeof widthPx === 'number' ? pxToMm(widthPx) : pxToMm(maxWidthPx);
@@ -1418,12 +1434,12 @@ function buildTextPlan(
               text.size,
               intervals.length
             )
-      ).map((px) => qgisNumber(px * PT_PER_CSS_PX));
+      ).map((px) => qgisNumber(px * PT_PER_PAGE_UNIT));
       dataDefined.Size = classCaseExpression(
         text.valueColumn,
         intervals,
         sizes,
-        qgisNumber(text.size * PT_PER_CSS_PX),
+        qgisNumber(text.size * PT_PER_PAGE_UNIT),
         kindOf(context, text.valueColumn, sizeClassification)
       );
     }
@@ -1460,7 +1476,7 @@ function buildTextPlan(
       description: labelColumn,
       format: {
         fontFamily: text.fontFamily,
-        sizePt: primarySizePx * PT_PER_CSS_PX,
+        sizePt: primarySizePx * PT_PER_PAGE_UNIT,
         color,
         bold: text.bold,
         italic: text.italic,
@@ -1486,7 +1502,7 @@ function buildTextPlan(
       description: secondary.labelColumn,
       format: {
         fontFamily: secondary.fontFamily,
-        sizePt: secondarySizePx * PT_PER_CSS_PX,
+        sizePt: secondarySizePx * PT_PER_PAGE_UNIT,
         color: toRgba(firstColor(secondary.color), secondaryOpacity, '#000000'),
         bold: secondary.bold,
         italic: secondary.italic,
