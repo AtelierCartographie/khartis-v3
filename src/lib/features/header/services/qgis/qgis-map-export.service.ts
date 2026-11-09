@@ -93,7 +93,12 @@ import {
   type QgisStyleContext
 } from './qgis-style';
 import { buildQgisProject } from './qgis-project';
-import { buildQml, MM_PER_PAGE_UNIT, PT_PER_PAGE_UNIT } from './qml';
+import {
+  buildQml,
+  MM_PER_PAGE_UNIT,
+  PT_PER_PAGE_UNIT,
+  sizeLegendNodes
+} from './qml';
 import {
   exportMapToJpg,
   type MapExportPlacement
@@ -252,6 +257,9 @@ function createStyleContext(
     domain: (primitive, column) => getDomain(viz, primitive, column),
     formatValue: (value) => formatter.format(value),
     missingDataLabel: m.qgis_missing_data(),
+    // Unknown (not drawn yet): kept, rather than lose an entry.
+    hasMissingData: (primitive) =>
+      rowScopeStore.missingDataState(viz.id, primitive) ?? true,
     columnKind: (column) => temporal.get(column) ?? 'number',
     locale: getLocale()
   };
@@ -695,8 +703,8 @@ function resolveLabelEdits(
   };
 }
 
-// QGIS draws the nested circles of proportional symbols with the values of
-// the Khartis legend.
+// QGIS draws the size legend of proportional symbols and lines with the
+// values of the Khartis legend.
 function withSizeLegend(
   plan: QgisLayerPlan,
   viz: VisualizationConfig,
@@ -706,27 +714,28 @@ function withSizeLegend(
   if (!plan.proportionalSize || renderer.type === 'null') {
     return plan;
   }
-  const classes = [viz.id, resolveOrderVizId(viz.id)]
+  const measured = [viz.id, resolveOrderVizId(viz.id)]
     .map((id) => measuredSizeLegend(page, id, plan.primitive))
-    .find((entries) => entries.length > 0);
-  if (!classes) {
+    .find((entry) => entry !== null);
+  if (!measured) {
     return plan;
   }
-  // The legend frame carries the title; the circles take its subtitle.
-  const item = getLegendState().items.find((entry) => {
-    const parsed = parseLegendItemId(entry.id);
-    return (
-      parsed?.primitive === plan.primitive &&
-      [viz.id, resolveOrderVizId(viz.id)].includes(parsed.vizId)
-    );
-  });
+  // The frame of the sizes carries the title; they take its subtitle.
+  const item = getLegendState().items.find(
+    (entry) => entry.id === measured.itemId
+  );
+  const { classes } = measured;
   return {
     ...plan,
     style: {
       ...plan.style,
       renderer: {
         ...renderer,
-        sizeLegend: { title: item?.subtitle?.trim() ?? '', classes }
+        sizeLegend: {
+          title: measured.subtitle ?? item?.subtitle?.trim() ?? '',
+          classes,
+          neutral: !plan.uniqueColor
+        }
       }
     }
   };
@@ -1699,34 +1708,41 @@ function layoutFont(
   };
 }
 
-// With a size legend, QGIS lists its title, the circles, then one entry per
-// category: an untitled one names its expression, and symbols of one colour
-// need no entry beside the circles.
+// A size legend lists its sizes beside the other entries; symbols of one
+// colour need no entry of their own beside the sizes, only the missing data.
 function legendNodeOrder(
   plan: QgisLayerPlan,
   channel?: string
 ): number[] | undefined {
-  const { renderer } = plan.style;
-  if (renderer.type === 'null' || !renderer.sizeLegend) {
+  const nodes = sizeLegendNodes(plan.style.renderer);
+  if (!nodes) {
     return undefined;
   }
-  const entries =
-    renderer.type === 'single'
-      ? 0
-      : renderer.type === 'rules'
-        ? renderer.rules.length
-        : renderer.categories.length;
-  // A variable with a legend per channel: the size one shows the circles,
+  // A variable with a legend per channel: the size one shows the sizes,
   // the colour one the categories.
-  const circles = [...(renderer.sizeLegend.title ? [0] : []), 1];
-  const categories = Array.from({ length: entries }, (_, index) => index + 2);
+  const entries = plan.uniqueColor ? nodes.entries.slice(1) : nodes.entries;
   if (channel === 'size') {
-    return circles;
+    return nodes.size;
   }
-  if (channel === 'color' && categories.length > 0) {
-    return categories;
+  if (channel === 'color' && entries.length > 0) {
+    return entries;
   }
-  return [...circles, ...(plan.uniqueColor ? [] : categories)];
+  return [...nodes.size, ...entries];
+}
+
+// Nested sizes carry their own title; listed ones take it above the layer.
+function sizeSubtitle(
+  plan: QgisLayerPlan,
+  channel?: string
+): string | undefined {
+  const { renderer } = plan.style;
+  const nodes = sizeLegendNodes(renderer);
+  return nodes &&
+    !nodes.nested &&
+    channel !== 'color' &&
+    renderer.type !== 'null'
+    ? renderer.sizeLegend?.title || undefined
+    : undefined;
 }
 
 /** The print layout of the page: map frames, texts, legends, indications. */
@@ -1769,18 +1785,22 @@ function buildLayout(
     return [
       {
         itemId: frame.itemId,
-        title: item?.title || item?.name || '',
+        // Broken into lines where Khartis breaks it.
+        title: frame.title ?? (item?.title || item?.name || ''),
         font: layoutFont(frame.font, 9),
         titleFont: {
           ...layoutFont(frame.titleFont ?? frame.font, 10),
           bold: true
         },
+        note: frame.note ?? undefined,
         tables: matching
           .filter((layer) => layer.group === firstGroup)
           .reverse()
           .map((layer) => ({
             table: layer.options.layerName,
-            nodeOrder: legendNodeOrder(layer.plan, parsed.channel)
+            nodeOrder: legendNodeOrder(layer.plan, parsed.channel),
+            subtitle: sizeSubtitle(layer.plan, parsed.channel),
+            iconSizes: sizeLegendNodes(layer.plan.style.renderer)?.iconSizes
           }))
       }
     ];

@@ -7,6 +7,7 @@ import type {
   LayoutBox,
   LayoutFont,
   LayoutLegend,
+  LayoutLegendSection,
   LayoutMap,
   LayoutText,
   QgisLayout
@@ -41,14 +42,18 @@ export function parseLegendItemId(
 }
 
 /**
- * The size legend Khartis draws for proportional symbols of a visualization:
- * labels and circle diameters in millimetres, largest first.
+ * The size legend Khartis draws for a visualization, in its order: labels
+ * and sizes in millimetres (symbol height, line width), and its frame.
  */
 export function measuredSizeLegend(
   page: MeasuredMapPage | null,
   vizId: string,
   primitive: string
-): Array<{ label: string; sizeMm: number }> {
+): {
+  itemId: string;
+  subtitle: string | null;
+  classes: Array<{ label: string; sizeMm: number }>;
+} | null {
   const legend = page?.legends.find((entry) => {
     const parsed = parseLegendItemId(entry.itemId);
     return (
@@ -57,12 +62,16 @@ export function measuredSizeLegend(
       entry.sizes.length > 0
     );
   });
-  return (legend?.sizes ?? [])
-    .map(({ label, radius }) => ({
-      label,
-      sizeMm: 2 * radius * MM_PER_PAGE_UNIT
-    }))
-    .sort((a, b) => b.sizeMm - a.sizeMm);
+  return legend
+    ? {
+        itemId: legend.itemId,
+        subtitle: legend.subtitle,
+        classes: legend.sizes.map(({ label, size }) => ({
+          label,
+          sizeMm: size * MM_PER_PAGE_UNIT
+        }))
+      }
+    : null;
 }
 
 /** `rgb()` or `rgba()` as the browser computes it. */
@@ -117,12 +126,14 @@ export interface PageLayoutInput {
   dataExtent: (theme?: string) => [number, number, number, number] | null;
   /** Themes the project defines, one per map of a collection. */
   themes: string[];
-  legends: Array<
-    Omit<LayoutLegend, 'box' | 'mapKey' | 'name' | 'layers'> & {
-      itemId: string;
-      tables: LegendTable[];
-    }
-  >;
+  legends: Array<{
+    itemId: string;
+    title: string;
+    note?: string;
+    font: LayoutFont;
+    titleFont: LayoutFont;
+    tables: LegendTable[];
+  }>;
   scaleBar: {
     form: 'line' | 'box';
     unit: 'km' | 'mi';
@@ -137,11 +148,58 @@ export interface PageLayoutInput {
 export interface LegendTable {
   table: string;
   nodeOrder?: number[];
+  /** Shown above the layer's entries. */
+  subtitle?: string;
+  iconSizes?: Record<number, [number, number]>;
 }
 
 export type PageLayoutSpec = Omit<QgisLayout, 'legends'> & {
-  legends: Array<Omit<LayoutLegend, 'layers'> & { tables: LegendTable[] }>;
+  legends: Array<
+    Omit<LayoutLegend, 'sections'> & {
+      sections: Array<
+        Omit<LayoutLegendSection, 'layers'> & { tables: LegendTable[] }
+      >;
+    }
+  >;
 };
+
+type SpecLegend = PageLayoutSpec['legends'][number];
+
+// The next legend of a column starts below the previous one, both sharing
+// most of their width.
+function followsInColumn(previous: LayoutBox, next: LayoutBox): boolean {
+  const overlap =
+    Math.min(previous.x + previous.width, next.x + next.width) -
+    Math.max(previous.x, next.x);
+  return (
+    overlap > 0.5 * Math.min(previous.width, next.width) &&
+    next.y >= previous.y + previous.height - 1
+  );
+}
+
+/**
+ * Khartis legends stacked in one column become one QGIS legend: its entries
+ * take more room than the Khartis frames, and separate legends would
+ * overlap.
+ */
+export function stackLegends(
+  legends: Array<{ box: LayoutBox; legend: SpecLegend }>
+): SpecLegend[] {
+  const columns: Array<{ last: LayoutBox; legend: SpecLegend }> = [];
+  for (const entry of [...legends].sort((a, b) => a.box.y - b.box.y)) {
+    const column = columns.find(({ last }) => followsInColumn(last, entry.box));
+    if (column) {
+      column.legend = {
+        ...column.legend,
+        sections: [...column.legend.sections, ...entry.legend.sections]
+      };
+      column.last = entry.box;
+    } else {
+      columns.push({ last: entry.box, legend: entry.legend });
+    }
+  }
+  return columns.map(({ legend }) => legend);
+}
 
 /** The QGIS print layout of a measured Khartis page. */
 export function buildPageLayoutSpec(input: PageLayoutInput): PageLayoutSpec {
@@ -216,22 +274,32 @@ export function buildPageLayoutSpec(input: PageLayoutInput): PageLayoutSpec {
     background: parseCssColor(text.background)
   }));
 
-  const legends = input.legends.flatMap((legend) => {
-    const frame = page.legends.find((entry) => entry.itemId === legend.itemId);
-    return frame && maps.length > 0 && legend.tables.length > 0
-      ? [
-          {
+  const legends = stackLegends(
+    input.legends.flatMap((legend) => {
+      const frame = page.legends.find(
+        (entry) => entry.itemId === legend.itemId
+      );
+      if (!frame || maps.length === 0 || legend.tables.length === 0) {
+        return [];
+      }
+      const box = toLayoutBox(frame.box);
+      return [
+        {
+          box,
+          legend: {
             name: legend.title,
-            box: toLayoutBox(frame.box),
+            box,
             mapKey: maps[0].key,
-            title: legend.title,
             font: legend.font,
             titleFont: legend.titleFont,
-            tables: legend.tables
+            sections: [
+              { title: legend.title, note: legend.note, tables: legend.tables }
+            ]
           }
-        ]
-      : [];
-  });
+        }
+      ];
+    })
+  );
 
   const map = maps[0];
   return {

@@ -42,14 +42,29 @@ export interface LayoutLegendLayer {
   source: string;
   /** The legend entries shown, by index; all when absent. */
   nodeOrder?: number[];
+  /** Shown above the layer's entries; the layer name stays hidden without it. */
+  subtitle?: string;
+  /** Icon width and height of some entries, in millimetres, by index. */
+  iconSizes?: Record<number, [number, number]>;
 }
 
+/** One Khartis legend frame: a title, its layers, a note. */
+export interface LayoutLegendSection {
+  title: string;
+  layers: LayoutLegendLayer[];
+  /** Text under the entries, one line per `\n`. */
+  note?: string;
+}
+
+/**
+ * A QGIS legend: the Khartis legends of one column follow one another in
+ * it, since a QGIS legend grows to its content where Khartis drew it.
+ */
 export interface LayoutLegend {
   name: string;
   box: LayoutBox;
   mapKey: string;
-  title: string;
-  layers: LayoutLegendLayer[];
+  sections: LayoutLegendSection[];
   font: LayoutFont;
   titleFont: LayoutFont;
 }
@@ -214,8 +229,22 @@ function textItem(text: LayoutText, zValue: number): string {
   );
 }
 
-// The legend says the Khartis title once: each layer's own name is hidden.
-function legendLayer(layer: LayoutLegendLayer): string {
+function layerTreeProperties(properties: Record<string, string>): string {
+  return element('customproperties', {}, [
+    element(
+      'Option',
+      { type: 'Map' },
+      Object.entries(properties).map(([name, value]) =>
+        element('Option', { name, type: 'QString', value })
+      )
+    )
+  ]);
+}
+
+function layerTreeLayer(
+  layer: LayoutLegendLayer,
+  properties: Record<string, string>
+): string {
   return element(
     'layer-tree-layer',
     {
@@ -226,25 +255,50 @@ function legendLayer(layer: LayoutLegendLayer): string {
       checked: 'Qt::Checked',
       expanded: 1
     },
-    [
-      element('customproperties', {}, [
-        element('Option', { type: 'Map' }, [
-          ...(layer.nodeOrder
-            ? [
-                element('Option', {
-                  name: 'legend/node-order',
-                  type: 'QString',
-                  value: layer.nodeOrder.join(',')
-                })
-              ]
-            : []),
-          element('Option', {
-            name: 'legend/title-style',
-            type: 'QString',
-            value: 'hidden'
-          })
-        ])
+    [layerTreeProperties(properties)]
+  );
+}
+
+// The section title is said once: each layer's own name is hidden, or
+// replaced by the subtitle of its sizes.
+function legendLayer(layer: LayoutLegendLayer): string {
+  return layerTreeLayer(layer, {
+    ...(layer.nodeOrder
+      ? { 'legend/node-order': layer.nodeOrder.join(',') }
+      : {}),
+    ...Object.fromEntries(
+      Object.entries(layer.iconSizes ?? {}).map(([index, size]) => [
+        `legend/symbol-size-${index}`,
+        size.map((value) => mm(value)).join(',')
       ])
+    ),
+    'legend/title-style': layer.subtitle ? 'subgroup' : 'hidden',
+    ...(layer.subtitle ? { 'legend/title-label': layer.subtitle } : {})
+  });
+}
+
+// A legend has no free text: the note is the title of a layer entry that
+// lists none of its symbols.
+function legendNote(layer: LayoutLegendLayer, text: string): string {
+  return layerTreeLayer(layer, {
+    'legend/node-order': 'empty',
+    'legend/title-style': 'subgroup',
+    'legend/title-label': text
+  });
+}
+
+function legendSection(section: LayoutLegendSection): string {
+  return element(
+    'layer-tree-group',
+    { name: section.title, checked: 'Qt::Checked', expanded: 1 },
+    [
+      layerTreeProperties({
+        'legend/title-style': section.title ? 'group' : 'hidden'
+      }),
+      ...section.layers.map(legendLayer),
+      ...(section.note && section.layers.length > 0
+        ? [legendNote(section.layers[0], section.note)]
+        : [])
     ]
   );
 }
@@ -255,29 +309,32 @@ function legendItem(legend: LayoutLegend, zValue: number): string {
     {
       ...common(ITEM.legend, legend.name, legend.box, zValue, null),
       map_uuid: uuid(legend.mapKey),
-      title: legend.title,
-      titleAlignment: ALIGN.left,
+      title: '',
       resizeToContents: 1,
       columnCount: 1,
       symbolWidth: 6,
       symbolHeight: 4,
       symbolAlignment: ALIGN.left,
       boxSpace: 0,
-      // Entries without a feature on the map (no missing data) stay out;
-      // QGIS would drop the circles of a size legend too, which pick their
-      // own entries.
-      legendFilterByMap: legend.layers.some((layer) => layer.nodeOrder) ? 0 : 1
+      // The styles list what the Khartis legend shows; a filter by map
+      // would also drop the sizes, which no feature matches.
+      legendFilterByMap: 0
     },
     [
       element('styles', {}, [
-        element('style', { name: 'title', marginBottom: 2 }, [
+        element('style', { name: 'group', marginTop: 4, marginBottom: 2 }, [
           textStyle(legend.titleFont)
         ]),
+        element('style', { name: 'subgroup', marginBottom: 2 }, [
+          textStyle(legend.font)
+        ]),
+        // Rows as close as the Khartis legend.
+        element('style', { name: 'symbol', marginTop: 1.2 }),
         element('style', { name: 'symbolLabel', marginLeft: 1.5 }, [
           textStyle(legend.font)
         ])
       ]),
-      element('layer-tree-group', {}, legend.layers.map(legendLayer))
+      element('layer-tree-group', {}, legend.sections.map(legendSection))
     ]
   );
 }

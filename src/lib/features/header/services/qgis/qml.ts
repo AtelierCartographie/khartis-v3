@@ -82,11 +82,19 @@ export interface QmlCategory {
   render: boolean;
 }
 
-/** The nested circles QGIS draws for a size read from the data. */
+/**
+ * The legend of a size read from the data: nested symbols QGIS draws itself
+ * for simple markers, otherwise one legend-only entry per size.
+ */
 export interface QmlSizeLegend {
   title: string;
-  /** Largest first; size is the symbol size QGIS draws, in millimetres. */
+  /**
+   * In the order of the Khartis legend; size is what QGIS draws, in
+   * millimetres: a marker size, a bar height, a line width.
+   */
   classes: Array<{ label: string; sizeMm: number }>;
+  /** The symbols differ in colour: the legend draws them in grey. */
+  neutral: boolean;
 }
 
 export type QmlRenderer =
@@ -151,11 +159,15 @@ export const MM_PER_PAGE_UNIT = 25.4 / 72;
 export const PT_PER_PAGE_UNIT = 1;
 
 function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return (
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      // A raw line break in an attribute reads back as a space.
+      .replace(/\r?\n/g, '&#10;')
+  );
 }
 
 function element(
@@ -486,6 +498,196 @@ function sizeLegendXml(legend: QmlSizeLegend): string {
   );
 }
 
+type DrawnRenderer = Exclude<QmlRenderer, { type: 'null' }>;
+
+function rendererEntries(
+  renderer: DrawnRenderer
+): Array<{ filter: string; symbol: QmlSymbol }> {
+  switch (renderer.type) {
+    case 'single':
+      return [{ filter: 'TRUE', symbol: renderer.symbol }];
+    case 'rules':
+      return renderer.rules;
+    case 'categories':
+      return renderer.categories.map((category) => ({
+        filter: `${qgisField(renderer.attribute)} = ${qgisString(category.value)}`,
+        symbol: category.symbol
+      }));
+  }
+}
+
+// QGIS nests the sizes of simple markers only; a bar or a spike would grow
+// in width too, and a line has no size legend.
+function drawsNestedSizes(renderer: DrawnRenderer): boolean {
+  return rendererEntries(renderer).every(
+    (entry) => onlyMarker(entry.symbol) !== null
+  );
+}
+
+/** Where the size legend and the other entries sit among a layer's legend nodes. */
+export function sizeLegendNodes(renderer: QmlRenderer): {
+  nested: boolean;
+  size: number[];
+  entries: number[];
+  /** Icon size of listed sizes, width and height in millimetres, by node. */
+  iconSizes?: Record<number, [number, number]>;
+} | null {
+  if (renderer.type === 'null' || !renderer.sizeLegend) {
+    return null;
+  }
+  const { sizeLegend } = renderer;
+  const count = rendererEntries(renderer).length;
+  if (drawsNestedSizes(renderer)) {
+    // Title, nested symbols, then the categories (none for a single symbol).
+    const entries = renderer.type === 'single' ? 0 : count;
+    return {
+      nested: true,
+      size: [...(sizeLegend.title ? [0] : []), 1],
+      entries: Array.from({ length: entries }, (_, index) => index + 2)
+    };
+  }
+  // QGIS gives every entry the same row otherwise: a thick line spills
+  // over the next one, a bar takes a square as wide as it is tall.
+  const [layer] = rendererEntries(renderer)[0].symbol.layers;
+  const width =
+    layer.kind === 'ellipse-marker' ? layer.widthMm : LISTED_LINE_LENGTH_MM;
+  return {
+    nested: false,
+    size: sizeLegend.classes.map((_, index) => count + index),
+    entries: Array.from({ length: count }, (_, index) => index),
+    iconSizes: Object.fromEntries(
+      sizeLegend.classes.map((entry, index) => [
+        count + index,
+        [width, Math.max(entry.sizeMm, MIN_ICON_HEIGHT_MM)]
+      ])
+    )
+  };
+}
+
+const LISTED_LINE_LENGTH_MM = 8;
+const MIN_ICON_HEIGHT_MM = 1;
+
+const NEUTRAL_FILL: Rgba = [255, 255, 255, 255];
+const NEUTRAL_LINE: Rgba = [90, 90, 90, 255];
+
+function withoutDataDefined(
+  dataDefined: DataDefinedProperties | undefined,
+  keys: string[]
+): DataDefinedProperties {
+  return Object.fromEntries(
+    Object.entries(dataDefined ?? {}).filter(([key]) => !keys.includes(key))
+  );
+}
+
+// A copy of the symbol at one size of the legend, in grey when the symbols
+// differ in colour.
+function sizeSample(
+  symbol: QmlSymbol,
+  sizeMm: number,
+  neutral: boolean
+): QmlSymbol {
+  const neutralStroke = (stroke: QmlStroke | null): QmlStroke => ({
+    color: NEUTRAL_LINE,
+    widthMm: stroke?.widthMm || 0.2
+  });
+  return {
+    ...symbol,
+    layers: symbol.layers.map((layer): QmlSymbolLayer => {
+      switch (layer.kind) {
+        case 'line':
+          return {
+            ...layer,
+            stroke: {
+              ...layer.stroke,
+              widthMm: sizeMm,
+              color: neutral ? NEUTRAL_LINE : layer.stroke.color
+            },
+            dataDefined: withoutDataDefined(layer.dataDefined, [
+              'outlineWidth',
+              'outlineColor'
+            ])
+          };
+        case 'ellipse-marker':
+          // Standing on the point on the map, centred in the legend.
+          return {
+            ...layer,
+            heightMm: sizeMm,
+            color: neutral ? NEUTRAL_FILL : layer.color,
+            stroke: neutral ? neutralStroke(layer.stroke) : layer.stroke,
+            dataDefined: withoutDataDefined(layer.dataDefined, [
+              'height',
+              'offset',
+              'fillColor'
+            ])
+          };
+        case 'marker':
+          return {
+            ...layer,
+            sizeMm,
+            color: neutral ? NEUTRAL_FILL : layer.color,
+            stroke: neutral ? neutralStroke(layer.stroke) : layer.stroke,
+            dataDefined: withoutDataDefined(layer.dataDefined, [
+              'size',
+              'fillColor'
+            ])
+          };
+        default:
+          return layer;
+      }
+    })
+  };
+}
+
+// Entries that no feature matches carry the sizes of the legend.
+function withSizeSamples(renderer: DrawnRenderer): QmlRenderer {
+  const { sizeLegend } = renderer;
+  if (!sizeLegend) {
+    return renderer;
+  }
+  const [first] = rendererEntries(renderer);
+  const samples = sizeLegend.classes.map((entry, index) => ({
+    index,
+    label: entry.label,
+    symbol: sizeSample(first.symbol, entry.sizeMm, sizeLegend.neutral)
+  }));
+  switch (renderer.type) {
+    case 'single':
+    case 'rules': {
+      const rules =
+        renderer.type === 'single'
+          ? [{ filter: 'TRUE', label: '', symbol: renderer.symbol }]
+          : renderer.rules;
+      return {
+        type: 'rules',
+        rules: [
+          ...rules,
+          ...samples.map((sample) => ({
+            filter: 'FALSE',
+            label: sample.label,
+            symbol: sample.symbol
+          }))
+        ],
+        orderBy: renderer.orderBy
+      };
+    }
+    case 'categories':
+      return {
+        type: 'categories',
+        attribute: renderer.attribute,
+        categories: [
+          ...renderer.categories,
+          ...samples.map((sample) => ({
+            value: `khartis-legend-size-${sample.index}`,
+            label: sample.label,
+            symbol: sample.symbol,
+            render: true
+          }))
+        ],
+        orderBy: renderer.orderBy
+      };
+  }
+}
+
 /**
  * QGIS draws the size legend of a single or categorized renderer only, and
  * only when every symbol reads its size from one and the same expression:
@@ -496,21 +698,13 @@ function withNativeSizeLegend(renderer: QmlRenderer): QmlRenderer {
   if (renderer.type === 'null' || !renderer.sizeLegend) {
     return renderer;
   }
-  const entries =
-    renderer.type === 'single'
-      ? [{ filter: 'TRUE', symbol: renderer.symbol }]
-      : renderer.type === 'rules'
-        ? renderer.rules
-        : renderer.categories.map((category) => ({
-            filter: `${qgisField(renderer.attribute)} = ${qgisString(category.value)}`,
-            symbol: category.symbol
-          }));
-  const markers = entries.map((entry) => onlyMarker(entry.symbol));
-  if (markers.some((marker) => marker === null)) {
-    const { sizeLegend: _, ...rest } = renderer;
-    return rest;
+  if (!drawsNestedSizes(renderer)) {
+    return withSizeSamples(renderer);
   }
-  const sizes = (markers as SimpleMarker[]).map(markerSize);
+  const entries = rendererEntries(renderer);
+  const sizes = entries.map((entry) =>
+    markerSize(onlyMarker(entry.symbol) as SimpleMarker)
+  );
   const size = sizes.every((value) => value === sizes[0])
     ? sizes[0]
     : `CASE ${entries.map((entry, index) => `WHEN ${entry.filter} THEN ${sizes[index]}`).join(' ')} END`;
@@ -541,32 +735,25 @@ function withNativeSizeLegend(renderer: QmlRenderer): QmlRenderer {
   }
 }
 
-// The nested circles take the look of the first symbol, in grey when the
-// symbols differ in colour.
-function sizeLegendSymbol(symbols: QmlSymbol[]): QmlSymbol {
-  const [first] = symbols;
-  const colors = new Set(
-    symbols.map((symbol) =>
-      formatRgba(onlyMarker(symbol)?.color ?? TRANSPARENT)
-    )
-  );
-  return colors.size <= 1
-    ? first
-    : {
-        ...first,
-        layers: first.layers.map((layer) =>
+// The nested symbols take the look of the first one.
+function sizeLegendSymbol(symbol: QmlSymbol, neutral: boolean): QmlSymbol {
+  return neutral
+    ? {
+        ...symbol,
+        layers: symbol.layers.map((layer) =>
           layer.kind === 'marker'
             ? {
                 ...layer,
-                color: [255, 255, 255, 255],
+                color: NEUTRAL_FILL,
                 stroke: {
-                  color: [90, 90, 90, 255],
+                  color: NEUTRAL_LINE,
                   widthMm: layer.stroke?.widthMm || 0.2
                 }
               }
             : layer
         )
-      };
+      }
+    : symbol;
 }
 
 function rendererXml(input: QmlRenderer): string {
@@ -643,7 +830,8 @@ function rendererXml(input: QmlRenderer): string {
                 element('source-symbol', {}, [
                   symbolXml(
                     sizeLegendSymbol(
-                      renderer.categories.map((category) => category.symbol)
+                      renderer.categories[0].symbol,
+                      renderer.sizeLegend?.neutral ?? false
                     ),
                     '0'
                   )

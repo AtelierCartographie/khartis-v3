@@ -133,6 +133,8 @@ export interface QgisStyleContext {
   ) => { min: number; max: number } | null;
   formatValue: (value: number) => string;
   missingDataLabel: string;
+  /** Some feature of the primitive lacks its value. */
+  hasMissingData: (primitive: PrimitiveFilter) => boolean;
   /** How a column is exported, for date classes; numbers when absent. */
   columnKind?: (column: string) => ClassValueKind;
   locale?: string;
@@ -212,7 +214,13 @@ function dashMm(
 }
 
 function classCount(classification: ClassificationConfig): number {
-  return classification.numClasses ?? classification.colors?.length ?? 0;
+  // A thickness or size classification has no colours.
+  return (
+    classification.numClasses ??
+    classification.colors?.length ??
+    classification.classes ??
+    0
+  );
 }
 
 function classIntervals(
@@ -336,8 +344,13 @@ function hasPattern(classification: ClassificationConfig | undefined): boolean {
   return Boolean(classification?.pattern || classification?.patternId);
 }
 
-function missingShows(missing: MissingDataConfig | undefined): boolean {
-  return missing?.show ?? true;
+// As the Khartis legend: shown, and some feature lacks the value.
+function missingShows(
+  missing: MissingDataConfig | undefined,
+  context: QgisStyleContext,
+  primitive: PrimitiveFilter
+): boolean {
+  return (missing?.show ?? true) && context.hasMissingData(primitive);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,13 +495,21 @@ function buildPolygonPlan(
     PrimitiveFilterType.POLYGON
   );
   const missing = polygon.missingData;
-  const missingPattern = missingShows(missing)
+  const missingPattern = missingShows(
+    missing,
+    context,
+    PrimitiveFilterType.POLYGON
+  )
     ? resolveMissingDataClassPattern(missing)
     : null;
   const missingPatternLayers = missingPattern
     ? resolveQgisPattern(missingPattern)
     : null;
-  if (missing?.pattern && missingShows(missing) && !missingPatternLayers) {
+  if (
+    missing?.pattern &&
+    missingShows(missing, context, PrimitiveFilterType.POLYGON) &&
+    !missingPatternLayers
+  ) {
     notes.push({ code: 'missing-pattern' });
   }
   const missingSymbol = () =>
@@ -550,7 +571,7 @@ function buildPolygonPlan(
           ]
         : [];
     });
-    if (missingShows(missing)) {
+    if (missingShows(missing, context, PrimitiveFilterType.POLYGON)) {
       rules.push({
         filter: missingFilter(column),
         label: missing?.label ?? context.missingDataLabel,
@@ -579,7 +600,7 @@ function buildPolygonPlan(
           ? fillSymbol(patternBackground, stroke, dataDefined, pattern)
           : fillSymbol(toRgba(hex, opacity), stroke, dataDefined);
       },
-      missing: missingShows(missing)
+      missing: missingShows(missing, context, PrimitiveFilterType.POLYGON)
         ? {
             label: missing?.label ?? context.missingDataLabel,
             symbol: missingSymbol()
@@ -690,6 +711,7 @@ interface MarkerOptions {
 }
 
 const LEGEND_SYMBOL_SIZE_MM = 3;
+const LEGEND_LINE_WIDTH_MM = 1;
 
 function radiusMmExpression(radius: number | string): string {
   return typeof radius === 'number'
@@ -760,6 +782,15 @@ function markerLayer(options: MarkerOptions): QmlSymbolLayer {
     stroke,
     dataDefined
   };
+}
+
+// What a size legend gives QGIS for a symbol of this radius: the marker
+// size, or the height of a bar or a spike.
+function legendSizeMm(shape: ShapeType, radius: number): number {
+  return isLinearShape(shape)
+    ? 2 * pxToMm(radius)
+    : (QGIS_MARKER_SHAPES[shape] ?? QGIS_MARKER_SHAPES[ShapeType.CIRCLE])
+        .sizeFactor * pxToMm(radius);
 }
 
 function markerSymbol(options: MarkerOptions): QmlSymbol {
@@ -983,7 +1014,11 @@ function buildSymbolPlan(
     (symbol.fillMode === FillMode.CLASSES
       ? fillValueColumn
       : fillCategoryColumn);
-  const missingSymbol = missingShows(missing)
+  const missingSymbol = missingShows(
+    missing,
+    context,
+    PrimitiveFilterType.POINT
+  )
     ? markerSymbol({
         shape:
           MISSING_SHAPES[missing?.shape ?? MissingDataShape.CIRCLE] ??
@@ -1014,6 +1049,7 @@ function buildSymbolPlan(
 
   let renderer: QmlRenderer;
   let colorIsUnique = false;
+  let sizeClassesListed = false;
   if (doubleSymbols && uniqueFill) {
     const role = qgisField(doubleSymbols.roleField);
     const value = qgisField(doubleSymbols.valueField);
@@ -1137,6 +1173,7 @@ function buildSymbolPlan(
     }
     renderer = { type: 'rules', rules, orderBy };
   } else if (sizeClasses) {
+    sizeClassesListed = true;
     const { column, intervals, radii, classification } = sizeClasses;
     const rules: QmlRule[] = intervals.flatMap((list, index) => {
       const filter = classFilterExpression(
@@ -1185,6 +1222,25 @@ function buildSymbolPlan(
     renderer = { type: 'single', symbol: symbolWith(uniqueColor), orderBy };
   }
 
+  // Colour drawn from another variable: the classed sizes get a legend of
+  // their own, largest first as Khartis lists them.
+  if (sizeClasses && !sizeClassesListed && renderer.type !== 'null') {
+    const { intervals, radii, classification } = sizeClasses;
+    renderer = {
+      ...renderer,
+      sizeLegend: {
+        title: '',
+        classes: intervals
+          .map((list, index) => ({
+            label: classLabel(classification, list, index, context),
+            sizeMm: legendSizeMm(shape, radii[index])
+          }))
+          .reverse(),
+        neutral: true
+      }
+    };
+  }
+
   return {
     primitive: PrimitiveFilterType.POINT,
     doubleSymbols,
@@ -1220,6 +1276,12 @@ function buildLinePlan(
   const dataDefined: DataDefinedProperties = {};
 
   let widthPx: number | string = Math.max(1, baseWidthPx);
+  let thicknessClasses: {
+    column: string;
+    intervals: ClassInterval[][];
+    widths: number[];
+    classification: ClassificationConfig;
+  } | null = null;
   if (line.thicknessMode === ThicknessMode.PROPORTIONAL && line.sizeColumn) {
     columns.add(line.sizeColumn);
     const domain = context.domain(PrimitiveFilterType.LINE, line.sizeColumn);
@@ -1237,9 +1299,15 @@ function buildLinePlan(
         : 0;
   } else if (line.thicknessMode === ThicknessMode.CLASSES && line.valueColumn) {
     const intervals = classIntervals(thicknessClassification);
-    if (intervals) {
+    if (intervals && thicknessClassification) {
       columns.add(line.valueColumn);
       const widths = classedSizes(1, maxWidthPx, intervals.length);
+      thicknessClasses = {
+        column: line.valueColumn,
+        intervals,
+        widths,
+        classification: thicknessClassification
+      };
       widthPx = classCaseExpression(
         line.valueColumn,
         intervals,
@@ -1252,8 +1320,10 @@ function buildLinePlan(
   if (typeof widthPx === 'string') {
     dataDefined.outlineWidth = `(${widthPx}) * ${qgisNumber(MM_PER_PAGE_UNIT)}`;
   }
+  // A width read from the data replaces it on the map; the legend draws
+  // categories and classes at this one.
   const widthMm =
-    typeof widthPx === 'number' ? pxToMm(widthPx) : pxToMm(maxWidthPx);
+    typeof widthPx === 'number' ? pxToMm(widthPx) : LEGEND_LINE_WIDTH_MM;
   const strokeFor = (hex: string | undefined): QmlStroke => ({
     color: toRgba(hex, opacity, NEUTRAL_STROKE),
     widthMm,
@@ -1273,6 +1343,7 @@ function buildLinePlan(
       : undefined;
 
   let renderer: QmlRenderer;
+  let thicknessListed = false;
   if (
     line.colorMode === ColorMode.CLASSES &&
     line.valueColumn &&
@@ -1298,7 +1369,7 @@ function buildLinePlan(
           ]
         : [];
     });
-    if (missingShows(missing)) {
+    if (missingShows(missing, context, PrimitiveFilterType.LINE)) {
       rules.push({
         filter: missingFilter(column),
         label: missingLabel,
@@ -1316,7 +1387,7 @@ function buildLinePlan(
       column: line.categoryColumn,
       classification: colorClassification,
       symbolFor: (hex) => lineSymbol(hex),
-      missing: missingShows(missing)
+      missing: missingShows(missing, context, PrimitiveFilterType.LINE)
         ? {
             label: missingLabel,
             symbol: lineSymbol(missing?.color ?? DEFAULT_COLORS.missingData)
@@ -1324,6 +1395,47 @@ function buildLinePlan(
         : null,
       orderBy
     });
+  } else if (thicknessClasses) {
+    thicknessListed = true;
+    // One entry per class, at its width, as the Khartis legend lists them.
+    const { column, intervals, widths, classification } = thicknessClasses;
+    const color = firstColor(line.color) ?? firstColor(viz.style.lineColor);
+    const rules: QmlRule[] = intervals.flatMap((list, index) => {
+      const filter = classFilterExpression(
+        column,
+        list,
+        kindOf(context, column, classification)
+      );
+      return filter
+        ? [
+            {
+              filter,
+              label: classLabel(classification, list, index, context),
+              symbol: {
+                type: 'line',
+                opacity: 1,
+                layers: [
+                  {
+                    kind: 'line',
+                    stroke: {
+                      ...strokeFor(color),
+                      widthMm: pxToMm(widths[index])
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        : [];
+    });
+    if (missingShows(missing, context, PrimitiveFilterType.LINE)) {
+      rules.push({
+        filter: missingFilter(column),
+        label: missingLabel,
+        symbol: lineSymbol(missing?.color ?? DEFAULT_COLORS.missingData)
+      });
+    }
+    renderer = { type: 'rules', rules, orderBy };
   } else {
     renderer = {
       type: 'single',
@@ -1334,12 +1446,33 @@ function buildLinePlan(
     };
   }
 
+  // Colour drawn from another variable: the classed widths get a legend of
+  // their own.
+  if (thicknessClasses && !thicknessListed && renderer.type !== 'null') {
+    const { intervals, widths, classification } = thicknessClasses;
+    renderer = {
+      ...renderer,
+      sizeLegend: {
+        title: '',
+        classes: intervals.map((list, index) => ({
+          label: classLabel(classification, list, index, context),
+          sizeMm: pxToMm(widths[index])
+        })),
+        neutral: true
+      }
+    };
+  }
+
   return {
     primitive: PrimitiveFilterType.LINE,
     geometry: 'line',
     columns: [...columns],
     style: { geometryType: 'line', renderer },
-    notes: []
+    notes: [],
+    proportionalSize:
+      line.thicknessMode === ThicknessMode.PROPORTIONAL &&
+      typeof widthPx === 'string',
+    uniqueColor: renderer.type === 'single'
   };
 }
 
