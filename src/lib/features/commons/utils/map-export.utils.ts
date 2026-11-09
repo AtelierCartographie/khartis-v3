@@ -4135,8 +4135,15 @@ export interface MeasuredPageLegend {
   box: PageBox;
   font: MeasuredFont | null;
   titleFont: MeasuredFont | null;
-  /** Proportional circles, largest first: label and radius in page units. */
-  sizes: Array<{ label: string; radius: number }>;
+  /**
+   * Proportional sizes in legend order, in page units: the height of a
+   * symbol (circle, square, bar, spike) or the width of a line.
+   */
+  sizes: Array<{ label: string; size: number }>;
+  /** Title, subtitle and note as drawn, their lines joined by `\n`. */
+  title: string | null;
+  subtitle: string | null;
+  note: string | null;
 }
 
 /** Where every element of the page sits, as exported. */
@@ -4272,30 +4279,45 @@ export async function measureMapPage(
         if (!frameBox || !itemId) {
           return;
         }
-        const symbols = frame.querySelector('.legend-svg--symbols');
-        const radii = symbols
-          ? Array.from(symbols.querySelectorAll('.symbols circle')).map(
-              (circle) => Number(circle.getAttribute('r'))
-            )
-          : [];
-        const labels = symbols
-          ? Array.from(symbols.querySelectorAll('.labels text')).map(
-              (label) => label.textContent?.trim() ?? ''
-            )
-          : [];
+        const symbols = frame.querySelector(
+          '.legend-svg--symbols .symbol_legend'
+        );
+        const lines = frame.querySelector('.khartis_proportional_line_legend');
+        const sizes = symbols
+          ? Array.from(
+              symbols.querySelectorAll<SVGGraphicsElement>('.symbols > *')
+            ).map((symbol) => symbol.getBBox().height)
+          : lines
+            ? Array.from(lines.querySelectorAll('.segments line')).map((line) =>
+                Number(line.getAttribute('stroke-width'))
+              )
+            : [];
+        const labels = Array.from(
+          (symbols ?? lines)?.querySelectorAll(':scope > .labels text') ?? []
+        ).map((label) => label.textContent?.trim() ?? '');
+        const textLines = (group: Element | null | undefined) =>
+          Array.from(group?.querySelectorAll('text') ?? [])
+            .map((line) => line.textContent?.trim() ?? '')
+            .join('\n') || null;
         legends.push({
           itemId,
           box: frameBox,
+          title: textLines(frame.querySelector('g.title')),
+          // The subtitle of the sizes, when the frame shows some.
+          subtitle: textLines(
+            (symbols ?? lines)?.querySelector(':scope > g.subtitle')
+          ),
+          note: textLines(frame.querySelector('g.note')),
           font: measureFont(
             frame.querySelector('.labels text') ??
               frame.querySelector('svg g:not(.title) > text')
           ),
           titleFont: measureFont(frame.querySelector('.title text')),
           sizes:
-            radii.length === labels.length
-              ? radii
-                  .map((radius, index) => ({ label: labels[index], radius }))
-                  .filter((entry) => Number.isFinite(entry.radius))
+            sizes.length === labels.length
+              ? sizes
+                  .map((size, index) => ({ label: labels[index], size }))
+                  .filter((entry) => Number.isFinite(entry.size))
               : []
         });
       });

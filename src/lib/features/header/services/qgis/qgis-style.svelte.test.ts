@@ -20,7 +20,7 @@ import {
   buildVisualizationLayerPlans,
   type QgisStyleContext
 } from './qgis-style';
-import { buildQml, MM_PER_PAGE_UNIT } from './qml';
+import { buildQml, MM_PER_PAGE_UNIT, sizeLegendNodes } from './qml';
 import { transformWkb } from './wkb-transform';
 import { resolveQgisPattern } from './qgis-patterns';
 import { DOUBLE_SYMBOL_FIELDS } from './qgis-style';
@@ -78,7 +78,8 @@ function evaluateNumericExpression(
 const context: QgisStyleContext = {
   domain: () => ({ min: 0, max: 400 }),
   formatValue: (value) => String(value),
-  missingDataLabel: 'No data'
+  missingDataLabel: 'No data',
+  hasMissingData: () => true
 };
 
 function choroplethWithSymbolsAndLabels(): VisualizationConfig {
@@ -581,7 +582,8 @@ describe('QGIS date classes', () => {
           classes: [
             { label: '100', sizeMm: 10 },
             { label: '1', sizeMm: 1 }
-          ]
+          ],
+          neutral: true
         }
       }
     });
@@ -616,6 +618,77 @@ describe('QGIS date classes', () => {
       ['100', '10'],
       ['1', '1']
     ]);
+  });
+
+  it('should list bars at the legend heights when QGIS cannot nest them', () => {
+    const bar = {
+      type: 'marker' as const,
+      opacity: 1,
+      layers: [
+        {
+          kind: 'ellipse-marker' as const,
+          shape: 'rectangle' as const,
+          widthMm: 2,
+          heightMm: 0,
+          color: [255, 0, 0, 255] as const,
+          stroke: null,
+          dataDefined: { height: '2 * "v"', offset: `'0,' || -"v"` }
+        }
+      ]
+    };
+    const qml = buildQml({
+      geometryType: 'point',
+      renderer: {
+        type: 'single',
+        symbol: bar,
+        sizeLegend: {
+          title: '',
+          classes: [
+            { label: '100', sizeMm: 12 },
+            { label: '10', sizeMm: 1.2 }
+          ],
+          neutral: false
+        }
+      }
+    });
+    const doc = new DOMParser().parseFromString(qml, 'application/xml');
+    const rules = Array.from(doc.querySelectorAll('rules > rule')).map(
+      (rule) => [rule.getAttribute('filter'), rule.getAttribute('label')]
+    );
+    const heights = Array.from(doc.querySelectorAll('symbols > symbol')).map(
+      (symbol) =>
+        symbol
+          .querySelector('Option[name="symbol_height"]')
+          ?.getAttribute('value')
+    );
+
+    // Entries no feature matches carry the sizes; the map keeps its bars.
+    expect(doc.querySelector('data-defined-size-legend')).toBeNull();
+    expect(rules).toEqual([
+      ['TRUE', ''],
+      ['FALSE', '100'],
+      ['FALSE', '10']
+    ]);
+    expect(heights.slice(1)).toEqual(['12', '1.2']);
+    expect(
+      sizeLegendNodes({
+        type: 'single',
+        symbol: bar,
+        sizeLegend: {
+          title: '',
+          classes: [
+            { label: '100', sizeMm: 12 },
+            { label: '10', sizeMm: 1.2 }
+          ],
+          neutral: false
+        }
+      })
+    ).toEqual({
+      nested: false,
+      size: [1, 2],
+      entries: [0],
+      iconSizes: { 1: [2, 12], 2: [2, 1.2] }
+    });
   });
 
   it('should read the visualization and primitive of a legend frame', () => {

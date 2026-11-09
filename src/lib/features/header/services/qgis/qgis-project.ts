@@ -145,21 +145,24 @@ export function buildQgisProject(options: {
   const layout = options.layout
     ? buildQgisLayoutXml({
         ...options.layout,
-        legends: options.layout.legends.map(({ tables, ...legend }) => ({
+        legends: options.layout.legends.map((legend) => ({
           ...legend,
-          layers: tables.flatMap(({ table, nodeOrder }) => {
-            const layer = topFirst.find((entry) => entry.table === table);
-            return layer
-              ? [
-                  {
-                    id: layer.id,
-                    name: layer.name,
-                    source: layer.source,
-                    nodeOrder
-                  }
-                ]
-              : [];
-          })
+          sections: legend.sections.map(({ tables, ...section }) => ({
+            ...section,
+            layers: tables.flatMap(({ table, ...entries }) => {
+              const layer = topFirst.find((entry) => entry.table === table);
+              return layer
+                ? [
+                    {
+                      id: layer.id,
+                      name: layer.name,
+                      source: layer.source,
+                      ...entries
+                    }
+                  ]
+                : [];
+            })
+          }))
         }))
       })
     : '';

@@ -2141,7 +2141,7 @@
   "qgis_note_font": "Police {font} : installez-la (Google Fonts, licence libre) pour que QGIS l'utilise, sinon il la remplace.",
   "qgis_note_layout": "La mise en page (titre, légende, échelle, orientation, annotations, encarts, couleur de la page) est à refaire dans une mise en page QGIS.",
   "qgis_memo_layout": "Mise en page : le projet contient la mise en page « Khartis » (Projet > Mises en page), au format de la page Khartis, avec la carte, les textes, la légende et les indications géographiques à leur place.",
-  "qgis_note_layout_legend": "Mise en page : la légende est celle de QGIS, construite à partir des styles des couches (classes, catégories, cercles emboîtés des symboles proportionnels) ; sa présentation diffère de celle de Khartis.",
+  "qgis_note_layout_legend": "Mise en page : la légende est celle de QGIS, construite à partir des styles des couches (classes, catégories, tailles des symboles et des lignes proportionnels, emboîtées pour les cercles et les carrés, une par ligne pour les barres, les pics et les lignes) ; sa présentation diffère de celle de Khartis.",
   "qgis_note_layout_facets": "Mise en page : chaque carte de la collection suit son thème de carte et cadre ses données, pas le cadrage exact de Khartis.",
   "qgis_note_layout_extent": "Mise en page : la carte cadre les données, pas le cadrage exact de Khartis, qui n'a pas de SCR commun avec les couches.",
   "qgis_note_layout_shapes": "Mise en page : {count} annotation(s) graphique(s) (formes, flèches, dessins, images) ne sont pas reprises.",

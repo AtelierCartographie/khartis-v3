@@ -273,7 +273,9 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   la carte. Une géométrie en longitude et latitude est d'abord coupée là où d3
   coupe la sphère (`cutAtSeam`) ; sinon PROJ étire les anneaux qui traversent
   cette couture sur toute la carte. Sans inclinaison, c'est le méridien opposé
-  au centre. Avec une latitude, c'est le méridien opposé de la sphère tournée :
+  au centre. Une méthode PROJ qui tourne elle-même la sphère (Bertin 1953,
+  `builtInOrientation`) est coupée comme une carte inclinée de la même
+  rotation. Avec une latitude, c'est le méridien opposé de la sphère tournée :
   un demi grand cercle, deux tronçons de méridiens par le pôle pour une
   projection du catalogue. Le pôle qui tombe sur la couture est un point
   partagé entre les deux bords de la carte : une calotte d'une soixantaine de
@@ -329,12 +331,23 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   légende (`data-legend-item-id`), échelle, nord, titres des cartes d'une
   collection. Le cadre de la carte prend l'emprise exacte de
   `buildMapGeoreference` ; à défaut (collection, projection sans SCR commun),
-  celle des données. La légende est celle de QGIS : la taille des symboles
-  proportionnels y devient la légende de taille native (cercles emboîtés,
-  valeurs lues sur la légende Khartis), ce qui demande un renderer catégorisé
-  dont tous les symboles lisent leur taille d'une même expression
-  (`withNativeSizeLegend`, `qml.ts`). La mesure abandonne après 10 s : un
-  onglet masqué ne dessine aucune image.
+  celle des données. Les légendes Khartis empilées dans une même colonne
+  deviennent une seule légende QGIS, un groupe par cadre (titre, sous-titre et
+  note coupés aux mêmes lignes que Khartis, la note en titre d'une entrée
+  sans symbole) : une légende QGIS grandit avec son contenu et des légendes
+  séparées se chevaucheraient. Les entrées sont celles des styles, sans filtre
+  par la carte : l'absence de données n'y figure que si une entité en manque
+  (`rowScopeStore.missingDataState`, comme la légende Khartis). La taille des
+  symboles proportionnels (cercles, carrés) devient la légende de taille
+  native (symboles emboîtés, valeurs et tailles lues sur la légende Khartis),
+  ce qui demande un renderer catégorisé dont tous les symboles lisent leur
+  taille d'une même expression (`withNativeSizeLegend`, `qml.ts`). Les barres,
+  les pics et les épaisseurs de lignes, que QGIS ne sait pas emboîter,
+  deviennent des entrées qu'aucune entité ne remplit (règle `FALSE`), chacune
+  à sa taille, avec une taille d'icône propre (`legend/symbol-size-N`). Les
+  tailles en classes combinées à une couleur d'une autre variable reçoivent la
+  même légende, construite sur les classes. La mesure abandonne après 10 s :
+  un onglet masqué ne dessine aucune image.
 - Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
   applique à l'ouverture. Les classes sont des règles qui reprennent
   exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans

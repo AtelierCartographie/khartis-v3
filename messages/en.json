@@ -2141,7 +2141,7 @@
   "qgis_note_font": "Font {font}: install it (Google Fonts, open license) for QGIS to use it, otherwise QGIS substitutes it.",
   "qgis_note_layout": "The page layout (title, legend, scale, orientation, annotations, insets, page color) has to be rebuilt in a QGIS print layout.",
   "qgis_memo_layout": "Page layout: the project contains the “Khartis” print layout (Project > Layouts), at the Khartis page size, with the map, texts, legend and geographic indications in place.",
-  "qgis_note_layout_legend": "Page layout: the legend is the QGIS one, built from the layer styles (classes, categories, nested circles of proportional symbols); it looks different from the Khartis legend.",
+  "qgis_note_layout_legend": "Page layout: the legend is the QGIS one, built from the layer styles (classes, categories, sizes of proportional symbols and lines, nested for circles and squares, one per row for bars, spikes and lines); it looks different from the Khartis legend.",
   "qgis_note_layout_facets": "Page layout: each map of the collection follows its map theme and frames its data, not the exact Khartis framing.",
   "qgis_note_layout_extent": "Page layout: the map frames the data, not the exact Khartis framing, which shares no CRS with the layers.",
   "qgis_note_layout_shapes": "Page layout: {count} graphic annotation(s) (shapes, arrows, drawings, images) are not included.",
