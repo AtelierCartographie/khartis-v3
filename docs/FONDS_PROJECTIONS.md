@@ -289,8 +289,23 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   lignes du panneau, ordre manuel compris. Une collection de cartes exporte
   ses cartes (pas la visualisation d'origine), dans une liste unique à l'ordre
   de la carte, avec un thème de carte QGIS par carte.
-- Une projection composite s'exporte dans le SCR du territoire principal, les
-  encarts à leur position réelle ; le mémo et la boîte d'export le disent.
+- Une projection composite s'exporte dans le SCR du territoire principal (entrée
+  `mainland` du préréglage), les encarts à leur position réelle ; le mémo et la
+  boîte d'export le disent. Une chaîne PROJ identique à un code connu est
+  déclarée par ce code (`findKnownEpsgForProj4`) : sinon QGIS choisit entre
+  équivalents (LAEA Europe lue EPSG:5636 au lieu de 3035). Dans le projet
+  QGIS, un code EPSG s'écrit en WKT dont l'autorité racine suffit à QGIS pour
+  reconstruire le SCR.
+- Les colonnes de dates partent en `DATE` ou `DATETIME` ISO, et les classes de
+  dates comparent des dates (`to_date('2020-01-01')`), jamais des
+  millisecondes, qui dépendent du fuseau dans QGIS.
+- Les territoires joints partent toujours avec leurs données, en couche
+  décochée quand la visualisation ne les dessine pas (symboles seuls) ; la
+  densité de points part avec les points mêmes de la carte (même graine, même
+  cache).
+- L'archive contient l'image JPEG de la page, calée quand la carte a un SCR
+  (`.aux.xml`, world file) et ajoutée décochée au projet ; le mémo reprend les
+  textes de la page et la légende en clair (méthode, classes et couleurs).
 - Graticule et équateur : lignes remarquables du catalogue, ou lignes que la
   carte génère (`getGraticuleGeoJSON`), reprojetées comme le reste.
 - Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS

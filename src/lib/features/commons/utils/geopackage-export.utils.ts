@@ -31,6 +31,11 @@ export interface GeoPackageLayerExportOptions extends GeoPackageExportOptions {
   style?: GeoPackageLayerStyle;
   /** Columns in this order, typed by their values; others follow. */
   propertyColumns?: string[];
+  /**
+   * Columns holding ISO dates (`YYYY-MM-DD`) or date-times, declared as such
+   * so GIS software reads them as dates rather than text.
+   */
+  columnTypes?: Record<string, 'DATE' | 'DATETIME'>;
 }
 
 interface GeoPackagePropertyColumnMapping {
@@ -391,6 +396,7 @@ function createGeoPackageFeatureTable(
     geometryType: string;
     srs: ReturnType<typeof resolveSrs>;
     features: GeoPackageFeatureRow[];
+    columnTypes: Record<string, 'DATE' | 'DATETIME'>;
   }
 ): void {
   const { layerName, propertyColumnMappings, geometryType, srs, features } =
@@ -413,7 +419,10 @@ function createGeoPackageFeatureTable(
     const values = features.map(
       (feature) => feature.properties[mapping.sourceName]
     );
-    return `${quoteIdentifier(mapping.columnName)} ${inferSqliteColumnType(values)}`;
+    const declared = Object.hasOwn(options.columnTypes, mapping.sourceName)
+      ? options.columnTypes[mapping.sourceName]
+      : undefined;
+    return `${quoteIdentifier(mapping.columnName)} ${declared ?? inferSqliteColumnType(values)}`;
   });
   const columnDefinitions = [
     `${quoteIdentifier(GEOPACKAGE_ID_COLUMN)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL`,
@@ -624,7 +633,8 @@ export async function exportGeoPackageLayers(
       srs: resolveSrs(layer.sourceCrs, layer.customSrs),
       geometryType: resolveLayerGeometryType(layer.features),
       features: layer.features,
-      style: layer.style
+      style: layer.style,
+      columnTypes: layer.columnTypes ?? {}
     };
   });
 

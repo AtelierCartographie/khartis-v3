@@ -22,6 +22,7 @@ import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import { diagnoseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
 import {
   createProj4Crs,
+  findKnownEpsgForProj4,
   registerResolvedCoordinateSystem,
   WGS84_CRS
 } from '$lib/features/commons/utils/proj4-crs.utils';
@@ -346,5 +347,29 @@ describe('proj4d3', () => {
     for (const code of ['EPSG:5070', 'EPSG:28992', 'EPSG:3576']) {
       expect(diagnoseProjectionCode(code)).toMatchObject({ status: 'valid' });
     }
+  });
+});
+
+describe('findKnownEpsgForProj4', () => {
+  it('should name the composite main frames of the catalogue by their EPSG code', () => {
+    // As written in projection-presets.json, without the code.
+    expect(
+      findKnownEpsgForProj4(
+        '+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs'
+      )
+    ).toBe('3035');
+    expect(
+      findKnownEpsgForProj4(
+        '+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m'
+      )
+    ).toBe('2154');
+  });
+
+  it('should not name a projection that only resembles a known one', () => {
+    expect(
+      findKnownEpsgForProj4(
+        '+proj=laea +lat_0=52 +lon_0=10 +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs'
+      )
+    ).toBeUndefined();
   });
 });

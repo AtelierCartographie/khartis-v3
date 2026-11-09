@@ -485,3 +485,54 @@ describe('QGIS double symbols', () => {
     );
   });
 });
+
+describe('QGIS date classes', () => {
+  it('should compare dates with date literals and label them as dates', () => {
+    const viz = choroplethWithSymbolsAndLabels();
+    const year = (y: number) => Date.UTC(y, 0, 1);
+    if (viz.polygon) {
+      viz.polygon.valueColumn = 'opened';
+      viz.polygon.classification = {
+        method: 'calendar',
+        classes: 3,
+        breaks: [year(2019), year(2020), year(2021), year(2022)],
+        colors: ['#eeeeee', '#999999', '#333333'],
+        calendarStep: { unit: 'year', count: 1 }
+      } as VisualizationConfig['classification'];
+    }
+    const [polygon] = buildVisualizationLayerPlans(
+      viz,
+      { ...context, columnKind: () => 'date', locale: 'fr' },
+      []
+    );
+    const { renderer } = polygon.style;
+    if (renderer.type !== 'rules') throw new Error('rules expected');
+
+    expect(renderer.rules[1].filter).toBe(
+      `"opened" IS NOT NULL AND ("opened" >= to_date('2020-01-01') AND "opened" < to_date('2021-01-01'))`
+    );
+    expect(renderer.rules.slice(0, 3).map((rule) => rule.label)).toEqual([
+      '2019',
+      '2020',
+      '2021'
+    ]);
+  });
+
+  it('should compare epoch milliseconds when numeric breaks classify a date column', () => {
+    const viz = choroplethWithSymbolsAndLabels();
+    if (viz.polygon?.classification) {
+      viz.polygon.valueColumn = 'opened';
+    }
+    const [polygon] = buildVisualizationLayerPlans(
+      viz,
+      { ...context, columnKind: () => 'date' },
+      []
+    );
+    const { renderer } = polygon.style;
+    if (renderer.type !== 'rules') throw new Error('rules expected');
+
+    expect(renderer.rules[1].filter).toBe(
+      `"opened" IS NOT NULL AND (epoch(to_datetime("opened")) >= 10 AND epoch(to_datetime("opened")) < 20)`
+    );
+  });
+});
