@@ -226,6 +226,18 @@ describe('QGIS export SQL', () => {
     }
   );
 
+  it('should not streak polygons across Bertin 1953, which PROJ turns itself', async () => {
+    // d3 and PROJ both draw it on the sphere turned by rotate([-16.5, -42]).
+    const target =
+      '+proj=bertin1953 +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs';
+    const seam = { longitude: 16.5, latitude: 42, meridian: 180 };
+    const keep = (geometry: string) => geometry;
+    const cut = (geometry: string) => cutAtSeam(geometry, seam);
+
+    expect(await streaks(WORLD_CELLS, keep, target, seam)).toBeGreaterThan(0);
+    expect(await streaks(WORLD_CELLS, cut, target, seam)).toBe(0);
+  });
+
   it.each([
     [
       'Albers tilted to 96° W, 30° S',
