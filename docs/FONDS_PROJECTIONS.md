@@ -278,7 +278,11 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
   projection du catalogue. Le pôle qui tombe sur la couture est un point
   partagé entre les deux bords de la carte : une calotte d'une soixantaine de
   mètres autour de lui est retirée, comme une bande d'environ un mètre de part
-  et d'autre de la couture. Si DuckDB refuse le SCR cible, la
+  et d'autre de la couture. Les pôles de la sphère tournée, qu'une conique
+  dessine en arc et une pseudo-cylindrique en ligne, sont entourés d'un petit
+  disque à un sommet par degré : sans lui, QGIS relie les deux bouts de l'arc
+  par une corde. Le graticule reçoit un sommet par degré (`densifyLines`), car
+  PROJ ne courbe pas un segment entre deux sommets comme le fait d3. Si DuckDB refuse le SCR cible, la
   projection se fait en JavaScript avec la fonction qui géoréférence l'image.
   Une entité qui sort du domaine de la projection est écartée et comptée dans
   le mémo.

@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { geoRotation } from 'd3-geo';
+import proj4 from 'proj4';
 import {
   cutAtSeam,
+  densifyLines,
   representativePoint,
   resolveSeamLines
 } from '$lib/features/header/services/qgis/qgis-sql';
@@ -223,6 +225,87 @@ describe('QGIS export SQL', () => {
       expect(await streaks(WORLD_MERIDIANS, cut, target, seam)).toBe(0);
     }
   );
+
+  it.each([
+    [
+      'Albers tilted to 96° W, 30° S',
+      '+proj=aea +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs',
+      -96,
+      -30
+    ],
+    [
+      'Albers on 96° W',
+      '+proj=aea +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs',
+      -96,
+      0
+    ],
+    [
+      'Equal Earth tilted to 57° E, 50° S',
+      '+proj=eqearth +x_0=0 +y_0=0 +R=6371000 +units=m +no_defs',
+      57,
+      -50
+    ]
+  ])(
+    'should keep the area of the sphere on %s, turned poles included',
+    async (_name, base, longitude, latitude) => {
+      // Equal-area: the cut globe covers 4πR² on the map, unless a ring round
+      // a pole the map draws as a line or an arc takes a chord instead. The
+      // tilt then the base projection, as the map (and the JS fallback) does:
+      // the PROJ of DuckDB for Node gives no ob_tran round a cone.
+      const turn = geoRotation([-longitude, -latitude, 0]);
+      // proj4js needs lat_0 and lon_0, which PROJ defaults to 0.
+      const forward = proj4('EPSG:4326', `${base} +lat_0=0 +lon_0=0`).forward;
+      const project = ([lon, lat]: [number, number]) =>
+        forward(turn([lon, lat]) as [number, number]) as [number, number];
+      const rows = (await query(
+        db,
+        `SELECT ST_AsText(part.geom) AS wkt
+       FROM (SELECT UNNEST(ST_Dump(${cutAtSeam('geom', { longitude, latitude, meridian: 180 })})) AS part FROM ${WORLD_CELLS})`
+      )) as Array<{ wkt: string }>;
+      let area = 0;
+      for (const { wkt } of rows) {
+        const rings = [...wkt.matchAll(/\(([^()]+)\)/g)].map((ring) =>
+          ring[1]
+            .split(',')
+            .map((pair) =>
+              project(pair.trim().split(/\s+/).map(Number) as [number, number])
+            )
+        );
+        rings.forEach((ring, index) => {
+          let twice = 0;
+          for (let i = 0; i < ring.length - 1; i++) {
+            twice += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+          }
+          area += (index === 0 ? 1 : -1) * Math.abs(twice / 2);
+        });
+      }
+      const sphere = 4 * Math.PI * 6371000 ** 2;
+      expect(Math.abs(area / sphere - 1)).toBeLessThan(0.001);
+    }
+  );
+
+  it('should give a graticule line a vertex every degree, its own kept', async () => {
+    const line =
+      "ST_GeomFromText('MULTILINESTRING((0 0, 10 0, 10 2.5), (-180 66.5, 180 66.5))')";
+    const [row] = (await query(
+      db,
+      `SELECT ST_NPoints(g) AS points, ST_Length(g) AS length,
+              ST_Intersects(g, ST_Point(0, 0)) AS keepsStart,
+              ST_Contains(ST_Buffer(g, 1e-9), ST_Point(10, 0)) AS keepsCorner
+       FROM (SELECT ${densifyLines(line, 1)} AS g)`
+    )) as Array<{
+      points: number;
+      length: number;
+      keepsStart: boolean;
+      keepsCorner: boolean;
+    }>;
+
+    // 10 + 3 + 360 segments of a degree or less.
+    expect(Number(row.points)).toBe(11 + 3 + 361);
+    expect(Number(row.length)).toBeCloseTo(12.5 + 360, 9);
+    expect(row.keepsStart).toBe(true);
+    expect(row.keepsCorner).toBe(true);
+  });
 
   it('should put the symbol inside a polygon whose centroid falls outside it', async () => {
     const horseshoe =
