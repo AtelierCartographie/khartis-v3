@@ -1,8 +1,10 @@
 <script lang="ts">
   import {
     claimFloatingPanel,
+    enterFloatingPanelScope,
     floatingPanelIn,
-    floatingPanelOut
+    floatingPanelOut,
+    isTopmostFloatingPanel
   } from '$lib/features/commons/utils/floating-panel.svelte';
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
@@ -218,9 +220,11 @@
     popoverRight = toolbarWidth;
   }
 
+  const nestedInFloatingPanel = enterFloatingPanelScope();
+
   $effect(() => {
     if (!open) return;
-    return claimFloatingPanel(handleClose);
+    return claimFloatingPanel(handleClose, { nested: nestedInFloatingPanel });
   });
 
   function handleClose() {
@@ -487,6 +491,7 @@
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
+        if (!isTopmostFloatingPanel(handleClose)) return;
         handleClose();
         return;
       }
