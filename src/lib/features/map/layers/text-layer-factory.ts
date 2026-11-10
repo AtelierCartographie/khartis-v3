@@ -8,8 +8,7 @@ import {
   DEFAULT_COLORS,
   ShapeType,
   SizeMode,
-  SymbolMode,
-  VISUALIZATION_DEFAULTS
+  SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   isTopVizFilter,
@@ -145,6 +144,8 @@ import {
 const LABEL_MAX_WIDTH_EM = 10;
 const LABEL_LEADER_WIDTH_PX = 0.75;
 const LABEL_LEADER_MIN_GAP_PX = 6;
+// Clear space between labels that may be hidden, in median label heights.
+const LABEL_SPACING_RATIO = 0.5;
 const LABEL_LEADER_MIN_GAP_EM = 0.5;
 const LABEL_LEADER_SYMBOL_GAP_PX = 3;
 // Clear space an area label keeps around its text, in page pixels. The safe
@@ -1255,9 +1256,7 @@ function buildTextOverlayLayers(
           ),
       spacing:
         placementMode === 'optional' && heights.length
-          ? (textConfig.labelSpacing ??
-              VISUALIZATION_DEFAULTS.textLabelSpacing) *
-            heights[heights.length >> 1]
+          ? LABEL_SPACING_RATIO * heights[heights.length >> 1]
           : 0,
 
       align: textConfig.labelColumns ? 'columns' : 'none',

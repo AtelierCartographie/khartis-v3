@@ -1496,8 +1496,6 @@
   "text_automatic_placement_info": "Déplace les étiquettes pour éviter qu'elles se chevauchent et masque celles qui ne trouvent pas de place, en commençant par les moins importantes. Une étiquette retenue par un filtre reste visible, sauf si vous autorisez à les masquer, et une étiquette déplacée à la main garde sa position.",
   "text_label_columns": "Aligner en colonnes",
   "text_label_columns_info": "Avec le placement automatique, range les étiquettes des groupes serrés en colonne à côté du groupe, dans l'ordre de leurs points et reliées par des filets. Une colonne n'est posée que si elle montre plus de noms ou range des filets.",
-  "text_label_spacing": "Espace entre les étiquettes (%)",
-  "text_label_spacing_info": "Espace laissé libre autour de chaque étiquette, en pourcentage de la hauteur d'une étiquette. Plus il est grand, plus la carte s'aère et plus d'étiquettes sont masquées. Sans effet quand les étiquettes filtrées sont toutes imposées.",
   "text_filtered_labels_optional": "Masquer des étiquettes filtrées faute de place",
   "text_filtered_labels_optional_info": "Par défaut, toutes les étiquettes retenues par le filtre Textes sont affichées, quitte à se chevaucher. Activée, cette option laisse l'algorithme en masquer, en commençant par les moins importantes. Avec un filtre « Top », l'ordre du filtre fixe la priorité.",
   "hidden_labels_summary": "{hidden} étiquettes sur {total} masquées faute de place.",

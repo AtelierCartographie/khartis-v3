@@ -464,10 +464,6 @@ export function buildTextPrimitiveConfig(
       false,
     labelColumns:
       existing?.labelColumns ?? visualization.style.textLabelColumns ?? false,
-    labelSpacing:
-      existing?.labelSpacing ??
-      visualization.style.textLabelSpacing ??
-      VISUALIZATION_DEFAULTS.textLabelSpacing,
     filteredLabelsOptional:
       existing?.filteredLabelsOptional ??
       visualization.style.textFilteredLabelsOptional ??
