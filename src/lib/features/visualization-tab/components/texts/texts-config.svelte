@@ -2,7 +2,12 @@
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import {
+    SectionHeading,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import { VizFilterButton, VizFilterPanel } from '../shared';
+  import HiddenLabelsSummary from './hidden-labels-summary.svelte';
   import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
@@ -25,6 +30,7 @@
     SizeMode,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
+  import { isVizFilterComplete } from '$lib/features/commons/utils/viz-filter.utils';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
     DEFAULT_SEQUENTIAL_PREVIEW
@@ -155,6 +161,9 @@
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
+  let automaticPlacement = $state<boolean>(false);
+  let labelColumns = $state<boolean>(false);
+  let filteredLabelsOptional = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
   let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
@@ -193,6 +202,7 @@
   let categoryPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
 
+  const hasTextFilter = $derived(filters.some(isVizFilterComplete));
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(
     labelFieldSelection.selectedFieldId !== NONE_FIELD_ID
@@ -284,6 +294,10 @@
       colorMode = visualization.modes?.color ?? ColorMode.UNIQUE;
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
+      automaticPlacement = visualization.style.textAutomaticPlacement ?? false;
+      labelColumns = visualization.style.textLabelColumns ?? false;
+      filteredLabelsOptional =
+        visualization.style.textFilteredLabelsOptional ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
@@ -419,6 +433,21 @@
     textOpacity = value;
     onStyleChange?.({ textOpacity: value / 100 });
     onSecondaryLabelsChange?.({ opacity: value / 100 });
+  }
+
+  function handleAutomaticPlacementToggle(value: boolean) {
+    automaticPlacement = value;
+    onStyleChange?.({ textAutomaticPlacement: value });
+  }
+
+  function handleLabelColumnsToggle(value: boolean) {
+    labelColumns = value;
+    onStyleChange?.({ textLabelColumns: value });
+  }
+
+  function handleFilteredLabelsOptionalToggle(value: boolean) {
+    filteredLabelsOptional = value;
+    onStyleChange?.({ textFilteredLabelsOptional: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -645,6 +674,33 @@
           onColorChange={handleMissingDataColorChange}
         />
 
+        <SectionHeading title={m.text_position_title()} />
+        <p class="texts-config__helper">{m.text_position_helper()}</p>
+        <ToggleWithLabel
+          label={m.text_automatic_placement()}
+          toggled={automaticPlacement}
+          infoText={m.text_automatic_placement_info()}
+          ontoggle={handleAutomaticPlacementToggle}
+        />
+        <ToggleWithLabel
+          label={m.text_label_columns()}
+          toggled={automaticPlacement && labelColumns}
+          disabled={!automaticPlacement}
+          infoText={m.text_label_columns_info()}
+          ontoggle={handleLabelColumnsToggle}
+        />
+        {#if automaticPlacement && hasTextFilter}
+          <ToggleWithLabel
+            label={m.text_filtered_labels_optional()}
+            toggled={filteredLabelsOptional}
+            infoText={m.text_filtered_labels_optional_info()}
+            ontoggle={handleFilteredLabelsOptionalToggle}
+          />
+        {/if}
+        {#if automaticPlacement && visualization}
+          <HiddenLabelsSummary vizId={visualization.id} />
+        {/if}
+
         <TextSizeSection
           sizeMode={sizeMode}
           size={size}
@@ -771,6 +827,11 @@
 
   .texts-config__dependent--disabled {
     opacity: 0.4;
+  }
+
+  .texts-config__helper {
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    color: var(--cds-text-helper);
   }
 
   :global(.text-input-field .bx--text-input) {

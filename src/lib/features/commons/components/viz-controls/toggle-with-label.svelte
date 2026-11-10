@@ -64,7 +64,6 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding: var(--cds-spacing-02) 0;
     gap: var(--cds-spacing-04);
   }
 

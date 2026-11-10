@@ -298,6 +298,12 @@ export interface TextPrimitiveConfig {
   /** 0 to 1. */
   haloOpacity: number;
   collisionDetection: boolean;
+  /** Labels placed by label-placer, off unless the user turns it on. */
+  automaticPlacement?: boolean;
+  /** With automatic placement, stack the labels of dense clusters in columns. */
+  labelColumns?: boolean;
+  /** Labels a Texts filter kept may be hidden for lack of room too. */
+  filteredLabelsOptional?: boolean;
   dxpMasking: boolean;
   valueColumn?: string;
   categoryColumn?: string;
@@ -437,6 +443,9 @@ export interface VisualizationConfig {
     textHaloWidth?: number;
     textHaloOpacity?: number;
     textCollisionDetection?: boolean;
+    textAutomaticPlacement?: boolean;
+    textLabelColumns?: boolean;
+    textFilteredLabelsOptional?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;

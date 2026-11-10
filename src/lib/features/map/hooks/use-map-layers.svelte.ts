@@ -31,6 +31,7 @@ import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+import { hiddenLabelsStore } from '../stores/hidden-labels.store.svelte';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
@@ -445,6 +446,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...layers, ...(preview as Layer<DeckDataRow>[])];
   }
 
+  // Ghosts of the labels the placement hid, in the Styling step: drawn on top
+  // like the drag preview, so a hover never rebuilds the thematic layers.
+  function withHiddenLabelGhosts(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const ghosts = untrack(() => hiddenLabelsStore.ghostLayers);
+    return ghosts.length > 0
+      ? [...layers, ...(ghosts as Layer<DeckDataRow>[])]
+      : layers;
+  }
+
   let joinControlHoverSource: JoinControlHoverSource | null = null;
 
   // Hovering a value in the join panel or a row of the table outlines its
@@ -485,6 +497,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   $effect(() => {
     void mapHoverHighlightStore.overlay;
     void labelLayoutStore.dragPreview;
+    void hiddenLabelsStore.ghostLayers;
     void joinControlStore.hoverTarget;
     void joinControlStore.getRevealProgress(
       datasetsStore.selectedDatasetId ?? ''
@@ -498,7 +511,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function setLayers(stack: Layer<DeckDataRow>[]): boolean {
     const layers = withLabelDragPreview(
-      withHoverHighlight(withJoinControlReveal(withJoinControlHover(stack)))
+      withHiddenLabelGhosts(
+        withHoverHighlight(withJoinControlReveal(withJoinControlHover(stack)))
+      )
     );
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
@@ -1289,6 +1304,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
       let hasPendingBasemapLayerSource = false;
+      let labelOutlineTables: ArrowTable[] = [];
       let isBuildingBasemapLayer = false;
       isWaitingForRepresentativePoints = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
@@ -1418,6 +1434,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               });
             }
           }
+
+          labelOutlineTables = metadataLayers
+            .filter((layer) => layer.type === BasemapLayerType.LAND)
+            .map((layer) => layer.table);
 
           const additionalData = {
             frontieresTable: shouldShowBasemapLayers
@@ -1556,6 +1576,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             projectionState.overrideSource,
             allowProjectionOverride
           );
+          ctx.labelOutlineTables = labelOutlineTables;
 
           if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
