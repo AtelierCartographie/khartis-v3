@@ -1496,8 +1496,6 @@
   "text_automatic_placement_info": "Moves labels so they do not overlap and hides those that find no room, the least important first. A label kept by a filter stays visible unless you let them be hidden, and a label moved by hand keeps its position.",
   "text_label_columns": "Align in columns",
   "text_label_columns_info": "With automatic placement, stacks the labels of tight clusters in a column beside the cluster, in the order of their points and joined by leaders. A column is set only when it shows more names or tidies leaders.",
-  "text_label_spacing": "Space between labels (%)",
-  "text_label_spacing_info": "Space kept clear around each label, as a percentage of a label's height. The larger it is, the airier the map and the more labels are hidden. No effect when the filtered labels are all required.",
   "text_filtered_labels_optional": "Hide filtered labels for lack of room",
   "text_filtered_labels_optional_info": "By default, every label kept by the Texts filter is shown, even if labels overlap. When on, the algorithm may hide some, the least important first. With a Top filter, the filter's order sets the priority.",
   "hidden_labels_summary": "{hidden} of {total} labels hidden for lack of room.",

@@ -200,8 +200,6 @@ export const VISUALIZATION_DEFAULTS = {
   fillOpacity: 100,
   textSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
   textOpacity: 100,
-  // Clear space between labels that may be hidden, in median label heights.
-  textLabelSpacing: 0.5,
   labelSize: PRINT_STANDARD_TOKENS.legend.fontSize,
   labelOpacity: 100,
   lineWidth: 1,
@@ -222,8 +220,6 @@ export const SLIDER_LIMITS = {
   symbolBarWidth: { min: 1, max: 30, step: 1 },
   textSize: { min: 6, max: 64, step: 1 },
   textOpacity: { min: 0, max: 100, step: 1 },
-  // In percent of the median label height.
-  textLabelSpacing: { min: 0, max: 150, step: 10 },
   labelOpacity: { min: 0, max: 100, step: 1 },
   haloWidth: { min: 0, max: 4, step: 0.5 },
   missingDataSize: { min: 1, max: 12, step: 0.5 },

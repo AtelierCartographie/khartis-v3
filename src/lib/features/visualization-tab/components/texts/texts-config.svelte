@@ -4,7 +4,6 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import {
     SectionHeading,
-    SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import { VizFilterButton, VizFilterPanel } from '../shared';
@@ -29,7 +28,6 @@
     ColorMode,
     DEFAULT_COLORS,
     SizeMode,
-    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import { isVizFilterComplete } from '$lib/features/commons/utils/viz-filter.utils';
@@ -165,9 +163,6 @@
   let halo = $state<boolean>(false);
   let automaticPlacement = $state<boolean>(false);
   let labelColumns = $state<boolean>(false);
-  let labelSpacing = $state<number>(
-    VISUALIZATION_DEFAULTS.textLabelSpacing * 100
-  );
   let filteredLabelsOptional = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
@@ -301,10 +296,6 @@
       halo = visualization.style.textHalo ?? false;
       automaticPlacement = visualization.style.textAutomaticPlacement ?? false;
       labelColumns = visualization.style.textLabelColumns ?? false;
-      labelSpacing = Math.round(
-        (visualization.style.textLabelSpacing ??
-          VISUALIZATION_DEFAULTS.textLabelSpacing) * 100
-      );
       filteredLabelsOptional =
         visualization.style.textFilteredLabelsOptional ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
@@ -452,11 +443,6 @@
   function handleLabelColumnsToggle(value: boolean) {
     labelColumns = value;
     onStyleChange?.({ textLabelColumns: value });
-  }
-
-  function handleLabelSpacingChange(value: number) {
-    labelSpacing = value;
-    onStyleChange?.({ textLabelSpacing: value / 100 });
   }
 
   function handleFilteredLabelsOptionalToggle(value: boolean) {
@@ -709,20 +695,6 @@
             toggled={filteredLabelsOptional}
             infoText={m.text_filtered_labels_optional_info()}
             ontoggle={handleFilteredLabelsOptionalToggle}
-          />
-        {/if}
-        {#if automaticPlacement}
-          <SliderWithInput
-            label={m.text_label_spacing()}
-            infoText={m.text_label_spacing_info()}
-            min={SLIDER_LIMITS.textLabelSpacing.min}
-            max={SLIDER_LIMITS.textLabelSpacing.max}
-            step={SLIDER_LIMITS.textLabelSpacing.step}
-            value={labelSpacing}
-            disabled={hasTextFilter && !filteredLabelsOptional}
-            showMinMax
-            inputWidth="64px"
-            onchange={handleLabelSpacingChange}
           />
         {/if}
         {#if automaticPlacement && visualization}

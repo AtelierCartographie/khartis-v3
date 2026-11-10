@@ -178,11 +178,10 @@ empilement, filets et export SVG suivent sans chemin propre.
   a un, puis rayon du symbole, taille du texte et valeur). Le filtre se lit
   dans ses identifiants de lignes : en rendu scindé, la table d'attributs est
   toujours restreinte, filtre ou non.
-- Les étiquettes facultatives gardent entre elles un espace libre
-  (`labelSpacing`, une demi-hauteur d'étiquette médiane par défaut, réglable
-  de 0 à 150 % dans le panneau Textes ; `spacing` du moteur), filets compris :
-  les zones denses s'éclaircissent d'abord. Des étiquettes requises n'en
-  gardent aucun.
+- Les étiquettes facultatives gardent entre elles un espace libre d'une
+  demi-hauteur d'étiquette médiane (`LABEL_SPACING_RATIO`, `spacing` du
+  moteur), filets compris : les zones denses s'éclaircissent d'abord. Cet
+  espace n'est pas réglable. Des étiquettes requises n'en gardent aucun.
 - Seul le premier quart des étiquettes de symboles, par importance, peut
   prendre un filet (300 au plus) : avec des filets pour toutes, la plupart des
   noms d'une carte dense en portaient un.

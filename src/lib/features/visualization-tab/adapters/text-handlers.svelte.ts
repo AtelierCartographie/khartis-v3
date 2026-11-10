@@ -33,7 +33,6 @@ const TEXT_STYLE_MIRROR_KEYS = [
   'textCollisionDetection',
   'textAutomaticPlacement',
   'textLabelColumns',
-  'textLabelSpacing',
   'textFilteredLabelsOptional',
   'textDxpMasking'
 ] as const satisfies ReadonlyArray<keyof VisualizationConfig['style']>;
@@ -96,7 +95,6 @@ export function createTextHandlers(deps: TextHandlersDeps) {
         { from: 'textCollisionDetection', to: 'collisionDetection' },
         { from: 'textAutomaticPlacement', to: 'automaticPlacement' },
         { from: 'textLabelColumns', to: 'labelColumns' },
-        { from: 'textLabelSpacing', to: 'labelSpacing' },
         {
           from: 'textFilteredLabelsOptional',
           to: 'filteredLabelsOptional'

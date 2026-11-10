@@ -302,8 +302,6 @@ export interface TextPrimitiveConfig {
   automaticPlacement?: boolean;
   /** With automatic placement, stack the labels of dense clusters in columns. */
   labelColumns?: boolean;
-  /** Clear space between labels that may be hidden, in median label heights. */
-  labelSpacing?: number;
   /** Labels a Texts filter kept may be hidden for lack of room too. */
   filteredLabelsOptional?: boolean;
   dxpMasking: boolean;
@@ -447,7 +445,6 @@ export interface VisualizationConfig {
     textCollisionDetection?: boolean;
     textAutomaticPlacement?: boolean;
     textLabelColumns?: boolean;
-    textLabelSpacing?: number;
     textFilteredLabelsOptional?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
