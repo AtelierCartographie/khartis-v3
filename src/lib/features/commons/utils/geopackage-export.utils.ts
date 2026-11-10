@@ -19,8 +19,23 @@ export interface GeoPackageExportOptions {
   customSrs?: { name: string; definition: string };
 }
 
+/** A QGIS style applied to the layer on opening (`layer_styles`). */
+export interface GeoPackageLayerStyle {
+  name: string;
+  qml: string;
+  description?: string;
+}
+
 export interface GeoPackageLayerExportOptions extends GeoPackageExportOptions {
   features: GeoPackageFeatureRow[];
+  style?: GeoPackageLayerStyle;
+  /** Columns in this order, typed by their values; others follow. */
+  propertyColumns?: string[];
+  /**
+   * Columns holding ISO dates (`YYYY-MM-DD`) or date-times, declared as such
+   * so GIS software reads them as dates rather than text.
+   */
+  columnTypes?: Record<string, 'DATE' | 'DATETIME'>;
 }
 
 interface GeoPackagePropertyColumnMapping {
@@ -381,6 +396,7 @@ function createGeoPackageFeatureTable(
     geometryType: string;
     srs: ReturnType<typeof resolveSrs>;
     features: GeoPackageFeatureRow[];
+    columnTypes: Record<string, 'DATE' | 'DATETIME'>;
   }
 ): void {
   const { layerName, propertyColumnMappings, geometryType, srs, features } =
@@ -403,7 +419,10 @@ function createGeoPackageFeatureTable(
     const values = features.map(
       (feature) => feature.properties[mapping.sourceName]
     );
-    return `${quoteIdentifier(mapping.columnName)} ${inferSqliteColumnType(values)}`;
+    const declared = Object.hasOwn(options.columnTypes, mapping.sourceName)
+      ? options.columnTypes[mapping.sourceName]
+      : undefined;
+    return `${quoteIdentifier(mapping.columnName)} ${declared ?? inferSqliteColumnType(values)}`;
   });
   const columnDefinitions = [
     `${quoteIdentifier(GEOPACKAGE_ID_COLUMN)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL`,
@@ -453,6 +472,136 @@ function insertFeatures(
   }
 }
 
+// GDAL and QGIS read and write this table under this exact shape.
+function createLayerStylesTable(db: SqliteDatabase): void {
+  db.exec(`
+    CREATE TABLE layer_styles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      f_table_catalog TEXT(256),
+      f_table_schema TEXT(256),
+      f_table_name TEXT(256),
+      f_geometry_column TEXT(256),
+      styleName TEXT(30),
+      styleQML TEXT,
+      styleSLD TEXT,
+      useAsDefault BOOLEAN,
+      description TEXT,
+      owner TEXT(30),
+      ui TEXT(30),
+      update_time DATETIME DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+    INSERT INTO gpkg_contents (table_name, data_type, identifier, description)
+    VALUES ('layer_styles', 'attributes', 'layer_styles', '');
+  `);
+}
+
+function insertLayerStyle(
+  db: SqliteDatabase,
+  layerName: string,
+  style: GeoPackageLayerStyle
+): void {
+  db.prepare(
+    `INSERT INTO layer_styles (
+       f_table_catalog, f_table_schema, f_table_name, f_geometry_column,
+       styleName, styleQML, styleSLD, useAsDefault, description, owner, ui
+     ) VALUES ('', '', ?, ?, ?, ?, '', 1, ?, '', NULL)`
+  )
+    .bind([
+      layerName,
+      GEOPACKAGE_GEOMETRY_COLUMN,
+      style.name,
+      style.qml,
+      style.description ?? ''
+    ])
+    .stepFinalize();
+}
+
+type Extent = [number, number, number, number];
+
+// Walks a WKB geometry (2D, XY) and widens `extent` with its coordinates.
+function extendExtentWithWkb(wkb: Uint8Array, extent: Extent): void {
+  const view = new DataView(wkb.buffer, wkb.byteOffset, wkb.byteLength);
+  let offset = 0;
+  const readGeometry = (): void => {
+    const littleEndian = view.getUint8(offset) === 1;
+    const rawType = view.getUint32(offset + 1, littleEndian);
+    offset += 5;
+    const type = rawType % 1000;
+    const dimensions = rawType >= 3000 ? 4 : rawType >= 1000 ? 3 : 2;
+    const readPoint = () => {
+      const x = view.getFloat64(offset, littleEndian);
+      const y = view.getFloat64(offset + 8, littleEndian);
+      offset += 8 * dimensions;
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        extent[0] = Math.min(extent[0], x);
+        extent[1] = Math.min(extent[1], y);
+        extent[2] = Math.max(extent[2], x);
+        extent[3] = Math.max(extent[3], y);
+      }
+    };
+    const readCount = () => {
+      const count = view.getUint32(offset, littleEndian);
+      offset += 4;
+      return count;
+    };
+    const readPoints = () => {
+      for (let count = readCount(); count > 0; count -= 1) readPoint();
+    };
+    switch (type) {
+      case 1:
+        readPoint();
+        break;
+      case 2:
+        readPoints();
+        break;
+      case 3:
+        for (let rings = readCount(); rings > 0; rings -= 1) readPoints();
+        break;
+      case 4:
+      case 5:
+      case 6:
+      case 7:
+        for (let parts = readCount(); parts > 0; parts -= 1) readGeometry();
+        break;
+      default:
+        throw new RangeError(`Unsupported WKB geometry type ${rawType}`);
+    }
+  };
+  readGeometry();
+}
+
+/** [xmin, ymin, xmax, ymax] of WKB features, null when none is readable. */
+export function computeLayerExtent(
+  features: GeoPackageFeatureRow[]
+): Extent | null {
+  const extent: Extent = [Infinity, Infinity, -Infinity, -Infinity];
+  try {
+    for (const feature of features) {
+      extendExtentWithWkb(feature.wkb, extent);
+    }
+  } catch {
+    return null;
+  }
+  return extent[0] <= extent[2] ? extent : null;
+}
+
+// QGIS zooms to a layer from these columns before it scans the features.
+function updateLayerExtent(
+  db: SqliteDatabase,
+  layerName: string,
+  features: GeoPackageFeatureRow[]
+): void {
+  const extent = computeLayerExtent(features);
+  if (!extent) {
+    return;
+  }
+  db.prepare(
+    `UPDATE gpkg_contents SET min_x = ?, min_y = ?, max_x = ?, max_y = ? WHERE table_name = ?`
+  )
+    .bind([...extent, layerName])
+    .stepFinalize();
+}
+
 export async function exportGeoPackageLayers(
   layers: GeoPackageLayerExportOptions[]
 ): Promise<Blob> {
@@ -473,16 +622,19 @@ export async function exportGeoPackageLayers(
   const preparedLayers = exportableLayers.map((layer) => {
     const layerName = createUniqueLayerName(layer.layerName, usedLayerNames);
     const propertyColumns = Array.from(
-      new Set(
-        layer.features.flatMap((feature) => Object.keys(feature.properties))
-      )
+      new Set([
+        ...(layer.propertyColumns ?? []),
+        ...layer.features.flatMap((feature) => Object.keys(feature.properties))
+      ])
     );
     return {
       layerName,
       propertyColumnMappings: createPropertyColumnMappings(propertyColumns),
       srs: resolveSrs(layer.sourceCrs, layer.customSrs),
       geometryType: resolveLayerGeometryType(layer.features),
-      features: layer.features
+      features: layer.features,
+      style: layer.style,
+      columnTypes: layer.columnTypes ?? {}
     };
   });
 
@@ -501,6 +653,17 @@ export async function exportGeoPackageLayers(
         srsId: layer.srs.srsId,
         features: layer.features
       });
+      updateLayerExtent(db, layer.layerName, layer.features);
+    }
+
+    const styledLayers = preparedLayers.filter((layer) => layer.style);
+    if (styledLayers.length > 0) {
+      createLayerStylesTable(db);
+      for (const layer of styledLayers) {
+        if (layer.style) {
+          insertLayerStyle(db, layer.layerName, layer.style);
+        }
+      }
     }
 
     const dbPointer = db.pointer;

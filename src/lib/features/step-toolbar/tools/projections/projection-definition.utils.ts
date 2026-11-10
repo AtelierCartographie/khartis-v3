@@ -48,6 +48,11 @@ export interface ProjectionDefinition {
    * [-longitude, -latitude]: `proj4` is then the matching ob_tran string.
    */
   obliqueBase?: ObliqueBase;
+  /**
+   * The d3 rotation [-longitude, -latitude] a PROJ method builds in (Bertin
+   * 1953): the sphere is cut after it, not along the antimeridian.
+   */
+  builtInOrientation?: [number, number];
 }
 
 export interface ObliqueBase {
@@ -310,7 +315,10 @@ function resolveD3Definition(state: ProjectionState): ProjectionDefinition {
         )
       : {
           proj4: [`+proj=${method.proj}`, ...params, PROJ_SUFFIX].join(' '),
-          notes: tilted ? [...notes, 'oblique'] : notes
+          notes: tilted ? [...notes, 'oblique'] : notes,
+          ...(method.fixedOrientation
+            ? { builtInOrientation: [longitude, latitude] as [number, number] }
+            : {})
         };
   return { ...definition, rotation: rotation !== 0 ? rotation : undefined };
 }
