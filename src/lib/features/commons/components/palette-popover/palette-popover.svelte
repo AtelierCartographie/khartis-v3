@@ -1,8 +1,10 @@
 <script lang="ts">
   import {
     claimFloatingPanel,
+    enterFloatingPanelScope,
     floatingPanelIn,
-    floatingPanelOut
+    floatingPanelOut,
+    isTopmostFloatingPanel
   } from '$lib/features/commons/utils/floating-panel.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
@@ -129,9 +131,11 @@
       DEFAULT_QUALITATIVE_PRESET;
   }
 
+  const nestedInFloatingPanel = enterFloatingPanelScope();
+
   $effect(() => {
     if (!open) return;
-    return claimFloatingPanel(handleClose);
+    return claimFloatingPanel(handleClose, { nested: nestedInFloatingPanel });
   });
 
   function handleClose() {
@@ -259,6 +263,7 @@
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
+        if (!isTopmostFloatingPanel(handleClose)) return;
         handleClose();
       }
     }
