@@ -125,22 +125,45 @@ function resolveMapFrame(layout: PageLayout): PageFrame {
 }
 
 // Page elements may sit anywhere on the page, margins included: shrinking the
-// map frame is how room is made for a title outside the map. The rendered size
-// varies with the sizing profile, so only a grip has to stay on the page; the
-// overlay clamps drags against the measured size.
+// map frame is how room is made for a title outside the map. A title's box
+// follows its text, which varies with the sizing profile, so only a grip has to
+// stay on the page; the overlay clamps drags against the measured size.
 const PAGE_ELEMENT_MIN_VISIBLE_PX = PAGE_GRID_SIZE_PX * 2;
+
+/**
+ * The box a page element is rendered in, when the layout sets it: a text
+ * width chosen by the user, or half the page for the captions. A title
+ * without a chosen width follows its text, which only the overlay measures.
+ */
+function getPageElementBoxWidth(
+  role: PageElementRole,
+  layout: Pick<PageLayout, 'width'>,
+  style?: AnnotationStyle
+): number | undefined {
+  if (style?.shapeWidth) {
+    return style.shapeWidth;
+  }
+  return isTopLeftPageElementRole(role)
+    ? undefined
+    : getPageElementWidth(role, layout);
+}
 
 export function clampPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   layout: PageLayout,
-  snapToGridEnabled = true
+  snapToGridEnabled = true,
+  style?: AnnotationStyle
 ): { x: number; y: number } {
+  const boxWidth = getPageElementBoxWidth(role, layout, style);
   return snapPointWithinBounds(
     position,
     {
       minX: 0,
-      maxX: Math.max(0, layout.width - PAGE_ELEMENT_MIN_VISIBLE_PX),
+      maxX: Math.max(
+        0,
+        layout.width - (boxWidth ?? PAGE_ELEMENT_MIN_VISIBLE_PX)
+      ),
       minY: 0,
       maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
@@ -148,21 +171,43 @@ export function clampPageElementPosition(
   );
 }
 
+const TEXT_ALIGN_FACTOR: Record<TextAlign, number> = {
+  [TextAlign.Left]: 0,
+  [TextAlign.Center]: 0.5,
+  [TextAlign.Right]: 1
+};
+
 export function remapPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   from: Pick<PageLayout, 'width' | 'height'>,
-  to: Pick<PageLayout, 'width' | 'height'>
+  to: Pick<PageLayout, 'width' | 'height'>,
+  style?: AnnotationStyle
 ): { x: number; y: number } {
-  return remapPointToResizedArea(
-    position,
-    {
-      width: getPageElementWidth(role, from),
-      height: PAGE_ELEMENT_HEIGHTS[role]
-    },
+  const height = PAGE_ELEMENT_HEIGHTS[role];
+  const fromBox = getPageElementBoxWidth(role, from, style);
+  const toBox = getPageElementBoxWidth(role, to, style);
+
+  if (fromBox === undefined || toBox === undefined || fromBox === toBox) {
+    return remapPointToResizedArea(
+      position,
+      { width: fromBox ?? getPageElementWidth(role, from), height },
+      from,
+      to
+    );
+  }
+
+  // A caption box spans half the page and resizes with it. The text sits on
+  // the side its alignment picks, so that edge of the box, not the box, keeps
+  // its distance to the nearest page edge.
+  const alignFactor = TEXT_ALIGN_FACTOR[style?.textAlign ?? TextAlign.Left];
+  const textEdge = remapPointToResizedArea(
+    { x: position.x + alignFactor * fromBox, y: position.y },
+    { width: 0, height },
     from,
     to
   );
+  return { x: textEdge.x - alignFactor * toBox, y: textEdge.y };
 }
 
 export function resolvePageLayout(overrides?: {
