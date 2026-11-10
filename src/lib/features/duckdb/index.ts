@@ -1,6 +1,7 @@
 export { Duck, initDuckDB } from './duck';
 export { waitForQueryIdle } from './core/query-activity';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
+export type { CoordinateSystemEntry } from './orchestrator/crs-ops';
 export { detectGPSColumns, validateGPSColumns } from './orchestrator/gps-ops';
 export {
   buildFilterClause,
@@ -10,7 +11,9 @@ export {
 export type { GPSValidationResult } from './orchestrator/gps-ops';
 export type {
   JoinFuzzyPassEstimate,
-  JoinTarget
+  JoinTarget,
+  JoinTerritoryStatus,
+  JoinTerritoryStatusRow
 } from './orchestrator/join-ops';
 export { selectBasemapJoinKeyColumns } from './utils/basemap-join-key-columns.utils';
 export type { MissingValueColumn } from './orchestrator/table-data-ops';
@@ -27,6 +30,10 @@ export {
   isGeometryColumnName,
   isGeometryColumnType
 } from './utils/geometry-column.utils';
+export {
+  isMissingDuckTableError,
+  isOutOfMemoryError
+} from './utils/duckdb-error.utils';
 export type {
   AnalysisResult,
   AnalysisResults,

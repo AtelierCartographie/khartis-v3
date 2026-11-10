@@ -46,6 +46,7 @@
     Modal
   } from 'carbon-components-svelte';
   import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import CalculatorPanel from './calculator-panel.svelte';
@@ -157,6 +158,8 @@
   });
 
   let confirmReimportOpen = $state(false);
+
+  $effect(() => () => joinControlStore.setHoverTarget(null));
   let pendingCsvOptions = $state<CsvOptions | null>(null);
 
   $effect(() => {
@@ -220,11 +223,7 @@
   const canReimportCsv = $derived(
     isCsvFile &&
       !!sourceFile &&
-      Boolean(
-        sourceFile.originalFile ||
-        sourceFile.content ||
-        hasReimportableSourceAsset(sourceFile)
-      )
+      Boolean(sourceFile.originalFile || hasReimportableSourceAsset(sourceFile))
   );
 
   let forceRefreshKey = $state(0);
@@ -412,16 +411,6 @@
     }
 
     let file = sourceFile.originalFile;
-
-    if (!file && sourceFile.content) {
-      const content =
-        typeof sourceFile.content === 'string'
-          ? sourceFile.content
-          : new TextDecoder().decode(sourceFile.content as ArrayBuffer);
-      file = new File([content], sourceFile.name, {
-        type: sourceFile.type || 'text/csv'
-      });
-    }
 
     // A restored project keeps the source bytes in IndexedDB only.
     if (!file && hasReimportableSourceAsset(sourceFile)) {
@@ -934,6 +923,10 @@
           onTableMutation={handleTableMutation}
           onSelectionChange={handleSelectionChange}
           onSortChange={handleSortChange}
+          onRowHover={(rowId) =>
+            joinControlStore.setHoverTarget(
+              rowId === null ? null : { rowIds: [rowId] }
+            )}
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}

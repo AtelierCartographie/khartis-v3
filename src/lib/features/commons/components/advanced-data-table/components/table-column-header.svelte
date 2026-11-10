@@ -1,7 +1,10 @@
 <script lang="ts">
   import { type AnalysisResult, RefineOperation } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
+  import {
+    VARIABLE_BADGE_STYLES,
+    type VariableBadgeType
+  } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
   import {
     formatValue,
@@ -220,6 +223,25 @@
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
+
+  // The header tooltip names the column in full and sums its type up.
+  const valueType = $derived.by((): VariableBadgeType => {
+    const typeSimple = analysis?.type_simple;
+    if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'date') return 'date';
+    if (typeSimple === 'boolean') return 'boolean';
+    return 'string';
+  });
+  const valueTypeLabel = $derived(
+    valueType === 'numeric'
+      ? m.column_type_number()
+      : valueType === 'date'
+        ? m.column_type_date()
+        : valueType === 'boolean'
+          ? m.column_type_boolean()
+          : m.column_type_text()
+  );
+  const valueTypeStyle = $derived(VARIABLE_BADGE_STYLES[valueType]);
 
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
@@ -623,7 +645,16 @@
             role="tooltip"
           >
             <div class="simple-tooltip-arrow"></div>
-            {typeTooltipMessage}
+            <span class="tooltip-column-name">{displayName ?? column.name}</span
+            >
+            <span
+              class="tooltip-column-type"
+              style:color={valueTypeStyle.color}
+              style:background-color={valueTypeStyle.bgColor}
+              style:border-color={valueTypeStyle.borderColor}
+            >
+              {valueTypeLabel}
+            </span>
           </div>
         </Portal>
       {/if}
@@ -1600,5 +1631,20 @@
     white-space: normal;
     max-width: 240px;
     text-align: left;
+  }
+
+  .tooltip-column-name {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-column-type {
+    display: inline-block;
+    margin-top: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-02);
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 </style>

@@ -931,7 +931,7 @@ describe('legend overlay visibility', () => {
     });
   });
 
-  it('recenters the page when a centered legend loses focus', async () => {
+  it('keeps the page centred on a legend until its tool closes', async () => {
     const { legend } = setupLegendViewport();
 
     await fireEvent.click(legend);
@@ -941,6 +941,10 @@ describe('legend overlay visibility', () => {
     });
 
     await fireEvent.blur(legend);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 60 });
+
+    globalActions.setSelectedTool(undefined);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });

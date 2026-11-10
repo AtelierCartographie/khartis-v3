@@ -4,8 +4,8 @@
   import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
+  import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
@@ -119,11 +119,6 @@
   function handleOpacityChange(e: CustomEvent<number>) {
     if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
     annotationsActions.applyStyle({ opacity: e.detail });
-  }
-
-  function handleBackgroundOpacityChange(e: CustomEvent<number>) {
-    if (bgOpacity === e.detail) return;
-    annotationsActions.applyStyle({ backgroundOpacity: e.detail });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -404,8 +399,6 @@
           stepMultiplier={4}
           on:input={handleOpacityChange}
           on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
         />
       </div>
     </Column>
@@ -414,68 +407,30 @@
   <Row>
     <Column>
       <div class="section">
-        <div class="bg-row">
-          <div class="bg-toggle-col">
-            <span class="bg-col-label">{m.legend_background()}</span>
-            <Switch
-              labelText={m.legend_background()}
-              hideLabel
-              toggled={backgroundEnabled}
-              labelA={m.no()}
-              labelB={m.yes()}
-              showStateLabel
-              onchange={(enabled: boolean) => {
-                if (enabled) {
-                  annotationsActions.applyStyle({
-                    backgroundColor: '#ffffff',
-                    backgroundOpacity: bgOpacity
-                  });
-                } else {
-                  annotationsActions.applyStyle({
+        <BackgroundSettings
+          enabled={backgroundEnabled}
+          color={bgColorValue}
+          opacity={bgOpacity}
+          shadow={effectiveStyle.backgroundShadow ?? false}
+          onEnabledChange={(enabled) =>
+            annotationsActions.applyStyle(
+              enabled
+                ? { backgroundColor: '#ffffff', backgroundOpacity: bgOpacity }
+                : {
                     backgroundColor: undefined,
-                    backgroundOpacity: undefined
-                  });
-                }
-              }}
-            />
-          </div>
-          <div class="bg-color-col">
-            <ColorPicker
-              triggerLabel={m.legend_background_color()}
-              hex={bgColorValue.hex}
-              hue={bgColorValue.hue}
-              saturation={bgColorValue.saturation}
-              lightness={bgColorValue.lightness}
-              disabled={!backgroundEnabled}
-              onValidate={({
-                hue,
-                saturation,
-                lightness
-              }: {
-                hex: string;
-                hue: number;
-                saturation: number;
-                lightness: number;
-              }) => {
-                annotationsActions.applyStyle({
-                  backgroundColor: { hue, saturation, lightness }
-                });
-              }}
-            />
-          </div>
-        </div>
-        <Slider
-          labelText={m.legend_opacity()}
-          value={bgOpacity}
-          disabled={!backgroundEnabled}
-          min={0}
-          max={100}
-          step={5}
-          on:input={handleBackgroundOpacityChange}
-          on:change={handleBackgroundOpacityChange}
-          minLabel=""
-          maxLabel=""
-          fullWidth
+                    backgroundOpacity: undefined,
+                    backgroundShadow: undefined
+                  }
+            )}
+          onColorChange={(backgroundColor) =>
+            annotationsActions.applyStyle({ backgroundColor })}
+          onOpacityChange={(backgroundOpacity) => {
+            if (backgroundOpacity !== bgOpacity) {
+              annotationsActions.applyStyle({ backgroundOpacity });
+            }
+          }}
+          onShadowChange={(backgroundShadow) =>
+            annotationsActions.applyStyle({ backgroundShadow })}
         />
       </div>
     </Column>
@@ -547,33 +502,4 @@
   }
 
   /* Background controls: toggle and color picker side by side. */
-  .bg-row {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--cds-spacing-03);
-    margin-bottom: var(--cds-spacing-03);
-  }
-
-  .bg-toggle-col {
-    display: flex;
-    flex-direction: column;
-    gap: var(--kh-gap-label);
-    flex-shrink: 0;
-  }
-
-  .bg-toggle-col :global(.kh-switch-native) {
-    min-height: var(--kh-size-sm);
-  }
-
-  .bg-col-label {
-    font-size: 0.75rem;
-    line-height: 1rem;
-    color: var(--cds-text-secondary, #525252);
-    letter-spacing: 0.32px;
-  }
-
-  .bg-color-col {
-    flex: 1;
-    min-width: 0;
-  }
 </style>

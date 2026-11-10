@@ -1,4 +1,5 @@
 import { unzipSync, zipSync } from 'fflate';
+import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ParseError,
@@ -8,7 +9,14 @@ import { PROJECT_CONST } from '$lib/features/project-management/constants';
 
 const ensureUploadedFileAssets = vi.fn(async (file) => file);
 const readAssetBytes = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
-const persistAssetBytes = vi.fn(async () => undefined);
+const persistedAssets = new Map<string, Uint8Array>();
+const persistAssetStream = vi.fn(
+  async (source: ReadableStream<Uint8Array>, ref: { assetId: string }) => {
+    const bytes = new Uint8Array(await new Response(source).arrayBuffer());
+    persistedAssets.set(ref.assetId, bytes);
+    return { ...ref, size: bytes.length };
+  }
+);
 const deleteOrphanAssets = vi.fn(async () => undefined);
 const saveProject = vi.fn(async () => undefined);
 const loadSerializedProject = vi.fn(async () => null);
@@ -32,7 +40,7 @@ vi.mock(
   () => ({
     ensureUploadedFileAssets,
     readAssetBytes,
-    persistAssetBytes,
+    persistAssetStream,
     deleteOrphanAssets
   })
 );
@@ -91,6 +99,7 @@ function createProjectFixture() {
 describe('project archive format', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    persistedAssets.clear();
   });
 
   it('exports a .kh archive with manifest, project metadata and assets', async () => {
@@ -265,13 +274,8 @@ describe('project archive format', () => {
 
     const imported = await importProject(file);
 
-    expect(persistAssetBytes).toHaveBeenCalledTimes(1);
-    expect(persistAssetBytes).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
-      expect.objectContaining({
-        assetId: 'asset-1',
-        path: 'assets/asset-1'
-      })
+    expect(persistedAssets.get('asset-1')).toEqual(
+      new Uint8Array([1, 2, 3, 4])
     );
     expect(deserialize).toHaveBeenCalledTimes(1);
     expect(saveProject).toHaveBeenCalledTimes(1);
@@ -316,7 +320,7 @@ describe('project archive format', () => {
       details: expect.objectContaining({ archiveVersion: 1 })
     });
     expect(migrateIfNeeded).not.toHaveBeenCalled();
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
   });
 
   it('rejects an unsupported project schema before restoring assets', async () => {
@@ -371,7 +375,7 @@ describe('project archive format', () => {
     await expect(importProject(file)).rejects.toMatchObject({
       code: 'UNSUPPORTED_PROJECT_SCHEMA_VERSION'
     });
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
     expect(deserialize).not.toHaveBeenCalled();
     expect(saveProject).not.toHaveBeenCalled();
   });
@@ -462,7 +466,7 @@ describe('project archive format', () => {
     });
 
     await expect(importProject(file)).rejects.toThrow('quota exceeded');
-    expect(persistAssetBytes).toHaveBeenCalledTimes(1);
+    expect(persistAssetStream).toHaveBeenCalledTimes(1);
     expect(removeProject).toHaveBeenCalledWith('project-1');
     expect(deleteOrphanAssets).toHaveBeenCalledWith(['asset-1']);
   });
@@ -485,7 +489,7 @@ describe('project archive format', () => {
       code: 'PARSE_ERROR',
       details: expect.objectContaining({ entry: expect.any(String) })
     });
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
   });
 
   it('rejects an archive file larger than the size limit before unzipping', async () => {
@@ -497,13 +501,14 @@ describe('project archive format', () => {
       'project.json': createProjectPayload(),
       'assets/asset-1': new Uint8Array([1, 2, 3, 4])
     });
-    Object.defineProperty(file, 'size', { value: 201 * 1024 * 1024 });
+    const oversizedBytes = STORAGE_LIMITS.maxFileSize + 1024 * 1024;
+    Object.defineProperty(file, 'size', { value: oversizedBytes });
 
     await expect(importProject(file)).rejects.toMatchObject({
       code: 'PARSE_ERROR',
-      details: expect.objectContaining({ archiveBytes: 201 * 1024 * 1024 })
+      details: expect.objectContaining({ archiveBytes: oversizedBytes })
     });
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
   });
 
   it('rejects a manifest whose assetCount does not match its asset entries', async () => {
@@ -520,7 +525,7 @@ describe('project archive format', () => {
       code: 'PARSE_ERROR',
       details: expect.objectContaining({ assetCount: 2, assetEntryCount: 1 })
     });
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
   });
 
   it('rejects a manifest asset entry whose path does not match its asset id', async () => {
@@ -547,7 +552,58 @@ describe('project archive format', () => {
     await expect(importProject(file)).rejects.toMatchObject({
       code: 'PARSE_ERROR'
     });
-    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(persistAssetStream).not.toHaveBeenCalled();
+  });
+
+  it('should restore assets byte for byte when the archive stores them deflated', async () => {
+    const { importProject } =
+      await import('$lib/features/project-management/io/importer');
+    const payload = new Uint8Array(512 * 1024);
+    for (let index = 0; index < payload.length; index++) {
+      payload[index] = (index * 31) % 251;
+    }
+
+    const file = createArchiveFile({
+      'manifest.json': createManifestPayload(),
+      'project.json': [createProjectPayload(), { level: 0 }],
+      'assets/asset-1': [payload, { level: 6 }]
+    });
+
+    await importProject(file);
+
+    const restored = persistedAssets.get('asset-1') ?? new Uint8Array();
+    expect(Buffer.compare(restored, payload)).toBe(0);
+  });
+
+  it('should reject a deflated asset that inflates past its declared size', async () => {
+    const { importProject } =
+      await import('$lib/features/project-management/io/importer');
+    const file = createArchiveFile({
+      'manifest.json': createManifestPayload(),
+      'project.json': createProjectPayload(),
+      'assets/asset-1': [new Uint8Array(4096), { level: 6 }]
+    });
+    const archive = new Uint8Array(await file.arrayBuffer());
+    const view = new DataView(archive.buffer);
+    const assetName = new TextEncoder().encode('assets/asset-1');
+    for (let offset = 0; offset < archive.length - 4; offset++) {
+      const isCentralHeader = view.getUint32(offset, true) === 0x02014b50;
+      const nameLength = isCentralHeader
+        ? view.getUint16(offset + 28, true)
+        : 0;
+      const name = archive.subarray(offset + 46, offset + 46 + nameLength);
+      if (isCentralHeader && name.every((byte, i) => byte === assetName[i])) {
+        view.setUint32(offset + 24, 16, true);
+      }
+    }
+    const tampered = new File([archive], 'tampered.kh');
+
+    await expect(importProject(tampered)).rejects.toMatchObject({
+      code: 'PARSE_ERROR',
+      details: expect.objectContaining({ fileName: 'tampered.kh' })
+    });
+    expect(saveProject).not.toHaveBeenCalled();
+    expect(deleteOrphanAssets).toHaveBeenCalledWith(['asset-1']);
   });
 
   it('ignores unexpected archive entries', async () => {
@@ -564,7 +620,7 @@ describe('project archive format', () => {
     const imported = await importProject(file);
 
     expect(imported.id).toBe('project-1');
-    expect(persistAssetBytes).toHaveBeenCalledTimes(1);
+    expect(persistAssetStream).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a non-zip payload with a localized parse error', async () => {

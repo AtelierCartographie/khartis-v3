@@ -35,6 +35,26 @@ interface ExportOptions {
   height: number;
 }
 
+/**
+ * Where the single map lands in the exported image: an export pixel is
+ * `offset + scale × map viewport pixel` (the logical pixels of
+ * `projectDataToViewportPx` and `map.project`). Absent for a collection of
+ * maps.
+ */
+export interface MapExportPlacement {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+export interface MapExportRequest extends Partial<ExportOptions> {
+  onMapPlacement?: (placement: MapExportPlacement) => void;
+  /** SVG: add the map frame as an empty rectangle layer, to line up exports. */
+  georeferenceFrame?: boolean;
+}
+
 interface RelativeRect {
   x: number;
   y: number;
@@ -1551,7 +1571,7 @@ function serializePointLayer(
   const barWidth = getLayerNumber(props, 'barWidth', 6);
   const layerId = getLayerId(layer, 0);
   const dedupeId = createSvgIdDeduper();
-  const parts: string[] = [];
+  const symbols: SvgPointSymbol[] = [];
 
   for (let index = 0; index < length; index++) {
     const position = readBinaryTuple(positionAttribute, index);
@@ -1617,18 +1637,161 @@ function serializePointLayer(
       ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
       : '';
 
-    parts.push(
+    symbols.push({
+      shape,
+      x: projected[0],
+      y: projected[1],
+      radius,
+      fillColor,
+      strokeColor,
+      strokeWidth,
+      nameAttribute
+    });
+  }
+
+  if (props.knockout === true) {
+    return serializeKnockoutPointSymbols(symbols, barWidth, layerId);
+  }
+
+  return symbols
+    .map((symbol) =>
       serializePointShape(
-        shape,
-        projected[0],
-        projected[1],
-        radius,
-        fillAttributes(fillColor, null),
-        colorAttributes('stroke', strokeColor),
-        strokeWidth,
+        symbol.shape,
+        symbol.x,
+        symbol.y,
+        symbol.radius,
+        fillAttributes(symbol.fillColor, null),
+        colorAttributes('stroke', symbol.strokeColor),
+        symbol.strokeWidth,
         barWidth,
-        nameAttribute
+        symbol.nameAttribute
       )
+    )
+    .join('');
+}
+
+interface SvgPointSymbol {
+  shape: number;
+  x: number;
+  y: number;
+  radius: number;
+  fillColor: SvgColor;
+  strokeColor: SvgColor;
+  strokeWidth: number;
+  nameAttribute: string;
+}
+
+function sharedOpacity(colors: SvgColor[]): number | null {
+  const first = colors[0]?.opacity;
+  if (first === undefined) return null;
+  return colors.every((color) => Math.abs(color.opacity - first) < 1e-3)
+    ? first
+    : null;
+}
+
+// SVG has no knockout group. Painted opaque in drawing order, fills and strokes
+// each show the topmost symbol's color; two masks, built in the same order,
+// keep the pixels where the topmost symbol is a fill, respectively a stroke.
+// The shared opacity then goes on each group, so the result matches the
+// WebGL knockout exactly whenever fills, and strokes, share one opacity.
+function serializeKnockoutPointSymbols(
+  symbols: SvgPointSymbol[],
+  barWidth: number,
+  layerId: string
+): string {
+  if (symbols.length === 0) return '';
+
+  const shapeOf = (
+    symbol: SvgPointSymbol,
+    fill: string,
+    stroke: string,
+    nameAttribute = ''
+  ) =>
+    serializePointShape(
+      symbol.shape,
+      symbol.x,
+      symbol.y,
+      symbol.radius,
+      fill,
+      stroke,
+      symbol.strokeWidth,
+      barWidth,
+      nameAttribute
+    );
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const symbol of symbols) {
+    // Linear shapes rise two radii above their anchor.
+    const reach = symbol.radius * 2 + symbol.strokeWidth;
+    minX = Math.min(minX, symbol.x - reach);
+    minY = Math.min(minY, symbol.y - reach);
+    maxX = Math.max(maxX, symbol.x + reach);
+    maxY = Math.max(maxY, symbol.y + reach);
+  }
+  const maskBounds = `maskUnits="userSpaceOnUse" x="${roundSvgCoord(minX)}" y="${roundSvgCoord(minY)}" width="${roundSvgCoord(maxX - minX)}" height="${roundSvgCoord(maxY - minY)}"`;
+
+  const baseId = `khartis-knockout-${sanitizeSvgId(layerId)}`;
+  const parts: string[] = [];
+  const visibleFills = symbols.filter((symbol) => symbol.fillColor.opacity > 0);
+  const visibleStrokes = symbols.filter(
+    (symbol) => symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+  );
+  const namesOnStrokes = visibleStrokes.length > 0;
+
+  if (visibleFills.length > 0) {
+    const maskId = `${baseId}-fill-mask`;
+    const groupOpacity = sharedOpacity(visibleFills.map((s) => s.fillColor));
+    const fills = symbols
+      .map((symbol) =>
+        symbol.fillColor.opacity > 0
+          ? shapeOf(
+              symbol,
+              fillAttributes(
+                groupOpacity === null
+                  ? symbol.fillColor
+                  : { ...symbol.fillColor, opacity: 1 },
+                null
+              ),
+              'stroke="none"',
+              namesOnStrokes ? '' : symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#fff"', 'stroke="#000"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${fills}</g>`
+    );
+  }
+
+  if (namesOnStrokes) {
+    const maskId = `${baseId}-stroke-mask`;
+    const groupOpacity = sharedOpacity(
+      visibleStrokes.map((s) => s.strokeColor)
+    );
+    const strokes = symbols
+      .map((symbol) =>
+        symbol.strokeColor.opacity > 0 && symbol.strokeWidth > 0
+          ? shapeOf(
+              symbol,
+              'fill="none"',
+              colorAttributes(
+                'stroke',
+                groupOpacity === null
+                  ? symbol.strokeColor
+                  : { ...symbol.strokeColor, opacity: 1 }
+              ),
+              symbol.nameAttribute
+            )
+          : ''
+      )
+      .join('');
+    parts.push(
+      `<mask id="${maskId}" ${maskBounds}>${symbols.map((symbol) => shapeOf(symbol, 'fill="#000"', 'stroke="#fff"')).join('')}</mask>`,
+      `<g mask="url(#${maskId})"${groupOpacity !== null && groupOpacity < 1 ? ` opacity="${roundSvgValue(groupOpacity)}"` : ''}>${strokes}</g>`
     );
   }
 
@@ -1781,6 +1944,8 @@ function serializePolygonLayer(
     getBinaryAttribute(data, 'vertexValid');
   const layerOpacity = getLayerNumber(props, 'opacity', 1);
   const layerId = getLayerId(layer, 0);
+  // The territory is stored one row per part; it stays one compound path.
+  const mergesParts = layerId.startsWith(DeckLayerId.BASEMAP_TERRE);
   const groups: PolygonFeatureGroup[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1812,7 +1977,9 @@ function serializePolygonLayer(
     );
     if (fillColor.opacity <= 0) continue;
 
-    const featureId = readFeatureId(data.featureIds, index, startIndices);
+    const featureId = mergesParts
+      ? null
+      : readFeatureId(data.featureIds, index, startIndices);
     const groupKey =
       featureId !== null
         ? `feature:${featureId}`
@@ -3572,6 +3739,59 @@ function buildVisualizationLayer(
   );
 }
 
+// `imageScale` maps page pixels to image pixels: the JPG renders the page
+// unscaled (offsetWidth) at its pixel ratio, the SVG keeps the page's
+// on-screen box as its user units.
+function resolveMapPlacement(
+  pageContainer: HTMLElement,
+  imageScale: number,
+  imageOffset: [number, number],
+  pageUnits: 'unscaled' | 'on-screen'
+): MapExportPlacement | null {
+  if (pageContainer.matches('.facets-page')) {
+    return null;
+  }
+  const canvas = resolveMapCanvas(pageContainer);
+  if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) {
+    return null;
+  }
+
+  const rect = getRelativeRect(canvas, pageContainer);
+  const pageScale =
+    pageUnits === 'unscaled' && pageContainer.offsetWidth > 0
+      ? pageContainer.getBoundingClientRect().width / pageContainer.offsetWidth
+      : 1;
+  const viewportToPage = rect.width / pageScale / canvas.clientWidth;
+
+  return {
+    scale: imageScale * viewportToPage,
+    offsetX: imageOffset[0] + imageScale * (rect.x / pageScale),
+    offsetY: imageOffset[1] + imageScale * (rect.y / pageScale),
+    viewportWidth: canvas.clientWidth,
+    viewportHeight: canvas.clientHeight
+  };
+}
+
+// An empty rectangle on the map frame: the same frame, exported from QGIS
+// out of the georeferencing GeoPackage, lines up on it in a drawing tool.
+function buildGeoreferenceFrameLayer(placement: MapExportPlacement): string {
+  return buildTopLevelLayer(
+    m.svg_export_layer_georeference_frame(),
+    `
+      <rect
+        id="khartis-georeference-frame"
+        x="${roundSvgValue(placement.offsetX)}"
+        y="${roundSvgValue(placement.offsetY)}"
+        width="${roundSvgValue(placement.viewportWidth)}"
+        height="${roundSvgValue(placement.viewportHeight)}"
+        fill="none"
+        stroke="none"
+      />
+    `,
+    createSvgIdDeduper()
+  );
+}
+
 function resolveMapCanvas(
   pageContainer: HTMLElement
 ): HTMLCanvasElement | null {
@@ -3759,7 +3979,7 @@ async function withPreparedMapExport<T>(
 }
 
 export async function exportMapToSvg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   await fontAssetsStore.ensureLoaded();
@@ -3792,15 +4012,32 @@ export async function exportMapToSvg(
       { mapLibreBackgroundDataUrl },
       pageGeometry
     );
+    // The SVG draws deck geometry at its on-screen box plus viewport pixels
+    // (`projectPosition`): placement follows the same convention.
+    const placement =
+      opts.onMapPlacement || opts.georeferenceFrame
+        ? resolveMapPlacement(pageContainer, 1, [0, 0], 'on-screen')
+        : null;
+    if (placement) {
+      opts.onMapPlacement?.({ ...placement, scale: 1 });
+    }
+    const frameLayer =
+      opts.georeferenceFrame && placement
+        ? buildGeoreferenceFrameLayer(placement)
+        : '';
 
-    return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
+    const svg = frameLayer
+      ? markup.replace(/<\/svg>\s*$/, `${frameLayer}</svg>`)
+      : markup;
+    return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   });
 }
 
 export async function exportMapToJpg(
-  options: Partial<ExportOptions> = {}
+  options: MapExportRequest = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+  let placement = null as MapExportPlacement | null;
   await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
@@ -3816,6 +4053,9 @@ export async function exportMapToJpg(
       const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
       await prerenderWebgl(pagePixelRatio);
       await freezeCanvases();
+      placement = opts.onMapPlacement
+        ? resolveMapPlacement(pageContainer, pagePixelRatio, [0, 0], 'unscaled')
+        : null;
 
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
@@ -3840,14 +4080,298 @@ export async function exportMapToJpg(
   ctx.fillRect(0, 0, opts.width, opts.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(
-    pageCanvas,
-    Math.round((opts.width - pageCanvas.width) / 2),
-    Math.round((opts.height - pageCanvas.height) / 2)
-  );
+  const drawX = Math.round((opts.width - pageCanvas.width) / 2);
+  const drawY = Math.round((opts.height - pageCanvas.height) / 2);
+  ctx.drawImage(pageCanvas, drawX, drawY);
+  if (placement) {
+    opts.onMapPlacement?.({
+      ...placement,
+      offsetX: placement.offsetX + drawX,
+      offsetY: placement.offsetY + drawY
+    });
+  }
 
   return offscreen.convertToBlob({
     type: 'image/jpeg',
     quality: JPEG_EXPORT_QUALITY
+  });
+}
+
+/** A box on the page, in page units from its top-left corner. */
+export interface PageBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface MeasuredPageText {
+  /** Title, source…, or null for a free annotation. */
+  role: string | null;
+  box: PageBox;
+  text: string;
+  fontFamily: string;
+  /** In page units. */
+  fontSize: number;
+  bold: boolean;
+  italic: boolean;
+  /** CSS colours, as the browser computes them. */
+  color: string;
+  background: string | null;
+  align: 'left' | 'center' | 'right';
+}
+
+/** The font of a page element, as the browser computes it. */
+export interface MeasuredFont {
+  family: string;
+  /** In page units. */
+  size: number;
+  color: string;
+}
+
+export interface MeasuredPageLegend {
+  /** The legend item id (`legend-viz-<id>--<primitive>…`). */
+  itemId: string;
+  box: PageBox;
+  font: MeasuredFont | null;
+  titleFont: MeasuredFont | null;
+  /**
+   * Proportional sizes in legend order, in page units: the height of a
+   * symbol (circle, square, bar, spike) or the width of a line.
+   */
+  sizes: Array<{ label: string; size: number }>;
+  /** Title, subtitle and note as drawn, their lines joined by `\n`. */
+  title: string | null;
+  subtitle: string | null;
+  note: string | null;
+}
+
+/** Where every element of the page sits, as exported. */
+export interface MeasuredMapPage {
+  width: number;
+  height: number;
+  map: PageBox | null;
+  /** For `buildMapGeoreference`, in page units. */
+  placement: MapExportPlacement | null;
+  facets: Array<{
+    box: PageBox;
+    title: string;
+    titleText: MeasuredPageText | null;
+  }>;
+  texts: MeasuredPageText[];
+  /** Shapes, drawings and images, which are not measured. */
+  otherAnnotations: number;
+  legends: MeasuredPageLegend[];
+  scaleBar: PageBox | null;
+  scaleBarFont: MeasuredFont | null;
+  northArrow: PageBox | null;
+}
+
+// SVG text keeps its own units inside a scaled frame: page units.
+function measureFont(text: Element | null): MeasuredFont | null {
+  if (!text) {
+    return null;
+  }
+  const style = getComputedStyle(text);
+  return {
+    family: firstFontFamily(style.fontFamily),
+    size: parseCssPixels(style.fontSize),
+    color: style.fill && style.fill !== 'none' ? style.fill : style.color
+  };
+}
+
+function firstFontFamily(css: string): string {
+  return (css.split(',')[0] ?? '').trim().replace(/^["']|["']$/g, '');
+}
+
+function cssAlign(value: string): MeasuredPageText['align'] {
+  return value === 'center' || value === 'right' || value === 'end'
+    ? value === 'end'
+      ? 'right'
+      : value
+    : 'left';
+}
+
+function isTransparentCss(color: string): boolean {
+  return (
+    color === 'transparent' ||
+    /rgba\([^)]*,\s*0(\.0+)?\s*\)$/.test(color.replace(/\s+/g, ' '))
+  );
+}
+
+/**
+ * Measures the page as it is exported (placeholders and grid hidden): the
+ * map frame, the texts with their computed style, the legend frames and the
+ * geographic indications. `pageWidth` is the page width in page units.
+ */
+export async function measureMapPage(
+  pageWidth: number
+): Promise<MeasuredMapPage | null> {
+  const pageContainer = document.querySelector(
+    EXPORT_PAGE_SELECTOR
+  ) as HTMLElement | null;
+  if (!pageContainer) {
+    return null;
+  }
+
+  return withPreparedMapExport(pageContainer, async () => {
+    const pageRect = pageContainer.getBoundingClientRect();
+    if (pageRect.width <= 0) {
+      return null;
+    }
+    const unit = pageWidth / pageRect.width;
+    const box = (element: Element): PageBox | null => {
+      const rect = getRelativeRect(element, pageContainer);
+      return rect.width > 0 && rect.height > 0
+        ? {
+            x: rect.x * unit,
+            y: rect.y * unit,
+            width: rect.width * unit,
+            height: rect.height * unit
+          }
+        : null;
+    };
+    const find = (selector: string) => pageContainer.querySelector(selector);
+
+    const mapStage = find(EXPORT_MAP_STAGE_SELECTOR);
+    const texts: MeasuredPageText[] = [];
+    let otherAnnotations = 0;
+    pageContainer
+      .querySelectorAll<HTMLElement>('.annotation-overlay .annotation-item')
+      .forEach((item) => {
+        if (item.dataset.khartisExportPlaceholder === 'true') {
+          return;
+        }
+        const textElement = item.querySelector<HTMLElement>('.annotation-text');
+        const itemBox = box(item);
+        if (!textElement || !itemBox) {
+          otherAnnotations += itemBox ? 1 : 0;
+          return;
+        }
+        const text = textElement.innerText.trim();
+        if (!text) {
+          return;
+        }
+        const style = getComputedStyle(textElement);
+        const background = getComputedStyle(item).backgroundColor;
+        texts.push({
+          role: item.dataset.annotationRole ?? null,
+          box: box(textElement) ?? itemBox,
+          text,
+          fontFamily: firstFontFamily(style.fontFamily),
+          // The item is scaled as a whole: its own font size is in page units.
+          fontSize: parseCssPixels(style.fontSize),
+          bold: Number(style.fontWeight) >= 600 || style.fontWeight === 'bold',
+          italic: style.fontStyle === 'italic',
+          color: style.color,
+          background:
+            background && !isTransparentCss(background) ? background : null,
+          align: cssAlign(style.textAlign)
+        });
+      });
+
+    const legends: MeasuredPageLegend[] = [];
+    pageContainer
+      .querySelectorAll<HTMLElement>('.legend-overlay .legend-container')
+      .forEach((frame) => {
+        const frameBox = box(frame);
+        const itemId = frame.dataset.legendItemId;
+        if (!frameBox || !itemId) {
+          return;
+        }
+        const symbols = frame.querySelector(
+          '.legend-svg--symbols .symbol_legend'
+        );
+        const lines = frame.querySelector('.khartis_proportional_line_legend');
+        const sizes = symbols
+          ? Array.from(
+              symbols.querySelectorAll<SVGGraphicsElement>('.symbols > *')
+            ).map((symbol) => symbol.getBBox().height)
+          : lines
+            ? Array.from(lines.querySelectorAll('.segments line')).map((line) =>
+                Number(line.getAttribute('stroke-width'))
+              )
+            : [];
+        const labels = Array.from(
+          (symbols ?? lines)?.querySelectorAll(':scope > .labels text') ?? []
+        ).map((label) => label.textContent?.trim() ?? '');
+        const textLines = (group: Element | null | undefined) =>
+          Array.from(group?.querySelectorAll('text') ?? [])
+            .map((line) => line.textContent?.trim() ?? '')
+            .join('\n') || null;
+        legends.push({
+          itemId,
+          box: frameBox,
+          title: textLines(frame.querySelector('g.title')),
+          // The subtitle of the sizes, when the frame shows some.
+          subtitle: textLines(
+            (symbols ?? lines)?.querySelector(':scope > g.subtitle')
+          ),
+          note: textLines(frame.querySelector('g.note')),
+          font: measureFont(
+            frame.querySelector('.labels text') ??
+              frame.querySelector('svg g:not(.title) > text')
+          ),
+          titleFont: measureFont(frame.querySelector('.title text')),
+          sizes:
+            sizes.length === labels.length
+              ? sizes
+                  .map((size, index) => ({ label: labels[index], size }))
+                  .filter((entry) => Number.isFinite(entry.size))
+              : []
+        });
+      });
+
+    const facets = Array.from(
+      pageContainer.querySelectorAll<HTMLElement>('.facet-cell')
+    ).flatMap((cell) => {
+      const frame = cell.querySelector('.facet-map-frame');
+      const frameBox = frame ? box(frame) : null;
+      const title = cell.querySelector<HTMLElement>('.facet-title');
+      const titleBox = title ? box(title) : null;
+      const style = title ? getComputedStyle(title) : null;
+      return frameBox
+        ? [
+            {
+              box: frameBox,
+              title: title?.innerText.trim() ?? '',
+              titleText:
+                title && titleBox && style
+                  ? {
+                      role: null,
+                      box: titleBox,
+                      text: title.innerText.trim(),
+                      fontFamily: firstFontFamily(style.fontFamily),
+                      // The cell is not scaled: back to page units.
+                      fontSize: parseCssPixels(style.fontSize) * unit,
+                      bold:
+                        Number(style.fontWeight) >= 600 ||
+                        style.fontWeight === 'bold',
+                      italic: style.fontStyle === 'italic',
+                      color: style.color,
+                      background: null,
+                      align: cssAlign(style.textAlign)
+                    }
+                  : null
+            }
+          ]
+        : [];
+    });
+
+    const scaleBar = find('.geo-indications-overlay .scale-bar');
+    const northArrow = find('.geo-indications-overlay .north-arrow');
+    return {
+      width: pageWidth,
+      height: pageRect.height * unit,
+      map: mapStage ? box(mapStage) : null,
+      placement: resolveMapPlacement(pageContainer, unit, [0, 0], 'on-screen'),
+      facets,
+      texts,
+      otherAnnotations,
+      legends,
+      scaleBar: scaleBar ? box(scaleBar) : null,
+      scaleBarFont: measureFont(scaleBar?.querySelector('text') ?? null),
+      northArrow: northArrow ? box(northArrow) : null
+    };
   });
 }

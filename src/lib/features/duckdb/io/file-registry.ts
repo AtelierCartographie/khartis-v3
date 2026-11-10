@@ -104,18 +104,22 @@ async function patchDuplicateDbfFieldNames(file: File): Promise<File> {
     return file;
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const prefix = new Uint8Array(
+    await file.slice(0, DBF_HEADER_LENGTH_OFFSET + 2).arrayBuffer()
+  );
   const headerLength =
-    bytes[DBF_HEADER_LENGTH_OFFSET] |
-    (bytes[DBF_HEADER_LENGTH_OFFSET + 1] << 8);
+    prefix[DBF_HEADER_LENGTH_OFFSET] |
+    (prefix[DBF_HEADER_LENGTH_OFFSET + 1] << 8);
 
   if (
     !Number.isFinite(headerLength) ||
     headerLength <= DBF_FIELD_DESCRIPTOR_LENGTH ||
-    headerLength > bytes.length
+    headerLength > file.size
   ) {
     return file;
   }
+
+  const bytes = new Uint8Array(await file.slice(0, headerLength).arrayBuffer());
 
   const fieldDescriptors: Array<{ offset: number; name: string }> = [];
   for (
@@ -154,7 +158,7 @@ async function patchDuplicateDbfFieldNames(file: File): Promise<File> {
     return file;
   }
 
-  return new File([bytes], file.name, {
+  return new File([bytes, file.slice(headerLength)], file.name, {
     type: file.type,
     lastModified: file.lastModified
   });

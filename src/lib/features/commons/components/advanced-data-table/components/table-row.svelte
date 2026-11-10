@@ -61,6 +61,7 @@
 
 <tr
   data-row-id={rowId}
+  class:alternate={rowIndex % 2 === 1}
   class:highlight-current={highlightType === 'current'}
   class:highlight-exact={highlightType === 'exact'}
   class:highlight-partial={highlightType === 'partial'}
@@ -114,6 +115,11 @@
     background-color: var(--cds-ui-01, #ffffff);
   }
 
+  /* By data index, so that the alternation holds while rows are virtualised. */
+  tr.alternate {
+    background-color: var(--cds-ui-02, #ffffff);
+  }
+
   tr:hover {
     background-color: var(--cds-hover-ui);
   }
@@ -162,7 +168,7 @@
     padding: 0;
     position: sticky;
     left: 0;
-    background-color: var(--cds-ui-01, #ffffff);
+    background-color: inherit;
     z-index: var(--z-base);
     display: flex;
     align-items: center;

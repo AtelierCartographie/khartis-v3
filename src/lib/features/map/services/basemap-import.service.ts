@@ -9,6 +9,7 @@ import {
   Duck,
   GEO_CONSTANTS,
   isGeometryColumnType,
+  isOutOfMemoryError,
   runTableBuildInBackground,
   waitForTableBuild
 } from '$lib/features/duckdb';
@@ -150,7 +151,7 @@ export async function processBasemapImport(
     // Restore skips a basemap whose table exists, so a failed import must not
     // leave a partial one behind.
     await dropBasemapImportTables(tableName);
-    if (error instanceof Error && error.message.includes('Out of Memory')) {
+    if (isOutOfMemoryError(error)) {
       throw new DuckDBError(m.basemap_import_error_out_of_memory(), undefined, {
         fileName: file.name,
         cause: error.message
@@ -414,7 +415,7 @@ export function resolveCustomBasemapLayerType(
   )?.type;
 }
 
-export async function createArrowTableFromDuckTable(
+async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {

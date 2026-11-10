@@ -100,6 +100,16 @@
   --khartis-additions-text-disabled-suggestions: #003a6d40;
   --khartis-additions-icon-disabled-suggestions: #003a6d40;
 
+  /* Khartis additions - Join categories, shared by the join panel and the map */
+  --khartis-additions-join-label: #00539a;
+  --khartis-additions-join-row-hover: #f4f4f4;
+  --khartis-additions-join-success: #24a148;
+  --khartis-additions-join-success-bg: #defbe6;
+  --khartis-additions-join-warning: #f1c21b;
+  --khartis-additions-join-warning-bg: #fcf4d6;
+  --khartis-additions-join-error: #da1e28;
+  --khartis-additions-join-error-bg: #fff1f1;
+
   /* Tag colors - Purple */
   --tag-purple-tag-background: #e8daff;
   --tag-purple-tag-border-operational: #be95ff;
@@ -193,6 +203,15 @@
   --khartis-additions-layer-hover-02-suggestions: #01315b;
   --khartis-additions-text-disabled-suggestions: #82cfff66;
   --khartis-additions-icon-disabled-suggestions: #82cfff66;
+
+  /* Khartis additions - Join categories (dark theme) */
+  --khartis-additions-join-label: #78a9ff;
+  --khartis-additions-join-row-hover: #262626;
+  --khartis-additions-join-success: #42be65;
+  --khartis-additions-join-success-bg: #022d0d;
+  --khartis-additions-join-warning-bg: #302400;
+  --khartis-additions-join-error: #fa4d56;
+  --khartis-additions-join-error-bg: #2d0709;
 
   /* Tag colors - Purple (dark theme) */
   --tag-purple-tag-background: #3e1d66;
@@ -471,6 +490,11 @@ label {
   flex-shrink: 0;
 }
 
+/* Sliders show their value, never their bounds. */
+.bx--slider__range-label {
+  display: none;
+}
+
 /* Carbon hard-codes kind="secondary" on the Modal cancel button; the design
    pairs a primary main action with a tertiary secondary one. */
 .bx--modal-footer .bx--btn--secondary {
@@ -514,4 +538,79 @@ label {
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
   }
+}
+
+/* Headings of what Khartis suggests: a light sweeps across the text, then
+   the icon, as on the Khartis presentation page. */
+.kh-thinking-text {
+  background-image: linear-gradient(
+    100deg,
+    currentColor 40%,
+    color-mix(in srgb, currentColor 35%, transparent) 50%,
+    currentColor 60%
+  );
+  background-position: 100% 0;
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: kh-thinking 3s ease-in-out infinite;
+}
+
+.kh-thinking-icon {
+  animation: kh-thinking-icon 3s ease-in-out 0.9s infinite;
+}
+
+@keyframes kh-thinking {
+  0% {
+    background-position: 100% 0;
+  }
+
+  60%,
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes kh-thinking-icon {
+  0%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+
+  30% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kh-thinking-text,
+  .kh-thinking-icon {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .kh-thinking-text {
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* Notification actions follow Carbon's tertiary (outline) button; the
+   notification prefix outranks Carbon's ghost and low-contrast rules. */
+.bx--inline-notification .bx--inline-notification__action-button.bx--btn--ghost,
+.bx--toast-notification .bx--toast-notification__action-button.bx--btn--ghost {
+  border: 1px solid var(--cds-text-primary);
+  background-color: transparent;
+  color: var(--cds-text-primary);
+}
+
+.bx--inline-notification
+  .bx--inline-notification__action-button.bx--btn--ghost:hover,
+.bx--toast-notification
+  .bx--toast-notification__action-button.bx--btn--ghost:hover {
+  border-color: var(--cds-hover-tertiary);
+  background-color: var(--cds-hover-tertiary);
+  color: var(--cds-text-inverse);
 }

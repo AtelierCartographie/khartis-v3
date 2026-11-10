@@ -21,6 +21,9 @@ export interface GeoIndicationsState {
   scale: {
     enabled: boolean;
     form: ScaleForm;
+    lineWidth: number;
+    /** 0 to 100. */
+    opacity: number;
     distance: number;
     // When true, distance is re-suggested whenever projection/zoom/center
     // changes — releases stale auto-suggestions from previous sessions when
@@ -39,6 +42,8 @@ export interface GeoIndicationsState {
     style: OrientationIndicatorStyle;
     size: number;
     color: ColorState;
+    /** 0 to 100. */
+    opacity: number;
     dragPosition: DragPosition | null;
   };
   insetMap: {
@@ -50,6 +55,13 @@ export interface GeoIndicationsState {
     seaColor: ColorState;
     /** Outline of the globe and its graticules. */
     sphereColor: ColorState;
+    background: {
+      enabled: boolean;
+      color: ColorState;
+      /** 0 to 100. */
+      opacity: number;
+      shadow: boolean;
+    };
     useBasemapColors: boolean;
     zoom: number;
     centerLongitude: number;

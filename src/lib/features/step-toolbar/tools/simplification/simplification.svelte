@@ -304,8 +304,6 @@
             on:change={handleRateChange}
             labelText={m.simplification_rate_label()}
             hideLabel
-            minLabel="0"
-            maxLabel="100"
             fullWidth
           />
         </div>
@@ -369,8 +367,6 @@
           on:change={handleRateChange}
           labelText={m.simplification_rate_label()}
           hideLabel
-          minLabel="0"
-          maxLabel="100"
           fullWidth
         />
       </div>

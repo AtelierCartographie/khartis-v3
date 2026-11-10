@@ -5,6 +5,8 @@
   } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { osmBasemapStore } from '$lib/features/map';
@@ -37,7 +39,8 @@
     formatScaleDistance,
     getNumericEventValue,
     getScaleDistanceLimit,
-    getScaleDistanceStep
+    getScaleDistanceStep,
+    SCALE_LINE_WIDTH_LIMITS
   } from './geo-indications.utils';
   import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
 
@@ -45,6 +48,13 @@
     { value: DistanceUnit.KILOMETERS, labelText: m.geo_kilometers() },
     { value: DistanceUnit.MILES, labelText: m.geo_miles() }
   ]);
+
+  interface Props {
+    open: boolean;
+    onToggle: (expanded: boolean) => void;
+  }
+
+  const { open, onToggle }: Props = $props();
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -132,9 +142,8 @@
     });
   });
 
-  function handleScaleFormChange(event: Event): void {
-    const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
-    if (form !== geoState.scale.form) {
+  function handleScaleFormChange(form: ScaleForm | undefined): void {
+    if (form && form !== geoState.scale.form) {
       store.setScaleForm(form);
     }
   }
@@ -144,7 +153,9 @@
   title={m.geo_scale()}
   description={scaleDisabledReason}
   scrollIntoViewOnOpen
-  defaultOpen={geoState.scale.expanded}
+  open={open}
+  onToggle={onToggle}
+  animateBody
   showToggle={true}
   toggleChecked={geoState.scale.enabled && !isScaleDisabled}
   toggleDisabled={isScaleDisabled}
@@ -162,17 +173,23 @@
     <Grid noGutter>
       <Row>
         <Column>
-          <Select
-            id="form-select"
-            labelText={m.geo_style()}
-            selected={geoState.scale.form}
-            on:change={handleScaleFormChange}
-            size="sm"
+          <div
+            class="scale-form-field"
+            role="group"
+            aria-labelledby="scale-form-label"
           >
-            {#each formOptions as option (option.value)}
-              <SelectItem value={option.value} text={option.text} />
-            {/each}
-          </Select>
+            <span id="scale-form-label" class="bx--label">{m.geo_style()}</span>
+            <ToggleTabs
+              size="sm"
+              items={formOptions.map((option) => ({ label: option.text }))}
+              activeIndex={formOptions.findIndex(
+                (option) => option.value === geoState.scale.form
+              )}
+              onchange={(index) =>
+                handleScaleFormChange(formOptions[index].value)}
+              hideInactiveLabel={false}
+            />
+          </div>
         </Column>
       </Row>
 
@@ -207,6 +224,21 @@
           />
         </Column>
       </Row>
+
+      {#if geoState.scale.form === ScaleForm.LINE}
+        <Row>
+          <Column>
+            <SliderWithInput
+              label={m.thickness()}
+              min={SCALE_LINE_WIDTH_LIMITS.min}
+              max={SCALE_LINE_WIDTH_LIMITS.max}
+              step={SCALE_LINE_WIDTH_LIMITS.step}
+              value={geoState.scale.lineWidth}
+              onchange={store.setScaleLineWidth}
+            />
+          </Column>
+        </Row>
+      {/if}
 
       <Row>
         <Column>
@@ -272,6 +304,20 @@
             }: ColorPickerValidateEvent) => {
               store.setScaleColor({ hue, saturation, lightness });
             }}
+          />
+        </Column>
+      </Row>
+      <Row>
+        <Column>
+          <SliderWithInput
+            label={m.legend_opacity()}
+            value={geoState.scale.opacity}
+            min={0}
+            max={100}
+            step={1}
+            inputWidth="72px"
+            showSteppers={false}
+            onchange={store.setScaleOpacity}
           />
         </Column>
       </Row>

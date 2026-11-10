@@ -1,4 +1,6 @@
 import proj4 from 'proj4';
+import { registerD3Proj4Methods } from './proj4-d3-methods.utils';
+import { get_intersecting_countries } from '@ateliercartographie/proj-suggest';
 
 export const WGS84_CRS = 'EPSG:4326';
 
@@ -22,7 +24,76 @@ export const EPSG_DEFINITIONS: Record<string, string> = {
   [WGS84_CRS]: '+proj=longlat +datum=WGS84 +no_defs +type=crs'
 };
 
+export const EPSG_NAMES: Record<string, string> = {
+  'EPSG:2154': 'RGF93 v1 / Lambert-93',
+  'EPSG:3035': 'ETRS89-extended / LAEA Europe',
+  'EPSG:27700': 'OSGB36 / British National Grid',
+  'EPSG:2157': 'IRENET95 / Irish Transverse Mercator',
+  'EPSG:2056': 'CH1903+ / LV95',
+  'EPSG:3857': 'WGS 84 / Pseudo-Mercator',
+  'EPSG:27572': 'NTF (Paris) / Lambert zone II',
+  'EPSG:31370': 'BD72 / Belgian Lambert 72',
+  'EPSG:28992': 'Amersfoort / RD New',
+  'EPSG:25832': 'ETRS89 / UTM zone 32N',
+  'EPSG:5070': 'NAD83 / Conus Albers',
+  'EPSG:3347': 'NAD83 / Statistics Canada Lambert',
+  'EPSG:9473': 'GDA2020 / Australian Albers',
+  'EPSG:3576': 'WGS 84 / North Pole LAEA Russia',
+  [WGS84_CRS]: 'WGS 84'
+};
+
+const WORLD_BBOX: [number, number, number, number] = [-180, -90, 180, 90];
+const RADIANS_TO_DEGREES = 180 / Math.PI;
+
+// Past these angles from its centre an azimuthal CRS returns no coordinate
+// (orthographic back hemisphere, gnomonic horizon) or one that blows up the
+// fit (stereographic, LAEA and AEQD antipode). Keyed by proj4's short names.
+const AZIMUTHAL_CLIP_ANGLES: Record<string, number | 'horizon'> = {
+  ortho: 90,
+  gnom: 60,
+  stere: 142,
+  sterea: 142,
+  laea: 179.9,
+  aeqd: 179.9,
+  geos: 'horizon',
+  tpers: 'horizon'
+};
+
+// proj4js leaves these undefined when a PROJ.4 string omits them, and aea,
+// laea, lcc, cea, somerc… then return NaN for every point. PROJ defaults all
+// four to 0.
+const PROJ_ZERO_DEFAULT_PARAMETERS = ['lat_0', 'lon_0', 'x_0', 'y_0'] as const;
+
+export type Proj4Crs = InstanceType<typeof proj4.Proj>;
+
 let proj4DefinitionsRegistered = false;
+
+/** A CRS read from the PROJ database of DuckDB (`duckdb_coordinate_systems`). */
+export interface ResolvedCoordinateSystem {
+  name: string;
+  projjson: string;
+  renderable: boolean;
+}
+
+// null: PROJ does not know the code either.
+const resolvedCoordinateSystems = new Map<
+  string,
+  ResolvedCoordinateSystem | null
+>();
+
+export function registerResolvedCoordinateSystem(
+  code: string,
+  entry: ResolvedCoordinateSystem | null
+): void {
+  resolvedCoordinateSystems.set(normalizeProj4CrsCode(code), entry);
+}
+
+/** undefined: not looked up yet. */
+export function getResolvedCoordinateSystem(
+  code: string
+): ResolvedCoordinateSystem | null | undefined {
+  return resolvedCoordinateSystems.get(normalizeProj4CrsCode(code));
+}
 
 export function normalizeProj4CrsCode(crs: string): string {
   const trimmed = crs.trim();
@@ -31,14 +102,194 @@ export function normalizeProj4CrsCode(crs: string): string {
   return epsgMatch ? `EPSG:${epsgMatch[1]}` : trimmed;
 }
 
+export function completeProj4Defaults(definition: string): string {
+  if (!definition.trimStart().startsWith('+')) {
+    return definition;
+  }
+
+  const missing = PROJ_ZERO_DEFAULT_PARAMETERS.filter(
+    (parameter) => !new RegExp(`\\+${parameter}=`).test(definition)
+  );
+
+  return missing.length === 0
+    ? definition
+    : `${definition} ${missing.map((parameter) => `+${parameter}=0`).join(' ')}`;
+}
+
+// Accepts an EPSG code known to proj4, a PROJ.4 string, a WKT (1 or 2) or a
+// PROJJSON text. Throws when proj4 cannot build the CRS.
+export function createProj4Crs(code: string): Proj4Crs {
+  registerKnownProj4Definitions();
+
+  const normalized = normalizeProj4CrsCode(code);
+  if (normalized.startsWith('{')) {
+    return new proj4.Proj(JSON.parse(normalized));
+  }
+  const resolved = proj4.defs(normalized)
+    ? undefined
+    : getResolvedCoordinateSystem(normalized);
+  if (resolved?.renderable) {
+    return new proj4.Proj(JSON.parse(resolved.projjson));
+  }
+
+  return new proj4.Proj(completeProj4Defaults(normalized));
+}
+
+/** PROJ.4 string of a code proj4 knows by name (EPSG registry, UTM). */
+export function getKnownProj4Definition(epsgCode: string): string | undefined {
+  registerKnownProj4Definitions();
+  const code = normalizeProj4CrsCode(epsgCode);
+  const registered = EPSG_DEFINITIONS[code];
+  if (registered) {
+    return registered;
+  }
+  const projStr = (proj4.defs(code) as { projStr?: string } | undefined)
+    ?.projStr;
+  if (projStr) {
+    return projStr;
+  }
+  const utm = code.match(/^EPSG:32([67])(\d{2})$/);
+  return utm
+    ? `+proj=utm +zone=${Number(utm[2])}${utm[1] === '7' ? ' +south' : ''} +datum=WGS84 +units=m +no_defs`
+    : undefined;
+}
+
+export function getKnownEpsgName(epsgCode: string): string | undefined {
+  const code = normalizeProj4CrsCode(epsgCode);
+  const utm = code.match(/^EPSG:32([67])(\d{2})$/);
+  if (utm) {
+    return `WGS 84 / UTM zone ${Number(utm[2])}${utm[1] === '6' ? 'N' : 'S'}`;
+  }
+  return EPSG_NAMES[code] ?? getResolvedCoordinateSystem(code)?.name;
+}
+
+type Proj4CrsOriginFields = {
+  names?: string[];
+  projName?: string;
+  long0?: number;
+  lat0?: number;
+  lat_ts?: number;
+  from_greenwich?: number;
+  a?: number;
+  h?: number;
+};
+
+export interface Proj4CrsOrigin {
+  longitude: number;
+  latitude: number;
+  clipAngle?: number;
+}
+
+function finiteDegrees(radians: number | undefined): number {
+  const degrees = (radians ?? 0) * RADIANS_TO_DEGREES;
+  return Number.isFinite(degrees) ? degrees : 0;
+}
+
+/**
+ * Centre of a CRS in degrees: its central meridian (prime meridian included)
+ * and, for an azimuthal CRS, its latitude of origin and the clip angle around
+ * that centre.
+ */
+export function readProj4CrsOrigin(crs: Proj4Crs): Proj4CrsOrigin {
+  const fields = crs as unknown as Proj4CrsOriginFields;
+  const longitude = finiteDegrees(
+    (fields.long0 ?? 0) + (fields.from_greenwich ?? 0)
+  );
+  const method = (fields.names ?? [fields.projName ?? '']).find(
+    (name) => name in AZIMUTHAL_CLIP_ANGLES
+  );
+  if (!method) {
+    return { longitude, latitude: 0 };
+  }
+
+  const polarLatitude =
+    fields.lat0 === undefined && fields.lat_ts !== undefined
+      ? Math.sign(fields.lat_ts) * 90
+      : undefined;
+  const clip = AZIMUTHAL_CLIP_ANGLES[method];
+  const horizon =
+    clip === 'horizon' && fields.a && fields.h
+      ? Math.acos(fields.a / (fields.a + fields.h)) * RADIANS_TO_DEGREES
+      : undefined;
+
+  return {
+    longitude,
+    latitude: polarLatitude ?? finiteDegrees(fields.lat0),
+    clipAngle: clip === 'horizon' ? horizon : clip
+  };
+}
+
+/** Central meridian of a CRS code in degrees, 0 when it cannot be built. */
+export function getProjectionCodeCentralMeridian(code: string): number {
+  try {
+    return readProj4CrsOrigin(createProj4Crs(code)).longitude;
+  } catch {
+    return 0;
+  }
+}
+
+// The national CRS that proj-suggest can suggest, so a code pasted by hand
+// resolves like the suggestion card does. Khartis' own definitions win.
+function listNationalProj4Definitions(): Array<[string, string]> {
+  return get_intersecting_countries(WORLD_BBOX)
+    .filter((country) => country.epsg && country.proj4)
+    .map((country) => [`EPSG:${country.epsg}`, country.proj4]);
+}
+
 export function registerKnownProj4Definitions(): void {
+  registerD3Proj4Methods();
   if (proj4DefinitionsRegistered) {
     return;
   }
 
+  for (const [code, definition] of listNationalProj4Definitions()) {
+    proj4.defs(code, completeProj4Defaults(definition));
+  }
   for (const [code, definition] of Object.entries(EPSG_DEFINITIONS)) {
     proj4.defs(code, definition);
   }
 
   proj4DefinitionsRegistered = true;
+}
+
+// Parameters that do not change the projection: their presence or order
+// must not hide an EPSG code behind an equivalent PROJ string.
+const IGNORED_PROJ4_PARAMETERS = new Set(['no_defs', 'type', 'wktext']);
+
+function canonicalProj4(definition: string): string {
+  return definition
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.replace(/^\+/, ''))
+    .filter(
+      (token) => token && !IGNORED_PROJ4_PARAMETERS.has(token.split('=')[0])
+    )
+    .map((token) => {
+      const [key, value] = token.split('=');
+      if (value === undefined) return key;
+      const numbers = value.split(',').map(Number);
+      return numbers.every(Number.isFinite)
+        ? `${key}=${numbers.join(',')}`
+        : `${key}=${value}`;
+    })
+    .sort()
+    .join(' ');
+}
+
+/**
+ * The EPSG code whose definition is exactly this PROJ string, Khartis' own
+ * definitions first. A PROJ string alone lets GIS software guess among
+ * several codes with the same parameters (LAEA Europe: 3035 or 5636).
+ */
+export function findKnownEpsgForProj4(definition: string): string | undefined {
+  registerKnownProj4Definitions();
+  const target = canonicalProj4(definition);
+  const candidates = [
+    ...Object.entries(EPSG_DEFINITIONS),
+    ...listNationalProj4Definitions()
+  ];
+  const match = candidates.find(
+    ([code, known]) => code !== WGS84_CRS && canonicalProj4(known) === target
+  );
+  return match?.[0].replace(/^EPSG:/, '');
 }

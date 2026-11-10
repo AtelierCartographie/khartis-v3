@@ -26,12 +26,12 @@
   } from '$lib/features/commons/utils/perf-marks.utils';
   import {
     type AnalysisResult,
+    detectGPSColumns,
     Duck,
     type GPSValidationResult,
     validateGPSColumns
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import * as m from '$lib/paraglide/messages';
   import { InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Map as MapIcon } from 'carbon-icons-svelte';
@@ -317,9 +317,15 @@
       return;
     }
 
+    // A table holding both is geolocated by its coordinates by default, unless
+    // the project already links an entity variable.
+    const keepsLinkedEntities =
+      !dataTabState.geolocation.autoDetected &&
+      Boolean(dataTabState.geolocation.linkedVariableName);
     if (
       !hasAutoGeoreferenceInitialization &&
       hasLatLon &&
+      !keepsLinkedEntities &&
       dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES
     ) {
       dataTabActions.setGeolocationState({

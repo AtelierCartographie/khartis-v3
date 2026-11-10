@@ -12,11 +12,10 @@ const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
  * Page-zoom factor applied to pixel-sized marks (symbol radius, line width,
  * label size) so they scale together with the canvas and the SVG legend.
  *
- * The render `modelMatrix` already scales geometry positions by this same
- * factor (orthographic mode only); marks use `*Units: 'pixels'`, an orthogonal
- * shader path the matrix never touches, so they must be multiplied explicitly.
- * `ctx.pageDisplayScale` is left at 1 in MapLibre interleaved mode (no render
- * matrix), keeping mark size consistent with position handling in both engines.
+ * Geometry already follows this factor, through the render `modelMatrix` in
+ * orthographic mode and through the map zoom in MapLibre interleaved mode;
+ * marks use `*Units: 'pixels'`, which neither reaches, so they must be
+ * multiplied explicitly.
  */
 export function resolvePageDisplayScale(
   ctx: Pick<LayerContext, 'pageDisplayScale'>

@@ -8,6 +8,7 @@
   import { m } from '$lib/paraglide/messages';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
+    Button,
     FileUploaderDropContainer,
     InlineNotification,
     Modal,
@@ -15,11 +16,12 @@
     OverflowMenuItem,
     SkeletonPlaceholder
   } from 'carbon-components-svelte';
-  import { Calendar } from 'carbon-icons-svelte';
+  import { Calendar, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import {
     formatDate,
     formatFileSize
@@ -45,6 +47,7 @@
   let isDuplicating = $state(false);
   let projectToDelete = $state<string | null>(null);
   let showDeleteConfirm = $state(false);
+  let showDeleteAllConfirm = $state(false);
 
   onMount(async () => {
     await loadProjects();
@@ -74,6 +77,7 @@
     }
 
     selectedProjectId = projectId;
+    createProjectActions.setOpeningProject(true);
 
     try {
       await projectStore.loadProject(projectId);
@@ -86,6 +90,8 @@
           ? err.message
           : m.open_project_error_load_project();
       selectedProjectId = null;
+    } finally {
+      createProjectActions.setOpeningProject(false);
     }
   }
 
@@ -106,6 +112,7 @@
     }
 
     isImporting = true;
+    createProjectActions.setOpeningProject(true);
     error = '';
 
     try {
@@ -121,6 +128,7 @@
           : m.open_project_error_import_project();
     } finally {
       isImporting = false;
+      createProjectActions.setOpeningProject(false);
     }
   }
 
@@ -173,6 +181,26 @@
     }
   }
 
+  async function handleDeleteAllProjects() {
+    showDeleteAllConfirm = false;
+    error = '';
+
+    try {
+      for (const project of savedProjects) {
+        await projectStore.deleteProject(project.id);
+      }
+      selectedProjectId = null;
+    } catch (err) {
+      logger.error('Failed to delete all projects', LogCategory.PROJECT, err);
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_delete_project();
+    } finally {
+      await loadProjects();
+    }
+  }
+
   function cancelDelete() {
     projectToDelete = null;
     showDeleteConfirm = false;
@@ -186,20 +214,19 @@
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
-  <header class="mb-4 flex justify-between items-end">
-    <div>
-      <h6 class="mb-3">{m.open_project_select_backup()}</h6>
+  <header class="mb-4">
+    <h6 class="mb-3">{m.open_project_select_backup()}</h6>
 
-      <span class="text-grey">
-        {m.open_project_backup_description()}
+    <span class="text-grey">
+      {m.open_project_backup_description()}
+      <span class="inline-tooltip">
+        <Tooltip>
+          <p>
+            {m.open_project_backup_warning()}
+          </p>
+        </Tooltip>
       </span>
-    </div>
-
-    <Tooltip align="end">
-      <p>
-        {m.open_project_backup_warning()}
-      </p>
-    </Tooltip>
+    </span>
   </header>
 
   {#if error}
@@ -279,6 +306,19 @@
     {/if}
   </div>
 
+  {#if !isLoading && savedProjects.length > 0}
+    <div class="flex justify-end">
+      <Button
+        kind="tertiary"
+        size="small"
+        icon={TrashCan}
+        on:click={() => (showDeleteAllConfirm = true)}
+      >
+        {m.open_project_delete_all()}
+      </Button>
+    </div>
+  {/if}
+
   <div class="mt-5">
     <header>
       <h6 class="mb-3">{m.open_project_import_project()}</h6>
@@ -319,11 +359,45 @@
       </Modal>
     </div>
   {/if}
+
+  {#if showDeleteAllConfirm}
+    <div use:portal>
+      <Modal
+        iconDescription={m.a11y_close_dialog()}
+        danger
+        bind:open={showDeleteAllConfirm}
+        modalHeading={m.open_project_delete_all_confirm_title()}
+        primaryButtonText={m.open_project_delete_all_confirm_button()}
+        secondaryButtonText={m.open_project_cancel()}
+        on:click:button--primary={handleDeleteAllProjects}
+        on:click:button--secondary={() => (showDeleteAllConfirm = false)}
+        on:close={() => (showDeleteAllConfirm = false)}
+        size="sm"
+      >
+        <p>
+          {m.open_project_delete_all_confirm_message()}
+        </p>
+      </Modal>
+    </div>
+  {/if}
 </section>
 
 <style>
+  #khartis-open-project :global(.bx--file__drop-container) {
+    line-height: 1.25rem;
+    color: var(--cds-text-05);
+  }
+
   #khartis-open-project :global(.bx--file-browse-btn) {
     min-width: 100%;
+  }
+
+  /* Centred on the line of text it ends. */
+  .inline-tooltip {
+    display: inline-flex;
+    align-items: center;
+    height: 1lh;
+    vertical-align: top;
   }
 
   .project-card-skeleton {
@@ -361,10 +435,11 @@
     position: relative;
   }
 
+  /* Its icon lines up with the card's radio, set inside the 1px border. */
   .project-card-wrapper :global(.bx--overflow-menu) {
     position: absolute;
     top: 8px;
-    right: 8px;
+    right: 9px;
     z-index: var(--z-content);
   }
 

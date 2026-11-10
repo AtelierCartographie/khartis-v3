@@ -38,8 +38,20 @@ import {
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import {
   exportMapToJpg,
-  exportMapToSvg
+  exportMapToSvg,
+  type MapExportPlacement
 } from '$lib/features/commons/utils/map-export.utils';
+import {
+  encodePolygonWkb,
+  formatGdalAuxXml,
+  formatWorldFile
+} from '$lib/features/commons/utils/georeference.utils';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import {
+  buildMapGeoreference,
+  formatGeoreferenceReadme
+} from '$lib/features/step-toolbar/tools/projections';
+import { strToU8, zipSync } from 'fflate';
 import {
   DataValidationError,
   DuckDBError
@@ -85,30 +97,125 @@ export async function exportProject(fileName: string): Promise<void> {
   await projectStore.exportProject(fileName);
 }
 
+export interface MapFileExportOptions {
+  /** Ship the image in a .zip with its CRS, position and a memo. */
+  georeference?: boolean;
+}
+
 export async function exportMapAsSvg(
   fileName: string,
   width: number = 1920,
-  height: number = 1080
+  height: number = 1080,
+  { georeference = false }: MapFileExportOptions = {}
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToSvg({ width, height });
+  let placement: MapExportPlacement | undefined;
+  const blob = await exportMapToSvg({
+    width,
+    height,
+    georeferenceFrame: georeference,
+    onMapPlacement: (value) => (placement = value)
+  });
   const filename = generateExportFilename(fileName, 'svg');
 
-  downloadFile(blob, filename);
+  await downloadMapExport(blob, filename, {
+    georeference,
+    placement,
+    raster: false
+  });
 }
 
 export async function exportMapAsJpg(
   fileName: string,
   width: number = 1920,
-  height: number = 1080
+  height: number = 1080,
+  { georeference = false }: MapFileExportOptions = {}
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToJpg({ width, height });
+  let placement: MapExportPlacement | undefined;
+  const blob = await exportMapToJpg({
+    width,
+    height,
+    onMapPlacement: (value) => (placement = value)
+  });
   const filename = generateExportFilename(fileName, 'jpg');
 
-  downloadFile(blob, filename);
+  await downloadMapExport(blob, filename, {
+    georeference,
+    placement,
+    raster: true
+  });
+}
+
+async function downloadMapExport(
+  blob: Blob,
+  filename: string,
+  {
+    georeference,
+    placement,
+    raster
+  }: {
+    georeference: boolean;
+    placement: MapExportPlacement | undefined;
+    raster: boolean;
+  }
+): Promise<void> {
+  if (!georeference) {
+    downloadFile(blob, filename);
+    return;
+  }
+
+  const result = placement ? buildMapGeoreference(placement) : null;
+  if (result?.status !== 'ok') {
+    showWarning(
+      m.export_georeference_failed_title(),
+      m.export_georeference_failed()
+    );
+    downloadFile(blob, filename);
+    return;
+  }
+
+  const { georeference: fit } = result;
+  const baseName = filename.replace(/\.[^.]+$/, '');
+  const files: Record<string, Uint8Array> = {
+    [filename]: new Uint8Array(await blob.arrayBuffer())
+  };
+  // GDAL reads the CRS and the geotransform from the .aux.xml; the world
+  // file is for the software that only reads that.
+  const aux = raster ? `${filename}.aux.xml` : undefined;
+  const world = raster ? `${baseName}.jgw` : undefined;
+  if (aux && world) {
+    files[aux] = strToU8(formatGdalAuxXml(fit.srs, fit.transform));
+    files[world] = strToU8(formatWorldFile(fit.transform));
+  }
+  const frame = fit.geoPackageSrs ? `${baseName}-cadre.gpkg` : undefined;
+  if (frame && fit.geoPackageSrs) {
+    const srs = fit.geoPackageSrs;
+    const geoPackage = await exportGeoPackageLayers([
+      {
+        layerName: m.georeference_frame_layer(),
+        sourceCrs: 'epsg' in srs ? `EPSG:${srs.epsg}` : null,
+        customSrs: 'epsg' in srs ? undefined : srs,
+        features: [
+          {
+            properties: { image: filename },
+            wkb: encodePolygonWkb(fit.frameRing)
+          }
+        ]
+      }
+    ]);
+    files[frame] = new Uint8Array(await geoPackage.arrayBuffer());
+  }
+  files[`${baseName}.txt`] = strToU8(
+    formatGeoreferenceReadme(fit, { image: filename, aux, world, frame })
+  );
+
+  downloadFile(
+    new Blob([zipSync(files, { level: 0 })], { type: 'application/zip' }),
+    `${baseName}.zip`
+  );
 }
 
 export async function exportData(
@@ -1038,4 +1145,112 @@ async function fetchDatasetsWithGeometry(
   }
 
   return results;
+}
+
+/**
+ * Where the map finds a dataset's geometry, as SQL: its own geometry column,
+ * its GPS columns or the basemap it is joined to. The dataset rows are the
+ * relation `d`, kept to `rowFilter` before the basemap join.
+ */
+export interface DatasetGeometrySource {
+  /** FROM clause; the dataset columns are `d."…"`. */
+  from: string;
+  /** The geometry, in `sourceCrs`. */
+  geometry: string;
+  sourceCrs: string;
+  /** Dataset columns worth exporting as attributes. */
+  attributeColumns: string[];
+  datasetTableName: string;
+  /** The basemap the geometry comes from, when the dataset is joined. */
+  joined?: {
+    basemap: string;
+    /** Relation `g` of `from`, matched on `joinColumn`. */
+    joinColumn: string;
+  };
+}
+
+export async function resolveDatasetGeometrySource(
+  datasetId: string,
+  rowFilter: string | null
+): Promise<DatasetGeometrySource | null> {
+  const original = datasetsStore.datasets.find(
+    (candidate) =>
+      candidate.id === datasetId || candidate.sourceFileId === datasetId
+  );
+  if (!original) {
+    return null;
+  }
+  const [dataset] = normalizeDatasets([original]);
+  const duckDataset = resolveDuckDataset(dataset);
+  const tableName = duckDataset?.tableName ?? dataset.duckdbTableName;
+  if (!dataset || !tableName) {
+    return null;
+  }
+  const geomColumn = resolveDatasetGeometryColumn(dataset);
+  const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
+  const gpsColumns = resolveDatasetGpsColumns(dataset);
+  const escapedTable = escapeIdentifier(tableName);
+  const rows = `(SELECT * FROM "${escapedTable}"${rowFilter ? ` WHERE ${rowFilter}` : ''}) d`;
+  const attributeColumns = dataset.columns
+    .map((column) => column.name)
+    .filter((name) => name !== geomColumn?.name);
+
+  if (geomColumn) {
+    const type = await getDuckDBColumnType(tableName, geomColumn.name);
+    return {
+      from: rows,
+      // `d` is the only relation: bare column names are unambiguous.
+      geometry: buildGeometryValueExpression(geomColumn.name, type),
+      sourceCrs: resolveDatasetGeometryCrs(dataset) ?? WGS84_CRS,
+      attributeColumns,
+      datasetTableName: tableName
+    };
+  }
+
+  if (
+    gpsColumns &&
+    shouldUseGpsGeometryExport({
+      hasGeometryColumn: false,
+      hasJoinedGeometry: Boolean(joinedGeometrySource),
+      hasGpsColumns: true,
+      gpsMode: duckDataset?.gpsMode
+    })
+  ) {
+    return {
+      from: rows,
+      geometry: buildGpsGeometryValueExpression(gpsColumns),
+      sourceCrs: WGS84_CRS,
+      attributeColumns,
+      datasetTableName: tableName
+    };
+  }
+
+  if (!joinedGeometrySource) {
+    return null;
+  }
+  const geometryTable = await basemapService.loadGeometryIntoDuckDB(
+    joinedGeometrySource.joinedBasemap
+  );
+  const geometryColumns = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+    { format: 'array' }
+  )) as Array<{ column_name: string }>;
+  const joinColumn =
+    geometryColumns.find((c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID)
+      ?.column_name ??
+    geometryColumns.find(
+      (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
+    )?.column_name;
+  if (!joinColumn) {
+    return null;
+  }
+  return {
+    from: `${rows} JOIN "${escapeIdentifier(geometryTable)}" g ON CAST(d."${escapeIdentifier(JOINED_BASEMAP_COLUMN.ID)}" AS VARCHAR) = CAST(g."${escapeIdentifier(joinColumn)}" AS VARCHAR)`,
+    geometry: 'g.geom::GEOMETRY',
+    sourceCrs: WGS84_CRS,
+    attributeColumns,
+    datasetTableName: tableName,
+    joined: { basemap: joinedGeometrySource.joinedBasemap, joinColumn }
+  };
 }

@@ -8,8 +8,11 @@
   import { ToolbarStep } from '../commons/types/global';
   import {
     formatActions,
-    formatState
+    formatState,
+    MIN_PAGE_AREA_SIZE,
+    resolvePageInsetBox
   } from '$lib/features/step-toolbar/tools/format';
+  import { FormatMode } from '../commons/constants/ui.constants';
   import { EVENT } from '../commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
@@ -18,7 +21,6 @@
   } from '../commons/utils/page-grid.utils';
   import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
-  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
@@ -29,6 +31,7 @@
   import { useMapDisplayData } from './hooks';
   import { useBackgroundClassificationRefresh } from '$lib/features/visualization-tab';
   import { getKeyboardMoveDelta } from './utils/keyboard-position.utils';
+  import { formatValue } from '../commons/utils/format.utils';
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
@@ -135,7 +138,10 @@
   let workspaceHeight = $state(0);
   let stepToolbarWidth = $state(0);
 
-  const fitScale = $derived(
+  // Frozen while the page edges are dragged, so the dragged edge stays under
+  // the pointer instead of the page refitting to the workspace at each step.
+  let frozenFitScale = $state<number | null>(null);
+  const workspaceFitScale = $derived(
     resolveWorkspaceFitScale({
       viewportWidth: workspaceWidth,
       viewportHeight: workspaceHeight,
@@ -146,8 +152,11 @@
       maxViewportCoverageRatio: 1
     })
   );
+  const fitScale = $derived(frozenFitScale ?? workspaceFitScale);
   const renderedPageScale = $derived(
-    fitScale * (globalState.zoom.pageZoomLevel / 100)
+    globalState.zoom.isPageZoomFitted
+      ? fitScale
+      : globalState.zoom.pageZoomPercent / 100
   );
   const renderedPageWidth = $derived(
     Math.max(1, Math.round(formatState.width * renderedPageScale))
@@ -156,34 +165,9 @@
     Math.max(1, Math.round(formatState.height * renderedPageScale))
   );
 
-  // Resize handles target the map frame inside fixed page margins.
-  const mapAreaInsetLeftPx = $derived(
-    Math.round(formatState.margins.left * renderedPageScale)
-  );
-  const mapAreaInsetTopPx = $derived(
-    Math.round(formatState.margins.top * renderedPageScale)
-  );
-  const mapAreaWidthPx = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (formatState.width -
-          formatState.margins.left -
-          formatState.margins.right) *
-          renderedPageScale
-      )
-    )
-  );
-  const mapAreaHeightPx = $derived(
-    Math.max(
-      1,
-      Math.round(
-        (formatState.height -
-          formatState.margins.top -
-          formatState.margins.bottom) *
-          renderedPageScale
-      )
-    )
+  // Resize handles follow the map frame, which page margins do not move.
+  const mapFrameBox = $derived(
+    resolvePageInsetBox(formatState, formatState.mapFrame, renderedPageScale)
   );
 
   function applyWorkspaceResize(entry: ResizeObserverEntry): void {
@@ -315,6 +299,7 @@
       cleanupTransitionListener();
       stopResponsiveMapObservers();
       handleResizeUp();
+      handlePageResizeUp();
     };
   });
 
@@ -332,6 +317,12 @@
       }, remaining);
     }
   }
+
+  $effect(() => {
+    if (workspaceWidth <= 0 || workspaceHeight <= 0) return;
+    const scale = fitScale;
+    untrack(() => globalActions.setPageFitScale(scale));
+  });
 
   $effect(() => {
     globalActions.setPageZoomScale(renderedPageScale);
@@ -358,7 +349,7 @@
     edge: ResizeEdge;
     startX: number;
     startY: number;
-    startMargins: { top: number; right: number; bottom: number; left: number };
+    startFrame: { top: number; right: number; bottom: number; left: number };
   } | null>(null);
 
   function getKeyboardResizeStep(): number {
@@ -373,17 +364,14 @@
     edge: ResizeEdge,
     dx: number,
     dy: number,
-    startMargins: { top: number; right: number; bottom: number; left: number }
+    startFrame: { top: number; right: number; bottom: number; left: number }
   ): void {
-    // Resizing the frame is composing the page by hand: page elements stay
-    // where they are instead of following the frame into the map.
-    annotationsActions.pinPageElements();
-    let { top, right, bottom, left } = startMargins;
+    let { top, right, bottom, left } = startFrame;
 
-    if (edge.includes('e')) right = startMargins.right - dx;
-    if (edge.includes('w')) left = startMargins.left + dx;
-    if (edge.includes('s')) bottom = startMargins.bottom - dy;
-    if (edge.includes('n')) top = startMargins.top + dy;
+    if (edge.includes('e')) right = startFrame.right - dx;
+    if (edge.includes('w')) left = startFrame.left + dx;
+    if (edge.includes('s')) bottom = startFrame.bottom - dy;
+    if (edge.includes('n')) top = startFrame.top + dy;
 
     // The frame edges snap in page coordinates, where layout objects snap too.
     const snap = formatState.gridEnabled;
@@ -393,7 +381,7 @@
     right = width - snapToPageGrid(width - right, snap);
     bottom = height - snapToPageGrid(height - bottom, snap);
 
-    formatActions.setMargins({
+    formatActions.setMapFrame({
       top: Math.round(top),
       right: Math.round(right),
       bottom: Math.round(bottom),
@@ -412,21 +400,21 @@
       edge,
       startX: event.clientX,
       startY: event.clientY,
-      startMargins: { ...formatState.margins }
+      startFrame: { ...formatState.mapFrame }
     };
     window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.addEventListener(EVENT.POINTERUP, handleResizeUp);
   }
 
-  // Edge drag adjusts margins, not page format.
+  // Edge drag adjusts the map frame, not page format or margins.
   function handleResizeMove(event: PointerEvent): void {
     if (!resizeState) return;
-    const { edge, startX, startY, startMargins } = resizeState;
+    const { edge, startX, startY, startFrame } = resizeState;
     const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startMargins);
+    resizeMapFrame(edge, dx, dy, startFrame);
   }
 
   function handleResizeUp(): void {
@@ -455,7 +443,141 @@
 
     event.preventDefault();
     event.stopPropagation();
-    resizeMapFrame(edge, dx, dy, { ...formatState.margins });
+    resizeMapFrame(edge, dx, dy, { ...formatState.mapFrame });
+  }
+
+  let hoveredPageResizeEdge = $state<ResizeEdge | null>(null);
+  let pageResizeState = $state<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
+  let pendingPageResizeFrame: number | null = null;
+  let pageResizeHandlesEl = $state<HTMLDivElement | null>(null);
+  let pageResizePointer = $state<{ x: number; y: number } | null>(null);
+
+  // The handles box sits inside the translated workspace camera, so the
+  // pointer is placed relative to it rather than with position: fixed.
+  function updatePageResizePointer(clientX: number, clientY: number): void {
+    if (!pageResizeHandlesEl) return;
+    const rect = pageResizeHandlesEl.getBoundingClientRect();
+    pageResizePointer = { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function resizePage(
+    edge: ResizeEdge,
+    dx: number,
+    dy: number,
+    startWidth: number,
+    startHeight: number
+  ): void {
+    // The page stays centred in the workspace and grows on both sides, so
+    // twice the drag keeps the dragged edge under the pointer.
+    let width = startWidth;
+    let height = startHeight;
+    if (edge.includes('e')) width += 2 * dx;
+    if (edge.includes('w')) width -= 2 * dx;
+    if (edge.includes('s')) height += 2 * dy;
+    if (edge.includes('n')) height -= 2 * dy;
+
+    const snap = formatState.gridEnabled;
+    width = Math.round(
+      Math.max(MIN_PAGE_AREA_SIZE, snapToPageGrid(width, snap))
+    );
+    height = Math.round(
+      Math.max(MIN_PAGE_AREA_SIZE, snapToPageGrid(height, snap))
+    );
+    if (width === formatState.width && height === formatState.height) {
+      return;
+    }
+
+    if (formatState.mode !== FormatMode.CUSTOM) {
+      formatActions.setMode(FormatMode.CUSTOM);
+    }
+    formatActions.setSize(width, height);
+  }
+
+  function handlePageResizePointerDown(
+    event: PointerEvent,
+    edge: ResizeEdge
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    frozenFitScale = fitScale;
+    pageResizeState = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: formatState.width,
+      startHeight: formatState.height
+    };
+    updatePageResizePointer(event.clientX, event.clientY);
+    window.addEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handlePageResizeUp);
+  }
+
+  // Pointer moves outpace a page relayout: only the latest one is applied,
+  // once per frame.
+  function handlePageResizeMove(event: PointerEvent): void {
+    if (!pageResizeState) return;
+    const { clientX, clientY } = event;
+    if (pendingPageResizeFrame !== null) {
+      cancelAnimationFrame(pendingPageResizeFrame);
+    }
+    pendingPageResizeFrame = requestAnimationFrame(() => {
+      pendingPageResizeFrame = null;
+      if (!pageResizeState) return;
+      updatePageResizePointer(clientX, clientY);
+      const { edge, startX, startY, startWidth, startHeight } = pageResizeState;
+      const scale = Math.max(renderedPageScale, 0.01);
+      resizePage(
+        edge,
+        (clientX - startX) / scale,
+        (clientY - startY) / scale,
+        startWidth,
+        startHeight
+      );
+    });
+  }
+
+  function handlePageResizeUp(): void {
+    if (pendingPageResizeFrame !== null) {
+      cancelAnimationFrame(pendingPageResizeFrame);
+      pendingPageResizeFrame = null;
+    }
+    pageResizeState = null;
+    pageResizePointer = null;
+    hoveredPageResizeEdge = null;
+    frozenFitScale = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handlePageResizeUp);
+  }
+
+  function handlePageResizeKeyDown(
+    event: KeyboardEvent,
+    edge: ResizeEdge
+  ): void {
+    const delta = getKeyboardMoveDelta(
+      event,
+      getKeyboardResizeStep(),
+      getKeyboardFastResizeStep()
+    );
+    if (!delta) {
+      return;
+    }
+
+    const dx = edge.includes('e') || edge.includes('w') ? delta.x : 0;
+    const dy = edge.includes('n') || edge.includes('s') ? delta.y : 0;
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    // One key press changes the size by one step, not by twice the step.
+    resizePage(edge, dx / 2, dy / 2, formatState.width, formatState.height);
   }
 </script>
 
@@ -530,9 +652,46 @@
 
       {#if showResizeHandles}
         <div
+          bind:this={pageResizeHandlesEl}
+          class="resize-handles-page"
+          class:highlighted={hoveredPageResizeEdge !== null ||
+            pageResizeState !== null}
+          style="width: {renderedPageWidth}px; height: {renderedPageHeight}px;"
+        >
+          {#each RESIZE_EDGES as edge (edge)}
+            <div
+              class="resize-handle page-resize-handle resize-{edge}"
+              role="button"
+              tabindex="0"
+              aria-label={m.page_resize_handle()}
+              onpointerenter={() => (hoveredPageResizeEdge = edge)}
+              onpointerleave={() => {
+                if (hoveredPageResizeEdge === edge) {
+                  hoveredPageResizeEdge = null;
+                }
+              }}
+              onpointerdown={(e: PointerEvent) =>
+                handlePageResizePointerDown(e, edge)}
+              onkeydown={(e: KeyboardEvent) => handlePageResizeKeyDown(e, edge)}
+            ></div>
+          {/each}
+          {#if pageResizeState && pageResizePointer}
+            <div
+              class="page-resize-tooltip"
+              role="status"
+              style="left: {pageResizePointer.x}px; top: {pageResizePointer.y}px;"
+            >
+              {m.page_resize_size({
+                width: formatValue(formatState.width),
+                height: formatValue(formatState.height)
+              })}
+            </div>
+          {/if}
+        </div>
+        <div
           class="resize-handles-frame"
           class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
-          style="left: {mapAreaInsetLeftPx}px; top: {mapAreaInsetTopPx}px; width: {mapAreaWidthPx}px; height: {mapAreaHeightPx}px;"
+          style="left: {mapFrameBox.left}px; top: {mapFrameBox.top}px; width: {mapFrameBox.width}px; height: {mapFrameBox.height}px;"
         >
           {#each RESIZE_EDGES as edge (edge)}
             <div
@@ -668,7 +827,10 @@
     max-width: 400px;
   }
 
+  /* The map frame and the page resize from their edges; a colour each tells
+     the two apart. */
   .resize-handles-frame {
+    --_resize-color: #0f62fe;
     --resize-hit-reach: 8px;
     position: absolute;
     pointer-events: none;
@@ -680,8 +842,89 @@
   }
 
   .resize-handles-frame.highlighted {
-    border-color: rgba(15, 98, 254, 0.55);
-    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
+    border-color: color-mix(in srgb, var(--_resize-color) 55%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--_resize-color) 15%, transparent);
+  }
+
+  /* Page handles sit outside the page, so they never cover the frame handles
+     of a map that reaches the page edge. */
+  .resize-handles-page {
+    --_resize-color: #8a3ffc;
+    --resize-hit-reach: 8px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    outline: 1px dashed transparent;
+    transition: outline-color 120ms ease;
+  }
+
+  :global(html[theme='g100']) .resize-handles-frame {
+    --_resize-color: #4589ff;
+  }
+
+  :global(html[theme='g100']) .resize-handles-page {
+    --_resize-color: #a56eff;
+  }
+
+  .resize-handles-page.highlighted {
+    outline-color: color-mix(in srgb, var(--_resize-color) 55%, transparent);
+  }
+
+  .page-resize-tooltip {
+    position: absolute;
+    z-index: 4;
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--cds-inverse-01, #ffffff);
+    background: var(--cds-inverse-02, #393939);
+    border-radius: 2px;
+    pointer-events: none;
+    transform: translate(12px, 12px);
+  }
+
+  .page-resize-handle.resize-n,
+  .page-resize-handle.resize-ne,
+  .page-resize-handle.resize-nw {
+    top: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-s,
+  .page-resize-handle.resize-se,
+  .page-resize-handle.resize-sw {
+    bottom: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-e,
+  .page-resize-handle.resize-ne,
+  .page-resize-handle.resize-se {
+    right: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-w,
+  .page-resize-handle.resize-nw,
+  .page-resize-handle.resize-sw {
+    left: calc(-2 * var(--resize-hit-reach));
+  }
+
+  .page-resize-handle.resize-n::after {
+    top: calc(2 * var(--resize-hit-reach) - 6px);
+  }
+
+  .page-resize-handle.resize-s::after {
+    top: 0;
+  }
+
+  .page-resize-handle.resize-e::after {
+    left: 0;
+  }
+
+  .page-resize-handle.resize-w::after {
+    left: calc(2 * var(--resize-hit-reach) - 6px);
   }
 
   .resize-handle {
@@ -699,7 +942,7 @@
   .resize-handle::after {
     position: absolute;
     border-radius: 1px;
-    background: var(--cds-interactive-01, #0f62fe);
+    background: var(--_resize-color);
     opacity: 0;
     transition: opacity 120ms ease;
     content: '';

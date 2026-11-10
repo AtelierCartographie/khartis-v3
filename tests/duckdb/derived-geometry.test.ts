@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  arePolygonsOverlapping,
   isMeshTooFineForInnerLimits,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
@@ -15,7 +16,10 @@ type DuckMock = Parameters<typeof rebuildDerivedGeometryTables>[0];
 
 function createDuck(
   shouldFail: (sql: string) => boolean = () => false,
-  { validCoverage = false }: { validCoverage?: boolean } = {}
+  {
+    validCoverage = false,
+    failure = 'TopologyException: found non-noded intersection'
+  }: { validCoverage?: boolean; failure?: string } = {}
 ): {
   duck: DuckMock;
   queries: string[];
@@ -25,7 +29,7 @@ function createDuck(
     query: vi.fn(async (sql: string) => {
       queries.push(sql);
       if (shouldFail(sql)) {
-        throw new Error('TopologyException: found non-noded intersection');
+        throw new Error(failure);
       }
       if (sql.includes('is_valid_polygon_coverage(')) {
         return [{ is_valid: validCoverage }];
@@ -50,7 +54,10 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(findQueries(queries, 'extract_land(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(1);
-    for (const sql of findQueries(queries, 'CREATE OR REPLACE TABLE')) {
+    for (const sql of [
+      ...findQueries(queries, 'extract_land('),
+      ...findQueries(queries, 'extract_innerlines(')
+    ]) {
       expect(sql).toContain('noding_factor := 0');
     }
   });
@@ -66,10 +73,7 @@ describe('rebuildDerivedGeometryTables', () => {
     );
     expect(findQueries(queries, 'extract_land(')).toHaveLength(0);
     expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(0);
-    expect(findQueries(queries, 'extract_coverage_outerlines(')).toHaveLength(
-      1
-    );
-    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
   });
 
   it('falls back to the dissolve when the coverage path fails', async () => {
@@ -100,6 +104,10 @@ describe('rebuildDerivedGeometryTables', () => {
     const landQueries = findQueries(queries, 'extract_land(');
     expect(landQueries).toHaveLength(2);
     expect(landQueries[1]).toMatch(/noding_factor := 0\.\d+/);
+    // The borders match the outline of the territory only on the same grid.
+    const innerlinesQueries = findQueries(queries, 'extract_innerlines(');
+    expect(innerlinesQueries).toHaveLength(1);
+    expect(innerlinesQueries[0]).toMatch(/noding_factor := 0\.\d+/);
     expect(queries.some((sql) => sql.includes('WHERE FALSE'))).toBe(false);
   });
 
@@ -115,6 +123,21 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(emptyTableQuery).toContain(
       'CREATE OR REPLACE TABLE "regions__innerlines"'
     );
+  });
+
+  it('neither retries nor goes on once a derivation runs out of memory', async () => {
+    const { duck, queries } = createDuck(
+      (sql) => sql.includes('extract_land('),
+      { failure: 'Out of Memory Error: Allocation failure' }
+    );
+
+    await rebuildDerivedGeometryTables(duck, 'regions');
+
+    expect(findQueries(queries, 'extract_land(')).toHaveLength(1);
+    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(0);
+    const emptyTables = queries.filter((sql) => sql.includes('WHERE FALSE'));
+    expect(emptyTables).toHaveLength(3);
   });
 });
 
@@ -152,5 +175,54 @@ describe('isMeshTooFineForInnerLimits', () => {
     await createStripOfCells('coarse_grid', 100);
 
     expect(await isMeshTooFineForInnerLimits(duck, 'coarse_grid')).toBe(false);
+  });
+});
+
+describe('arePolygonsOverlapping', () => {
+  let db: TestDuckDB;
+  const duck = {
+    query: (sql: string) => query(db, sql)
+  } as unknown as DuckMock;
+
+  beforeAll(async () => {
+    db = await createTestInstance();
+    await run(db, 'LOAD spatial');
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  async function createSquares(tableName: string, secondSquareX: number) {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE ${tableName} AS
+       SELECT * FROM (VALUES
+         (ST_MakeEnvelope(0, 0, 10, 10)),
+         (ST_MakeEnvelope(${secondSquareX}, 0, ${secondSquareX} + 10, 10))
+       ) t(geom)`
+    );
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE ${tableName}__land AS
+       SELECT ST_Union_Agg(geom) AS geom FROM ${tableName}`
+    );
+  }
+
+  it('should flag polygons that cover each other', async () => {
+    await createSquares('overlapping', 5);
+
+    expect(
+      await arePolygonsOverlapping(duck, 'overlapping', 'overlapping__land')
+    ).toBe(true);
+  });
+
+  it('should let a sliver between neighbours through', async () => {
+    // 0.01 of overlap on a 10x10 edge: 0.05 % of the territory.
+    await createSquares('sliver', 9.99);
+
+    expect(await arePolygonsOverlapping(duck, 'sliver', 'sliver__land')).toBe(
+      false
+    );
   });
 });

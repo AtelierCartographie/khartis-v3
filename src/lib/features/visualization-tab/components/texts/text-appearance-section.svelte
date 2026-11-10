@@ -259,7 +259,6 @@
     max={SLIDER_LIMITS.textOpacity.max}
     step={SLIDER_LIMITS.textOpacity.step}
     value={opacity}
-    showMinMax
     inputWidth="64px"
     onchange={onOpacityChange}
   />
@@ -285,7 +284,6 @@
       max={SLIDER_LIMITS.haloWidth.max}
       step={SLIDER_LIMITS.haloWidth.step}
       value={haloWidth}
-      showMinMax
       inputWidth="64px"
       onchange={onHaloWidthChange}
     />
@@ -296,7 +294,6 @@
       max={SLIDER_LIMITS.textOpacity.max}
       step={SLIDER_LIMITS.textOpacity.step}
       value={haloOpacity}
-      showMinMax
       inputWidth="64px"
       onchange={onHaloOpacityChange}
     />

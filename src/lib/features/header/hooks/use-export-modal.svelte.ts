@@ -12,6 +12,7 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { analyticsService } from '$lib/features/commons/services/analytics.service';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
+import { getMapGeoreferenceAvailability } from '$lib/features/step-toolbar/tools/projections';
 import { m } from '$lib/paraglide/messages';
 import { getExportDimensionsForPage } from '../export-dimensions.utils';
 import {
@@ -21,6 +22,7 @@ import {
   exportMapAsSvg,
   exportProject
 } from '../services/export.service';
+import { exportMapAsQgisGeoPackage } from '../services/qgis/qgis-map-export.service';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 
@@ -38,6 +40,7 @@ function createExportModal(): UseExportModalReturn {
   let mapFormat = $state<MapExportFormat>(MAP_FORMAT.JPG);
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
   let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
+  let georeference = $state(false);
 
   function open(tab: ExportTabType = ExportTab.MAP): void {
     fileName = projectStore.projectName || getDefaultFileName();
@@ -69,6 +72,10 @@ function createExportModal(): UseExportModalReturn {
     resolution = res;
   }
 
+  function setGeoreference(value: boolean): void {
+    georeference = value;
+  }
+
   async function executeExport(): Promise<void> {
     if (fileName !== projectStore.projectName) {
       projectStore.updateProjectName(fileName);
@@ -83,6 +90,10 @@ function createExportModal(): UseExportModalReturn {
           break;
 
         case ExportTab.MAP: {
+          if (mapFormat === MAP_FORMAT.QGIS) {
+            await exportMapAsQgisGeoPackage(fileName);
+            break;
+          }
           const currentFormat = getFormatState();
           const targetResolution =
             mapFormat === MAP_FORMAT.SVG
@@ -93,10 +104,14 @@ function createExportModal(): UseExportModalReturn {
             currentFormat.height,
             targetResolution
           );
+          const options = {
+            georeference:
+              georeference && getMapGeoreferenceAvailability().available
+          };
           if (mapFormat === MAP_FORMAT.SVG) {
-            await exportMapAsSvg(fileName, dims.width, dims.height);
+            await exportMapAsSvg(fileName, dims.width, dims.height, options);
           } else {
-            await exportMapAsJpg(fileName, dims.width, dims.height);
+            await exportMapAsJpg(fileName, dims.width, dims.height, options);
           }
           break;
         }
@@ -114,12 +129,14 @@ function createExportModal(): UseExportModalReturn {
             ? 'data'
             : 'project',
         selectedTab === ExportTab.MAP
-          ? mapFormat
+          ? mapFormat === MAP_FORMAT.QGIS
+            ? DATA_FORMAT.GEOPACKAGE
+            : mapFormat
           : selectedTab === ExportTab.DATA
             ? dataFormat
             : 'kh',
         selectedTab === ExportTab.MAP
-          ? mapFormat === MAP_FORMAT.SVG
+          ? mapFormat !== MAP_FORMAT.JPG
             ? 'vector'
             : resolution
           : undefined
@@ -165,6 +182,9 @@ function createExportModal(): UseExportModalReturn {
     get resolution() {
       return resolution;
     },
+    get georeference() {
+      return georeference;
+    },
 
     open,
     close,
@@ -173,6 +193,7 @@ function createExportModal(): UseExportModalReturn {
     setMapFormat,
     setDataFormat,
     setResolution,
+    setGeoreference,
     executeExport
   };
 }

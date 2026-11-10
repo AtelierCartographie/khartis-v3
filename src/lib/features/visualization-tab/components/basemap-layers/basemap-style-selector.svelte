@@ -7,6 +7,10 @@
     MAP_PROJECTION_TYPE
   } from '$lib/features/commons/constants';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import { VisualizationTools } from '$lib/features/commons/types/global';
+  import { selectTool } from '$lib/features/step-toolbar/tools-list/tool-list.utils.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { BasemapCardVertical } from '$lib/features/data-tab/components';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -294,7 +298,26 @@
       {/each}
     </div>
     <p class="groups-helper">{m.basemap_tiled_zoom_helper()}</p>
+    <SliderWithInput
+      label={m.legend_opacity()}
+      value={basemapStyleStore.opacity}
+      min={0}
+      max={100}
+      step={1}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(opacity) => basemapStyleStore.setOpacity(opacity)}
+    />
   </div>
+
+  <Button
+    kind="tertiary"
+    size="small"
+    class="projection-shortcut-btn"
+    on:click={() => selectTool(VisualizationTools.Projection)}
+  >
+    {m.basemap_projection_shortcut()}
+  </Button>
 
   <div class="reference-link">
     <Link
@@ -424,5 +447,9 @@
 
   .reference-link :global(.bx--link svg) {
     fill: currentColor;
+  }
+
+  .basemap-style-selector :global(.projection-shortcut-btn) {
+    align-self: flex-start;
   }
 </style>

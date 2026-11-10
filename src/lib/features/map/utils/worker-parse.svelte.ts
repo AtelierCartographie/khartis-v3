@@ -1,4 +1,3 @@
-import { type Table as ArrowTable, tableToIPC } from 'apache-arrow/Arrow';
 import type {
   ParseWorkerClient,
   WorkerLike
@@ -112,15 +111,4 @@ export function withParseWorkerTimeout<T>(
       clearTimeout(timeoutId);
     }
   });
-}
-
-const ipcCache = new WeakMap<ArrowTable, Uint8Array>();
-
-export function ipcBytesForTable(table: ArrowTable): Uint8Array {
-  let bytes = ipcCache.get(table);
-  if (!bytes) {
-    bytes = tableToIPC(table);
-    ipcCache.set(table, bytes);
-  }
-  return bytes;
 }

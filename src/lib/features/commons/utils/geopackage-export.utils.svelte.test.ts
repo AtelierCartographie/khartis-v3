@@ -281,4 +281,66 @@ describe('GeoPackage export utils', () => {
     expect(rows[0].organization_coordsys_id).toBe(2154);
     expect(rows[0].definition).toContain('Lambert_Conformal_Conic_2SP');
   });
+
+  it('should store each layer style where QGIS applies it on opening', async () => {
+    const blob = await exportGeoPackageLayers([
+      {
+        layerName: 'cities',
+        sourceCrs: 'EPSG:2154',
+        propertyColumns: ['name', 'population'],
+        style: { name: 'Cities – symbols', qml: '<qgis/>' },
+        features: [
+          {
+            properties: { name: 'A', population: 10 },
+            wkb: createPointWkb(700000, 6600000)
+          },
+          {
+            properties: { name: 'B', population: 20 },
+            wkb: createPointWkb(710000, 6650000)
+          }
+        ]
+      }
+    ]);
+
+    const styles = await selectGeoPackageRows<{
+      f_table_name: string;
+      f_geometry_column: string;
+      styleName: string;
+      styleQML: string;
+      useAsDefault: number;
+    }>(
+      blob,
+      'SELECT f_table_name, f_geometry_column, styleName, styleQML, useAsDefault FROM layer_styles'
+    );
+    const [contents] = await selectGeoPackageRows<{
+      min_x: number;
+      min_y: number;
+      max_x: number;
+      max_y: number;
+    }>(
+      blob,
+      "SELECT min_x, min_y, max_x, max_y FROM gpkg_contents WHERE table_name = 'cities'"
+    );
+    const registered = await selectGeoPackageRows<{ data_type: string }>(
+      blob,
+      "SELECT data_type FROM gpkg_contents WHERE table_name = 'layer_styles'"
+    );
+
+    expect(styles).toEqual([
+      {
+        f_table_name: 'cities',
+        f_geometry_column: 'geom',
+        styleName: 'Cities – symbols',
+        styleQML: '<qgis/>',
+        useAsDefault: 1
+      }
+    ]);
+    expect(registered).toEqual([{ data_type: 'attributes' }]);
+    expect(contents).toEqual({
+      min_x: 700000,
+      min_y: 6600000,
+      max_x: 710000,
+      max_y: 6650000
+    });
+  });
 });

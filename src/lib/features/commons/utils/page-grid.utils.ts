@@ -5,6 +5,7 @@
  * the same alignments.
  */
 export const LAYOUT_UNIT_PX = 4;
+/** @alias */
 export const PAGE_SNAP_STEP_PX = LAYOUT_UNIT_PX;
 export const PAGE_GRID_SIZE_PX = LAYOUT_UNIT_PX * 3;
 
