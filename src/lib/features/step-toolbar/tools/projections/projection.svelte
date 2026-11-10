@@ -1,15 +1,17 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { InlineNotification } from 'carbon-components-svelte';
   import {
     Catalog,
     MagicWandFilled,
     SettingsAdjust
   } from 'carbon-icons-svelte';
   import { tick } from 'svelte';
-  import { projectionActions } from './projection.store.svelte';
-  import { parseProjectionCode } from './projection-code.utils';
+  import {
+    getProjectionState,
+    projectionActions
+  } from './projection.store.svelte';
+  import type { ProjectionCodeDiagnosis } from './projection-code.utils';
   import ProjectionCurrent from './projection-current.svelte';
   import ProjectionMain from './projection-main.svelte';
   import ProjectionOther from './projection-other.svelte';
@@ -19,7 +21,6 @@
 
   const title = $derived(m.projection_title());
 
-  let crsError = $state(false);
   let settingsOpen = $state(false);
 
   async function openSettings() {
@@ -30,22 +31,29 @@
       ?.scrollIntoView({ block: 'end' });
   }
 
-  function handleProjectionCodeApply({ code }: { code: string }) {
-    const parsed = parseProjectionCode(code);
-    if (!parsed) {
-      crsError = true;
+  function handleProjectionCodeApply(diagnosis: ProjectionCodeDiagnosis) {
+    if (diagnosis.status === 'catalogue-equivalent') {
+      projectionActions.setSelected(diagnosis.catalogueId);
+      if (diagnosis.longitude !== undefined) {
+        projectionActions.setCenter(
+          diagnosis.longitude,
+          getProjectionState().latitude
+        );
+      }
       return;
     }
 
-    crsError = false;
-    projectionActions.setSelected(parsed.projectionId);
-    projectionActions.setCustomCode(parsed.normalizedCode);
+    if (diagnosis.status !== 'valid') {
+      return;
+    }
+
+    projectionActions.setSelected(diagnosis.projectionId);
+    projectionActions.setCustomCode(diagnosis.normalizedCode);
   }
 
   const DEFAULT_PROJECTION = 'mercator';
 
   function handleProjectionCodeReset() {
-    crsError = false;
     projectionActions.setCustomCode(null);
     projectionActions.setSelected(DEFAULT_PROJECTION);
   }
@@ -58,11 +66,11 @@
     <ExpandableSection
       title={title}
       defaultOpen={true}
-      titleClass="projection-suggestions-title"
+      titleClass="projection-suggestions-title kh-thinking-text"
       scrollIntoViewOnOpen
     >
       {#snippet icon()}
-        <MagicWandFilled size={20} />
+        <MagicWandFilled size={20} class="kh-thinking-icon" />
       {/snippet}
       <ProjectionMain />
     </ExpandableSection>
@@ -76,15 +84,6 @@
         onapply={handleProjectionCodeApply}
         onreset={handleProjectionCodeReset}
       />
-      {#if crsError}
-        <InlineNotification
-          closeButtonDescription={m.a11y_close_notification()}
-          kind="error"
-          lowContrast
-          title={m.projection_code_helper()}
-          on:close={() => (crsError = false)}
-        />
-      {/if}
     </ExpandableSection>
 
     <ExpandableSection

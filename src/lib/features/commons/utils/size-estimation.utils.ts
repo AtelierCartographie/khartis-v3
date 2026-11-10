@@ -11,8 +11,6 @@ function stripBinaryFields(project: unknown): unknown {
     ...data,
     sourceFiles: data.sourceFiles.map((file: Record<string, unknown>) => {
       const {
-        content: _content,
-        relatedFilesData: _relatedFilesData,
         archiveLayerSnapshot: _archiveLayerSnapshot,
         originalFile: _originalFile,
         relatedFileObjects: _relatedFileObjects,

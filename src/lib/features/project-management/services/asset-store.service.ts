@@ -90,6 +90,26 @@ export async function assetExists(assetId: string): Promise<boolean> {
   });
 }
 
+async function putAssetChunk(
+  db: IDBDatabase,
+  assetId: string,
+  chunkIndex: number,
+  data: ArrayBuffer
+): Promise<void> {
+  // put() clones `data` synchronously, so the caller may reuse it afterwards.
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_CHUNK_STORE_NAME], 'readwrite');
+    tx.objectStore(ASSET_CHUNK_STORE_NAME).put({
+      assetId,
+      chunkIndex,
+      data
+    } satisfies StoredAssetChunk);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_write_asset_chunk()));
+  });
+}
+
 async function writeAssetChunks(
   db: IDBDatabase,
   assetId: string,
@@ -102,17 +122,90 @@ async function writeAssetChunks(
     const end = Math.min(start + CHUNK_SIZE, blob.size);
     const chunk = await blob.slice(start, end).arrayBuffer();
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([ASSET_CHUNK_STORE_NAME], 'readwrite');
-      tx.objectStore(ASSET_CHUNK_STORE_NAME).put({
-        assetId,
-        chunkIndex,
-        data: cloneArrayBuffer(chunk)
-      } satisfies StoredAssetChunk);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () =>
-        reject(tx.error || new Error(m.error_failed_write_asset_chunk()));
-    });
+    await putAssetChunk(db, assetId, chunkIndex, cloneArrayBuffer(chunk));
+  }
+}
+
+async function writeAssetChunkStream(
+  db: IDBDatabase,
+  assetId: string,
+  source: ReadableStream<Uint8Array>
+): Promise<number> {
+  const reader = source.getReader();
+  const chunk = new Uint8Array(CHUNK_SIZE);
+  let filled = 0;
+  let chunkIndex = 0;
+  let size = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      let offset = 0;
+      while (offset < value.length) {
+        const count = Math.min(CHUNK_SIZE - filled, value.length - offset);
+        chunk.set(value.subarray(offset, offset + count), filled);
+        filled += count;
+        offset += count;
+        size += count;
+
+        if (filled === CHUNK_SIZE) {
+          await putAssetChunk(db, assetId, chunkIndex, chunk.buffer);
+          chunkIndex += 1;
+          filled = 0;
+        }
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  }
+
+  if (filled > 0 || chunkIndex === 0) {
+    await putAssetChunk(db, assetId, chunkIndex, chunk.buffer.slice(0, filled));
+  }
+
+  return size;
+}
+
+async function putAssetMetadata(
+  db: IDBDatabase,
+  ref: AssetRef,
+  size: number
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_STORE_NAME], 'readwrite');
+    tx.objectStore(ASSET_STORE_NAME).put({
+      assetId: ref.assetId,
+      mimeType: ref.mimeType,
+      size: ref.size,
+      chunkCount: getChunkCount(size),
+      chunkSize: CHUNK_SIZE,
+      createdAt: new Date().toISOString()
+    } satisfies StoredAssetMetadata);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_create_asset_metadata()));
+  });
+}
+
+async function assertStorageHeadroom(
+  ref: AssetRef,
+  requiredBytes: number
+): Promise<void> {
+  const hasHeadroom = await estimateStorageHeadroom(requiredBytes);
+  if (!hasHeadroom) {
+    throw new PipelineError(
+      m.error_insufficient_storage(),
+      PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE,
+      {
+        assetId: ref.assetId,
+        requiredBytes
+      }
+    );
   }
 }
 
@@ -124,52 +217,36 @@ export async function persistAssetBlob(
   const alreadyExists = await assetExists(ref.assetId);
 
   if (!alreadyExists) {
-    const hasHeadroom = await estimateStorageHeadroom(blob.size);
-    if (!hasHeadroom) {
-      throw new PipelineError(
-        m.error_insufficient_storage(),
-        PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE,
-        {
-          assetId: ref.assetId,
-          requiredBytes: blob.size
-        }
-      );
-    }
-
+    await assertStorageHeadroom(ref, blob.size);
     await writeAssetChunks(db, ref.assetId, blob);
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([ASSET_STORE_NAME], 'readwrite');
-      tx.objectStore(ASSET_STORE_NAME).put({
-        assetId: ref.assetId,
-        mimeType: ref.mimeType,
-        size: ref.size,
-        chunkCount: getChunkCount(blob.size),
-        chunkSize: CHUNK_SIZE,
-        createdAt: new Date().toISOString()
-      } satisfies StoredAssetMetadata);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () =>
-        reject(tx.error || new Error(m.error_failed_create_asset_metadata()));
-    });
+    await putAssetMetadata(db, ref, blob.size);
   }
 
   return ref;
 }
 
-export async function persistAssetContent(
-  content: string | ArrayBuffer,
-  params: Omit<AssetRef, 'assetId'>
+/**
+ * Writes an asset chunk by chunk as the stream yields it, so the whole
+ * payload never sits in memory. `ref.size` is the expected size, used for the
+ * storage headroom check; the returned ref carries the size actually written.
+ */
+export async function persistAssetStream(
+  source: ReadableStream<Uint8Array>,
+  ref: AssetRef
 ): Promise<AssetRef> {
-  const blob = new Blob([content], { type: params.mimeType });
+  const db = await getDb();
+  const alreadyExists = await assetExists(ref.assetId);
 
-  const ref: AssetRef = {
-    ...params,
-    assetId: crypto.randomUUID(),
-    size: blob.size
-  };
+  if (alreadyExists) {
+    await source.cancel();
+    return ref;
+  }
 
-  return persistAssetBlob(blob, ref);
+  await assertStorageHeadroom(ref, ref.size);
+  const size = await writeAssetChunkStream(db, ref.assetId, source);
+  const writtenRef = { ...ref, size };
+  await putAssetMetadata(db, writtenRef, size);
+  return writtenRef;
 }
 
 export async function persistAssetBytes(
@@ -206,20 +283,6 @@ function findCompanionFiles(file: UploadedFile): File[] {
 
   return file.relatedFileObjects.filter(
     (candidate) => candidate.name.toLowerCase() !== mainFileName
-  );
-}
-
-function buildCompanionContentEntries(
-  file: UploadedFile
-): Array<[string, ArrayBuffer]> {
-  if (!file.relatedFilesData) {
-    return [];
-  }
-
-  const mainFileName = file.name.toLowerCase();
-
-  return Object.entries(file.relatedFilesData).filter(
-    ([name]) => name.toLowerCase() !== mainFileName
   );
 }
 
@@ -273,13 +336,6 @@ export async function ensureUploadedFileAssets(
         'primary',
         preparedFile.name
       );
-    } else if (preparedFile.content) {
-      preparedFile.assetRef = await persistAssetContent(preparedFile.content, {
-        originalName: preparedFile.name,
-        mimeType: preparedFile.type || 'application/octet-stream',
-        size: preparedFile.size,
-        kind: 'primary'
-      });
     }
   }
 
@@ -292,7 +348,7 @@ export async function ensureUploadedFileAssets(
           )
         )
       ).every(Boolean)) ||
-    (!preparedFile.relatedFileObjects && !preparedFile.relatedFilesData)
+    !preparedFile.relatedFileObjects
   ) {
     return preparedFile;
   }
@@ -307,25 +363,6 @@ export async function ensureUploadedFileAssets(
         await createAssetRefFromFile(companion, 'companion')
       );
     }
-
-    return preparedFile;
-  }
-
-  const companionEntries = buildCompanionContentEntries(preparedFile);
-  if (companionEntries.length === 0) {
-    return preparedFile;
-  }
-
-  preparedFile.companionAssetRefs = [];
-  for (const [name, buffer] of companionEntries) {
-    preparedFile.companionAssetRefs.push(
-      await persistAssetContent(buffer, {
-        originalName: name,
-        mimeType: 'application/octet-stream',
-        size: buffer.byteLength,
-        kind: 'companion'
-      })
-    );
   }
 
   return preparedFile;

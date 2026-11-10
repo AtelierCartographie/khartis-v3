@@ -52,6 +52,7 @@ import {
 import {
   getKnownPageElementDefaultContents,
   getPageElementDefaultContent,
+  getPageElementRolesWrittenAsFreeText,
   getSourcePrefix,
   hasPageElementDefaultWording,
   isLegacyPageElementContent,
@@ -125,7 +126,6 @@ type AnnotationsActions = {
   }) => void;
   refreshPageElementPlaceholders: () => void;
   setPageElementsVisibility: (visible: boolean) => void;
-  pinPageElements: () => void;
   redistributePageElements: (
     layout?: {
       width?: number;
@@ -900,29 +900,52 @@ const { actions, getState } = createToolStore<
         }
       ];
 
+      const writtenRoles = getPageElementRolesWrittenAsFreeText(
+        s.items
+          .filter(
+            (item) =>
+              item.type === AnnotationKind.TEXT &&
+              typeof item.content === 'string'
+          )
+          .map((item) => ({
+            content: String(item.content),
+            fontSize: item.style?.fontSize ?? DEFAULT_NOTE_FONT_SIZE,
+            pageY:
+              resolveAnnotationCoordinateSpace(item) === 'page'
+                ? item.position.y
+                : item.position.y + layout.margins.top
+          })),
+        {
+          maxY: layout.height / 4,
+          minFontSize: tokens.annotations.subtitleFontSize
+        }
+      );
+
       const timestamp = Date.now();
 
-      const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
-        id: `page-element-${el.role}-${timestamp}-${index}`,
-        type: AnnotationKind.TEXT,
-        content: getPageElementDefaultContent(
-          el.role,
-          basemapSource,
-          withPlaceholders,
-          getLocale(),
-          year
-        ),
-        position: clampPageElementPosition(
-          getPageElementPosition(el.role, layout),
-          el.role,
-          layout,
-          shouldSnapAutoPageElement(el.role)
-        ),
-        positionMode: 'auto',
-        style: { ...s.defaultStyle, ...el.style },
-        role: el.role,
-        visible
-      }));
+      const newAnnotations: Annotation[] = pageElements
+        .filter((el) => !writtenRoles.has(el.role))
+        .map((el, index) => ({
+          id: `page-element-${el.role}-${timestamp}-${index}`,
+          type: AnnotationKind.TEXT,
+          content: getPageElementDefaultContent(
+            el.role,
+            basemapSource,
+            withPlaceholders,
+            getLocale(),
+            year
+          ),
+          position: clampPageElementPosition(
+            getPageElementPosition(el.role, layout),
+            el.role,
+            layout,
+            shouldSnapAutoPageElement(el.role)
+          ),
+          positionMode: 'auto',
+          style: { ...s.defaultStyle, ...el.style },
+          role: el.role,
+          visible
+        }));
 
       s.items = [...s.items, ...newAnnotations];
     },
@@ -969,21 +992,6 @@ const { actions, getState } = createToolStore<
     setPageElementsVisibility: (visible: boolean) => {
       s.items = s.items.map((item) =>
         isPageElementRole(item.role) ? { ...item, visible } : item
-      );
-    },
-    pinPageElements: () => {
-      if (
-        !s.items.some(
-          (item) =>
-            isPageElementRole(item.role) && item.positionMode !== 'manual'
-        )
-      ) {
-        return;
-      }
-      s.items = s.items.map((item) =>
-        isPageElementRole(item.role) && item.positionMode !== 'manual'
-          ? { ...item, positionMode: 'manual' }
-          : item
       );
     },
     redistributePageElements: (layoutOverrides, previousPage) => {

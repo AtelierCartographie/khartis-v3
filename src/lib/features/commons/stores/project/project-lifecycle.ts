@@ -3,6 +3,10 @@ import type {
   SavedProjectMetadata
 } from '$lib/features/project-management';
 import {
+  APP_LOADING_PHASE,
+  appLoadingStore
+} from '../app-loading.store.svelte';
+import {
   duplicateProject as duplicateProjectEntity,
   PROJECT_CONST,
   projectRepository,
@@ -292,6 +296,7 @@ export async function loadLastProject(
   const controller = new AbortController();
   let lastProjectId: string | undefined;
   const restoreOperation = (async () => {
+    appLoadingStore.setPhase(APP_LOADING_PHASE.PROJECT);
     lastProjectId =
       (await projectStorage.load<string>(ProjectStorageKey.CURRENT)) ??
       undefined;

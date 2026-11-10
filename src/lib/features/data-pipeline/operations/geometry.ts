@@ -60,6 +60,7 @@ export function extractGeometryColumnCrs(
 
 export interface GeometryInspection {
   geometry?: GeometryInfo;
+  vertexCount?: number;
   warnings: string[];
 }
 
@@ -95,7 +96,10 @@ export async function extractGeometryInfo(
 
     const consolidatedQuery = `
 			WITH bbox AS (
-				SELECT ST_Extent_Agg("${escapedGeomCol}") AS extent FROM "${escapedTable}"
+				SELECT
+					ST_Extent_Agg("${escapedGeomCol}") AS extent,
+					SUM(ST_NPoints("${escapedGeomCol}"))::BIGINT AS vertex_count
+				FROM "${escapedTable}"
 			),
 			first_row AS (
 				SELECT "${escapedGeomCol}" AS geom FROM "${escapedTable}" WHERE "${escapedGeomCol}" IS NOT NULL LIMIT 1
@@ -105,7 +109,8 @@ export async function extractGeometryInfo(
 				ST_XMin(extent) AS minX,
 				ST_YMin(extent) AS minY,
 				ST_XMax(extent) AS maxX,
-				ST_YMax(extent) AS maxY
+				ST_YMax(extent) AS maxY,
+				vertex_count
 			FROM bbox
 		`;
 
@@ -117,8 +122,10 @@ export async function extractGeometryInfo(
       minY: number | null;
       maxX: number | null;
       maxY: number | null;
+      vertex_count: number | bigint | null;
     }>;
 
+    const vertexCount = Number(result?.vertex_count ?? 0);
     const geometryType = result?.geom_type ?? GEOMETRY_COLUMN_TYPE;
     const extent = result;
 
@@ -134,6 +141,7 @@ export async function extractGeometryInfo(
           type: normalizeGeometryType(geometryType),
           columnName: geometryColumn.name
         },
+        vertexCount,
         warnings: [m.pipeline_warning_geometry_bounds_unavailable()]
       };
     }
@@ -153,6 +161,7 @@ export async function extractGeometryInfo(
         centroid: computeCentroid(bounds),
         crs: geometryCrs ?? GEO_CONSTANTS.WGS84_CRS
       },
+      vertexCount,
       warnings: []
     };
   } catch (error) {

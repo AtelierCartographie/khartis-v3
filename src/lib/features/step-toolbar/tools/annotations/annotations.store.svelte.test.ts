@@ -159,6 +159,79 @@ describe('annotations store', () => {
     );
   });
 
+  it('should not seed the page texts an older project already wrote as free texts', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'title',
+          type: AnnotationKind.TEXT,
+          content: 'Paris : âge du bâti\ndans le 13e arrondissement',
+          position: { x: 32, y: 24 },
+          coordinateSpace: 'page',
+          style: { fontSize: 14 }
+        },
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content:
+            'Sources : Apur, 2025. Fond de carte : Eurostat - GISCO, 2024.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          content: 'Réalisation : Atelier de cartographie, 2026.',
+          position: { x: 424, y: 556 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'label',
+          type: AnnotationKind.TEXT,
+          content: 'Océan Atlantique',
+          position: { x: 40, y: 300 },
+          style: { fontSize: 14 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([]);
+  });
+
+  it('should seed only the page texts an older project did not write', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content: 'Source: Eurostat, 2025.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([
+      ANNOTATION_ROLE.TITLE,
+      ANNOTATION_ROLE.SUBTITLE,
+      ANNOTATION_ROLE.BASEMAP_SOURCE,
+      ANNOTATION_ROLE.CREDIT
+    ]);
+  });
+
   it('turns the source placeholder into its lead-in once clicked', () => {
     annotationsActions.initPageElements({ withPlaceholders: true });
 

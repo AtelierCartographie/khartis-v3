@@ -58,6 +58,20 @@
     padding-top: var(--safe-area-top);
   }
 
+  /* The logo block ends at the beta tag, so that the project title can
+     keep equal space on both sides. */
+  #khartis-header :global(.bx--header__name) {
+    padding: 0;
+  }
+
+  #khartis-header :global(#khartis-logo) {
+    padding-inline: var(--cds-spacing-05) 0;
+  }
+
+  #khartis-header :global(.bx--header__global) {
+    flex: 0 0 auto;
+  }
+
   #khartis-header :global(.bx--header__menu-trigger) {
     min-width: var(--kh-size-header);
     min-height: var(--kh-size-header);

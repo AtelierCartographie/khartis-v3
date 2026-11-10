@@ -69,16 +69,8 @@ function isProjectionViewMode(value: unknown): value is ProjectionViewMode {
   return value === 'list' || value === 'grid';
 }
 
-function restorePageZoom(
-  value: unknown,
-  minPageZoom: number,
-  maxPageZoom: number
-): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return 100;
-  }
-
-  return Math.max(minPageZoom, Math.min(value, maxPageZoom));
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function restorePanOffsetCoordinate(value: unknown): number {
@@ -106,12 +98,14 @@ function createGlobalStore() {
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
-      pageZoomLevel: 100,
+      isPageZoomFitted: true,
+      pageZoomPercent: 100,
       minPageZoom: 10,
-      maxPageZoom: 500,
-      pageZoomStep: 10,
+      maxPageZoom: 1000,
+      pageZoomStep: 5,
       pagePanOffset: { x: 0, y: 0 },
-      pageZoomScale: 1
+      pageZoomScale: 1,
+      pageFitScale: 1
     },
     isMobileView:
       typeof window !== 'undefined'
@@ -335,18 +329,34 @@ function createGlobalStore() {
     notifyPersistence();
   }
 
-  function adjustPageZoom(direction: 1 | -1): void {
-    const currentLevel = state.zoom.pageZoomLevel;
-    const step = state.zoom.pageZoomStep;
-    const minZoom = state.zoom.minPageZoom;
-    const maxZoom = state.zoom.maxPageZoom;
+  // The page either follows the workspace (fitted) or keeps the absolute
+  // percentage the user chose, 100 % being one page pixel per CSS pixel. A
+  // chosen zoom survives a page or window resize instead of being rescaled.
+  function getPageZoomPercent(): number {
+    return state.zoom.isPageZoomFitted
+      ? state.zoom.pageFitScale * 100
+      : state.zoom.pageZoomPercent;
+  }
 
-    const clamp = direction === 1 ? Math.min : Math.max;
-    const limit = direction === 1 ? maxZoom : minZoom;
-    const newZoomLevel = clamp(currentLevel + direction * step, limit);
-
-    state.zoom.pageZoomLevel = newZoomLevel;
+  function setPageZoomPercent(percent: number): void {
+    pendingLegacyZoomLevel = null;
+    state.zoom.isPageZoomFitted = false;
+    state.zoom.pageZoomPercent = Math.max(
+      state.zoom.minPageZoom,
+      Math.min(percent, state.zoom.maxPageZoom)
+    );
     notifyPersistence();
+  }
+
+  function adjustPageZoom(direction: 1 | -1): void {
+    const step = state.zoom.pageZoomStep;
+    // Snap to the step grid, so a fitted 218 % steps to 220 % or 215 %.
+    const position = getPageZoomPercent() / step;
+    const snapped =
+      direction === 1
+        ? Math.floor(position + 1e-6) + 1
+        : Math.ceil(position - 1e-6) - 1;
+    setPageZoomPercent(snapped * step);
   }
 
   function zoomInPage(): void {
@@ -357,10 +367,15 @@ function createGlobalStore() {
     adjustPageZoom(-1);
   }
 
-  function resetPageZoom(): void {
-    state.zoom.pageZoomLevel = 100;
-    state.zoom.pagePanOffset = { x: 0, y: 0 };
+  function fitPageZoom(): void {
+    pendingLegacyZoomLevel = null;
+    state.zoom.isPageZoomFitted = true;
     notifyPersistence();
+  }
+
+  function resetPageZoom(): void {
+    fitPageZoom();
+    resetPagePan();
   }
 
   function panPageBy(deltaX: number, deltaY: number): void {
@@ -380,8 +395,25 @@ function createGlobalStore() {
   }
 
   function resetPagePan(): void {
+    panBeforeCentering = null;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     notifyPersistence();
+  }
+
+  // Selecting a layout object pans the page to show it beside its tool;
+  // closing the tool brings back the page where the user had moved it.
+  let panBeforeCentering: { x: number; y: number } | null = null;
+
+  function centerPageBy(deltaX: number, deltaY: number): void {
+    panBeforeCentering ??= { ...state.zoom.pagePanOffset };
+    panPageBy(deltaX, deltaY);
+  }
+
+  function restorePagePan(): void {
+    if (!panBeforeCentering) return;
+
+    setPagePanOffset(panBeforeCentering);
+    panBeforeCentering = null;
   }
 
   function setToolbarTransitioning(value: boolean): void {
@@ -392,12 +424,21 @@ function createGlobalStore() {
     state.isMapExporting = value;
   }
 
-  function setPageZoom(level: number): void {
-    state.zoom.pageZoomLevel = Math.max(
+  // Projects saved before the fitted mode store only a level relative to the
+  // fit, which can be turned into a percentage once the workspace is measured.
+  let pendingLegacyZoomLevel: number | null = null;
+
+  function setPageFitScale(scale: number): void {
+    if (!isPositiveNumber(scale)) return;
+    state.zoom.pageFitScale = scale;
+    if (pendingLegacyZoomLevel === null) return;
+    const level = pendingLegacyZoomLevel;
+    pendingLegacyZoomLevel = null;
+    state.zoom.isPageZoomFitted = false;
+    state.zoom.pageZoomPercent = Math.max(
       state.zoom.minPageZoom,
-      Math.min(level, state.zoom.maxPageZoom)
+      Math.min(scale * level * 100, state.zoom.maxPageZoom)
     );
-    notifyPersistence();
   }
 
   function setPageZoomScale(scale: number): void {
@@ -421,13 +462,39 @@ function createGlobalStore() {
     state.selectedTool = undefined;
     state.projectionFilter = 'all';
     state.projectionViewMode = 'list';
-    state.zoom.pageZoomLevel = 100;
+    state.zoom.isPageZoomFitted = true;
+    state.zoom.pageZoomPercent = 100;
+    pendingLegacyZoomLevel = null;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     state.isMapExporting = false;
     state.isResizingMapFrame = false;
 
     selectedDataButtonState.id = undefined;
     pendingDatasetSelections.clear();
+  }
+
+  function restorePageZoom(persisted: Record<string, unknown>): void {
+    pendingLegacyZoomLevel = null;
+    state.zoom.isPageZoomFitted = true;
+    state.zoom.pageZoomPercent = 100;
+
+    if (typeof persisted.isPageZoomFitted === 'boolean') {
+      if (persisted.isPageZoomFitted) return;
+      if (!isPositiveNumber(persisted.pageZoomPercent)) return;
+      state.zoom.isPageZoomFitted = false;
+      state.zoom.pageZoomPercent = Math.max(
+        state.zoom.minPageZoom,
+        Math.min(persisted.pageZoomPercent, state.zoom.maxPageZoom)
+      );
+      return;
+    }
+
+    if (
+      isPositiveNumber(persisted.pageZoomLevel) &&
+      persisted.pageZoomLevel !== 100
+    ) {
+      pendingLegacyZoomLevel = persisted.pageZoomLevel / 100;
+    }
   }
 
   function restoreFromSerialized(data: unknown): void {
@@ -442,9 +509,16 @@ function createGlobalStore() {
     state.selectedTool = isSelectedTool(persisted.selectedTool)
       ? persisted.selectedTool
       : undefined;
-    state.toolbarState = isToolbarState(persisted.toolbarState)
+    const persistedToolbarState = isToolbarState(persisted.toolbarState)
       ? persisted.toolbarState
       : ToolbarState.Full;
+    // The Données panel cannot be collapsed; a state saved while Escape still
+    // collapsed it reopens.
+    state.toolbarState =
+      state.selectedStep === ToolbarStep.Data &&
+      persistedToolbarState === ToolbarState.Collapsed
+        ? ToolbarState.Full
+        : persistedToolbarState;
     state.projectionFilter = isProjectionFilterId(persisted.projectionFilter)
       ? persisted.projectionFilter
       : 'all';
@@ -453,11 +527,7 @@ function createGlobalStore() {
     )
       ? persisted.projectionViewMode
       : 'list';
-    state.zoom.pageZoomLevel = restorePageZoom(
-      persisted.pageZoomLevel,
-      state.zoom.minPageZoom,
-      state.zoom.maxPageZoom
-    );
+    restorePageZoom(persisted);
     state.zoom.pagePanOffset = {
       x: restorePanOffsetCoordinate(persistedPanOffset.x),
       y: restorePanOffsetCoordinate(persistedPanOffset.y)
@@ -584,11 +654,15 @@ function createGlobalStore() {
     zoomInPage,
     zoomOutPage,
     resetPageZoom,
-    setPageZoom,
+    fitPageZoom,
+    setPageZoomPercent,
+    setPageFitScale,
     setPageZoomScale,
     panPageBy,
+    centerPageBy,
     setPagePanOffset,
     resetPagePan,
+    restorePagePan,
     setToolbarTransitioning,
     setMapExporting,
     resetNavigationState,
@@ -609,11 +683,15 @@ export const globalActions = {
   zoomInPage: globalState.zoomInPage,
   zoomOutPage: globalState.zoomOutPage,
   resetPageZoom: globalState.resetPageZoom,
-  setPageZoom: globalState.setPageZoom,
+  fitPageZoom: globalState.fitPageZoom,
+  setPageZoomPercent: globalState.setPageZoomPercent,
+  setPageFitScale: globalState.setPageFitScale,
   setPageZoomScale: globalState.setPageZoomScale,
   panPageBy: globalState.panPageBy,
+  centerPageBy: globalState.centerPageBy,
   setPagePanOffset: globalState.setPagePanOffset,
   resetPagePan: globalState.resetPagePan,
+  restorePagePan: globalState.restorePagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,
   closeMobileToolbar: globalState.closeMobileToolbar,
@@ -632,7 +710,12 @@ persistenceRegistry.register({
     projectionFilter: globalState.projectionFilter,
     projectionViewMode: globalState.projectionViewMode,
     selectedSourceFileId: globalState.selectedDataButtonId,
-    pageZoomLevel: globalState.zoom.pageZoomLevel,
+    // Builds that predate the fitted mode read only this relative level.
+    pageZoomLevel: globalState.zoom.isPageZoomFitted
+      ? 100
+      : globalState.zoom.pageZoomPercent / globalState.zoom.pageFitScale,
+    isPageZoomFitted: globalState.zoom.isPageZoomFitted,
+    pageZoomPercent: globalState.zoom.pageZoomPercent,
     pagePanOffset: globalState.zoom.pagePanOffset
   }),
   deserialize: (data: unknown) => globalState.restoreFromSerialized(data),

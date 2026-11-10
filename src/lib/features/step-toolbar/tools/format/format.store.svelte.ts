@@ -9,8 +9,8 @@ import {
   createReadonlyStateFacade,
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
-import type { FormatState } from '../../types/format.types';
-import { clampPageMargins } from './page-margins.utils';
+import type { FormatState, PageInsets } from '../../types/format.types';
+import { arePageInsetsEqual, clampPageInsets } from './page-insets.utils';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
@@ -65,6 +65,7 @@ const DEFAULT_STATE: FormatState = {
   height: PAGE_PRESETS[PageModel.A4_LANDSCAPE].height,
   color: { ...DEFAULT_PAGE_COLOR },
   margins: { ...DEFAULT_MARGINS },
+  mapFrame: { ...DEFAULT_MARGINS },
   gridEnabled: true
 };
 
@@ -77,12 +78,9 @@ type FormatActions = {
     saturation: number;
     lightness: number;
   }) => void;
-  setMargins: (margins: {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-  }) => void;
+  setMargins: (margins: PageInsets) => void;
+  setMapFrame: (mapFrame: PageInsets) => void;
+  fitMapFrame: (mapFrame: PageInsets) => void;
   toggleGrid: () => void;
 };
 
@@ -110,54 +108,93 @@ export function getLastPageResize(): PageResize | null {
   return lastPageResize;
 }
 
-// Same rule for the map frame: only a margin edit the user makes crops the
-// map, never margins restored with a project.
-let marginsEditId = $state(0);
+// Same rule for the map frame: only a frame edge the user moves crops the
+// map, never a frame restored with a project or fitted to the map.
+let mapFrameEditId = $state(0);
 
-export function getMarginsEditId(): number {
-  return marginsEditId;
+export function getMapFrameEditId(): number {
+  return mapFrameEditId;
 }
+
+// A page too small for the margins or the map frame clamps them; growing it
+// back restores what was asked for. The request is dropped as soon as the
+// insets change any other way (an edit, a fit, a restored project).
+interface RequestedInsets {
+  margins: PageInsets;
+  mapFrame: PageInsets;
+  appliedMargins: PageInsets;
+  appliedMapFrame: PageInsets;
+}
+let requestedInsets: RequestedInsets | null = null;
 
 const { state, actions, getState } = createToolStore<
   FormatState,
   FormatActions
 >(
   DEFAULT_STATE,
-  (s) => ({
-    setMode: (mode: FormatMode) => {
-      s.mode = mode;
-    },
-    setModel: (model: PageModel) => {
-      s.model = model;
-      const preset = PAGE_PRESETS[model];
-      if (preset) {
-        recordPageResize(
-          { width: s.width, height: s.height },
-          { width: preset.width, height: preset.height }
-        );
-        s.width = preset.width;
-        s.height = preset.height;
-        s.margins = clampPageMargins(s.margins, s.margins, preset);
-      }
-    },
-    setSize: (width: number, height: number) => {
-      const next = { width: Math.max(1, width), height: Math.max(1, height) };
+  (s) => {
+    const applySize = (next: { width: number; height: number }): void => {
       recordPageResize({ width: s.width, height: s.height }, next);
       s.width = next.width;
       s.height = next.height;
-      s.margins = clampPageMargins(s.margins, s.margins, next);
-    },
-    setColor: (color) => {
-      s.color = normalizePageColor(color);
-    },
-    setMargins: (margins) => {
-      s.margins = clampPageMargins(margins, s.margins, s);
-      marginsEditId += 1;
-    },
-    toggleGrid: () => {
-      s.gridEnabled = !s.gridEnabled;
-    }
-  }),
+      const margins =
+        requestedInsets &&
+        arePageInsetsEqual(requestedInsets.appliedMargins, s.margins)
+          ? requestedInsets.margins
+          : { ...s.margins };
+      const mapFrame =
+        requestedInsets &&
+        arePageInsetsEqual(requestedInsets.appliedMapFrame, s.mapFrame)
+          ? requestedInsets.mapFrame
+          : { ...s.mapFrame };
+      s.margins = clampPageInsets(margins, margins, next);
+      s.mapFrame = clampPageInsets(mapFrame, mapFrame, next);
+      requestedInsets = {
+        margins,
+        mapFrame,
+        appliedMargins: { ...s.margins },
+        appliedMapFrame: { ...s.mapFrame }
+      };
+    };
+
+    return {
+      setMode: (mode: FormatMode) => {
+        s.mode = mode;
+        // A custom size is kept when leaving the preset, but the preset tab
+        // always shows the page its selected model describes.
+        const preset = PAGE_PRESETS[s.model];
+        if (mode === FormatMode.PRESET && preset) {
+          applySize({ width: preset.width, height: preset.height });
+        }
+      },
+      setModel: (model: PageModel) => {
+        s.model = model;
+        const preset = PAGE_PRESETS[model];
+        if (preset) {
+          applySize({ width: preset.width, height: preset.height });
+        }
+      },
+      setSize: (width: number, height: number) => {
+        applySize({ width: Math.max(1, width), height: Math.max(1, height) });
+      },
+      setColor: (color) => {
+        s.color = normalizePageColor(color);
+      },
+      setMargins: (margins) => {
+        s.margins = clampPageInsets(margins, s.margins, s);
+      },
+      setMapFrame: (mapFrame) => {
+        s.mapFrame = clampPageInsets(mapFrame, s.mapFrame, s);
+        mapFrameEditId += 1;
+      },
+      fitMapFrame: (mapFrame) => {
+        s.mapFrame = clampPageInsets(mapFrame, s.mapFrame, s);
+      },
+      toggleGrid: () => {
+        s.gridEnabled = !s.gridEnabled;
+      }
+    };
+  },
   { key: 'format' }
 );
 

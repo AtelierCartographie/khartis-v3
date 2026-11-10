@@ -18,11 +18,9 @@
   import {
     fuzzyMatch,
     highlightSegments
-  } from 'carbon-components-svelte/src/utils/fuzzyMatch.js';
+  } from 'carbon-components-svelte/src/utils/fuzzy-match.js';
   import {
     CheckmarkFilled,
-    ChevronDown,
-    ChevronUp,
     Error as NotAllowed,
     ErrorFilled,
     MagicWandFilled,
@@ -34,12 +32,16 @@
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
   import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
+  import { joinControlStore, type JoinPanelCategory } from '$lib/features/map';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import JoinCategoryHeader from '$lib/features/commons/components/join-category-header.svelte';
   import type {
     EntityValidation,
     IgnoredEntity,
     JoinCandidate
   } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+  import { untrack } from 'svelte';
 
   type HeaderSlot =
     | 'info'
@@ -121,6 +123,9 @@
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
     basemapAliasesByValue?: Record<string, BasemapAlias[]>;
+    // Rows hold the variant each value matched, often not in the UI
+    // language: they wait for the displayed values instead of switching.
+    basemapValuesLoading?: boolean;
     onRequestBasemapValues?: () => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
@@ -154,6 +159,7 @@
     duplicateLines = [],
     ignoredEntities = [],
     basemapAliasesByValue = {},
+    basemapValuesLoading = false,
     onRequestBasemapValues,
     onFinalizeJoin,
     onManualCorrection,
@@ -198,6 +204,10 @@
     }
     return values;
   });
+
+  const availableBasemapValueSet = $derived.by(
+    () => new Set<string>(availableBasemapValues)
+  );
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
@@ -507,7 +517,16 @@
   );
   const comboIdPrefix = $derived(isNarrow ? 'join-sm' : 'join');
 
-  const clearedJoinedRows = new SvelteSet<string>();
+  // A joined value whose entity the user cleared is no longer joined: the map
+  // and the Visualize button follow it until it gets an entity or is ignored.
+  const clearedJoinedRows = $derived(
+    joinControlStore.getClearedValues(datasetsStore.selectedDatasetId ?? '')
+  );
+  function setJoinedRowCleared(dataValue: string, cleared: boolean): void {
+    const datasetId = datasetsStore.selectedDatasetId;
+    if (datasetId)
+      joinControlStore.setJoinCleared(datasetId, dataValue, cleared);
+  }
 
   let actionTooltipTrigger = $state<HTMLElement | null>(null);
   const actionTooltipText = $derived(
@@ -580,6 +599,15 @@
 
   const pendingUnrecognizedSelections = new SvelteMap<string, string>();
 
+  // A value joined by another row since it was picked leaves the options, so
+  // its combo box cannot show it: it is no longer a validatable selection.
+  function getPendingUnrecognizedSelection(entity: string): string | undefined {
+    const value = pendingUnrecognizedSelections.get(entity);
+    return value !== undefined && availableBasemapValueSet.has(value)
+      ? value
+      : undefined;
+  }
+
   function handleUnrecognizedSelect(
     entity: string,
     item: ComboBoxItem | undefined
@@ -593,7 +621,7 @@
   }
 
   function handleUnrecognizedValidate(entity: string): void {
-    const value = pendingUnrecognizedSelections.get(entity);
+    const value = getPendingUnrecognizedSelection(entity);
     if (!value) return;
     pendingUnrecognizedSelections.delete(entity);
     onManualCorrection?.(entity, value);
@@ -710,18 +738,23 @@
     Object.fromEntries(duplicateLines.map((d) => [d.dataValue, d.lines]))
   );
 
-  let joinedExpanded = $state(false);
-  let toVerifyExpanded = $state(true);
-  let duplicatesExpanded = $state(false);
-  let unrecognizedExpanded = $state(false);
-  let ignoredExpanded = $state(false);
+  // One category open at a time, like every accordion of the app.
+  let expandedCategory = $state<JoinPanelCategory | null>('check');
+  const joinedExpanded = $derived(expandedCategory === 'matched');
+  const toVerifyExpanded = $derived(expandedCategory === 'check');
+  const duplicatesExpanded = $derived(expandedCategory === 'duplicate');
+  const unrecognizedExpanded = $derived(expandedCategory === 'unrecognized');
+  const ignoredExpanded = $derived(expandedCategory === 'ignored');
   let footerDismissed = $state(false);
 
   // The buckets are feedback, never a gate: on every join screen a join is
   // valid as soon as one entity is joined. To-verify entities are joined;
   // unrecognized and duplicate ones are only left out.
   const unresolvedCount = $derived(unrecognizedCount + duplicateCount);
-  const showSuccessNotification = $derived(joinedCount > 0 && joinFinalized);
+  const hasClearedJoins = $derived(clearedJoinedRows.size > 0);
+  const showSuccessNotification = $derived(
+    joinedCount > 0 && joinFinalized && !hasClearedJoins
+  );
   const showValidationNotification = $derived(
     joinedCount > 0 && !joinFinalized
   );
@@ -743,19 +776,114 @@
   });
 
   function resetToDefaultExpanded(): void {
-    joinedExpanded = false;
-    toVerifyExpanded = toVerifyCount > 0;
-    duplicatesExpanded = false;
-    unrecognizedExpanded = false;
-    ignoredExpanded = false;
+    expandedCategory = toVerifyCount > 0 ? 'check' : null;
   }
 
-  function toggleJoined(): void {
-    const nextExpanded = !joinedExpanded;
-    joinedExpanded = nextExpanded;
-    if (nextExpanded && basemapValues.length === 0) {
+  let sectionElement = $state<HTMLDivElement | null>(null);
+
+  function isCategoryExpanded(category: JoinPanelCategory): boolean {
+    return expandedCategory === category;
+  }
+
+  function setCategoryExpanded(
+    category: JoinPanelCategory,
+    expanded: boolean
+  ): void {
+    if (expanded) {
+      expandedCategory = category;
+    } else if (expandedCategory === category) {
+      expandedCategory = null;
+    }
+    if (
+      expanded &&
+      (category === 'matched' || category === 'unrecognized') &&
+      basemapValues.length === 0
+    ) {
       onRequestBasemapValues?.();
     }
+  }
+
+  function toggleCategory(category: JoinPanelCategory): void {
+    setCategoryExpanded(category, !isCategoryExpanded(category));
+  }
+
+  $effect(() => () => {
+    joinControlStore.setHoverTarget(null);
+  });
+
+  // The map shows the join as the user scrolls down to it: it grows visible
+  // while this section rises through the panel, then stays.
+  const REVEAL_SCROLL_SPAN = 0.6;
+
+  function findScrollParent(element: HTMLElement): HTMLElement | null {
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const { overflowY } = getComputedStyle(node);
+      if (overflowY === 'auto' || overflowY === 'scroll') return node;
+    }
+    return null;
+  }
+
+  $effect(() => {
+    const element = sectionElement;
+    const datasetId = datasetsStore.selectedDatasetId;
+    if (!element || !datasetId) return;
+    const scroller = findScrollParent(element);
+    if (!scroller) {
+      untrack(() => joinControlStore.completeReveal(datasetId));
+      return;
+    }
+
+    const update = () => {
+      if (joinControlStore.getRevealProgress(datasetId) >= 1) return;
+      const view = scroller.getBoundingClientRect();
+      const top = element.getBoundingClientRect().top;
+      const progress = (view.bottom - top) / (view.height * REVEAL_SCROLL_SPAN);
+      joinControlStore.setRevealProgress(datasetId, progress);
+      const isAtEnd =
+        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      if (progress > 0 && isAtEnd) joinControlStore.completeReveal(datasetId);
+    };
+    untrack(update);
+    scroller.addEventListener('scroll', update, { passive: true });
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(scroller);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      resizeObserver.disconnect();
+    };
+  });
+
+  // The linked variable is chosen at the geolocation step: its badge leads
+  // back to that field.
+  function showLinkedVariableField(): void {
+    const step = document.getElementById('geolocation-step');
+    if (!step) return;
+    step.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    step
+      .querySelector<HTMLInputElement>('.geocode-field input')
+      ?.focus({ preventScroll: true });
+  }
+
+  // Hovering or focusing a value outlines its territory on the map.
+  function mapHoverValue(node: HTMLElement, dataValue: string) {
+    let value = dataValue;
+    const show = () => joinControlStore.setHoverTarget({ values: [value] });
+    const hide = () => joinControlStore.setHoverTarget(null);
+    node.addEventListener('pointerenter', show);
+    node.addEventListener('pointerleave', hide);
+    node.addEventListener('focusin', show);
+    node.addEventListener('focusout', hide);
+    return {
+      update(nextValue: string) {
+        value = nextValue;
+      },
+      destroy() {
+        node.removeEventListener('pointerenter', show);
+        node.removeEventListener('pointerleave', hide);
+        node.removeEventListener('focusin', show);
+        node.removeEventListener('focusout', hide);
+      }
+    };
   }
 
   $effect(() => {
@@ -774,14 +902,6 @@
       onRequestJoinedEntities?.();
     }
   });
-
-  function toggleUnrecognized(): void {
-    const nextExpanded = !unrecognizedExpanded;
-    unrecognizedExpanded = nextExpanded;
-    if (nextExpanded && basemapValues.length === 0) {
-      onRequestBasemapValues?.();
-    }
-  }
 
   let hasInitializedExpanded = $state(false);
   let notificationSnapshot = $state<NotificationSnapshot>({
@@ -802,8 +922,13 @@
   });
 
   $effect(() => {
-    if (hasInitializedExpanded && !loading && toVerifyCount === 0) {
-      toVerifyExpanded = false;
+    if (
+      hasInitializedExpanded &&
+      !loading &&
+      toVerifyCount === 0 &&
+      expandedCategory === 'check'
+    ) {
+      expandedCategory = null;
     }
   });
 
@@ -839,6 +964,7 @@
 
   function handleIgnore(entries: IgnoredEntity[]): void {
     if (entries.length === 0) return;
+    for (const entry of entries) setJoinedRowCleared(entry.dataValue, false);
     const nextIgnoredCount = ignoredCount + entries.length;
     onIgnoreEntities?.(entries);
     if (entries.length > 1) {
@@ -971,7 +1097,12 @@
     <div class="table-header-data">
       <span class="table-header-label">{m.join_data_column()}</span>
       {#if linkedVariableName}
-        <VariableBadge label={linkedVariableName} type="geo-ref" />
+        <VariableBadge
+          label={linkedVariableName}
+          type="geo-ref"
+          ariaLabel={m.join_linked_variable_edit()}
+          onclick={showLinkedVariableField}
+        />
       {/if}
     </div>
     {#if relation}
@@ -1017,6 +1148,7 @@
 {/snippet}
 
 <div
+  bind:this={sectionElement}
   class="join-assisted-section"
   class:is-narrow={isNarrow}
   bind:clientWidth={sectionWidth}
@@ -1030,8 +1162,10 @@
     {ariaLiveMessage}
   </div>
   <div class="section-header">
-    <span class="section-title">{m.section_join_assisted()}</span>
-    <span class="section-header-icon">
+    <span class="section-title kh-thinking-text"
+      >{m.section_join_assisted()}</span
+    >
+    <span class="section-header-icon kh-thinking-icon">
       <MagicWandFilled size={20} />
     </span>
     <InfoPopover text={m.join_assisted_info()} />
@@ -1043,129 +1177,316 @@
     use:actionTooltips
   >
     <div class="category-rows">
-      <div class="category-row category-row-joined">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={toggleJoined}
-          aria-expanded={joinedExpanded}
-        >
-          <span class="category-icon icon-success">
-            <CheckmarkFilled size={20} />
-          </span>
-          <div class="category-count count-success">
-            {formatValue(joinedCount)}
-          </div>
-          <span class="category-label label-success"
-            >{isSingularCount(joinedCount)
+      {#if joinedCount > 0}
+        <div class="category-row category-row-joined">
+          <JoinCategoryHeader
+            tone="success"
+            icon={CheckmarkFilled}
+            count={joinedCount}
+            label={isSingularCount(joinedCount)
               ? m.join_entities_joined_one()
-              : m.join_entities_joined()}</span
-          >
-          <span class="category-chevron">
-            {#if joinedExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if joinedExpanded}
-          <div class="category-body">
-            {#if joinedEntitiesList.length > 0}
-              <div class="join-table join-table-success">
+              : m.join_entities_joined()}
+            expanded={isCategoryExpanded('matched')}
+            onclick={() => toggleCategory('matched')}
+          />
+          {#if joinedExpanded}
+            <div class="category-body">
+              {#if joinedEntitiesList.length > 0}
+                <div class="join-table join-table-success">
+                  {@render tableHeader(
+                    m.join_basemap_column(),
+                    joinedHeaderSlots,
+                    '='
+                  )}
+                  <div class="join-table-scroll" bind:this={joinedScrollEl}>
+                    {#each joinedEntitiesList as row, joinedIndex (row.dataValue)}
+                      {@const joinedDisplayedValue =
+                        resolveDisplayedBasemapValue(row.basemapValue)}
+                      {@const joinedCleared = clearedJoinedRows.has(
+                        row.dataValue
+                      )}
+                      {@const joinedTooltip = joinedCleared
+                        ? buildRowTooltip(undefined)
+                        : buildRowTooltip(
+                            row.basemapValue,
+                            row.otherIdentifiers
+                          )}
+                      <div
+                        class="table-row"
+                        use:observeRow={row.dataValue}
+                        use:mapHoverValue={row.dataValue}
+                      >
+                        <div class="table-cell cell-data" title={row.dataValue}>
+                          {row.dataValue}
+                        </div>
+                        <div class="table-cell cell-equals">=</div>
+                        <div class="table-cell cell-select" use:titleMenuToggle>
+                          {#if visibleJoinedRows.has(row.dataValue) && !basemapValuesLoading}
+                            {@const joinedRowOptions = buildJoinedRowOptions(
+                              row.basemapValue
+                            )}
+                            {#key joinedValueSignature}
+                              <ComboBox
+                                translateWithId={translateCarbonId}
+                                translateWithIdSelection={translateCarbonId}
+                                portalMenu
+                                autoHighlight="first-match"
+                                id={`${comboIdPrefix}-joined-${joinedIndex}`}
+                                items={joinedRowOptions}
+                                selectedId={joinedCleared
+                                  ? undefined
+                                  : joinedDisplayedValue}
+                                placeholder={m.join_unrecognized_correction_placeholder()}
+                                {...{ title: joinedDisplayedValue }}
+                                labelText={m.join_select_label_joined({
+                                  entity: row.dataValue
+                                })}
+                                hideLabel
+                                size="sm"
+                                shouldFilterItem={shouldFilterBasemapItem}
+                                on:input={(e) =>
+                                  setActiveComboQuery(
+                                    `joined-${row.dataValue}`,
+                                    e
+                                  )}
+                                on:select={(e) => {
+                                  activeComboQuery = null;
+                                  const item = e.detail.selectedItem as
+                                    ComboBoxItem | undefined;
+                                  const nextValue = item?.text;
+                                  if (nextValue) {
+                                    setJoinedRowCleared(row.dataValue, false);
+                                  }
+                                  if (
+                                    nextValue &&
+                                    nextValue !== joinedDisplayedValue &&
+                                    onManualCorrection
+                                  ) {
+                                    onManualCorrection(
+                                      row.dataValue,
+                                      nextValue
+                                    );
+                                    announce(
+                                      m.join_announce_remapped({
+                                        entity: row.dataValue
+                                      })
+                                    );
+                                  }
+                                }}
+                                invalid={joinedCleared}
+                                on:clear={() =>
+                                  setJoinedRowCleared(row.dataValue, true)}
+                                let:item
+                              >
+                                {@render comboItemContent(
+                                  item as ComboBoxItem,
+                                  getActiveComboQuery(`joined-${row.dataValue}`)
+                                )}
+                              </ComboBox>
+                            {/key}
+                          {:else}
+                            <div class="select-placeholder" aria-hidden="true">
+                              {basemapValuesLoading || joinedCleared
+                                ? ''
+                                : joinedDisplayedValue}
+                            </div>
+                          {/if}
+                        </div>
+                        <div class="row-actions">
+                          <span class="row-action row-action-info">
+                            <InfoPopover
+                              text={joinedTooltip.text}
+                              tags={joinedTooltip.tags}
+                              disabled={joinedTooltip.disabled}
+                              title={m.join_info_basemap_title()}
+                            />
+                          </span>
+                          <button
+                            type="button"
+                            class="row-action"
+                            aria-label={m.join_action_ignore()}
+                            data-tooltip={m.join_action_ignore()}
+                            onclick={() =>
+                              handleIgnore([
+                                {
+                                  dataValue: row.dataValue,
+                                  source: 'joined',
+                                  basemapValue: row.basemapValue
+                                }
+                              ])}
+                          >
+                            <NotAllowed size={20} />
+                          </button>
+                          <button
+                            type="button"
+                            class="row-action row-action-validate row-action-disabled"
+                            aria-label={m.join_action_validated()}
+                            aria-disabled="true"
+                            data-tooltip={m.join_action_validated()}
+                          >
+                            <CheckmarkFilled size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                  {#if showJoinedPagination}
+                    <Pagination
+                      page={joinedPage}
+                      pageSize={joinedPageSize}
+                      pageSizes={[joinedPageSize]}
+                      totalItems={joinedCount}
+                      pageSizeInputDisabled
+                      size="sm"
+                      forwardText={m.join_pagination_next()}
+                      backwardText={m.join_pagination_previous()}
+                      itemRangeText={(min, max, total) =>
+                        m.join_pagination_item_range({
+                          min: formatValue(min),
+                          max: formatValue(max),
+                          total: formatValue(total)
+                        })}
+                      pageRangeText={(_current, total) =>
+                        m.join_pagination_page_range({
+                          total: formatValue(total)
+                        })}
+                      on:update={(event) => {
+                        if (event.detail.page !== joinedPage) {
+                          onJoinedPageChange?.(event.detail.page);
+                        }
+                      }}
+                    />
+                  {/if}
+                </div>
+              {:else}
+                <p class="category-body-text">
+                  {m.join_entities_joined_desc()}
+                </p>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if toVerifyCount > 0}
+        <div class="category-row category-row-verify">
+          <JoinCategoryHeader
+            tone="warning"
+            icon={WarningFilled}
+            count={toVerifyCount}
+            label={isSingularCount(toVerifyCount)
+              ? m.join_entities_to_verify_one()
+              : m.join_entities_to_verify()}
+            expanded={isCategoryExpanded('check')}
+            onclick={() => toggleCategory('check')}
+          />
+          {#if toVerifyExpanded}
+            <div class="category-body">
+              <div class="join-table join-table-warning">
                 {@render tableHeader(
                   m.join_basemap_column(),
-                  joinedHeaderSlots,
-                  '='
+                  toVerifyHeaderSlots,
+                  '≈'
                 )}
-                <div class="join-table-scroll" bind:this={joinedScrollEl}>
-                  {#each joinedEntitiesList as row, joinedIndex (row.dataValue)}
-                    {@const joinedDisplayedValue = resolveDisplayedBasemapValue(
-                      row.basemapValue
+                <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
+                  {#each deduplicatedJoinRows as row, i (i)}
+                    {@const rowKey = getToVerifyRowKey(i)}
+                    {@const selectedMapping = getToVerifySelectedMapping(
+                      rowKey,
+                      row.selectedMapping
                     )}
-                    {@const joinedCleared = clearedJoinedRows.has(
-                      row.dataValue
+                    {@const selectedCandidate = getSelectedCandidate(
+                      row,
+                      selectedMapping
                     )}
-                    {@const joinedTooltip = joinedCleared
-                      ? buildRowTooltip(undefined)
-                      : buildRowTooltip(row.basemapValue, row.otherIdentifiers)}
-                    <div class="table-row" use:observeRow={row.dataValue}>
+                    {@const verifyTooltip = buildToVerifyTooltip(
+                      selectedMapping,
+                      selectedCandidate
+                    )}
+                    <div
+                      class="table-row"
+                      use:observeToVerifyRow={rowKey}
+                      use:mapHoverValue={row.dataValue}
+                    >
                       <div class="table-cell cell-data" title={row.dataValue}>
                         {row.dataValue}
                       </div>
-                      <div class="table-cell cell-equals">=</div>
+                      <div
+                        class="table-cell cell-equals cell-equals-approx"
+                        aria-label={m.join_approximate_indicator()}
+                      >
+                        <span class="approx-symbol" aria-hidden="true">≈</span>
+                      </div>
                       <div class="table-cell cell-select" use:titleMenuToggle>
-                        {#if visibleJoinedRows.has(row.dataValue)}
-                          {@const joinedRowOptions = buildJoinedRowOptions(
-                            row.basemapValue
+                        {#if visibleToVerifyRows.has(rowKey) && !basemapValuesLoading}
+                          {@const toVerifyItems = buildToVerifyItems(
+                            row.basemapOptions
                           )}
-                          {#key joinedValueSignature}
+                          {#key basemapComboBoxItems}
                             <ComboBox
                               translateWithId={translateCarbonId}
                               translateWithIdSelection={translateCarbonId}
                               portalMenu
                               autoHighlight="first-match"
-                              id={`${comboIdPrefix}-joined-${joinedIndex}`}
-                              items={joinedRowOptions}
-                              selectedId={joinedCleared
-                                ? undefined
-                                : joinedDisplayedValue}
+                              id={`${comboIdPrefix}-${i}`}
+                              items={toVerifyItems}
+                              selectedId={selectedMapping
+                                ? resolveDisplayedBasemapValue(selectedMapping)
+                                : undefined}
+                              {...{
+                                title:
+                                  resolveDisplayedBasemapValue(selectedMapping)
+                              }}
                               placeholder={m.join_unrecognized_correction_placeholder()}
-                              {...{ title: joinedDisplayedValue }}
-                              labelText={m.join_select_label_joined({
+                              labelText={m.join_select_label_to_verify({
                                 entity: row.dataValue
                               })}
                               hideLabel
                               size="sm"
-                              shouldFilterItem={shouldFilterBasemapItem}
-                              on:input={(e) =>
-                                setActiveComboQuery(
-                                  `joined-${row.dataValue}`,
-                                  e
+                              shouldFilterItem={(item, value) =>
+                                value ===
+                                  resolveDisplayedBasemapValue(
+                                    selectedMapping
+                                  ) || shouldFilterBasemapItem(item, value)}
+                              on:input={(e) => setActiveComboQuery(rowKey, e)}
+                              on:select={(e) =>
+                                handleToVerifyMappingChange(
+                                  rowKey,
+                                  i,
+                                  row.selectedMapping,
+                                  (
+                                    e.detail.selectedItem as
+                                      ComboBoxItem | undefined
+                                  )?.id
                                 )}
-                              on:select={(e) => {
+                              on:clear={() => {
                                 activeComboQuery = null;
-                                const item = e.detail.selectedItem as
-                                  ComboBoxItem | undefined;
-                                const nextValue = item?.text;
-                                if (nextValue) {
-                                  clearedJoinedRows.delete(row.dataValue);
-                                }
-                                if (
-                                  nextValue &&
-                                  nextValue !== joinedDisplayedValue &&
-                                  onManualCorrection
-                                ) {
-                                  onManualCorrection(row.dataValue, nextValue);
-                                  announce(
-                                    m.join_announce_remapped({
-                                      entity: row.dataValue
-                                    })
-                                  );
-                                }
+                                toVerifySelectedMappings[rowKey] = '';
                               }}
-                              on:clear={() =>
-                                clearedJoinedRows.add(row.dataValue)}
                               let:item
                             >
                               {@render comboItemContent(
                                 item as ComboBoxItem,
-                                getActiveComboQuery(`joined-${row.dataValue}`)
+                                getActiveComboQuery(rowKey)
                               )}
                             </ComboBox>
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
-                            {joinedDisplayedValue}
+                            {basemapValuesLoading || !row.selectedMapping
+                              ? ''
+                              : resolveDisplayedBasemapValue(
+                                  row.selectedMapping
+                                )}
                           </div>
                         {/if}
                       </div>
                       <div class="row-actions">
                         <span class="row-action row-action-info">
                           <InfoPopover
-                            text={joinedTooltip.text}
-                            tags={joinedTooltip.tags}
-                            disabled={joinedTooltip.disabled}
+                            text={verifyTooltip.text}
+                            tags={verifyTooltip.tags}
+                            disabled={verifyTooltip.disabled}
                             title={m.join_info_basemap_title()}
                           />
                         </span>
@@ -1178,8 +1499,8 @@
                             handleIgnore([
                               {
                                 dataValue: row.dataValue,
-                                source: 'joined',
-                                basemapValue: row.basemapValue
+                                source: 'to_verify',
+                                basemapValue: selectedMapping
                               }
                             ])}
                         >
@@ -1187,10 +1508,20 @@
                         </button>
                         <button
                           type="button"
-                          class="row-action row-action-validate row-action-disabled"
-                          aria-label={m.join_action_validated()}
-                          aria-disabled="true"
-                          data-tooltip={m.join_action_validated()}
+                          class="row-action row-action-validate"
+                          class:row-action-disabled={!selectedMapping}
+                          aria-label={m.join_action_validate()}
+                          aria-disabled={!selectedMapping || undefined}
+                          data-tooltip={selectedMapping
+                            ? m.join_action_validate()
+                            : m.join_action_validate_disabled()}
+                          onclick={() =>
+                            handleValidate([
+                              {
+                                dataValue: row.dataValue,
+                                basemapValue: selectedMapping
+                              }
+                            ])}
                         >
                           <CheckmarkFilled size={20} />
                         </button>
@@ -1198,422 +1529,194 @@
                     </div>
                   {/each}
                 </div>
-                {#if showJoinedPagination}
-                  <Pagination
-                    page={joinedPage}
-                    pageSize={joinedPageSize}
-                    pageSizes={[joinedPageSize]}
-                    totalItems={joinedCount}
-                    pageSizeInputDisabled
-                    size="sm"
-                    forwardText={m.join_pagination_next()}
-                    backwardText={m.join_pagination_previous()}
-                    itemRangeText={(min, max, total) =>
-                      m.join_pagination_item_range({
-                        min: formatValue(min),
-                        max: formatValue(max),
-                        total: formatValue(total)
-                      })}
-                    pageRangeText={(_current, total) =>
-                      m.join_pagination_page_range({
-                        total: formatValue(total)
-                      })}
-                    on:update={(event) => {
-                      if (event.detail.page !== joinedPage) {
-                        onJoinedPageChange?.(event.detail.page);
-                      }
-                    }}
-                  />
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if unrecognizedCount > 0 || showFuzzyPassOffer}
+        <div class="category-row category-row-unrecognized">
+          <JoinCategoryHeader
+            tone="error"
+            icon={ErrorFilled}
+            count={unrecognizedCount}
+            label={isSingularCount(unrecognizedCount)
+              ? m.join_entities_unrecognized_one()
+              : m.join_entities_unrecognized()}
+            expanded={isCategoryExpanded('unrecognized')}
+            onclick={() => toggleCategory('unrecognized')}
+          />
+          {#if showFuzzyPassOffer}
+            <div class="fuzzy-pass-offer">
+              <InlineNotification
+                kind="info"
+                lowContrast
+                hideCloseButton
+                title={m.join_fuzzy_pass_title()}
+                subtitle={(isSingularCount(fuzzyPassEstimate?.candidates ?? 0)
+                  ? m.join_fuzzy_pass_subtitle_one
+                  : m.join_fuzzy_pass_subtitle)({
+                  count: formatValue(fuzzyPassEstimate?.candidates ?? 0),
+                  seconds: fuzzyPassSeconds
+                })}
+              />
+              <div class="fuzzy-pass-actions">
+                {#if fuzzyPassRunning}
+                  <InlineLoading description={m.join_fuzzy_pass_running()} />
+                {:else}
+                  <Button
+                    kind="tertiary"
+                    size="small"
+                    icon={MagicWandFilled}
+                    on:click={() => onRunFullFuzzyPass?.()}
+                  >
+                    {m.join_fuzzy_pass_action()}
+                  </Button>
                 {/if}
               </div>
-            {:else}
-              <p class="category-body-text">
-                {m.join_entities_joined_desc()}
-              </p>
-            {/if}
-          </div>
-        {/if}
-      </div>
-
-      <div class="category-row category-row-verify">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
-          aria-expanded={toVerifyExpanded}
-        >
-          <span class="category-icon icon-warning">
-            <WarningFilled size={20} />
-          </span>
-          <div class="category-count count-warning">
-            {formatValue(toVerifyCount)}
-          </div>
-          <span class="category-label label-warning"
-            >{isSingularCount(toVerifyCount)
-              ? m.join_entities_to_verify_one()
-              : m.join_entities_to_verify()}</span
-          >
-          <span class="category-chevron">
-            {#if toVerifyExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if toVerifyExpanded}
-          <div class="category-body">
-            <div class="join-table join-table-warning">
-              {@render tableHeader(
-                m.join_basemap_column(),
-                toVerifyHeaderSlots,
-                '≈'
-              )}
-              <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
-                {#each deduplicatedJoinRows as row, i (i)}
-                  {@const rowKey = getToVerifyRowKey(i)}
-                  {@const selectedMapping = getToVerifySelectedMapping(
-                    rowKey,
-                    row.selectedMapping
-                  )}
-                  {@const selectedCandidate = getSelectedCandidate(
-                    row,
-                    selectedMapping
-                  )}
-                  {@const verifyTooltip = buildToVerifyTooltip(
-                    selectedMapping,
-                    selectedCandidate
-                  )}
-                  <div class="table-row" use:observeToVerifyRow={rowKey}>
-                    <div class="table-cell cell-data" title={row.dataValue}>
-                      {row.dataValue}
-                    </div>
-                    <div
-                      class="table-cell cell-equals cell-equals-approx"
-                      aria-label={m.join_approximate_indicator()}
-                    >
-                      <span class="approx-symbol" aria-hidden="true">≈</span>
-                    </div>
-                    <div class="table-cell cell-select" use:titleMenuToggle>
-                      {#if visibleToVerifyRows.has(rowKey)}
-                        {@const toVerifyItems = buildToVerifyItems(
-                          row.basemapOptions
-                        )}
-                        {#key basemapComboBoxItems}
-                          <ComboBox
-                            translateWithId={translateCarbonId}
-                            translateWithIdSelection={translateCarbonId}
-                            portalMenu
-                            autoHighlight="first-match"
-                            id={`${comboIdPrefix}-${i}`}
-                            items={toVerifyItems}
-                            selectedId={selectedMapping
-                              ? resolveDisplayedBasemapValue(selectedMapping)
-                              : undefined}
-                            {...{
-                              title:
-                                resolveDisplayedBasemapValue(selectedMapping)
-                            }}
-                            placeholder={m.join_unrecognized_correction_placeholder()}
-                            labelText={m.join_select_label_to_verify({
-                              entity: row.dataValue
-                            })}
-                            hideLabel
-                            size="sm"
-                            shouldFilterItem={(item, value) =>
-                              value ===
-                                resolveDisplayedBasemapValue(selectedMapping) ||
-                              shouldFilterBasemapItem(item, value)}
-                            on:input={(e) => setActiveComboQuery(rowKey, e)}
-                            on:select={(e) =>
-                              handleToVerifyMappingChange(
-                                rowKey,
-                                i,
-                                row.selectedMapping,
-                                (
-                                  e.detail.selectedItem as
-                                    ComboBoxItem | undefined
-                                )?.id
-                              )}
-                            on:clear={() => {
-                              activeComboQuery = null;
-                              toVerifySelectedMappings[rowKey] = '';
-                            }}
-                            let:item
-                          >
-                            {@render comboItemContent(
-                              item as ComboBoxItem,
-                              getActiveComboQuery(rowKey)
-                            )}
-                          </ComboBox>
-                        {/key}
-                      {:else}
-                        <div class="select-placeholder" aria-hidden="true">
-                          {row.selectedMapping ?? ''}
-                        </div>
-                      {/if}
-                    </div>
-                    <div class="row-actions">
-                      <span class="row-action row-action-info">
-                        <InfoPopover
-                          text={verifyTooltip.text}
-                          tags={verifyTooltip.tags}
-                          disabled={verifyTooltip.disabled}
-                          title={m.join_info_basemap_title()}
-                        />
-                      </span>
-                      <button
-                        type="button"
-                        class="row-action"
-                        aria-label={m.join_action_ignore()}
-                        data-tooltip={m.join_action_ignore()}
-                        onclick={() =>
-                          handleIgnore([
-                            {
-                              dataValue: row.dataValue,
-                              source: 'to_verify',
-                              basemapValue: selectedMapping
-                            }
-                          ])}
-                      >
-                        <NotAllowed size={20} />
-                      </button>
-                      <button
-                        type="button"
-                        class="row-action row-action-validate"
-                        class:row-action-disabled={!selectedMapping}
-                        aria-label={m.join_action_validate()}
-                        aria-disabled={!selectedMapping || undefined}
-                        data-tooltip={selectedMapping
-                          ? m.join_action_validate()
-                          : m.join_action_validate_disabled()}
-                        onclick={() =>
-                          handleValidate([
-                            {
-                              dataValue: row.dataValue,
-                              basemapValue: selectedMapping
-                            }
-                          ])}
-                      >
-                        <CheckmarkFilled size={20} />
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
             </div>
-          </div>
-        {/if}
-      </div>
-
-      <div class="category-row category-row-unrecognized">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={toggleUnrecognized}
-          aria-expanded={unrecognizedExpanded}
-        >
-          <span class="category-icon icon-error">
-            <ErrorFilled size={20} />
-          </span>
-          <div class="category-count count-error">
-            {formatValue(unrecognizedCount)}
-          </div>
-          <span class="category-label label-error"
-            >{isSingularCount(unrecognizedCount)
-              ? m.join_entities_unrecognized_one()
-              : m.join_entities_unrecognized()}</span
-          >
-          <span class="category-chevron">
-            {#if unrecognizedExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if showFuzzyPassOffer}
-          <div class="fuzzy-pass-offer">
-            <InlineNotification
-              kind="info"
-              lowContrast
-              hideCloseButton
-              title={m.join_fuzzy_pass_title()}
-              subtitle={(isSingularCount(fuzzyPassEstimate?.candidates ?? 0)
-                ? m.join_fuzzy_pass_subtitle_one
-                : m.join_fuzzy_pass_subtitle)({
-                count: formatValue(fuzzyPassEstimate?.candidates ?? 0),
-                seconds: fuzzyPassSeconds
-              })}
-            />
-            <div class="fuzzy-pass-actions">
-              {#if fuzzyPassRunning}
-                <InlineLoading description={m.join_fuzzy_pass_running()} />
-              {:else}
-                <Button
-                  kind="tertiary"
-                  size="small"
-                  icon={MagicWandFilled}
-                  on:click={() => onRunFullFuzzyPass?.()}
-                >
-                  {m.join_fuzzy_pass_action()}
-                </Button>
-              {/if}
-            </div>
-          </div>
-        {/if}
-        {#if unrecognizedExpanded && unrecognizedCount > 0}
-          <div class="category-body">
-            <div class="join-table join-table-error">
-              {@render tableHeader(
-                m.join_basemap_column(),
-                unrecognizedHeaderSlots,
-                '='
-              )}
-              <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
-                {#each unknowns as entity, unknownIndex (entity)}
-                  {@const hasPendingSelection =
-                    pendingUnrecognizedSelections.has(entity)}
-                  {@const unrecognizedTooltip = buildRowTooltip(
-                    pendingUnrecognizedSelections.get(entity)
-                  )}
-                  <div class="table-row" use:observeUnrecognizedRow={entity}>
-                    <div class="table-cell cell-data" title={entity}>
-                      {entity}
-                    </div>
-                    <div class="table-cell cell-equals">=</div>
-                    <div class="table-cell cell-select" use:titleMenuToggle>
-                      {#if visibleUnrecognizedRows.has(entity)}
-                        {#if basemapComboBoxItems.length > 0 && onManualCorrection}
-                          {#key basemapComboBoxItems}
-                            <ComboBox
-                              translateWithId={translateCarbonId}
-                              translateWithIdSelection={translateCarbonId}
-                              portalMenu
-                              autoHighlight="first-match"
-                              id={`${comboIdPrefix}-unrecognized-${unknownIndex}`}
-                              items={basemapComboBoxItems}
-                              placeholder={m.join_unrecognized_correction_placeholder()}
+          {/if}
+          {#if unrecognizedExpanded && unrecognizedCount > 0}
+            <div class="category-body">
+              <div class="join-table join-table-error">
+                {@render tableHeader(
+                  m.join_basemap_column(),
+                  unrecognizedHeaderSlots,
+                  '='
+                )}
+                <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
+                  {#each unknowns as entity, unknownIndex (entity)}
+                    {@const pendingSelection =
+                      getPendingUnrecognizedSelection(entity)}
+                    {@const hasPendingSelection =
+                      pendingSelection !== undefined}
+                    {@const unrecognizedTooltip =
+                      buildRowTooltip(pendingSelection)}
+                    <div class="table-row" use:observeUnrecognizedRow={entity}>
+                      <div class="table-cell cell-data" title={entity}>
+                        {entity}
+                      </div>
+                      <div class="table-cell cell-equals">=</div>
+                      <div class="table-cell cell-select" use:titleMenuToggle>
+                        {#if visibleUnrecognizedRows.has(entity)}
+                          {#if basemapComboBoxItems.length > 0 && onManualCorrection}
+                            {#key basemapComboBoxItems}
+                              <ComboBox
+                                translateWithId={translateCarbonId}
+                                translateWithIdSelection={translateCarbonId}
+                                portalMenu
+                                autoHighlight="first-match"
+                                id={`${comboIdPrefix}-unrecognized-${unknownIndex}`}
+                                items={basemapComboBoxItems}
+                                selectedId={pendingSelection}
+                                placeholder={m.join_unrecognized_correction_placeholder()}
+                                labelText={m.join_select_label_unrecognized({
+                                  entity
+                                })}
+                                hideLabel
+                                size="sm"
+                                shouldFilterItem={shouldFilterBasemapItem}
+                                on:input={(e) =>
+                                  setActiveComboQuery(
+                                    `unrecognized-${entity}`,
+                                    e
+                                  )}
+                                on:select={(e) =>
+                                  handleUnrecognizedSelect(
+                                    entity,
+                                    e.detail.selectedItem as
+                                      ComboBoxItem | undefined
+                                  )}
+                                on:clear={() =>
+                                  handleUnrecognizedSelect(entity, undefined)}
+                                let:item
+                              >
+                                {@render comboItemContent(
+                                  item as ComboBoxItem,
+                                  getActiveComboQuery(`unrecognized-${entity}`)
+                                )}
+                              </ComboBox>
+                            {/key}
+                          {:else}
+                            <Select
+                              id={`unrecognized-${entity}`}
                               labelText={m.join_select_label_unrecognized({
                                 entity
                               })}
                               hideLabel
                               size="sm"
-                              shouldFilterItem={shouldFilterBasemapItem}
-                              on:input={(e) =>
-                                setActiveComboQuery(
-                                  `unrecognized-${entity}`,
-                                  e
-                                )}
-                              on:select={(e) =>
-                                handleUnrecognizedSelect(
-                                  entity,
-                                  e.detail.selectedItem as
-                                    ComboBoxItem | undefined
-                                )}
-                              on:clear={() =>
-                                handleUnrecognizedSelect(entity, undefined)}
-                              let:item
+                              disabled
                             >
-                              {@render comboItemContent(
-                                item as ComboBoxItem,
-                                getActiveComboQuery(`unrecognized-${entity}`)
-                              )}
-                            </ComboBox>
-                          {/key}
+                              <SelectItem
+                                value=""
+                                text={m.join_unrecognized_correction_placeholder()}
+                              />
+                            </Select>
+                          {/if}
                         {:else}
-                          <Select
-                            id={`unrecognized-${entity}`}
-                            labelText={m.join_select_label_unrecognized({
-                              entity
-                            })}
-                            hideLabel
-                            size="sm"
-                            disabled
-                          >
-                            <SelectItem
-                              value=""
-                              text={m.join_unrecognized_correction_placeholder()}
-                            />
-                          </Select>
+                          <div
+                            class="select-placeholder"
+                            aria-hidden="true"
+                          ></div>
                         {/if}
-                      {:else}
-                        <div
-                          class="select-placeholder"
-                          aria-hidden="true"
-                        ></div>
-                      {/if}
+                      </div>
+                      <div class="row-actions">
+                        <span class="row-action row-action-info">
+                          <InfoPopover
+                            text={unrecognizedTooltip.text}
+                            tags={unrecognizedTooltip.tags}
+                            disabled={unrecognizedTooltip.disabled}
+                            title={m.join_info_basemap_title()}
+                          />
+                        </span>
+                        <button
+                          type="button"
+                          class="row-action"
+                          aria-label={m.join_action_ignore()}
+                          data-tooltip={m.join_action_ignore()}
+                          onclick={() =>
+                            handleIgnore([
+                              { dataValue: entity, source: 'unrecognized' }
+                            ])}
+                        >
+                          <NotAllowed size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          class="row-action row-action-validate"
+                          class:row-action-disabled={!hasPendingSelection}
+                          aria-label={m.join_action_validate()}
+                          aria-disabled={!hasPendingSelection || undefined}
+                          data-tooltip={hasPendingSelection
+                            ? m.join_action_validate()
+                            : m.join_action_validate_disabled()}
+                          onclick={() => handleUnrecognizedValidate(entity)}
+                        >
+                          <CheckmarkFilled size={20} />
+                        </button>
+                      </div>
                     </div>
-                    <div class="row-actions">
-                      <span class="row-action row-action-info">
-                        <InfoPopover
-                          text={unrecognizedTooltip.text}
-                          tags={unrecognizedTooltip.tags}
-                          disabled={unrecognizedTooltip.disabled}
-                          title={m.join_info_basemap_title()}
-                        />
-                      </span>
-                      <button
-                        type="button"
-                        class="row-action"
-                        aria-label={m.join_action_ignore()}
-                        data-tooltip={m.join_action_ignore()}
-                        onclick={() =>
-                          handleIgnore([
-                            { dataValue: entity, source: 'unrecognized' }
-                          ])}
-                      >
-                        <NotAllowed size={20} />
-                      </button>
-                      <button
-                        type="button"
-                        class="row-action row-action-validate"
-                        class:row-action-disabled={!hasPendingSelection}
-                        aria-label={m.join_action_validate()}
-                        aria-disabled={!hasPendingSelection || undefined}
-                        data-tooltip={hasPendingSelection
-                          ? m.join_action_validate()
-                          : m.join_action_validate_disabled()}
-                        onclick={() => handleUnrecognizedValidate(entity)}
-                      >
-                        <CheckmarkFilled size={20} />
-                      </button>
-                    </div>
-                  </div>
-                {/each}
+                  {/each}
+                </div>
               </div>
             </div>
-          </div>
-        {/if}
-      </div>
+          {/if}
+        </div>
+      {/if}
 
       {#if duplicateCount > 0}
         <div class="category-row category-row-duplicates">
-          <button
-            type="button"
-            class="category-row-header"
-            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-            aria-expanded={duplicatesExpanded}
-          >
-            <span class="category-icon icon-warning-alt">
-              <WarningAltFilled size={20} />
-            </span>
-            <div class="category-count count-warning-alt">
-              {formatValue(duplicateCount)}
-            </div>
-            <span class="category-label label-warning-alt"
-              >{isSingularCount(duplicateCount)
-                ? m.join_entities_duplicate_one()
-                : m.join_entities_duplicate()}</span
-            >
-            <span class="category-chevron">
-              {#if duplicatesExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
+          <JoinCategoryHeader
+            tone="error"
+            icon={WarningAltFilled}
+            count={duplicateCount}
+            label={isSingularCount(duplicateCount)
+              ? m.join_entities_duplicate_one()
+              : m.join_entities_duplicate()}
+            expanded={isCategoryExpanded('duplicate')}
+            onclick={() => toggleCategory('duplicate')}
+          />
           {#if duplicatesExpanded}
             <div class="category-body">
               <div class="inline-banner inline-banner-error">
@@ -1622,7 +1725,10 @@
               <div class="join-table join-table-error">
                 {@render tableHeader(m.join_lines_column(), null, null)}
                 {#each duplicates as entity (entity)}
-                  <div class="table-row table-row-lines">
+                  <div
+                    class="table-row table-row-lines"
+                    use:mapHoverValue={entity}
+                  >
                     <div class="table-cell cell-data" title={entity}>
                       {entity}
                     </div>
@@ -1643,31 +1749,16 @@
 
       {#if ignoredCount > 0}
         <div class="category-row category-row-ignored">
-          <button
-            type="button"
-            class="category-row-header"
-            onclick={() => (ignoredExpanded = !ignoredExpanded)}
-            aria-expanded={ignoredExpanded}
-          >
-            <span class="category-icon icon-ignored">
-              <NotAllowed size={20} />
-            </span>
-            <div class="category-count count-ignored">
-              {formatValue(ignoredCount)}
-            </div>
-            <span class="category-label label-ignored"
-              >{isSingularCount(ignoredCount)
-                ? m.join_entities_ignored_one()
-                : m.join_entities_ignored()}</span
-            >
-            <span class="category-chevron">
-              {#if ignoredExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
+          <JoinCategoryHeader
+            tone="ignored"
+            icon={NotAllowed}
+            count={ignoredCount}
+            label={isSingularCount(ignoredCount)
+              ? m.join_entities_ignored_one()
+              : m.join_entities_ignored()}
+            expanded={isCategoryExpanded('ignored')}
+            onclick={() => toggleCategory('ignored')}
+          />
           {#if ignoredExpanded}
             <div class="category-body">
               <div class="inline-banner inline-banner-info">
@@ -1712,7 +1803,15 @@
     </div>
 
     <div class="join-status-zone">
-      {#if displayedNotificationState.showSuccessNotification}
+      {#if hasClearedJoins}
+        <InlineNotification
+          kind="error"
+          lowContrast
+          hideCloseButton
+          title={m.join_cleared_title()}
+          subtitle={m.join_cleared_subtitle()}
+        />
+      {:else if displayedNotificationState.showSuccessNotification}
         <div class="notification-success">
           <span class="notification-success-icon">
             <CheckmarkFilled size={20} />
@@ -1784,22 +1883,20 @@
 
     --join-text: #161616;
     --join-text-secondary: #525252;
-    --join-label: #00539a;
     --join-row-bg: #f4f4f4;
     --join-row-border: #c6c6c6;
-    --join-header-hover: #f4f4f4;
     --join-divider: #e0e0e0;
     --join-action-hover: rgba(0, 0, 0, 0.05);
     --join-icon-disabled: rgba(22, 22, 22, 0.25);
-    --join-success: #24a148;
-    --join-success-bg: #defbe6;
+    --join-success: var(--khartis-additions-join-success);
+    --join-success-bg: var(--khartis-additions-join-success-bg);
     --join-success-line: rgba(36, 161, 72, 0.3);
     --join-success-text: #044317;
-    --join-warning: #f1c21b;
-    --join-warning-bg: #fcf4d6;
+    --join-warning: var(--khartis-additions-join-warning);
+    --join-warning-bg: var(--khartis-additions-join-warning-bg);
     --join-warning-line: rgba(241, 194, 27, 0.3);
-    --join-error: #da1e28;
-    --join-error-bg: #fff1f1;
+    --join-error: var(--khartis-additions-join-error);
+    --join-error-bg: var(--khartis-additions-join-error-bg);
     --join-error-line: rgba(218, 30, 40, 0.3);
     --join-info: #0043ce;
     --join-info-bg: #edf5ff;
@@ -1868,114 +1965,6 @@
     border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
-  .category-row-header {
-    display: flex;
-    align-items: center;
-    gap: var(--kh-gap-inline);
-    width: 100%;
-    padding: var(--kh-gap-param) var(--kh-pad-panel);
-    background: none;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-    transition: background-color 0.15s;
-  }
-
-  .category-row-header:hover {
-    background-color: var(--join-header-hover);
-  }
-
-  .category-row-header:focus-visible {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: -2px;
-  }
-
-  .category-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .icon-success :global(svg) {
-    fill: var(--join-success);
-  }
-
-  .icon-warning :global(svg) {
-    fill: var(--join-warning);
-  }
-
-  .icon-warning-alt :global(svg) {
-    fill: var(--join-error);
-  }
-
-  .icon-error :global(svg) {
-    fill: var(--join-error);
-  }
-
-  .icon-ignored :global(svg) {
-    fill: var(--join-text-secondary);
-  }
-
-  .category-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 4ch;
-    padding: 0 var(--kh-gap-inline) 2px var(--kh-gap-inline);
-    font-weight: 600;
-    font-size: 1rem;
-    line-height: var(--kh-line-primitive);
-    color: var(--join-text);
-    border-bottom: 1px solid;
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .count-success {
-    background-color: var(--join-success-bg);
-    border-bottom-color: var(--join-success);
-  }
-
-  .count-warning {
-    background-color: var(--join-warning-bg);
-    border-bottom-color: var(--join-warning);
-  }
-
-  .count-warning-alt,
-  .count-error {
-    background-color: var(--join-error-bg);
-    border-bottom-color: var(--join-error);
-  }
-
-  .count-ignored {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
-  }
-
-  .category-label {
-    flex: 1;
-    font-weight: 400;
-    font-size: 0.875rem;
-    line-height: var(--kh-line-primitive);
-    color: var(--join-label);
-  }
-
-  .label-success,
-  .label-warning,
-  .label-warning-alt,
-  .label-error,
-  .label-ignored {
-    color: var(--join-label);
-  }
-
-  .category-chevron {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    color: var(--join-text);
-  }
-
   .category-body {
     padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
     display: flex;
@@ -2041,11 +2030,26 @@
   }
 
   .join-table .table-row {
-    background-color: var(--join-row-bg);
+    background-color: var(--join-row-stripe, var(--join-row-bg));
     border-bottom: 1px solid var(--join-row-border);
   }
   .join-table .table-row:last-child {
     border-bottom: none;
+  }
+
+  /* Alternating rows and a hovered row, as in the data table. The alternate
+     row only leans towards the field color, so its dropdown still stands
+     out. */
+  .join-table .table-row:nth-child(even of .table-row) {
+    --join-row-stripe: color-mix(
+      in srgb,
+      var(--join-row-bg) 65%,
+      var(--cds-field-02, #ffffff)
+    );
+  }
+
+  .join-table .table-row:hover {
+    background-color: var(--cds-hover-ui, #e5e5e5);
   }
 
   /* Header and rows share one column grid, so every header label sits above
@@ -2465,21 +2469,14 @@
   :global(html[theme='g100']) .join-assisted-section {
     --join-text: #f4f4f4;
     --join-text-secondary: #c6c6c6;
-    --join-label: #78a9ff;
     --join-row-bg: #262626;
     --join-row-border: #393939;
-    --join-header-hover: #262626;
     --join-divider: #525252;
     --join-action-hover: rgba(255, 255, 255, 0.1);
     --join-icon-disabled: rgba(244, 244, 244, 0.25);
-    --join-success: #42be65;
-    --join-success-bg: #022d0d;
     --join-success-line: rgba(66, 190, 101, 0.4);
     --join-success-text: #a7f0ba;
-    --join-warning-bg: #302400;
     --join-warning-line: rgba(241, 194, 27, 0.4);
-    --join-error: #fa4d56;
-    --join-error-bg: #2d0709;
     --join-error-line: rgba(250, 77, 86, 0.4);
     --join-info: #4589ff;
     --join-info-bg: #001141;

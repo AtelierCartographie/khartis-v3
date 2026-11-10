@@ -58,6 +58,7 @@
     NONE_FIELD_ID,
     useFieldSelection
   } from '../../hooks/use-field-selection.svelte';
+  import type { LabelFieldItem } from '../../hooks/use-dataset-analysis.svelte';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
@@ -66,6 +67,7 @@
     open?: boolean;
     onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
+    basemapLabelFields?: LabelFieldItem[];
     visualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -93,6 +95,7 @@
 
   let {
     dataFields = [],
+    basemapLabelFields = [],
     visualization,
     disabled = false,
     onStyleChange,
@@ -120,19 +123,31 @@
   );
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  // Labels may also read the basemap names; the picker shows their label while
+  // the mapping stores the column.
+  const labelFields = $derived<LabelFieldItem[]>([
+    ...dataFields,
+    ...basemapLabelFields
+  ]);
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const secondaryFieldItems = $derived([noneOption, ...dataFields]);
+  const labelFieldOptions = $derived([
+    noneOption,
+    ...labelFields.map((field) => ({
+      id: field.id,
+      text: field.label ?? field.text
+    }))
+  ]);
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'size' | 'color'>('size');
   let filterSectionVisible = $state(false);
 
-  const labelFieldSelection = useFieldSelection(() => dataFields);
+  const labelFieldSelection = useFieldSelection(() => labelFields);
   // Labels carry one value column: the size classes and the colour classes read
   // the same variable and share a single classification.
   const valueFieldSelection = useFieldSelection(() => dataFields);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
-  const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryLabelFieldSelection = useFieldSelection(() => labelFields);
   const textFacetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -334,7 +349,7 @@
       return;
     }
 
-    const field = dataFields.find((item) => item.id === fieldId);
+    const field = labelFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ labelColumn: field.text });
     }
@@ -350,7 +365,7 @@
       return;
     }
 
-    const field = secondaryFieldItems.find((item) => item.id === fieldId);
+    const field = labelFields.find((item) => item.id === fieldId);
     if (!field) {
       return;
     }
@@ -643,8 +658,8 @@
 
     <div class="texts-config">
       <TextLabelSection
-        selectableDataFields={selectableDataFields}
-        secondaryFieldItems={secondaryFieldItems}
+        selectableDataFields={labelFieldOptions}
+        secondaryFieldItems={labelFieldOptions}
         primarySelectedId={labelFieldSelection.selectedFieldId}
         secondarySelectedId={secondaryLabelFieldSelection.selectedFieldId}
         hasPrimaryField={hasPrimaryField}

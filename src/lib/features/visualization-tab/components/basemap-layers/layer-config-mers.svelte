@@ -93,7 +93,6 @@
             max={BASEMAP_LAYER_CONFIG.thickness.max}
             step={BASEMAP_LAYER_CONFIG.thickness.step}
             value={outlineThickness}
-            showMinMax
             inputWidth="64px"
             showSteppers={false}
             onchange={(value) => onoutlinechange?.({ thickness: value })}
@@ -105,7 +104,6 @@
             max={BASEMAP_LAYER_CONFIG.opacity.max}
             step={BASEMAP_LAYER_CONFIG.opacity.step}
             value={outlineOpacity}
-            showMinMax
             inputWidth="64px"
             showSteppers={false}
             onchange={(value) => onoutlinechange?.({ opacity: value })}

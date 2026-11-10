@@ -124,14 +124,14 @@ describe('simplifyGeometryTable', () => {
       `CREATE OR REPLACE TABLE "target' ""table""__innerlines"`
     );
     expect(innerlinesQuery).toContain(
-      `extract_innerlines('target'' "table"', noding_factor := 0)`
+      `extract_innerlines('target'' "table"', 'target'' "table"__land', noding_factor := 0)`
     );
     expect(outerlinesQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__outerlines"`
     );
     // The outer contour reuses the dissolved land table, not the source rows.
     expect(outerlinesQuery).toContain(
-      `extract_outerlines('target'' "table"__land', noding_factor := 0)`
+      `extract_outerlines('target'' "table"__land')`
     );
     expect(landQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__land"`

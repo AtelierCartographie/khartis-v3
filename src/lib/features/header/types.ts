@@ -1,4 +1,4 @@
-export type MapExportFormat = 'svg' | 'jpg';
+export type MapExportFormat = 'svg' | 'jpg' | 'qgis';
 export type DataExportFormat = 'csv' | 'geojson' | 'geopackage';
 export type ExportResolution = '1080p' | '2k' | '4k';
 
@@ -17,7 +17,9 @@ export type ExportTabType = (typeof ExportTab)[keyof typeof ExportTab];
 
 export const MAP_FORMAT = {
   SVG: 'svg',
-  JPG: 'jpg'
+  JPG: 'jpg',
+  /** The map as GIS layers: a GeoPackage QGIS opens styled. */
+  QGIS: 'qgis'
 } as const;
 
 export const DATA_FORMAT = {
@@ -47,6 +49,7 @@ export interface UseExportModalReturn {
   readonly mapFormat: MapExportFormat;
   readonly dataFormat: DataExportFormat;
   readonly resolution: ExportResolution;
+  readonly georeference: boolean;
 
   open: (tab?: ExportTabType) => void;
   close: () => void;
@@ -55,5 +58,6 @@ export interface UseExportModalReturn {
   setMapFormat: (format: MapExportFormat) => void;
   setDataFormat: (format: DataExportFormat) => void;
   setResolution: (resolution: ExportResolution) => void;
+  setGeoreference: (value: boolean) => void;
   executeExport: () => Promise<void>;
 }

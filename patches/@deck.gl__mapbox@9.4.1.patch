@@ -1,8 +1,11 @@
 diff --git a/dist/deck-utils.js b/dist/deck-utils.js
-index f6d6b69..4c4b6c1 100644
+index bac2b5de63932ccad7e738633b3a962b1ff669d7..da2d70c5da6bf64874483e9b4a8082d940eebc85 100644
 --- a/dist/deck-utils.js
 +++ b/dist/deck-utils.js
-@@ -165 +165,6 @@ function centerCameraOnTerrain(map, viewState) {
+@@ -171,14 +171,18 @@ export function getViewState(map) {
+     return viewState;
+ }
+ function centerCameraOnTerrain(map, viewState) {
 -    if (map.getFreeCameraOptions) {
 +    const centerElevation = map.getCenterElevation?.();
 +    if (typeof centerElevation === 'number') {
@@ -10,18 +13,34 @@ index f6d6b69..4c4b6c1 100644
 +        viewState.position = [0, 0, centerElevation];
 +    }
 +    else if (map.getFreeCameraOptions) {
-@@ -171,2 +176 @@ function centerCameraOnTerrain(map, viewState) {
+         // mapbox-gl v2
+         const { position } = map.getFreeCameraOptions();
+         if (!position || position.z === undefined) {
+             return;
+         }
 -        // @ts-ignore transform is not typed
 -        const height = map.transform.height;
 +        const height = map.getCanvas().clientHeight;
-@@ -194,4 +198,2 @@ function centerCameraOnTerrain(map, viewState) {
+         const { longitude, latitude, pitch } = viewState;
+         // Convert mapbox mercator coordinate to deck common space
+         const cameraX = position.x * TILE_SIZE;
+@@ -200,10 +204,8 @@ function centerCameraOnTerrain(map, viewState) {
+         const surfaceElevation = cameraZ - cameraZFromSurface;
+         viewState.position = [0, 0, surfaceElevation / unitsPerMeter(latitude)];
+     }
 -    // @ts-ignore transform is not typed
 -    else if (typeof map.transform.elevation === 'number') {
 -        // maplibre-gl
 -        // @ts-ignore transform is not typed
 +    else if (typeof map.transform?.elevation === 'number') {
 +        // maplibre-gl v4 compatibility fallback
-@@ -213,5 +215,6 @@ function getViewport(deck, map, renderParameters) {
+         viewState.position = [0, 0, map.transform.elevation];
+     }
+ }
+@@ -219,11 +221,12 @@ function getViewport(deck, map, renderParameters) {
+     // Get the base map near/far plane
+     // renderParameters is maplibre API but not mapbox
+     // Transform is not an official API, properties could be undefined for older versions
 -    const nearZ = renderParameters?.nearZ ?? map.transform._nearZ;
 -    const farZ = renderParameters?.farZ ?? map.transform._farZ;
 -    if (Number.isFinite(nearZ)) {
@@ -33,23 +52,44 @@ index f6d6b69..4c4b6c1 100644
 +    if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
 +        viewState.nearZ = nearZ / height;
 +        viewState.farZ = farZ / height;
+     }
+     // Otherwise fallback to default calculation using nearZMultiplier/farZMultiplier
+     return view.makeViewport({
 diff --git a/dist/dist.dev.js b/dist/dist.dev.js
-index 3659a10..f1014d4 100644
+index 9feb8122c3a047cffbf4f3c8f261d067ce50f4a5..96c92667232c41f963a0fb6f4bdcfee93c65fa84 100644
 --- a/dist/dist.dev.js
 +++ b/dist/dist.dev.js
-@@ -331 +331,4 @@ var __exports__ = (() => {
+@@ -336,12 +336,15 @@ var __exports__ = (() => {
+     return viewState;
+   }
+   function centerCameraOnTerrain(map, viewState) {
 -    if (map.getFreeCameraOptions) {
 +    const centerElevation = map.getCenterElevation?.();
 +    if (typeof centerElevation === "number") {
 +      viewState.position = [0, 0, centerElevation];
 +    } else if (map.getFreeCameraOptions) {
-@@ -336 +339 @@ var __exports__ = (() => {
+       const { position } = map.getFreeCameraOptions();
+       if (!position || position.z === void 0) {
+         return;
+       }
 -      const height = map.transform.height;
 +      const height = map.getCanvas().clientHeight;
-@@ -355 +358 @@ var __exports__ = (() => {
+       const { longitude, latitude, pitch } = viewState;
+       const cameraX = position.x * TILE_SIZE2;
+       const cameraY = (1 - position.y) * TILE_SIZE2;
+@@ -360,7 +363,7 @@ var __exports__ = (() => {
+       const cameraZFromSurface = altitudePixels * Math.cos(pitchRadians) / scale;
+       const surfaceElevation = cameraZ - cameraZFromSurface;
+       viewState.position = [0, 0, surfaceElevation / unitsPerMeter(latitude)];
 -    } else if (typeof map.transform.elevation === "number") {
 +    } else if (typeof map.transform?.elevation === "number") {
-@@ -365,5 +368,6 @@ var __exports__ = (() => {
+       viewState.position = [0, 0, map.transform.elevation];
+     }
+   }
+@@ -370,11 +373,12 @@ var __exports__ = (() => {
+     if (renderParameters) {
+       view.props.nearZMultiplier = 0.2;
+     }
 -    const nearZ = renderParameters?.nearZ ?? map.transform._nearZ;
 -    const farZ = renderParameters?.farZ ?? map.transform._farZ;
 -    if (Number.isFinite(nearZ)) {
@@ -61,23 +101,44 @@ index 3659a10..f1014d4 100644
 +    if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
 +      viewState.nearZ = nearZ / height;
 +      viewState.farZ = farZ / height;
+     }
+     return view.makeViewport({
+       width: deck.width,
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 9e083a9..4e4a651 100644
+index a716ec2216c4146c02c571edd0ffd30a98f06f9f..8da7271f9731e3cc945f52745cd94d6a697d87fa 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -262 +262,4 @@ function centerCameraOnTerrain(map, viewState) {
+@@ -264,12 +264,15 @@ function getViewState(map) {
+   return viewState;
+ }
+ function centerCameraOnTerrain(map, viewState) {
 -  if (map.getFreeCameraOptions) {
 +  const centerElevation = map.getCenterElevation?.();
 +  if (typeof centerElevation === "number") {
 +    viewState.position = [0, 0, centerElevation];
 +  } else if (map.getFreeCameraOptions) {
-@@ -267 +270 @@ function centerCameraOnTerrain(map, viewState) {
+     const { position } = map.getFreeCameraOptions();
+     if (!position || position.z === void 0) {
+       return;
+     }
 -    const height = map.transform.height;
 +    const height = map.getCanvas().clientHeight;
-@@ -286 +289 @@ function centerCameraOnTerrain(map, viewState) {
+     const { longitude, latitude, pitch } = viewState;
+     const cameraX = position.x * TILE_SIZE;
+     const cameraY = (1 - position.y) * TILE_SIZE;
+@@ -288,7 +291,7 @@ function centerCameraOnTerrain(map, viewState) {
+     const cameraZFromSurface = altitudePixels * Math.cos(pitchRadians) / scale;
+     const surfaceElevation = cameraZ - cameraZFromSurface;
+     viewState.position = [0, 0, surfaceElevation / (0, import_web_mercator.unitsPerMeter)(latitude)];
 -  } else if (typeof map.transform.elevation === "number") {
 +  } else if (typeof (map.transform == null ? void 0 : map.transform.elevation) === "number") {
-@@ -296,5 +299,6 @@ function getViewport(deck, map, renderParameters) {
+     viewState.position = [0, 0, map.transform.elevation];
+   }
+ }
+@@ -298,11 +301,12 @@ function getViewport(deck, map, renderParameters) {
+   if (renderParameters) {
+     view.props.nearZMultiplier = 0.2;
+   }
 -  const nearZ = (renderParameters == null ? void 0 : renderParameters.nearZ) ?? map.transform._nearZ;
 -  const farZ = (renderParameters == null ? void 0 : renderParameters.farZ) ?? map.transform._farZ;
 -  if (Number.isFinite(nearZ)) {
@@ -89,28 +150,51 @@ index 9e083a9..4e4a651 100644
 +  if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
 +    viewState.nearZ = nearZ / height;
 +    viewState.farZ = farZ / height;
+   }
+   return view.makeViewport({
+     width: deck.width,
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index 059e11a..a8da1ab 100644
+index 059e11a543cbbc5864154a3592edca216a347e50..a8da1ab58eef76ad130c496181e88a9b6bb90e81 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -80,0 +81 @@ export interface Map extends Evented {
+@@ -78,6 +78,7 @@ export interface Map extends Evented {
+     getRenderWorldCopies(): boolean;
+     getTerrain?(): any;
+     getProjection?(): any;
 +    getCenterElevation?(): number;
+     getFreeCameraOptions?(): FreeCameraOptions;
+     transform?: any;
+     remove(): void;
 diff --git a/src/deck-utils.ts b/src/deck-utils.ts
-index 6f02c5b..3b396bf 100644
+index 8820d5fa70bef3595196b57bcf603f568ef10766..a70e22e676a190b86bf1d59c50c244d47982c68b 100644
 --- a/src/deck-utils.ts
 +++ b/src/deck-utils.ts
-@@ -223 +223,5 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+@@ -228,15 +228,18 @@ export function getViewState(map: Map): MapViewState & {
+ }
+ 
+ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
 -  if (map.getFreeCameraOptions) {
 +  const centerElevation = map.getCenterElevation?.();
 +  if (typeof centerElevation === 'number') {
 +    // maplibre-gl v5+
 +    viewState.position = [0, 0, centerElevation];
 +  } else if (map.getFreeCameraOptions) {
-@@ -230,2 +234 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+     // mapbox-gl v2
+     const {position} = map.getFreeCameraOptions();
+     if (!position || position.z === undefined) {
+       return;
+     }
+ 
 -    // @ts-ignore transform is not typed
 -    const height = map.transform.height;
 +    const height = map.getCanvas().clientHeight;
-@@ -257,5 +260,2 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+     const {longitude, latitude, pitch} = viewState;
+ 
+     // Convert mapbox mercator coordinate to deck common space
+@@ -262,11 +265,8 @@ function centerCameraOnTerrain(map: Map, viewState: MapViewState) {
+     const cameraZFromSurface = (altitudePixels * Math.cos(pitchRadians)) / scale;
+     const surfaceElevation = cameraZ - cameraZFromSurface;
+     viewState.position = [0, 0, surfaceElevation / unitsPerMeter(latitude)];
 -  }
 -  // @ts-ignore transform is not typed
 -  else if (typeof map.transform.elevation === 'number') {
@@ -118,7 +202,13 @@ index 6f02c5b..3b396bf 100644
 -    // @ts-ignore transform is not typed
 +  } else if (typeof map.transform?.elevation === 'number') {
 +    // maplibre-gl v4 compatibility fallback
-@@ -290,5 +290,8 @@ function getViewport(deck: Deck, map: Map, renderParameters?: unknown): Viewport
+     viewState.position = [0, 0, map.transform.elevation];
+   }
+ }
+@@ -295,11 +295,14 @@ function getViewport(deck: Deck, map: Map, renderParameters?: unknown): Viewport
+   // Get the base map near/far plane
+   // renderParameters is maplibre API but not mapbox
+   // Transform is not an official API, properties could be undefined for older versions
 -  const nearZ = (renderParameters as MaplibreRenderParameters)?.nearZ ?? map.transform._nearZ;
 -  const farZ = (renderParameters as MaplibreRenderParameters)?.farZ ?? map.transform._farZ;
 -  if (Number.isFinite(nearZ)) {
@@ -132,10 +222,19 @@ index 6f02c5b..3b396bf 100644
 +  if (Number.isFinite(nearZ) && Number.isFinite(farZ) && height > 0) {
 +    viewState.nearZ = nearZ / height;
 +    viewState.farZ = farZ / height;
+   }
+   // Otherwise fallback to default calculation using nearZMultiplier/farZMultiplier
+ 
 diff --git a/src/types.ts b/src/types.ts
-index 4669bd8..1711e06 100644
+index 4669bd8b21ef28377b029d7cac4b1a5a22e63cfc..1711e06233b4d4e2e99da3c8e676f909de318cd6 100644
 --- a/src/types.ts
 +++ b/src/types.ts
-@@ -120,0 +121,2 @@ export interface Map extends Evented {
+@@ -118,6 +118,8 @@ export interface Map extends Evented {
+   getTerrain?(): any;
+   // mapbox v2+, maplibre v5+
+   getProjection?(): any;
 +  // maplibre v5+
 +  getCenterElevation?(): number;
+   // mapbox v2+
+   getFreeCameraOptions?(): FreeCameraOptions;
+ 

@@ -1,9 +1,9 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import {
-  createFileFromUpload,
-  dataPipeline,
-  isZipDatasetResult
-} from '$lib/features/data-pipeline';
+  APP_LOADING_PHASE,
+  appLoadingStore
+} from '../stores/app-loading.store.svelte';
+import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
 import {
   Duck,
   duckDBOrchestrator,
@@ -193,6 +193,15 @@ function createDataOrchestratorService() {
     }
 
     try {
+      // The source data keeps its values: the corrections are read by the
+      // join, so they must be known before it is rebuilt or graded.
+      if (restoredJoinState.joinCorrections) {
+        await duckDBOrchestrator.applyJoinCorrections(
+          duckDatasetId,
+          restoredJoinState.geoColumn,
+          restoredJoinState.joinCorrections
+        );
+      }
       await duckDBOrchestrator.finalizeJoin(
         duckDatasetId,
         basemap,
@@ -251,9 +260,8 @@ function createDataOrchestratorService() {
 
         if (registered === null) {
           let restoredDuckDatasetId: string | null = null;
-          if (file.content || file.originalFile) {
-            const restoredSourceFile =
-              file.originalFile ?? (await createFileFromUpload(file));
+          if (file.originalFile) {
+            const restoredSourceFile = file.originalFile;
             const processedResult = await dataPipeline.processUploadedFile(
               file,
               restoredSourceFile
@@ -669,68 +677,6 @@ function createDataOrchestratorService() {
               );
               file.relatedFileObjects = [];
             }
-          }
-
-          if (file.relatedFilesData) {
-            const companionFiles: File[] = [];
-            for (const [name, buffer] of Object.entries(
-              file.relatedFilesData
-            )) {
-              try {
-                const restoredFile = new File([buffer as ArrayBuffer], name);
-                companionFiles.push(restoredFile);
-              } catch (error) {
-                logger.error(
-                  'Failed to recreate shapefile companion file during project restore',
-                  LogCategory.DATA,
-                  error,
-                  {
-                    flow: 'project_restore',
-                    extra: {
-                      ...buildFileErrorContext(file),
-                      companionFileName: name
-                    }
-                  }
-                );
-                showWarning(
-                  m.project_restore_companion_files_warning_title(),
-                  m.project_restore_companion_files_warning_message({
-                    fileName: file.name
-                  })
-                );
-                continue;
-              }
-            }
-            if (companionFiles.length > 0) {
-              file.relatedFileObjects = companionFiles;
-            }
-          }
-        }
-
-        if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
-
-        if (!file.originalFile && file.content) {
-          try {
-            file.originalFile = await createFileFromUpload(file);
-          } catch (error) {
-            logger.error(
-              'Failed to recreate source file during project restore',
-              LogCategory.DATA,
-              error,
-              {
-                flow: 'project_restore',
-                extra: buildFileErrorContext(file)
-              }
-            );
-            showWarning(
-              m.project_restore_source_file_warning_title(),
-              m.project_restore_source_file_warning_message({
-                fileName: file.name
-              })
-            );
-            return;
           }
         }
 
@@ -1355,6 +1301,7 @@ function createDataOrchestratorService() {
             return;
           }
 
+          appLoadingStore.setPhase(APP_LOADING_PHASE.BASEMAPS);
           await restoreCustomBasemapTables();
           throwIfProjectChangeAborted(options.signal);
 
@@ -1363,6 +1310,7 @@ function createDataOrchestratorService() {
           }
 
           if (currentProject?.data?.sourceFiles) {
+            appLoadingStore.setPhase(APP_LOADING_PHASE.DATA);
             await processProjectFiles(
               currentProject.data.sourceFiles,
               restoreRun
@@ -1395,12 +1343,14 @@ function createDataOrchestratorService() {
                 lastSelectedTiledStyle: basemapSettings.lastSelectedTiledStyle,
                 referenceBasemapId: basemapSettings.referenceBasemapId,
                 showLabels: basemapSettings.showLabels,
-                groupVisibility: basemapSettings.groupVisibility
+                groupVisibility: basemapSettings.groupVisibility,
+                opacity: basemapSettings.opacity
               }
             });
           }
 
           migrateOrphanedVizDatasetIds();
+          appLoadingStore.setPhase(APP_LOADING_PHASE.VISUALIZATIONS);
           await recomputeMissingBreaks();
           throwIfProjectChangeAborted(options.signal);
 
@@ -1423,6 +1373,7 @@ function createDataOrchestratorService() {
           duckDBOrchestrator.applyPersistedTableFilters();
 
           if (currentProject) {
+            appLoadingStore.setPhase(APP_LOADING_PHASE.JOINS);
             await restorePersistedDataTabState(
               currentProject,
               restoreToken,
@@ -1468,6 +1419,7 @@ function createDataOrchestratorService() {
   ): Promise<void> {
     throwIfProjectChangeAborted(options.signal);
     const projectChangeRun = captureProjectRuntime();
+    appLoadingStore.setPhase(APP_LOADING_PHASE.ENGINE);
     await duckDBOrchestrator.waitForInitialization();
     throwIfProjectChangeAborted(options.signal);
     if (!isCurrentProjectRuntime(projectChangeRun)) {

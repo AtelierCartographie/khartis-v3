@@ -6,3 +6,7 @@ export function isMissingDuckTableError(error: unknown): boolean {
     )
   );
 }
+
+export function isOutOfMemoryError(error: unknown): error is Error {
+  return error instanceof Error && error.message.includes('Out of Memory');
+}

@@ -318,8 +318,7 @@
   }
 
   function fitPageToWorkspace(): void {
-    globalActions.setPageZoom(100);
-    globalActions.resetPagePan();
+    globalActions.resetPageZoom();
   }
 
   function refreshObservedPageElement(
@@ -460,7 +459,7 @@
 
     if (event.key === '1') {
       event.preventDefault();
-      globalActions.setPageZoom(100);
+      globalActions.setPageZoomPercent(100);
       globalActions.resetPagePan();
     }
   }
