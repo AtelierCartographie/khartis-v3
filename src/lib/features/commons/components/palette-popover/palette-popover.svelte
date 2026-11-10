@@ -1,10 +1,16 @@
 <script lang="ts">
   import {
     claimFloatingPanel,
+    closeFloatingPanelsAbove,
     enterFloatingPanelScope,
     floatingPanelIn,
     floatingPanelOut,
-    isTopmostFloatingPanel
+    floatingPanelVeil,
+    getFloatingPanelHostElement,
+    isFloatingPanelCovered,
+    isTopmostFloatingPanel,
+    type NestedPanelPlacement,
+    resolveNestedPanelPlacement
   } from '$lib/features/commons/utils/floating-panel.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
@@ -132,10 +138,41 @@
   }
 
   const nestedInFloatingPanel = enterFloatingPanelScope();
+  let nestedPlacement = $state<NestedPanelPlacement | null>(null);
+  const covered = $derived(open && isFloatingPanelCovered(handleClose));
 
   $effect(() => {
     if (!open) return;
-    return claimFloatingPanel(handleClose, { nested: nestedInFloatingPanel });
+    return claimFloatingPanel(handleClose, {
+      nested: nestedInFloatingPanel,
+      getElement: () => popoverRef
+    });
+  });
+
+  // Stacked over its host, the panel takes the focus and sits beside the
+  // host, or cascaded over it when the viewport is too narrow.
+  $effect(() => {
+    const panel = popoverRef;
+    if (!open || !nestedInFloatingPanel || !panel) return;
+
+    const place = () => {
+      const host = getFloatingPanelHostElement(handleClose);
+      nestedPlacement = host
+        ? resolveNestedPanelPlacement(
+            host.getBoundingClientRect(),
+            panel.offsetWidth,
+            window.innerWidth
+          )
+        : null;
+    };
+
+    place();
+    panel.focus({ preventScroll: true });
+    window.addEventListener(EVENT.RESIZE, place);
+    return () => {
+      window.removeEventListener(EVENT.RESIZE, place);
+      nestedPlacement = null;
+    };
   });
 
   function handleClose() {
@@ -283,8 +320,11 @@
       in:floatingPanelIn
       out:floatingPanelOut
       class="palette-popover"
-      style:right={popoverRight}
+      class:kh-floating-panel-stacked={nestedPlacement !== null}
+      class:kh-floating-panel-cascaded={nestedPlacement?.cascaded}
+      style:right={nestedPlacement?.right ?? popoverRight}
       role="dialog"
+      tabindex="-1"
       aria-label={popoverTitle}
       use:clickOutside={{
         enabled: open,
@@ -295,72 +335,83 @@
       }}
       onoutsideclick={handlePopoverOutsideClick}
     >
-      <PanelHeader
-        title={popoverTitle}
-        closeLabel={m.button_cancel()}
-        onclose={handleClose}
-      />
+      <div class="kh-floating-panel-body" inert={covered}>
+        <PanelHeader
+          title={popoverTitle}
+          closeLabel={m.button_cancel()}
+          onclose={handleClose}
+        />
 
-      <div class="kh-scroll-area">
-        <div class="popover-content" use:scrollShadows>
-          <PaletteSuggestions
-            paletteType={draftType}
-            selectedPaletteId={draftPaletteId}
-            selectedColor={draftColors[0]}
-            numClasses={numClasses}
-            divergingSplit={divergingSplit}
-            onSelect={handlePaletteSelect}
-            onColorSelect={handleQualitativeColorSelect}
-            onPaletteSelect={handleQualitativePaletteSelect}
-            onIntensitySelect={handleQualitativeColorSelect}
-            onQualitativePresetChange={handleQualitativePresetChange}
-          />
+        <div class="kh-scroll-area">
+          <div class="popover-content" use:scrollShadows>
+            <PaletteSuggestions
+              paletteType={draftType}
+              selectedPaletteId={draftPaletteId}
+              selectedColor={draftColors[0]}
+              numClasses={numClasses}
+              divergingSplit={divergingSplit}
+              onSelect={handlePaletteSelect}
+              onColorSelect={handleQualitativeColorSelect}
+              onPaletteSelect={handleQualitativePaletteSelect}
+              onIntensitySelect={handleQualitativeColorSelect}
+              onQualitativePresetChange={handleQualitativePresetChange}
+            />
 
-          <PaletteCustom
-            paletteType={draftType}
-            numClasses={numClasses}
-            currentColors={draftColors}
-            divergingSplit={divergingSplit}
-            allowPattern={allowPattern}
-            inverted={draftInverted}
-            patternPaletteConfig={draftPatternPaletteConfig}
-            onColorsChange={handleCustomColorsChange}
-            onPatternPaletteChange={handlePatternPaletteChange}
-            onInvertToggle={handleInvertToggle}
-          />
+            <PaletteCustom
+              paletteType={draftType}
+              numClasses={numClasses}
+              currentColors={draftColors}
+              divergingSplit={divergingSplit}
+              allowPattern={allowPattern}
+              inverted={draftInverted}
+              patternPaletteConfig={draftPatternPaletteConfig}
+              onColorsChange={handleCustomColorsChange}
+              onPatternPaletteChange={handlePatternPaletteChange}
+              onInvertToggle={handleInvertToggle}
+            />
+          </div>
+        </div>
+
+        <div class="popover-preview-wrap">
+          <div class="popover-divider"></div>
+          <div class="popover-preview">
+            <PaletteComparison
+              currentColors={currentColors}
+              newColors={draftColors}
+              paletteType={draftType}
+              currentPatternId={toValidPatternId(currentPatternId)}
+              currentPatternParams={currentPatternParams}
+              newPatternId={findPaletteById(draftPaletteId)?.patternId}
+              currentPatternPaletteConfig={currentPatternPaletteConfig}
+              newPatternPaletteConfig={draftPatternPaletteConfig}
+              currentInverted={currentInverted}
+              newInverted={draftInverted}
+            />
+          </div>
+          <footer class="popover-footer">
+            <Button kind="tertiary" size="small" on:click={handleCancel}>
+              {m.button_cancel()}
+            </Button>
+            <Button
+              kind="primary"
+              size="small"
+              icon={ArrowRight}
+              on:click={handleValidate}
+            >
+              {m.button_validate()}
+            </Button>
+          </footer>
         </div>
       </div>
-
-      <div class="popover-preview-wrap">
-        <div class="popover-divider"></div>
-        <div class="popover-preview">
-          <PaletteComparison
-            currentColors={currentColors}
-            newColors={draftColors}
-            paletteType={draftType}
-            currentPatternId={toValidPatternId(currentPatternId)}
-            currentPatternParams={currentPatternParams}
-            newPatternId={findPaletteById(draftPaletteId)?.patternId}
-            currentPatternPaletteConfig={currentPatternPaletteConfig}
-            newPatternPaletteConfig={draftPatternPaletteConfig}
-            currentInverted={currentInverted}
-            newInverted={draftInverted}
-          />
-        </div>
-        <footer class="popover-footer">
-          <Button kind="tertiary" size="small" on:click={handleCancel}>
-            {m.button_cancel()}
-          </Button>
-          <Button
-            kind="primary"
-            size="small"
-            icon={ArrowRight}
-            on:click={handleValidate}
-          >
-            {m.button_validate()}
-          </Button>
-        </footer>
-      </div>
+      {#if covered}
+        <!-- Escape closes the stacked panel too; the veil only helps the pointer. -->
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div
+          class="kh-floating-panel-veil"
+          transition:floatingPanelVeil
+          onclick={() => closeFloatingPanelsAbove(handleClose)}
+        ></div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -394,6 +445,12 @@
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
     overflow: hidden;
+  }
+
+  :global(.palette-popover.kh-floating-panel-stacked) {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.24),
+      0 0 1px rgba(0, 0, 0, 0.24);
   }
 
   @media (max-width: 1023px) {

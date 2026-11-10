@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import SingleColorDropdown from './single-color-dropdown.svelte';
@@ -55,6 +56,7 @@
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
+  let mainButton = $state<HTMLButtonElement>();
 
   function handleClick() {
     dropdownOpen = !dropdownOpen;
@@ -74,6 +76,12 @@
     dropdownOpen = false;
   }
 
+  // The host panel stays inert until the stacked one has released its place.
+  async function restoreFocus() {
+    await tick();
+    mainButton?.focus();
+  }
+
   function handlePopoverValidate(
     _palette: Palette | undefined,
     newColors: string[],
@@ -84,10 +92,12 @@
     if (hex) onchange?.(hex);
     onpatternchange?.(nextPatternPaletteConfig);
     popoverOpen = false;
+    void restoreFocus();
   }
 
   function handlePopoverClose() {
     popoverOpen = false;
+    void restoreFocus();
   }
 </script>
 
@@ -99,6 +109,7 @@
     <button
       type="button"
       class="color-main"
+      bind:this={mainButton}
       onclick={handleClick}
       aria-label={m.color()}
       aria-expanded={dropdownOpen}
