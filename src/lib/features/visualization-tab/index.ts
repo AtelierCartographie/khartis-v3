@@ -9,3 +9,4 @@ export {
   buildSuggestionOrigin,
   mapSuggestionToType
 } from './services/suggestion.service';
+export { resolveDiscretizationLabel } from './components/discretization/discretization.utils';

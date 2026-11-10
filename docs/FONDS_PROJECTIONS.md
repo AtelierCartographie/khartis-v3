@@ -256,6 +256,112 @@ l'exige. Tant que les tables WGS84 ne sont pas arrivées, la table encore en CRS
 source n'est ni dessinée ni mesurée, et une emprise hors longitude et latitude
 n'ajuste jamais une projection d3.
 
+### Export en couches SIG pour QGIS
+
+Le format de carte « GeoPackage (QGIS) » (`header/services/qgis/`) écrit la
+carte elle-même : les couches de fond dessinées depuis une géométrie (terres,
+lacs, limites, rivières) et une couche par figuré de chaque visualisation
+active, dans l'ordre de la carte. Le .zip contient le GeoPackage, un projet
+QGIS (`.qgs`, chemins relatifs) qui ouvre les couches dans cet ordre et dans le
+SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
+
+- Le SCR est celui de `resolveMapVectorCrs` : la définition de
+  `resolveCurrentProjectionDefinition`, comme pour l'export géoréférencé. Une
+  projection sans équivalent PROJ (composite, oblique, globe, propre à d3)
+  exporte en WGS84, et la boîte d'export comme le mémo le disent.
+- La reprojection passe par `ST_Transform` vers EPSG:4326 puis vers le SCR de
+  la carte. Une géométrie en longitude et latitude est d'abord coupée là où d3
+  coupe la sphère (`cutAtSeam`) ; sinon PROJ étire les anneaux qui traversent
+  cette couture sur toute la carte. Sans inclinaison, c'est le méridien opposé
+  au centre. Une méthode PROJ qui tourne elle-même la sphère (Bertin 1953,
+  `builtInOrientation`) est coupée comme une carte inclinée de la même
+  rotation. Avec une latitude, c'est le méridien opposé de la sphère tournée :
+  un demi grand cercle, deux tronçons de méridiens par le pôle pour une
+  projection du catalogue. Le pôle qui tombe sur la couture est un point
+  partagé entre les deux bords de la carte : une calotte d'une soixantaine de
+  mètres autour de lui est retirée, comme une bande d'environ un mètre de part
+  et d'autre de la couture. Les pôles de la sphère tournée, qu'une conique
+  dessine en arc et une pseudo-cylindrique en ligne, sont entourés d'un petit
+  disque à un sommet par degré : sans lui, QGIS relie les deux bouts de l'arc
+  par une corde. Le graticule reçoit un sommet par degré (`densifyLines`), car
+  PROJ ne courbe pas un segment entre deux sommets comme le fait d3. Si DuckDB refuse le SCR cible, la
+  projection se fait en JavaScript avec la fonction qui géoréférence l'image.
+  Une entité qui sort du domaine de la projection est écartée et comptée dans
+  le mémo.
+- Les symboles et étiquettes sont posés sur les centroïdes que fournit le fond
+  du catalogue, comme sur la carte, et à défaut sur le point de
+  `ST_MaximumInscribedCircle`. Une visualisation de symboles doubles devient
+  deux lignes par entité (rôle A et B), pour que QGIS trie tous les symboles
+  par taille comme la carte.
+- Les étiquettes reprennent les textes retouchés et les positions déplacées
+  (`labelLayoutStore`, même clé d'entité que la carte) dans des attributs
+  `khartis_etiquette`, `khartis_decalage_x_mm` et `khartis_decalage_y_mm`
+  qui pilotent l'étiquetage QGIS.
+- L'ordre des couches est celui du panneau Calques : `mergeLayerOrder` sur les
+  lignes du panneau, ordre manuel compris. Une collection de cartes exporte
+  ses cartes (pas la visualisation d'origine), dans une liste unique à l'ordre
+  de la carte, avec un thème de carte QGIS par carte.
+- Une projection composite s'exporte dans le SCR du territoire principal (entrée
+  `mainland` du préréglage), les encarts à leur position réelle ; le mémo et la
+  boîte d'export le disent. Une chaîne PROJ identique à un code connu est
+  déclarée par ce code (`findKnownEpsgForProj4`) : sinon QGIS choisit entre
+  équivalents (LAEA Europe lue EPSG:5636 au lieu de 3035). Dans le projet
+  QGIS, un code EPSG s'écrit en WKT dont l'autorité racine suffit à QGIS pour
+  reconstruire le SCR.
+- Les colonnes de dates partent en `DATE` ou `DATETIME` ISO, et les classes de
+  dates comparent des dates (`to_date('2020-01-01')`), jamais des
+  millisecondes, qui dépendent du fuseau dans QGIS.
+- Les territoires joints partent toujours avec leurs données, en couche
+  décochée quand la visualisation ne les dessine pas (symboles seuls) ; la
+  densité de points part avec les points mêmes de la carte (même graine, même
+  cache).
+- L'archive contient l'image JPEG de la page, calée quand la carte a un SCR
+  (`.aux.xml`, world file) et ajoutée décochée au projet ; le mémo reprend les
+  textes de la page et la légende en clair (méthode, classes et couleurs).
+- Graticule et équateur : lignes remarquables du catalogue, ou lignes que la
+  carte génère (`getGraticuleGeoJSON`), reprojetées comme le reste. Les mers
+  sont la sphère entière (un rectangle lon/lat à un sommet par degré), coupée et
+  projetée comme le reste : la forme que d3 remplit. Si la projection envoie
+  les pôles à l'infini, la couleur des mers passe au fond du canevas.
+- La page Khartis compte en points (A4 = 842 × 595) : tailles en millimètres
+  = unités × 25,4/72, textes en points = unités.
+- Le projet contient une mise en page QGIS « Khartis » au format de la page.
+  `measureMapPage` (`map-export.utils.ts`) mesure la page telle qu'elle
+  s'exporte : cadre de la carte, textes avec leur style calculé, cadres de
+  légende (`data-legend-item-id`), échelle, nord, titres des cartes d'une
+  collection. Le cadre de la carte prend l'emprise exacte de
+  `buildMapGeoreference` ; à défaut (collection, projection sans SCR commun),
+  celle des données. Les légendes Khartis empilées dans une même colonne
+  deviennent une seule légende QGIS, un groupe par cadre (titre, sous-titre et
+  note coupés aux mêmes lignes que Khartis, la note en titre d'une entrée
+  sans symbole) : une légende QGIS grandit avec son contenu et des légendes
+  séparées se chevaucheraient. Les entrées sont celles des styles, sans filtre
+  par la carte : l'absence de données n'y figure que si une entité en manque
+  (`rowScopeStore.missingDataState`, comme la légende Khartis). La taille des
+  symboles proportionnels (cercles, carrés) devient la légende de taille
+  native (symboles emboîtés, valeurs et tailles lues sur la légende Khartis),
+  ce qui demande un renderer catégorisé dont tous les symboles lisent leur
+  taille d'une même expression (`withNativeSizeLegend`, `qml.ts`). Les barres,
+  les pics et les épaisseurs de lignes, que QGIS ne sait pas emboîter,
+  deviennent des entrées qu'aucune entité ne remplit (règle `FALSE`), chacune
+  à sa taille, avec une taille d'icône propre (`legend/symbol-size-N`). Les
+  tailles en classes combinées à une couleur d'une autre variable reçoivent la
+  même légende, construite sur les classes. La mesure abandonne après 10 s :
+  un onglet masqué ne dessine aucune image.
+- Les styles sont des QML enregistrés dans la table `layer_styles`, que QGIS
+  applique à l'ouverture. Les classes sont des règles qui reprennent
+  exactement `getClassIndexForValue` (une valeur égale à une borne tombe dans
+  la même classe que sur la carte), les tailles proportionnelles une
+  expression sur le domaine de la carte, les tailles des millimètres sur la
+  page Khartis. Les trames motif.js deviennent des hachures ou des grilles de
+  symboles QGIS de même pas, épaisseur et angle (`qgis-patterns.ts`). Ce qui
+  ne se traduit pas (évidement, filets d'étiquettes, certaines trames, formes
+  des annotations, présentation de la légende) est listé dans le mémo, jamais
+  approché sans le dire.
+- Une couche qui échoue (géométrie refusée par GEOS, SCR inaccessible) est
+  écartée, nommée dans le mémo et signalée à l'utilisateur ; le reste de la
+  carte est exporté.
+
 ### Orientation intrinsèque
 
 Beaucoup de projections d3 portent leur propre orientation : Bertin 1953 est
