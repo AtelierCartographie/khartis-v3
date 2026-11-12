@@ -393,7 +393,13 @@ describe('annotations store', () => {
       return;
     }
 
+    // The credit box spans half the page: it cannot start past the middle.
     annotationsActions.moveAnnotation(credit.id, { x: 600, y: 560 });
+    expect(
+      getAnnotationsState().items.find((item) => item.id === credit.id)
+        ?.position
+    ).toEqual({ x: 421, y: 560 });
+
     annotationsActions.redistributePageElements(
       { width: 1191, height: 842 },
       { width: 842, height: 595 }
@@ -402,7 +408,35 @@ describe('annotations store', () => {
     expect(
       getAnnotationsState().items.find((item) => item.id === credit.id)
         ?.position
-    ).toEqual({ x: 949, y: 807 });
+    ).toEqual({ x: 595.5, y: 807 });
+  });
+
+  it('keeps a right-aligned caption on the page side of its text when the page shrinks', () => {
+    formatActions.toggleGrid();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const credit = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.CREDIT
+    );
+    expect(credit?.style?.textAlign).toBe(TextAlign.Right);
+    if (!credit) {
+      return;
+    }
+
+    // Box from 150 to 571 on an 842 px page: the text ends 271 px from the
+    // right edge, though the box starts closer to the left one.
+    annotationsActions.moveAnnotation(credit.id, { x: 150, y: 300 });
+    annotationsActions.redistributePageElements(
+      { width: 595, height: 595 },
+      { width: 842, height: 595 }
+    );
+
+    const position = getAnnotationsState().items.find(
+      (item) => item.id === credit.id
+    )?.position;
+    expect(position).toEqual({ x: 26.5, y: 300 });
+    // The text end keeps its gap to the right edge of the page.
+    expect(595 - ((position?.x ?? 0) + 595 / 2)).toBe(271);
   });
 
   it('uses the custom page sizing profile when page elements are initialized', () => {

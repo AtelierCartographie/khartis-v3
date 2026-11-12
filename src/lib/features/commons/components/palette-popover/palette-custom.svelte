@@ -290,6 +290,7 @@
       {#if activeTab === 0}
         <SingleColorPreview
           label={m.color()}
+          allowPattern={false}
           color={singleColor}
           onchange={handleSingleColorChange}
         />
@@ -297,11 +298,13 @@
         <div class="two-colors">
           <SingleColorPreview
             label={m.color()}
+            allowPattern={false}
             color={startColor}
             onchange={handleStartColorChange}
           />
           <SingleColorPreview
             label={m.color()}
+            allowPattern={false}
             color={endColor}
             onchange={handleEndColorChange}
           />
