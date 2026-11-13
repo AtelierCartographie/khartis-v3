@@ -87,7 +87,7 @@
         config.contrast,
         false
       );
-      return `background: ${buildClassPatternSvgBackground(pattern, '#ffffff')}`;
+      return `background: ${buildClassPatternSvgBackground(pattern)}`;
     }
 
     return swatchStyle(color, patternId, params);
@@ -114,9 +114,7 @@
       config.contrast,
       inverted
     );
-    return patterns.map((pattern) =>
-      buildClassPatternSvgBackground(pattern, '#ffffff')
-    );
+    return patterns.map((pattern) => buildClassPatternSvgBackground(pattern));
   }
 </script>
 

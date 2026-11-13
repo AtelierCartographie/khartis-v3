@@ -17,8 +17,6 @@
     color: string;
     presets?: readonly string[];
     patternPaletteConfig?: PatternPaletteConfig;
-    /** What the pattern is drawn over: white for a pattern fill, the color for a hatch. */
-    patternBackground?: string;
     exclusive?: boolean;
     allowPattern?: boolean;
     onchange?: (hex: string) => void;
@@ -30,7 +28,6 @@
     color,
     presets,
     patternPaletteConfig,
-    patternBackground = '#ffffff',
     exclusive = false,
     allowPattern = true,
     onchange,
@@ -48,9 +45,7 @@
       patternPaletteConfig.contrast,
       false
     )[0];
-    return pattern
-      ? buildClassPatternSvgBackground(pattern, patternBackground)
-      : null;
+    return pattern ? buildClassPatternSvgBackground(pattern) : null;
   });
 
   let dropdownOpen = $state(false);
