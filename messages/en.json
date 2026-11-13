@@ -951,6 +951,8 @@
   "join_entities_no_data_one": "entity without data",
   "join_control_tooltip_status": "Assisted join",
   "map_tooltip_entity_no_data": "No data",
+  "map_tooltip_more_variables": "+{count} variables · click to pin",
+  "map_tooltip_more_variables_one": "+1 variable · click to pin",
   "join_control_tooltip_file": "Imported file",
   "join_control_tooltip_rows": "Rows",
   "join_control_tooltip_other_variables": "Other joined tabular data",

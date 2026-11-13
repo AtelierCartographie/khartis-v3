@@ -16,6 +16,7 @@
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
   const PREVIEW_MAX_ENTRIES_COUNT = 5;
+  const PREVIEW_MAX_OTHER_VARIABLES_COUNT = 3;
   const DESKTOP_INSPECTOR_TARGET_HEIGHT = 352;
   const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
@@ -32,42 +33,91 @@
     globalState.selectedStep === ToolbarStep.Styling
   );
   const isInteractive = $derived(isMobileLayout || tooltipState.pinned);
+  const titleEntry = $derived(
+    tooltipState.entries.find((entry) => entry.role === 'title') ?? null
+  );
+  const bodyEntries = $derived(
+    tooltipState.entries.filter((entry) => entry.role !== 'title')
+  );
+  // A visualization's data reads in three tiers: the entity, the variables
+  // the map draws, then the others, quieter.
+  const isVariableLayout = $derived(
+    titleEntry !== null || bodyEntries.some((entry) => entry.isVizColumn)
+  );
   const headlineEntry = $derived.by(() =>
-    isInteractive ? resolveHeadlineEntry(tooltipState.entries) : null
+    isInteractive && !titleEntry
+      ? resolveHeadlineEntry(tooltipState.entries)
+      : null
   );
   const badgeEntries = $derived.by(() =>
     isInteractive
-      ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
+      ? resolveBadgeEntries(bodyEntries, headlineEntry?.key ?? null)
       : []
   );
-  // A heading stays on one line: the tooltip widens to hold it.
+  // A heading or a title stays on one line: the tooltip widens to hold it.
   const hasHeading = $derived(
-    tooltipState.entries.some((entry) => entry.role === 'heading')
+    tooltipState.entries.some(
+      (entry) => entry.role === 'heading' || entry.role === 'title'
+    )
   );
   const previewEntries = $derived(
-    tooltipState.entries.filter((entry) => !entry.pinnedOnly)
+    bodyEntries.filter((entry) => !entry.pinnedOnly)
+  );
+  const previewOtherCount = $derived(
+    previewEntries.filter((entry) => !entry.isVizColumn && !entry.role).length
   );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return previewEntries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
+      return isVariableLayout
+        ? layoutVariables(previewEntries, PREVIEW_MAX_OTHER_VARIABLES_COUNT)
+        : previewEntries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
       ...(headlineEntry ? [headlineEntry.key] : []),
       ...badgeEntries.map((entry) => entry.key)
     ]);
-
-    return tooltipState.entries.filter((entry) => !skippedKeys.has(entry.key));
+    const entries = bodyEntries.filter((entry) => !skippedKeys.has(entry.key));
+    return isVariableLayout ? layoutVariables(entries, null) : entries;
   });
   // The pinned inspector shows what the preview leaves out.
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, previewEntries.length - PREVIEW_MAX_ENTRIES_COUNT) +
+      : (isVariableLayout
+          ? Math.max(0, previewOtherCount - PREVIEW_MAX_OTHER_VARIABLES_COUNT)
+          : Math.max(0, previewEntries.length - PREVIEW_MAX_ENTRIES_COUNT)) +
           tooltipState.entries.filter(
             (entry) => entry.pinnedOnly && !entry.role
           ).length
   );
+
+  function layoutVariables(
+    entries: typeof tooltipState.entries,
+    maxOthers: number | null
+  ): typeof tooltipState.entries {
+    const variables = entries.filter((entry) => entry.isVizColumn);
+    const others = entries.filter((entry) => !entry.isVizColumn);
+    const shownOthers =
+      maxOthers === null ? others : others.slice(0, maxOthers);
+    const divider = {
+      key: 'variables-divider',
+      value: '',
+      role: 'divider' as const
+    };
+    return [
+      ...(titleEntry && !isInteractive && variables.length + shownOthers.length
+        ? [{ ...divider, key: 'title-divider' }]
+        : []),
+      ...variables,
+      ...(variables.length > 0 && shownOthers.length > 0 ? [divider] : []),
+      ...shownOthers
+    ];
+  }
+
+  function swatchStyle(swatch: [number, number, number]): string {
+    return `background-color: rgb(${swatch.join(' ')});`;
+  }
 
   function getTooltipViewerRect(): {
     left: number;
@@ -308,7 +358,14 @@
           />
         </div>
 
-        {#if headlineEntry}
+        {#if titleEntry}
+          <div class="tooltip-title">
+            <span class="tooltip-title-text">{titleEntry.key}</span>
+            {#if titleEntry.value}
+              <span class="tooltip-title-subtitle">{titleEntry.value}</span>
+            {/if}
+          </div>
+        {:else if headlineEntry}
           <div class="tooltip-title">{headlineEntry.value}</div>
         {/if}
 
@@ -327,6 +384,14 @@
     <div class="kh-scroll-area">
       <div class="tooltip-shell-body" use:scrollShadows>
         <div class="tooltip-entries">
+          {#if titleEntry && !isInteractive}
+            <div class="tooltip-preview-title">
+              <span class="tooltip-title-text">{titleEntry.key}</span>
+              {#if titleEntry.value}
+                <span class="tooltip-title-subtitle">{titleEntry.value}</span>
+              {/if}
+            </div>
+          {/if}
           {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
             {#if entry.role === 'divider'}
               <hr class="tooltip-divider" />
@@ -349,9 +414,20 @@
                 {/each}
               </div>
             {:else}
-              <div class="tooltip-row" class:inline={entry.pinnedOnly}>
-                <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-                  >{entry.key}</span
+              <div
+                class="tooltip-row"
+                class:inline={entry.pinnedOnly}
+                class:variable={isVariableLayout && entry.isVizColumn}
+                class:other={isVariableLayout && !entry.isVizColumn}
+              >
+                <span class="tooltip-key" class:viz-column={entry.isVizColumn}>
+                  {#if entry.swatch}
+                    <span
+                      class="tooltip-swatch"
+                      style={swatchStyle(entry.swatch)}
+                      aria-hidden="true"
+                    ></span>
+                  {/if}{entry.key}</span
                 >
                 <span class="tooltip-value">{entry.value}</span>
               </div>
@@ -360,8 +436,10 @@
         </div>
 
         {#if previewOverflowCount > 0}
-          <div class="tooltip-preview-more" aria-hidden="true">
-            +{previewOverflowCount}
+          <div class="tooltip-preview-more">
+            {previewOverflowCount === 1
+              ? m.map_tooltip_more_variables_one()
+              : m.map_tooltip_more_variables({ count: previewOverflowCount })}
           </div>
         {/if}
       </div>
@@ -396,7 +474,7 @@
     );
     width: min(13rem, calc(100vw - 16px));
     max-width: min(13rem, calc(100vw - 16px));
-    max-height: min(8.5rem, calc(100dvh - 16px));
+    max-height: min(11rem, calc(100dvh - 16px));
     overflow: hidden;
     pointer-events: none;
     user-select: none;
@@ -458,6 +536,28 @@
     color: var(--cds-text-primary, #161616);
   }
 
+  .tooltip-title-text {
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+  .tooltip-title-subtitle {
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .tooltip-title .tooltip-title-subtitle {
+    display: block;
+    font-size: 0.75rem;
+  }
+  .tooltip-preview-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tooltip-preview-title .tooltip-title-subtitle {
+    font-size: 11px;
+  }
   .tooltip-badges {
     display: flex;
     flex-wrap: wrap;
@@ -557,6 +657,28 @@
   .tooltip-key.viz-column {
     font-weight: 600;
     color: var(--cds-text-primary, #161616);
+  }
+  /* The variables the map draws are never cut short. */
+  .tooltip-row.variable {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+  .tooltip-row.variable .tooltip-key {
+    max-width: none;
+  }
+  .tooltip-row.variable .tooltip-value {
+    max-width: none;
+  }
+  .tooltip-row.other .tooltip-value {
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .tooltip-swatch {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    vertical-align: -1px;
+    box-shadow: inset 0 0 0 0.5px rgba(22, 22, 22, 0.25);
   }
 
   .tooltip-value {
@@ -709,17 +831,6 @@
   }
 
   .tooltip-preview-more {
-    align-self: flex-end;
-    min-width: 24px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 0;
-    background: rgba(22, 22, 22, 0.06);
-    color: #525252;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
+    color: var(--cds-text-secondary, #525252);
   }
 </style>
