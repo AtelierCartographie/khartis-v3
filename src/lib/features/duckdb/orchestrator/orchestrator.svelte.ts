@@ -509,6 +509,15 @@ export const duckDBOrchestrator = {
     return joinOps.getBasemapAttributeValues(basemap, Duck);
   },
 
+  async getBasemapDisplayNames(
+    basemap: BasemapMetadata
+  ): Promise<Map<string, string>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getBasemapDisplayNames(basemap, Duck);
+  },
+
   async getBasemapAttributeAliasesByValue(
     basemap: BasemapMetadata
   ): Promise<Record<string, joinOps.BasemapAlias[]>> {
