@@ -11,6 +11,8 @@ export interface ReadTabularOptions {
   ignore_errors?: boolean;
   all_varchar?: boolean;
   format?: string;
+  /** Warns about lines `ignore_errors` drops; off for replays of a known file. */
+  report_skipped_lines?: boolean;
 }
 
 export interface ReadGeofileOptions {
