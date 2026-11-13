@@ -3,9 +3,12 @@ import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.
 import { isYearValue } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS
 } from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
@@ -339,14 +342,161 @@ export function extractTooltipEntries(
     ? extractEntriesFromArrowTable(sourceTable, rowIndex)
     : [];
 
-  if (entries.length === 0) return [];
+  if (!sourceTable || entries.length === 0) return [];
 
+  const viz = resolveHoveredVisualization(info, visualizations);
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
     const vizColumns = getVizColumnNames(visualizations, info.layer.id);
     entries = sortEntriesByVizPriority(entries, vizColumns);
   }
+  entries = withFillSwatch(entries, info, viz);
 
-  return entries;
+  return withEntityTitle(entries, sourceTable, rowIndex, viz);
+}
+
+// A collection map's id extends its source visualization's: the longest
+// match names the map actually hovered.
+function resolveHoveredVisualization(
+  info: PickingInfo,
+  visualizations: VisualizationConfig[] | undefined
+): VisualizationConfig | undefined {
+  const layerId = info.layer?.id;
+  return layerId
+    ? visualizations
+        ?.filter((candidate) => layerId.includes(candidate.id))
+        .sort((a, b) => b.id.length - a.id.length)[0]
+    : undefined;
+}
+
+function resolveDatasetGeoColumn(datasetId: string): string | undefined {
+  const entry = datasetsStore.datasets.find(
+    (dataset) => dataset.id === datasetId
+  );
+  return (
+    duckDBOrchestrator.findDatasetByIdOrSourceFile(
+      entry?.sourceFileId || datasetId
+    )?.geoColumn ?? entry?.geoColumn
+  );
+}
+
+function readText(table: ArrowTable, column: string, row: number): string {
+  const value = table.getChild(column)?.get(row);
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function normalizeName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .toLocaleLowerCase();
+}
+
+/**
+ * The value the row was joined on titles the entry; the basemap's display
+ * name follows it when it says something else, a name for a code ("76",
+ * Seine-Maritime) or the corrected spelling of a typo.
+ */
+function withEntityTitle(
+  entries: TooltipEntry[],
+  table: ArrowTable,
+  rowIndex: number,
+  viz: VisualizationConfig | undefined
+): TooltipEntry[] {
+  const geoColumn = viz?.datasetId
+    ? resolveDatasetGeoColumn(viz.datasetId)
+    : undefined;
+  const joinedValue = geoColumn ? readText(table, geoColumn, rowIndex) : '';
+  const basemapName = readText(table, JOINED_BASEMAP_COLUMN.NAME, rowIndex);
+  const title = joinedValue || basemapName;
+  if (!title) return entries;
+
+  const subtitle =
+    joinedValue &&
+    basemapName &&
+    normalizeName(joinedValue) !== normalizeName(basemapName)
+      ? basemapName
+      : '';
+  return [
+    {
+      key: formatTooltipValue(title, geoColumn),
+      value: subtitle ? formatTooltipValue(subtitle) : '',
+      role: 'title'
+    },
+    ...entries.filter((entry) => entry.isVizColumn || entry.key !== geoColumn)
+  ];
+}
+
+type Rgb = [number, number, number];
+
+interface ColorAttribute {
+  value?: ArrayLike<number> | null;
+  size?: number;
+  isConstant?: boolean;
+}
+
+/** The color the hovered feature is drawn in, as the picked layer holds it. */
+function readPickedFillColor(info: PickingInfo): Rgb | null {
+  const layer = (info.sourceLayer ?? info.layer) as
+    | (PickingInfo['layer'] & {
+        getAttributeManager?: () => {
+          getAttributes: () => Record<string, ColorAttribute>;
+        } | null;
+      })
+    | null
+    | undefined;
+  const attributes = layer?.getAttributeManager?.()?.getAttributes();
+  const index = info.index;
+  if (!attributes || index === undefined || index < 0) return null;
+
+  for (const [name, perVertex] of [
+    ['fillColors', true],
+    ['instanceFillColors', false]
+  ] as const) {
+    const attribute = attributes[name];
+    const value = attribute?.value;
+    const size = attribute?.size ?? 4;
+    if (!value) continue;
+    let element = 0;
+    if (!attribute.isConstant) {
+      const startIndices = perVertex
+        ? (Reflect.get(Object(layer?.props?.data), 'startIndices') as
+            ArrayLike<number> | undefined)
+        : undefined;
+      element = perVertex ? Number(startIndices?.[index] ?? -1) : index;
+    }
+    const offset = element * size;
+    if (element < 0 || offset + 2 >= value.length) continue;
+    const alpha = size === 4 ? Number(value[offset + 3]) : 255;
+    if (!(alpha > 0)) return null;
+    // Constant colors are kept normalized, buffers in bytes.
+    const scale = attribute.isConstant && Number(value[0]) <= 1 ? 255 : 1;
+    return [0, 1, 2].map((channel) =>
+      Math.round(Number(value[offset + channel]) * scale)
+    ) as Rgb;
+  }
+  return null;
+}
+
+/** The swatch goes to the variable that colors the hovered feature. */
+function withFillSwatch(
+  entries: TooltipEntry[],
+  info: PickingInfo,
+  viz: VisualizationConfig | undefined
+): TooltipEntry[] {
+  const mapping = viz?.mapping;
+  const colorColumn =
+    mapping?.colorColumn ?? mapping?.categoryColumn ?? mapping?.valueColumn;
+  if (!colorColumn) return entries;
+  const index = entries.findIndex(
+    (entry) => entry.isVizColumn && entry.key === colorColumn
+  );
+  if (index < 0) return entries;
+  const swatch = readPickedFillColor(info);
+  if (!swatch) return entries;
+  return entries.map((entry, entryIndex) =>
+    entryIndex === index ? { ...entry, swatch } : entry
+  );
 }
 
 // Legends of every visualization drawn from the hovered dataset read the
@@ -355,14 +505,7 @@ function resolveHoveredRow(
   info: PickingInfo,
   visualizations: VisualizationConfig[] | undefined
 ): HoveredRow | null {
-  const layerId = info.layer?.id;
-  // A collection map's id extends its source visualization's: the longest
-  // match names the map actually hovered.
-  const viz = layerId
-    ? visualizations
-        ?.filter((candidate) => layerId.includes(candidate.id))
-        .sort((a, b) => b.id.length - a.id.length)[0]
-    : undefined;
+  const viz = resolveHoveredVisualization(info, visualizations);
   const table = resolveSourceTable(info);
   const rowIndex = resolvePickedRowIndex(info);
   if (!viz?.datasetId || !table || rowIndex === null) {

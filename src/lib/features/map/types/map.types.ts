@@ -32,16 +32,19 @@ export interface TooltipEntry {
   value: string;
   /** The column drives one of the hovered layer's visualizations. */
   isVizColumn?: boolean;
+  /** The color the hovered feature is drawn in, beside its variable. */
+  swatch?: [number, number, number];
   /** A heading's value drawn as a join category count. */
   tone?: JoinCategoryTone;
   /** The fields of a `columns` entry, side by side like a join table row. */
   columns?: TooltipColumn[];
   /**
-   * A heading (key in the accent color, then its value), a subtitle (the key
+   * A title (the entity, key, with an optional lighter name as value), a
+   * heading (key in the accent color, then its value), a subtitle (the key
    * alone, muted), a divider, or fields side by side, instead of a key/value
    * row.
    */
-  role?: 'heading' | 'subtitle' | 'divider' | 'columns';
+  role?: 'title' | 'heading' | 'subtitle' | 'divider' | 'columns';
   /** Shown only once the inspector is pinned. */
   pinnedOnly?: boolean;
 }
