@@ -469,7 +469,11 @@ function withVariableGlyphs(
     resolveLegendRowStyle(
       viz,
       glyph.primitive,
-      glyph.channel === 'stroke' ? 'stroke' : 'fill',
+      glyph.channel === 'stroke'
+        ? 'stroke'
+        : glyph.secondary
+          ? 'secondary'
+          : 'fill',
       readValue
     );
 
@@ -482,6 +486,7 @@ function withVariableGlyphs(
         const style = styleOf(glyph);
         const keepsOutline =
           glyph.channel === 'size' &&
+          !glyph.secondary &&
           glyph.primitive !== PrimitiveFilterType.TEXT &&
           coloredPrimitives.has(glyph.primitive);
         const color = keepsOutline ? undefined : style.color;

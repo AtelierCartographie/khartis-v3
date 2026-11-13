@@ -10,6 +10,15 @@
   let { glyph }: Props = $props();
 
   const NEUTRAL = 'var(--cds-icon-secondary, #6f6f6f)';
+  const DENSITY_DOTS: [number, number][] = [
+    [2, 2],
+    [6, 1.5],
+    [4, 5],
+    [8.5, 4.5],
+    [1.5, 7.5],
+    [6, 8.5],
+    [9, 8.5]
+  ];
   const SIZE = 10;
 
   const color = $derived(glyph.color ?? NEUTRAL);
@@ -52,7 +61,12 @@
   viewBox="0 0 10 10"
   aria-hidden="true"
 >
-  {#if glyph.primitive === PrimitiveFilterType.TEXT}
+  {#if glyph.channel === 'density'}
+    <!-- The dot cloud of the density fill mode's own icon. -->
+    {#each DENSITY_DOTS as [cx, cy], index (index)}
+      <circle cx={cx} cy={cy} r="1.1" fill={color} />
+    {/each}
+  {:else if glyph.primitive === PrimitiveFilterType.TEXT}
     <text
       x="5"
       y="9"

@@ -30,7 +30,9 @@ export interface TooltipColumn {
 
 export interface TooltipGlyph {
   primitive: PrimitiveFilter;
-  channel: 'color' | 'size' | 'stroke' | 'label';
+  channel: 'color' | 'size' | 'stroke' | 'label' | 'density';
+  /** The second variable of double proportional symbols, in its own color. */
+  secondary?: boolean;
   /** A symbol's shape, the hovered row's own when shapes follow categories. */
   shape?: ShapeType;
   /** The color the hovered row is drawn in, when this glyph carries it. */
