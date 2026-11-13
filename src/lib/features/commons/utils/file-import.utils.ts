@@ -89,6 +89,42 @@ export async function fileContainsPattern(
   }
 }
 
+export async function isUtf8(file: Blob): Promise<boolean> {
+  const reader = file
+    .stream()
+    .pipeThrough(new TextDecoderStream(UTF8_ENCODING, { fatal: true }))
+    .getReader();
+
+  try {
+    for (;;) {
+      const { done } = await reader.read();
+      if (done) return true;
+    }
+  } catch {
+    return false;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
+ * DuckDB reads UTF-8 only, and in WASM `ignore_errors` drops every line that
+ * holds a non-UTF-8 byte, so a Windows export loses its accented rows silently.
+ */
+export async function transcodeLegacyTextToUtf8(file: File): Promise<File> {
+  const utf8 = await new Response(
+    file
+      .stream()
+      .pipeThrough(new TextDecoderStream(FILE_ENCODING.LEGACY))
+      .pipeThrough(new TextEncoderStream())
+  ).blob();
+
+  return new File([utf8], file.name, {
+    type: file.type,
+    lastModified: file.lastModified
+  });
+}
+
 export function createUploadedFile(
   file: File,
   sourceType: DataSourceType,

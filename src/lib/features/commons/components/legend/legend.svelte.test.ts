@@ -137,7 +137,7 @@ describe('common legend generators', () => {
 
   it('should put the lowest class at the bottom of a vertical bar when it reads like a thermometer', () => {
     const labelY = (markup: string, label: string): number =>
-      Number(new RegExp(`y="([\\d.]+)">${label}<`).exec(markup)?.[1]);
+      Number(new RegExp(`y="([\\d.]+)"[^>]*>${label}<`).exec(markup)?.[1]);
     const thermometer = draw_quanti_color_legend(
       [0, 50, 100],
       ['#f7fbff', '#2171b5'],
@@ -169,7 +169,7 @@ describe('common legend generators', () => {
       width: Number(width)
     }));
     const labels = [
-      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+">([^<]+)</g)
+      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+"[^>]*>([^<]+)</g)
     ].map(([, x, text]) => ({ x: Number(x), text }));
 
     expect(segments.map((segment) => segment.width)).toEqual([2.5, 6]);

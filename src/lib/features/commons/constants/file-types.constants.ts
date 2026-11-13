@@ -59,7 +59,9 @@ export const FILE_EXTENSION_GROUPS = {
 } as const;
 
 export const FILE_ENCODING = {
-  DEFAULT: 'UTF-8'
+  DEFAULT: 'UTF-8',
+  /** Assumed for text that is not UTF-8: Excel and most Windows exports. */
+  LEGACY: 'windows-1252'
 } as const;
 
 export const CSV_DELIMITERS = {

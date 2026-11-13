@@ -20,6 +20,7 @@
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { portal } from '$lib/features/commons/utils/portal';
   import * as m from '$lib/paraglide/messages';
   import { Modal, Tag, TextInput } from 'carbon-components-svelte';
   import {
@@ -968,58 +969,62 @@
   </div>
 </div>
 
-<AddDataModal bind:open={isAddDataModalOpen} />
+<!-- The tabs sit in the panel's sticky header: WebKit clips a fixed dialog
+     to the scroller of a sticky ancestor, so the dialogs live under <body>. -->
+<div use:portal>
+  <AddDataModal bind:open={isAddDataModalOpen} />
 
-<Modal
-  iconDescription={m.a11y_close_dialog()}
-  danger
-  open={isVizDeleteConfirmOpen}
-  modalHeading={m.viz_list_delete_title()}
-  primaryButtonText={m.delete_confirm_button()}
-  secondaryButtonText={m.cancel()}
-  size="sm"
-  on:click:button--secondary={cancelVizDelete}
-  on:click:button--primary={confirmVizDelete}
-  on:close={cancelVizDelete}
->
-  <p>
-    {m.viz_list_delete_message({ name: vizToDelete?.name ?? '' })}
-  </p>
-</Modal>
+  <Modal
+    iconDescription={m.a11y_close_dialog()}
+    danger
+    open={isVizDeleteConfirmOpen}
+    modalHeading={m.viz_list_delete_title()}
+    primaryButtonText={m.delete_confirm_button()}
+    secondaryButtonText={m.cancel()}
+    size="sm"
+    on:click:button--secondary={cancelVizDelete}
+    on:click:button--primary={confirmVizDelete}
+    on:close={cancelVizDelete}
+  >
+    <p>
+      {m.viz_list_delete_message({ name: vizToDelete?.name ?? '' })}
+    </p>
+  </Modal>
 
-<Modal
-  iconDescription={m.a11y_close_dialog()}
-  danger
-  open={isDeleteConfirmOpen}
-  modalHeading={m.file_delete_title()}
-  primaryButtonText={m.delete_confirm_button()}
-  secondaryButtonText={m.cancel()}
-  size="sm"
-  on:click:button--secondary={cancelDelete}
-  on:click:button--primary={handleDeleteFile}
-  on:close={cancelDelete}
->
-  <p>
-    {m.file_delete_message({ name: fileToDelete?.name ?? '' })}
-  </p>
-</Modal>
+  <Modal
+    iconDescription={m.a11y_close_dialog()}
+    danger
+    open={isDeleteConfirmOpen}
+    modalHeading={m.file_delete_title()}
+    primaryButtonText={m.delete_confirm_button()}
+    secondaryButtonText={m.cancel()}
+    size="sm"
+    on:click:button--secondary={cancelDelete}
+    on:click:button--primary={handleDeleteFile}
+    on:close={cancelDelete}
+  >
+    <p>
+      {m.file_delete_message({ name: fileToDelete?.name ?? '' })}
+    </p>
+  </Modal>
 
-<Modal
-  iconDescription={m.a11y_close_dialog()}
-  danger
-  open={isDeleteDatasetConfirmOpen}
-  modalHeading={m.dataset_delete_title()}
-  primaryButtonText={m.delete_confirm_button()}
-  secondaryButtonText={m.cancel()}
-  size="sm"
-  on:click:button--secondary={cancelDeleteDataset}
-  on:click:button--primary={confirmDeleteDataset}
-  on:close={cancelDeleteDataset}
->
-  <p>
-    {m.dataset_delete_message({ name: datasetToDelete?.name ?? '' })}
-  </p>
-</Modal>
+  <Modal
+    iconDescription={m.a11y_close_dialog()}
+    danger
+    open={isDeleteDatasetConfirmOpen}
+    modalHeading={m.dataset_delete_title()}
+    primaryButtonText={m.delete_confirm_button()}
+    secondaryButtonText={m.cancel()}
+    size="sm"
+    on:click:button--secondary={cancelDeleteDataset}
+    on:click:button--primary={confirmDeleteDataset}
+    on:close={cancelDeleteDataset}
+  >
+    <p>
+      {m.dataset_delete_message({ name: datasetToDelete?.name ?? '' })}
+    </p>
+  </Modal>
+</div>
 
 <style>
   .toolbar-tabs-collapsed {

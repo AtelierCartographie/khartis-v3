@@ -401,7 +401,7 @@ export function draw_categorical_legend(
       <g class="box">
         ${boxes.join('')}
       </g>
-      <g class="labels" text-anchor="start" dominant-baseline="middle" font-size="${fontSize}" transform="translate(${dx},0)">
+      <g class="labels" text-anchor="start" font-size="${fontSize}" transform="translate(${dx},0)">
         ${labels.join('')}
       </g>
       ${header.markup}
@@ -519,13 +519,13 @@ function create_label(
   const centerY = y + rowHeight / 2;
 
   if (text.nb_lines === 1) {
-    return `<text x="${x}" y="${centerY}">${escapeSvgText(text.lines[0] ?? '')}</text>`;
+    return `<text x="${x}" y="${centerY}" dominant-baseline="middle">${escapeSvgText(text.lines[0] ?? '')}</text>`;
   }
 
-  return `<text aria-label="${escapeSvgAttribute(text.label)}">${text.lines
+  return `<text aria-label="${escapeSvgAttribute(text.label)}" dominant-baseline="middle">${text.lines
     .map((d, i) => {
       const lineY = centerY + (i - (text.nb_lines - 1) / 2) * dy;
-      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(d)}</tspan>`;
+      return `<tspan x="${x}" y="${lineY}" dominant-baseline="middle">${escapeSvgText(d)}</tspan>`;
     })
     .join('')}</text>`;
 }

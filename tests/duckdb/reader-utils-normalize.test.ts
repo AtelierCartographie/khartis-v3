@@ -7,6 +7,9 @@
  * common in real data, so we strip the prefix back — but only when it is safe
  * (keyword/digit-led name, no collision) and never on internal columns.
  */
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createTestInstance,
@@ -30,8 +33,10 @@ vi.mock('$lib/features/duckdb/core/query', () => ({
 }));
 
 import {
+  CSV_STORE_REJECTS_OPTIONS,
   dropSyntheticFeatureIdColumn,
-  restoreNormalizedColumnNames
+  restoreNormalizedColumnNames,
+  takeCsvRejectedLines
 } from '$lib/features/duckdb/io/reader-utils';
 
 let db: TestDuckDB;
@@ -125,5 +130,44 @@ describe('dropSyntheticFeatureIdColumn', () => {
     await dropSyntheticFeatureIdColumn(db.connection as never, 'ids');
 
     expect(await columnsOf('ids')).toContain('OGC_FID');
+  });
+});
+
+describe('takeCsvRejectedLines', () => {
+  beforeAll(async () => {
+    db = await createTestInstance();
+    hoisted.connection = db.connection;
+  });
+
+  afterAll(async () => {
+    await destroyTestInstance(db);
+  });
+
+  it('should report each skipped CSV line once and forget it after the next scan', async () => {
+    const csv = join(tmpdir(), `kh-rejects-${process.pid}.csv`);
+    writeFileSync(
+      csv,
+      ['pays;score', 'FIN;86', 'EST;88;extra', 'NLD', 'SWE;87'].join('\n')
+    );
+    const readCsv = `CREATE OR REPLACE TABLE rsf AS FROM read_csv('${csv}',
+      header=true, delim=';', ignore_errors=true, all_varchar=true,
+      ${CSV_STORE_REJECTS_OPTIONS.join(', ')})`;
+
+    try {
+      await db.connection.run(readCsv);
+      const rejected = await takeCsvRejectedLines(db.connection as never);
+      const kept = await db.connection.runAndReadAll('SELECT pays FROM rsf');
+
+      expect(kept.getRows().flat()).toEqual(['FIN', 'SWE']);
+      expect(rejected).toEqual({ count: 2, sample: [3, 4] });
+
+      await db.connection.run(readCsv);
+      expect(await takeCsvRejectedLines(db.connection as never)).toEqual({
+        count: 2,
+        sample: [3, 4]
+      });
+    } finally {
+      rmSync(csv, { force: true });
+    }
   });
 });
