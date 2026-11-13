@@ -6,14 +6,19 @@ import {
   JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS
 } from '$lib/features/commons/constants/data.constants';
-import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  type VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
 import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
-import type { TooltipEntry } from '../types';
+import type { TooltipEntry, TooltipGlyph } from '../types';
+import { resolveVariableGlyphs } from '../utils/tooltip-variable-glyphs.utils';
+import { classifyThematicLayerPrimitive } from '../utils/layer-panel-row.utils';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 import {
   type HoveredRow,
@@ -345,11 +350,13 @@ export function extractTooltipEntries(
   if (!sourceTable || entries.length === 0) return [];
 
   const viz = resolveHoveredVisualization(info, visualizations);
+  const glyphsByColumn = viz ? resolveVariableGlyphs(viz) : new Map();
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
     const vizColumns = getVizColumnNames(visualizations, info.layer.id);
+    for (const column of glyphsByColumn.keys()) vizColumns.add(column);
     entries = sortEntriesByVizPriority(entries, vizColumns);
   }
-  entries = withFillSwatch(entries, info, viz);
+  entries = withVariableGlyphs(entries, info, glyphsByColumn);
 
   return withEntityTitle(entries, sourceTable, rowIndex, viz);
 }
@@ -436,7 +443,7 @@ interface ColorAttribute {
 }
 
 /** The color the hovered feature is drawn in, as the picked layer holds it. */
-function readPickedFillColor(info: PickingInfo): Rgb | null {
+function readPickedColor(info: PickingInfo): Rgb | null {
   const layer = (info.sourceLayer ?? info.layer) as
     | (PickingInfo['layer'] & {
         getAttributeManager?: () => {
@@ -451,7 +458,9 @@ function readPickedFillColor(info: PickingInfo): Rgb | null {
 
   for (const [name, perVertex] of [
     ['fillColors', true],
-    ['instanceFillColors', false]
+    ['instanceFillColors', false],
+    ['colors', true],
+    ['instanceColors', false]
   ] as const) {
     const attribute = attributes[name];
     const value = attribute?.value;
@@ -478,25 +487,52 @@ function readPickedFillColor(info: PickingInfo): Rgb | null {
   return null;
 }
 
-/** The swatch goes to the variable that colors the hovered feature. */
-function withFillSwatch(
+/**
+ * Each variable the visualization draws gets the glyph of how it is drawn;
+ * the one coloring the hovered primitive takes the hovered feature's color.
+ */
+function withVariableGlyphs(
   entries: TooltipEntry[],
   info: PickingInfo,
-  viz: VisualizationConfig | undefined
+  glyphsByColumn: Map<string, TooltipGlyph[]>
 ): TooltipEntry[] {
-  const mapping = viz?.mapping;
-  const colorColumn =
-    mapping?.colorColumn ?? mapping?.categoryColumn ?? mapping?.valueColumn;
-  if (!colorColumn) return entries;
-  const index = entries.findIndex(
-    (entry) => entry.isVizColumn && entry.key === colorColumn
+  if (glyphsByColumn.size === 0) return entries;
+  const pickedPrimitive = info.layer?.id
+    ? classifyThematicLayerPrimitive(info.layer.id)
+    : null;
+  // A size drawn in a single color takes that color; once a variable colors
+  // the primitive, the color is that variable's.
+  const isColoredByVariable = [...glyphsByColumn.values()].some((glyphs) =>
+    glyphs.some(
+      (glyph) =>
+        glyph.primitive === pickedPrimitive && glyph.channel === 'color'
+    )
   );
-  if (index < 0) return entries;
-  const swatch = readPickedFillColor(info);
-  if (!swatch) return entries;
-  return entries.map((entry, entryIndex) =>
-    entryIndex === index ? { ...entry, swatch } : entry
-  );
+  let pickedColor: [number, number, number] | null | undefined;
+  return entries.map((entry) => {
+    const glyphs = glyphsByColumn.get(entry.key);
+    if (!glyphs) return entry;
+    return {
+      ...entry,
+      glyphs: glyphs.map((glyph) => {
+        // A hollow symbol keeps a fill color it does not draw.
+        const carriesColor =
+          !glyph.hollow &&
+          (glyph.channel === 'color' ||
+            (glyph.channel === 'size' && !isColoredByVariable));
+        // Text colors are stored per character, not per feature.
+        if (
+          !carriesColor ||
+          glyph.primitive !== pickedPrimitive ||
+          glyph.primitive === PrimitiveFilterType.TEXT
+        ) {
+          return glyph;
+        }
+        pickedColor ??= readPickedColor(info);
+        return pickedColor ? { ...glyph, color: pickedColor } : glyph;
+      })
+    };
+  });
 }
 
 // Legends of every visualization drawn from the hovered dataset read the

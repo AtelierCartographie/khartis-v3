@@ -13,6 +13,7 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { Tag } from 'carbon-components-svelte';
+  import TooltipGlyph from './tooltip-glyph.svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
   const PREVIEW_MAX_ENTRIES_COUNT = 5;
@@ -113,10 +114,6 @@
       ...(variables.length > 0 && shownOthers.length > 0 ? [divider] : []),
       ...shownOthers
     ];
-  }
-
-  function swatchStyle(swatch: [number, number, number]): string {
-    return `background-color: rgb(${swatch.join(' ')});`;
   }
 
   function getTooltipViewerRect(): {
@@ -421,12 +418,12 @@
                 class:other={isVariableLayout && !entry.isVizColumn}
               >
                 <span class="tooltip-key" class:viz-column={entry.isVizColumn}>
-                  {#if entry.swatch}
-                    <span
-                      class="tooltip-swatch"
-                      style={swatchStyle(entry.swatch)}
-                      aria-hidden="true"
-                    ></span>
+                  {#if entry.glyphs?.length}
+                    <span class="tooltip-glyphs">
+                      {#each entry.glyphs as glyph, glyphIndex (glyphIndex)}
+                        <TooltipGlyph glyph={glyph} />
+                      {/each}
+                    </span>
                   {/if}{entry.key}</span
                 >
                 <span class="tooltip-value">{entry.value}</span>
@@ -658,27 +655,24 @@
     font-weight: 600;
     color: var(--cds-text-primary, #161616);
   }
-  /* The variables the map draws are never cut short. */
+  /* The variables the map draws are never cut short: a long name wraps. */
   .tooltip-row.variable {
-    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-columns: minmax(0, max-content) minmax(3rem, 1fr);
   }
   .tooltip-row.variable .tooltip-key {
     max-width: none;
-  }
-  .tooltip-row.variable .tooltip-value {
-    max-width: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .tooltip-row.other .tooltip-value {
     font-weight: 400;
     color: var(--cds-text-secondary, #525252);
   }
-  .tooltip-swatch {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
+  .tooltip-glyphs {
+    display: inline-flex;
+    gap: 2px;
     margin-right: 5px;
     vertical-align: -1px;
-    box-shadow: inset 0 0 0 0.5px rgba(22, 22, 22, 0.25);
   }
 
   .tooltip-value {
@@ -688,8 +682,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 114px;
-    flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
     justify-self: end;
   }
 
