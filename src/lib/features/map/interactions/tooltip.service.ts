@@ -3,14 +3,22 @@ import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.
 import { isYearValue } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS
 } from '$lib/features/commons/constants/data.constants';
-import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  type VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
 import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
-import type { TooltipEntry } from '../types';
+import type { TooltipEntry, TooltipGlyph } from '../types';
+import { resolveVariableGlyphs } from '../utils/tooltip-variable-glyphs.utils';
+import { resolveLegendRowStyle } from '../utils/legend-segments.utils';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 import {
   type HoveredRow,
@@ -339,14 +347,164 @@ export function extractTooltipEntries(
     ? extractEntriesFromArrowTable(sourceTable, rowIndex)
     : [];
 
-  if (entries.length === 0) return [];
+  if (!sourceTable || entries.length === 0) return [];
 
+  const viz = resolveHoveredVisualization(info, visualizations);
+  const glyphsByColumn = viz ? resolveVariableGlyphs(viz) : new Map();
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
     const vizColumns = getVizColumnNames(visualizations, info.layer.id);
+    for (const column of glyphsByColumn.keys()) vizColumns.add(column);
     entries = sortEntriesByVizPriority(entries, vizColumns);
   }
+  entries = withVariableGlyphs(
+    entries,
+    sourceTable,
+    rowIndex,
+    viz,
+    glyphsByColumn
+  );
 
-  return entries;
+  return withEntityTitle(entries, sourceTable, rowIndex, viz);
+}
+
+// A collection map's id extends its source visualization's: the longest
+// match names the map actually hovered.
+function resolveHoveredVisualization(
+  info: PickingInfo,
+  visualizations: VisualizationConfig[] | undefined
+): VisualizationConfig | undefined {
+  const layerId = info.layer?.id;
+  return layerId
+    ? visualizations
+        ?.filter((candidate) => layerId.includes(candidate.id))
+        .sort((a, b) => b.id.length - a.id.length)[0]
+    : undefined;
+}
+
+function resolveDatasetGeoColumn(datasetId: string): string | undefined {
+  const entry = datasetsStore.datasets.find(
+    (dataset) => dataset.id === datasetId
+  );
+  return (
+    duckDBOrchestrator.findDatasetByIdOrSourceFile(
+      entry?.sourceFileId || datasetId
+    )?.geoColumn ?? entry?.geoColumn
+  );
+}
+
+function readText(table: ArrowTable, column: string, row: number): string {
+  const value = table.getChild(column)?.get(row);
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function normalizeName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .toLocaleLowerCase();
+}
+
+/**
+ * The value the row was joined on titles the entry; the basemap's display
+ * name follows it when it says something else, a name for a code ("76",
+ * Seine-Maritime) or the corrected spelling of a typo.
+ */
+function withEntityTitle(
+  entries: TooltipEntry[],
+  table: ArrowTable,
+  rowIndex: number,
+  viz: VisualizationConfig | undefined
+): TooltipEntry[] {
+  const geoColumn = viz?.datasetId
+    ? resolveDatasetGeoColumn(viz.datasetId)
+    : undefined;
+  const joinedValue = geoColumn ? readText(table, geoColumn, rowIndex) : '';
+  const basemapName = readText(table, JOINED_BASEMAP_COLUMN.NAME, rowIndex);
+  const title = joinedValue || basemapName;
+  if (!title) return entries;
+
+  const subtitle =
+    joinedValue &&
+    basemapName &&
+    normalizeName(joinedValue) !== normalizeName(basemapName)
+      ? basemapName
+      : '';
+  return [
+    {
+      key: formatTooltipValue(title, geoColumn),
+      value: subtitle ? formatTooltipValue(subtitle) : '',
+      role: 'title'
+    },
+    ...entries.filter((entry) => entry.isVizColumn || entry.key !== geoColumn)
+  ];
+}
+
+/**
+ * Each variable the visualization draws gets the glyph of how it is drawn,
+ * in the color and the shape the hovered row takes, read like the legend
+ * reads it. A size keeps an outline when another variable colors its
+ * primitive, so that color reads once.
+ */
+function withVariableGlyphs(
+  entries: TooltipEntry[],
+  table: ArrowTable,
+  rowIndex: number,
+  viz: VisualizationConfig | undefined,
+  glyphsByColumn: Map<string, TooltipGlyph[]>
+): TooltipEntry[] {
+  if (!viz || glyphsByColumn.size === 0) return entries;
+  const readValue = (column: string): unknown => {
+    const child = table.getChild(column);
+    return child ? child.get(rowIndex) : undefined;
+  };
+  const coloredPrimitives = new Set(
+    [...glyphsByColumn.values()].flatMap((glyphs) =>
+      glyphs
+        .filter((glyph) => glyph.channel === 'color')
+        .map((glyph) => glyph.primitive)
+    )
+  );
+  const styleOf = (glyph: TooltipGlyph) =>
+    resolveLegendRowStyle(
+      viz,
+      glyph.primitive,
+      glyph.channel === 'stroke'
+        ? 'stroke'
+        : glyph.secondary
+          ? 'secondary'
+          : 'fill',
+      readValue
+    );
+
+  return entries.map((entry) => {
+    const glyphs = glyphsByColumn.get(entry.key);
+    if (!glyphs) return entry;
+    return {
+      ...entry,
+      glyphs: glyphs.map((glyph) => {
+        const style = styleOf(glyph);
+        const keepsOutline =
+          glyph.channel === 'size' &&
+          !glyph.secondary &&
+          glyph.primitive !== PrimitiveFilterType.TEXT &&
+          coloredPrimitives.has(glyph.primitive);
+        const color = keepsOutline ? undefined : style.color;
+        // A size drawn without a fill (hollow symbols) shows its outline.
+        const outline =
+          glyph.channel === 'size' && !color
+            ? resolveLegendRowStyle(viz, glyph.primitive, 'stroke', readValue)
+                .color
+            : undefined;
+        return {
+          ...glyph,
+          ...(style.shape && { shape: style.shape }),
+          ...(color && { color }),
+          ...(outline && { outline })
+        };
+      })
+    };
+  });
 }
 
 // Legends of every visualization drawn from the hovered dataset read the
@@ -355,14 +513,7 @@ function resolveHoveredRow(
   info: PickingInfo,
   visualizations: VisualizationConfig[] | undefined
 ): HoveredRow | null {
-  const layerId = info.layer?.id;
-  // A collection map's id extends its source visualization's: the longest
-  // match names the map actually hovered.
-  const viz = layerId
-    ? visualizations
-        ?.filter((candidate) => layerId.includes(candidate.id))
-        .sort((a, b) => b.id.length - a.id.length)[0]
-    : undefined;
+  const viz = resolveHoveredVisualization(info, visualizations);
   const table = resolveSourceTable(info);
   const rowIndex = resolvePickedRowIndex(info);
   if (!viz?.datasetId || !table || rowIndex === null) {

@@ -62,7 +62,8 @@ vi.mock('$lib/features/duckdb', async () => ({
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),
-    getConnection: vi.fn().mockResolvedValue(null)
+    getConnection: vi.fn().mockResolvedValue(null),
+    findDatasetByIdOrSourceFile: vi.fn().mockReturnValue(undefined)
   },
   Duck: {},
   validateGPSColumns: vi.fn().mockResolvedValue({ isValid: true }),
