@@ -22,10 +22,17 @@ import {
   readProjectedCrs
 } from './native-projection.utils';
 import {
+  findKnownEpsgForProj4,
+  getKnownEpsgName,
+  getProjectionCodeCentralMeridian
+} from '$lib/features/commons/utils/proj4-crs.utils';
+import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
+import {
   createCurrentProjectionForward,
   isGeoreferenceableDefinition,
   resolveCurrentProjectionDefinition,
   type ProjectionDefinition,
+  type ProjectionForward,
   type ProjectionDefinitionNote,
   type ProjectionDefinitionContext
 } from './projection-definition.utils';
@@ -278,6 +285,138 @@ export function buildMapGeoreference(
       pixelSize,
       rotated: Math.abs(transform.b) + Math.abs(transform.d) > pixelSize * 1e-9
     }
+  };
+}
+
+/** The CRS vector layers of the map are written in, for GIS software. */
+export type MapVectorCrs =
+  | {
+      status: 'map';
+      crsName: string;
+      definition: ProjectionDefinition;
+      /** For `ST_Transform`: an EPSG code, the pasted WKT or a PROJ.4 string. */
+      target: string;
+      geoPackageSrs: GeoPackageSrs;
+      /** Where d3 cuts lon/lat geometry before projecting it. */
+      seam: MapSeam;
+      /** Lon/lat to CRS, the one the georeferenced image uses. */
+      forward: ProjectionForward | null;
+      /**
+       * The map is composite: this is the CRS of its main frame, the insets
+       * keep their real place instead of their own frame.
+       */
+      composite: boolean;
+    }
+  | {
+      status: 'wgs84';
+      reason: Exclude<MapGeoreferenceUnavailableReason, 'facets'>;
+    };
+
+/**
+ * Where d3 cuts the sphere: the map turns it by [-longitude, -latitude],
+ * then the projection splits it along `meridian` of that turned sphere.
+ */
+export interface MapSeam {
+  longitude: number;
+  latitude: number;
+  meridian: number;
+}
+
+function resolveMapSeam(definition: ProjectionDefinition): MapSeam {
+  const { obliqueBase } = definition;
+  if (obliqueBase) {
+    // The base CRS keeps its own central meridian after the tilt.
+    return {
+      longitude: obliqueBase.longitude,
+      latitude: obliqueBase.latitude,
+      meridian: getProjectionCodeCentralMeridian(obliqueBase.proj4) + 180
+    };
+  }
+  if (definition.builtInOrientation) {
+    const [longitude, latitude] = definition.builtInOrientation;
+    return { longitude, latitude, meridian: 180 };
+  }
+  return {
+    longitude: definition.proj4
+      ? getProjectionCodeCentralMeridian(definition.proj4)
+      : 0,
+    latitude: 0,
+    meridian: 180
+  };
+}
+
+// A composite preset without an EPSG code still names the projection of its
+// main frame (`mainland`), the one the territory is drawn in.
+function resolveMainFrameProj4(
+  context: ProjectionDefinitionContext
+): string | undefined {
+  const { state, basemapProjection, projectionPresets } = context;
+  const presetId =
+    state.overrideActive === true && state.overrideSource === 'manual'
+      ? getCompositeProjectionPresetId(state.selected)
+      : basemapProjection?.type === 'composite'
+        ? basemapProjection.preset
+        : undefined;
+  const entries = presetId ? projectionPresets?.[presetId]?.entries : undefined;
+  const main =
+    entries?.find((entry) => entry.id === 'mainland') ?? entries?.[0];
+  return main?.proj4.replace(/\s*\+type=crs\b/, '').trim() || undefined;
+}
+
+/**
+ * The CRS the map is drawn in, when one exists. A map collection shares one
+ * projection, so it does not prevent vector layers from following it.
+ */
+export function resolveMapVectorCrs(): MapVectorCrs {
+  const context = getCurrentProjectionContext();
+  const drawn = resolveCurrentProjectionDefinition(context);
+  // A composite map has one CRS per frame; layers can only take one, the
+  // main frame's, which is what a GIS user of that territory works in.
+  const composite = drawn.notes.includes('composite');
+  const proj4 = composite
+    ? (drawn.proj4 ?? resolveMainFrameProj4(context))
+    : drawn.proj4;
+  // A PROJ string equal to a known code is declared by that code, so GIS
+  // software does not guess among equivalents (LAEA Europe: 3035 or 5636).
+  const epsg =
+    drawn.epsg ??
+    (proj4 && !drawn.wkt ? findKnownEpsgForProj4(proj4) : undefined);
+  const definition: ProjectionDefinition = {
+    ...drawn,
+    proj4,
+    epsg,
+    notes: drawn.notes.filter((note) => note !== 'composite')
+  };
+  const target = resolveSrs(definition);
+  const displayName = resolveCurrentProjectionDisplay(
+    context.state,
+    context.basemapProjection,
+    context.projectionPresets
+  ).name;
+  // A code has an official name; a composite map keeps its own, which says
+  // the insets.
+  const crsName =
+    (!composite && epsg ? getKnownEpsgName(`EPSG:${epsg}`) : undefined) ??
+    displayName;
+  const geoPackageSrs = resolveGeoPackageSrs(definition, crsName);
+  if (!isGeoreferenceableDefinition(definition) || !target || !geoPackageSrs) {
+    const reason =
+      NOTE_REASONS.find(([note]) => drawn.notes.includes(note))?.[1] ??
+      'no-equivalent';
+    return {
+      status: 'wgs84',
+      reason: reason === 'facets' ? 'no-equivalent' : reason
+    };
+  }
+  return {
+    status: 'map',
+    crsName,
+    definition,
+    target,
+    geoPackageSrs,
+    seam: resolveMapSeam(definition),
+    forward: createCurrentProjectionForward(context, definition),
+    composite
   };
 }
 

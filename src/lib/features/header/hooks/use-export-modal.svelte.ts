@@ -22,6 +22,7 @@ import {
   exportMapAsSvg,
   exportProject
 } from '../services/export.service';
+import { exportMapAsQgisGeoPackage } from '../services/qgis/qgis-map-export.service';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 
@@ -89,6 +90,10 @@ function createExportModal(): UseExportModalReturn {
           break;
 
         case ExportTab.MAP: {
+          if (mapFormat === MAP_FORMAT.QGIS) {
+            await exportMapAsQgisGeoPackage(fileName);
+            break;
+          }
           const currentFormat = getFormatState();
           const targetResolution =
             mapFormat === MAP_FORMAT.SVG
@@ -124,12 +129,14 @@ function createExportModal(): UseExportModalReturn {
             ? 'data'
             : 'project',
         selectedTab === ExportTab.MAP
-          ? mapFormat
+          ? mapFormat === MAP_FORMAT.QGIS
+            ? DATA_FORMAT.GEOPACKAGE
+            : mapFormat
           : selectedTab === ExportTab.DATA
             ? dataFormat
             : 'kh',
         selectedTab === ExportTab.MAP
-          ? mapFormat === MAP_FORMAT.SVG
+          ? mapFormat !== MAP_FORMAT.JPG
             ? 'vector'
             : resolution
           : undefined

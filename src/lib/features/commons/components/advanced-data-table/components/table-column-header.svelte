@@ -16,6 +16,7 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
+  import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -72,6 +73,9 @@
     { value: 'number', label: m.column_type_number() },
     { value: 'date', label: m.column_type_date() }
   ]);
+
+  // The refine operations rewrite text: they mean nothing on numbers or dates.
+  const canRefine = $derived(isTextLikeColumnType(column.type));
 
   const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
@@ -773,31 +777,33 @@
                   </button>
                 {/if}
 
-                <button
-                  type="button"
-                  class="menu-item submenu-trigger"
-                  role="menuitem"
-                  aria-haspopup="menu"
-                  aria-expanded={activeSubmenu === 'refine'}
-                  bind:this={refineSubmenuTriggerRef}
-                  onclick={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef, {
-                      focusFirst: true
-                    })}
-                  onkeydown={(event: KeyboardEvent) =>
-                    handleSubmenuTriggerKeydown(
-                      event,
-                      'refine',
-                      refineSubmenuTriggerRef
-                    )}
-                  onmouseenter={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                  onfocus={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                >
-                  {m.column_refine_label()}
-                  <span class="submenu-arrow">&#9654;</span>
-                </button>
+                {#if canRefine}
+                  <button
+                    type="button"
+                    class="menu-item submenu-trigger"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={activeSubmenu === 'refine'}
+                    bind:this={refineSubmenuTriggerRef}
+                    onclick={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef, {
+                        focusFirst: true
+                      })}
+                    onkeydown={(event: KeyboardEvent) =>
+                      handleSubmenuTriggerKeydown(
+                        event,
+                        'refine',
+                        refineSubmenuTriggerRef
+                      )}
+                    onmouseenter={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                    onfocus={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                  >
+                    {m.column_refine_label()}
+                    <span class="submenu-arrow">&#9654;</span>
+                  </button>
+                {/if}
 
                 <div class="menu-divider"></div>
 
@@ -870,7 +876,7 @@
               </div>
             </Portal>
           {/if}
-          {#if activeSubmenu === 'refine'}
+          {#if activeSubmenu === 'refine' && canRefine}
             <Portal>
               <div
                 class="dropdown-menu submenu-portal"

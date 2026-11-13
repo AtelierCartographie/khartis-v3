@@ -296,6 +296,25 @@ html[theme='g100'] .app-shadow {
   );
 }
 
+/* A floating panel another one is stacked over steps back: a veil dims it
+   and its content is inert until the panel above closes (floating-panel.svelte.ts). */
+.kh-floating-panel-body {
+  display: contents;
+}
+
+.kh-floating-panel-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--cds-overlay, rgba(22, 22, 22, 0.5));
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.kh-floating-panel-cascaded {
+  margin-top: var(--cds-spacing-06);
+}
+
 /* A wrapper around one scroller, sized like it (see scroll-shadows.ts): a
    thin scrollbar, and a shade on each edge where content is hidden. */
 .kh-scroll-area {
@@ -310,7 +329,7 @@ html[theme='g100'] .app-shadow {
 
 html[theme='g100'] .kh-scroll-area {
   --_scroll-shade: rgba(0, 0, 0, 0.9);
-  --_scroll-shade-size: var(--cds-spacing-07);
+  --_scroll-shade-size: var(--cds-spacing-06);
 }
 
 .kh-scroll-area > * {

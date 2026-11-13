@@ -1,4 +1,9 @@
 import { PipelineError } from '$lib/features/commons/pipeline.errors';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+import {
+  LEGACY_PATTERN_BACKGROUND,
+  PATTERN_SHAPES
+} from '$lib/features/commons/constants/pattern.constants';
 import * as m from '$lib/paraglide/messages';
 import { PROJECT_CONST } from '../constants';
 
@@ -42,6 +47,44 @@ function withMapFrameFromMargins(
   };
 }
 
+function isMotifConfig(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    (PATTERN_SHAPES as readonly unknown[]).includes(value.shape) &&
+    value.background === undefined
+  );
+}
+
+// Up to 3.16.0 a motif was painted over white, and a missing-data hatch over
+// the missing-data color. Since 3.17.0 the background belongs to the motif and
+// its absence leaves the polygon unpainted, so older motifs get theirs.
+function withMotifBackgrounds(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withMotifBackgrounds);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'pattern' && isMotifConfig(child)) {
+      next[key] = { ...child, background: LEGACY_PATTERN_BACKGROUND };
+    } else if (key === 'patternConfig' && isMotifConfig(child)) {
+      next[key] = {
+        ...child,
+        background:
+          typeof value.color === 'string'
+            ? value.color
+            : NEUTRAL_CARTOGRAPHY_COLORS.missingData
+      };
+    } else {
+      next[key] = withMotifBackgrounds(child);
+    }
+  }
+  return next;
+}
+
 // No-op on purpose up to 3.15.0: each bump fences off builds that would drop
 // saved state on save (3.10.0: imported basemap sources, 3.11.0: tabular
 // archive layers, 3.12.0: enrichment snapshots, 3.13.0: manual label
@@ -82,6 +125,14 @@ export const schemaMigrations: readonly SchemaMigration[] = [
     from: '3.15.0',
     to: '3.16.0',
     migrate: withMapFrameFromMargins
+  },
+  {
+    from: '3.16.0',
+    to: '3.17.0',
+    migrate: (data) =>
+      'data' in data
+        ? { ...data, data: withMotifBackgrounds(data.data) }
+        : { ...data }
   }
 ];
 

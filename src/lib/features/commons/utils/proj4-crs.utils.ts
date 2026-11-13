@@ -251,3 +251,45 @@ export function registerKnownProj4Definitions(): void {
 
   proj4DefinitionsRegistered = true;
 }
+
+// Parameters that do not change the projection: their presence or order
+// must not hide an EPSG code behind an equivalent PROJ string.
+const IGNORED_PROJ4_PARAMETERS = new Set(['no_defs', 'type', 'wktext']);
+
+function canonicalProj4(definition: string): string {
+  return definition
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.replace(/^\+/, ''))
+    .filter(
+      (token) => token && !IGNORED_PROJ4_PARAMETERS.has(token.split('=')[0])
+    )
+    .map((token) => {
+      const [key, value] = token.split('=');
+      if (value === undefined) return key;
+      const numbers = value.split(',').map(Number);
+      return numbers.every(Number.isFinite)
+        ? `${key}=${numbers.join(',')}`
+        : `${key}=${value}`;
+    })
+    .sort()
+    .join(' ');
+}
+
+/**
+ * The EPSG code whose definition is exactly this PROJ string, Khartis' own
+ * definitions first. A PROJ string alone lets GIS software guess among
+ * several codes with the same parameters (LAEA Europe: 3035 or 5636).
+ */
+export function findKnownEpsgForProj4(definition: string): string | undefined {
+  registerKnownProj4Definitions();
+  const target = canonicalProj4(definition);
+  const candidates = [
+    ...Object.entries(EPSG_DEFINITIONS),
+    ...listNationalProj4Definitions()
+  ];
+  const match = candidates.find(
+    ([code, known]) => code !== WGS84_CRS && canonicalProj4(known) === target
+  );
+  return match?.[0].replace(/^EPSG:/, '');
+}

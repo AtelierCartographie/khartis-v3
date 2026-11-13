@@ -322,8 +322,7 @@ export function draw_quanti_color_legend(
                 nodata_y,
                 nodata_box_w,
                 nodata_box_h,
-                options.nodataPatternFill,
-                nodata_fill
+                options.nodataPatternFill
               )
             : {
                 markup: box(
@@ -351,7 +350,7 @@ export function draw_quanti_color_legend(
       <g class="ticks" stroke="black">
         ${ticks.join('')}
       </g>
-      <g class="labels" text-anchor="middle" dominant-baseline="hanging" font-size="${fontSize}"
+      <g class="labels" text-anchor="middle" font-size="${fontSize}"
          font-variant="tabular-nums" transform="translate(0,${tick_gap})">
         ${labels.join('')}
       </g>
@@ -543,7 +542,7 @@ function draw_vertical_quanti_color_legend(
     .map((y) => `<path d="M${margin},${y}L${tick_x2},${y}" />`);
   const label_markup = thresholds.map(
     (_value, i) =>
-      `<text x="${tick_x2 + tick_gap}" y="${y_of(i)}">${escapeSvgText(labels[i])}</text>`
+      `<text x="${tick_x2 + tick_gap}" y="${y_of(i)}" dominant-baseline="central">${escapeSvgText(labels[i])}</text>`
   );
   const bar_bottom = bar_top + bar_height + fontSize / 2;
 
@@ -574,8 +573,7 @@ function draw_vertical_quanti_color_legend(
               nodata_y,
               cell_width,
               nodata_h,
-              options.nodataPatternFill,
-              nodata_fill
+              options.nodataPatternFill
             )
           : {
               markup: box(margin, nodata_y, cell_width, nodata_h, nodata_fill)
@@ -617,7 +615,7 @@ function draw_vertical_quanti_color_legend(
       <g class="ticks" stroke="black">
         ${ticks.join('')}
       </g>
-      <g class="labels" text-anchor="start" dominant-baseline="central" font-size="${fontSize}" font-variant="tabular-nums">
+      <g class="labels" text-anchor="start" font-size="${fontSize}" font-variant="tabular-nums">
         ${label_markup.join('')}
       </g>
       ${header.markup}
@@ -714,10 +712,11 @@ function pattern_box(
   y: number,
   width: number,
   height: number,
-  patternFill: LegendPatternFill,
-  background = '#ffffff'
+  patternFill: LegendPatternFill
 ): { markup: string; defs?: string } {
-  const backgroundRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(background)}"/>`;
+  const backgroundRect = patternFill.background
+    ? `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.background)}"/>`
+    : '';
   const patternRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="1"/>`;
 
   return {
@@ -731,5 +730,5 @@ function tick(x: number, y1: number, y2: number): string {
 }
 
 function label(x: number, y: number, text: string): string {
-  return `<text x="${x}" y="${y}">${escapeSvgText(text)}</text>`;
+  return `<text x="${x}" y="${y}" dominant-baseline="hanging">${escapeSvgText(text)}</text>`;
 }

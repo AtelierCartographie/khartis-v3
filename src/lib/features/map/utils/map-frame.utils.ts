@@ -143,6 +143,14 @@ function readPositions(
   return null;
 }
 
+function isPickOnly(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    Reflect.get(data, 'khartisPickOnly') === true
+  );
+}
+
 function measurePositions(value: ArrayLike<number>, size: number): BBox | null {
   let minX = Infinity;
   let minY = Infinity;
@@ -181,7 +189,7 @@ function flattenLayerProps(
 export function measureDrawnExtent(layers: unknown): BBox | null {
   let extent: BBox | null = null;
   for (const props of flattenLayerProps(layers)) {
-    if (props.visible === false) continue;
+    if (props.visible === false || isPickOnly(props.data)) continue;
     const positions = readPositions(props.data);
     if (!positions) continue;
 

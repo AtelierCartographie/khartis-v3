@@ -24,6 +24,7 @@ import {
   finalizeJoin,
   getJoinedBasemapValues,
   getJoinedEntitiesPage,
+  getBasemapDisplayNames,
   getJoinTerritoryStatuses,
   invalidateSimilarityCache,
   type DuckDBClientForJoin,
@@ -951,6 +952,22 @@ describe('join status per basemap entity', () => {
       valueCount: 0
     });
     expect(statuses.NA.status).toBe('no_data');
+  });
+
+  it('should name each entity by its display variant when it has aliases', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes
+      VALUES ('XX', '99999', 'code', '99999', '${TEST_BASEMAP}', 8)`
+    );
+
+    const names = await getBasemapDisplayNames(basemap, makeDuckClient(db));
+
+    expect(names.get('LY')).toBe('Lyon');
+    expect(names.get('SC2')).toBe('Sainte-Colombe');
+    expect(names.size).toBe(8);
+    // Without a display variant, the caller falls back on the entity id.
+    expect(names.has('XX')).toBe(false);
   });
 
   it('should join a corrected value to the picked entity without rewriting the source data', async () => {
