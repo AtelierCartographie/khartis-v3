@@ -45,6 +45,8 @@ export interface ProcessFileOptions {
   /** Layer of a multi-layer source; the preferred spatial layer otherwise. */
   layer?: string;
   csvOptions?: CsvImportOptions;
+  /** A first import by the user, as opposed to a replay of a known file. */
+  reportSkippedLines?: boolean;
 }
 
 export interface ReadFileIntoTableOptions {
@@ -53,6 +55,7 @@ export interface ReadFileIntoTableOptions {
   companionFiles?: File[];
   layer?: string;
   csvOptions?: CsvImportOptions;
+  reportSkippedLines?: boolean;
 }
 
 export interface FileTableRead {
@@ -144,7 +147,8 @@ export async function readFileIntoTable(
     file,
     tableName,
     fileInfo.name,
-    options.csvOptions
+    options.csvOptions,
+    options.reportSkippedLines ?? false
   );
   if (geoParquetMetadata) {
     await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
@@ -172,7 +176,8 @@ export async function processFileInternal(
     originalName: options.originalName,
     companionFiles: options.companionFiles,
     layer: options.layer,
-    csvOptions: options.csvOptions
+    csvOptions: options.csvOptions,
+    reportSkippedLines: options.reportSkippedLines
   });
 
   const { dataset, vertexCount } = await buildDatasetFromDuckTable({
@@ -259,7 +264,8 @@ async function readTabularFile(
   file: File,
   tableName: string,
   fileName: string,
-  chosenOptions?: CsvImportOptions
+  chosenOptions: CsvImportOptions | undefined,
+  reportSkippedLines: boolean
 ): Promise<CsvImportOptions | undefined> {
   if (isParquetFileName(fileName)) {
     await Duck.read_tabular(file, {
@@ -275,7 +281,8 @@ async function readTabularFile(
       header: chosenOptions.header,
       decimal_separator: chosenOptions.decimalSeparator,
       thousands_separator: chosenOptions.thousandsSeparator,
-      delimiter: chosenOptions.delimiter
+      delimiter: chosenOptions.delimiter,
+      report_skipped_lines: reportSkippedLines
     });
     return chosenOptions;
   }
@@ -292,7 +299,8 @@ async function readTabularFile(
     header: headerDetection.hasHeader,
     decimal_separator: detection.separator,
     delimiter: detection.delimiter,
-    thousands_separator: detection.thousandsSeparator
+    thousands_separator: detection.thousandsSeparator,
+    report_skipped_lines: reportSkippedLines
   });
 
   await normalizeFormattedNumericColumns(tableName, Duck);
