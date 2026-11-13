@@ -14,11 +14,16 @@
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type { Palette, PaletteType } from './palette.constants';
   import {
+    buildClassPatternSvgBackground,
     findPaletteById,
     normalizePaletteId,
     PALETTE_TYPE,
     resolvePaletteForType
   } from './palette.constants';
+  import {
+    resolveClassificationPatternConfig,
+    resolveClassPatterns
+  } from '$lib/features/commons/services/pattern-palette.service';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
@@ -74,12 +79,44 @@
   let triggerRef = $state<HTMLDivElement>();
 
   const MAX_PREVIEW_SWATCHES = 20;
-  const displayColors = $derived.by(() => {
-    if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
-    const step = colors.length / MAX_PREVIEW_SWATCHES;
+  // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
+  const MAX_CATEGORICAL_PATTERN_COUNT = 24;
+
+  function sampleForPreview<T>(items: readonly T[]): T[] {
+    if (items.length <= MAX_PREVIEW_SWATCHES) return [...items];
+    const step = items.length / MAX_PREVIEW_SWATCHES;
     return Array.from(
       { length: MAX_PREVIEW_SWATCHES },
-      (_, i) => colors[Math.min(colors.length - 1, Math.round(i * step))]
+      (_, i) => items[Math.min(items.length - 1, Math.round(i * step))]
+    );
+  }
+
+  const displayColors = $derived(sampleForPreview(colors));
+
+  // The map draws the classification's motifs instead of its colors, so the
+  // trigger must show the same motifs (see resolveClassPatternPalette).
+  const displayPatternBackgrounds = $derived.by(() => {
+    if (categoriesVariant !== 'polygons') return undefined;
+    const config = resolveClassificationPatternConfig(classification);
+    if (!config) return undefined;
+
+    const count = categoriesMode
+      ? (classification?.labels?.length ?? colors.length)
+      : colors.length;
+    if (count === 0) return undefined;
+    if (categoriesMode && count > MAX_CATEGORICAL_PATTERN_COUNT) {
+      return undefined;
+    }
+
+    const patterns = resolveClassPatterns(
+      count,
+      config,
+      categoriesMode ? 'categorical' : 'sequential',
+      config.contrast,
+      inverted
+    );
+    return sampleForPreview(
+      patterns.map((pattern) => buildClassPatternSvgBackground(pattern))
     );
   });
   const dropdownPreviewCount = $derived(
@@ -341,13 +378,19 @@
       aria-expanded={dropdownOpen}
     >
       <div class="palette-preview">
-        {#each displayColors as color, i (i)}
-          <div
-            class="palette-color"
-            style="background-color: {color}"
-            title={color}
-          ></div>
-        {/each}
+        {#if displayPatternBackgrounds}
+          {#each displayPatternBackgrounds as background, i (i)}
+            <div class="palette-color" style="background: {background}"></div>
+          {/each}
+        {:else}
+          {#each displayColors as color, i (i)}
+            <div
+              class="palette-color"
+              style="background-color: {color}"
+              title={color}
+            ></div>
+          {/each}
+        {/if}
       </div>
       <ChevronDown size={16} />
     </button>
