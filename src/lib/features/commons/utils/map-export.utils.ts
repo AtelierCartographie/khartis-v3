@@ -696,6 +696,7 @@ const BASEMAP_PREFIX_LABELS: [string, () => string][] = [
   [DeckLayerId.BASEMAP_META_GEO_LINES, m.svg_export_basemap_meta_geo_lines],
   [DeckLayerId.BASEMAP_META_CENTROID, m.svg_export_basemap_meta_centroid],
   [DeckLayerId.BASEMAP_VILLES_LABELS, m.svg_export_basemap_villes_labels],
+  [DeckLayerId.BASEMAP_VUES_LABELS, m.svg_export_basemap_vues_labels],
   [DeckLayerId.BASEMAP_TERRE, m.svg_export_basemap_terre],
   [DeckLayerId.BASEMAP_MERS, m.svg_export_basemap_mers],
   [DeckLayerId.BASEMAP_LACS, m.svg_export_basemap_lacs],
