@@ -170,7 +170,8 @@ function getClassPatternLegendFill(pattern: ClassPattern): LegendPatternFill {
   });
   const fill: LegendPatternFill = {
     defs: stripSvgDefsWrapper(result.defs.outerHTML),
-    fillUrl: result.url
+    fillUrl: result.url,
+    ...(pattern.background ? { background: pattern.background } : {})
   };
   legendPatternFillCache[cacheKey] = fill;
   return fill;
@@ -1876,7 +1877,7 @@ function getCategoricalLegendDraft(
       const patternFills = getClassPatternLegendFills(classPatternPalette);
       const categories: CategoryItem[] = entries.map((entry) => ({
         label: entry.label,
-        fill: '#ffffff',
+        fill: classPatternPalette[0]?.background ?? 'none',
         patternFill: patternFills[entry.originalIndex] ?? null,
         patternOpacity: 1,
         entryKey: categoryLegendEntry(entry.value)
@@ -2267,7 +2268,11 @@ function getUniquePolygonLegendDraft(
 
   const item: KhartisLegendSwatchItem = {
     label: m.polygons_title(),
-    fill: fillNone ? 'none' : classPatternPalette ? '#ffffff' : fill,
+    fill: fillNone
+      ? 'none'
+      : classPatternPalette
+        ? (classPatternPalette[0]?.background ?? 'none')
+        : fill,
     stroke: strokeNone
       ? 'none'
       : resolveLegendColor(polygon.strokeColor, DEFAULT_COLORS.stroke),
@@ -2774,7 +2779,9 @@ function getMissingDataLegendSwatch(
 
   return {
     label: m.missing_data_text(),
-    fill: color,
+    fill: missingDataPattern
+      ? (missingDataPattern.background ?? 'none')
+      : color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
     patternFill: missingDataPattern

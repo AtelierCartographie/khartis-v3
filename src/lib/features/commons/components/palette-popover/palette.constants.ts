@@ -12,6 +12,7 @@ import {
   sequential
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
+import { escapeSvgAttribute } from '$lib/features/commons/components/legend/utils';
 import {
   type PatternParams,
   type PatternShape,
@@ -647,9 +648,16 @@ export function buildPatternBackground(
   return buildPatternSvgBackground(effectivePatternId, accent, base, params);
 }
 
+// Light checkerboard standing for "nothing painted" behind a transparent motif.
+const TRANSPARENT_CHECKERBOARD_DEFS =
+  '<defs><pattern id="kh-transparent-checker" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#ffffff"/><rect width="4" height="4" fill="#e0e0e0"/><rect x="4" y="4" width="4" height="4" fill="#e0e0e0"/></pattern></defs>';
+
+/**
+ * Previews a class motif over its own background, or over a checkerboard when
+ * the motif leaves the polygon unpainted.
+ */
 export function buildClassPatternSvgBackground(
   pattern: ClassPattern,
-  background = '#ffffff',
   opacity = 1
 ): string {
   const rendered = motif({
@@ -662,7 +670,11 @@ export function buildClassPatternSvgBackground(
     patchSize: pattern.patchSize
   });
   const fillOpacity = opacity < 1 ? ` opacity="${opacity}"` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${background}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
+  const backgroundFill = pattern.background
+    ? escapeSvgAttribute(pattern.background)
+    : 'url(#kh-transparent-checker)';
+  const checkerDefs = pattern.background ? '' : TRANSPARENT_CHECKERBOARD_DEFS;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${checkerDefs}${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${backgroundFill}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
 
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }

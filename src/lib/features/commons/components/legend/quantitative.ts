@@ -322,8 +322,7 @@ export function draw_quanti_color_legend(
                 nodata_y,
                 nodata_box_w,
                 nodata_box_h,
-                options.nodataPatternFill,
-                nodata_fill
+                options.nodataPatternFill
               )
             : {
                 markup: box(
@@ -574,8 +573,7 @@ function draw_vertical_quanti_color_legend(
               nodata_y,
               cell_width,
               nodata_h,
-              options.nodataPatternFill,
-              nodata_fill
+              options.nodataPatternFill
             )
           : {
               markup: box(margin, nodata_y, cell_width, nodata_h, nodata_fill)
@@ -714,10 +712,11 @@ function pattern_box(
   y: number,
   width: number,
   height: number,
-  patternFill: LegendPatternFill,
-  background = '#ffffff'
+  patternFill: LegendPatternFill
 ): { markup: string; defs?: string } {
-  const backgroundRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(background)}"/>`;
+  const backgroundRect = patternFill.background
+    ? `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.background)}"/>`
+    : '';
   const patternRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="1"/>`;
 
   return {

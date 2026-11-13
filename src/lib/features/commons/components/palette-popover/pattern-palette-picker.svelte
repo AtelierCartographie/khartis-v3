@@ -8,6 +8,7 @@
     PatternPaletteConfig,
     PatternShape
   } from '$lib/features/commons/constants/pattern.constants';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ShapeChipRow from './shape-chip-row.svelte';
 
   interface Props {
@@ -20,6 +21,9 @@
   const DEFAULT_ANGLE = 45;
   const DEFAULT_SCALE = 0.7;
   const DEFAULT_COLOR = '#000000';
+  const DEFAULT_BACKGROUND = '#ffffff';
+
+  type BackgroundMode = 'transparent' | 'color';
 
   const ANGLE_OPTIONS = [0, 45, 90, 135] as const;
 
@@ -27,6 +31,11 @@
   const scale = $derived(config.scale ?? DEFAULT_SCALE);
   const displayScale = $derived(Math.round(scale * 10));
   const color = $derived(config.color ?? DEFAULT_COLOR);
+  const backgroundMode = $derived<BackgroundMode>(
+    config.background ? 'color' : 'transparent'
+  );
+  // Remembers the last background color while the motif is transparent.
+  let lastBackground = $state(DEFAULT_BACKGROUND);
 
   function handleShapeSelect(shape: PatternShape) {
     onchange({ ...config, shape });
@@ -42,6 +51,21 @@
 
   function handleColorChange(value: string) {
     onchange({ ...config, color: value });
+  }
+
+  function handleBackgroundModeChange(mode: BackgroundMode) {
+    if (mode === 'color') {
+      onchange({ ...config, background: lastBackground });
+      return;
+    }
+    if (config.background) lastBackground = config.background;
+    const { background: _background, ...rest } = config;
+    onchange(rest);
+  }
+
+  function handleBackgroundChange(value: string) {
+    lastBackground = value;
+    onchange({ ...config, background: value });
   }
 </script>
 
@@ -77,7 +101,34 @@
     onchange={handleScaleChange}
   />
 
-  <ColorSelector label={m.color()} value={color} onchange={handleColorChange} />
+  <ColorSelector
+    label={m.pattern_color()}
+    value={color}
+    onchange={handleColorChange}
+  />
+
+  <div class="param-block">
+    <SimpleRadioGroup
+      name="pattern-background"
+      legendText={m.background()}
+      items={[
+        {
+          value: 'transparent',
+          labelText: m.pattern_background_transparent()
+        },
+        { value: 'color', labelText: m.pattern_background_color() }
+      ]}
+      selected={backgroundMode}
+      onchange={handleBackgroundModeChange}
+    />
+    {#if config.background}
+      <ColorSelector
+        ariaLabel={m.background()}
+        value={config.background}
+        onchange={handleBackgroundChange}
+      />
+    {/if}
+  </div>
 </div>
 
 <style lang="scss">

@@ -111,19 +111,6 @@ export function createUniqueClassPatternIndexAccessor(
   return (row) => (Object.keys(row).length > 0 ? 0 : null);
 }
 
-export function createUniquePatternBaseFillAccessor(
-  ctx: LayerContext
-): (row: Record<string, unknown>) => [number, number, number, number] {
-  if (!hasSplitRenderingContext(ctx)) {
-    return () => [255, 255, 255, 255];
-  }
-
-  return (row) =>
-    Object.keys(row).length > 0
-      ? [255, 255, 255, 255]
-      : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
-}
-
 export function createClassPatternColorAccessor(
   classIndexAccessor: (row: Record<string, unknown>) => number | null,
   targetIndex: number,
@@ -141,18 +128,15 @@ export function createClassPatternColorAccessor(
       : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
 }
 
+// Under a motif, a classed polygon is painted with the motif background,
+// transparent when the motif has none. The fill layer is kept for picking.
 export function createPatternBackgroundFillAccessor(
   classIndexAccessor: (row: Record<string, unknown>) => number | null,
   baseFillAccessor: (
     row: Record<string, unknown>
-  ) => [number, number, number, number]
+  ) => [number, number, number, number],
+  backgroundColor: [number, number, number, number]
 ): (row: Record<string, unknown>) => [number, number, number, number] {
-  const white: [number, number, number, number] = [255, 255, 255, 255];
-  return (row) => {
-    const baseColor = baseFillAccessor(row);
-    if (classIndexAccessor(row) !== null) {
-      return [white[0], white[1], white[2], baseColor[3] ?? 255];
-    }
-    return baseColor;
-  };
+  return (row) =>
+    classIndexAccessor(row) !== null ? backgroundColor : baseFillAccessor(row);
 }

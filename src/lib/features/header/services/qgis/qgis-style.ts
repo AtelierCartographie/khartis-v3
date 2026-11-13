@@ -512,15 +512,21 @@ function buildPolygonPlan(
   ) {
     notes.push({ code: 'missing-pattern' });
   }
+  // Under a motif the map paints the motif background, or nothing.
+  const missingFill = missingPattern
+    ? missingPattern.background
+      ? toRgba(missingPattern.background, opacity)
+      : null
+    : toRgba(missing?.color ?? DEFAULT_COLORS.missingData, opacity);
   const missingSymbol = () =>
-    fillSymbol(
-      toRgba(missing?.color ?? DEFAULT_COLORS.missingData, opacity),
-      stroke,
-      dataDefined,
-      missingPatternLayers?.layers
-    );
-  // Under a pattern the map fills white, the motif tells classes apart.
-  const patternBackground = toRgba('#ffffff', opacity);
+    fillSymbol(missingFill, stroke, dataDefined, missingPatternLayers?.layers);
+  const patternBackgroundColor = resolveClassPatternPalette(
+    classification,
+    polygon.fillMode
+  )?.[0]?.background;
+  const patternBackground = patternBackgroundColor
+    ? toRgba(patternBackgroundColor, opacity)
+    : null;
 
   let renderer: QmlRenderer;
   if (polygon.fillMode === FillMode.DENSITY) {

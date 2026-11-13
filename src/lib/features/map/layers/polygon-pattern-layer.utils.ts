@@ -16,6 +16,7 @@ import {
   resolveClassificationPatternConfig,
   resolveClassPatterns
 } from '$lib/features/commons/services/pattern-palette.service';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import type {
   ClassificationConfig,
@@ -254,7 +255,8 @@ export function resolveMissingDataClassPattern(
     missingData.patternConfig ??
     patternPaletteFromLegacy(
       resolveMissingDataPatternId(missingData),
-      missingData.patternParams
+      missingData.patternParams,
+      missingData.color ?? NEUTRAL_CARTOGRAPHY_COLORS.missingData
     );
   if (!config) {
     return null;

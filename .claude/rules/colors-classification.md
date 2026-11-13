@@ -42,7 +42,7 @@ Generate class colors with `generateColorsForBreaks()` in `classification.servic
 
 ## Patterns (`@ateliercartographie/motif.js` with ok-palette)
 
-- A pattern palette replaces the flat fill (white background plus one motif per class); it is not an overlay.
+- A pattern palette replaces the flat fill (one motif per class over `PatternPaletteConfig.background`); it is not an overlay. An absent background leaves the polygon unpainted so the layers beneath show through, and previews draw it as a checkerboard. Under a motif the flat color (`fillColor`, `missingData.color`) is not drawn. Projects before schema 3.17.0 get their former background (white, or the missing-data color) by migration.
 - Class pattern sets come from ok-palette (`sequentialPatterns`, `categoricalPatterns`) through `resolveClassPatterns()` in `pattern-palette.service.ts`. Size and angle ramps are not hand-rolled.
 - `PatternPaletteConfig.scale` is in native motif units: the design tile is scale × 10 CSS px, and the UI slider shows the ×10 value. Categorical pattern palettes are capped at `MAX_CATEGORICAL_PATTERN_COUNT`.
 - Atlas frame widths scaled by `devicePixelRatio` are not fed to the Deck.gl shader, and previews are not built from `motif().tile()` (canvas tiles are DPR-scaled and unrotated). Use the SVG-defs helpers: `buildPatternSvgBackground`, `buildClassPatternSvgBackground`, the legend `patternFill`.
