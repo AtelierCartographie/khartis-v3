@@ -31,12 +31,12 @@ export interface TooltipColumn {
 export interface TooltipGlyph {
   primitive: PrimitiveFilter;
   channel: 'color' | 'size' | 'stroke' | 'label';
-  /** A symbol's shape. */
+  /** A symbol's shape, the hovered row's own when shapes follow categories. */
   shape?: ShapeType;
-  /** The symbol is drawn without a fill: its glyph stays an outline. */
-  hollow?: boolean;
-  /** The color the hovered feature is drawn in, when this glyph carries it. */
-  color?: [number, number, number];
+  /** The color the hovered row is drawn in, when this glyph carries it. */
+  color?: string;
+  /** The row's outline color, for a glyph drawn as an outline. */
+  outline?: string;
 }
 
 export interface TooltipEntry {

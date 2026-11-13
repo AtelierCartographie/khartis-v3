@@ -1,8 +1,5 @@
 import {
-  CategoryShapeMode,
   ColorMode,
-  FillMode,
-  ShapeType,
   SizeMode,
   StrokeMode,
   SymbolMode,
@@ -75,18 +72,11 @@ function addPolygonGlyphs(glyphs: GlyphsByColumn, viz: VisualizationConfig) {
 function addSymbolGlyphs(glyphs: GlyphsByColumn, viz: VisualizationConfig) {
   const symbol = getSymbolPrimitive(viz);
   if (!symbol?.enabled) return;
-  // Shapes that change with the category read as a plain circle.
-  const shape =
-    symbol.mode === SymbolMode.CATEGORIES &&
-    symbol.categoryShape !== CategoryShapeMode.UNIQUE
-      ? ShapeType.CIRCLE
-      : symbol.shape;
-  const hollow = symbol.fillMode === FillMode.NONE;
+  const shape = symbol.shape;
   const glyph = (channel: TooltipGlyph['channel']): TooltipGlyph => ({
     primitive: PrimitiveFilterType.POINT,
     channel,
-    shape,
-    ...(hollow && { hollow })
+    shape
   });
 
   if (shouldApplyProportionalSymbols(viz)) {

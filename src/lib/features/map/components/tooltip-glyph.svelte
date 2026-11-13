@@ -12,16 +12,14 @@
   const NEUTRAL = 'var(--cds-icon-secondary, #6f6f6f)';
   const SIZE = 10;
 
-  const color = $derived(
-    glyph.color ? `rgb(${glyph.color.join(' ')})` : NEUTRAL
-  );
+  const color = $derived(glyph.color ?? NEUTRAL);
   // A color, or a size drawn in a single color, reads as a fill; a size
   // whose color another variable carries reads as an outline.
   const isFilled = $derived(
     glyph.channel === 'color' || (glyph.channel === 'size' && !!glyph.color)
   );
   const fill = $derived(isFilled ? color : 'none');
-  const stroke = $derived(isFilled ? 'none' : color);
+  const stroke = $derived(isFilled ? 'none' : (glyph.outline ?? color));
 
   function symbolPath(shape: ShapeType | undefined): string {
     switch (shape) {
