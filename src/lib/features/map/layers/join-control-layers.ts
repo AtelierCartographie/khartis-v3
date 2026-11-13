@@ -52,7 +52,6 @@ import {
   HIGHLIGHT_STROKE_COLOR,
   HIGHLIGHT_STROKE_WIDTH
 } from './layer-selection-overlays';
-import { buildSplitDatasetRowMapping } from './split-rendering-accessors';
 import {
   resolvePathParser,
   resolvePolygonParser
@@ -562,36 +561,6 @@ export function createJoinControlLayers(
       placement: placementProps(ctx)
     }
   };
-}
-
-const datasetRowsCache = new WeakMap<
-  ArrowTable,
-  WeakMap<ArrowTable, Map<string, Int32Array>>
->();
-
-/** The finalized row a territory displays, as the split rendering reads it. */
-export function resolveJoinControlDatasetRow(
-  pickData: JoinControlPickData,
-  geomRow: number
-): number | null {
-  const { geometry, dataset, featureIdColumn } = pickData;
-  let byDataset = datasetRowsCache.get(geometry);
-  if (!byDataset) {
-    byDataset = new WeakMap();
-    datasetRowsCache.set(geometry, byDataset);
-  }
-  let byColumn = byDataset.get(dataset);
-  if (!byColumn) {
-    byColumn = new Map();
-    byDataset.set(dataset, byColumn);
-  }
-  let mapping = byColumn.get(featureIdColumn);
-  if (!mapping) {
-    mapping = buildSplitDatasetRowMapping(geometry, dataset, featureIdColumn);
-    byColumn.set(featureIdColumn, mapping);
-  }
-  const datasetRow = mapping[geomRow];
-  return datasetRow === undefined || datasetRow < 0 ? null : datasetRow;
 }
 
 interface HoverLookup {

@@ -1963,6 +1963,28 @@ export async function getBasemapAttributeValues(
   return rows.map((r) => r.raw);
 }
 
+/** Each basemap entity's display name in the interface locale, by id. */
+export async function getBasemapDisplayNames(
+  basemap: BasemapMetadata,
+  Duck: DuckDBClientForJoin
+): Promise<Map<string, string>> {
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const rows = (await Duck.query(
+    `SELECT CAST(id AS VARCHAR) AS id, CAST(raw AS VARCHAR) AS name
+     FROM (${buildDisplayNamesQuery(
+       CATALOG_ATTRIBUTES_TABLE,
+       basemapId,
+       getBasemapDisplayVariants(basemap)
+     )})
+     WHERE id IS NOT NULL`,
+    { format: 'array' }
+  )) as Array<{ id: string; name: string }>;
+
+  return new Map((rows ?? []).map((row) => [row.id, row.name]));
+}
+
 export interface BasemapAlias {
   value: string;
   variant: string | null;
