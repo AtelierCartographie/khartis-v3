@@ -27,6 +27,7 @@
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
+  import { presetHasInsetNames } from '$lib/features/map/utils/projection-preset-names.utils';
   import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 
@@ -121,6 +122,23 @@
     style: null
   });
 
+  // Composite presets name their inset views; other basemaps have none.
+  const viewNamesSyntheticLayer = $derived<BasemapLayer | null>(
+    currentMetadata?.proj_to?.type === 'composite' &&
+      presetHasInsetNames(
+        basemapService.projectionPresets,
+        currentMetadata.proj_to.preset
+      )
+      ? {
+          title_fr: m.basemap_layer_vues({}, { locale: 'fr' }),
+          title_en: m.basemap_layer_vues({}, { locale: 'en' }),
+          type: BasemapLayerType.POLYGON,
+          file: SYNTHETIC_AUX_LAYER_KEY.VUES,
+          style: null
+        }
+      : null
+  );
+
   interface LayerEntry {
     layer: BasemapLayer;
     sharedLegacyId: BasemapLayerId | null;
@@ -146,6 +164,13 @@
       }
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
+    if (viewNamesSyntheticLayer) {
+      entries.push({
+        layer: viewNamesSyntheticLayer,
+        sharedLegacyId: 'vues',
+        instanceIndex: 0
+      });
+    }
     for (const layer of metadata.layers) {
       if (!isSection3RenderableType(layer.type)) continue;
       const count = typeCounters.get(layer.type) ?? 0;

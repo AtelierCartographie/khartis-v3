@@ -8,7 +8,8 @@ export const BASEMAP_LAYER_ID = {
   MERIDIENS: 'meridiens',
   FRONTIERES: 'frontieres',
   VILLES: 'villes',
-  SPHERE: 'sphere'
+  SPHERE: 'sphere',
+  VUES: 'vues'
 } as const;
 
 // Derived geometry tables hang off the source table name; the map import
@@ -24,7 +25,8 @@ export const DERIVED_GEOMETRY_TABLE_SUFFIX = {
 
 export const SYNTHETIC_AUX_LAYER_KEY = {
   MERS: 'synthetic:mers',
-  SPHERE: 'synthetic:sphere'
+  SPHERE: 'synthetic:sphere',
+  VUES: 'synthetic:vues'
 } as const;
 
 export type BasemapLayerId =

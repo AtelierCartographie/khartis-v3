@@ -109,6 +109,8 @@ import {
   createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
 import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
+import { resolveViewLabels } from '../utils/projection-preset-names.utils';
+import { getLocale } from '$lib/paraglide/runtime';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
@@ -148,6 +150,7 @@ const ORTHOGRAPHIC_BASEMAP_LAYER_PREFIXES = [
   DeckLayerId.BASEMAP_FRONTIERES,
   DeckLayerId.BASEMAP_VILLES,
   DeckLayerId.BASEMAP_VILLES_LABELS,
+  DeckLayerId.BASEMAP_VUES_LABELS,
   DeckLayerId.BASEMAP_META_LAND,
   DeckLayerId.BASEMAP_META_LIMIT,
   DeckLayerId.BASEMAP_META_GRATICULE,
@@ -1329,7 +1332,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               ? (projectionFitBbox ?? currentMetadata?.bbox ?? null)
               : projectionFitBbox,
             graticuleClipExtent,
-            unprojectedFrame
+            unprojectedFrame,
+            pageDisplayScale: pageDisplayScaleToApply
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
@@ -1458,7 +1462,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             metadataLayers,
             stylePresets: shouldShowBasemapLayers
               ? basemapService.stylePresets
-              : null
+              : null,
+            viewLabels:
+              shouldShowBasemapLayers &&
+              currentMetadata &&
+              basemapAuxLayersStore.isVisible(
+                currentMetadata.file,
+                SYNTHETIC_AUX_LAYER_KEY.VUES,
+                true
+              )
+                ? resolveViewLabels(
+                    basemapService.projectionPresets,
+                    currentMetadata.proj_to?.preset,
+                    getLocale()
+                  )
+                : undefined
           };
           const basemapGroups = createBasemapLayers(
             shouldShowBasemapLayers ? worldBaseTable : null,
@@ -1957,7 +1975,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       );
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && tables.size > 0;
-      // The layer store always holds its ten rows, so "one of them is visible"
+      // The layer store always holds its eleven rows, so "one of them is visible"
       // says nothing about a basemap that draws none of them: it kept the
       // previous stack on screen after the user hid every row. What justifies
       // holding it is a visible layer whose table has not loaded yet.
