@@ -6,6 +6,7 @@ import {
   HIGHLIGHT_STROKE_COLOR,
   HIGHLIGHT_STROKE_WIDTH
 } from './layer-selection-overlays';
+import { MultiShapeLayer, ShapeTypeOrdinal } from './multi-shape-layer';
 
 const HOVER_HIGHLIGHT_SUFFIX = 'hover-highlight';
 const POINT_RING_GAP_PX = 2;
@@ -204,6 +205,74 @@ function resolvePickedRadiusPx(info: PickingInfo): number {
   );
 }
 
+type BinaryAttribute = { value?: ArrayLike<number>; size?: number };
+
+function readBinaryAttribute(
+  info: PickingInfo,
+  name: string
+): BinaryAttribute | undefined {
+  const data = info.layer?.props?.data as
+    { attributes?: Record<string, BinaryAttribute | undefined> } | undefined;
+  return data?.attributes?.[name];
+}
+
+// A ring only fits a circle: any other symbol (bar, spike, square…) is
+// outlined by redrawing the hovered instance alone with its own shape, so
+// the outline hugs it wherever its offset or anchor puts it.
+function buildSymbolShapeOverlay(info: PickingInfo, id: string): Layer | null {
+  const layer = info.layer;
+  if (!(layer instanceof MultiShapeLayer)) {
+    return null;
+  }
+  const shapeAttribute = readBinaryAttribute(info, 'getShape');
+  const shape =
+    shapeAttribute?.value?.[info.index] ??
+    (typeof layer.props.getShape === 'number' ? layer.props.getShape : 0);
+  if (shape === ShapeTypeOrdinal.CIRCLE) {
+    return null;
+  }
+  const position = readBinaryAttribute(info, 'getPosition');
+  const radius = readBinaryAttribute(info, 'getRadius');
+  const positionSize = position?.size ?? 2;
+  if (!position?.value || radius?.value?.[info.index] === undefined) {
+    return null;
+  }
+  const start = info.index * positionSize;
+  return layer.clone({
+    id,
+    data: {
+      length: 1,
+      attributes: {
+        getPosition: {
+          value: Float64Array.from(
+            Array.from(
+              { length: positionSize },
+              (_, offset) => position.value?.[start + offset] ?? 0
+            )
+          ),
+          size: positionSize
+        },
+        getRadius: {
+          value: new Float32Array([radius.value[info.index]]),
+          size: 1
+        },
+        getShape: { value: new Float32Array([shape]), size: 1 }
+      }
+    },
+    filled: false,
+    stroked: true,
+    dashed: false,
+    knockout: false,
+    getLineColor: HIGHLIGHT_STROKE_COLOR,
+    getLineWidth: 1,
+    lineWidthUnits: 'pixels',
+    lineWidthScale: HIGHLIGHT_STROKE_WIDTH,
+    opacity: 1,
+    pickable: false,
+    parameters: HIGHLIGHT_PARAMETERS
+  }) as Layer;
+}
+
 function pickPlacementProps(info: PickingInfo): Record<string, unknown> {
   const props = (info.layer?.props ?? {}) as Record<string, unknown>;
   const placement: Record<string, unknown> = {};
@@ -305,6 +374,10 @@ export function createHoverHighlightOverlay(info: PickingInfo): Layer | null {
   }
 
   if (isPointGeometry(geometry)) {
+    const shapeOutline = buildSymbolShapeOverlay(info, id);
+    if (shapeOutline) {
+      return shapeOutline;
+    }
     const positions = collectPoints(geometry, hovered.featureId);
     if (positions.length === 0) {
       return null;
