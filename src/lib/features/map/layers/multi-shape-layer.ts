@@ -71,10 +71,30 @@ const multiShapeUniformBlock = `
 // stops depth writes, hence the clears instead of an 'always' pass.
 const KNOCKOUT_PASS = { OFF: 0, DEPTH: 1, COLOR: 2 } as const;
 
+// The depth pass must leave the color target untouched. The picking pass
+// replaces the layer blending with its own (source copied as is), so the
+// pass's transparent fragments would overwrite the picking colors of the
+// layers beneath and make the inside of hollow symbols pick nothing. luma.gl
+// re-applies the render pass color mask on every draw, so blending is the
+// only lever.
+const KEEP_COLOR_BLENDING = {
+  blend: true,
+  blendColorOperation: 'add',
+  blendColorSrcFactor: 'zero',
+  blendColorDstFactor: 'one',
+  blendAlphaOperation: 'add',
+  blendAlphaSrcFactor: 'zero',
+  blendAlphaDstFactor: 'one'
+} as const;
+
 const KNOCKOUT_PASSES = [
   {
     pass: KNOCKOUT_PASS.DEPTH,
-    parameters: { depthCompare: 'less', depthWriteEnabled: true }
+    parameters: {
+      depthCompare: 'less',
+      depthWriteEnabled: true,
+      ...KEEP_COLOR_BLENDING
+    }
   },
   {
     pass: KNOCKOUT_PASS.COLOR,
