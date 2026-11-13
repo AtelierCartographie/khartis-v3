@@ -321,9 +321,9 @@ export function renderLegendHeader({
     );
     const lineHeight = titleSize * 1.2;
     if (lines.length > 0) {
-      markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
+      markup += `<g class="title" text-anchor="start" font-size="${titleSize}" font-weight="bold">`;
       lines.forEach((line, index) => {
-        markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+        markup += `<text x="${x}" y="${cursor + index * lineHeight}" dominant-baseline="hanging">${escapeSvgText(line)}</text>`;
       });
       markup += `</g>`;
       cursor += lines.length * lineHeight + gap;
@@ -338,9 +338,9 @@ export function renderLegendHeader({
     );
     const lineHeight = subtitleSize * 1.2;
     if (lines.length > 0) {
-      markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
+      markup += `<g class="subtitle" text-anchor="start" font-size="${subtitleSize}">`;
       lines.forEach((line, index) => {
-        markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+        markup += `<text x="${x}" y="${cursor + index * lineHeight}" dominant-baseline="hanging">${escapeSvgText(line)}</text>`;
       });
       markup += `</g>`;
       cursor += lines.length * lineHeight + gap;
@@ -374,9 +374,9 @@ export function renderLegendNote({
   }
 
   const lineHeight = noteSize * 1.2;
-  let markup = `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
+  let markup = `<g class="note" text-anchor="start" font-size="${noteSize}">`;
   lines.forEach((line, index) => {
-    markup += `<text x="${x}" y="${y + index * lineHeight}">${escapeSvgText(line)}</text>`;
+    markup += `<text x="${x}" y="${y + index * lineHeight}" dominant-baseline="hanging">${escapeSvgText(line)}</text>`;
   });
   markup += `</g>`;
 

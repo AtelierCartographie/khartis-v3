@@ -237,7 +237,7 @@ export function draw_khartis_proportional_line_legend(
     const x = margin + index * (segmentLength + segmentGap);
     return {
       line: `<line x1="${x}" y1="${lineY}" x2="${x + segmentLength}" y2="${lineY}" stroke-width="${Math.max(0.5, step.width)}"${dash} />`,
-      label: `<text x="${x + segmentLength / 2}" y="${labelY}">${escapeSvgText(step.label)}</text>`
+      label: `<text x="${x + segmentLength / 2}" y="${labelY}" dominant-baseline="hanging">${escapeSvgText(step.label)}</text>`
     };
   });
   const rowBottom = labelY + fontSize * 1.2;
@@ -273,7 +273,7 @@ export function draw_khartis_proportional_line_legend(
     <g class="segments" stroke="currentColor" stroke-linecap="butt" fill="none">
       ${segments.map((segment) => segment.line).join('')}
     </g>
-    <g class="labels" text-anchor="middle" dominant-baseline="hanging" font-size="${fontSize}" font-variant="tabular-nums">
+    <g class="labels" text-anchor="middle" font-size="${fontSize}" font-variant="tabular-nums">
       ${segments.map((segment) => segment.label).join('')}
     </g>
     <g class="footer" font-size="${fontSize}">${footerMarkup}</g>
@@ -491,7 +491,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     markup: `<g class="${escapeSvgAttribute(options.className)}" font-family="${escapeSvgAttribute(fontFamily)}">
     ${createLegendCanvasRect(bodyWidth, height)}
     ${defs ? `<defs>${defs}</defs>` : ''}
-    <g class="items" font-size="${fontSize}" dominant-baseline="middle">
+    <g class="items" font-size="${fontSize}">
       ${rows.map((row) => row.markup).join('')}
       ${footerRows.map((row) => row.markup).join('')}
     </g>
@@ -593,15 +593,15 @@ function render_label(
   label?: string
 ): string {
   if (lines.length <= 1) {
-    return `<text x="${x}" y="${y}">${escapeSvgText(lines[0] ?? '')}</text>`;
+    return `<text x="${x}" y="${y}" dominant-baseline="middle">${escapeSvgText(lines[0] ?? '')}</text>`;
   }
 
   const accessibleName = label ?? lines.join(' ');
 
-  return `<text aria-label="${escapeSvgAttribute(accessibleName)}">${lines
+  return `<text aria-label="${escapeSvgAttribute(accessibleName)}" dominant-baseline="middle">${lines
     .map((line, index) => {
       const lineY = y + (index - (lines.length - 1) / 2) * lineHeight;
-      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(line)}</tspan>`;
+      return `<tspan x="${x}" y="${lineY}" dominant-baseline="middle">${escapeSvgText(line)}</tspan>`;
     })
     .join('')}</text>`;
 }

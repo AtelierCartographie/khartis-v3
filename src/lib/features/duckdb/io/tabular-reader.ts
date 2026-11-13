@@ -3,9 +3,19 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 import {
+  isUtf8,
+  transcodeLegacyTextToUtf8
+} from '$lib/features/commons/utils/file-import.utils';
+import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  isSingularCount,
+  resolveLocale
+} from '$lib/features/commons/utils/format.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { notificationManager } from '$lib/features/commons/utils/notification.utils.svelte';
 import * as m from '$lib/paraglide/messages';
 import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
@@ -17,7 +27,13 @@ import {
   generateUniqueTableName,
   registerFiles
 } from './file-registry';
-import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
+import {
+  addRowId,
+  CSV_STORE_REJECTS_OPTIONS,
+  type CsvRejectedLines,
+  restoreNormalizedColumnNames,
+  takeCsvRejectedLines
+} from './reader-utils';
 import { promoteImportedTextDates } from './text-dates';
 
 const SAFE_CSV_DELIMITERS = new Set([';', ',', '\t', '|']);
@@ -45,6 +61,29 @@ function resolveCsvDelimiter(value: string | undefined): string | undefined {
     throw new DuckDBError(m.error_invalid_csv_delimiter());
   }
   return value;
+}
+
+function warnRejectedCsvLines(
+  filename: string,
+  rejected: CsvRejectedLines
+): void {
+  const locale = resolveLocale();
+  const lines =
+    rejected.sample.map((line) => line.toLocaleString(locale)).join(', ') +
+    (rejected.count > rejected.sample.length ? '…' : '');
+  const count = rejected.count.toLocaleString(locale);
+  logger.warn('CSV lines skipped by ignore_errors', LogCategory.DUCKDB, {
+    filename,
+    rejected
+  });
+  // Rows are missing from the table: the warning stays until it is closed.
+  notificationManager.warning({
+    title: m.warning_csv_lines_skipped_title(),
+    subtitle: isSingularCount(rejected.count, locale)
+      ? m.warning_csv_lines_skipped_message_one({ lines })
+      : m.warning_csv_lines_skipped_message({ count, lines }),
+    timeout: 0
+  });
 }
 
 /**
@@ -105,6 +144,7 @@ export async function readTabular(
     }
 
     const finalTablename = tablename;
+    const csvRejects: { lines: CsvRejectedLines | null } = { lines: null };
     const shouldRetryWithIgnoreErrors =
       !ignoreErrors &&
       !allVarchar &&
@@ -146,7 +186,10 @@ export async function readTabular(
               }
 
               if (ignoreErrors || retryOptions.ignoreErrors) {
-                csvOptions.push('ignore_errors=true');
+                csvOptions.push(
+                  'ignore_errors=true',
+                  ...CSV_STORE_REJECTS_OPTIONS
+                );
               }
 
               if (allVarchar || retryOptions.allVarchar) {
@@ -167,6 +210,10 @@ export async function readTabular(
               await executeQuery(ctx.connection, query, {
                 format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
               });
+              csvRejects.lines =
+                ignoreErrors || retryOptions.ignoreErrors
+                  ? await takeCsvRejectedLines(ctx.connection)
+                  : null;
             };
 
             if (recoveryMode) {
@@ -210,18 +257,43 @@ export async function readTabular(
       );
     };
 
+    let imported = false;
     try {
       await runImportInTransaction(false);
+      imported = true;
     } catch (error) {
       if (!shouldRetryWithIgnoreErrors) {
         throw error;
       }
+    }
 
+    if (!imported && input instanceof File && !(await isUtf8(input))) {
+      await dropRegisteredFile(ctx.db, ctx.registered_files, fileid);
+      const utf8File = await transcodeLegacyTextToUtf8(input);
+      await registerFiles(ctx.db, ctx.registered_files, [utf8File]);
+      fileid = (utf8File as FileWithId).id;
+      try {
+        await runImportInTransaction(false);
+        imported = true;
+      } catch {
+        // The recovery import below reads the transcoded file.
+      }
+    }
+
+    if (!imported) {
       await runImportInTransaction(true);
     }
 
     if (!tablename) {
       throw new DuckDBError(m.error_unable_determine_table());
+    }
+
+    if (
+      options.report_skipped_lines &&
+      csvRejects.lines &&
+      csvRejects.lines.count > 0
+    ) {
+      warnRejectedCsvLines(filename, csvRejects.lines);
     }
 
     ctx.loaded_files.set(tablename, filename);
