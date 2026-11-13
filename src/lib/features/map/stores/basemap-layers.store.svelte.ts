@@ -10,6 +10,7 @@ import {
   BasemapRepresentation
 } from '$lib/features/commons/constants/visualization.constants';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   BASEMAP_LAYER_ID,
   type BasemapLayerId,
@@ -110,6 +111,14 @@ export interface VillesLayerConfig extends BasemapLayerBase {
   labelColor?: string;
 }
 
+// Names of the inset views of a composite projection (DOM, Alaska…).
+export interface VuesLayerConfig extends BasemapLayerBase {
+  id: 'vues';
+  color: string;
+  labelFontFamily: string;
+  labelSize: number;
+}
+
 export interface SphereLayerConfig extends BasemapLayerBase {
   id: 'sphere';
   color: string;
@@ -127,6 +136,7 @@ export type BasemapLayerConfig =
   | MeridiensLayerConfig
   | FrontieresLayerConfig
   | VillesLayerConfig
+  | VuesLayerConfig
   | SphereLayerConfig;
 
 const DEFAULT_LAYERS: BasemapLayerConfig[] = [
@@ -186,6 +196,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     labelFontFamily: 'Cabin',
     labelSize: 12,
     labelColor: NEUTRAL_CARTOGRAPHY_COLORS.cityLabel
+  },
+  {
+    id: 'vues',
+    visible: false,
+    color: NEUTRAL_CARTOGRAPHY_COLORS.cityLabel,
+    labelFontFamily: 'Cabin',
+    // Same size as the sources and credits of the layout.
+    labelSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize
   },
   {
     id: 'sphere',

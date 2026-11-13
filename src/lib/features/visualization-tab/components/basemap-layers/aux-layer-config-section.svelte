@@ -8,6 +8,7 @@
   import LayerConfigMeridiens from './layer-config-meridiens.svelte';
   import LayerConfigVilles from './layer-config-villes.svelte';
   import LayerConfigMers from './layer-config-mers.svelte';
+  import LayerConfigVues from './layer-config-vues.svelte';
   import {
     type BasemapLayerConfig,
     type BasemapLayerId,
@@ -413,6 +414,13 @@
       labelSize={getConfig('villes')?.labelSize}
       labelColor={getConfig('villes')?.labelColor}
       onchange={(updates) => handleLayerChange('villes', updates)}
+    />
+  {:else if legacyId === 'vues'}
+    <LayerConfigVues
+      color={getConfig('vues')?.color}
+      labelFontFamily={getConfig('vues')?.labelFontFamily}
+      labelSize={getConfig('vues')?.labelSize}
+      onchange={(updates) => handleLayerChange('vues', updates)}
     />
   {:else if legacyId === 'mers'}
     <LayerConfigMers
