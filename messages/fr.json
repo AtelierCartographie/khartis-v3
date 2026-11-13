@@ -951,6 +951,7 @@
   "join_entities_ignored_one": "entité ignorée",
   "join_entities_no_data_one": "entité sans données",
   "join_control_tooltip_status": "Jointure assistée",
+  "map_tooltip_entity_no_data": "Sans données",
   "join_control_tooltip_file": "Fichier importé",
   "join_control_tooltip_rows": "Lignes",
   "join_control_tooltip_other_variables": "Autres données tabulaires jointes",

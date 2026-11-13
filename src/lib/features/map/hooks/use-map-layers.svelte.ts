@@ -127,8 +127,11 @@ import {
   type JoinControlLayers
 } from '../layers/join-control-layers';
 import { buildPendingJoinMappings } from '../utils/join-control.utils';
+import { createReferenceEntityProbeLayer } from '../layers/reference-entity-probe-layer';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 
 const JOIN_CONTROL_LAYER_PREFIX = 'join-control-';
+const REFERENCE_ENTITY_PROBE_LAYER_PREFIX = 'reference-entity-probe-';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -1547,6 +1550,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       };
 
       const renderedDatasetIds = new Set<string>();
+      // At the Visualizations step every entity of the reference basemap can
+      // be hovered for its name, joined to the data or not.
+      const referenceProbeLayers: Layer<DeckDataRow>[] = [];
+      const probedDatasetIds = new Set<string>();
+      const shouldProbeReferenceEntities = untrack(
+        () =>
+          globalState.selectedStep === ToolbarStep.Visualizations &&
+          !globalState.isMapExporting
+      );
       for (const viz of visualizationsToRender) {
         const vizLayerStart = layers.length;
         try {
@@ -1660,6 +1672,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);
+            if (
+              split &&
+              shouldProbeReferenceEntities &&
+              currentMetadata &&
+              joinedBasemapId === currentMetadata.file &&
+              isPolygonGeometryType(geoInfo?.type) &&
+              !probedDatasetIds.has(datasetId)
+            ) {
+              probedDatasetIds.add(datasetId);
+              const probe = createReferenceEntityProbeLayer({
+                layerId: `${REFERENCE_ENTITY_PROBE_LAYER_PREFIX}${datasetId}${
+                  projectionSuffix ? `-${projectionSuffix}` : ''
+                }`,
+                geometry: split.geometry,
+                dataset: split.dataset,
+                featureIdColumn: split.featureIdColumn,
+                basemap: currentMetadata,
+                ctx
+              });
+              if (probe) referenceProbeLayers.push(probe);
+            }
             if (arrowLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
@@ -1968,7 +2001,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionSphereMaskLayer
       );
       layers.length = 0;
-      layers.push(...maskedOrderedLayers);
+      // Under everything pickable, so the visualizations answer first.
+      layers.push(...referenceProbeLayers, ...maskedOrderedLayers);
 
       const hasExpectedActiveViz = activeVisualizations.some(
         visualizationHasEnabledPrimitive

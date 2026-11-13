@@ -16,11 +16,16 @@ import {
   type HoveredRow,
   mapHoverHighlightStore
 } from '../stores/map-hover-highlight.store.svelte';
+import { readJoinControlPickData } from '../layers/join-control-layers';
 import {
-  readJoinControlPickData,
-  resolveJoinControlDatasetRow
-} from '../layers/join-control-layers';
-import { buildJoinControlTooltipEntries } from '../utils/join-control.utils';
+  readReferenceEntityPickData,
+  resolveReferenceDatasetRow,
+  resolveReferenceEntityName
+} from '../layers/reference-entity-probe-layer';
+import {
+  buildJoinControlTooltipEntries,
+  buildUnjoinedEntityTooltipEntries
+} from '../utils/join-control.utils';
 
 export function formatTooltipValue(value: unknown, columnName = ''): string {
   if (typeof value === 'string') {
@@ -292,10 +297,7 @@ export function extractTooltipEntries(
     ) as ArrayLike<number> | undefined;
     const geomRow = featureIds?.[info.index];
     if (geomRow === undefined) return [];
-    const datasetRow = resolveJoinControlDatasetRow(
-      joinControl,
-      Number(geomRow)
-    );
+    const datasetRow = resolveReferenceDatasetRow(joinControl, Number(geomRow));
     const otherVariables =
       datasetRow === null
         ? []
@@ -307,6 +309,25 @@ export function extractTooltipEntries(
       Number(geomRow),
       otherVariables
     );
+  }
+
+  const referenceEntity = readReferenceEntityPickData(info.layer?.props?.data);
+  if (referenceEntity) {
+    const featureIds = Reflect.get(
+      info.layer?.props?.data as object,
+      'featureIds'
+    ) as ArrayLike<number> | undefined;
+    const geomRow = Number(featureIds?.[info.index]);
+    // A joined entity answers through its visualization's layer, where it
+    // has one; elsewhere (around a symbol) it stays silent as before.
+    if (
+      !Number.isInteger(geomRow) ||
+      resolveReferenceDatasetRow(referenceEntity, geomRow) !== null
+    ) {
+      return [];
+    }
+    const name = resolveReferenceEntityName(referenceEntity, geomRow);
+    return name === null ? [] : buildUnjoinedEntityTooltipEntries(name);
   }
 
   const rowIndex = resolvePickedRowIndex(info);
