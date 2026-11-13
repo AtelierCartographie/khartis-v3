@@ -196,7 +196,8 @@
         patternPaletteFromLegacy(
           missingData.patternId ??
             mapPatternTypeToPatternId(missingData.patternType, 'diagonal'),
-          missingData.patternParams
+          missingData.patternParams,
+          missingDataColor
         ) ??
         DEFAULT_MISSING_DATA_PATTERN_CONFIG;
     }

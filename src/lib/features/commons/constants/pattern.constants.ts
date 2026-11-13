@@ -37,7 +37,12 @@ export interface PatternPaletteConfig {
   colorize?: boolean;
   categoryShapes?: (PatternShape | undefined)[];
   contrast?: ContrastMode;
+  /** Color painted under the motif; absent, the polygon is left unpainted. */
+  background?: string;
 }
+
+// Before schema 3.17.0 a pattern fill was always painted over white.
+export const LEGACY_PATTERN_BACKGROUND = '#ffffff';
 
 // Polygons without data are hatched in grey so that they stay distinct from
 // every class color, whatever the palette.
@@ -45,5 +50,6 @@ export const DEFAULT_MISSING_DATA_PATTERN_CONFIG: PatternPaletteConfig = {
   shape: 'line',
   angle: 45,
   scale: 0.7,
-  color: NEUTRAL_CARTOGRAPHY_COLORS.missingDataHatch
+  color: NEUTRAL_CARTOGRAPHY_COLORS.missingDataHatch,
+  background: NEUTRAL_CARTOGRAPHY_COLORS.missingData
 };

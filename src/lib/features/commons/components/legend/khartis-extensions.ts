@@ -23,6 +23,8 @@ export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
 export interface LegendPatternFill {
   defs: string;
   fillUrl: string;
+  /** Color painted under the motif; absent, nothing is painted. */
+  background?: string;
 }
 
 export interface KhartisLegendSwatchItem {
