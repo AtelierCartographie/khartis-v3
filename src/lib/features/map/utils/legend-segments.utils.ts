@@ -48,6 +48,7 @@ import {
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
+  DENSITY_DEFAULTS,
   DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   FillMode,
   ShapeType,
@@ -3005,6 +3006,9 @@ function buildQuantiColorThresholds(options: {
   return null;
 }
 
+/** A primitive's fill, its stroke, or the second value of double symbols. */
+export type LegendRowChannel = 'fill' | 'stroke' | 'secondary';
+
 export interface LegendRowStyle {
   /** The color the row is drawn in, absent when the primitive draws none. */
   color?: string;
@@ -3093,9 +3097,12 @@ function readStrokeColor(
   }
 }
 
+// The layers' own fallback for the second value of double symbols.
+const DOUBLE_SYMBOL_SECONDARY_FILL = '#ff832b';
+
 function readSymbolRowStyle(
   viz: VisualizationConfig,
-  channel: 'fill' | 'stroke',
+  channel: LegendRowChannel,
   readValue: (column: string) => unknown
 ): LegendRowStyle {
   const symbol = getSymbolPrimitive(viz);
@@ -3117,6 +3124,12 @@ function readSymbolRowStyle(
       : getLegendPointCategoryShape(viz, categoryIndex);
   if (channel === 'stroke') {
     return { shape, color: readStrokeColor(symbol, readValue) };
+  }
+  if (channel === 'secondary') {
+    return {
+      shape,
+      color: symbol.fillColorB ?? DOUBLE_SYMBOL_SECONDARY_FILL
+    };
   }
 
   let color: string | undefined;
@@ -3153,7 +3166,7 @@ function readSymbolRowStyle(
 
 function readPolygonRowStyle(
   viz: VisualizationConfig,
-  channel: 'fill' | 'stroke',
+  channel: LegendRowChannel,
   readValue: (column: string) => unknown
 ): LegendRowStyle {
   const polygon = getPolygonPrimitive(viz);
@@ -3179,6 +3192,8 @@ function readPolygonRowStyle(
       };
     case FillMode.UNIQUE:
       return { color: firstColor(polygon.fillColor) };
+    case FillMode.DENSITY:
+      return { color: viz.density?.color ?? DENSITY_DEFAULTS.color };
     default:
       return {};
   }
@@ -3220,7 +3235,7 @@ function readColorModeRowStyle(
 export function resolveLegendRowStyle(
   viz: VisualizationConfig,
   primitive: PrimitiveFilter,
-  channel: 'fill' | 'stroke',
+  channel: LegendRowChannel,
   readValue: (column: string) => unknown
 ): LegendRowStyle {
   switch (primitive) {

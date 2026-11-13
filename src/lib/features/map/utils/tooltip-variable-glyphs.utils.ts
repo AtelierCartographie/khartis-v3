@@ -1,5 +1,6 @@
 import {
   ColorMode,
+  FillMode,
   SizeMode,
   StrokeMode,
   SymbolMode,
@@ -19,6 +20,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 
 import type { TooltipGlyph } from '../types';
+import { usesDoubleProportionalSymbols } from '../layers/symbol-layer.utils';
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,
@@ -53,7 +55,12 @@ function addPolygonGlyphs(glyphs: GlyphsByColumn, viz: VisualizationConfig) {
     primitive: PrimitiveFilterType.POLYGON,
     channel: 'color'
   };
-  if (shouldApplyChoropleth(viz, PrimitiveFilterType.POLYGON)) {
+  if (polygon.fillMode === FillMode.DENSITY) {
+    add(glyphs, viz.density?.valueColumn, {
+      primitive: PrimitiveFilterType.POLYGON,
+      channel: 'density'
+    });
+  } else if (shouldApplyChoropleth(viz, PrimitiveFilterType.POLYGON)) {
     add(glyphs, polygon.valueColumn, glyph);
   } else if (shouldApplyCategorical(viz, PrimitiveFilterType.POLYGON)) {
     add(glyphs, polygon.categoryColumn, glyph);
@@ -85,6 +92,10 @@ function addSymbolGlyphs(glyphs: GlyphsByColumn, viz: VisualizationConfig) {
       getPrimitiveSizeColumn(viz, PrimitiveFilterType.POINT),
       glyph('size')
     );
+  }
+  // Double symbols draw a second value beside the first, in its own color.
+  if (usesDoubleProportionalSymbols(viz)) {
+    add(glyphs, symbol.valueColumn, { ...glyph('size'), secondary: true });
   }
   if (symbol.mode === SymbolMode.CATEGORIES) {
     add(
