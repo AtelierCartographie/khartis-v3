@@ -7,6 +7,7 @@ import type {
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
+import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
 
 export type DeckDataRow = Record<string, unknown>;
 
@@ -27,13 +28,24 @@ export interface TooltipColumn {
   value: string;
 }
 
+export interface TooltipGlyph {
+  primitive: PrimitiveFilter;
+  channel: 'color' | 'size' | 'stroke' | 'label';
+  /** A symbol's shape. */
+  shape?: ShapeType;
+  /** The symbol is drawn without a fill: its glyph stays an outline. */
+  hollow?: boolean;
+  /** The color the hovered feature is drawn in, when this glyph carries it. */
+  color?: [number, number, number];
+}
+
 export interface TooltipEntry {
   key: string;
   value: string;
   /** The column drives one of the hovered layer's visualizations. */
   isVizColumn?: boolean;
-  /** The color the hovered feature is drawn in, beside its variable. */
-  swatch?: [number, number, number];
+  /** How the variable is drawn: by which primitive, through which channel. */
+  glyphs?: TooltipGlyph[];
   /** A heading's value drawn as a join category count. */
   tone?: JoinCategoryTone;
   /** The fields of a `columns` entry, side by side like a join table row. */
