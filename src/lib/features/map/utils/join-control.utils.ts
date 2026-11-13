@@ -125,3 +125,17 @@ export function buildPendingJoinMappings(
   for (const value of clearedValues) pending[value] = '';
   return pending;
 }
+
+/** A basemap entity the visualized dataset does not reach: its name only. */
+export function buildUnjoinedEntityTooltipEntries(
+  name: string
+): TooltipEntry[] {
+  return [
+    {
+      key: formatValue(name),
+      value: m.map_tooltip_entity_no_data(),
+      tone: STATUS_TONES.no_data,
+      role: 'heading'
+    }
+  ];
+}

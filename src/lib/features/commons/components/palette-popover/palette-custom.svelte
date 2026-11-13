@@ -84,23 +84,28 @@
 
   $effect(() => {
     const next = patternPaletteConfig;
-    if (next) {
+    if (!next) {
+      // A suggested flat color replaces the motif.
       untrack(() => {
-        draftPatternPaletteConfig = next;
-        if (!activeTabInitialized) {
-          activeTabInitialized = true;
-          contrastMode =
-            next.contrast === 'low' || next.contrast === 'high'
-              ? next.contrast
-              : 'normal';
-          if (isQualitative) {
-            motifEnabled = true;
-          } else {
-            activeTab = 2;
-          }
-        }
+        if (isQualitative) motifEnabled = false;
       });
+      return;
     }
+    untrack(() => {
+      draftPatternPaletteConfig = next;
+      if (!activeTabInitialized) {
+        activeTabInitialized = true;
+        contrastMode =
+          next.contrast === 'low' || next.contrast === 'high'
+            ? next.contrast
+            : 'normal';
+        if (isQualitative) {
+          motifEnabled = true;
+        } else {
+          activeTab = 2;
+        }
+      }
+    });
   });
 
   // A diverging palette is defined by its two hues: from a single seed the
@@ -258,11 +263,15 @@
   </div>
 
   {#if isQualitative}
-    <ColorSelector
-      label={m.color()}
-      value={singleColor}
-      onchange={handleSingleColorChange}
-    />
+    <!-- Under a motif the flat color is not drawn: the motif has its own
+         color and background. -->
+    {#if !(allowPattern && motifEnabled)}
+      <ColorSelector
+        label={m.color()}
+        value={singleColor}
+        onchange={handleSingleColorChange}
+      />
+    {/if}
 
     {#if allowPattern}
       <ToggleWithLabel
@@ -290,6 +299,7 @@
       {#if activeTab === 0}
         <SingleColorPreview
           label={m.color()}
+          allowPattern={false}
           color={singleColor}
           onchange={handleSingleColorChange}
         />
@@ -297,11 +307,13 @@
         <div class="two-colors">
           <SingleColorPreview
             label={m.color()}
+            allowPattern={false}
             color={startColor}
             onchange={handleStartColorChange}
           />
           <SingleColorPreview
             label={m.color()}
+            allowPattern={false}
             color={endColor}
             onchange={handleEndColorChange}
           />

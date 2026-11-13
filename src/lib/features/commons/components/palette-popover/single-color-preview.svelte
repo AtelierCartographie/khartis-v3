@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import SingleColorDropdown from './single-color-dropdown.svelte';
@@ -16,8 +17,6 @@
     color: string;
     presets?: readonly string[];
     patternPaletteConfig?: PatternPaletteConfig;
-    /** What the pattern is drawn over: white for a pattern fill, the color for a hatch. */
-    patternBackground?: string;
     exclusive?: boolean;
     allowPattern?: boolean;
     onchange?: (hex: string) => void;
@@ -29,7 +28,6 @@
     color,
     presets,
     patternPaletteConfig,
-    patternBackground = '#ffffff',
     exclusive = false,
     allowPattern = true,
     onchange,
@@ -47,14 +45,13 @@
       patternPaletteConfig.contrast,
       false
     )[0];
-    return pattern
-      ? buildClassPatternSvgBackground(pattern, patternBackground)
-      : null;
+    return pattern ? buildClassPatternSvgBackground(pattern) : null;
   });
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
+  let mainButton = $state<HTMLButtonElement>();
 
   function handleClick() {
     dropdownOpen = !dropdownOpen;
@@ -74,6 +71,12 @@
     dropdownOpen = false;
   }
 
+  // The host panel stays inert until the stacked one has released its place.
+  async function restoreFocus() {
+    await tick();
+    mainButton?.focus();
+  }
+
   function handlePopoverValidate(
     _palette: Palette | undefined,
     newColors: string[],
@@ -84,10 +87,12 @@
     if (hex) onchange?.(hex);
     onpatternchange?.(nextPatternPaletteConfig);
     popoverOpen = false;
+    void restoreFocus();
   }
 
   function handlePopoverClose() {
     popoverOpen = false;
+    void restoreFocus();
   }
 </script>
 
@@ -99,6 +104,7 @@
     <button
       type="button"
       class="color-main"
+      bind:this={mainButton}
       onclick={handleClick}
       aria-label={m.color()}
       aria-expanded={dropdownOpen}

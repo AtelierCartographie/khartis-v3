@@ -12,7 +12,7 @@ Contrat de compatibilité des projets Khartis. Il porte sur deux versions qui
 | Archive exportée | v2       | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`    |
 | Archives lues    | v2       | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` |
 | Schéma baseline  | `3.9.0`  | `PROJECT_CONST.SCHEMA_BASELINE_VERSION`    |
-| Schéma courant   | `3.16.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
+| Schéma courant   | `3.17.0` | `PROJECT_CONST.SCHEMA_VERSION`             |
 
 Les archives v1 et les schémas antérieurs à `3.9.0` datent du développement et
 ne sont pas supportés.
@@ -26,6 +26,7 @@ ne sont pas supportés.
 | `3.13.0` → `3.14.0` | Aucune transformation. Dans une collection de cartes, la variable de fond choisie pour chaque carte est enregistrée dans `uiSettings.facets.fillVariables`, par variable de la collection, et les couleurs des valeurs positives et négatives d'un symbole proportionnel dans `symbol.signColors`. Le changement de version empêche un build antérieur de réenregistrer le projet sans ces choix.                                                                                                                                              |
 | `3.14.0` → `3.15.0` | Aucune transformation. Le fichier source d'une couche enrichie enregistre le fichier d'origine de chaque colonne ajoutée par la jointure (`sourceFiles[].joinedColumnOrigins`), affiché dans la table, et un tableau du projet joint à une couche enregistre cette couche (`sourceFiles[].attachedTo`). Le changement de version empêche un build antérieur de réenregistrer le projet sans ces informations.                                                                                                                                  |
 | `3.15.0` → `3.16.0` | Le cadre de la carte (`layoutSettings.format.mapFrame`) devient distinct des marges de page, qui ne servent plus qu'à la mise en page. La migration copie les marges d'un projet antérieur dans `mapFrame`, ce qui garde son affichage. La vue orthographique enregistrée (`basemapSettings.mapViewState`) gagne trois champs optionnels : `baseZoom` et `baseTargetRatio` (vue de base de l'ajustement automatique, affichée à 100 %) et `auto` (la vue suit encore l'ajustement automatique) ; leur absence garde le comportement antérieur. |
+| `3.16.0` → `3.17.0` | Le fond d'un motif devient un réglage du motif (`pattern.background` d'une classification, `missingData.patternConfig.background`) ; son absence laisse le polygone non peint, transparent. La migration donne aux motifs d'un projet antérieur le fond qu'ils avaient : blanc pour un remplissage, la couleur de l'absence de données pour ses hachures.                                                                                                                                                                                      |
 
 Avant toute restauration d'asset, l'import rejette explicitement une version
 absente, inconnue, future, ou ancienne sans migration. Une version inconnue

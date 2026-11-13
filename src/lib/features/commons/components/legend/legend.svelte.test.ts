@@ -137,7 +137,7 @@ describe('common legend generators', () => {
 
   it('should put the lowest class at the bottom of a vertical bar when it reads like a thermometer', () => {
     const labelY = (markup: string, label: string): number =>
-      Number(new RegExp(`y="([\\d.]+)">${label}<`).exec(markup)?.[1]);
+      Number(new RegExp(`y="([\\d.]+)"[^>]*>${label}<`).exec(markup)?.[1]);
     const thermometer = draw_quanti_color_legend(
       [0, 50, 100],
       ['#f7fbff', '#2171b5'],
@@ -169,7 +169,7 @@ describe('common legend generators', () => {
       width: Number(width)
     }));
     const labels = [
-      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+">([^<]+)</g)
+      ...markup.matchAll(/<text x="([\d.]+)" y="[\d.]+"[^>]*>([^<]+)</g)
     ].map(([, x, text]) => ({ x: Number(x), text }));
 
     expect(segments.map((segment) => segment.width)).toEqual([2.5, 6]);
@@ -465,13 +465,14 @@ describe('common legend generators', () => {
     );
   });
 
-  it('draws quantitative class boxes as white background plus motif fill when classPatternFills is set', () => {
+  it('should draw each class box as its motif over the motif background, or over nothing when it has none', () => {
     const svg = createLegendSvg(
       draw_quanti_color_legend([0, 10, 20], ['#f7fbff', '#2171b5'], {
         classPatternFills: [
           {
             defs: '<pattern id="motif-0"><rect /></pattern>',
-            fillUrl: 'url(#motif-0)'
+            fillUrl: 'url(#motif-0)',
+            background: '#ffe4b5'
           },
           {
             defs: '<pattern id="motif-1"><rect /></pattern>',
@@ -483,7 +484,8 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('<pattern id="motif-0">');
     expect(svg.markup).toContain('<pattern id="motif-1">');
-    expect(svg.markup).toContain('fill="#ffffff"');
+    expect(svg.markup.match(/fill="#ffe4b5"/g)).toHaveLength(1);
+    expect(svg.markup).not.toContain('fill="#ffffff"');
     expect(svg.markup).toContain('fill="url(#motif-0)" opacity="1"');
     expect(svg.markup).toContain('fill="url(#motif-1)" opacity="1"');
     expect(svg.markup).not.toContain('fill="#f7fbff"');

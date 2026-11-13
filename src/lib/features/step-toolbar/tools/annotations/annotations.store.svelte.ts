@@ -746,7 +746,9 @@ const { actions, getState } = createToolStore<
                 ? clampPageElementPosition(
                     newPosition,
                     item.role,
-                    resolvePageLayout()
+                    resolvePageLayout(),
+                    true,
+                    item.style
                   )
                 : snapPointToPageGrid(newPosition, isGridEnabled()),
               positionMode: 'manual'
@@ -822,7 +824,13 @@ const { actions, getState } = createToolStore<
           const positionMode = item.positionMode ?? 'auto';
           const position =
             positionMode === 'manual'
-              ? clampPageElementPosition(item.position, item.role, layout)
+              ? clampPageElementPosition(
+                  item.position,
+                  item.role,
+                  layout,
+                  true,
+                  item.style
+                )
               : clampPageElementPosition(
                   getPageElementPosition(item.role, layout),
                   item.role,
@@ -1017,11 +1025,14 @@ const { actions, getState } = createToolStore<
                     item.position,
                     item.role,
                     previousPage,
-                    layout
+                    layout,
+                    style
                   )
                 : item.position,
               item.role,
-              layout
+              layout,
+              true,
+              style
             )
           };
         }

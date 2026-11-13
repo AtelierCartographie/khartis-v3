@@ -4,6 +4,8 @@
 
   interface Props {
     label?: string;
+    /** Accessible name when the selector has no visible label. */
+    ariaLabel?: string;
     value: string;
     size?: 'default' | 'small';
     exclusive?: boolean;
@@ -12,6 +14,7 @@
 
   let {
     label = '',
+    ariaLabel,
     value,
     size: _size = 'default',
     exclusive = false,
@@ -24,6 +27,7 @@
 <ColorPicker
   exclusive={exclusive}
   triggerLabel={label}
+  triggerAriaLabel={ariaLabel}
   hex={value}
   hue={hsl.hue}
   saturation={hsl.saturation}

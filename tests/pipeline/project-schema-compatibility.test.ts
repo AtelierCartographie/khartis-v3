@@ -96,6 +96,79 @@ describe('project schema compatibility', () => {
     expect(migrated.data).toEqual(data);
   });
 
+  it('should keep the white background of the motifs of a 3.16.0 project when it is migrated', () => {
+    const motif = { shape: 'line', angle: 45, scale: 0.7, color: '#000000' };
+    const polygon = {
+      fillMode: 'classes',
+      classification: { method: 'jenks', classes: 4, pattern: motif },
+      missingData: {
+        show: true,
+        color: '#abcdef',
+        pattern: true,
+        patternConfig: { shape: 'line', color: '#595959' }
+      }
+    };
+    const project = {
+      manifest: { version: '3.16.0', name: 'Hatched project' },
+      data: {
+        visualization: {
+          visualizations: [
+            {
+              id: 'viz-1',
+              polygon,
+              origin: {
+                mode: 'custom',
+                restoreState: { visualization: { polygon } }
+              }
+            }
+          ]
+        }
+      }
+    };
+
+    const migrated = migrateIfNeeded(project) as typeof project;
+
+    const migratedPolygon = {
+      ...polygon,
+      classification: {
+        ...polygon.classification,
+        pattern: { ...motif, background: '#ffffff' }
+      },
+      missingData: {
+        ...polygon.missingData,
+        patternConfig: {
+          ...polygon.missingData.patternConfig,
+          background: '#abcdef'
+        }
+      }
+    };
+    expect(migrated.data.visualization.visualizations[0]).toEqual({
+      id: 'viz-1',
+      polygon: migratedPolygon,
+      origin: {
+        mode: 'custom',
+        restoreState: { visualization: { polygon: migratedPolygon } }
+      }
+    });
+    expect(motif).not.toHaveProperty('background');
+  });
+
+  it('should leave a motif background chosen before the migration untouched', () => {
+    const pattern = { shape: 'circle', background: '#ff0000' };
+    const data = {
+      visualization: {
+        visualizations: [{ polygon: { classification: { pattern } } }]
+      }
+    };
+
+    const migrated = migrateIfNeeded({
+      manifest: { version: '3.16.0', name: 'Colored motif' },
+      data
+    });
+
+    expect(migrated.data).toEqual(data);
+  });
+
   it('should reject a pre-production schema without silently restamping it', () => {
     expect(() =>
       migrateIfNeeded({

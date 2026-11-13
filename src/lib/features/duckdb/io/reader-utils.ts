@@ -130,3 +130,48 @@ export async function dropSyntheticFeatureIdColumn(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }
+
+const CSV_REJECTS_TABLE = 'kh_csv_rejects';
+const CSV_REJECTS_SCAN_TABLE = 'kh_csv_reject_scans';
+const CSV_REJECTED_LINE_SAMPLE = 5;
+
+/** `read_csv` options that record the lines `ignore_errors` drops. */
+export const CSV_STORE_REJECTS_OPTIONS = [
+  'store_rejects=true',
+  `rejects_table='${CSV_REJECTS_TABLE}'`,
+  `rejects_scan='${CSV_REJECTS_SCAN_TABLE}'`
+] as const;
+
+export interface CsvRejectedLines {
+  count: number;
+  /** First file line numbers, header included, as a text editor shows them. */
+  sample: number[];
+}
+
+/**
+ * Reads then drops the rejects of the last `read_csv` run with
+ * {@link CSV_STORE_REJECTS_OPTIONS}: the tables accumulate across scans.
+ */
+export async function takeCsvRejectedLines(
+  connection: AsyncDuckDBConnection
+): Promise<CsvRejectedLines> {
+  const rows = (await executeQuery(
+    connection,
+    `SELECT line, count(*) OVER () AS skipped
+     FROM (SELECT DISTINCT line FROM ${CSV_REJECTS_TABLE})
+     ORDER BY line
+     LIMIT ${CSV_REJECTED_LINE_SAMPLE};`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{
+    line: number | bigint | string;
+    skipped: number | bigint | string;
+  }>;
+  for (const table of [CSV_REJECTS_TABLE, CSV_REJECTS_SCAN_TABLE]) {
+    await executeQuery(connection, `DROP TABLE IF EXISTS ${table};`);
+  }
+
+  return {
+    count: Number(rows[0]?.skipped ?? 0),
+    sample: rows.map((row) => Number(row.line))
+  };
+}

@@ -1269,7 +1269,11 @@ describe('basemap projection fallbacks', () => {
     expect(
       basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.visible
     ).toBe(true);
-    expect(basemapLayersStore.layers).toHaveLength(10);
+    expect(basemapLayersStore.layers).toHaveLength(11);
+    // A project saved before the view-names layer existed keeps its map.
+    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.VUES)?.visible).toBe(
+      false
+    );
   });
 
   it('falls back to the default meridiens mode when serialized mode is invalid', () => {
