@@ -39,6 +39,7 @@ import {
   BASEMAP_LAYER_ID,
   basemapLayersStore,
   type BasemapRenderGroup,
+  type VuesLayerConfig,
   type EquateurLayerConfig,
   type FrontieresLayerConfig,
   getBasemapRenderGroup,
@@ -68,6 +69,8 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { dottedPatternToDashArray, withOpacity } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
+import type { ViewLabel } from '../utils/projection-preset-names.utils';
+import { createViewLabelsLayers } from './basemap-view-labels';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
   extendTextCharacterSet,
@@ -142,6 +145,7 @@ interface BasemapLayerContext {
   excludeEquator?: boolean;
   graticuleClipExtent?: GraticuleClipExtent | null;
   unprojectedFrame?: GraticuleClipExtent | null;
+  pageDisplayScale?: number;
 }
 
 interface BaseLayerProps {
@@ -1242,6 +1246,8 @@ export interface BasemapAdditionalData {
   hasLandMetadataLayers?: boolean;
   hasLimitMetadataLayers?: boolean;
   stylePresets?: StylePresets | null;
+  // Label of each named view of the composite preset, by entry id.
+  viewLabels?: ReadonlyMap<string, ViewLabel>;
 }
 
 export interface BasemapRowOrderEntry {
@@ -1491,6 +1497,22 @@ export function createBasemapLayers(
           if (layers.length > 0) {
             targetGroups.push(layers);
           }
+          break;
+        }
+
+        case BASEMAP_LAYER_ID.VUES: {
+          const layers = createViewLabelsLayers({
+            config: config as VuesLayerConfig,
+            labels: additionalData?.viewLabels,
+            projection: ctx.projection,
+            modelMatrix: ctx.modelMatrix,
+            layerId: buildLayerId(
+              DeckLayerId.BASEMAP_VUES_LABELS,
+              ctx.projectionSuffix
+            ),
+            pageDisplayScale: ctx.pageDisplayScale ?? 1
+          });
+          if (layers.length > 0) targetGroups.push(layers);
           break;
         }
       }

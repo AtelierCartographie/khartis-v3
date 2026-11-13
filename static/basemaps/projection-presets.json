@@ -19,6 +19,9 @@
       },
       {
         "id": "guadeloupe",
+        "name_fr": "Guadeloupe",
+        "name_en": "Guadeloupe",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-61.9, 15.8],
@@ -33,6 +36,9 @@
       },
       {
         "id": "martinique",
+        "name_fr": "Martinique",
+        "name_en": "Martinique",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-61.3, 14.35],
@@ -47,6 +53,9 @@
       },
       {
         "id": "guyane",
+        "name_fr": "Guyane",
+        "name_en": "French Guiana",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-54.7, 2.0],
@@ -61,6 +70,9 @@
       },
       {
         "id": "la_reunion",
+        "name_fr": "La Réunion",
+        "name_en": "Réunion",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [55.15, -21.45],
@@ -75,6 +87,9 @@
       },
       {
         "id": "saint_pierre_miquelon",
+        "name_fr": "Saint-Pierre-\net-Miquelon",
+        "name_en": "Saint Pierre\nand Miquelon",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=21 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-56.45, 46.7],
@@ -84,6 +99,9 @@
       },
       {
         "id": "mayotte",
+        "name_fr": "Mayotte",
+        "name_en": "Mayotte",
+        "label_placement": "top-outside",
         "proj4": "+proj=utm +zone=38 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [44.95, -13.05],
@@ -109,6 +127,8 @@
       },
       {
         "id": "guadeloupe",
+        "name_fr": "Guadeloupe",
+        "name_en": "Guadeloupe",
         "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-61.95, 15.75],
@@ -118,6 +138,8 @@
       },
       {
         "id": "martinique",
+        "name_fr": "Martinique",
+        "name_en": "Martinique",
         "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-61.3, 14.35],
@@ -127,6 +149,8 @@
       },
       {
         "id": "guyane",
+        "name_fr": "Guyane",
+        "name_en": "French Guiana",
         "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-54.7, 2.0],
@@ -136,6 +160,8 @@
       },
       {
         "id": "acores",
+        "name_fr": "Açores",
+        "name_en": "Azores",
         "proj4": "+proj=utm +zone=26 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-31.4, 36.8],
@@ -145,6 +171,8 @@
       },
       {
         "id": "canarias",
+        "name_fr": "Canaries",
+        "name_en": "Canary Islands",
         "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-18.3, 27.5],
@@ -154,6 +182,8 @@
       },
       {
         "id": "madeira",
+        "name_fr": "Madère",
+        "name_en": "Madeira",
         "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-17.4, 32.35],
@@ -163,6 +193,8 @@
       },
       {
         "id": "mayotte",
+        "name_fr": "Mayotte",
+        "name_en": "Mayotte",
         "proj4": "+proj=utm +zone=38 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [44.95, -13.05],
@@ -172,6 +204,8 @@
       },
       {
         "id": "la_reunion",
+        "name_fr": "La Réunion",
+        "name_en": "Réunion",
         "proj4": "+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [55.15, -21.45],
@@ -202,6 +236,8 @@
       },
       {
         "id": "alaska",
+        "name_fr": "Alaska",
+        "name_en": "Alaska",
         "proj4": "+proj=aea +lat_0=50 +lon_0=-154 +lat_1=55 +lat_2=65 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-180.0, 51.0],
@@ -216,6 +252,9 @@
       },
       {
         "id": "hawaii",
+        "name_fr": "Hawaï",
+        "name_en": "Hawaii",
+        "label_placement": "bottom-inside",
         "proj4": "+proj=aea +lat_0=13 +lon_0=-157 +lat_1=8 +lat_2=18 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-160.25, 18.9],
@@ -225,6 +264,9 @@
       },
       {
         "id": "puerto_rico",
+        "name_fr": "Porto Rico",
+        "name_en": "Puerto Rico",
+        "label_placement": "bottom-outside",
         "proj4": "+proj=aea +lat_0=18 +lon_0=-66 +lat_1=8 +lat_2=18 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
           [-67.97, 17.83],
@@ -346,6 +388,8 @@
       },
       {
         "id": "canarias",
+        "name_fr": "Canaries",
+        "name_en": "Canary Islands",
         "proj4": "+proj=lcc +lat_0=28.5 +lon_0=-16 +lat_1=28.5 +x_0=300000 +y_0=300000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
         "bounds": [
           [-18.6267, 27.2008],
