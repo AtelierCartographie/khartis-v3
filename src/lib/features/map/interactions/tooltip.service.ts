@@ -18,7 +18,7 @@ import type { PickingInfo } from '@deck.gl/core';
 import { type Table as ArrowTable, Type } from 'apache-arrow/Arrow';
 import type { TooltipEntry, TooltipGlyph } from '../types';
 import { resolveVariableGlyphs } from '../utils/tooltip-variable-glyphs.utils';
-import { classifyThematicLayerPrimitive } from '../utils/layer-panel-row.utils';
+import { resolveLegendRowStyle } from '../utils/legend-segments.utils';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 import {
   type HoveredRow,
@@ -356,7 +356,13 @@ export function extractTooltipEntries(
     for (const column of glyphsByColumn.keys()) vizColumns.add(column);
     entries = sortEntriesByVizPriority(entries, vizColumns);
   }
-  entries = withVariableGlyphs(entries, info, glyphsByColumn);
+  entries = withVariableGlyphs(
+    entries,
+    sourceTable,
+    rowIndex,
+    viz,
+    glyphsByColumn
+  );
 
   return withEntityTitle(entries, sourceTable, rowIndex, viz);
 }
@@ -434,102 +440,63 @@ function withEntityTitle(
   ];
 }
 
-type Rgb = [number, number, number];
-
-interface ColorAttribute {
-  value?: ArrayLike<number> | null;
-  size?: number;
-  isConstant?: boolean;
-}
-
-/** The color the hovered feature is drawn in, as the picked layer holds it. */
-function readPickedColor(info: PickingInfo): Rgb | null {
-  const layer = (info.sourceLayer ?? info.layer) as
-    | (PickingInfo['layer'] & {
-        getAttributeManager?: () => {
-          getAttributes: () => Record<string, ColorAttribute>;
-        } | null;
-      })
-    | null
-    | undefined;
-  const attributes = layer?.getAttributeManager?.()?.getAttributes();
-  const index = info.index;
-  if (!attributes || index === undefined || index < 0) return null;
-
-  for (const [name, perVertex] of [
-    ['fillColors', true],
-    ['instanceFillColors', false],
-    ['colors', true],
-    ['instanceColors', false]
-  ] as const) {
-    const attribute = attributes[name];
-    const value = attribute?.value;
-    const size = attribute?.size ?? 4;
-    if (!value) continue;
-    let element = 0;
-    if (!attribute.isConstant) {
-      const startIndices = perVertex
-        ? (Reflect.get(Object(layer?.props?.data), 'startIndices') as
-            ArrayLike<number> | undefined)
-        : undefined;
-      element = perVertex ? Number(startIndices?.[index] ?? -1) : index;
-    }
-    const offset = element * size;
-    if (element < 0 || offset + 2 >= value.length) continue;
-    const alpha = size === 4 ? Number(value[offset + 3]) : 255;
-    if (!(alpha > 0)) return null;
-    // Constant colors are kept normalized, buffers in bytes.
-    const scale = attribute.isConstant && Number(value[0]) <= 1 ? 255 : 1;
-    return [0, 1, 2].map((channel) =>
-      Math.round(Number(value[offset + channel]) * scale)
-    ) as Rgb;
-  }
-  return null;
-}
-
 /**
- * Each variable the visualization draws gets the glyph of how it is drawn;
- * the one coloring the hovered primitive takes the hovered feature's color.
+ * Each variable the visualization draws gets the glyph of how it is drawn,
+ * in the color and the shape the hovered row takes, read like the legend
+ * reads it. A size keeps an outline when another variable colors its
+ * primitive, so that color reads once.
  */
 function withVariableGlyphs(
   entries: TooltipEntry[],
-  info: PickingInfo,
+  table: ArrowTable,
+  rowIndex: number,
+  viz: VisualizationConfig | undefined,
   glyphsByColumn: Map<string, TooltipGlyph[]>
 ): TooltipEntry[] {
-  if (glyphsByColumn.size === 0) return entries;
-  const pickedPrimitive = info.layer?.id
-    ? classifyThematicLayerPrimitive(info.layer.id)
-    : null;
-  // A size drawn in a single color takes that color; once a variable colors
-  // the primitive, the color is that variable's.
-  const isColoredByVariable = [...glyphsByColumn.values()].some((glyphs) =>
-    glyphs.some(
-      (glyph) =>
-        glyph.primitive === pickedPrimitive && glyph.channel === 'color'
+  if (!viz || glyphsByColumn.size === 0) return entries;
+  const readValue = (column: string): unknown => {
+    const child = table.getChild(column);
+    return child ? child.get(rowIndex) : undefined;
+  };
+  const coloredPrimitives = new Set(
+    [...glyphsByColumn.values()].flatMap((glyphs) =>
+      glyphs
+        .filter((glyph) => glyph.channel === 'color')
+        .map((glyph) => glyph.primitive)
     )
   );
-  let pickedColor: [number, number, number] | null | undefined;
+  const styleOf = (glyph: TooltipGlyph) =>
+    resolveLegendRowStyle(
+      viz,
+      glyph.primitive,
+      glyph.channel === 'stroke' ? 'stroke' : 'fill',
+      readValue
+    );
+
   return entries.map((entry) => {
     const glyphs = glyphsByColumn.get(entry.key);
     if (!glyphs) return entry;
     return {
       ...entry,
       glyphs: glyphs.map((glyph) => {
-        // A hollow symbol keeps a fill color it does not draw.
-        const carriesColor =
-          !glyph.hollow &&
-          (glyph.channel === 'color' ||
-            (glyph.channel === 'size' && !isColoredByVariable));
-        // Text colors are stored per character, not per feature.
-        if (
-          !carriesColor ||
-          glyph.primitive !== pickedPrimitive ||
-          glyph.primitive === PrimitiveFilterType.TEXT
-        ) {
-          return glyph;
-        }
-        pickedColor ??= readPickedColor(info);
-        return pickedColor ? { ...glyph, color: pickedColor } : glyph;
+        const style = styleOf(glyph);
+        const keepsOutline =
+          glyph.channel === 'size' &&
+          glyph.primitive !== PrimitiveFilterType.TEXT &&
+          coloredPrimitives.has(glyph.primitive);
+        const color = keepsOutline ? undefined : style.color;
+        // A size drawn without a fill (hollow symbols) shows its outline.
+        const outline =
+          glyph.channel === 'size' && !color
+            ? resolveLegendRowStyle(viz, glyph.primitive, 'stroke', readValue)
+                .color
+            : undefined;
+        return {
+          ...glyph,
+          ...(style.shape && { shape: style.shape }),
+          ...(color && { color }),
+          ...(outline && { outline })
+        };
       })
     };
   });
