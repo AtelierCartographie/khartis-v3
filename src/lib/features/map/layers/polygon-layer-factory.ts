@@ -90,8 +90,7 @@ import {
   createMissingPolygonPatternColorAccessor,
   createPatternBackgroundFillAccessor,
   createSplitUniqueBinaryColorAccessor,
-  createUniqueClassPatternIndexAccessor,
-  createUniquePatternBaseFillAccessor
+  createUniqueClassPatternIndexAccessor
 } from './polygon-fill-accessors.utils';
 import { orderPrimitiveLayers } from './primitive-layer-order';
 import { POLYGON_STROKE_WIDTH_DIVISOR } from './stroke-width.constants';
@@ -117,6 +116,14 @@ export type PolygonLayerDependencies = {
 const DENSITY_PICKING_FILL_COLOR: [number, number, number, number] = [
   0, 0, 0, 0
 ];
+
+function toPatternBackgroundColor(
+  pattern: { background?: string } | undefined
+): [number, number, number, number] {
+  if (!pattern?.background) return TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
+  const [r, g, b] = hexToRgb(pattern.background);
+  return [r, g, b, 255];
+}
 
 export function createPolygonLayerStack(
   jsTable: ArrowTable,
@@ -215,6 +222,20 @@ export function createPolygonLayerStack(
   const missingDataPatternFillRgb = missingDataResolvedPattern
     ? hexToRgb(missingDataResolvedPattern.fill)
     : polygonMissingColor;
+  // Under a motif, polygons are painted with the motif background, or left
+  // unpainted when it has none.
+  const classPatternBackgroundColor = toPatternBackgroundColor(
+    classPatternPalette?.[0]
+  );
+  const missingDataBackground = missingDataResolvedPattern
+    ? missingDataResolvedPattern.background
+    : undefined;
+  const polygonMissingFillColor = missingDataBackground
+    ? hexToRgb(missingDataBackground)
+    : polygonMissingColor;
+  const showMissingPolygonFill =
+    showMissingPolygons &&
+    (!missingDataResolvedPattern || Boolean(missingDataBackground));
   const densityRequested =
     polygonFillMode === FillMode.DENSITY && Boolean(viz?.density);
   const densityTable = ctx.densityTable;
@@ -260,7 +281,7 @@ export function createPolygonLayerStack(
       };
       solidBinaryData.attributes.getFillColor = createPolygonFillColorAttribute(
         polyData,
-        missingColorFor(polygonMissingColor)
+        missingColorFor(polygonMissingFillColor)
       );
 
       const fillLayer = new SolidPolygonLayer({
@@ -276,7 +297,7 @@ export function createPolygonLayerStack(
         updateTriggers: {
           getFillColor: [
             densityValueColumn,
-            polygonMissingColor,
+            polygonMissingFillColor,
             showMissingPolygons
           ]
         }
@@ -295,7 +316,8 @@ export function createPolygonLayerStack(
           )
         : null;
 
-      return patternLayer ? [fillLayer, patternLayer] : [fillLayer];
+      const densityLayers = showMissingPolygonFill ? [fillLayer] : [];
+      return patternLayer ? [...densityLayers, patternLayer] : densityLayers;
     } catch (error) {
       logger.warn(
         'Failed to create density missing-data polygons',
@@ -428,8 +450,8 @@ export function createPolygonLayerStack(
               polygonValueColumn!,
               polygonClassification!.breaks!,
               polygonClassification!.colors!,
-              polygonMissingColor,
-              showMissingPolygons
+              polygonMissingFillColor,
+              showMissingPolygonFill
             )
           : null;
 
@@ -438,8 +460,8 @@ export function createPolygonLayerStack(
           ? createCategoricalColorAccessor(
               polygonCategoryColumn!,
               effectiveCategoryColorMap,
-              polygonMissingColor,
-              showMissingPolygons,
+              polygonMissingFillColor,
+              showMissingPolygonFill,
               polygonClassification?.disabledLabels ?? []
             )
           : null;
@@ -464,7 +486,7 @@ export function createPolygonLayerStack(
 
       const uniquePatternBaseFillAccessor =
         classPatternPalette && polygonFillMode === FillMode.UNIQUE
-          ? createUniquePatternBaseFillAccessor(ctx)
+          ? () => TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
           : null;
 
       const baseFillAccessor =
@@ -494,7 +516,8 @@ export function createPolygonLayerStack(
         baseFillAccessor
           ? createPatternBackgroundFillAccessor(
               classPatternClassIndexAccessor,
-              baseFillAccessor
+              baseFillAccessor,
+              classPatternBackgroundColor
             )
           : baseFillAccessor;
 
@@ -653,6 +676,8 @@ export function createPolygonLayerStack(
             polygonClassification?.labels,
             polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
             showMissingPolygons,
+            missingDataBackground,
+            showMissingPolygonFill,
             polygonFillColor,
             classPatternPalette,
             Boolean(patternProps),

@@ -5,10 +5,11 @@ import {
   sequentialPatterns
 } from '@ateliercartographie/ok-palette';
 
-import type {
-  PatternPaletteConfig,
-  PatternParams as LegacyPatternParams,
-  PatternShape
+import {
+  LEGACY_PATTERN_BACKGROUND,
+  type PatternPaletteConfig,
+  type PatternParams as LegacyPatternParams,
+  type PatternShape
 } from '../constants/pattern.constants';
 import { webglToHex } from '../utils/color-utils';
 
@@ -19,6 +20,8 @@ export interface ClassPattern {
   size: number;
   fill: string;
   patchSize: boolean;
+  /** Color painted under the motif; absent, the polygon stays unpainted. */
+  background?: string;
 }
 
 const CATEGORICAL_SCALE_RANGE: [number, number] = [1, 2.5];
@@ -68,7 +71,8 @@ export function resolveClassPatterns(
     scale: pattern.scale,
     size: pattern.size,
     fill: toHexFill(pattern.fill),
-    patchSize: pattern.patchSize
+    patchSize: pattern.patchSize,
+    ...(cfg.background ? { background: cfg.background } : {})
   }));
 
   const reordered = inverted ? resolved.reverse() : resolved;
@@ -112,7 +116,8 @@ export function resolveClassificationPatternConfig(
     (classification?.patternId
       ? patternPaletteFromLegacy(
           classification.patternId,
-          classification.patternParams
+          classification.patternParams,
+          LEGACY_PATTERN_BACKGROUND
         )
       : undefined)
   );
@@ -120,7 +125,8 @@ export function resolveClassificationPatternConfig(
 
 export function patternPaletteFromLegacy(
   patternId: string,
-  params?: LegacyPatternParams
+  params?: LegacyPatternParams,
+  background?: string
 ): PatternPaletteConfig | undefined {
   const legacyShape = LEGACY_SHAPE_BY_PATTERN_ID[patternId];
   if (!legacyShape) {
@@ -132,6 +138,7 @@ export function patternPaletteFromLegacy(
     angle: params?.angle ?? legacyShape.angle ?? DEFAULT_SEQUENTIAL_ANGLE,
     scale: params?.scale
       ? Math.max(0.1, params.scale / 10)
-      : DEFAULT_SEQUENTIAL_SCALE
+      : DEFAULT_SEQUENTIAL_SCALE,
+    ...(background ? { background } : {})
   };
 }
