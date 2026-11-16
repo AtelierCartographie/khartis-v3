@@ -16,7 +16,7 @@ Color and discretization are the heart of thematic semiology: a wrong break or p
 ## Three palette families, matched to the variable
 
 - **Sequential** (`sequential`): ordered quantitative data, light to dark.
-- **Diverging** (`divergentSequential`): quantitative data with a meaningful breakpoint. Pass the diverging split (`hasCenterClass`) computed from the break position; reversing a sequential ramp does not produce one.
+- **Diverging** (`divergentSequential`): quantitative data with a meaningful breakpoint, either a series that crosses zero or a value the user sets. Only a finite breakpoint makes a classification diverging (`isDivergingBreakpoint`); otherwise the palette stays sequential. The breakpoint is a break, so there is no center class: `computeDivergingSplit` returns the class counts below and above it. Reversing a sequential ramp does not produce a diverging one.
 - **Qualitative**: nominal categories, from the project presets (`qualitative-palette.constants.ts`).
 
 Generate class colors with `generateColorsForBreaks()` in `classification.service.ts`, and export them to the renderer with `resolvePalette(..., { format: 'webgl' })` then `webglToHex`. Inverting a palette flips the resolved array; it does not regenerate it.
@@ -25,7 +25,7 @@ Generate class colors with `generateColorsForBreaks()` in `classification.servic
 
 - Methods live in `ClassificationMethod` (equal interval, quantiles, k-means, q6, nested means, head/tail, manual) and map to DuckDB break macros through `mapMethodToMacro()`. A new method is added there and computed in DuckDB.
 - The user's class count and manually edited bounds are always honored. `manual` recomputes nothing except the counts per class.
-- A breakpoint turns the ramp diverging (`calculateDivergingBreaks`, `computeDivergingSplit`). Validate it with `Number.isFinite` and keep the frequency histogram in sync.
+- A breakpoint turns the ramp diverging (`calculateDivergingBreaks`, `computeDivergingSplit`). Validate it with `isDivergingBreakpoint` and keep the frequency histogram in sync.
 - Class bounds are rounded to the data with the existing rounding step. Raw floats are not shown as breaks.
 
 ## Color-blindness
