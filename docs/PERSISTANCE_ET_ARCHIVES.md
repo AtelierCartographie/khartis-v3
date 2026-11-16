@@ -97,10 +97,12 @@ Locks, il ne traite que les assets datés.
 
 | Règle                             | Valeur              |
 | --------------------------------- | ------------------- |
-| CSV, TSV, GeoJSON, KML, KMZ, GPX  | 150 Mio par fichier |
+| CSV, TSV                          | 400 Mio par fichier |
+| GeoJSON                           | 250 Mio par fichier |
 | Shapefile, GeoPackage, GeoParquet | 200 Mio par fichier |
+| KML, KMZ, GPX                     | 150 Mio par fichier |
 | ZIP générique                     | 100 Mio par fichier |
-| Total d'un import                 | 200 Mio             |
+| Total d'un import                 | 400 Mio             |
 | Fichiers par import               | 20                  |
 | Snapshot sérialisé                | 150 Mio             |
 
