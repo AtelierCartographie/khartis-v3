@@ -242,13 +242,13 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('id="khartis-page-background"');
     expect(markup).toContain('width="360"');
     expect(markup).toContain('height="280"');
-    expect(markup).toContain('fill="rgb(250, 250, 250)"');
+    expect(markup).toContain('fill="#fafafa"');
     expect(markup).toContain('id="khartis-map-frame-background"');
     expect(markup).toContain('x="20"');
     expect(markup).toContain('y="30"');
     expect(markup).toContain('width="300"');
     expect(markup).toContain('height="200"');
-    expect(markup).toContain('fill="rgb(200, 210, 220)"');
+    expect(markup).toContain('fill="#c8d2dc"');
     expect(markup).toContain('clip-path="url(#khartis-map-frame-clip)"');
     expect(markup).toContain('data-khartis-export-mode="raster-fallback"');
   });
@@ -1043,7 +1043,7 @@ describe('map export DOM mutations', () => {
       getSize: () => textSize,
       sizeUnits: 'pixels',
       outlineWidth,
-      outlineColor: [255, 255, 255, 255],
+      outlineColor: [255, 255, 255, 128],
       fontFamily: 'Arial',
       fontWeight: '400',
       background: false
@@ -1063,6 +1063,9 @@ describe('map export DOM mutations', () => {
     expect(textElements[0]).toContain('stroke="rgb(255, 255, 255)"');
     expect(textElements[0]).toContain('stroke-linejoin="round"');
     expect(textElements[1]).toContain('stroke="none"');
+    // Illustrator ignores `stroke-opacity` on text: the halo opacity sits on the element.
+    expect(textElements[0]).toMatch(/\sopacity="0\.5/);
+    expect(textElements[0]).not.toMatch(/(stroke|fill)-opacity="0/);
     expect(markup).not.toContain('paint-order');
     expect(markup).not.toContain('dominant-baseline');
   });
@@ -1273,13 +1276,13 @@ describe('map export DOM mutations', () => {
     expect(markup).not.toContain('data:image/svg+xml');
   });
 
-  it('emits an SVG drop-shadow filter for the legend box-shadow', async () => {
+  it('should emit an SVG 1.1 shadow and hex paint when the legend background is translucent', async () => {
     document.body.innerHTML = `
       <div class="page-container">
         <div class="map-canvas"><canvas></canvas></div>
         <div
           class="legend-container"
-          style="background-color: rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 8px 0px;"
+          style="background-color: rgba(255, 255, 255, 0.9); box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 8px 0px;"
         ></div>
       </div>
     `;
@@ -1300,13 +1303,18 @@ describe('map export DOM mutations', () => {
     const markup = await blob.text();
 
     expect(markup).toMatch(/id="khartis-drop-shadow-\d+"/);
-    expect(markup).toContain('<feDropShadow');
+    expect(markup).not.toContain('<feDropShadow');
+    expect(markup).toContain(
+      '<feGaussianBlur in="SourceAlpha" stdDeviation="4"'
+    );
     expect(markup).toContain('dx="0"');
     expect(markup).toContain('dy="2"');
-    expect(markup).toContain('stdDeviation="4"');
-    expect(markup).toContain('flood-color="rgb(0, 0, 0)"');
+    expect(markup).toContain('flood-color="#000000"');
     expect(markup).toContain('flood-opacity="0.15"');
     expect(markup).toMatch(/filter="url\(#khartis-drop-shadow-\d+\)"/);
+    // Inkscape paints `rgba()` black; design tools read hex plus opacity.
+    expect(markup).toContain('fill="#ffffff" fill-opacity="0.9"');
+    expect(markup).not.toMatch(/="rgba\(/);
   });
 
   it('exports Deck pattern fill layers as native SVG patterns', async () => {
@@ -1589,7 +1597,7 @@ describe('map export DOM mutations', () => {
 
       expect(markup).toContain('viewBox="0 0 420 320"');
       expect(markup).toContain('id="khartis-map-frame-background"');
-      expect(markup).toContain('fill="rgb(210, 220, 230)"');
+      expect(markup).toContain('fill="#d2dce6"');
       expect(markup).toContain('clip-path="url(#khartis-map-frame-clip)"');
       expect(markup).toContain('data-khartis-export-mode="raster-fallback"');
 
@@ -1770,9 +1778,9 @@ describe('map export DOM mutations', () => {
 
     expect(markup).toContain(`id="${m.svg_export_layer_scale()}"`);
     expect(markup).toContain('inkscape:groupmode="layer"');
-    expect(markup).toContain('fill="rgb(0, 0, 0)"');
+    expect(markup).toContain('fill="#000000"');
     expect(markup).toContain('200 km');
-    expect(markup).toContain('fill="rgb(255, 255, 255)"');
+    expect(markup).toContain('fill="#ffffff"');
     expect(markup.match(/<svg[\s>]/g)).toHaveLength(1);
   });
 
