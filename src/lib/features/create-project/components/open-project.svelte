@@ -5,6 +5,7 @@
   import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import {
+    projectRepository,
     readBrowserStorageStatus,
     type BrowserStorageStatus,
     type ListedProjectMetadata
@@ -13,13 +14,15 @@
   import { portal } from '$lib/features/commons/utils/portal';
   import {
     Button,
+    ContentSwitcher,
     FileUploaderDropContainer,
     InlineNotification,
     Modal,
     OverflowMenu,
     OverflowMenuItem,
     ProgressBar,
-    SkeletonPlaceholder
+    SkeletonPlaceholder,
+    Switch
   } from 'carbon-components-svelte';
   import { Calendar, DataBase, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
@@ -44,9 +47,13 @@
 
   const KHARTIS_FILE_EXTENSIONS = ['.kh', '.khartis'];
   const STORAGE_NEARLY_FULL_RATIO = 0.8;
+  const SORT_BY_SIZE_INDEX = 1;
 
   let savedProjects = $state<ListedProjectMetadata[]>([]);
   let storageStatus = $state<BrowserStorageStatus | null>(null);
+  let projectBytes = $state(0);
+  let sortIndex = $state(0);
+  let cardRail = $state<HTMLDivElement | null>(null);
   let selectedProjectId = $state<string | null>(null);
   let isLoading = $state(true);
   let error = $state('');
@@ -59,6 +66,15 @@
   const storageNearlyFull = $derived(
     storageStatus !== null &&
       storageStatus.usage / storageStatus.quota >= STORAGE_NEARLY_FULL_RATIO
+  );
+  // Cache Storage of the offline app counts against the same quota.
+  const appBytes = $derived(
+    storageStatus ? Math.max(0, storageStatus.usage - projectBytes) : 0
+  );
+  const sortedProjects = $derived(
+    sortIndex === SORT_BY_SIZE_INDEX
+      ? [...savedProjects].sort((a, b) => b.storageBytes - a.storageBytes)
+      : savedProjects
   );
   const reclaimableOnDelete = $derived(
     savedProjects.find((project) => project.id === projectToDelete)
@@ -74,9 +90,10 @@
     error = '';
 
     try {
-      [savedProjects, storageStatus] = await Promise.all([
+      [savedProjects, storageStatus, projectBytes] = await Promise.all([
         projectStore.listProjects(),
-        readBrowserStorageStatus()
+        readBrowserStorageStatus(),
+        projectRepository.measureStorage()
       ]);
     } catch (err) {
       logger.error('Failed to load projects', LogCategory.PROJECT, err);
@@ -256,10 +273,16 @@
         max={storageStatus.quota}
         status={storageNearlyFull ? 'error' : 'active'}
         labelText={m.open_project_storage_label()}
-        helperText={m.open_project_storage_usage({
-          used: formatFileSize(storageStatus.usage),
-          quota: formatFileSize(storageStatus.quota)
-        })}
+        helperText={appBytes > 0
+          ? m.open_project_storage_usage({
+              projects: formatFileSize(projectBytes),
+              app: formatFileSize(appBytes),
+              quota: formatFileSize(storageStatus.quota)
+            })
+          : m.open_project_storage_usage_projects_only({
+              projects: formatFileSize(projectBytes),
+              quota: formatFileSize(storageStatus.quota)
+            })}
       />
       {#if storageNearlyFull}
         <InlineNotification
@@ -287,7 +310,24 @@
     />
   {/if}
 
+  {#if !isLoading && savedProjects.length > 1}
+    <ContentSwitcher
+      aria-label={m.open_project_sort_label()}
+      class="sort-switcher"
+      size="sm"
+      selectedIndex={sortIndex}
+      on:change={(event) => {
+        sortIndex = event.detail;
+        cardRail?.scrollTo({ left: 0 });
+      }}
+    >
+      <Switch text={m.open_project_sort_recent()} />
+      <Switch text={m.open_project_sort_size()} />
+    </ContentSwitcher>
+  {/if}
+
   <div
+    bind:this={cardRail}
     class="flex gap-5 overflow-x-auto pb-3 card-rail"
     use:horizontalWheelScroll
   >
@@ -302,7 +342,7 @@
         <p class="text-grey">{m.create_project_no_saved_projects()}</p>
       </div>
     {:else}
-      {#each savedProjects as project (project.id)}
+      {#each sortedProjects as project (project.id)}
         <div class="project-card-wrapper">
           <ProjectCard
             title={project.name}
@@ -462,6 +502,10 @@
     align-items: center;
     height: 1lh;
     vertical-align: top;
+  }
+
+  #khartis-open-project :global(.sort-switcher) {
+    max-width: 20rem;
   }
 
   .project-card-skeleton {

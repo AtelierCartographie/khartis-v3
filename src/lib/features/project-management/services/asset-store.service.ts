@@ -558,6 +558,22 @@ export async function loadProjectAssetUsage(): Promise<
   return computeProjectAssetUsage(assets, refs);
 }
 
+export async function loadTotalAssetBytes(): Promise<number> {
+  const db = await getDb();
+
+  const assets = await new Promise<StoredAssetMetadata[]>((resolve, reject) => {
+    const request = db
+      .transaction([ASSET_STORE_NAME], 'readonly')
+      .objectStore(ASSET_STORE_NAME)
+      .getAll();
+    request.onsuccess = () => resolve(request.result as StoredAssetMetadata[]);
+    request.onerror = () =>
+      reject(request.error || new Error(m.error_failed_load_asset_metadata()));
+  });
+
+  return assets.reduce((total, asset) => total + asset.size, 0);
+}
+
 export async function syncProjectAssetRefs(
   projectId: string,
   files: UploadedFile[],
