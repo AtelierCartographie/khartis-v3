@@ -490,6 +490,7 @@
       categoriesMode={true}
       categoriesVariant="lines"
       categoryLabels={categoryLabels.labels}
+      classification={strokeClassification}
       bind:categoriesPopoverOpen={categoriesPopoverOpen}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
