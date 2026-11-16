@@ -115,21 +115,32 @@ indique comment libérer de l'espace (`storage-quota.service.ts`). En
 production, la PWA demande le stockage persistant
 (`navigator.storage.persist()`), sans garantie que le navigateur l'accorde.
 
-L'écran « Ouvrir un projet » affiche l'espace utilisé par l'origine sur le
-quota, avertit au-delà de 80 %, et signale un stockage non persistant. Il
-sépare la part des projets (`measureProjectStorage` : snapshots plus assets,
-chacun compté une fois) du reste, attribué à l'application hors ligne : le
-Service Worker garde en Cache Storage le moteur DuckDB et ses extensions,
-environ 70 Mio, sur le même quota. La part des projets est une estimation
-(taille JSON et taille brute des assets) ; le navigateur compresse ce qu'il
-stocke, et l'espace d'un projet supprimé n'est rendu qu'au compactage
-d'IndexedDB.
+L'écran « Ouvrir un projet » affiche l'espace des projets
+(`measureProjectStorage` : snapshots plus assets, chacun compté une fois) sur
+l'espace dont ils disposent, avertit au-delà de 80 %, et signale un stockage
+non persistant. L'espace disponible est le quota moins ce que l'origine occupe
+hors projets : le Service Worker garde en Cache Storage le moteur DuckDB et
+ses extensions, environ 70 Mio, sur le même quota. La part des projets est une
+estimation (taille JSON et taille brute des assets) ; le navigateur compresse
+ce qu'il stocke, et l'espace d'un projet supprimé n'est rendu qu'au compactage
+d'IndexedDB. Les tailles affichées sont donc arrondies
+(`formatApproximateSize`).
 
 La taille d'un projet est celle de son snapshot plus celle des assets qu'il
 référence (`computeProjectAssetUsage`). Les projets se trient par date ou par
 taille, et la confirmation de suppression donne l'espace libéré, sans les
 assets partagés avec un autre projet, par exemple après une duplication. Il
 n'y a pas de plafond du nombre de projets.
+
+La recherche de projets porte sur le nom, la description et un texte
+normalisé (minuscules, sans accents) rangé dans les métadonnées locales du
+projet (`search`), hors du snapshot et de l'archive `.kh` : textes de la mise
+en page (titre, sources, crédits), titres de légende, noms des visualisations,
+noms des fichiers importés et titre du fond de carte. Les noms de colonnes et
+les valeurs des données n'y sont pas. Le texte est reconstruit à chaque
+sauvegarde, et à l'ouverture de la liste pour un projet sans texte ou d'une
+version antérieure de `PROJECT_SEARCH_VERSION`. À la sauvegarde, le fond est
+nommé d'après le catalogue tel qu'il est chargé, sans attendre le réseau.
 
 Ces seuils sont des garde-fous : ils ne garantissent pas qu'un gros projet
 pourra être importé, enregistré et rouvert sur tous les navigateurs.
