@@ -237,6 +237,7 @@
       categoriesMode={true}
       categoriesVariant="lines"
       categoryLabels={categoryLabels}
+      classification={classification}
       bind:categoriesPopoverOpen={categoriesPopoverOpen}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
