@@ -1,3 +1,4 @@
+import type { ProjectSearchIndex } from './core/project-search';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 
 export interface ProjectManifest {
@@ -46,6 +47,15 @@ export interface SavedProjectMetadata {
   thumbnail?: string;
   /** Identifies which example project this was created from, if any. */
   exampleId?: string;
+  /** Normalized words the project list searches, besides name and description. */
+  search?: ProjectSearchIndex;
+}
+
+export interface ListedProjectMetadata extends SavedProjectMetadata {
+  /** Project snapshot plus every file it references, shared ones included. */
+  storageBytes: number;
+  /** What deleting the project frees: files shared with another project stay. */
+  reclaimableBytes: number;
 }
 
 export enum ProjectStorageKey {
