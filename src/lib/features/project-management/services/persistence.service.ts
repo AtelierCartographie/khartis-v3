@@ -14,6 +14,7 @@ import { ProjectStorageKey } from '../types';
 import {
   ensureUploadedFileAssets,
   loadProjectAssetUsage,
+  loadTotalAssetBytes,
   removeProjectAssetRefs,
   syncProjectAssetRefs,
   withAssetWriteLock
@@ -437,7 +438,8 @@ export const projectRepository = {
   loadSerialized: loadSerializedProject,
   saveSerialized: saveSerializedProject,
   remove: removeProject,
-  listMetadata
+  listMetadata,
+  measureStorage: measureProjectStorage
 };
 export async function removeProject(id: string): Promise<void> {
   const database = await ensureDb();
@@ -460,6 +462,15 @@ export async function removeProject(id: string): Promise<void> {
   loadedProjectRevisions.delete(id);
   await removeProjectAssetRefs(id);
   await removeFromMetadata(id);
+}
+
+/** Bytes held by saved projects: their snapshots plus every stored file once. */
+export async function measureProjectStorage(): Promise<number> {
+  const [metadata, assetBytes] = await Promise.all([
+    loadProjectMetadata(),
+    loadTotalAssetBytes()
+  ]);
+  return metadata.reduce((total, entry) => total + entry.size, assetBytes);
 }
 
 export async function listMetadata(): Promise<ListedProjectMetadata[]> {

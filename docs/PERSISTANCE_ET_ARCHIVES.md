@@ -116,11 +116,20 @@ production, la PWA demande le stockage persistant
 (`navigator.storage.persist()`), sans garantie que le navigateur l'accorde.
 
 L'écran « Ouvrir un projet » affiche l'espace utilisé par l'origine sur le
-quota, avertit au-delà de 80 %, et signale un stockage non persistant. La
-taille d'un projet est celle de son snapshot plus celle des assets qu'il
-référence (`computeProjectAssetUsage`) ; la confirmation de suppression donne
-l'espace libéré, sans les assets partagés avec un autre projet, par exemple
-après une duplication. Il n'y a pas de plafond du nombre de projets.
+quota, avertit au-delà de 80 %, et signale un stockage non persistant. Il
+sépare la part des projets (`measureProjectStorage` : snapshots plus assets,
+chacun compté une fois) du reste, attribué à l'application hors ligne : le
+Service Worker garde en Cache Storage le moteur DuckDB et ses extensions,
+environ 70 Mio, sur le même quota. La part des projets est une estimation
+(taille JSON et taille brute des assets) ; le navigateur compresse ce qu'il
+stocke, et l'espace d'un projet supprimé n'est rendu qu'au compactage
+d'IndexedDB.
+
+La taille d'un projet est celle de son snapshot plus celle des assets qu'il
+référence (`computeProjectAssetUsage`). Les projets se trient par date ou par
+taille, et la confirmation de suppression donne l'espace libéré, sans les
+assets partagés avec un autre projet, par exemple après une duplication. Il
+n'y a pas de plafond du nombre de projets.
 
 Ces seuils sont des garde-fous : ils ne garantissent pas qu'un gros projet
 pourra être importé, enregistré et rouvert sur tous les navigateurs.
