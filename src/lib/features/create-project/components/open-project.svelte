@@ -5,6 +5,7 @@
   import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import {
+    matchesProjectSearch,
     projectRepository,
     readBrowserStorageStatus,
     type BrowserStorageStatus,
@@ -21,18 +22,23 @@
     OverflowMenu,
     OverflowMenuItem,
     ProgressBar,
+    Search,
     SkeletonPlaceholder,
     Switch
   } from 'carbon-components-svelte';
   import { Calendar, DataBase, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import {
-    formatDate,
-    formatFileSize
+    formatApproximateSize,
+    formatDate
   } from '$lib/features/commons/utils/format.utils';
 
   interface Props {
@@ -53,6 +59,7 @@
   let storageStatus = $state<BrowserStorageStatus | null>(null);
   let projectBytes = $state(0);
   let sortIndex = $state(0);
+  let searchQuery = $state('');
   let cardRail = $state<HTMLDivElement | null>(null);
   let selectedProjectId = $state<string | null>(null);
   let isLoading = $state(true);
@@ -63,19 +70,36 @@
   let showDeleteConfirm = $state(false);
   let showDeleteAllConfirm = $state(false);
 
+  // The offline app's Cache Storage shares the quota: what it holds is
+  // taken off the space shown as available to projects.
+  const availableBytes = $derived(
+    storageStatus
+      ? Math.max(
+          projectBytes,
+          storageStatus.quota - Math.max(0, storageStatus.usage - projectBytes)
+        )
+      : 0
+  );
   const storageNearlyFull = $derived(
-    storageStatus !== null &&
-      storageStatus.usage / storageStatus.quota >= STORAGE_NEARLY_FULL_RATIO
+    availableBytes > 0 &&
+      projectBytes / availableBytes >= STORAGE_NEARLY_FULL_RATIO
   );
-  // Cache Storage of the offline app counts against the same quota.
-  const appBytes = $derived(
-    storageStatus ? Math.max(0, storageStatus.usage - projectBytes) : 0
-  );
-  const sortedProjects = $derived(
-    sortIndex === SORT_BY_SIZE_INDEX
-      ? [...savedProjects].sort((a, b) => b.storageBytes - a.storageBytes)
-      : savedProjects
-  );
+  const visibleProjects = $derived.by(() => {
+    const matching = savedProjects.filter((project) =>
+      matchesProjectSearch(
+        [project.name, project.description, project.search?.text],
+        searchQuery
+      )
+    );
+    return sortIndex === SORT_BY_SIZE_INDEX
+      ? matching.sort((a, b) => b.storageBytes - a.storageBytes)
+      : matching;
+  });
+
+  function handleSearchInput(event: CarbonValueEvent) {
+    searchQuery = readCarbonStringValue(event, searchQuery);
+    cardRail?.scrollTo({ left: 0 });
+  }
   const reclaimableOnDelete = $derived(
     savedProjects.find((project) => project.id === projectToDelete)
       ?.reclaimableBytes
@@ -267,23 +291,25 @@
 
   {#if storageStatus}
     <div class="grid gap-3">
-      <ProgressBar
-        size="sm"
-        value={storageStatus.usage}
-        max={storageStatus.quota}
-        status={storageNearlyFull ? 'error' : 'active'}
-        labelText={m.open_project_storage_label()}
-        helperText={appBytes > 0
-          ? m.open_project_storage_usage({
-              projects: formatFileSize(projectBytes),
-              app: formatFileSize(appBytes),
-              quota: formatFileSize(storageStatus.quota)
-            })
-          : m.open_project_storage_usage_projects_only({
-              projects: formatFileSize(projectBytes),
-              quota: formatFileSize(storageStatus.quota)
+      <div class="grid gap-2">
+        <div class="flex items-baseline justify-between gap-3 text-sm">
+          <span>{m.open_project_storage_label()}</span>
+          <span class="text-grey">
+            {m.open_project_storage_usage({
+              used: formatApproximateSize(projectBytes),
+              available: formatApproximateSize(availableBytes)
             })}
-      />
+          </span>
+        </div>
+        <ProgressBar
+          size="sm"
+          hideLabel
+          labelText={m.open_project_storage_label()}
+          value={projectBytes}
+          max={availableBytes}
+          status={storageNearlyFull ? 'error' : 'active'}
+        />
+      </div>
       {#if storageNearlyFull}
         <InlineNotification
           lowContrast
@@ -311,19 +337,33 @@
   {/if}
 
   {#if !isLoading && savedProjects.length > 1}
-    <ContentSwitcher
-      aria-label={m.open_project_sort_label()}
-      class="sort-switcher"
-      size="sm"
-      selectedIndex={sortIndex}
-      on:change={(event) => {
-        sortIndex = event.detail;
-        cardRail?.scrollTo({ left: 0 });
-      }}
-    >
-      <Switch text={m.open_project_sort_recent()} />
-      <Switch text={m.open_project_sort_size()} />
-    </ContentSwitcher>
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="project-search">
+        <Search
+          size="sm"
+          hideLabel
+          labelText={m.open_project_search_label()}
+          placeholder={m.open_project_search_placeholder()}
+          closeButtonLabelText={m.a11y_clear_search()}
+          value={searchQuery}
+          on:input={handleSearchInput}
+          on:clear={() => (searchQuery = '')}
+        />
+      </div>
+      <ContentSwitcher
+        aria-label={m.open_project_sort_label()}
+        class="sort-switcher"
+        size="sm"
+        selectedIndex={sortIndex}
+        on:change={(event) => {
+          sortIndex = event.detail;
+          cardRail?.scrollTo({ left: 0 });
+        }}
+      >
+        <Switch text={m.open_project_sort_recent()} />
+        <Switch text={m.open_project_sort_size()} />
+      </ContentSwitcher>
+    </div>
   {/if}
 
   <div
@@ -341,8 +381,12 @@
       <div class="no-projects">
         <p class="text-grey">{m.create_project_no_saved_projects()}</p>
       </div>
+    {:else if visibleProjects.length === 0}
+      <div class="no-projects">
+        <p class="text-grey">{m.open_project_search_no_match()}</p>
+      </div>
     {:else}
-      {#each sortedProjects as project (project.id)}
+      {#each visibleProjects as project (project.id)}
         <div class="project-card-wrapper">
           <ProjectCard
             title={project.name}
@@ -371,7 +415,7 @@
                       style="color: var(--calendar-color); fill: var(--calendar-color);"
                     />
                     <span class="ml-2 text-sm"
-                      >{formatFileSize(project.storageBytes)}</span
+                      >{formatApproximateSize(project.storageBytes)}</span
                     >
                   </div>
                 </div>
@@ -456,7 +500,7 @@
           {m.open_project_delete_confirm_message()}
           {#if reclaimableOnDelete}
             {m.open_project_delete_reclaim({
-              size: formatFileSize(reclaimableOnDelete)
+              size: formatApproximateSize(reclaimableOnDelete)
             })}
           {/if}
         </p>
@@ -505,7 +549,11 @@
   }
 
   #khartis-open-project :global(.sort-switcher) {
-    max-width: 20rem;
+    flex: 0 1 20rem;
+  }
+
+  .project-search {
+    flex: 1 1 14rem;
   }
 
   .project-card-skeleton {

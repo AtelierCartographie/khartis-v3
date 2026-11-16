@@ -9,6 +9,8 @@ export type {
 
 export { PROJECT_CONST } from './constants';
 
+export { matchesProjectSearch } from './core/project-search';
+
 export { projectRepository } from './services/persistence.service';
 
 export { projectStorage } from './services/storage.service';

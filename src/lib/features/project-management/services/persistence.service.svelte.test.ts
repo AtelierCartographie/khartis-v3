@@ -33,6 +33,11 @@ vi.mock('./asset-store.service', () => ({
   withAssetWriteLock: (task: () => Promise<unknown>) => task()
 }));
 
+vi.mock('./project-search.service', () => ({
+  buildProjectSearchIndex: () => ({ version: 2, text: '' }),
+  loadSearchCatalog: async () => undefined
+}));
+
 vi.mock('./serializer.service', () => ({
   deserialize: vi.fn(),
   prepareForIndexedDB: mocks.prepareForIndexedDB
@@ -78,7 +83,10 @@ class FakeObjectStore {
   }
 
   get(key: string) {
-    return createRequest(this.store.records.get(key));
+    const request = createRequest(this.store.records.get(key));
+    // A read-only transaction completes too, after its requests succeed.
+    this.scheduleComplete();
+    return request;
   }
 
   delete(key: string): void {
