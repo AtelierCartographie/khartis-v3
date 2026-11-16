@@ -4,7 +4,11 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
-  import type { SavedProjectMetadata } from '$lib/features/project-management';
+  import {
+    readBrowserStorageStatus,
+    type BrowserStorageStatus,
+    type ListedProjectMetadata
+  } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
@@ -14,9 +18,10 @@
     Modal,
     OverflowMenu,
     OverflowMenuItem,
+    ProgressBar,
     SkeletonPlaceholder
   } from 'carbon-components-svelte';
-  import { Calendar, TrashCan } from 'carbon-icons-svelte';
+  import { Calendar, DataBase, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
@@ -38,8 +43,10 @@
   });
 
   const KHARTIS_FILE_EXTENSIONS = ['.kh', '.khartis'];
+  const STORAGE_NEARLY_FULL_RATIO = 0.8;
 
-  let savedProjects = $state<SavedProjectMetadata[]>([]);
+  let savedProjects = $state<ListedProjectMetadata[]>([]);
+  let storageStatus = $state<BrowserStorageStatus | null>(null);
   let selectedProjectId = $state<string | null>(null);
   let isLoading = $state(true);
   let error = $state('');
@@ -48,6 +55,15 @@
   let projectToDelete = $state<string | null>(null);
   let showDeleteConfirm = $state(false);
   let showDeleteAllConfirm = $state(false);
+
+  const storageNearlyFull = $derived(
+    storageStatus !== null &&
+      storageStatus.usage / storageStatus.quota >= STORAGE_NEARLY_FULL_RATIO
+  );
+  const reclaimableOnDelete = $derived(
+    savedProjects.find((project) => project.id === projectToDelete)
+      ?.reclaimableBytes
+  );
 
   onMount(async () => {
     await loadProjects();
@@ -58,7 +74,10 @@
     error = '';
 
     try {
-      savedProjects = await projectStore.listProjects();
+      [savedProjects, storageStatus] = await Promise.all([
+        projectStore.listProjects(),
+        readBrowserStorageStatus()
+      ]);
     } catch (err) {
       logger.error('Failed to load projects', LogCategory.PROJECT, err);
       error =
@@ -229,6 +248,34 @@
     </span>
   </header>
 
+  {#if storageStatus}
+    <div class="grid gap-3">
+      <ProgressBar
+        size="sm"
+        value={storageStatus.usage}
+        max={storageStatus.quota}
+        status={storageNearlyFull ? 'error' : 'active'}
+        labelText={m.open_project_storage_label()}
+        helperText={m.open_project_storage_usage({
+          used: formatFileSize(storageStatus.usage),
+          quota: formatFileSize(storageStatus.quota)
+        })}
+      />
+      {#if storageNearlyFull}
+        <InlineNotification
+          lowContrast
+          hideCloseButton
+          kind="warning"
+          subtitle={m.open_project_storage_nearly_full()}
+        />
+      {:else if storageStatus.persisted === false}
+        <p class="text-grey text-sm">
+          {m.open_project_storage_not_persisted()}
+        </p>
+      {/if}
+    </div>
+  {/if}
+
   {#if error}
     <InlineNotification
       closeButtonDescription={m.a11y_close_notification()}
@@ -259,7 +306,7 @@
         <div class="project-card-wrapper">
           <ProjectCard
             title={project.name}
-            subtitle={project.description || formatFileSize(project.size)}
+            subtitle={project.description ?? ''}
             thumbnail={project.thumbnail}
             variant="gray"
             selected={selectedProjectId === project.id}
@@ -267,14 +314,26 @@
           >
             {#snippet footer()}
               <div class="flex items-center justify-between w-full">
-                <div class="flex items-center">
-                  <Calendar
-                    size={16}
-                    style="color: var(--calendar-color); fill: var(--calendar-color);"
-                  />
-                  <span class="ml-2 text-sm"
-                    >{formatDate(project.updatedAt)}</span
-                  >
+                <div class="grid gap-1">
+                  <div class="flex items-center">
+                    <Calendar
+                      size={16}
+                      style="color: var(--calendar-color); fill: var(--calendar-color);"
+                    />
+                    <span class="ml-2 text-sm"
+                      >{formatDate(project.updatedAt)}</span
+                    >
+                  </div>
+                  <div class="flex items-center">
+                    <DataBase
+                      size={16}
+                      title={m.open_project_storage_size()}
+                      style="color: var(--calendar-color); fill: var(--calendar-color);"
+                    />
+                    <span class="ml-2 text-sm"
+                      >{formatFileSize(project.storageBytes)}</span
+                    >
+                  </div>
                 </div>
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
@@ -355,6 +414,11 @@
       >
         <p>
           {m.open_project_delete_confirm_message()}
+          {#if reclaimableOnDelete}
+            {m.open_project_delete_reclaim({
+              size: formatFileSize(reclaimableOnDelete)
+            })}
+          {/if}
         </p>
       </Modal>
     </div>

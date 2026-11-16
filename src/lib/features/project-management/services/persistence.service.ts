@@ -4,10 +4,16 @@ import { m } from '$lib/paraglide/messages';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
-import type { KhartisProject, SavedProjectMetadata } from '../types';
+import type {
+  KhartisProject,
+  ListedProjectMetadata,
+  SavedProjectMetadata
+} from '../types';
+import type { ProjectAssetUsage } from '../core/asset-usage';
 import { ProjectStorageKey } from '../types';
 import {
   ensureUploadedFileAssets,
+  loadProjectAssetUsage,
   removeProjectAssetRefs,
   syncProjectAssetRefs
 } from './asset-store.service';
@@ -18,6 +24,7 @@ import {
   loadMetadataStoreValue,
   openDatabase as openProjectDatabase
 } from './database-access.service';
+import { toStorageQuotaError } from './storage-quota.service';
 import {
   assertCurrentProjectSchema,
   migrateIfNeeded
@@ -241,6 +248,8 @@ async function enqueueProjectSave(
 
   try {
     await save();
+  } catch (error) {
+    throw toStorageQuotaError(error, { projectId });
   } finally {
     releaseCurrentSave();
     if (projectSaveQueues.get(projectId) === queuedSave) {
@@ -452,14 +461,27 @@ export async function removeProject(id: string): Promise<void> {
   await removeFromMetadata(id);
 }
 
-export async function listMetadata(): Promise<SavedProjectMetadata[]> {
+export async function listMetadata(): Promise<ListedProjectMetadata[]> {
   const metadata = await loadProjectMetadata();
+  const assetUsage = await loadProjectAssetUsage().catch((error: unknown) => {
+    logger.warn(
+      'Failed to measure project file storage',
+      LogCategory.PERSISTENCE,
+      error
+    );
+    return new Map<string, ProjectAssetUsage>();
+  });
 
-  const normalized = metadata.map((entry) => ({
-    ...entry,
-    createdAt: new Date(entry.createdAt),
-    updatedAt: new Date(entry.updatedAt)
-  }));
+  const normalized = metadata.map((entry) => {
+    const usage = assetUsage.get(entry.id);
+    return {
+      ...entry,
+      createdAt: new Date(entry.createdAt),
+      updatedAt: new Date(entry.updatedAt),
+      storageBytes: entry.size + (usage?.assetBytes ?? 0),
+      reclaimableBytes: entry.size + (usage?.exclusiveAssetBytes ?? 0)
+    };
+  });
 
   return normalized.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()

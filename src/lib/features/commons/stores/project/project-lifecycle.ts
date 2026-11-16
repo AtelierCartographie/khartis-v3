@@ -1,6 +1,6 @@
 import type {
   KhartisProject,
-  SavedProjectMetadata
+  ListedProjectMetadata
 } from '$lib/features/project-management';
 import {
   APP_LOADING_PHASE,
@@ -249,7 +249,7 @@ export async function duplicateProject(
   }
 }
 
-export async function listProjects(): Promise<SavedProjectMetadata[]> {
+export async function listProjects(): Promise<ListedProjectMetadata[]> {
   const projects = await projectRepository.listMetadata();
 
   return projects;

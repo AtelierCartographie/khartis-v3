@@ -26,6 +26,7 @@ vi.mock('localforage', () => ({
 
 vi.mock('./asset-store.service', () => ({
   ensureUploadedFileAssets: mocks.ensureUploadedFileAssets,
+  loadProjectAssetUsage: async () => new Map(),
   registerAssetStores: mocks.registerAssetStores,
   removeProjectAssetRefs: mocks.removeProjectAssetRefs,
   syncProjectAssetRefs: mocks.syncProjectAssetRefs

@@ -9,6 +9,7 @@ import {
   DataValidationError,
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
+import { computeProjectAssetUsage } from '../core/asset-usage';
 
 const mocks = vi.hoisted(() => ({
   getProjectDatabase: vi.fn<() => Promise<IDBDatabase>>()
@@ -368,5 +369,32 @@ describe('asset store errors', () => {
     });
 
     expect(preparedFile.assetRef).toEqual(legacyAssetRef);
+  });
+});
+
+describe('project file usage', () => {
+  it('should count a shared file in each project but free it from none when deleted', () => {
+    const usage = computeProjectAssetUsage(
+      [
+        { assetId: 'communes', size: 100 },
+        { assetId: 'census', size: 30 },
+        { assetId: 'notes', size: 5 }
+      ],
+      [
+        { projectId: 'original', assetId: 'communes' },
+        { projectId: 'original', assetId: 'census' },
+        { projectId: 'copy', assetId: 'communes' },
+        { projectId: 'copy', assetId: 'notes' }
+      ]
+    );
+
+    expect(usage.get('original')).toEqual({
+      assetBytes: 130,
+      exclusiveAssetBytes: 30
+    });
+    expect(usage.get('copy')).toEqual({
+      assetBytes: 105,
+      exclusiveAssetBytes: 5
+    });
   });
 });
