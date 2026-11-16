@@ -221,21 +221,6 @@ export async function duplicateProject(
       );
     }
 
-    const projects = await listProjects();
-    const capacityCheck = ProjectValidator.validateStorageCapacity(
-      projects.length
-    );
-    if (!capacityCheck.isValid) {
-      throw new DataValidationError(
-        capacityCheck.errors.join(', '),
-        'projectCapacity',
-        {
-          errors: capacityCheck.errors,
-          projectCount: projects.length
-        }
-      );
-    }
-
     const duplicationSuffix = m.project_duplicate_suffix();
     const duplicatedName =
       newName || `${originalProject.manifest.name} ${duplicationSuffix}`;

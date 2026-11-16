@@ -798,8 +798,6 @@
   "validation_project_exceeds_size": "Le projet dépasse la limite de {limit} Mo",
   "validation_project_size_performance": "Le projet est volumineux et pourrait affecter les performances",
   "validation_project_name_max_chars": "Le nom du projet ne peut pas dépasser 255 caractères",
-  "validation_project_count_limit": "Limite de {limit} projets atteinte. Veuillez supprimer des projets existants.",
-  "validation_project_count_approaching": "Vous approchez de la limite de {limit} projets",
   "validation_csv_empty": "Le fichier est vide",
   "column_type_text": "Texte",
   "column_type_number": "Nombre",

@@ -87,7 +87,6 @@ projet sont écrits dans des transactions distinctes.
 | Total d'un import                 | 200 Mio             |
 | Fichiers par import               | 20                  |
 | Snapshot sérialisé                | 150 Mio             |
-| Projets                           | 50                  |
 
 Avant d'écrire un asset, Khartis consulte `navigator.storage.estimate()` et
 exige la taille de l'asset plus une marge de max(20 %, 8 Mio). Sans estimation
