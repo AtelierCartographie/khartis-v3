@@ -18,7 +18,10 @@ export {
   type BrowserStorageStatus
 } from './services/storage-quota.service';
 
-export { persistTableSnapshot } from './services/asset-store.service';
+export {
+  persistTableSnapshot,
+  sweepStorageGarbage
+} from './services/asset-store.service';
 
 export { persistCustomBasemapSource } from './services/custom-basemap-source.service';
 export { restoreCustomBasemapTables } from './services/custom-basemap-restore.service';
