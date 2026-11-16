@@ -16,6 +16,10 @@ import {
   resolveClassificationPatternConfig,
   resolveClassPatterns
 } from '$lib/features/commons/services/pattern-palette.service';
+import {
+  computeDivergingSplit,
+  isDivergingBreakpoint
+} from '$lib/features/commons/services/classification.service';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import type {
@@ -183,12 +187,20 @@ export function resolveClassPatternPalette(
   if (fillMode === FillMode.CLASSES) {
     const count = classification?.colors?.length ?? 0;
     if (count === 0) return null;
+    const breakpointValue = classification?.breakpointValue;
     return resolveClassPatterns(
       count,
       pattern,
       'sequential',
       pattern.contrast,
-      classification?.inverted ?? false
+      classification?.inverted ?? false,
+      isDivergingBreakpoint(breakpointValue)
+        ? computeDivergingSplit(
+            count,
+            classification?.breaks ?? [],
+            breakpointValue
+          )
+        : undefined
     );
   }
 

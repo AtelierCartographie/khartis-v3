@@ -116,7 +116,8 @@
       config,
       categoriesMode ? 'categorical' : 'sequential',
       config.contrast,
-      inverted
+      inverted,
+      categoriesMode ? undefined : divergingSplit
     );
     return sampleForPreview(
       patterns.map((pattern) => buildClassPatternSvgBackground(pattern))
