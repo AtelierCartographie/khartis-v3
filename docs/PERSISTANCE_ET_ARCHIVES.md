@@ -77,6 +77,22 @@ Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
 les métadonnées de l'asset, le snapshot, les références et les métadonnées de
 projet sont écrits dans des transactions distinctes.
 
+Une écriture d'asset qui échoue efface les blocs déjà écrits. Les autres
+restes (import abandonné avant la première sauvegarde, suppression de projet
+interrompue) sont repris au démarrage par `sweepStorageGarbage()`, lancé quand
+le navigateur est inactif :
+
+- les références d'un projet absent du store `projects` sont supprimées ;
+- un asset qu'aucun projet existant ne référence est supprimé s'il a plus de
+  24 h, car un projet neuf écrit ses assets avant sa première sauvegarde ;
+- des blocs sans métadonnées sont supprimés seulement si aucune écriture n'est
+  en cours dans un autre onglet.
+
+Les écritures d'assets et les sauvegardes de projet tiennent le verrou Web
+Locks `khartis-asset-writes` en mode partagé. Le balayage le demande en mode
+exclusif avec `ifAvailable` et s'abstient s'il ne l'obtient pas. Sans Web
+Locks, il ne traite que les assets datés.
+
 ## Quotas et tailles
 
 | Règle                             | Valeur              |
@@ -205,8 +221,9 @@ d'origine devient un asset, et ses tables DuckDB sont rejouées à la reprise.
 ## Limites connues
 
 - **Fond importé abandonné.** L'asset est écrit à l'import du fond, avant la
-  sauvegarde : un fond abandonné avant toute sauvegarde laisse un asset sans
-  référence. Si l'écriture échoue (quota), l'import du fond échoue.
+  sauvegarde : un fond abandonné avant toute sauvegarde occupe de l'espace
+  jusqu'au balayage qui suit ses 24 h. Si l'écriture échoue (quota), l'import
+  du fond échoue.
 - **Projets `3.9.0`.** Un fond importé dans un projet `3.9.0` n'a jamais
   conservé ses octets : aucune migration ne peut les recréer.
 - **Coût du replay.** Il refait tout le traitement d'import ; son coût à

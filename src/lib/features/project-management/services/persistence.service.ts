@@ -15,7 +15,8 @@ import {
   ensureUploadedFileAssets,
   loadProjectAssetUsage,
   removeProjectAssetRefs,
-  syncProjectAssetRefs
+  syncProjectAssetRefs,
+  withAssetWriteLock
 } from './asset-store.service';
 import { collectCustomBasemapAssetRefs } from './custom-basemap-source.service';
 import { deserialize, prepareForIndexedDB } from './serializer.service';
@@ -247,7 +248,7 @@ async function enqueueProjectSave(
   }
 
   try {
-    await save();
+    await withAssetWriteLock(save);
   } catch (error) {
     throw toStorageQuotaError(error, { projectId });
   } finally {

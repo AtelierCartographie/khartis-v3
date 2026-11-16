@@ -8,12 +8,16 @@ import {
 } from '$lib/features/commons/pipeline.errors';
 import { FILE_EXTENSION_GROUPS, MIME } from '$lib/features/commons/constants';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
 import {
   computeProjectAssetUsage,
-  type ProjectAssetUsage
+  selectStorageGarbage,
+  type ProjectAssetUsage,
+  type StorageGarbage,
+  type StoredAssetRef
 } from '../core/asset-usage';
 import { collectFileAssetRefs } from '../core/file-asset-refs';
 import { getProjectDatabase } from './database-access.service';
@@ -51,6 +55,9 @@ const { ASSET_STORE_NAME, ASSET_CHUNK_STORE_NAME, ASSET_REF_STORE_NAME } =
   PROJECT_CONST.DB;
 
 const { CHUNK_SIZE } = PROJECT_CONST.ASSETS;
+
+const ASSET_WRITE_LOCK = 'khartis-asset-writes';
+const UNSAVED_ASSET_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE =
   'PROJECT_ASSET_STORAGE_INSUFFICIENT';
@@ -214,24 +221,54 @@ async function assertStorageHeadroom(
   }
 }
 
+/**
+ * Runs `task` while holding the cross-tab asset write lock in shared mode, so
+ * the storage sweep never sees a write in progress. The sweep only ever asks
+ * for the exclusive lock with `ifAvailable`, which is never queued: a nested
+ * shared request cannot wait behind it.
+ */
+export async function withAssetWriteLock<T>(
+  task: () => Promise<T>
+): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) {
+    return task();
+  }
+
+  return locks.request(ASSET_WRITE_LOCK, { mode: 'shared' }, task);
+}
+
+async function discardPartialAsset(assetId: string): Promise<void> {
+  await deleteAsset(assetId).catch((error: unknown) => {
+    logger.warn(
+      'Failed to discard a partially written asset',
+      LogCategory.PERSISTENCE,
+      { assetId, error }
+    );
+  });
+}
+
 export async function persistAssetBlob(
   blob: Blob,
   ref: AssetRef
 ): Promise<AssetRef> {
-  const db = await getDb();
-  const alreadyExists = await assetExists(ref.assetId);
+  return withAssetWriteLock(async () => {
+    const db = await getDb();
+    const alreadyExists = await assetExists(ref.assetId);
 
-  if (!alreadyExists) {
-    await assertStorageHeadroom(ref, blob.size);
-    try {
-      await writeAssetChunks(db, ref.assetId, blob);
-      await putAssetMetadata(db, ref, blob.size);
-    } catch (error) {
-      throw toStorageQuotaError(error, { assetId: ref.assetId });
+    if (!alreadyExists) {
+      await assertStorageHeadroom(ref, blob.size);
+      try {
+        await writeAssetChunks(db, ref.assetId, blob);
+        await putAssetMetadata(db, ref, blob.size);
+      } catch (error) {
+        await discardPartialAsset(ref.assetId);
+        throw toStorageQuotaError(error, { assetId: ref.assetId });
+      }
     }
-  }
 
-  return ref;
+    return ref;
+  });
 }
 
 /**
@@ -243,23 +280,26 @@ export async function persistAssetStream(
   source: ReadableStream<Uint8Array>,
   ref: AssetRef
 ): Promise<AssetRef> {
-  const db = await getDb();
-  const alreadyExists = await assetExists(ref.assetId);
+  return withAssetWriteLock(async () => {
+    const db = await getDb();
+    const alreadyExists = await assetExists(ref.assetId);
 
-  if (alreadyExists) {
-    await source.cancel();
-    return ref;
-  }
+    if (alreadyExists) {
+      await source.cancel();
+      return ref;
+    }
 
-  await assertStorageHeadroom(ref, ref.size);
-  try {
-    const size = await writeAssetChunkStream(db, ref.assetId, source);
-    const writtenRef = { ...ref, size };
-    await putAssetMetadata(db, writtenRef, size);
-    return writtenRef;
-  } catch (error) {
-    throw toStorageQuotaError(error, { assetId: ref.assetId });
-  }
+    await assertStorageHeadroom(ref, ref.size);
+    try {
+      const size = await writeAssetChunkStream(db, ref.assetId, source);
+      const writtenRef = { ...ref, size };
+      await putAssetMetadata(db, writtenRef, size);
+      return writtenRef;
+    } catch (error) {
+      await discardPartialAsset(ref.assetId);
+      throw toStorageQuotaError(error, { assetId: ref.assetId });
+    }
+  });
 }
 
 export async function persistAssetBytes(
@@ -664,4 +704,111 @@ export async function estimateStorageHeadroom(
   } catch {
     return true;
   }
+}
+
+async function readStorageInventory(db: IDBDatabase): Promise<{
+  projectIds: Set<string>;
+  refs: StoredProjectAssetRef[];
+  assets: StoredAssetMetadata[];
+  chunkAssetIds: Set<string>;
+}> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(
+      [
+        PROJECT_CONST.DB.STORE_NAME,
+        ASSET_REF_STORE_NAME,
+        ASSET_STORE_NAME,
+        ASSET_CHUNK_STORE_NAME
+      ],
+      'readonly'
+    );
+    const projectKeys = tx
+      .objectStore(PROJECT_CONST.DB.STORE_NAME)
+      .getAllKeys();
+    const refs = tx.objectStore(ASSET_REF_STORE_NAME).getAll();
+    const assets = tx.objectStore(ASSET_STORE_NAME).getAll();
+    const chunkAssetIds = new Set<string>();
+    const chunkCursor = tx
+      .objectStore(ASSET_CHUNK_STORE_NAME)
+      .index('assetId')
+      .openKeyCursor(null, 'nextunique');
+
+    chunkCursor.onsuccess = () => {
+      const cursor = chunkCursor.result;
+      if (cursor) {
+        chunkAssetIds.add(String(cursor.key));
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () =>
+      resolve({
+        projectIds: new Set(projectKeys.result.map(String)),
+        refs: refs.result as StoredProjectAssetRef[],
+        assets: assets.result as StoredAssetMetadata[],
+        chunkAssetIds
+      });
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_read_project_refs()));
+  });
+}
+
+async function deleteAssetRefs(
+  db: IDBDatabase,
+  refs: readonly StoredAssetRef[]
+): Promise<void> {
+  if (refs.length === 0) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_REF_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(ASSET_REF_STORE_NAME);
+    refs.forEach((ref) =>
+      store.delete(createProjectAssetRefId(ref.projectId, ref.assetId))
+    );
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_remove_project_refs()));
+  });
+}
+
+async function collectStorageGarbage(
+  now: number,
+  noWriteInProgress: boolean
+): Promise<StorageGarbage> {
+  const db = await getDb();
+  const inventory = await readStorageInventory(db);
+  const garbage = selectStorageGarbage({
+    ...inventory,
+    now,
+    graceMs: UNSAVED_ASSET_GRACE_MS,
+    noWriteInProgress
+  });
+
+  await deleteAssetRefs(db, garbage.staleRefs);
+  for (const assetId of garbage.orphanAssetIds) {
+    await deleteAsset(assetId);
+  }
+
+  return garbage;
+}
+
+/**
+ * Deletes the files no saved project references any more: an import abandoned
+ * before the first save, a write cut short, a project deletion interrupted
+ * between its steps. Skipped when another tab is writing.
+ */
+export async function sweepStorageGarbage(
+  now = Date.now()
+): Promise<StorageGarbage | null> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) {
+    return collectStorageGarbage(now, false);
+  }
+
+  return locks.request(
+    ASSET_WRITE_LOCK,
+    { mode: 'exclusive', ifAvailable: true },
+    (lock) => (lock ? collectStorageGarbage(now, true) : null)
+  );
 }

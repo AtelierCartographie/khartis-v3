@@ -53,3 +53,64 @@ export function computeProjectAssetUsage(
 
   return usage;
 }
+
+export interface StoredAssetEntry extends StoredAssetSize {
+  createdAt: string;
+}
+
+export interface StorageGarbageInput {
+  projectIds: ReadonlySet<string>;
+  refs: readonly StoredAssetRef[];
+  assets: readonly StoredAssetEntry[];
+  /** Asset ids that own at least one chunk. */
+  chunkAssetIds: ReadonlySet<string>;
+  now: number;
+  /** An unreferenced asset younger than this may belong to an unsaved project. */
+  graceMs: number;
+  /**
+   * Chunks without metadata are a write in progress unless every writer is
+   * known to be idle, which only the cross-tab write lock establishes.
+   */
+  noWriteInProgress: boolean;
+}
+
+export interface StorageGarbage {
+  /** References left behind by a project whose deletion was interrupted. */
+  staleRefs: StoredAssetRef[];
+  orphanAssetIds: string[];
+}
+
+export function selectStorageGarbage({
+  projectIds,
+  refs,
+  assets,
+  chunkAssetIds,
+  now,
+  graceMs,
+  noWriteInProgress
+}: StorageGarbageInput): StorageGarbage {
+  const staleRefs = refs.filter((ref) => !projectIds.has(ref.projectId));
+  const referenced = new Set(
+    refs
+      .filter((ref) => projectIds.has(ref.projectId))
+      .map((ref) => ref.assetId)
+  );
+
+  const orphanAssetIds = assets
+    .filter((asset) => {
+      const age = now - Date.parse(asset.createdAt);
+      return !referenced.has(asset.assetId) && age > graceMs;
+    })
+    .map((asset) => asset.assetId);
+
+  if (noWriteInProgress) {
+    const withMetadata = new Set(assets.map((asset) => asset.assetId));
+    for (const assetId of chunkAssetIds) {
+      if (!withMetadata.has(assetId) && !referenced.has(assetId)) {
+        orphanAssetIds.push(assetId);
+      }
+    }
+  }
+
+  return { staleRefs, orphanAssetIds };
+}

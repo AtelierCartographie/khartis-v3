@@ -29,7 +29,8 @@ vi.mock('./asset-store.service', () => ({
   loadProjectAssetUsage: async () => new Map(),
   registerAssetStores: mocks.registerAssetStores,
   removeProjectAssetRefs: mocks.removeProjectAssetRefs,
-  syncProjectAssetRefs: mocks.syncProjectAssetRefs
+  syncProjectAssetRefs: mocks.syncProjectAssetRefs,
+  withAssetWriteLock: (task: () => Promise<unknown>) => task()
 }));
 
 vi.mock('./serializer.service', () => ({

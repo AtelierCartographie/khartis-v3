@@ -1,8 +1,10 @@
-import type {
-  KhartisProject,
-  ProjectData,
-  ListedProjectMetadata
+import {
+  sweepStorageGarbage,
+  type KhartisProject,
+  type ProjectData,
+  type ListedProjectMetadata
 } from '$lib/features/project-management';
+import { LogCategory, logger } from '../utils/logger';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
 import type {
@@ -35,6 +37,26 @@ import {
   updateFileJoinedBasemap as updateFileJoinedBasemapFn
 } from './project';
 
+const STORAGE_SWEEP_IDLE_TIMEOUT_MS = 10_000;
+
+function scheduleStorageSweep(): void {
+  const sweep = () => {
+    sweepStorageGarbage().catch((error: unknown) => {
+      logger.warn(
+        'Failed to sweep unreferenced project files',
+        LogCategory.PERSISTENCE,
+        error
+      );
+    });
+  };
+
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(sweep, { timeout: STORAGE_SWEEP_IDLE_TIMEOUT_MS });
+  } else {
+    setTimeout(sweep, STORAGE_SWEEP_IDLE_TIMEOUT_MS);
+  }
+}
+
 function createProjectStore() {
   const state = $state(createProjectState());
   let initPromise: Promise<void> | undefined;
@@ -64,6 +86,7 @@ function createProjectStore() {
     } finally {
       state.isLoading = false;
       state.isInitialized = true;
+      scheduleStorageSweep();
     }
   }
 
