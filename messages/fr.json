@@ -1714,6 +1714,8 @@
   "pattern_shape_cross": "Croisillons",
   "pattern_colorize": "Motifs colorés",
   "pattern_color": "Couleur du motif",
+  "pattern_color_below_breakpoint": "Couleur sous la rupture",
+  "pattern_color_above_breakpoint": "Couleur au-dessus de la rupture",
   "pattern_background_transparent": "Transparent",
   "pattern_background_color": "Couleur",
   "palette_intensity": "Intensité",

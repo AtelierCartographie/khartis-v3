@@ -386,6 +386,9 @@
               newPatternPaletteConfig={draftPatternPaletteConfig}
               currentInverted={currentInverted}
               newInverted={draftInverted}
+              divergingSplit={draftType === PALETTE_TYPE.DIVERGING
+                ? divergingSplit
+                : undefined}
             />
           </div>
           <footer class="popover-footer">
