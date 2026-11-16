@@ -287,11 +287,6 @@
         </Tooltip>
       </span>
     </span>
-    {#if storageStatus?.persisted === false}
-      <span class="storage-note mt-1 text-grey">
-        {m.open_project_storage_not_persisted()}
-      </span>
-    {/if}
   </header>
 
   {#if storageNearlyFull}
@@ -551,12 +546,6 @@
 
   #khartis-open-project :global(.sort-switcher) {
     flex: 0 1 20rem;
-  }
-
-  .storage-note {
-    display: block;
-    font-size: 0.75rem;
-    line-height: 1rem;
   }
 
   .storage-gauge {
