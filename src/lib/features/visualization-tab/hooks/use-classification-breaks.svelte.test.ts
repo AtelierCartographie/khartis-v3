@@ -35,10 +35,11 @@ const serviceMocks = vi.hoisted(() => ({
   calculateDivergingBreaks: vi.fn(),
   calculateBreaks: vi.fn(),
   computeDivergingSplit: vi.fn(() => ({
-    hasCenterClass: false,
     lowerCount: 2,
     upperCount: 2
   })),
+  isDivergingBreakpoint: (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value),
   detectDivergingBreakpoint: vi.fn(),
   isTemporalColumn: vi.fn(async () => false),
   generateColorsForBreaks: vi.fn((count: number) =>

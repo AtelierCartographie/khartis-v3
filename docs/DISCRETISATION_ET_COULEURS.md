@@ -103,7 +103,7 @@ part en pas calendaire.
   - k-means et quantiles : chaque côté est classé à part, comme pour un
     nombre, avec le nombre de classes du curseur ;
   - manuel : la pivot ne fait que répartir les couleurs, comme pour un nombre
-    (classe centrale neutre si elle tombe dans une classe).
+    (une classe qui la contient passe du côté supérieur).
     Les seuils sont libellés à leur propre précision : dans une série en années,
     une pivot au 10 mai s'affiche « 10 mai 1981 » et les classes voisines au jour.
 - **Unités.** Bornes, `min` et `max` sont en millisecondes epoch : c'est
@@ -186,9 +186,12 @@ classes sous le pivot, pour que légende et palette se répartissent comme la
 carte.
 
 `computeDivergingSplit()` répartit la palette selon la position réelle des
-bornes. Si une classe chevauche le pivot, elle reçoit la couleur centrale ;
-sinon, les classes se partagent entre les deux côtés, éventuellement de façon
-asymétrique. La couleur neutre tombe ainsi sur le pivot réel.
+bornes : les classes dont la borne haute est inférieure ou égale au pivot sont
+du côté inférieur, les autres du côté supérieur, éventuellement de façon
+asymétrique. Une palette divergente n'a pas de classe centrale : le pivot est
+une borne, et la transition entre les deux teintes tombe sur lui. Seul un pivot
+fini rend la palette divergente (`isDivergingBreakpoint()`) ; sinon elle reste
+séquentielle.
 
 ## Palettes
 
