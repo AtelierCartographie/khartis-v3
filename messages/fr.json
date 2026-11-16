@@ -649,7 +649,6 @@
   "open_project_sort_recent": "Plus récents",
   "open_project_sort_size": "Plus volumineux",
   "open_project_storage_nearly_full": "Le stockage du navigateur est presque plein. Supprimez les projets les plus volumineux, après avoir exporté en .kh ceux que vous voulez garder.",
-  "open_project_storage_not_persisted": "Le navigateur peut effacer ces sauvegardes s'il manque d'espace. Exportez en .kh les projets que vous voulez garder.",
   "open_project_delete_reclaim": "Cette suppression libérera {size}.",
   "open_project_delete_confirm_button": "Supprimer",
   "open_project_cancel": "Annuler",

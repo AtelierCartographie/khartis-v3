@@ -117,8 +117,7 @@ production, la PWA demande le stockage persistant
 
 L'écran « Ouvrir un projet » affiche l'espace des projets
 (`measureProjectStorage` : snapshots plus assets, chacun compté une fois) sur
-l'espace dont ils disposent, avertit au-delà de 80 %, et signale un stockage
-non persistant. L'espace disponible est le quota moins ce que l'origine occupe
+l'espace dont ils disposent, avertit au-delà de 80 %. L'espace disponible est le quota moins ce que l'origine occupe
 hors projets : le Service Worker garde en Cache Storage le moteur DuckDB et
 ses extensions, environ 70 Mio, sur le même quota. La part des projets est une
 estimation (taille JSON et taille brute des assets) ; le navigateur compresse

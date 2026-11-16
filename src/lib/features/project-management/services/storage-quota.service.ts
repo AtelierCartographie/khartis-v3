@@ -7,8 +7,6 @@ export const PROJECT_STORAGE_QUOTA_ERROR_CODE =
 export interface BrowserStorageStatus {
   usage: number;
   quota: number;
-  /** `null` when the browser cannot tell whether eviction is allowed. */
-  persisted: boolean | null;
 }
 
 export function isQuotaExceededError(error: unknown): boolean {
@@ -70,12 +68,7 @@ export async function readBrowserStorageStatus(): Promise<BrowserStorageStatus |
       return null;
     }
 
-    const persisted =
-      typeof storageManager.persisted === 'function'
-        ? await storageManager.persisted().catch(() => null)
-        : null;
-
-    return { usage, quota, persisted };
+    return { usage, quota };
   } catch {
     return null;
   }

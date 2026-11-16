@@ -649,7 +649,6 @@
   "open_project_sort_recent": "Most recent",
   "open_project_sort_size": "Largest",
   "open_project_storage_nearly_full": "Browser storage is nearly full. Delete the largest projects, after exporting the ones you want to keep as .kh files.",
-  "open_project_storage_not_persisted": "The browser may erase these backups when it runs low on space. Export the projects you want to keep as .kh files.",
   "open_project_delete_reclaim": "Deleting it will free {size}.",
   "open_project_delete_confirm_button": "Delete",
   "open_project_cancel": "Cancel",
