@@ -1,7 +1,7 @@
 import type {
   KhartisProject,
   ProjectData,
-  SavedProjectMetadata
+  ListedProjectMetadata
 } from '$lib/features/project-management';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
@@ -160,7 +160,7 @@ function createProjectStore() {
     return duplicateProjectFn(container, id, newName);
   }
 
-  async function listProjects(): Promise<SavedProjectMetadata[]> {
+  async function listProjects(): Promise<ListedProjectMetadata[]> {
     return listProjectsFn();
   }
 

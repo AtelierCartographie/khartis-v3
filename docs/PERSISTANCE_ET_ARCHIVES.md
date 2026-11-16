@@ -91,8 +91,18 @@ projet sont écrits dans des transactions distinctes.
 Avant d'écrire un asset, Khartis consulte `navigator.storage.estimate()` et
 exige la taille de l'asset plus une marge de max(20 %, 8 Mio). Sans estimation
 disponible, l'écriture est tentée et l'erreur de quota du navigateur reste
-possible. En production, la PWA demande le stockage persistant
+possible. Une erreur de quota levée par l'écriture d'un asset, d'un projet ou
+d'une métadonnée devient `PROJECT_STORAGE_QUOTA_EXCEEDED`, avec un message qui
+indique comment libérer de l'espace (`storage-quota.service.ts`). En
+production, la PWA demande le stockage persistant
 (`navigator.storage.persist()`), sans garantie que le navigateur l'accorde.
+
+L'écran « Ouvrir un projet » affiche l'espace utilisé par l'origine sur le
+quota, avertit au-delà de 80 %, et signale un stockage non persistant. La
+taille d'un projet est celle de son snapshot plus celle des assets qu'il
+référence (`computeProjectAssetUsage`) ; la confirmation de suppression donne
+l'espace libéré, sans les assets partagés avec un autre projet, par exemple
+après une duplication. Il n'y a pas de plafond du nombre de projets.
 
 Ces seuils sont des garde-fous : ils ne garantissent pas qu'un gros projet
 pourra être importé, enregistré et rouvert sur tous les navigateurs.

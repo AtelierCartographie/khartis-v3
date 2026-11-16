@@ -1,6 +1,7 @@
 export { ProjectStorageKey } from './types';
 export type {
   KhartisProject,
+  ListedProjectMetadata,
   ProjectData,
   ProjectState,
   SavedProjectMetadata
@@ -11,6 +12,11 @@ export { PROJECT_CONST } from './constants';
 export { projectRepository } from './services/persistence.service';
 
 export { projectStorage } from './services/storage.service';
+
+export {
+  readBrowserStorageStatus,
+  type BrowserStorageStatus
+} from './services/storage-quota.service';
 
 export { persistTableSnapshot } from './services/asset-store.service';
 

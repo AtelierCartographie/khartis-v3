@@ -48,6 +48,13 @@ export interface SavedProjectMetadata {
   exampleId?: string;
 }
 
+export interface ListedProjectMetadata extends SavedProjectMetadata {
+  /** Project snapshot plus every file it references, shared ones included. */
+  storageBytes: number;
+  /** What deleting the project frees: files shared with another project stay. */
+  reclaimableBytes: number;
+}
+
 export enum ProjectStorageKey {
   CURRENT = 'khartis_current_project',
   METADATA = 'khartis_projects_metadata'

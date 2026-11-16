@@ -11,8 +11,13 @@ import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
 import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
+import {
+  computeProjectAssetUsage,
+  type ProjectAssetUsage
+} from '../core/asset-usage';
 import { collectFileAssetRefs } from '../core/file-asset-refs';
 import { getProjectDatabase } from './database-access.service';
+import { toStorageQuotaError } from './storage-quota.service';
 
 // Legacy archive layers were persisted as GeoJSON snapshots and stay readable.
 const ARCHIVE_SNAPSHOT_EXTENSIONS = [
@@ -218,8 +223,12 @@ export async function persistAssetBlob(
 
   if (!alreadyExists) {
     await assertStorageHeadroom(ref, blob.size);
-    await writeAssetChunks(db, ref.assetId, blob);
-    await putAssetMetadata(db, ref, blob.size);
+    try {
+      await writeAssetChunks(db, ref.assetId, blob);
+      await putAssetMetadata(db, ref, blob.size);
+    } catch (error) {
+      throw toStorageQuotaError(error, { assetId: ref.assetId });
+    }
   }
 
   return ref;
@@ -243,10 +252,14 @@ export async function persistAssetStream(
   }
 
   await assertStorageHeadroom(ref, ref.size);
-  const size = await writeAssetChunkStream(db, ref.assetId, source);
-  const writtenRef = { ...ref, size };
-  await putAssetMetadata(db, writtenRef, size);
-  return writtenRef;
+  try {
+    const size = await writeAssetChunkStream(db, ref.assetId, source);
+    const writtenRef = { ...ref, size };
+    await putAssetMetadata(db, writtenRef, size);
+    return writtenRef;
+  } catch (error) {
+    throw toStorageQuotaError(error, { assetId: ref.assetId });
+  }
 }
 
 export async function persistAssetBytes(
@@ -475,6 +488,34 @@ async function loadProjectAssetIds(projectId: string): Promise<string[]> {
     request.onerror = () =>
       reject(request.error || new Error(m.error_failed_read_project_refs()));
   });
+}
+
+/** Reads asset metadata and references only, never the chunks. */
+export async function loadProjectAssetUsage(): Promise<
+  Map<string, ProjectAssetUsage>
+> {
+  const db = await getDb();
+
+  const [assets, refs] = await new Promise<
+    [StoredAssetMetadata[], StoredProjectAssetRef[]]
+  >((resolve, reject) => {
+    const tx = db.transaction(
+      [ASSET_STORE_NAME, ASSET_REF_STORE_NAME],
+      'readonly'
+    );
+    const assetsRequest = tx.objectStore(ASSET_STORE_NAME).getAll();
+    const refsRequest = tx.objectStore(ASSET_REF_STORE_NAME).getAll();
+
+    tx.oncomplete = () =>
+      resolve([
+        assetsRequest.result as StoredAssetMetadata[],
+        refsRequest.result as StoredProjectAssetRef[]
+      ]);
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_read_project_refs()));
+  });
+
+  return computeProjectAssetUsage(assets, refs);
 }
 
 export async function syncProjectAssetRefs(
