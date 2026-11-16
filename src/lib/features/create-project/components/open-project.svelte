@@ -287,42 +287,20 @@
         </Tooltip>
       </span>
     </span>
+    {#if storageStatus?.persisted === false}
+      <span class="storage-note mt-1 text-grey">
+        {m.open_project_storage_not_persisted()}
+      </span>
+    {/if}
   </header>
 
-  {#if storageStatus}
-    <div class="grid gap-3">
-      <div class="grid gap-2">
-        <div class="flex items-baseline justify-between gap-3 text-sm">
-          <span>{m.open_project_storage_label()}</span>
-          <span class="text-grey">
-            {m.open_project_storage_usage({
-              used: formatApproximateSize(projectBytes),
-              available: formatApproximateSize(availableBytes)
-            })}
-          </span>
-        </div>
-        <ProgressBar
-          size="sm"
-          hideLabel
-          labelText={m.open_project_storage_label()}
-          value={projectBytes}
-          max={availableBytes}
-          status={storageNearlyFull ? 'error' : 'active'}
-        />
-      </div>
-      {#if storageNearlyFull}
-        <InlineNotification
-          lowContrast
-          hideCloseButton
-          kind="warning"
-          subtitle={m.open_project_storage_nearly_full()}
-        />
-      {:else if storageStatus.persisted === false}
-        <p class="text-grey text-sm">
-          {m.open_project_storage_not_persisted()}
-        </p>
-      {/if}
-    </div>
+  {#if storageNearlyFull}
+    <InlineNotification
+      lowContrast
+      hideCloseButton
+      kind="warning"
+      subtitle={m.open_project_storage_nearly_full()}
+    />
   {/if}
 
   {#if error}
@@ -449,16 +427,39 @@
     {/if}
   </div>
 
-  {#if !isLoading && savedProjects.length > 0}
-    <div class="flex justify-end">
-      <Button
-        kind="tertiary"
-        size="small"
-        icon={TrashCan}
-        on:click={() => (showDeleteAllConfirm = true)}
-      >
-        {m.open_project_delete_all()}
-      </Button>
+  {#if !isLoading && (storageStatus || savedProjects.length > 0)}
+    <div class="flex flex-wrap items-end justify-between gap-5">
+      {#if storageStatus}
+        <div class="storage-gauge grid gap-2">
+          <div class="flex items-baseline justify-between gap-3 text-sm">
+            <span>{m.open_project_storage_label()}</span>
+            <span class="text-grey">
+              {m.open_project_storage_usage({
+                used: formatApproximateSize(projectBytes),
+                available: formatApproximateSize(availableBytes)
+              })}
+            </span>
+          </div>
+          <ProgressBar
+            size="sm"
+            hideLabel
+            labelText={m.open_project_storage_label()}
+            value={projectBytes}
+            max={availableBytes}
+            status={storageNearlyFull ? 'error' : 'active'}
+          />
+        </div>
+      {/if}
+      {#if savedProjects.length > 0}
+        <Button
+          kind="tertiary"
+          size="small"
+          icon={TrashCan}
+          on:click={() => (showDeleteAllConfirm = true)}
+        >
+          {m.open_project_delete_all()}
+        </Button>
+      {/if}
     </div>
   {/if}
 
@@ -550,6 +551,17 @@
 
   #khartis-open-project :global(.sort-switcher) {
     flex: 0 1 20rem;
+  }
+
+  .storage-note {
+    display: block;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .storage-gauge {
+    flex: 1 1 12rem;
+    max-width: 24rem;
   }
 
   .project-search {
