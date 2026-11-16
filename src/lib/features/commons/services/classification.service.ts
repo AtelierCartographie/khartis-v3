@@ -5,7 +5,10 @@ import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
-import { DEFAULT_VISUALIZATION_COLOR } from '../constants/colors.constants';
+import {
+  DEFAULT_DIVERGING_COLORS,
+  DEFAULT_VISUALIZATION_COLOR
+} from '../constants/colors.constants';
 import type { ContrastMode, WebGLColor } from '@ateliercartographie/ok-palette';
 import {
   divergentSequential,
@@ -31,8 +34,6 @@ import {
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';
 const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
-const DIVERGING_COLOR_A = '#b2182b';
-const DIVERGING_COLOR_B = '#2166ac';
 
 export interface BreaksResult {
   breaks: number[];
@@ -1298,8 +1299,8 @@ export function generateColorsForBreaks(
   if (palette === 'diverging') {
     const split = divergingSplit ?? splitDivergingEvenly(steps);
     cssColors = divergentSequential({
-      colorA: DIVERGING_COLOR_A,
-      colorB: DIVERGING_COLOR_B,
+      colorA: DEFAULT_DIVERGING_COLORS[0],
+      colorB: DEFAULT_DIVERGING_COLORS[1],
       steps: [split.lowerCount, split.upperCount],
       hasCenterClass: false,
       contrast

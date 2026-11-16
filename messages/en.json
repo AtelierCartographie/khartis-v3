@@ -1714,6 +1714,8 @@
   "pattern_shape_cross": "Crosshatch",
   "pattern_colorize": "Colored patterns",
   "pattern_color": "Pattern color",
+  "pattern_color_below_breakpoint": "Color below the breakpoint",
+  "pattern_color_above_breakpoint": "Color above the breakpoint",
   "pattern_background_transparent": "Transparent",
   "pattern_background_color": "Color",
   "palette_intensity": "Intensity",

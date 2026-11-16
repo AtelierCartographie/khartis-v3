@@ -223,6 +223,30 @@ de palette (`pattern`) et marquent aussi l'absence de données. Sur la carte,
 elles passent par une texture (`map/layers/pattern-texture.ts`) ; dans les
 aperçus et la légende, par des `defs` SVG.
 
+La taille d'un motif est la part de la tuile qu'il couvre : c'est elle qui
+ordonne une palette de motifs (`sequentialPatterns`), comme la clarté ordonne
+une palette de couleurs.
+
+Avec un pivot, `resolveClassPatterns()` reçoit la répartition et produit une
+rampe par côté, qui grandit en s'éloignant du pivot. La taille porte l'ordre,
+la couleur porte seulement le côté : chaque côté prend une teinte fixe
+(`PatternPaletteConfig.divergingColors`, sinon `DEFAULT_DIVERGING_COLORS`),
+que le contraste ne change pas. Quatre formes sont proposées, et l'angle choisi
+par l'utilisateur reste réglable, le côté inférieur gardant l'écart qui oppose
+les deux côtés :
+
+| Forme       | Sous le pivot              | Au-dessus    |
+| ----------- | -------------------------- | ------------ |
+| Ligne       | ligne à α + 90°            | ligne à α    |
+| Quadrillage | quadrillage à α            | ligne à α    |
+| Triangle    | triangle à α + 180°        | triangle à α |
+| Plus        | plus à α + 45° (une croix) | plus à α     |
+
+Une croix est un plus tourné de 45° ; les autres formes retombent sur la ligne.
+La taille plafonne à 43 % pour le triangle et le plus
+(`DIVERGING_PATTERN_MAX_SIZE`) : au-delà, la forme touche ses voisines, la part
+peinte ne vaut plus la taille et la rampe perd son ordre.
+
 ## Simulation des troubles de la vision
 
 `color-blindness.filter.ts` fournit des matrices `feColorMatrix` pour huit

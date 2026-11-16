@@ -215,8 +215,24 @@
     }
   }
 
+  // A diverging motif starts from the darkest color of each side of the
+  // palette in progress, kept as is whatever the contrast.
+  function seedDivergingColors(): [string, string] | undefined {
+    if (paletteType !== PALETTE_TYPE.DIVERGING || currentColors.length < 2) {
+      return undefined;
+    }
+    const first = currentColors[0];
+    const last = currentColors[currentColors.length - 1];
+    return inverted ? [last, first] : [first, last];
+  }
+
   function emitPatternPaletteChange(config: PatternPaletteConfig) {
-    draftPatternPaletteConfig = { ...config, contrast: resolvedContrast };
+    const divergingColors = config.divergingColors ?? seedDivergingColors();
+    draftPatternPaletteConfig = {
+      ...config,
+      contrast: resolvedContrast,
+      ...(divergingColors ? { divergingColors } : {})
+    };
     onPatternPaletteChange?.(draftPatternPaletteConfig);
   }
 
@@ -321,6 +337,7 @@
       {:else if activeTab === 2}
         <PatternPalettePicker
           config={draftPatternPaletteConfig}
+          diverging={paletteType === PALETTE_TYPE.DIVERGING}
           onchange={handlePatternPaletteChange}
         />
       {/if}
