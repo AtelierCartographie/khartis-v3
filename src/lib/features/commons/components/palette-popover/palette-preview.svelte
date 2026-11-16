@@ -2,7 +2,10 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { computeDivergingSplit } from '$lib/features/commons/services/classification.service';
+  import {
+    computeDivergingSplit,
+    isDivergingBreakpoint
+  } from '$lib/features/commons/services/classification.service';
   import PalettePopover from './palette-popover.svelte';
   import PaletteDropdown from './palette-dropdown.svelte';
   import CategoriesAspectPopover from './categories-aspect-popover.svelte';
@@ -113,7 +116,8 @@
       config,
       categoriesMode ? 'categorical' : 'sequential',
       config.contrast,
-      inverted
+      inverted,
+      categoriesMode ? undefined : divergingSplit
     );
     return sampleForPreview(
       patterns.map((pattern) => buildClassPatternSvgBackground(pattern))
@@ -136,9 +140,10 @@
       (colors.length || 5)
   );
   const divergingSplit = $derived.by(() => {
+    const breakpointValue = classification?.breakpointValue;
     if (
       paletteType !== 'diverging' ||
-      classification?.breakpointValue == null ||
+      !isDivergingBreakpoint(breakpointValue) ||
       resolvedClassCount <= 0
     ) {
       return undefined;
@@ -147,7 +152,7 @@
     return computeDivergingSplit(
       resolvedClassCount,
       classification?.breaks ?? [],
-      classification.breakpointValue
+      breakpointValue
     );
   });
 
