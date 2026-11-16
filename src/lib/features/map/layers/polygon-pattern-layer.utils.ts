@@ -38,6 +38,7 @@ import {
   resolvePatternTilePx
 } from './pattern-texture';
 import { RotatableFillStyleExtension } from './rotatable-fill-style-extension';
+import { resolvePageDisplayScale } from './layer-style.utils';
 
 export const POLYGON_PATTERN_FILL_COLOR: [number, number, number, number] = [
   0, 0, 0, 255
@@ -304,11 +305,14 @@ export function createBinaryPolygonPatternOverlayLayer(
   polygonPatternId: string | undefined,
   polyData: BinaryPolygonData,
   patternProps: PolygonPatternProps,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId' | 'pageDisplayScale'>,
   getFillColor: (featureId: number) => [number, number, number, number],
   idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
   opacity: number = PATTERN_OVERLAY_OPACITY
 ): Layer<DeckDataRow> | null {
+  // The tile is sized in page pixels, like the legend drawn on the same page.
+  const fillPatternScale =
+    patternProps.getFillPatternScale * resolvePageDisplayScale(ctx);
   const fillColorAttribute = createVisiblePolygonFillColorAttribute(
     polyData,
     getFillColor
@@ -337,7 +341,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     fillPatternMapping: patternProps.fillPatternMapping,
     fillPatternMask: true,
     getFillPattern: patternProps.getFillPattern,
-    getFillPatternScale: patternProps.getFillPatternScale,
+    getFillPatternScale: fillPatternScale,
     getFillPatternRotation: patternProps.getFillPatternRotation,
     ...({
       khartisPatternId: patternProps.khartisPatternId,
@@ -351,7 +355,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     updateTriggers: {
       getFillColor: [idSuffix],
       getFillPattern: [polygonPatternId],
-      getFillPatternScale: [patternProps.getFillPatternScale],
+      getFillPatternScale: [fillPatternScale],
       getFillPatternRotation: [patternProps.getFillPatternRotation]
     },
     dataComparator: (newData, oldData) => newData === oldData
