@@ -205,19 +205,21 @@
     handleClose();
   }
 
+  // Inverting is a choice about the order of the classes, not about one
+  // palette: it carries over to the next palette picked.
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
-    draftInverted = false;
     draftPatternPaletteConfig = undefined;
     draftQualitativePreset =
       palette.qualitativePreset ?? draftQualitativePreset;
-    draftColors = generatePaletteColors(
+    const colors = generatePaletteColors(
       palette,
       numClasses,
       undefined,
       undefined,
       divergingSplit
     );
+    draftColors = draftInverted ? [...colors].reverse() : colors;
   }
 
   function handleCustomColorsChange(colors: string[]) {
