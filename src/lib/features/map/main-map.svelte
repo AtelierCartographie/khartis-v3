@@ -6,6 +6,11 @@
   import { fade } from 'svelte/transition';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { zoomModeStore } from '../commons/stores/zoom-mode.store.svelte';
+  import {
+    PAGE_GUIDE_THRESHOLD_PX,
+    snapRectToPageGuides
+  } from '../commons/utils/page-guides.utils';
+  import { pageGuidesStore } from './stores/page-guides.store.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import {
     formatActions,
@@ -603,23 +608,28 @@
     const frameWidth = width - startFrame.left - startFrame.right;
     const frameHeight = height - startFrame.top - startFrame.bottom;
     const snap = formatState.gridEnabled;
-    const left = Math.min(
-      Math.max(
-        snapToPageGrid(
-          startFrame.left + (event.clientX - startX) / scale,
-          snap
-        ),
-        0
-      ),
-      width - frameWidth
+    // A centre line or a margin close by wins over the grid.
+    const aligned = snapRectToPageGuides(
+      {
+        x: startFrame.left + (event.clientX - startX) / scale,
+        y: startFrame.top + (event.clientY - startY) / scale,
+        width: frameWidth,
+        height: frameHeight
+      },
+      { width, height, margins: formatState.margins },
+      PAGE_GUIDE_THRESHOLD_PX / scale
     );
-    const top = Math.min(
-      Math.max(
-        snapToPageGrid(startFrame.top + (event.clientY - startY) / scale, snap),
-        0
-      ),
-      height - frameHeight
-    );
+    pageGuidesStore.show(aligned.guides);
+    const alignedX =
+      aligned.guides.vertical.length > 0
+        ? aligned.x
+        : snapToPageGrid(aligned.x, snap);
+    const alignedY =
+      aligned.guides.horizontal.length > 0
+        ? aligned.y
+        : snapToPageGrid(aligned.y, snap);
+    const left = Math.min(Math.max(alignedX, 0), width - frameWidth);
+    const top = Math.min(Math.max(alignedY, 0), height - frameHeight);
     formatActions.setMapFrame({
       top: Math.round(top),
       left: Math.round(left),
@@ -630,6 +640,7 @@
 
   function handleMapMovePointerUp(): void {
     mapMoveState = null;
+    pageGuidesStore.clear();
     window.removeEventListener(EVENT.POINTERMOVE, handleMapMovePointerMove);
     window.removeEventListener(EVENT.POINTERUP, handleMapMovePointerUp);
   }

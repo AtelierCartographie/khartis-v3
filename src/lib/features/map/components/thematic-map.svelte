@@ -131,6 +131,7 @@
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
   import PageGridOverlay from './page-grid-overlay.svelte';
+  import PageGuidesOverlay from './page-guides-overlay.svelte';
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -2431,6 +2432,9 @@
   <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
       <PageGridOverlay displayScale={pageDisplayScale} />
+    {/if}
+    {#if !isFacetCell}
+      <PageGuidesOverlay displayScale={pageDisplayScale} />
     {/if}
 
     <div
