@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeDrawingBounds,
+  simplifyDrawingStroke,
   smoothDrawingPath
 } from './annotation-drawing.utils';
+
+function polygonArea(points: Array<{ x: number; y: number }>): number {
+  let area = 0;
+  points.forEach((point, index) => {
+    const next = points[(index + 1) % points.length];
+    area += point.x * next.y - next.x * point.y;
+  });
+  return Math.abs(area / 2);
+}
 
 function extractPathPoints(path: string): Array<{ x: number; y: number }> {
   return Array.from(
@@ -69,5 +79,65 @@ describe('annotation drawing utils', () => {
     expect(smoothedPoints[1]?.y).toBeLessThan(8);
     expect(middlePoint?.y).toBeGreaterThan(6);
     expect(middlePoint?.y).toBeLessThan(12);
+  });
+
+  it.each([25, 50, 100])(
+    'keeps the area of a closed zone smoothed at %i %%',
+    (smoothness) => {
+      const square = [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 100, y: 100 },
+        { x: 0, y: 100 }
+      ];
+
+      const smoothed = extractPathPoints(
+        smoothDrawingPath(square, smoothness, true)
+      );
+
+      expect(
+        Math.abs(polygonArea(smoothed) / polygonArea(square) - 1)
+      ).toBeLessThan(0.02);
+    }
+  );
+
+  it('keeps the ends of an open line where they were drawn', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 30, y: 40 },
+      { x: 60, y: 0 },
+      { x: 90, y: 40 }
+    ];
+
+    const smoothed = extractPathPoints(smoothDrawingPath(line, 100, false));
+
+    expect(smoothed[0]).toEqual(line[0]);
+    expect(smoothed.at(-1)).toEqual(line.at(-1));
+  });
+
+  it('reduces a densely sampled freehand stroke to few anchors near its path', () => {
+    const samples = Array.from({ length: 200 }, (_, index) => {
+      const angle = (index / 199) * Math.PI;
+      const jitter = index % 2 === 0 ? 0.8 : -0.8;
+      return {
+        x: 100 + (80 + jitter) * Math.cos(angle),
+        y: 100 + (80 + jitter) * Math.sin(angle)
+      };
+    });
+
+    const simplified = simplifyDrawingStroke(samples, 2.5);
+
+    expect(simplified.length).toBeLessThanOrEqual(30);
+    expect(simplified[0]).toEqual(samples[0]);
+    expect(simplified.at(-1)).toEqual(samples.at(-1));
+  });
+
+  it('leaves a click-click segment untouched', () => {
+    const segment = [
+      { x: 0, y: 0 },
+      { x: 50, y: 50 }
+    ];
+
+    expect(simplifyDrawingStroke(segment, 2.5)).toBe(segment);
   });
 });
