@@ -78,9 +78,11 @@
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
   );
 
+  // A section the parent opens through `open` stays as the parent says:
+  // its switch turning on elsewhere must not open it next to another one.
   $effect(() => {
     const checked = toggleChecked;
-    if (!showToggle) return;
+    if (!showToggle || open !== undefined) return;
     expanded = checked;
   });
 
