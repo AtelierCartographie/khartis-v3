@@ -131,6 +131,8 @@
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
   import PageGridOverlay from './page-grid-overlay.svelte';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let {
     tables,
@@ -2349,6 +2351,40 @@
       }
     };
   });
+
+  let attributionTooltipTrigger = $state<HTMLElement | null>(null);
+
+  // The tile credit is a MapLibre control, outside Svelte: the tooltip that
+  // says it stays out of the export is wired onto its element.
+  $effect(() => {
+    const map = mapInit.map;
+    if (!map || !mapInit.isMapLoaded) return;
+    const attribution = map
+      .getContainer()
+      .querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+    if (!attribution) return;
+    attribution
+      .querySelector('.maplibregl-ctrl-attrib-button')
+      ?.removeAttribute('title');
+
+    const show = () => {
+      attributionTooltipTrigger = attribution;
+    };
+    const hide = () => {
+      attributionTooltipTrigger = null;
+    };
+    attribution.addEventListener('mouseenter', show);
+    attribution.addEventListener('mouseleave', hide);
+    attribution.addEventListener('focusin', show);
+    attribution.addEventListener('focusout', hide);
+    return () => {
+      attribution.removeEventListener('mouseenter', show);
+      attribution.removeEventListener('mouseleave', hide);
+      attribution.removeEventListener('focusin', show);
+      attribution.removeEventListener('focusout', hide);
+      attributionTooltipTrigger = null;
+    };
+  });
 </script>
 
 <ColorBlindnessFilterDefs matrix={colorBlindnessMatrix} />
@@ -2429,6 +2465,15 @@
   </div>
 {/if}
 
+{#if attributionTooltipTrigger}
+  <TooltipBubble
+    text={m.basemap_attribution_tooltip()}
+    trigger={attributionTooltipTrigger}
+    direction="top"
+    align="start"
+  />
+{/if}
+
 <style>
   .page-container {
     position: relative;
@@ -2490,7 +2535,22 @@
     line-height: 1rem;
   }
 
+  /* The credit stays readable on demand but recedes: it is not exported. */
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
-    background: var(--cds-layer-01, #ffffff);
+    background: color-mix(
+      in srgb,
+      var(--cds-layer-01, #ffffff) 70%,
+      transparent
+    );
+    color: var(--cds-text-secondary);
+    opacity: 0.6;
+    filter: grayscale(1);
+    transition: opacity 150ms ease;
+  }
+
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact:hover),
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact:focus-within),
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact-show) {
+    opacity: 1;
   }
 </style>
