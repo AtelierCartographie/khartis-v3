@@ -16,6 +16,11 @@ export interface PageGuideFrame {
   width: number;
   height: number;
   margins: { top: number; right: number; bottom: number; left: number };
+  /**
+   * Where the item's own coordinates start on the page: the margin box for
+   * the legend and the geographic indications, the page corner otherwise.
+   */
+  offset?: { x: number; y: number };
 }
 
 export interface PageGuides {
@@ -76,12 +81,14 @@ export function snapRectToPageGuides(
     page.height / 2,
     page.height - page.margins.bottom
   ];
-  const x = snapAxis(rect.x, rect.width, verticalLines, threshold);
-  const y = snapAxis(rect.y, rect.height, horizontalLines, threshold);
+  const offsetX = page.offset?.x ?? 0;
+  const offsetY = page.offset?.y ?? 0;
+  const x = snapAxis(rect.x + offsetX, rect.width, verticalLines, threshold);
+  const y = snapAxis(rect.y + offsetY, rect.height, horizontalLines, threshold);
 
   return {
-    x: x.position,
-    y: y.position,
+    x: x.position - offsetX,
+    y: y.position - offsetY,
     guides: {
       vertical: x.line === null ? [] : [x.line],
       horizontal: y.line === null ? [] : [y.line]

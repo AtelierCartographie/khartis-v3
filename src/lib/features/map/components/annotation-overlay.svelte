@@ -1092,6 +1092,14 @@
   }
 
   const annotationDragController = createDraggablePageItemController({
+    getPageFrame: () =>
+      dragState?.scope === 'page'
+        ? {
+            width: formatState.width,
+            height: formatState.height,
+            margins: formatState.margins
+          }
+        : null,
     getOverlayElement: () =>
       dragState ? getInteractionLayer(dragState.scope) : null,
     getPageScale,
