@@ -5,6 +5,7 @@
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
+  import { zoomModeStore } from '../commons/stores/zoom-mode.store.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import {
     formatActions,
@@ -564,6 +565,75 @@
     };
   }
 
+  // In page mode the map does not pan: a drag on the map itself moves its
+  // frame on the page. Labels catch their press first (capture phase) and
+  // the resize handles are elements of their own, so neither starts it.
+  const canMoveMapFrame = $derived(
+    showResizeHandles && zoomModeStore.isPageMode && !facetsEnabled
+  );
+  let mapMoveState = $state<{
+    startX: number;
+    startY: number;
+    startFrame: { top: number; right: number; bottom: number; left: number };
+  } | null>(null);
+
+  function handleMapMovePointerDown(event: PointerEvent): void {
+    if (!canMoveMapFrame || event.button !== 0) return;
+    if (!(event.target instanceof Element) || !event.target.closest('canvas')) {
+      return;
+    }
+    event.preventDefault();
+    // The workspace pans the page on a drag: the move is the map's alone.
+    event.stopPropagation();
+    mapMoveState = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startFrame: { ...formatState.mapFrame }
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleMapMovePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handleMapMovePointerUp);
+  }
+
+  function handleMapMovePointerMove(event: PointerEvent): void {
+    if (!mapMoveState) return;
+    const { startX, startY, startFrame } = mapMoveState;
+    // Same conversion as the frame's own resize handles.
+    const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
+    const { width, height } = formatState;
+    const frameWidth = width - startFrame.left - startFrame.right;
+    const frameHeight = height - startFrame.top - startFrame.bottom;
+    const snap = formatState.gridEnabled;
+    const left = Math.min(
+      Math.max(
+        snapToPageGrid(
+          startFrame.left + (event.clientX - startX) / scale,
+          snap
+        ),
+        0
+      ),
+      width - frameWidth
+    );
+    const top = Math.min(
+      Math.max(
+        snapToPageGrid(startFrame.top + (event.clientY - startY) / scale, snap),
+        0
+      ),
+      height - frameHeight
+    );
+    formatActions.setMapFrame({
+      top: Math.round(top),
+      left: Math.round(left),
+      right: Math.round(width - left - frameWidth),
+      bottom: Math.round(height - top - frameHeight)
+    });
+  }
+
+  function handleMapMovePointerUp(): void {
+    mapMoveState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleMapMovePointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handleMapMovePointerUp);
+  }
+
   function handlePageResizePointerDown(
     event: PointerEvent,
     edge: ResizeEdge
@@ -677,6 +747,10 @@
       class="thematic-map-wrapper"
       class:held={shouldHideMapOutput}
       class:visible={isMapReady && !shouldHideMapOutput}
+      class:movable={canMoveMapFrame}
+      class:moving={mapMoveState !== null}
+      onpointerdown={handleMapMovePointerDown}
+      role="presentation"
     >
       {#if facetsEnabled && facetVisualizations.length > 0}
         <FacetsPage
@@ -785,6 +859,14 @@
 </div>
 
 <style>
+  .thematic-map-wrapper.movable :global(canvas) {
+    cursor: move;
+  }
+
+  .thematic-map-wrapper.moving :global(canvas) {
+    cursor: grabbing;
+  }
+
   .map-status-loader {
     position: absolute;
     top: var(--cds-spacing-04);
