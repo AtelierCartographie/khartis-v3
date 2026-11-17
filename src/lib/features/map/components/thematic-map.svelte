@@ -132,6 +132,7 @@
   import LegendOverlay from './legend-overlay.svelte';
   import PageGridOverlay from './page-grid-overlay.svelte';
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import * as m from '$lib/paraglide/messages';
 
   let {
@@ -2125,6 +2126,26 @@
       ) {
         fitMapLibreViewportAfterViewModeSwitch('projection');
       }
+    });
+  });
+
+  // Changing projection redraws the whole map at once: a short fade marks
+  // the change. Moving a projection's parameters does not trigger it.
+  let previousProjectionIdentity: string | null = null;
+  $effect(() => {
+    const projectionState = getProjectionState();
+    const identity = `${projectionState.selected}|${projectionState.customCode ?? ''}|${mapProjectionStore.projection}`;
+    untrack(() => {
+      const changed =
+        previousProjectionIdentity !== null &&
+        identity !== previousProjectionIdentity;
+      previousProjectionIdentity = identity;
+      const duration = motionDuration(320);
+      if (!changed || duration === 0) return;
+      mapContainer?.animate([{ opacity: 0.2 }, { opacity: 1 }], {
+        duration,
+        easing: 'cubic-bezier(0.2, 0, 0.38, 0.9)'
+      });
     });
   });
 
