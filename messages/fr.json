@@ -2198,5 +2198,6 @@
   "projection_web_mercator_description": "Projection des fonds de référence : conserve les formes locales mais agrandit les hautes latitudes.",
   "projection_globe_description": "Vue du globe, sans déformation près du centre, à faire tourner sur la carte.",
   "projection_tiled_settings_unavailable": "Les autres paramètres de projection ne sont pas disponibles avec un fond de référence.",
-  "pattern_angle_degrees": "Angle (°)"
+  "pattern_angle_degrees": "Angle (°)",
+  "legend_no_visualization": "Créez d'abord une visualisation : sa légende apparaîtra ici pour être personnalisée."
 }
