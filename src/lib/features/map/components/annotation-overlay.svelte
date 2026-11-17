@@ -36,6 +36,7 @@
   } from '../utils/focus-viewport.utils';
   import {
     computeDrawingBounds,
+    simplifyDrawingStroke,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
   import {
@@ -85,6 +86,8 @@
 
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
+  // How far a simplified freehand stroke may stray from the hand's path.
+  const DRAWING_SIMPLIFY_TOLERANCE_PX = 2.5;
   const SHAPE_PLACEMENT_DRAG_THRESHOLD_PX = 4;
   const FOCUS_RESET_DEBOUNCE_MS = 200;
   const ANNOTATION_DRAG_THRESHOLD_PX = 3;
@@ -1793,6 +1796,26 @@
     return points.slice(0, endIndex);
   }
 
+  let drawingStrokeStartIndex: number | null = null;
+
+  // A click-click line adds one or two samples per press and is kept as is;
+  // a stroke drawn with the button held is reduced to the anchors its shape
+  // needs.
+  function simplifyFreehandStroke(
+    points: { x: number; y: number }[]
+  ): { x: number; y: number }[] {
+    const start = drawingStrokeStartIndex ?? points.length;
+    const stroke = points.slice(start);
+    if (stroke.length < 3) return points;
+    return [
+      ...points.slice(0, start),
+      ...simplifyDrawingStroke(
+        stroke,
+        DRAWING_SIMPLIFY_TOLERANCE_PX / getPageScale()
+      )
+    ];
+  }
+
   function handleDrawingPointerDown(event: PointerEvent): void {
     if (!isDrawingMode) {
       return;
@@ -1806,6 +1829,7 @@
     event.preventDefault();
     event.stopPropagation();
 
+    drawingStrokeStartIndex = drawingPoints.length;
     const nextPoints = appendDrawingSample(drawingPoints, point);
     annotationsActions.updateDrawing(nextPoints);
     drawingCloseToStart = isNearDrawingStart(point);
@@ -1842,7 +1866,8 @@
     }
 
     const point = getPageCapturePoint(event);
-    const nextPoints = getReleasedDrawingPoints(point);
+    const nextPoints = simplifyFreehandStroke(getReleasedDrawingPoints(point));
+    drawingStrokeStartIndex = null;
     const minimumPointCount = getMinimumDrawingPoints(
       annotationsState.drawingModeType
     );

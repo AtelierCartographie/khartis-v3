@@ -169,7 +169,110 @@ function getSmoothedDrawingPoints(
     smoothedPoints = cutDrawingCorners(smoothedPoints, cutRatio, closed);
   }
 
+  if (closed) {
+    smoothedPoints = restoreClosedArea(points, smoothedPoints);
+  }
+
   return dedupeDrawingPoints(smoothedPoints);
+}
+
+function signedArea(points: DrawingPoint[]): number {
+  let area = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+  return area / 2;
+}
+
+function centroid(points: DrawingPoint[]): DrawingPoint {
+  const sum = points.reduce(
+    (total, point) => ({ x: total.x + point.x, y: total.y + point.y }),
+    { x: 0, y: 0 }
+  );
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+// Averaging neighbours and cutting corners both pull a closed outline
+// inward: the smoothed zone is scaled back about its centre to the area the
+// user drew.
+function restoreClosedArea(
+  original: DrawingPoint[],
+  smoothed: DrawingPoint[]
+): DrawingPoint[] {
+  const originalArea = Math.abs(signedArea(original));
+  const smoothedArea = Math.abs(signedArea(smoothed));
+  if (originalArea < 1e-6 || smoothedArea < 1e-6) return smoothed;
+
+  const scale = Math.sqrt(originalArea / smoothedArea);
+  const center = centroid(smoothed);
+  return smoothed.map((point) => ({
+    x: center.x + (point.x - center.x) * scale,
+    y: center.y + (point.y - center.y) * scale
+  }));
+}
+
+function distanceToSegment(
+  point: DrawingPoint,
+  start: DrawingPoint,
+  end: DrawingPoint
+): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+    )
+  );
+  return Math.hypot(point.x - (start.x + t * dx), point.y - (start.y + t * dy));
+}
+
+/**
+ * Keeps the anchors a freehand stroke needs to stay within `tolerance` of the
+ * hand's path (Ramer–Douglas–Peucker). A stroke sampled every few pixels
+ * otherwise carries so many anchors that smoothing has nothing left to round.
+ * The first and last points are kept; two points or fewer come back as is.
+ */
+export function simplifyDrawingStroke(
+  points: DrawingPoint[],
+  tolerance: number
+): DrawingPoint[] {
+  if (points.length < 3) return points;
+
+  const keep = new Uint8Array(points.length);
+  keep[0] = 1;
+  keep[points.length - 1] = 1;
+  const stack: Array<[number, number]> = [[0, points.length - 1]];
+
+  while (stack.length > 0) {
+    const [startIndex, endIndex] = stack.pop()!;
+    let farthest = -1;
+    let farthestDistance = 0;
+    for (let index = startIndex + 1; index < endIndex; index += 1) {
+      const distance = distanceToSegment(
+        points[index],
+        points[startIndex],
+        points[endIndex]
+      );
+      if (distance > farthestDistance) {
+        farthestDistance = distance;
+        farthest = index;
+      }
+    }
+    if (farthest !== -1 && farthestDistance > tolerance) {
+      keep[farthest] = 1;
+      stack.push([startIndex, farthest], [farthest, endIndex]);
+    }
+  }
+
+  return points.filter((_, index) => keep[index] === 1);
 }
 
 export function smoothDrawingPath(
