@@ -7,7 +7,7 @@
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
-  import { fade, fly } from 'svelte/transition';
+  import { fade, fly, type TransitionConfig } from 'svelte/transition';
   import {
     ComposedModal,
     Link,
@@ -141,9 +141,20 @@
       (tabElement as HTMLElement)?.focus();
     }
   }
+
+  // The modal mounts and unmounts already open, so Carbon's own transition
+  // never runs: the whole dialog fades and its panel rises with it.
+  function revealModal(_node: HTMLElement): TransitionConfig {
+    return {
+      duration: motionDuration(240),
+      easing: cubicOut,
+      css: (t) => `opacity: ${t}; --kh-modal-rise: ${(1 - t) * 16}px;`
+    };
+  }
 </script>
 
 <div
+  transition:revealModal|global
   id="khartis-create-project"
   data-testid="create-project-modal"
   use:linkDialogToTitle
@@ -296,6 +307,10 @@
     color: inherit;
   }
 
+  #khartis-create-project :global(.bx--modal-container) {
+    translate: 0 var(--kh-modal-rise, 0);
+  }
+
   @media (min-width: 1024px) {
     #khartis-create-project :global(.bx--modal-container) {
       width: 90vw;
@@ -305,10 +320,12 @@
       background: var(--cds-background);
     }
 
-    /* The body keeps the height « Ouvrir un projet » needs, whatever the
-       header wraps to; the space left for the header caps it. */
+    /* The body takes the height of the selected card, up to the space the
+       header leaves; a longer card scrolls inside it. */
     #khartis-create-project :global(.fixed-modal-body) {
-      height: 40rem;
+      display: flex;
+      flex-direction: column;
+      height: auto;
       max-height: calc(90vh - 7.5rem);
       min-height: 0;
       overflow: hidden;
@@ -332,7 +349,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .project-type-selector {
@@ -351,7 +369,7 @@
   /* The leaving and arriving panes share one cell while they swap. */
   .tab-content {
     display: grid;
-    grid-auto-rows: minmax(100%, auto);
+    grid-auto-rows: auto;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
