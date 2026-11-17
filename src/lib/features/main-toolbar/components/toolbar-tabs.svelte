@@ -673,7 +673,7 @@
         >
           <Button
             isSelected={vizTab.isSelected}
-            kind={vizTab.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
+            kind={ButtonKind.Ghost}
             on:click={() => visualizationStore.selectVisualization(vizTab.id)}
             class="tab-button"
             title={vizTab.label}
@@ -783,7 +783,7 @@
         >
           <Button
             isSelected={dataButton.isSelected}
-            kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
+            kind={ButtonKind.Ghost}
             on:click={() =>
               handleTabClick(dataButton.id, dataButton.isSelected)}
             class="tab-button"
@@ -1033,6 +1033,8 @@
 
   .tabs-scroller {
     display: flex;
+    align-self: stretch;
+    align-items: flex-end;
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
@@ -1044,7 +1046,23 @@
 
   .add-btn-wrapper {
     flex: 0 0 auto;
+    align-self: flex-end;
+    margin-bottom: 1px;
     margin-left: var(--cds-spacing-03);
+  }
+
+  .add-btn-wrapper :global(.bx--btn--ghost) {
+    height: var(--kh-size-md);
+    min-height: 0;
+    background-color: var(--cds-ui-02);
+    border: 1px solid var(--cds-border-subtle-01);
+    border-bottom: none;
+    color: var(--cds-text-secondary);
+  }
+
+  .add-btn-wrapper :global(.bx--btn--ghost:hover) {
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-text-primary);
   }
 
   .scrollbar-hidden {
@@ -1072,11 +1090,44 @@
        shows part of the title, then let the scroller overflow horizontally. */
     min-width: 8rem;
     max-width: 250px;
-    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    align-self: flex-end;
+    height: var(--kh-size-md);
+    margin-bottom: 1px;
+    background-color: var(--cds-ui-02);
+    border: 1px solid var(--cds-border-subtle-01);
+    border-bottom: none;
 
-    &:last-child {
-      border-right: none;
+    & + & {
+      margin-left: -1px;
     }
+  }
+
+  /* The selected tab takes the panel's colour and covers the header's bottom
+     rule, so it reads as one sheet with the content under it. */
+  .tab-button-wrapper.selected {
+    z-index: var(--z-base);
+    height: calc(var(--kh-size-md) + 1px);
+    margin-bottom: 0;
+    background-color: var(--cds-ui-01);
+  }
+
+  .tab-button-wrapper :global(.tab-button.bx--btn--ghost) {
+    height: 100%;
+    min-height: 0;
+    color: var(--cds-text-secondary);
+  }
+
+  .tab-button-wrapper.selected :global(.tab-button.bx--btn--ghost) {
+    color: var(--cds-text-primary);
+  }
+
+  .tab-button-wrapper :global(.tab-button.bx--btn--ghost:hover) {
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-text-primary);
+  }
+
+  .tab-button-wrapper.selected :global(.tab-button.bx--btn--ghost:hover) {
+    background-color: transparent;
   }
 
   .tab-button-wrapper :global(.tab-button) {
@@ -1128,7 +1179,7 @@
     font-size: inherit;
     font-family: inherit;
     font-weight: inherit;
-    color: var(--cds-text-on-color);
+    color: var(--cds-text-primary);
     background: transparent;
     border: none;
     border-radius: 2px;
@@ -1183,12 +1234,7 @@
   }
 
   .tab-button-wrapper.selected .tab-menu-button :global(svg) {
-    fill: var(--cds-icon-on-color, #ffffff);
-    opacity: 1;
-  }
-
-  .tab-button-wrapper.selected .tab-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.15);
+    fill: var(--cds-text-01);
   }
 
   .tab-context-menu {

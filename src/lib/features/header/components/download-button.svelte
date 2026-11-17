@@ -258,7 +258,6 @@
 
 <div id="khartis-download-button">
   <Button
-    class="h-full"
     size="small"
     tooltipPosition="bottom"
     tooltipAlignment="end"
