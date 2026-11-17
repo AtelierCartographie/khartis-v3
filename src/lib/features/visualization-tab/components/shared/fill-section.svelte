@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveClassificationPatternConfig } from '$lib/features/commons/services/pattern-palette.service';
   import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { type Snippet, untrack } from 'svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
@@ -191,12 +192,16 @@
   const resolvedCategoryCount = $derived(categoryLabels.count);
   const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
     ...DEFAULT_COMMON_ASPECT,
+    // Read like the map reads it, so a project saved with a legacy
+    // patternId shows its motif too.
     pattern:
       categoriesVariant === 'polygons' &&
-      Boolean(visualization?.classification?.pattern),
+      Boolean(
+        resolveClassificationPatternConfig(visualization?.classification)
+      ),
     patternConfig:
       (categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern
+        ? resolveClassificationPatternConfig(visualization?.classification)
         : undefined) ?? DEFAULT_COMMON_ASPECT.patternConfig
   });
   const selectableValueFields = $derived(

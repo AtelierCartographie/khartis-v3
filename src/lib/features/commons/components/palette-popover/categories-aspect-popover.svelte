@@ -40,7 +40,6 @@
     readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
@@ -814,36 +813,18 @@
                       </div>
                     </div>
                     {#if draftCommonAspect.pattern}
-                      <div class="common-grid-row common-grid-row--full">
-                        <ColorSelector
-                          label={m.color()}
-                          value={resolvedPatternConfig.color ?? '#000000'}
-                          onchange={(color) =>
-                            handlePatternConfigChange({
-                              ...resolvedPatternConfig,
-                              color
-                            })}
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          categorical
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
                         />
+                      </div>
+                      <div class="common-field--full">
                         <ToggleWithLabel
                           label={m.pattern_colorize()}
                           toggled={resolvedPatternConfig.colorize ?? false}
                           ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
-                      <div class="common-grid-row common-grid-row--full">
-                        <SliderWithInput
-                          label={m.pattern_scale()}
-                          min={1}
-                          max={30}
-                          step={1}
-                          value={Math.round(
-                            (resolvedPatternConfig.scale ?? 1) * 10
-                          )}
-                          onchange={(value) =>
-                            handlePatternConfigChange({
-                              ...resolvedPatternConfig,
-                              scale: value / 10
-                            })}
                         />
                       </div>
                     {/if}

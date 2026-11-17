@@ -19,10 +19,17 @@
     config: PatternPaletteConfig;
     /** The classification has a breakpoint: one motif ramp per side. */
     diverging?: boolean;
+    /** One motif per category: Khartis picks shapes and angles itself. */
+    categorical?: boolean;
     onchange: (config: PatternPaletteConfig) => void;
   }
 
-  let { config, diverging = false, onchange }: Props = $props();
+  let {
+    config,
+    diverging = false,
+    categorical = false,
+    onchange
+  }: Props = $props();
 
   const DEFAULT_ANGLE = 45;
   const DEFAULT_SCALE = 0.7;
@@ -116,23 +123,25 @@
 </script>
 
 <div class="pattern-palette-picker">
-  <div class="param-block">
-    <span class="param-label">{m.pattern_shape()}</span>
-    <ShapeChipRow
-      value={shape}
-      shapes={diverging ? DIVERGING_PATTERN_SHAPES : undefined}
-      onselect={handleShapeSelect}
-    />
-  </div>
+  {#if !categorical}
+    <div class="param-block">
+      <span class="param-label">{m.pattern_shape()}</span>
+      <ShapeChipRow
+        value={shape}
+        shapes={diverging ? DIVERGING_PATTERN_SHAPES : undefined}
+        onselect={handleShapeSelect}
+      />
+    </div>
 
-  <SliderWithInput
-    label={m.pattern_angle_degrees()}
-    min={ANGLE_MIN}
-    max={ANGLE_MAX}
-    step={ANGLE_STEP}
-    value={angle}
-    onchange={handleAngleChange}
-  />
+    <SliderWithInput
+      label={m.pattern_angle_degrees()}
+      min={ANGLE_MIN}
+      max={ANGLE_MAX}
+      step={ANGLE_STEP}
+      value={angle}
+      onchange={handleAngleChange}
+    />
+  {/if}
 
   <SliderWithInput
     label={m.pattern_scale()}
