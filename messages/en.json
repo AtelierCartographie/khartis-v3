@@ -2193,5 +2193,6 @@
   "font_category_slab": "Slab serif and typewriter",
   "font_category_handwritten": "Handwritten",
   "basemap_attribution_tooltip": "This credit is not exported. When styling the map, add this basemap's credit along with the sources and signature.",
-  "open_project_sort_short": "Sort"
+  "open_project_sort_short": "Sort",
+  "facets_title_size_label": "Title size"
 }
