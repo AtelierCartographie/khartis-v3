@@ -155,7 +155,6 @@
   scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
-  animateBody
   showToggle={true}
   toggleChecked={geoState.scale.enabled && !isScaleDisabled}
   toggleDisabled={isScaleDisabled}
