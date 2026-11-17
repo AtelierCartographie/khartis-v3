@@ -364,18 +364,37 @@
     edge: ResizeEdge,
     dx: number,
     dy: number,
-    startFrame: { top: number; right: number; bottom: number; left: number }
+    startFrame: { top: number; right: number; bottom: number; left: number },
+    lockAspectRatio = false
   ): void {
     let { top, right, bottom, left } = startFrame;
+    const { width, height } = formatState;
 
     if (edge.includes('e')) right = startFrame.right - dx;
     if (edge.includes('w')) left = startFrame.left + dx;
     if (edge.includes('s')) bottom = startFrame.bottom - dy;
     if (edge.includes('n')) top = startFrame.top + dy;
 
+    // Shift on a corner scales the frame in proportion, from the opposite
+    // corner; the grid would break the ratio, so it does not apply then.
+    const proportional = lockAspectRatio && edge.length === 2;
+    if (proportional) {
+      const startWidth = width - startFrame.left - startFrame.right;
+      const startHeight = height - startFrame.top - startFrame.bottom;
+      const factor = Math.max(
+        (width - left - right) / Math.max(startWidth, 1),
+        (height - top - bottom) / Math.max(startHeight, 1)
+      );
+      const nextWidth = startWidth * factor;
+      const nextHeight = startHeight * factor;
+      if (edge.includes('e')) right = width - startFrame.left - nextWidth;
+      else left = width - startFrame.right - nextWidth;
+      if (edge.includes('s')) bottom = height - startFrame.top - nextHeight;
+      else top = height - startFrame.bottom - nextHeight;
+    }
+
     // The frame edges snap in page coordinates, where layout objects snap too.
-    const snap = formatState.gridEnabled;
-    const { width, height } = formatState;
+    const snap = formatState.gridEnabled && !proportional;
     top = snapToPageGrid(top, snap);
     left = snapToPageGrid(left, snap);
     right = width - snapToPageGrid(width - right, snap);
@@ -414,7 +433,7 @@
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startFrame);
+    resizeMapFrame(edge, dx, dy, startFrame, event.shiftKey);
   }
 
   function handleResizeUp(): void {
