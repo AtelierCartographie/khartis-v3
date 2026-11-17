@@ -700,6 +700,19 @@
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
     padding-left: var(--safe-area-left);
+    /* Carbon hides the closed menu with a transform it does not animate. */
+    transition: transform 240ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  #khartis-side-nav :global(.bx--side-nav--collapsed) {
+    transition: transform 180ms cubic-bezier(0.2, 0, 1, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #khartis-side-nav :global(.bx--side-nav),
+    #khartis-side-nav :global(.bx--side-nav--collapsed) {
+      transition: none;
+    }
   }
 
   #khartis-side-nav :global(.bx--side-nav__overlay) {
