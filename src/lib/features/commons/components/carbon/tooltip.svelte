@@ -19,6 +19,8 @@
     icon?: typeof Information;
     iconDescription?: string;
     triggerText?: string;
+    /** `compact` sets a short note in the label size, closer to its text. */
+    size?: 'default' | 'compact';
   }
 
   const {
@@ -27,7 +29,8 @@
     direction = 'bottom',
     icon: Icon = Information,
     iconDescription = m.more_info(),
-    triggerText = ''
+    triggerText = '',
+    size = 'default'
   }: Props = $props();
 
   let open = $state(false);
@@ -195,6 +198,7 @@
     <div
       bind:this={tooltipElement}
       class="khartis-carbon-rich-tooltip khartis-carbon-rich-tooltip--{direction}"
+      class:khartis-carbon-rich-tooltip--compact={size === 'compact'}
       style={tooltipStyle}
       role="tooltip"
       onmouseenter={handleTooltipMouseEnter}
@@ -254,6 +258,14 @@
     line-height: var(--cds-body-short-01-line-height, 1.28572);
     letter-spacing: var(--cds-body-short-01-letter-spacing, 0.16px);
     word-wrap: break-word;
+  }
+
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact) {
+    min-width: 0;
+    max-width: 15rem;
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
   }
 
   :global(.khartis-carbon-rich-tooltip::before) {

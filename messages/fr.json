@@ -2192,5 +2192,6 @@
   "font_category_serif": "Serif",
   "font_category_slab": "Mécanes et machine à écrire",
   "font_category_handwritten": "Manuscrites",
-  "basemap_attribution_tooltip": "Ce crédit ne figure pas à l'export. Lors de l'habillage, indiquez le crédit de ce fond de carte avec les sources et la signature."
+  "basemap_attribution_tooltip": "Ce crédit ne figure pas à l'export. Lors de l'habillage, indiquez le crédit de ce fond de carte avec les sources et la signature.",
+  "open_project_sort_short": "Tri"
 }

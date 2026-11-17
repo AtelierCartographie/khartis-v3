@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ContentSwitcher from '$lib/features/commons/components/palette-popover/content-switcher.svelte';
   import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -15,7 +16,6 @@
   import { portal } from '$lib/features/commons/utils/portal';
   import {
     Button,
-    ContentSwitcher,
     FileUploaderDropContainer,
     InlineNotification,
     Modal,
@@ -23,8 +23,7 @@
     OverflowMenuItem,
     ProgressBar,
     Search,
-    SkeletonPlaceholder,
-    Switch
+    SkeletonPlaceholder
   } from 'carbon-components-svelte';
   import { Calendar, DataBase, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
@@ -280,7 +279,7 @@
     <span class="text-grey">
       {m.open_project_backup_description()}
       <span class="inline-tooltip">
-        <Tooltip>
+        <Tooltip size="compact">
           <p>
             {m.open_project_backup_warning()}
           </p>
@@ -323,19 +322,20 @@
           on:clear={() => (searchQuery = '')}
         />
       </div>
-      <ContentSwitcher
-        aria-label={m.open_project_sort_label()}
-        class="sort-switcher"
-        size="sm"
-        selectedIndex={sortIndex}
-        on:change={(event) => {
-          sortIndex = event.detail;
-          cardRail?.scrollTo({ left: 0 });
-        }}
-      >
-        <Switch text={m.open_project_sort_recent()} />
-        <Switch text={m.open_project_sort_size()} />
-      </ContentSwitcher>
+      <div class="project-sort">
+        <span class="project-sort__label" aria-hidden="true">
+          {m.open_project_sort_short()}
+        </span>
+        <ContentSwitcher
+          ariaLabel={m.open_project_sort_label()}
+          items={[m.open_project_sort_recent(), m.open_project_sort_size()]}
+          activeIndex={sortIndex}
+          onchange={(index) => {
+            sortIndex = index;
+            cardRail?.scrollTo({ left: 0 });
+          }}
+        />
+      </div>
     </div>
   {/if}
 
@@ -544,8 +544,18 @@
     vertical-align: top;
   }
 
-  #khartis-open-project :global(.sort-switcher) {
+  .project-sort {
+    display: flex;
+    align-items: center;
+    gap: var(--kh-gap-inline);
     flex: 0 1 20rem;
+  }
+
+  .project-sort__label {
+    flex-shrink: 0;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
+    color: var(--cds-text-secondary);
   }
 
   .storage-gauge {
