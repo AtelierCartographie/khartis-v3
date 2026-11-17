@@ -82,7 +82,7 @@ describe('annotation drawing utils', () => {
   });
 
   it.each([25, 50, 100])(
-    'keeps the area of a closed zone smoothed at %i %%',
+    'should keep the area of a closed zone when it is smoothed at %i %%',
     (smoothness) => {
       const square = [
         { x: 0, y: 0 },
@@ -101,7 +101,7 @@ describe('annotation drawing utils', () => {
     }
   );
 
-  it('keeps the ends of an open line where they were drawn', () => {
+  it('should keep the ends of an open line when it is smoothed', () => {
     const line = [
       { x: 0, y: 0 },
       { x: 30, y: 40 },
@@ -115,7 +115,7 @@ describe('annotation drawing utils', () => {
     expect(smoothed.at(-1)).toEqual(line.at(-1));
   });
 
-  it('reduces a densely sampled freehand stroke to few anchors near its path', () => {
+  it('should keep few anchors near the path when a freehand stroke is densely sampled', () => {
     const samples = Array.from({ length: 200 }, (_, index) => {
       const angle = (index / 199) * Math.PI;
       const jitter = index % 2 === 0 ? 0.8 : -0.8;
@@ -132,7 +132,7 @@ describe('annotation drawing utils', () => {
     expect(simplified.at(-1)).toEqual(samples.at(-1));
   });
 
-  it('leaves a click-click segment untouched', () => {
+  it('should leave a segment untouched when it has two points', () => {
     const segment = [
       { x: 0, y: 0 },
       { x: 50, y: 50 }
