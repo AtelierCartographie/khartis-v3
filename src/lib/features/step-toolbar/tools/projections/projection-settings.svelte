@@ -168,10 +168,11 @@
     box-sizing: border-box;
   }
 
+  /* The same rhythm as the visualization settings. */
   .controls {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-06);
+    gap: var(--kh-gap-param);
   }
 
   #khartis-projection-settings-tool :global(.controls .bx--slider-container) {
