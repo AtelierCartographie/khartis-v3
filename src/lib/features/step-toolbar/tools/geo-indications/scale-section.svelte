@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import {
     DistanceUnit,
     ScaleForm
@@ -224,20 +225,22 @@
         </Column>
       </Row>
 
-      {#if geoState.scale.form === ScaleForm.LINE}
-        <Row>
-          <Column>
-            <SliderWithInput
-              label={m.thickness()}
-              min={SCALE_LINE_WIDTH_LIMITS.min}
-              max={SCALE_LINE_WIDTH_LIMITS.max}
-              step={SCALE_LINE_WIDTH_LIMITS.step}
-              value={geoState.scale.lineWidth}
-              onchange={store.setScaleLineWidth}
-            />
-          </Column>
-        </Row>
-      {/if}
+      <SwitchedContent value={geoState.scale.form}>
+        {#if geoState.scale.form === ScaleForm.LINE}
+          <Row>
+            <Column>
+              <SliderWithInput
+                label={m.thickness()}
+                min={SCALE_LINE_WIDTH_LIMITS.min}
+                max={SCALE_LINE_WIDTH_LIMITS.max}
+                step={SCALE_LINE_WIDTH_LIMITS.step}
+                value={geoState.scale.lineWidth}
+                onchange={store.setScaleLineWidth}
+              />
+            </Column>
+          </Row>
+        {/if}
+      </SwitchedContent>
 
       <Row>
         <Column>
