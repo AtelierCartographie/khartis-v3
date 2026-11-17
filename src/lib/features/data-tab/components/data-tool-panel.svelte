@@ -13,7 +13,7 @@
     resolveToolbarPanelWidth
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import * as m from '$lib/paraglide/messages';
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
 
   interface Props {
@@ -43,9 +43,16 @@
     updatePanelPosition();
   });
 
+  // The panel closes its own tool only: when another tool replaces it, the
+  // incoming panel engages while this one may still be leaving, and closing
+  // the shared active tool would shut the new panel at once.
+  const ownTool = untrack(() => dataToolsStore.activeTool);
+
   $effect(() =>
     engageExclusiveContextualSurface(contextualSurfaceId, () => {
-      dataToolsStore.closeTool();
+      if (untrack(() => dataToolsStore.activeTool) === ownTool) {
+        dataToolsStore.closeTool();
+      }
     })
   );
 
