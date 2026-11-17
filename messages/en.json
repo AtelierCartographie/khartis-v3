@@ -2186,5 +2186,10 @@
   "qgis_note_facets": "Map collection: one QGIS map theme per map (Map Themes), the first one shown; pick another map's theme to show it instead.",
   "qgis_note_basemap_layers": "Basemap layers not exported: {layers}.",
   "qgis_note_label_edits": "Labels moved or edited in Khartis go back to their original position and text.",
-  "qgis_note_label_leaders": "Moved labels keep their position, but the leaders joining them to their feature are not exported."
+  "qgis_note_label_leaders": "Moved labels keep their position, but the leaders joining them to their feature are not exported.",
+  "font_category_sans": "Sans serif",
+  "font_category_condensed": "Condensed sans serif",
+  "font_category_serif": "Serif",
+  "font_category_slab": "Slab serif and typewriter",
+  "font_category_handwritten": "Handwritten"
 }

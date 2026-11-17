@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
@@ -8,7 +9,6 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     DEFAULT_FONT_SIZE,
@@ -234,22 +234,16 @@
       <div class="section">
         <div class="text-style-row">
           <div class="text-style-font">
-            <Select
+            <FontFamilySelect
               id="annotation-font-select"
               labelText={m.legend_font()}
-              selected={localFont}
-              on:change={(event) => {
-                const nextFont = (event.currentTarget as HTMLSelectElement)
-                  .value;
+              value={localFont}
+              fallback={CARTOGRAPHIC_FONT_FAMILY}
+              onchange={(nextFont) => {
                 localFont = nextFont;
                 annotationsActions.applyStyle({ font: nextFont });
               }}
-              size="sm"
-            >
-              {#each AVAILABLE_FONTS as f (f)}
-                <SelectItem value={f} text={f} />
-              {/each}
-            </Select>
+            />
           </div>
           <div class="text-style-size">
             <Select

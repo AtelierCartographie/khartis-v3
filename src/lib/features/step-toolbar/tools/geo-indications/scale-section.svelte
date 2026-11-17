@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import {
     DistanceUnit,
@@ -24,7 +25,6 @@
   } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     DEFAULT_FONT_SIZE,
@@ -246,23 +246,16 @@
         <Column>
           <div class="text-style-row">
             <div class="text-style-font">
-              <Select
+              <FontFamilySelect
                 id="scale-font-select"
                 labelText={m.legend_font()}
-                selected={localScaleFontFamily}
-                on:change={(event) => {
-                  const nextFontFamily = (
-                    event.currentTarget as HTMLSelectElement
-                  ).value;
+                value={localScaleFontFamily}
+                fallback={CARTOGRAPHIC_FONT_FAMILY}
+                onchange={(nextFontFamily) => {
                   localScaleFontFamily = nextFontFamily;
                   store.setScaleFontFamily(nextFontFamily);
                 }}
-                size="sm"
-              >
-                {#each AVAILABLE_FONTS as f (f)}
-                  <SelectItem value={f} text={f} />
-                {/each}
-              </Select>
+              />
             </div>
             <div class="text-style-size">
               <Select
