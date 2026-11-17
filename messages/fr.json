@@ -2194,5 +2194,9 @@
   "font_category_handwritten": "Manuscrites",
   "basemap_attribution_tooltip": "Ce crédit ne figure pas à l'export. Lors de l'habillage, indiquez le crédit de ce fond de carte avec les sources et la signature.",
   "open_project_sort_short": "Tri",
-  "facets_title_size_label": "Taille des titres"
+  "facets_title_size_label": "Taille des titres",
+  "projection_web_mercator_title": "Web Mercator",
+  "projection_web_mercator_description": "Projection des fonds de référence : conserve les formes locales mais agrandit les hautes latitudes.",
+  "projection_globe_description": "Vue du globe, sans déformation près du centre, à faire tourner sur la carte.",
+  "projection_tiled_settings_unavailable": "Les autres paramètres de projection ne sont pas disponibles avec un fond de référence."
 }
