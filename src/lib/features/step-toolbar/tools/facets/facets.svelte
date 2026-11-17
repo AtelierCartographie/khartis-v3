@@ -1,7 +1,16 @@
 <script lang="ts">
+  import { legendTitleFontSize } from '$lib/features/commons/components/legend';
+  import { resolveFontSizeOptions } from '$lib/features/step-toolbar/fonts.constants';
+  import { getLegendState } from '../legend';
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
-  import { Button, Link, TextInput } from 'carbon-components-svelte';
+  import {
+    Button,
+    Link,
+    Select,
+    SelectItem,
+    TextInput
+  } from 'carbon-components-svelte';
   import {
     CharacterWholeNumber,
     Draggable,
@@ -40,6 +49,9 @@
 
   const enabled = $derived(facetsStore.enabled);
   const layout = $derived(facetsStore.layout);
+  const titleFontSize = $derived(
+    layout.titleFontSize ?? legendTitleFontSize(getLegendState().style.fontSize)
+  );
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
@@ -240,6 +252,20 @@
         <span class="section-divider" aria-hidden="true"></span>
       </header>
       <p class="helper-text">{m.facets_titles_helper()}</p>
+
+      <Select
+        size="sm"
+        labelText={m.facets_title_size_label()}
+        selected={String(titleFontSize)}
+        on:change={(event) =>
+          facetsStore.setTitleFontSize(
+            Number((event.currentTarget as HTMLSelectElement).value)
+          )}
+      >
+        {#each resolveFontSizeOptions(titleFontSize) as size (size)}
+          <SelectItem value={size} text={size} />
+        {/each}
+      </Select>
 
       {#each variables as variable (variable)}
         <TextInput
