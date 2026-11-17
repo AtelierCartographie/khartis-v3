@@ -18,6 +18,7 @@
   import {
     Column,
     Grid,
+    InlineNotification,
     NumberInput,
     Row,
     Select,
@@ -150,9 +151,19 @@
   }
 </script>
 
+{#if isScaleDisabled}
+  <div class="kh-notification-stack scale-unavailable-notice">
+    <InlineNotification
+      kind="info"
+      lowContrast
+      hideCloseButton
+      subtitle={m.geo_scale_unavailable_tiled_basemap()}
+    />
+  </div>
+{/if}
+
 <ExpandableSection
   title={m.geo_scale()}
-  description={scaleDisabledReason}
   scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
@@ -321,6 +332,14 @@
 </ExpandableSection>
 
 <style>
+  .scale-unavailable-notice {
+    padding: var(--kh-gap-inline) var(--kh-pad-panel);
+  }
+
+  .scale-unavailable-notice :global(.bx--inline-notification) {
+    max-width: none;
+  }
+
   .section-content :global(.bx--row + .bx--row) {
     margin-top: var(--cds-spacing-05);
   }
