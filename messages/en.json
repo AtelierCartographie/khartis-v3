@@ -2191,5 +2191,6 @@
   "font_category_condensed": "Condensed sans serif",
   "font_category_serif": "Serif",
   "font_category_slab": "Slab serif and typewriter",
-  "font_category_handwritten": "Handwritten"
+  "font_category_handwritten": "Handwritten",
+  "basemap_attribution_tooltip": "This credit is not exported. When styling the map, add this basemap's credit along with the sources and signature."
 }
