@@ -77,7 +77,10 @@
     padding-inline-end: var(--cds-spacing-03);
   }
 
-  #khartis-header :global(.bx--header__global .bx--btn) {
+  /* Only the two bar buttons: the download dialog renders inside this
+     element too. */
+  #khartis-header :global(.bx--header__global > .header-help-button),
+  #khartis-header :global(#khartis-download-button > .bx--btn) {
     height: var(--kh-size-md);
     min-height: var(--kh-size-md);
   }
