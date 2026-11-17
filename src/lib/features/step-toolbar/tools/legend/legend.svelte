@@ -14,7 +14,12 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import { TableOfContents, TextFont } from 'carbon-icons-svelte';
-  import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    Select,
+    SelectItem,
+    TextArea
+  } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
     CARTOGRAPHIC_FONT_FAMILY,
@@ -76,7 +81,14 @@
       (item) => !item.primitive || !hasNothingToDraw(item.id)
     )
   );
-  const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
+  // Without a visualization there is no legend to style: the panel only says
+  // to create one first.
+  const hasVisualizations = $derived(
+    visualizationStore.visualizations.length > 0
+  );
+  const isContentTab = $derived(
+    !hasVisualizations || legendState.activeTab === LegendTab.CONTENT
+  );
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
@@ -311,10 +323,15 @@
   >
     <ToggleTabs
       size="md"
-      activeIndex={legendState.activeTab === LegendTab.CONTENT ? 0 : 1}
+      activeIndex={isContentTab ? 0 : 1}
       items={[
         { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },
-        { icon: TextFont, label: m.legend_style(), iconSize: 16 }
+        {
+          icon: TextFont,
+          label: m.legend_style(),
+          iconSize: 16,
+          disabled: !hasVisualizations
+        }
       ]}
       onchange={(index) =>
         handleTabChange(index === 0 ? LegendTab.CONTENT : LegendTab.STYLE)}
@@ -324,6 +341,16 @@
   <SwitchedContent value={isContentTab}>
     {#if isContentTab}
       <div id="legend-content-panel" class="legend-panel" role="tabpanel">
+        {#if !hasVisualizations}
+          <div class="kh-notification-stack legend-empty-notice">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              subtitle={m.legend_no_visualization()}
+            />
+          </div>
+        {/if}
         <div class="expandable-stack">
           {#each items as item (item.id)}
             {@const segments = getRenderedLegendSegments(item.id)}
@@ -516,6 +543,10 @@
 </div>
 
 <style>
+  .legend-empty-notice :global(.bx--inline-notification) {
+    max-width: none;
+  }
+
   .legend-tool {
     display: flex;
     flex-direction: column;
