@@ -1439,7 +1439,8 @@
         y: resizeState.startAnnotationY,
         width: resizeState.startW,
         height: resizeState.startH
-      }
+      },
+      event.shiftKey
     );
 
     annotationsActions.updateAnnotation(resizeState.id, {
