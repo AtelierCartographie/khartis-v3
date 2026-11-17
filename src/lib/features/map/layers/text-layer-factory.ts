@@ -254,7 +254,11 @@ function buildTextOverlayLayers(
   if (!viz || !textConfig?.enabled || !textConfig.labelColumn) {
     return [];
   }
-  if (!fontAssetsStore.ready) {
+  const primaryFontReady = fontAssetsStore.isFontReady(textConfig.fontFamily);
+  const secondaryFontReady =
+    !textConfig.secondaryLabels.enabled ||
+    fontAssetsStore.isFontReady(textConfig.secondaryLabels.fontFamily);
+  if (!primaryFontReady || !secondaryFontReady) {
     return [];
   }
   const pageDisplayScale = resolvePageDisplayScale(ctx);

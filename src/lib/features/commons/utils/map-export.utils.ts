@@ -4436,6 +4436,7 @@ export async function exportMapToSvg(
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   await fontAssetsStore.ensureLoaded();
+  await fontAssetsStore.whenFontsSettled();
 
   const pageContainer = document.querySelector(
     EXPORT_PAGE_SELECTOR
@@ -4492,6 +4493,7 @@ export async function exportMapToJpg(
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   let placement = null as MapExportPlacement | null;
   await fontAssetsStore.ensureLoaded();
+  await fontAssetsStore.whenFontsSettled();
 
   const pageContainer = document.querySelector(
     EXPORT_PAGE_SELECTOR

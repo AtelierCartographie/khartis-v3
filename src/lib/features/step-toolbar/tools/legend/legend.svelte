@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
@@ -16,7 +17,6 @@
   import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     normalizeFontFamily,
@@ -177,8 +177,7 @@
     }
   }
 
-  function handleFontFamilyChange(event: Event): void {
-    const nextFontFamily = (event.currentTarget as HTMLSelectElement).value;
+  function handleFontFamilyChange(nextFontFamily: string): void {
     localFontFamily = nextFontFamily;
 
     if (nextFontFamily !== legendState.style.fontFamily) {
@@ -462,17 +461,13 @@
 
         <div class="legend-style-section">
           <div class="legend-text-style-row">
-            <Select
+            <FontFamilySelect
               id={DOM_IDS.FONT_SELECT}
               labelText={m.legend_font()}
-              selected={localFontFamily}
-              on:change={handleFontFamilyChange}
-              size="sm"
-            >
-              {#each AVAILABLE_FONTS as font (font)}
-                <SelectItem value={font} text={font} />
-              {/each}
-            </Select>
+              value={localFontFamily}
+              fallback={CARTOGRAPHIC_FONT_FAMILY}
+              onchange={handleFontFamilyChange}
+            />
             <Select
               id={DOM_IDS.FONT_SIZE}
               labelText={m.legend_font_size()}
