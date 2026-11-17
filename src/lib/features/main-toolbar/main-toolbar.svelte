@@ -227,7 +227,7 @@
     'panel-hidden': isPanelHidden
   })}
 >
-  <header class="flex sticky z-1000 border-b main-toolbar-header">
+  <header class="flex sticky z-1000 main-toolbar-header">
     {#if hasToolbarPanel}
       <IconButton
         kind="ghost"
@@ -475,7 +475,8 @@
   .main-toolbar-header {
     top: 1px !important;
     background-color: var(--cds-ui-01);
-    border-color: var(--cds-border-subtle-00);
+    /* A shadow rather than a border: the selected tab paints over it. */
+    box-shadow: inset 0 -1px 0 var(--cds-border-subtle-01);
   }
 
   /* The leaving and arriving steps share one cell while they swap. */

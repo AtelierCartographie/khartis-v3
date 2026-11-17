@@ -68,8 +68,18 @@
     padding-inline: var(--cds-spacing-05) 0;
   }
 
+  /* The two actions sit inside the bar, apart from each other, rather than
+     running its full height edge to edge. */
   #khartis-header :global(.bx--header__global) {
     flex: 0 0 auto;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding-inline-end: var(--cds-spacing-03);
+  }
+
+  #khartis-header :global(.bx--header__global .bx--btn) {
+    height: var(--kh-size-md);
+    min-height: var(--kh-size-md);
   }
 
   #khartis-header :global(.bx--header__menu-trigger) {
