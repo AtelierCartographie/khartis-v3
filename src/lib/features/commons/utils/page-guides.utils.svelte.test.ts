@@ -43,4 +43,15 @@ describe('snapRectToPageGuides', () => {
       guides: { vertical: [], horizontal: [] }
     });
   });
+
+  it('should return item coordinates when the item lives in the margin box', () => {
+    const snap = snapRectToPageGuides(
+      { x: 298, y: 100, width: 100, height: 50 },
+      { ...page, offset: { x: 50, y: 20 } },
+      6
+    );
+
+    expect(snap.x).toBe(300);
+    expect(snap.guides.vertical).toEqual([400]);
+  });
 });
