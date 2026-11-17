@@ -472,6 +472,7 @@
     startY: number;
     startWidth: number;
     startHeight: number;
+    startFrame: { top: number; right: number; bottom: number; left: number };
   } | null>(null);
   let pendingPageResizeFrame: number | null = null;
   let pageResizeHandlesEl = $state<HTMLDivElement | null>(null);
@@ -490,7 +491,13 @@
     dx: number,
     dy: number,
     startWidth: number,
-    startHeight: number
+    startHeight: number,
+    startFrame: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    } = formatState.mapFrame
   ): void {
     // The page stays centred in the workspace and grows on both sides, so
     // twice the drag keeps the dragged edge under the pointer.
@@ -516,6 +523,45 @@
       formatActions.setMode(FormatMode.CUSTOM);
     }
     formatActions.setSize(width, height);
+    formatActions.setMapFrame(
+      scaleMapFrameToPage(startFrame, startWidth, startHeight, width, height)
+    );
+  }
+
+  // The map frame keeps its proportions when the page is resized: it grows
+  // or shrinks around the same relative centre instead of being recropped
+  // by margins that stay fixed.
+  function scaleMapFrameToPage(
+    frame: { top: number; right: number; bottom: number; left: number },
+    startWidth: number,
+    startHeight: number,
+    width: number,
+    height: number
+  ): { top: number; right: number; bottom: number; left: number } {
+    const frameWidth = startWidth - frame.left - frame.right;
+    const frameHeight = startHeight - frame.top - frame.bottom;
+    if (frameWidth <= 0 || frameHeight <= 0) return frame;
+
+    const factor = Math.min(width / startWidth, height / startHeight);
+    const nextWidth = frameWidth * factor;
+    const nextHeight = frameHeight * factor;
+    const centerX = ((frame.left + frameWidth / 2) / startWidth) * width;
+    const centerY = ((frame.top + frameHeight / 2) / startHeight) * height;
+    const left = Math.min(
+      Math.max(centerX - nextWidth / 2, 0),
+      width - nextWidth
+    );
+    const top = Math.min(
+      Math.max(centerY - nextHeight / 2, 0),
+      height - nextHeight
+    );
+
+    return {
+      top: Math.round(top),
+      left: Math.round(left),
+      right: Math.round(width - left - nextWidth),
+      bottom: Math.round(height - top - nextHeight)
+    };
   }
 
   function handlePageResizePointerDown(
@@ -530,7 +576,8 @@
       startX: event.clientX,
       startY: event.clientY,
       startWidth: formatState.width,
-      startHeight: formatState.height
+      startHeight: formatState.height,
+      startFrame: { ...formatState.mapFrame }
     };
     updatePageResizePointer(event.clientX, event.clientY);
     window.addEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
@@ -549,14 +596,16 @@
       pendingPageResizeFrame = null;
       if (!pageResizeState) return;
       updatePageResizePointer(clientX, clientY);
-      const { edge, startX, startY, startWidth, startHeight } = pageResizeState;
+      const { edge, startX, startY, startWidth, startHeight, startFrame } =
+        pageResizeState;
       const scale = Math.max(renderedPageScale, 0.01);
       resizePage(
         edge,
         (clientX - startX) / scale,
         (clientY - startY) / scale,
         startWidth,
-        startHeight
+        startHeight,
+        startFrame
       );
     });
   }
