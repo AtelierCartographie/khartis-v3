@@ -779,22 +779,22 @@
                     </div>
                     {#if draftCommonAspect.pattern}
                       <div class="common-field--full">
-                        <PatternPalettePicker
-                          config={resolvedPatternConfig}
-                          onchange={handlePatternConfigChange}
-                        />
-                      </div>
-                      <div class="common-field--full">
                         <ToggleWithLabel
                           label={m.pattern_colorize()}
                           toggled={resolvedPatternConfig.colorize ?? false}
                           ontoggle={handlePatternColorizeChange}
                         />
                       </div>
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
+                        />
+                      </div>
                     {/if}
                   </div>
                 {:else if primitiveKind === 'polygons'}
-                  <div class="common-grid">
+                  <div class="common-stack">
                     <div class="common-grid-row common-grid-row--full">
                       <span class="field-label"
                         >{m.aspect_common_pattern()}</span
@@ -814,17 +814,17 @@
                     </div>
                     {#if draftCommonAspect.pattern}
                       <div class="common-field--full">
-                        <PatternPalettePicker
-                          categorical
-                          config={resolvedPatternConfig}
-                          onchange={handlePatternConfigChange}
-                        />
-                      </div>
-                      <div class="common-field--full">
                         <ToggleWithLabel
                           label={m.pattern_colorize()}
                           toggled={resolvedPatternConfig.colorize ?? false}
                           ontoggle={handlePatternColorizeChange}
+                        />
+                      </div>
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          categorical
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
                         />
                       </div>
                     {/if}
@@ -1259,12 +1259,6 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .common-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--kh-gap-group);
-  }
-
   .common-grid-row {
     display: flex;
     flex-direction: column;
@@ -1274,6 +1268,12 @@
 
   .common-grid-row--full {
     grid-column: 1 / -1;
+  }
+
+  .common-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-group);
   }
 
   .toggle-control,
