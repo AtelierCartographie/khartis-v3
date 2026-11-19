@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
@@ -29,7 +30,10 @@
   );
 
   const legendState = $derived(getLegendState());
-  const showLegendBadge = $derived(!legendState.hasBeenOpened);
+  // No visualization, no legend to discover: the badge waits for one.
+  const showLegendBadge = $derived(
+    !legendState.hasBeenOpened && visualizationStore.visualizations.length > 0
+  );
 
   function handleLegendClick() {
     legendActions.markAsOpened();

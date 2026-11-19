@@ -1981,10 +1981,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         layerOrderStore.order,
         activeVisualizations.map((viz) => viz.id)
       );
+      // The join overlay colours the territories, so it sits right above the
+      // front-most background row. Inheriting the rank of the row emitted
+      // just before it put it under a second land layer (NUTS basemaps).
+      const joinAnchorRowId =
+        basemapBackgroundLayers
+          .map((layer) => basemapRowIdByLayerId.get(String(layer.id)))
+          .filter(
+            (id): id is string =>
+              id !== undefined && panelLayerOrder.includes(id)
+          )
+          .sort(
+            (left, right) =>
+              panelLayerOrder.indexOf(left) - panelLayerOrder.indexOf(right)
+          )[0] ?? null;
       const rowIdForLayer = (layer: Layer): string | null =>
-        thematicRowIdByLayerId.get(String(layer.id)) ??
-        basemapRowIdByLayerId.get(String(layer.id)) ??
-        null;
+        String(layer.id).startsWith(JOIN_CONTROL_LAYER_PREFIX)
+          ? joinAnchorRowId
+          : (thematicRowIdByLayerId.get(String(layer.id)) ??
+            basemapRowIdByLayerId.get(String(layer.id)) ??
+            null);
       const orderedLayers = applyPanelRenderOrder(
         [
           ...basemapBackgroundLayers,

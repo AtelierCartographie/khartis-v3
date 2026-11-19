@@ -65,7 +65,8 @@ export function createViewLabelsLayers({
   layerId,
   pageDisplayScale
 }: ViewLabelsLayerOptions): Layer<DeckDataRow>[] {
-  if (!labels?.size || !fontAssetsStore.ready) return [];
+  if (!labels?.size || !fontAssetsStore.isFontReady(config.labelFontFamily))
+    return [];
   if (!projection || !hasCompositeGraticuleSubProjections(projection)) {
     return [];
   }

@@ -10,7 +10,11 @@ import {
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState, PageInsets } from '../../types/format.types';
-import { arePageInsetsEqual, clampPageInsets } from './page-insets.utils';
+import {
+  arePageInsetsEqual,
+  clampPageInsets,
+  scalePageInsetsToPage
+} from './page-insets.utils';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
@@ -117,12 +121,13 @@ export function getMapFrameEditId(): number {
 }
 
 // A page too small for the margins or the map frame clamps them; growing it
-// back restores what was asked for. The request is dropped as soon as the
+// back restores what was asked for. The map frame also scales with the page. The request is dropped as soon as the
 // insets change any other way (an edit, a fit, a restored project).
 interface RequestedInsets {
   margins: PageInsets;
-  mapFrame: PageInsets;
   appliedMargins: PageInsets;
+  mapFrame: PageInsets;
+  mapFramePage: { width: number; height: number };
   appliedMapFrame: PageInsets;
 }
 let requestedInsets: RequestedInsets | null = null;
@@ -134,7 +139,8 @@ const { state, actions, getState } = createToolStore<
   DEFAULT_STATE,
   (s) => {
     const applySize = (next: { width: number; height: number }): void => {
-      recordPageResize({ width: s.width, height: s.height }, next);
+      const previous = { width: s.width, height: s.height };
+      recordPageResize(previous, next);
       s.width = next.width;
       s.height = next.height;
       const margins =
@@ -142,17 +148,29 @@ const { state, actions, getState } = createToolStore<
         arePageInsetsEqual(requestedInsets.appliedMargins, s.margins)
           ? requestedInsets.margins
           : { ...s.margins };
-      const mapFrame =
-        requestedInsets &&
-        arePageInsetsEqual(requestedInsets.appliedMapFrame, s.mapFrame)
+      const isMapFrameKept =
+        requestedInsets !== null &&
+        arePageInsetsEqual(requestedInsets.appliedMapFrame, s.mapFrame);
+      const requestedMapFrame =
+        isMapFrameKept && requestedInsets
           ? requestedInsets.mapFrame
           : { ...s.mapFrame };
+      const mapFramePage =
+        isMapFrameKept && requestedInsets
+          ? requestedInsets.mapFramePage
+          : previous;
+      const mapFrame = scalePageInsetsToPage(
+        requestedMapFrame,
+        mapFramePage,
+        next
+      );
       s.margins = clampPageInsets(margins, margins, next);
       s.mapFrame = clampPageInsets(mapFrame, mapFrame, next);
       requestedInsets = {
         margins,
-        mapFrame,
         appliedMargins: { ...s.margins },
+        mapFrame: requestedMapFrame,
+        mapFramePage,
         appliedMapFrame: { ...s.mapFrame }
       };
     };

@@ -5,12 +5,19 @@
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
+  import { zoomModeStore } from '../commons/stores/zoom-mode.store.svelte';
+  import {
+    PAGE_GUIDE_THRESHOLD_PX,
+    snapRectToPageGuides
+  } from '../commons/utils/page-guides.utils';
+  import { pageGuidesStore } from './stores/page-guides.store.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import {
     formatActions,
     formatState,
     MIN_PAGE_AREA_SIZE,
-    resolvePageInsetBox
+    resolvePageInsetBox,
+    scalePageInsetsToPage
   } from '$lib/features/step-toolbar/tools/format';
   import { FormatMode } from '../commons/constants/ui.constants';
   import { EVENT } from '../commons/constants/dom.constants';
@@ -364,18 +371,37 @@
     edge: ResizeEdge,
     dx: number,
     dy: number,
-    startFrame: { top: number; right: number; bottom: number; left: number }
+    startFrame: { top: number; right: number; bottom: number; left: number },
+    lockAspectRatio = false
   ): void {
     let { top, right, bottom, left } = startFrame;
+    const { width, height } = formatState;
 
     if (edge.includes('e')) right = startFrame.right - dx;
     if (edge.includes('w')) left = startFrame.left + dx;
     if (edge.includes('s')) bottom = startFrame.bottom - dy;
     if (edge.includes('n')) top = startFrame.top + dy;
 
+    // Shift on a corner scales the frame in proportion, from the opposite
+    // corner; the grid would break the ratio, so it does not apply then.
+    const proportional = lockAspectRatio && edge.length === 2;
+    if (proportional) {
+      const startWidth = width - startFrame.left - startFrame.right;
+      const startHeight = height - startFrame.top - startFrame.bottom;
+      const factor = Math.max(
+        (width - left - right) / Math.max(startWidth, 1),
+        (height - top - bottom) / Math.max(startHeight, 1)
+      );
+      const nextWidth = startWidth * factor;
+      const nextHeight = startHeight * factor;
+      if (edge.includes('e')) right = width - startFrame.left - nextWidth;
+      else left = width - startFrame.right - nextWidth;
+      if (edge.includes('s')) bottom = height - startFrame.top - nextHeight;
+      else top = height - startFrame.bottom - nextHeight;
+    }
+
     // The frame edges snap in page coordinates, where layout objects snap too.
-    const snap = formatState.gridEnabled;
-    const { width, height } = formatState;
+    const snap = formatState.gridEnabled && !proportional;
     top = snapToPageGrid(top, snap);
     left = snapToPageGrid(left, snap);
     right = width - snapToPageGrid(width - right, snap);
@@ -414,7 +440,7 @@
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startFrame);
+    resizeMapFrame(edge, dx, dy, startFrame, event.shiftKey);
   }
 
   function handleResizeUp(): void {
@@ -453,6 +479,7 @@
     startY: number;
     startWidth: number;
     startHeight: number;
+    startFrame: { top: number; right: number; bottom: number; left: number };
   } | null>(null);
   let pendingPageResizeFrame: number | null = null;
   let pageResizeHandlesEl = $state<HTMLDivElement | null>(null);
@@ -471,7 +498,13 @@
     dx: number,
     dy: number,
     startWidth: number,
-    startHeight: number
+    startHeight: number,
+    startFrame: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    } = formatState.mapFrame
   ): void {
     // The page stays centred in the workspace and grows on both sides, so
     // twice the drag keeps the dragged edge under the pointer.
@@ -497,6 +530,88 @@
       formatActions.setMode(FormatMode.CUSTOM);
     }
     formatActions.setSize(width, height);
+    formatActions.setMapFrame(
+      scalePageInsetsToPage(
+        startFrame,
+        { width: startWidth, height: startHeight },
+        { width, height }
+      )
+    );
+  }
+
+  // In page mode the map does not pan: a drag on the map itself moves its
+  // frame on the page. Labels catch their press first (capture phase) and
+  // the resize handles are elements of their own, so neither starts it.
+  const canMoveMapFrame = $derived(
+    showResizeHandles && zoomModeStore.isPageMode && !facetsEnabled
+  );
+  let mapMoveState = $state<{
+    startX: number;
+    startY: number;
+    startFrame: { top: number; right: number; bottom: number; left: number };
+  } | null>(null);
+
+  function handleMapMovePointerDown(event: PointerEvent): void {
+    if (!canMoveMapFrame || event.button !== 0) return;
+    if (!(event.target instanceof Element) || !event.target.closest('canvas')) {
+      return;
+    }
+    event.preventDefault();
+    // The workspace pans the page on a drag: the move is the map's alone.
+    event.stopPropagation();
+    mapMoveState = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startFrame: { ...formatState.mapFrame }
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleMapMovePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handleMapMovePointerUp);
+  }
+
+  function handleMapMovePointerMove(event: PointerEvent): void {
+    if (!mapMoveState) return;
+    const { startX, startY, startFrame } = mapMoveState;
+    // Same conversion as the frame's own resize handles.
+    const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
+    const { width, height } = formatState;
+    const frameWidth = width - startFrame.left - startFrame.right;
+    const frameHeight = height - startFrame.top - startFrame.bottom;
+    const snap = formatState.gridEnabled;
+    // A centre line or a margin close by wins over the grid.
+    const aligned = snapRectToPageGuides(
+      {
+        x: startFrame.left + (event.clientX - startX) / scale,
+        y: startFrame.top + (event.clientY - startY) / scale,
+        width: frameWidth,
+        height: frameHeight
+      },
+      { width, height, margins: formatState.margins },
+      PAGE_GUIDE_THRESHOLD_PX / scale
+    );
+    pageGuidesStore.show(aligned.guides);
+    const alignedX =
+      aligned.guides.vertical.length > 0
+        ? aligned.x
+        : snapToPageGrid(aligned.x, snap);
+    const alignedY =
+      aligned.guides.horizontal.length > 0
+        ? aligned.y
+        : snapToPageGrid(aligned.y, snap);
+    const left = Math.min(Math.max(alignedX, 0), width - frameWidth);
+    const top = Math.min(Math.max(alignedY, 0), height - frameHeight);
+    formatActions.setMapFrame({
+      top: Math.round(top),
+      left: Math.round(left),
+      right: Math.round(width - left - frameWidth),
+      bottom: Math.round(height - top - frameHeight)
+    });
+  }
+
+  function handleMapMovePointerUp(): void {
+    mapMoveState = null;
+    pageGuidesStore.clear();
+    window.removeEventListener(EVENT.POINTERMOVE, handleMapMovePointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handleMapMovePointerUp);
   }
 
   function handlePageResizePointerDown(
@@ -511,7 +626,8 @@
       startX: event.clientX,
       startY: event.clientY,
       startWidth: formatState.width,
-      startHeight: formatState.height
+      startHeight: formatState.height,
+      startFrame: { ...formatState.mapFrame }
     };
     updatePageResizePointer(event.clientX, event.clientY);
     window.addEventListener(EVENT.POINTERMOVE, handlePageResizeMove);
@@ -530,14 +646,16 @@
       pendingPageResizeFrame = null;
       if (!pageResizeState) return;
       updatePageResizePointer(clientX, clientY);
-      const { edge, startX, startY, startWidth, startHeight } = pageResizeState;
+      const { edge, startX, startY, startWidth, startHeight, startFrame } =
+        pageResizeState;
       const scale = Math.max(renderedPageScale, 0.01);
       resizePage(
         edge,
         (clientX - startX) / scale,
         (clientY - startY) / scale,
         startWidth,
-        startHeight
+        startHeight,
+        startFrame
       );
     });
   }
@@ -609,6 +727,10 @@
       class="thematic-map-wrapper"
       class:held={shouldHideMapOutput}
       class:visible={isMapReady && !shouldHideMapOutput}
+      class:movable={canMoveMapFrame}
+      class:moving={mapMoveState !== null}
+      onpointerdown={handleMapMovePointerDown}
+      role="presentation"
     >
       {#if facetsEnabled && facetVisualizations.length > 0}
         <FacetsPage
@@ -690,7 +812,9 @@
         </div>
         <div
           class="resize-handles-frame"
-          class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
+          class:highlighted={hoveredResizeEdge !== null ||
+            resizeState !== null ||
+            mapMoveState !== null}
           style="left: {mapFrameBox.left}px; top: {mapFrameBox.top}px; width: {mapFrameBox.width}px; height: {mapFrameBox.height}px;"
         >
           {#each RESIZE_EDGES as edge (edge)}
@@ -717,6 +841,14 @@
 </div>
 
 <style>
+  .thematic-map-wrapper.movable :global(canvas) {
+    cursor: move;
+  }
+
+  .thematic-map-wrapper.moving :global(canvas) {
+    cursor: grabbing;
+  }
+
   .map-status-loader {
     position: absolute;
     top: var(--cds-spacing-04);

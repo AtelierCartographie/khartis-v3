@@ -5,6 +5,10 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import {
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
@@ -13,7 +17,7 @@
     resolveToolbarPanelWidth
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import * as m from '$lib/paraglide/messages';
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
 
   interface Props {
@@ -43,9 +47,16 @@
     updatePanelPosition();
   });
 
+  // The panel closes its own tool only: when another tool replaces it, the
+  // incoming panel engages while this one may still be leaving, and closing
+  // the shared active tool would shut the new panel at once.
+  const ownTool = untrack(() => dataToolsStore.activeTool);
+
   $effect(() =>
     engageExclusiveContextualSurface(contextualSurfaceId, () => {
-      dataToolsStore.closeTool();
+      if (untrack(() => dataToolsStore.activeTool) === ownTool) {
+        dataToolsStore.closeTool();
+      }
     })
   );
 
@@ -73,7 +84,12 @@
   });
 </script>
 
-<aside class="data-tool-panel" style:right={panelRight}>
+<aside
+  in:floatingPanelIn|global
+  out:floatingPanelOut|global
+  class="data-tool-panel"
+  style:right={panelRight}
+>
   <PanelHeader
     title={title}
     closeLabel={m.data_tool_close()}

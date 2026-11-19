@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
@@ -312,35 +313,37 @@
     />
 
     <div class="tab-content">
-      {#if activeTab === 0}
-        <SingleColorPreview
-          label={m.color()}
-          allowPattern={false}
-          color={singleColor}
-          onchange={handleSingleColorChange}
-        />
-      {:else if activeTab === 1}
-        <div class="two-colors">
+      <SwitchedContent value={activeTab}>
+        {#if activeTab === 0}
           <SingleColorPreview
             label={m.color()}
             allowPattern={false}
-            color={startColor}
-            onchange={handleStartColorChange}
+            color={singleColor}
+            onchange={handleSingleColorChange}
           />
-          <SingleColorPreview
-            label={m.color()}
-            allowPattern={false}
-            color={endColor}
-            onchange={handleEndColorChange}
+        {:else if activeTab === 1}
+          <div class="two-colors">
+            <SingleColorPreview
+              label={m.color()}
+              allowPattern={false}
+              color={startColor}
+              onchange={handleStartColorChange}
+            />
+            <SingleColorPreview
+              label={m.color()}
+              allowPattern={false}
+              color={endColor}
+              onchange={handleEndColorChange}
+            />
+          </div>
+        {:else if activeTab === 2}
+          <PatternPalettePicker
+            config={draftPatternPaletteConfig}
+            diverging={paletteType === PALETTE_TYPE.DIVERGING}
+            onchange={handlePatternPaletteChange}
           />
-        </div>
-      {:else if activeTab === 2}
-        <PatternPalettePicker
-          config={draftPatternPaletteConfig}
-          diverging={paletteType === PALETTE_TYPE.DIVERGING}
-          onchange={handlePatternPaletteChange}
-        />
-      {/if}
+        {/if}
+      </SwitchedContent>
     </div>
 
     <div class="contrast-section">

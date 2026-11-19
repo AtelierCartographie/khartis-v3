@@ -88,6 +88,9 @@ import {
   type LabelLeaderSegment
 } from './label-leader-layer';
 import { sortBySizeDescending, withOpacity } from './layer-helpers';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
 import {
   isMissingThematicValue,
   resolvePointMissingColumn
@@ -243,6 +246,52 @@ export function createTextOverlayLayers(
   return layers;
 }
 
+// Deck draws every glyph quad with its own SDF outline, so a translucent
+// halo darkens where the outlines of neighbouring letters overlap. The halo
+// is drawn first by a layer of its own, opaque and faded as a whole, whose
+// stencil test lets each pixel be written once; the text follows without an
+// outline. MapLibre keeps tile clipping in the stencil buffer, so the
+// interleaved engine keeps the single layer.
+const HALO_STENCIL_PARAMETERS = {
+  ...THEMATIC_OVERLAY_PARAMETERS,
+  stencilReadMask: 0xff,
+  stencilWriteMask: 0xff,
+  stencilCompare: 'equal',
+  stencilPassOperation: 'increment-clamp'
+} as const;
+
+function splitTranslucentHalo(
+  textLayer: TextLayer<TextLayerDatum>,
+  haloColor: [number, number, number],
+  haloOpacity: number
+): TextLayer<TextLayerDatum>[] {
+  const outlineWidth = Number(textLayer.props.outlineWidth ?? 0);
+  const interleaved = shouldUseMapLibreInterleaved({
+    requiresMapLibre: basemapStyleStore.requiresMapLibre,
+    hasOSMBasemap: osmBasemapStore.isActive
+  });
+  if (outlineWidth <= 0 || haloOpacity >= 1 || interleaved) {
+    return [textLayer];
+  }
+
+  const opaqueHalo: [number, number, number, number] = [...haloColor, 255];
+  const halo = textLayer.clone({
+    id: `${textLayer.id}-halo`,
+    getColor: opaqueHalo,
+    outlineColor: opaqueHalo,
+    opacity: haloOpacity * (textLayer.props.opacity ?? 1),
+    background: false,
+    pickable: false,
+    parameters: HALO_STENCIL_PARAMETERS,
+    updateTriggers: {
+      ...textLayer.props.updateTriggers,
+      getColor: [haloColor.join(',')]
+    }
+  });
+  const text = textLayer.clone({ outlineWidth: 0 });
+  return [halo, text];
+}
+
 function buildTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
@@ -254,7 +303,11 @@ function buildTextOverlayLayers(
   if (!viz || !textConfig?.enabled || !textConfig.labelColumn) {
     return [];
   }
-  if (!fontAssetsStore.ready) {
+  const primaryFontReady = fontAssetsStore.isFontReady(textConfig.fontFamily);
+  const secondaryFontReady =
+    !textConfig.secondaryLabels.enabled ||
+    fontAssetsStore.isFontReady(textConfig.secondaryLabels.fontFamily);
+  if (!primaryFontReady || !secondaryFontReady) {
     return [];
   }
   const pageDisplayScale = resolvePageDisplayScale(ctx);
@@ -1475,8 +1528,13 @@ function buildTextOverlayLayers(
         }
       };
 
-      secondaryTextLayer = new TextLayer<TextLayerDatum>(labelLayerProps);
-      layers.push(secondaryTextLayer as ThematicLayer);
+      const secondaryLayers = splitTranslucentHalo(
+        new TextLayer<TextLayerDatum>(labelLayerProps),
+        resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
+        normalizeOpacity(secondaryLabelsConfig.haloOpacity, 1)
+      );
+      secondaryTextLayer = secondaryLayers[secondaryLayers.length - 1];
+      layers.push(...(secondaryLayers as ThematicLayer[]));
     }
   }
 
@@ -1645,8 +1703,14 @@ function buildTextOverlayLayers(
           getBorderColor: []
         }
       });
+      const primaryLayers = splitTranslucentHalo(
+        primaryTextLayer,
+        resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
+        normalizeOpacity(textConfig.haloOpacity, 1)
+      );
+      primaryTextLayer = primaryLayers[primaryLayers.length - 1];
       if (textData.length > 0) {
-        layers.push(primaryTextLayer as ThematicLayer);
+        layers.push(...(primaryLayers as ThematicLayer[]));
       }
       const ghostLayer = primaryTextLayer;
       buildHiddenLabelGhost = (featureKey) => {

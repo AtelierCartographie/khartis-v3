@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
@@ -12,11 +13,29 @@
   import DownloadButton from './components/download-button.svelte';
   import Logo from '$lib/features/commons/components/logo.svelte';
   import ProjectTitle from './components/project-title.svelte';
+
+  // Carbon forwards unknown props to the logo link but does not type them.
+  const logoLinkAttributes: Record<string, string> = $derived({
+    'aria-label': m.header_logo_open_home()
+  });
+
+  function openHome(event: MouseEvent): void {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    globalState.isSideNavOpen = false;
+    if (globalState.isCreateProjectModalOpen) return;
+    createProjectActions.resetAllTabs();
+    globalState.isCreateProjectModalOpen = true;
+  }
 </script>
 
 <div id="khartis-header">
   <CbsHeader
     href={resolve('/')}
+    uiShellAriaLabel={m.app_name()}
+    {...logoLinkAttributes}
+    on:click={openHome}
     persistentHamburgerMenu={true}
     ariaLabelMenu={globalState.isSideNavOpen
       ? m.a11y_close_menu()
@@ -68,8 +87,21 @@
     padding-inline: var(--cds-spacing-05) 0;
   }
 
+  /* The two actions sit inside the bar, apart from each other, rather than
+     running its full height edge to edge. */
   #khartis-header :global(.bx--header__global) {
     flex: 0 0 auto;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding-inline-end: var(--cds-spacing-03);
+  }
+
+  /* Only the two bar buttons: the download dialog renders inside this
+     element too. */
+  #khartis-header :global(.bx--header__global > .header-help-button),
+  #khartis-header :global(#khartis-download-button > .bx--btn) {
+    height: var(--kh-size-md);
+    min-height: var(--kh-size-md);
   }
 
   #khartis-header :global(.bx--header__menu-trigger) {

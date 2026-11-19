@@ -1,4 +1,10 @@
 import { EVENT } from '$lib/features/commons/constants/dom.constants';
+import {
+  PAGE_GUIDE_THRESHOLD_PX,
+  snapRectToPageGuides,
+  type PageGuideFrame
+} from '$lib/features/commons/utils/page-guides.utils';
+import { pageGuidesStore } from '../stores/page-guides.store.svelte';
 import { setStylingToolPopoverDragging } from './tool-popover-drag-visibility.utils';
 
 export interface DraggablePageItemPoint {
@@ -17,6 +23,11 @@ interface DraggablePageItemControllerOptions {
   onDraggingChange: (active: boolean) => void;
   onPointerMove?: (event: PointerEvent) => void;
   onPointerUp?: () => void;
+  /**
+   * The page the item is laid on, when its positions are page coordinates:
+   * the item is then pulled onto the page centre lines and margins.
+   */
+  getPageFrame?: () => PageGuideFrame | null;
 }
 
 interface DraggablePageItemStartOptions {
@@ -39,7 +50,8 @@ export function createDraggablePageItemController({
   setPosition,
   onDraggingChange,
   onPointerMove,
-  onPointerUp
+  onPointerUp,
+  getPageFrame
 }: DraggablePageItemControllerOptions): {
   start: (options: DraggablePageItemStartOptions) => boolean;
   stop: () => void;
@@ -47,8 +59,10 @@ export function createDraggablePageItemController({
   let isDragging = false;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let itemSize = { width: 0, height: 0 };
 
   function stop(): void {
+    if (getPageFrame) pageGuidesStore.clear();
     isDragging = false;
     onDraggingChange(false);
     setStylingToolPopoverDragging(false);
@@ -75,12 +89,37 @@ export function createDraggablePageItemController({
 
     const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const position = normalizePosition({
-      x: (event.clientX - rect.left) / scale - dragOffsetX,
-      y: (event.clientY - rect.top) / scale - dragOffsetY
-    });
+    const position = normalizePosition(
+      alignToPage(
+        {
+          x: (event.clientX - rect.left) / scale - dragOffsetX,
+          y: (event.clientY - rect.top) / scale - dragOffsetY
+        },
+        scale
+      )
+    );
 
     setPosition(position);
+  }
+
+  // The guide pulls the raw position; normalizePosition then clamps it and
+  // applies the grid, so an aligned item never leaves its area.
+  function alignToPage(
+    position: DraggablePageItemPoint,
+    scale: number
+  ): DraggablePageItemPoint {
+    const frame = getPageFrame?.();
+    if (!frame) return position;
+    const snap = snapRectToPageGuides(
+      { ...position, ...itemSize },
+      frame,
+      PAGE_GUIDE_THRESHOLD_PX / scale
+    );
+    pageGuidesStore.show(snap.guides);
+    return {
+      x: snap.guides.vertical.length > 0 ? snap.x : position.x,
+      y: snap.guides.horizontal.length > 0 ? snap.y : position.y
+    };
   }
 
   function start({
@@ -95,6 +134,10 @@ export function createDraggablePageItemController({
     const scale = getPageScale();
     const overlayRect = overlayElement.getBoundingClientRect();
     const itemRect = itemElement.getBoundingClientRect();
+    itemSize = {
+      width: itemRect.width / scale,
+      height: itemRect.height / scale
+    };
     const currentX = (itemRect.left - overlayRect.left) / scale;
     const currentY = (itemRect.top - overlayRect.top) / scale;
     const currentPosition = getCurrentPosition();

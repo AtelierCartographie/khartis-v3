@@ -12,5 +12,6 @@ export {
   arePageInsetsEqual,
   arePageInsetsWithin,
   MIN_PAGE_AREA_SIZE,
-  resolvePageInsetBox
+  resolvePageInsetBox,
+  scalePageInsetsToPage
 } from './page-insets.utils';
