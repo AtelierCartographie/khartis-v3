@@ -4,7 +4,7 @@
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { Matrix4 } from '@math.gl/core';
   import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
-  import { onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { getLocale } from '$lib/paraglide/runtime';
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
@@ -56,6 +56,7 @@
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
+  import { mapRevealStore } from '../stores/map-reveal.store.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -378,6 +379,7 @@
     requestAnimationFrame(() => {
       mapLoadingStore.setUpdatingLayers(false);
       measureDrawnMapExtent(layersReferenceBbox);
+      if (!hasPendingWorkerParse()) revealRedrawnMap();
     });
   }
 
@@ -2175,24 +2177,63 @@
     });
   });
 
-  // Changing projection redraws the whole map at once: a short fade marks
-  // the change. Moving a projection's parameters does not trigger it.
+  // A new projection or visualization redraws the whole map: the map dims
+  // at once and fades back in when the new drawing is on screen, since the
+  // reprojection or the new layers may take a while. Moving a projection's
+  // parameters does not trigger it.
+  const MAP_REVEAL_DIM_OPACITY = 0.25;
+  const MAP_REVEAL_TIMEOUT_MS = 2000;
   let previousProjectionIdentity: string | null = null;
+  let handledMapRevealVersion = untrack(() => mapRevealStore.version);
+  let mapDimAnimation: Animation | null = null;
+  let mapRevealFallbackId: ReturnType<typeof setTimeout> | null = null;
+
+  function dimMapUntilRedrawn(): void {
+    const duration = motionDuration(120);
+    if (!mapContainer || duration === 0) return;
+    mapDimAnimation?.cancel();
+    mapDimAnimation = mapContainer.animate(
+      [{ opacity: 1 }, { opacity: MAP_REVEAL_DIM_OPACITY }],
+      { duration, fill: 'forwards' }
+    );
+    if (mapRevealFallbackId !== null) clearTimeout(mapRevealFallbackId);
+    mapRevealFallbackId = setTimeout(revealRedrawnMap, MAP_REVEAL_TIMEOUT_MS);
+  }
+
+  function revealRedrawnMap(): void {
+    if (!mapDimAnimation) return;
+    if (mapRevealFallbackId !== null) {
+      clearTimeout(mapRevealFallbackId);
+      mapRevealFallbackId = null;
+    }
+    mapDimAnimation.cancel();
+    mapDimAnimation = null;
+    mapContainer?.animate(
+      [{ opacity: MAP_REVEAL_DIM_OPACITY }, { opacity: 1 }],
+      {
+        duration: motionDuration(320),
+        easing: 'cubic-bezier(0.2, 0, 0.38, 0.9)'
+      }
+    );
+  }
+
   $effect(() => {
     const projectionState = getProjectionState();
     const identity = `${projectionState.selected}|${projectionState.customCode ?? ''}|${mapProjectionStore.projection}`;
+    const revealVersion = mapRevealStore.version;
     untrack(() => {
       const changed =
-        previousProjectionIdentity !== null &&
-        identity !== previousProjectionIdentity;
+        (previousProjectionIdentity !== null &&
+          identity !== previousProjectionIdentity) ||
+        revealVersion !== handledMapRevealVersion;
       previousProjectionIdentity = identity;
-      const duration = motionDuration(320);
-      if (!changed || duration === 0) return;
-      mapContainer?.animate([{ opacity: 0.2 }, { opacity: 1 }], {
-        duration,
-        easing: 'cubic-bezier(0.2, 0, 0.38, 0.9)'
-      });
+      handledMapRevealVersion = revealVersion;
+      if (changed) dimMapUntilRedrawn();
     });
+  });
+
+  onDestroy(() => {
+    if (mapRevealFallbackId !== null) clearTimeout(mapRevealFallbackId);
   });
 
   const projectionRenderTrigger = $derived.by(() => {
