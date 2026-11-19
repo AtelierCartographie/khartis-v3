@@ -219,20 +219,20 @@
   const formatState = $derived(getFormatState());
   const pageMargins = $derived(formatState.margins);
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
+  // Map-anchored annotations are projected in the map canvas, which fills
+  // the map frame: the frame, not the page margins, is their origin.
+  const mapArea = $derived(formatState.mapFrame);
   const mapLayerStyle = $derived.by(() => {
     const scale = pageScale;
-    const width = Math.max(
-      1,
-      formatState.width - pageMargins.left - pageMargins.right
-    );
+    const width = Math.max(1, formatState.width - mapArea.left - mapArea.right);
     const height = Math.max(
       1,
-      formatState.height - pageMargins.top - pageMargins.bottom
+      formatState.height - mapArea.top - mapArea.bottom
     );
 
     return [
-      `left: ${pageMargins.left * scale}px`,
-      `top: ${pageMargins.top * scale}px`,
+      `left: ${mapArea.left * scale}px`,
+      `top: ${mapArea.top * scale}px`,
       `width: ${width * scale}px`,
       `height: ${height * scale}px`
     ].join('; ');
@@ -613,8 +613,8 @@
     const localPosition = getLocalRenderedPosition(item);
 
     return {
-      x: localPosition.x + pageMargins.left,
-      y: localPosition.y + pageMargins.top
+      x: localPosition.x + mapArea.left,
+      y: localPosition.y + mapArea.top
     };
   }
 
@@ -740,8 +740,8 @@
     annotationsActions.updateAnnotation(item.id, {
       coordinateSpace: 'page',
       position: {
-        x: item.position.x + pageMargins.left,
-        y: item.position.y + pageMargins.top
+        x: item.position.x + mapArea.left,
+        y: item.position.y + mapArea.top
       }
     });
   }
@@ -1556,8 +1556,8 @@
       scope === 'page'
         ? renderedPosition
         : {
-            x: renderedPosition.x - pageMargins.left,
-            y: renderedPosition.y - pageMargins.top
+            x: renderedPosition.x - mapArea.left,
+            y: renderedPosition.y - mapArea.top
           };
     const mapFactor = getMapScaleFactor(item);
     const centerX =

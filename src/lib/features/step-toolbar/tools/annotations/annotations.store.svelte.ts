@@ -45,7 +45,6 @@ import {
   isBottomRightPageElementRole,
   isGridEnabled,
   isPageElementRole,
-  type PageLayout,
   reconcileAutoPageElementStyle,
   remapPageElementPosition,
   resolvePageLayout,
@@ -340,35 +339,53 @@ function clearCreationState(state: AnnotationsState): void {
 }
 
 // Map anchors use map-area coordinates; the overlay re-adds page margins.
-function toMapAreaLocalPosition(
-  position: { x: number; y: number },
-  layout: PageLayout
-): { x: number; y: number } {
+// The map area is the map frame, which can sit anywhere on the page: it
+// is no longer the margin box.
+function toMapAreaLocalPosition(position: { x: number; y: number }): {
+  x: number;
+  y: number;
+} {
+  const { mapFrame } = getFormatState();
   return {
-    x: position.x - layout.margins.left,
-    y: position.y - layout.margins.top
+    x: position.x - mapFrame.left,
+    y: position.y - mapFrame.top
   };
 }
 
-// Only marks drawn directly on the map can be map-anchored.
+// Every annotation the user places on the map follows it; one placed in the
+// page margins, and the page elements (title, subtitle, source, credit,
+// which carry a role), stay on the page.
 const MAP_ANCHORABLE_SHAPE_KINDS: ReadonlySet<AnnotationKind> = new Set([
   AnnotationKind.SHAPE,
-  AnnotationKind.DRAWING
+  AnnotationKind.DRAWING,
+  AnnotationKind.TEXT,
+  AnnotationKind.IMAGE
 ]);
 
 // The overlay writes WGS84 anchors for new map-space shapes on first render.
-function anchorShapeToMap(
-  annotation: Annotation,
-  layout: PageLayout
-): Annotation {
-  if (annotation.role || !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type)) {
+function isInsideMapFrame(position: { x: number; y: number }): boolean {
+  const { width, height, mapFrame } = getFormatState();
+  return (
+    position.x >= mapFrame.left &&
+    position.x <= width - mapFrame.right &&
+    position.y >= mapFrame.top &&
+    position.y <= height - mapFrame.bottom
+  );
+}
+
+function anchorShapeToMap(annotation: Annotation): Annotation {
+  if (
+    annotation.role ||
+    !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type) ||
+    !isInsideMapFrame(annotation.position)
+  ) {
     return annotation;
   }
 
   return {
     ...annotation,
     coordinateSpace: 'map',
-    position: toMapAreaLocalPosition(annotation.position, layout)
+    position: toMapAreaLocalPosition(annotation.position)
   };
 }
 
@@ -588,8 +605,7 @@ const { actions, getState } = createToolStore<
             content: resolvedPreview.content ?? s.pendingContent
           },
           s.pendingStyle
-        ),
-        resolvePageLayout()
+        )
       );
 
       s.items = [...s.items, newAnnotation];
@@ -714,18 +730,15 @@ const { actions, getState } = createToolStore<
         relativePoints
       );
 
-      const newAnnotation = anchorShapeToMap(
-        {
-          id: createAnnotationId(),
-          type: AnnotationKind.DRAWING,
-          content: relativePoints,
-          position,
-          coordinateSpace: 'page',
-          positionMode: 'manual',
-          style
-        },
-        layout
-      );
+      const newAnnotation = anchorShapeToMap({
+        id: createAnnotationId(),
+        type: AnnotationKind.DRAWING,
+        content: relativePoints,
+        position,
+        coordinateSpace: 'page',
+        positionMode: 'manual',
+        style
+      });
 
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
