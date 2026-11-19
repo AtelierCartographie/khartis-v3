@@ -16,6 +16,12 @@
   import { wrapLongitude } from './projection-code.utils';
   import ProjectionDefinition from './projection-definition.svelte';
 
+  interface Props {
+    definitionOnly?: boolean;
+  }
+
+  let { definitionOnly = false }: Props = $props();
+
   const PROJECTION_ANGLE_STEP = 1;
 
   const projectionState = $derived(getProjectionState());
@@ -98,7 +104,9 @@
 <div id="khartis-projection-settings-tool">
   <div class="projection-settings">
     <div class="controls">
-      {#if !canApplyProjectionSettings}
+      {#if definitionOnly}
+        <!-- A reference basemap takes no setting: only its definition. -->
+      {:else if !canApplyProjectionSettings}
         <InlineNotification
           kind="warning"
           lowContrast

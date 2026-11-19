@@ -7,6 +7,7 @@
     SettingsAdjust
   } from 'carbon-icons-svelte';
   import { tick } from 'svelte';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { InlineNotification } from 'carbon-components-svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { osmBasemapStore } from '$lib/features/map';
@@ -36,12 +37,34 @@
 
   let settingsOpen = $state(false);
 
+  // The section slides open, then its header is brought to the top of the
+  // panel's own scroll area: scrollIntoView would also move the floating
+  // panel, whose frame does not scroll.
+  const SETTINGS_REVEAL_DELAY_MS = 220;
+
+  function findScrollArea(element: HTMLElement): HTMLElement | null {
+    let parent = element.parentElement;
+    while (parent) {
+      const { overflowY } = getComputedStyle(parent);
+      if (overflowY === 'auto' || overflowY === 'scroll') return parent;
+      parent = parent.parentElement;
+    }
+    return null;
+  }
+
   async function openSettings() {
     settingsOpen = true;
     await tick();
-    document
-      .getElementById(SETTINGS_SECTION_ID)
-      ?.scrollIntoView({ block: 'end' });
+    setTimeout(() => {
+      const section = document
+        .getElementById(SETTINGS_SECTION_ID)
+        ?.closest<HTMLElement>('.section-container');
+      const scrollArea = section ? findScrollArea(section) : null;
+      if (!section || !scrollArea) return;
+      scrollArea.scrollTop +=
+        section.getBoundingClientRect().top -
+        scrollArea.getBoundingClientRect().top;
+    }, motionDuration(SETTINGS_REVEAL_DELAY_MS));
   }
 
   function handleProjectionCodeApply(diagnosis: ProjectionCodeDiagnosis) {
@@ -108,14 +131,12 @@
       title={m.projection_settings_title()}
       open={settingsOpen}
       onToggle={(expanded) => (settingsOpen = expanded)}
-      disabled={isTiledBasemapEnabled}
-      disabledReason={m.projection_tiled_settings_unavailable()}
       scrollIntoViewOnOpen
     >
       {#snippet icon()}
         <SettingsAdjust size={20} />
       {/snippet}
-      <ProjectionSettings />
+      <ProjectionSettings definitionOnly={isTiledBasemapEnabled} />
     </ExpandableSection>
 
     {#if isTiledBasemapEnabled}
