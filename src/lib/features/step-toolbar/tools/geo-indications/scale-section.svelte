@@ -124,9 +124,6 @@
   const isScaleDisabled = $derived(
     basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
   );
-  const scaleDisabledReason = $derived(
-    isScaleDisabled ? m.geo_scale_unavailable_tiled_basemap() : undefined
-  );
   const scaleDistanceStep = $derived(
     getScaleDistanceStep(
       geoState.scale.distance > 0 ? geoState.scale.distance : scaleDistanceLimit
@@ -151,192 +148,188 @@
   }
 </script>
 
-{#if isScaleDisabled}
-  <div class="kh-notification-stack scale-unavailable-notice">
-    <InlineNotification
-      kind="info"
-      lowContrast
-      hideCloseButton
-      subtitle={m.geo_scale_unavailable_tiled_basemap()}
-    />
-  </div>
-{/if}
-
 <ExpandableSection
   title={m.geo_scale()}
   scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
   showToggle={true}
-  toggleChecked={geoState.scale.enabled && !isScaleDisabled}
+  toggleChecked={geoState.scale.enabled || isScaleDisabled}
   toggleDisabled={isScaleDisabled}
-  disabled={isScaleDisabled}
-  disabledReason={scaleDisabledReason}
   onToggleChange={() => {
     if (!isScaleDisabled) {
       store.toggleScale();
     }
   }}
 >
-  <div class="section-content">
-    <p class="scale-center-note">{m.geo_scale_valid_at_map_center()}</p>
+  {#if isScaleDisabled}
+    <div class="section-content">
+      <InlineNotification
+        kind="info"
+        lowContrast
+        hideCloseButton
+        subtitle={m.geo_scale_unavailable_tiled_basemap()}
+      />
+    </div>
+  {:else}
+    <div class="section-content">
+      <p class="scale-center-note">{m.geo_scale_valid_at_map_center()}</p>
 
-    <Grid noGutter>
-      <Row>
-        <Column>
-          <div
-            class="scale-form-field"
-            role="group"
-            aria-labelledby="scale-form-label"
-          >
-            <span id="scale-form-label" class="bx--label">{m.geo_style()}</span>
-            <ToggleTabs
-              size="sm"
-              items={formOptions.map((option) => ({ label: option.text }))}
-              activeIndex={formOptions.findIndex(
-                (option) => option.value === geoState.scale.form
-              )}
-              onchange={(index) =>
-                handleScaleFormChange(formOptions[index].value)}
-              hideInactiveLabel={false}
-            />
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <NumberInput
-            translateWithId={translateCarbonId}
-            id="distance-input"
-            labelText={m.geo_distance()}
-            value={geoState.scale.distance}
-            helperText={scaleDistanceHelperText}
-            on:change={(e) =>
-              store.setScaleDistance(
-                getNumericEventValue(e, geoState.scale.distance)
-              )}
-            min={0}
-            max={scaleDistanceLimit}
-            step={scaleDistanceStep}
-            size="sm"
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <SimpleRadioGroup
-            name="scale-units"
-            legendText={m.geo_units()}
-            items={scaleUnitsOptions}
-            selected={geoState.scale.units}
-            onchange={(value) => store.setScaleUnits(value)}
-          />
-        </Column>
-      </Row>
-
-      <SwitchedContent value={geoState.scale.form}>
-        {#if geoState.scale.form === ScaleForm.LINE}
-          <Row>
-            <Column>
-              <SliderWithInput
-                label={m.thickness()}
-                min={SCALE_LINE_WIDTH_LIMITS.min}
-                max={SCALE_LINE_WIDTH_LIMITS.max}
-                step={SCALE_LINE_WIDTH_LIMITS.step}
-                value={geoState.scale.lineWidth}
-                onchange={store.setScaleLineWidth}
-              />
-            </Column>
-          </Row>
-        {/if}
-      </SwitchedContent>
-
-      <Row>
-        <Column>
-          <div class="text-style-row">
-            <div class="text-style-font">
-              <FontFamilySelect
-                id="scale-font-select"
-                labelText={m.legend_font()}
-                value={localScaleFontFamily}
-                fallback={CARTOGRAPHIC_FONT_FAMILY}
-                onchange={(nextFontFamily) => {
-                  localScaleFontFamily = nextFontFamily;
-                  store.setScaleFontFamily(nextFontFamily);
-                }}
-              />
-            </div>
-            <div class="text-style-size">
-              <Select
-                id="scale-font-size"
-                labelText={m.legend_font_size()}
-                selected={String(localScaleFontSize)}
-                on:change={(event) => {
-                  const nextFontSize = Number(
-                    (event.currentTarget as HTMLSelectElement).value
-                  );
-                  if (!Number.isFinite(nextFontSize)) {
-                    return;
-                  }
-
-                  localScaleFontSize = nextFontSize;
-                  store.setScaleFontSize(nextFontSize);
-                }}
-                size="sm"
+      <Grid noGutter>
+        <Row>
+          <Column>
+            <div
+              class="scale-form-field"
+              role="group"
+              aria-labelledby="scale-form-label"
+            >
+              <span id="scale-form-label" class="bx--label"
+                >{m.geo_style()}</span
               >
-                {#each scaleFontSizeOptions as sizeOption (sizeOption)}
-                  <SelectItem value={sizeOption} text={sizeOption} />
-                {/each}
-              </Select>
+              <ToggleTabs
+                size="sm"
+                items={formOptions.map((option) => ({ label: option.text }))}
+                activeIndex={formOptions.findIndex(
+                  (option) => option.value === geoState.scale.form
+                )}
+                onchange={(index) =>
+                  handleScaleFormChange(formOptions[index].value)}
+                hideInactiveLabel={false}
+              />
             </div>
-          </div>
-        </Column>
-      </Row>
+          </Column>
+        </Row>
 
-      <Row>
-        <Column>
-          <ColorPicker
-            triggerLabel={m.color()}
-            hex={scaleHex}
-            hue={geoState.scale.color.hue}
-            saturation={geoState.scale.color.saturation}
-            lightness={geoState.scale.color.lightness}
-            onValidate={({
-              hue,
-              saturation,
-              lightness
-            }: ColorPickerValidateEvent) => {
-              store.setScaleColor({ hue, saturation, lightness });
-            }}
-          />
-        </Column>
-      </Row>
-      <Row>
-        <Column>
-          <SliderWithInput
-            label={m.legend_opacity()}
-            value={geoState.scale.opacity}
-            min={0}
-            max={100}
-            step={1}
-            inputWidth="72px"
-            showSteppers={false}
-            onchange={store.setScaleOpacity}
-          />
-        </Column>
-      </Row>
-    </Grid>
-  </div>
+        <Row>
+          <Column>
+            <NumberInput
+              translateWithId={translateCarbonId}
+              id="distance-input"
+              labelText={m.geo_distance()}
+              value={geoState.scale.distance}
+              helperText={scaleDistanceHelperText}
+              on:change={(e) =>
+                store.setScaleDistance(
+                  getNumericEventValue(e, geoState.scale.distance)
+                )}
+              min={0}
+              max={scaleDistanceLimit}
+              step={scaleDistanceStep}
+              size="sm"
+            />
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <SimpleRadioGroup
+              name="scale-units"
+              legendText={m.geo_units()}
+              items={scaleUnitsOptions}
+              selected={geoState.scale.units}
+              onchange={(value) => store.setScaleUnits(value)}
+            />
+          </Column>
+        </Row>
+
+        <SwitchedContent value={geoState.scale.form}>
+          {#if geoState.scale.form === ScaleForm.LINE}
+            <Row>
+              <Column>
+                <SliderWithInput
+                  label={m.thickness()}
+                  min={SCALE_LINE_WIDTH_LIMITS.min}
+                  max={SCALE_LINE_WIDTH_LIMITS.max}
+                  step={SCALE_LINE_WIDTH_LIMITS.step}
+                  value={geoState.scale.lineWidth}
+                  onchange={store.setScaleLineWidth}
+                />
+              </Column>
+            </Row>
+          {/if}
+        </SwitchedContent>
+
+        <Row>
+          <Column>
+            <div class="text-style-row">
+              <div class="text-style-font">
+                <FontFamilySelect
+                  id="scale-font-select"
+                  labelText={m.legend_font()}
+                  value={localScaleFontFamily}
+                  fallback={CARTOGRAPHIC_FONT_FAMILY}
+                  onchange={(nextFontFamily) => {
+                    localScaleFontFamily = nextFontFamily;
+                    store.setScaleFontFamily(nextFontFamily);
+                  }}
+                />
+              </div>
+              <div class="text-style-size">
+                <Select
+                  id="scale-font-size"
+                  labelText={m.legend_font_size()}
+                  selected={String(localScaleFontSize)}
+                  on:change={(event) => {
+                    const nextFontSize = Number(
+                      (event.currentTarget as HTMLSelectElement).value
+                    );
+                    if (!Number.isFinite(nextFontSize)) {
+                      return;
+                    }
+
+                    localScaleFontSize = nextFontSize;
+                    store.setScaleFontSize(nextFontSize);
+                  }}
+                  size="sm"
+                >
+                  {#each scaleFontSizeOptions as sizeOption (sizeOption)}
+                    <SelectItem value={sizeOption} text={sizeOption} />
+                  {/each}
+                </Select>
+              </div>
+            </div>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <ColorPicker
+              triggerLabel={m.color()}
+              hex={scaleHex}
+              hue={geoState.scale.color.hue}
+              saturation={geoState.scale.color.saturation}
+              lightness={geoState.scale.color.lightness}
+              onValidate={({
+                hue,
+                saturation,
+                lightness
+              }: ColorPickerValidateEvent) => {
+                store.setScaleColor({ hue, saturation, lightness });
+              }}
+            />
+          </Column>
+        </Row>
+        <Row>
+          <Column>
+            <SliderWithInput
+              label={m.legend_opacity()}
+              value={geoState.scale.opacity}
+              min={0}
+              max={100}
+              step={1}
+              inputWidth="72px"
+              showSteppers={false}
+              onchange={store.setScaleOpacity}
+            />
+          </Column>
+        </Row>
+      </Grid>
+    </div>
+  {/if}
 </ExpandableSection>
 
 <style>
-  .scale-unavailable-notice {
-    padding: var(--kh-gap-inline) var(--kh-pad-panel);
-  }
-
-  .scale-unavailable-notice :global(.bx--inline-notification) {
+  .section-content :global(.bx--inline-notification) {
     max-width: none;
   }
 
