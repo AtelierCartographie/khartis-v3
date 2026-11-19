@@ -812,7 +812,9 @@
         </div>
         <div
           class="resize-handles-frame"
-          class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
+          class:highlighted={hoveredResizeEdge !== null ||
+            resizeState !== null ||
+            mapMoveState !== null}
           style="left: {mapFrameBox.left}px; top: {mapFrameBox.top}px; width: {mapFrameBox.width}px; height: {mapFrameBox.height}px;"
         >
           {#each RESIZE_EDGES as edge (edge)}
