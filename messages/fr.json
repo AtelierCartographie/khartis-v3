@@ -1492,6 +1492,7 @@
   "aspect_common_auto_color": "Couleur automatique",
   "aspect_common_stroke_unique": "Épaisseur unique du contour",
   "aspect_common_pattern": "Motif",
+  "aspect_pattern_category_limit": "Les motifs restent lisibles jusqu'à {max} catégories : cette variable en compte {count}.",
   "per_category_aspect": "Aspect",
   "per_category_shape": "Forme",
   "per_category_color": "Couleur",

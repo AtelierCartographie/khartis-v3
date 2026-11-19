@@ -254,7 +254,11 @@
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
   ): PatternPaletteConfig | undefined {
-    if (!commonAspect.pattern || !commonAspect.patternConfig) {
+    if (
+      !commonAspect.pattern ||
+      !commonAspect.patternConfig ||
+      next.length > MAX_CATEGORICAL_PATTERN_COUNT
+    ) {
       return undefined;
     }
 
