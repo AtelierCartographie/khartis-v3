@@ -269,6 +269,14 @@
     letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
   }
 
+  /* A paragraph inside keeps the compact size, not the one of its dialog. */
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact p) {
+    margin: 0;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+  }
+
   :global(.khartis-carbon-rich-tooltip::before) {
     position: absolute;
     width: 0;
