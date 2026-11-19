@@ -327,6 +327,7 @@
   let lastLayoutSnapshot: string | null = null;
   let lastPageLayoutSnapshot: string | null = null;
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
+  let handledFramePageResizeId = handledPageResizeId;
 
   let isApplyingMapLibreSync = false;
 
@@ -1394,6 +1395,26 @@
         ? previousFrameLayout
         : null;
 
+    // A frame dragged whole carries the map with it, like an image.
+    const isFrameMove =
+      frameCrop !== null &&
+      frameCrop.left + frameCrop.right ===
+        frameLayout.left + frameLayout.right &&
+      frameCrop.top + frameCrop.bottom === frameLayout.top + frameLayout.bottom;
+    // A page the user resized scales its frame like an image: the map is
+    // zoomed by the same factor, so the frame shows the same extent.
+    const pageResize = getLastPageResize();
+    const frameScale =
+      pageResize &&
+      pageResize.id !== handledFramePageResizeId &&
+      previousFrameLayout !== null
+        ? (frameLayout.pageWidth - frameLayout.left - frameLayout.right) /
+          (previousFrameLayout.pageWidth -
+            previousFrameLayout.left -
+            previousFrameLayout.right)
+        : null;
+    handledFramePageResizeId = pageResize?.id ?? handledFramePageResizeId;
+
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
       return;
@@ -1406,7 +1427,18 @@
     lastLayoutSnapshot = layoutSnapshot;
 
     untrack(() => {
-      if (
+      if (isFrameMove) {
+        mapInstanceStore.markViewportManual();
+      } else if (
+        frameScale !== null &&
+        Number.isFinite(frameScale) &&
+        frameScale > 0 &&
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.MAPLIBRE
+      ) {
+        mapInstanceStore.rescaleMapLibreView(frameScale);
+      } else if (
         frameCrop &&
         mapInit.isMapLoaded &&
         !isSwitchingViewMode &&
@@ -1440,6 +1472,10 @@
       }
     });
   });
+
+  function dropPageSize(trigger: string): string {
+    return trigger.split('|').slice(2).join('|');
+  }
 
   function readAutomaticMapFrameTrigger(): string {
     return [
@@ -1523,7 +1559,7 @@
   // An automatic fit (data, basemap, projection, page format) closes the
   // frame in on the drawn map, inside the margins, and zooms the map to meet
   // it. A tiled MapLibre map fills any frame, so its automatic frame is the
-  // margin box, set again only when the basemap, projection or page changes.
+  // margin box, set again only when the basemap or the projection changes.
   // A manual view keeps its frame.
   $effect(() => {
     const trigger = readAutomaticMapFrameTrigger();
@@ -1540,9 +1576,18 @@
     const isTriggered =
       lastAutomaticMapFrameTrigger !== null &&
       trigger !== lastAutomaticMapFrameTrigger;
+    const previousTrigger = lastAutomaticMapFrameTrigger;
     lastAutomaticMapFrameTrigger = trigger;
     const isOrthographic = viewMode === ViewMode.ORTHOGRAPHIC;
     if (!isOrthographic && !isTriggered) {
+      return;
+    }
+    // A resized page has already scaled the tiled map's frame and zoom.
+    if (
+      !isOrthographic &&
+      previousTrigger !== null &&
+      dropPageSize(previousTrigger) === dropPageSize(trigger)
+    ) {
       return;
     }
 
