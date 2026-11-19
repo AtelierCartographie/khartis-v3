@@ -43,6 +43,7 @@
   } from '../utils/focus-viewport.utils';
   import {
     computeDrawingBounds,
+    getDrawingAnchorPoints,
     simplifyDrawingStroke,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
@@ -2674,7 +2675,7 @@
                 ondblclick={(event: MouseEvent) =>
                   handleDrawingPathDoubleClick(event, item)}
               />
-              {#each drawingSmoothing.adjusting ? [] : points as point, pointIndex (pointIndex)}
+              {#each drawingSmoothing.adjusting ? [] : getDrawingAnchorPoints(points, smoothness, isClosed) as point, pointIndex (pointIndex)}
                 <circle
                   class="drawing-anchor"
                   role="button"

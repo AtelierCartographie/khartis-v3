@@ -340,3 +340,31 @@ export function computeDrawingBounds(
     originY: vbY
   };
 }
+
+/**
+ * Where to draw the anchors of a drawing: on the smoothed stroke the user
+ * sees, at the point of the stroke closest to each control point. Dragging
+ * an anchor still moves its control point by the same offset.
+ */
+export function getDrawingAnchorPoints(
+  points: DrawingPoint[],
+  smoothness: number,
+  closed: boolean
+): DrawingPoint[] {
+  const smoothedPoints = getSmoothedDrawingPoints(points, smoothness, closed);
+  if (smoothedPoints === points) return points;
+
+  return points.map((point) => {
+    let nearest = smoothedPoints[0];
+    let nearestDistance = Infinity;
+    for (const candidate of smoothedPoints) {
+      const distance =
+        (candidate.x - point.x) ** 2 + (candidate.y - point.y) ** 2;
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  });
+}
