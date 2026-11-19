@@ -1,4 +1,10 @@
 <script lang="ts">
+  import {
+    clampFontSize,
+    DEFAULT_FONT_SIZE,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/fonts.constants';
+  import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     isShapeAspectRatioLocked,
@@ -97,6 +103,9 @@
   const KEYBOARD_FAST_MOVE_GRID_MULTIPLIER = 5;
   const KEYBOARD_FAST_MOVE_STEP_PX = 10;
   const DEFAULT_TEXT_PLACEMENT_SIZE = { width: 220, height: 64 } as const;
+  // Mirrors .annotation-text: max-width and line-height.
+  const TEXT_MAX_WIDTH_PX = 300;
+  const TEXT_LINE_HEIGHT = 1.2;
   const TEXT_MIN_WIDTH_PX = PAGE_GRID_SIZE_PX * 2;
   const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
   const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
@@ -388,13 +397,36 @@
       : KEYBOARD_FAST_MOVE_STEP_PX;
   }
 
+  // The text is centred on the pointer by its own size, not by a box wider
+  // than the words, which left it far from where the user clicked.
+  function measurePlacedTextSize(
+    content: unknown,
+    style: AnnotationStyle | undefined
+  ): { width: number; height: number } {
+    const text = typeof content === 'string' ? content : '';
+    if (!text.trim()) return DEFAULT_TEXT_PLACEMENT_SIZE;
+    const fontSize = clampFontSize(style?.fontSize ?? DEFAULT_FONT_SIZE, 8);
+    const fontFamily = resolveFontFamilyStack(style?.font);
+    const fontWeight = style?.bold ? 'bold' : 'normal';
+    const lines = text.split('\n');
+    const widest = Math.max(
+      ...lines.map((line) =>
+        measureTextWidth(line, fontSize, fontFamily, fontWeight)
+      )
+    );
+    return {
+      width: Math.ceil(Math.min(TEXT_MAX_WIDTH_PX, widest)),
+      height: Math.ceil(lines.length * fontSize * TEXT_LINE_HEIGHT)
+    };
+  }
+
   function getDefaultPlacementSize(
     type: AnnotationKind,
     content: unknown,
     style: AnnotationStyle | undefined
   ): { width: number; height: number } {
     if (type === AnnotationKind.TEXT) {
-      return DEFAULT_TEXT_PLACEMENT_SIZE;
+      return measurePlacedTextSize(content, style);
     }
 
     if (type === AnnotationKind.IMAGE) {
