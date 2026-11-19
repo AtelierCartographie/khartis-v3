@@ -23,6 +23,8 @@
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
   import { getOrdinalAnnotationName } from './_shared/annotation-name';
   import AnnotationToolPanel from './_shared/annotation-tool-panel.svelte';
+  import { drawingSmoothing } from './drawing-smoothing.svelte';
+  import { onDestroy } from 'svelte';
 
   const drawingTypeOptions = $derived.by(() => [
     { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
@@ -163,6 +165,18 @@
     }
     return value <= 1 ? value * 100 : value;
   }
+
+  onDestroy(() => drawingSmoothing.reset());
+
+  $effect(() => {
+    const release = (): void => drawingSmoothing.pointerUp();
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  });
 </script>
 
 <AnnotationToolPanel
@@ -203,19 +217,33 @@
       }}
     />
 
-    <SliderWithInput
-      label={m.annotations_smoothness()}
-      value={effectiveStyle.smoothness ?? 0}
-      min={0}
-      max={100}
-      step={1}
-      inputWidth="72px"
-      showSteppers={false}
-      onchange={(smoothness) => {
-        if ((effectiveStyle.smoothness ?? 0) === smoothness) return;
-        annotationsActions.applyStyle({ smoothness });
+    <div
+      class="smoothness-control"
+      role="presentation"
+      onpointerdown={(event: PointerEvent) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('.bx--slider')
+        ) {
+          drawingSmoothing.pointerDown();
+        }
       }}
-    />
+    >
+      <SliderWithInput
+        label={m.annotations_smoothness()}
+        value={effectiveStyle.smoothness ?? 0}
+        min={0}
+        max={100}
+        step={1}
+        inputWidth="72px"
+        showSteppers={false}
+        onchange={(smoothness) => {
+          if ((effectiveStyle.smoothness ?? 0) === smoothness) return;
+          drawingSmoothing.changed();
+          annotationsActions.applyStyle({ smoothness });
+        }}
+      />
+    </div>
 
     <ToggleWithLabel
       label={m.dashed()}

@@ -23,6 +23,7 @@
   } from '$lib/features/step-toolbar/tools/annotations';
   import {
     annotationsActions,
+    drawingSmoothing,
     getAnnotationsState,
     isPageElementPlaceholder,
     resolveAnnotationCoordinateSpace,
@@ -2641,7 +2642,7 @@
                 ondblclick={(event: MouseEvent) =>
                   handleDrawingPathDoubleClick(event, item)}
               />
-              {#each points as point, pointIndex (pointIndex)}
+              {#each drawingSmoothing.adjusting ? [] : points as point, pointIndex (pointIndex)}
                 <circle
                   class="drawing-anchor"
                   role="button"
@@ -2953,11 +2954,6 @@
     transform: translate(-50%, -50%);
   }
 
-  .annotation-shape,
-  .annotation-drawing {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
-  }
-
   .annotation-drawing--editable {
     overflow: visible;
   }
@@ -3012,7 +3008,6 @@
 
   .annotation-image {
     border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     object-fit: contain;
   }
 
