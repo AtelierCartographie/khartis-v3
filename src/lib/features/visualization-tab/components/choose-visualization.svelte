@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { mapRevealStore } from '$lib/features/map';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
@@ -172,6 +173,7 @@
     }
 
     const suggestionKey = getSuggestionSignature(suggestion);
+    mapRevealStore.request();
     applySuggestionToVisualization(targetViz.id, suggestion, {
       origin: buildSuggestionOrigin(targetViz, {
         mode: 'manual-suggestion',

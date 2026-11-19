@@ -237,22 +237,11 @@
   .viz-suggestion-card.selected {
     --viz-card-border-color: var(--viz-card-focus-color);
     box-shadow: inset 0 0 0 3px var(--viz-card-focus-color);
-    animation: kh-suggestion-pick 240ms cubic-bezier(0.2, 0, 0.38, 0.9);
-  }
-
-  @keyframes kh-suggestion-pick {
-    from {
-      transform: scale(0.98);
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .viz-suggestion-card {
       transition: none;
-    }
-
-    .viz-suggestion-card.selected {
-      animation: none;
     }
   }
 
