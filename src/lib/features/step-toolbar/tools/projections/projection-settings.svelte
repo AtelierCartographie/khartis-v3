@@ -14,6 +14,7 @@
     projectionActions
   } from './projection.store.svelte';
   import { wrapLongitude } from './projection-code.utils';
+  import ProjectionDefinition from './projection-definition.svelte';
 
   const PROJECTION_ANGLE_STEP = 1;
 
@@ -155,6 +156,7 @@
           on:click={resetAll}>{m.projection_settings_reset()}</Button
         >
       {/if}
+      <ProjectionDefinition />
     </div>
   </div>
 </div>
