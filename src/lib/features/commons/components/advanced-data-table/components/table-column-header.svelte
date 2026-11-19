@@ -1121,11 +1121,14 @@
     gap: 0;
   }
 
+  /* As tall as the column menu, so a column without one (the joined entity)
+     keeps its badge on the same line as the others. */
   .col-title-row {
     display: flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
+    min-height: var(--kh-size-xs);
   }
 
   .col-title-row :global(.variable-badge) {

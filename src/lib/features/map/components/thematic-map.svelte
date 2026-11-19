@@ -4,7 +4,7 @@
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { Matrix4 } from '@math.gl/core';
   import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
-  import { onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { getLocale } from '$lib/paraglide/runtime';
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
@@ -56,6 +56,7 @@
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
+  import { mapRevealStore } from '../stores/map-reveal.store.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -131,6 +132,10 @@
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
   import PageGridOverlay from './page-grid-overlay.svelte';
+  import PageGuidesOverlay from './page-guides-overlay.svelte';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let {
     tables,
@@ -323,6 +328,7 @@
   let lastLayoutSnapshot: string | null = null;
   let lastPageLayoutSnapshot: string | null = null;
   let handledPageResizeId = untrack(() => getLastPageResize()?.id ?? 0);
+  let handledFramePageResizeId = handledPageResizeId;
 
   let isApplyingMapLibreSync = false;
 
@@ -373,6 +379,7 @@
     requestAnimationFrame(() => {
       mapLoadingStore.setUpdatingLayers(false);
       measureDrawnMapExtent(layersReferenceBbox);
+      if (!hasPendingWorkerParse()) revealRedrawnMap();
     });
   }
 
@@ -1390,6 +1397,26 @@
         ? previousFrameLayout
         : null;
 
+    // A frame dragged whole carries the map with it, like an image.
+    const isFrameMove =
+      frameCrop !== null &&
+      frameCrop.left + frameCrop.right ===
+        frameLayout.left + frameLayout.right &&
+      frameCrop.top + frameCrop.bottom === frameLayout.top + frameLayout.bottom;
+    // A page the user resized scales its frame like an image: the map is
+    // zoomed by the same factor, so the frame shows the same extent.
+    const pageResize = getLastPageResize();
+    const frameScale =
+      pageResize &&
+      pageResize.id !== handledFramePageResizeId &&
+      previousFrameLayout !== null
+        ? (frameLayout.pageWidth - frameLayout.left - frameLayout.right) /
+          (previousFrameLayout.pageWidth -
+            previousFrameLayout.left -
+            previousFrameLayout.right)
+        : null;
+    handledFramePageResizeId = pageResize?.id ?? handledFramePageResizeId;
+
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
       return;
@@ -1402,7 +1429,18 @@
     lastLayoutSnapshot = layoutSnapshot;
 
     untrack(() => {
-      if (
+      if (isFrameMove) {
+        mapInstanceStore.markViewportManual();
+      } else if (
+        frameScale !== null &&
+        Number.isFinite(frameScale) &&
+        frameScale > 0 &&
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.MAPLIBRE
+      ) {
+        mapInstanceStore.rescaleMapLibreView(frameScale);
+      } else if (
         frameCrop &&
         mapInit.isMapLoaded &&
         !isSwitchingViewMode &&
@@ -1436,6 +1474,10 @@
       }
     });
   });
+
+  function dropPageSize(trigger: string): string {
+    return trigger.split('|').slice(2).join('|');
+  }
 
   function readAutomaticMapFrameTrigger(): string {
     return [
@@ -1519,7 +1561,7 @@
   // An automatic fit (data, basemap, projection, page format) closes the
   // frame in on the drawn map, inside the margins, and zooms the map to meet
   // it. A tiled MapLibre map fills any frame, so its automatic frame is the
-  // margin box, set again only when the basemap, projection or page changes.
+  // margin box, set again only when the basemap or the projection changes.
   // A manual view keeps its frame.
   $effect(() => {
     const trigger = readAutomaticMapFrameTrigger();
@@ -1536,9 +1578,18 @@
     const isTriggered =
       lastAutomaticMapFrameTrigger !== null &&
       trigger !== lastAutomaticMapFrameTrigger;
+    const previousTrigger = lastAutomaticMapFrameTrigger;
     lastAutomaticMapFrameTrigger = trigger;
     const isOrthographic = viewMode === ViewMode.ORTHOGRAPHIC;
     if (!isOrthographic && !isTriggered) {
+      return;
+    }
+    // A resized page has already scaled the tiled map's frame and zoom.
+    if (
+      !isOrthographic &&
+      previousTrigger !== null &&
+      dropPageSize(previousTrigger) === dropPageSize(trigger)
+    ) {
       return;
     }
 
@@ -2126,6 +2177,65 @@
     });
   });
 
+  // A new projection or visualization redraws the whole map: the map dims
+  // at once and fades back in when the new drawing is on screen, since the
+  // reprojection or the new layers may take a while. Moving a projection's
+  // parameters does not trigger it.
+  const MAP_REVEAL_DIM_OPACITY = 0.25;
+  const MAP_REVEAL_TIMEOUT_MS = 2000;
+  let previousProjectionIdentity: string | null = null;
+  let handledMapRevealVersion = untrack(() => mapRevealStore.version);
+  let mapDimAnimation: Animation | null = null;
+  let mapRevealFallbackId: ReturnType<typeof setTimeout> | null = null;
+
+  function dimMapUntilRedrawn(): void {
+    const duration = motionDuration(120);
+    if (!mapContainer || duration === 0) return;
+    mapDimAnimation?.cancel();
+    mapDimAnimation = mapContainer.animate(
+      [{ opacity: 1 }, { opacity: MAP_REVEAL_DIM_OPACITY }],
+      { duration, fill: 'forwards' }
+    );
+    if (mapRevealFallbackId !== null) clearTimeout(mapRevealFallbackId);
+    mapRevealFallbackId = setTimeout(revealRedrawnMap, MAP_REVEAL_TIMEOUT_MS);
+  }
+
+  function revealRedrawnMap(): void {
+    if (!mapDimAnimation) return;
+    if (mapRevealFallbackId !== null) {
+      clearTimeout(mapRevealFallbackId);
+      mapRevealFallbackId = null;
+    }
+    mapDimAnimation.cancel();
+    mapDimAnimation = null;
+    mapContainer?.animate(
+      [{ opacity: MAP_REVEAL_DIM_OPACITY }, { opacity: 1 }],
+      {
+        duration: motionDuration(320),
+        easing: 'cubic-bezier(0.2, 0, 0.38, 0.9)'
+      }
+    );
+  }
+
+  $effect(() => {
+    const projectionState = getProjectionState();
+    const identity = `${projectionState.selected}|${projectionState.customCode ?? ''}|${mapProjectionStore.projection}`;
+    const revealVersion = mapRevealStore.version;
+    untrack(() => {
+      const changed =
+        (previousProjectionIdentity !== null &&
+          identity !== previousProjectionIdentity) ||
+        revealVersion !== handledMapRevealVersion;
+      previousProjectionIdentity = identity;
+      handledMapRevealVersion = revealVersion;
+      if (changed) dimMapUntilRedrawn();
+    });
+  });
+
+  onDestroy(() => {
+    if (mapRevealFallbackId !== null) clearTimeout(mapRevealFallbackId);
+  });
+
   const projectionRenderTrigger = $derived.by(() => {
     const projectionState = getProjectionState();
 
@@ -2349,6 +2459,40 @@
       }
     };
   });
+
+  let attributionTooltipTrigger = $state<HTMLElement | null>(null);
+
+  // The tile credit is a MapLibre control, outside Svelte: the tooltip that
+  // says it stays out of the export is wired onto its element.
+  $effect(() => {
+    const map = mapInit.map;
+    if (!map || !mapInit.isMapLoaded) return;
+    const attribution = map
+      .getContainer()
+      .querySelector<HTMLElement>('.maplibregl-ctrl-attrib');
+    if (!attribution) return;
+    attribution
+      .querySelector('.maplibregl-ctrl-attrib-button')
+      ?.removeAttribute('title');
+
+    const show = () => {
+      attributionTooltipTrigger = attribution;
+    };
+    const hide = () => {
+      attributionTooltipTrigger = null;
+    };
+    attribution.addEventListener('mouseenter', show);
+    attribution.addEventListener('mouseleave', hide);
+    attribution.addEventListener('focusin', show);
+    attribution.addEventListener('focusout', hide);
+    return () => {
+      attribution.removeEventListener('mouseenter', show);
+      attribution.removeEventListener('mouseleave', hide);
+      attribution.removeEventListener('focusin', show);
+      attribution.removeEventListener('focusout', hide);
+      attributionTooltipTrigger = null;
+    };
+  });
 </script>
 
 <ColorBlindnessFilterDefs matrix={colorBlindnessMatrix} />
@@ -2374,6 +2518,9 @@
   <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
       <PageGridOverlay displayScale={pageDisplayScale} />
+    {/if}
+    {#if !isFacetCell}
+      <PageGuidesOverlay displayScale={pageDisplayScale} />
     {/if}
 
     <div
@@ -2427,6 +2574,15 @@
       {/key}
     {/if}
   </div>
+{/if}
+
+{#if attributionTooltipTrigger}
+  <TooltipBubble
+    text={m.basemap_attribution_tooltip()}
+    trigger={attributionTooltipTrigger}
+    direction="top"
+    align="start"
+  />
 {/if}
 
 <style>
@@ -2490,7 +2646,22 @@
     line-height: 1rem;
   }
 
+  /* The credit stays readable on demand but recedes: it is not exported. */
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
-    background: var(--cds-layer-01, #ffffff);
+    background: color-mix(
+      in srgb,
+      var(--cds-layer-01, #ffffff) 70%,
+      transparent
+    );
+    color: var(--cds-text-secondary);
+    opacity: 0.6;
+    filter: grayscale(1);
+    transition: opacity 150ms ease;
+  }
+
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact:hover),
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact:focus-within),
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact-show) {
+    opacity: 1;
   }
 </style>

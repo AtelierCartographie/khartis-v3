@@ -210,9 +210,9 @@
   function handleDropdownSelect(palette: Palette, newColors: string[]) {
     onselect?.(palette);
     onClassificationChange?.({
-      colors: newColors,
+      colors: inverted ? [...newColors].reverse() : newColors,
       paletteId: palette.id,
-      inverted: false,
+      inverted,
       patternId: palette.patternId ?? undefined,
       patternParams: undefined,
       pattern: undefined
@@ -254,7 +254,11 @@
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
   ): PatternPaletteConfig | undefined {
-    if (!commonAspect.pattern || !commonAspect.patternConfig) {
+    if (
+      !commonAspect.pattern ||
+      !commonAspect.patternConfig ||
+      next.length > MAX_CATEGORICAL_PATTERN_COUNT
+    ) {
       return undefined;
     }
 

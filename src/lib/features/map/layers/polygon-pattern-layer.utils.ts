@@ -205,7 +205,8 @@ export function resolveClassPatternPalette(
   }
 
   if (fillMode === FillMode.CATEGORIES) {
-    const count = classification?.labels?.length ?? 0;
+    const count =
+      (classification?.categoryValues ?? classification?.labels)?.length ?? 0;
     // Beyond ~24 categories no motif set stays perceptually distinct, and the
     // shared atlas canvas would exceed browser canvas size limits.
     if (count === 0 || count > MAX_CATEGORICAL_PATTERN_COUNT) return null;

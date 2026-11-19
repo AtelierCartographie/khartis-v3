@@ -14,6 +14,13 @@
     projectionActions
   } from './projection.store.svelte';
   import { wrapLongitude } from './projection-code.utils';
+  import ProjectionDefinition from './projection-definition.svelte';
+
+  interface Props {
+    definitionOnly?: boolean;
+  }
+
+  let { definitionOnly = false }: Props = $props();
 
   const PROJECTION_ANGLE_STEP = 1;
 
@@ -97,7 +104,9 @@
 <div id="khartis-projection-settings-tool">
   <div class="projection-settings">
     <div class="controls">
-      {#if !canApplyProjectionSettings}
+      {#if definitionOnly}
+        <!-- A reference basemap takes no setting: only its definition. -->
+      {:else if !canApplyProjectionSettings}
         <InlineNotification
           kind="warning"
           lowContrast
@@ -155,6 +164,7 @@
           on:click={resetAll}>{m.projection_settings_reset()}</Button
         >
       {/if}
+      <ProjectionDefinition />
     </div>
   </div>
 </div>
@@ -168,10 +178,11 @@
     box-sizing: border-box;
   }
 
+  /* The same rhythm as the visualization settings. */
   .controls {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-06);
+    gap: var(--kh-gap-param);
   }
 
   #khartis-projection-settings-tool :global(.controls .bx--slider-container) {

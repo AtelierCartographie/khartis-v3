@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
@@ -118,28 +119,30 @@
     />
   </div>
 
-  {#if referenceMode !== GeoreferenceType.COORDINATES}
-    {#if layout === 'paired' && paired}
-      <div class="paired-fields">
+  <SwitchedContent value={referenceMode}>
+    {#if referenceMode !== GeoreferenceType.COORDINATES}
+      {#if layout === 'paired' && paired}
+        <div class="paired-fields">
+          {@render comboField(primary)}
+          <span class="paired-separator" aria-hidden="true"
+            >{m.separator_double_arrow()}</span
+          >
+          {@render comboField(paired)}
+        </div>
+      {:else}
         {@render comboField(primary)}
-        <span class="paired-separator" aria-hidden="true"
-          >{m.separator_double_arrow()}</span
-        >
-        {@render comboField(paired)}
-      </div>
+      {/if}
     {:else}
-      {@render comboField(primary)}
+      <div class="coords-fields" class:compact={isCompact}>
+        {#if longitude}
+          {@render comboField(longitude)}
+        {/if}
+        {#if latitude}
+          {@render comboField(latitude)}
+        {/if}
+      </div>
     {/if}
-  {:else}
-    <div class="coords-fields" class:compact={isCompact}>
-      {#if longitude}
-        {@render comboField(longitude)}
-      {/if}
-      {#if latitude}
-        {@render comboField(latitude)}
-      {/if}
-    </div>
-  {/if}
+  </SwitchedContent>
 </div>
 
 <style lang="scss">

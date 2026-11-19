@@ -19,10 +19,17 @@
     config: PatternPaletteConfig;
     /** The classification has a breakpoint: one motif ramp per side. */
     diverging?: boolean;
+    /** One motif per category: Khartis picks shapes and angles itself. */
+    categorical?: boolean;
     onchange: (config: PatternPaletteConfig) => void;
   }
 
-  let { config, diverging = false, onchange }: Props = $props();
+  let {
+    config,
+    diverging = false,
+    categorical = false,
+    onchange
+  }: Props = $props();
 
   const DEFAULT_ANGLE = 45;
   const DEFAULT_SCALE = 0.7;
@@ -31,7 +38,10 @@
 
   type BackgroundMode = 'transparent' | 'color';
 
-  const ANGLE_OPTIONS = [0, 45, 90, 135] as const;
+  // Hatches repeat every 180°: four directions cover them.
+  const ANGLE_MIN = 0;
+  const ANGLE_MAX = 135;
+  const ANGLE_STEP = 45;
 
   // A diverging ramp draws a cross as a plus turned by 45° and replaces the
   // shapes it cannot oppose: the controls show what the map draws.
@@ -73,8 +83,13 @@
     onchange({ ...config, shape: nextShape });
   }
 
-  function handleAngleSelect(nextAngle: (typeof ANGLE_OPTIONS)[number]) {
-    onchange({ ...config, shape, angle: nextAngle });
+  // The number field accepts any value: it snaps to the nearest direction.
+  function handleAngleChange(value: number) {
+    const snapped = Math.min(
+      ANGLE_MAX,
+      Math.max(ANGLE_MIN, Math.round(value / ANGLE_STEP) * ANGLE_STEP)
+    );
+    onchange({ ...config, shape, angle: snapped });
   }
 
   function handleDivergingColorChange(side: 0 | 1, value: string) {
@@ -108,31 +123,25 @@
 </script>
 
 <div class="pattern-palette-picker">
-  <div class="param-block">
-    <span class="param-label">{m.pattern_shape()}</span>
-    <ShapeChipRow
-      value={shape}
-      shapes={diverging ? DIVERGING_PATTERN_SHAPES : undefined}
-      onselect={handleShapeSelect}
-    />
-  </div>
-
-  <div class="param-block">
-    <span class="param-label">{m.pattern_angle()}</span>
-    <div class="angle-chips">
-      {#each ANGLE_OPTIONS as option (option)}
-        <button
-          type="button"
-          class="angle-chip"
-          class:active={angle === option}
-          aria-pressed={angle === option}
-          onclick={() => handleAngleSelect(option)}
-        >
-          {option}°
-        </button>
-      {/each}
+  {#if !categorical}
+    <div class="param-block">
+      <span class="param-label">{m.pattern_shape()}</span>
+      <ShapeChipRow
+        value={shape}
+        shapes={diverging ? DIVERGING_PATTERN_SHAPES : undefined}
+        onselect={handleShapeSelect}
+      />
     </div>
-  </div>
+
+    <SliderWithInput
+      label={m.pattern_angle_degrees()}
+      min={ANGLE_MIN}
+      max={ANGLE_MAX}
+      step={ANGLE_STEP}
+      value={angle}
+      onchange={handleAngleChange}
+    />
+  {/if}
 
   <SliderWithInput
     label={m.pattern_scale()}
@@ -205,32 +214,5 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary);
     font-weight: 400;
-  }
-
-  .angle-chips {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-
-  .angle-chip {
-    min-height: 24px;
-    padding: 0 8px 2px;
-    font-size: 12px;
-    background: #e5f6ff;
-    border: 1px solid #82cfff;
-    border-radius: 9px;
-    cursor: pointer;
-    color: #003a6d;
-
-    &:hover {
-      background: #cceeff;
-    }
-
-    &.active {
-      background: #0072c3;
-      color: #ffffff;
-      border-color: #0072c3;
-    }
   }
 </style>

@@ -1,4 +1,10 @@
 <script lang="ts">
+  import {
+    clampFontSize,
+    DEFAULT_FONT_SIZE,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/fonts.constants';
+  import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     isShapeAspectRatioLocked,
@@ -23,6 +29,7 @@
   } from '$lib/features/step-toolbar/tools/annotations';
   import {
     annotationsActions,
+    drawingSmoothing,
     getAnnotationsState,
     isPageElementPlaceholder,
     resolveAnnotationCoordinateSpace,
@@ -36,6 +43,8 @@
   } from '../utils/focus-viewport.utils';
   import {
     computeDrawingBounds,
+    getDrawingAnchorPoints,
+    simplifyDrawingStroke,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
   import {
@@ -85,6 +94,8 @@
 
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
+  // How far a simplified freehand stroke may stray from the hand's path.
+  const DRAWING_SIMPLIFY_TOLERANCE_PX = 2.5;
   const SHAPE_PLACEMENT_DRAG_THRESHOLD_PX = 4;
   const FOCUS_RESET_DEBOUNCE_MS = 200;
   const ANNOTATION_DRAG_THRESHOLD_PX = 3;
@@ -93,6 +104,9 @@
   const KEYBOARD_FAST_MOVE_GRID_MULTIPLIER = 5;
   const KEYBOARD_FAST_MOVE_STEP_PX = 10;
   const DEFAULT_TEXT_PLACEMENT_SIZE = { width: 220, height: 64 } as const;
+  // Mirrors .annotation-text: max-width and line-height.
+  const TEXT_MAX_WIDTH_PX = 300;
+  const TEXT_LINE_HEIGHT = 1.2;
   const TEXT_MIN_WIDTH_PX = PAGE_GRID_SIZE_PX * 2;
   const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
   const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
@@ -384,13 +398,36 @@
       : KEYBOARD_FAST_MOVE_STEP_PX;
   }
 
+  // The text is centred on the pointer by its own size, not by a box wider
+  // than the words, which left it far from where the user clicked.
+  function measurePlacedTextSize(
+    content: unknown,
+    style: AnnotationStyle | undefined
+  ): { width: number; height: number } {
+    const text = typeof content === 'string' ? content : '';
+    if (!text.trim()) return DEFAULT_TEXT_PLACEMENT_SIZE;
+    const fontSize = clampFontSize(style?.fontSize ?? DEFAULT_FONT_SIZE, 8);
+    const fontFamily = resolveFontFamilyStack(style?.font);
+    const fontWeight = style?.bold ? 'bold' : 'normal';
+    const lines = text.split('\n');
+    const widest = Math.max(
+      ...lines.map((line) =>
+        measureTextWidth(line, fontSize, fontFamily, fontWeight)
+      )
+    );
+    return {
+      width: Math.ceil(Math.min(TEXT_MAX_WIDTH_PX, widest)),
+      height: Math.ceil(lines.length * fontSize * TEXT_LINE_HEIGHT)
+    };
+  }
+
   function getDefaultPlacementSize(
     type: AnnotationKind,
     content: unknown,
     style: AnnotationStyle | undefined
   ): { width: number; height: number } {
     if (type === AnnotationKind.TEXT) {
-      return DEFAULT_TEXT_PLACEMENT_SIZE;
+      return measurePlacedTextSize(content, style);
     }
 
     if (type === AnnotationKind.IMAGE) {
@@ -1089,6 +1126,14 @@
   }
 
   const annotationDragController = createDraggablePageItemController({
+    getPageFrame: () =>
+      dragState?.scope === 'page'
+        ? {
+            width: formatState.width,
+            height: formatState.height,
+            margins: formatState.margins
+          }
+        : null,
     getOverlayElement: () =>
       dragState ? getInteractionLayer(dragState.scope) : null,
     getPageScale,
@@ -1436,7 +1481,8 @@
         y: resizeState.startAnnotationY,
         width: resizeState.startW,
         height: resizeState.startH
-      }
+      },
+      event.shiftKey
     );
 
     annotationsActions.updateAnnotation(resizeState.id, {
@@ -1793,6 +1839,26 @@
     return points.slice(0, endIndex);
   }
 
+  let drawingStrokeStartIndex: number | null = null;
+
+  // A click-click line adds one or two samples per press and is kept as is;
+  // a stroke drawn with the button held is reduced to the anchors its shape
+  // needs.
+  function simplifyFreehandStroke(
+    points: { x: number; y: number }[]
+  ): { x: number; y: number }[] {
+    const start = drawingStrokeStartIndex ?? points.length;
+    const stroke = points.slice(start);
+    if (stroke.length < 3) return points;
+    return [
+      ...points.slice(0, start),
+      ...simplifyDrawingStroke(
+        stroke,
+        DRAWING_SIMPLIFY_TOLERANCE_PX / getPageScale()
+      )
+    ];
+  }
+
   function handleDrawingPointerDown(event: PointerEvent): void {
     if (!isDrawingMode) {
       return;
@@ -1806,6 +1872,7 @@
     event.preventDefault();
     event.stopPropagation();
 
+    drawingStrokeStartIndex = drawingPoints.length;
     const nextPoints = appendDrawingSample(drawingPoints, point);
     annotationsActions.updateDrawing(nextPoints);
     drawingCloseToStart = isNearDrawingStart(point);
@@ -1842,7 +1909,8 @@
     }
 
     const point = getPageCapturePoint(event);
-    const nextPoints = getReleasedDrawingPoints(point);
+    const nextPoints = simplifyFreehandStroke(getReleasedDrawingPoints(point));
+    drawingStrokeStartIndex = null;
     const minimumPointCount = getMinimumDrawingPoints(
       annotationsState.drawingModeType
     );
@@ -2607,7 +2675,7 @@
                 ondblclick={(event: MouseEvent) =>
                   handleDrawingPathDoubleClick(event, item)}
               />
-              {#each points as point, pointIndex (pointIndex)}
+              {#each drawingSmoothing.adjusting ? [] : getDrawingAnchorPoints(points, smoothness, isClosed) as point, pointIndex (pointIndex)}
                 <circle
                   class="drawing-anchor"
                   role="button"
@@ -2919,11 +2987,6 @@
     transform: translate(-50%, -50%);
   }
 
-  .annotation-shape,
-  .annotation-drawing {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
-  }
-
   .annotation-drawing--editable {
     overflow: visible;
   }
@@ -2978,7 +3041,6 @@
 
   .annotation-image {
     border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     object-fit: contain;
   }
 

@@ -11,7 +11,11 @@
   } from '$lib/features/commons/utils/floating-panel.svelte';
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
-  import { Dropdown, TextInput } from 'carbon-components-svelte';
+  import {
+    Dropdown,
+    InlineNotification,
+    TextInput
+  } from 'carbon-components-svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -40,7 +44,6 @@
     readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
@@ -147,8 +150,15 @@
 
   // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
   const MAX_PATTERN_PREVIEW_CATEGORIES = 24;
+  // Beyond that count the map draws no motif: the toggle says so instead.
+  const isPatternUnavailable = $derived(
+    primitiveKind === 'polygons' &&
+      draftCategories.length > MAX_PATTERN_PREVIEW_CATEGORIES
+  );
   const showCategoryPattern = $derived(
-    primitiveKind === 'polygons' && draftCommonAspect.pattern
+    primitiveKind === 'polygons' &&
+      draftCommonAspect.pattern &&
+      !isPatternUnavailable
   );
   const resolvedPatternConfig = $derived<PatternPaletteConfig>(
     draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
@@ -780,11 +790,51 @@
                     </div>
                     {#if draftCommonAspect.pattern}
                       <div class="common-field--full">
+                        <ToggleWithLabel
+                          label={m.pattern_colorize()}
+                          toggled={resolvedPatternConfig.colorize ?? false}
+                          ontoggle={handlePatternColorizeChange}
+                        />
+                      </div>
+                      <div class="common-field--full">
                         <PatternPalettePicker
                           config={resolvedPatternConfig}
                           onchange={handlePatternConfigChange}
                         />
                       </div>
+                    {/if}
+                  </div>
+                {:else if primitiveKind === 'polygons'}
+                  <div class="common-stack">
+                    <div class="common-grid-row common-grid-row--full">
+                      <span class="field-label"
+                        >{m.aspect_common_pattern()}</span
+                      >
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={showCategoryPattern}
+                          disabled={isPatternUnavailable}
+                          hideLabel
+                          labelText={m.aspect_common_pattern()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('pattern', value)}
+                        />
+                        <span class="toggle-state">
+                          {showCategoryPattern ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                    {#if isPatternUnavailable}
+                      <InlineNotification
+                        kind="info"
+                        lowContrast
+                        hideCloseButton
+                        subtitle={m.aspect_pattern_category_limit({
+                          max: MAX_PATTERN_PREVIEW_CATEGORIES,
+                          count: draftCategories.length
+                        })}
+                      />
+                    {:else if draftCommonAspect.pattern}
                       <div class="common-field--full">
                         <ToggleWithLabel
                           label={m.pattern_colorize()}
@@ -792,58 +842,11 @@
                           ontoggle={handlePatternColorizeChange}
                         />
                       </div>
-                    {/if}
-                  </div>
-                {:else if primitiveKind === 'polygons'}
-                  <div class="common-grid">
-                    <div class="common-grid-row common-grid-row--full">
-                      <span class="field-label"
-                        >{m.aspect_common_pattern()}</span
-                      >
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={draftCommonAspect.pattern}
-                          hideLabel
-                          labelText={m.aspect_common_pattern()}
-                          onchange={(value) =>
-                            handleCommonAspectChange('pattern', value)}
-                        />
-                        <span class="toggle-state">
-                          {draftCommonAspect.pattern ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
-                    {#if draftCommonAspect.pattern}
-                      <div class="common-grid-row common-grid-row--full">
-                        <ColorSelector
-                          label={m.color()}
-                          value={resolvedPatternConfig.color ?? '#000000'}
-                          onchange={(color) =>
-                            handlePatternConfigChange({
-                              ...resolvedPatternConfig,
-                              color
-                            })}
-                        />
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
-                      <div class="common-grid-row common-grid-row--full">
-                        <SliderWithInput
-                          label={m.pattern_scale()}
-                          min={1}
-                          max={30}
-                          step={1}
-                          value={Math.round(
-                            (resolvedPatternConfig.scale ?? 1) * 10
-                          )}
-                          onchange={(value) =>
-                            handlePatternConfigChange({
-                              ...resolvedPatternConfig,
-                              scale: value / 10
-                            })}
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          categorical
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
                         />
                       </div>
                     {/if}
@@ -1278,12 +1281,6 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .common-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--kh-gap-group);
-  }
-
   .common-grid-row {
     display: flex;
     flex-direction: column;
@@ -1293,6 +1290,12 @@
 
   .common-grid-row--full {
     grid-column: 1 / -1;
+  }
+
+  .common-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-group);
   }
 
   .toggle-control,

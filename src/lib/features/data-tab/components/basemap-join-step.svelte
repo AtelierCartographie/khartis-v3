@@ -24,6 +24,8 @@
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+  import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
     BasemapMetadata,
@@ -917,6 +919,26 @@
     }
   }
 
+  // A composite basemap sets several territories side by side: a sea
+  // around each inset weighs on the page, so it starts hidden. Only a fresh
+  // pick applies it, never a user choice already made for that basemap.
+  function hideSeaOnCompositeBasemap(basemap: BasemapMetadata): void {
+    if (basemap.proj_to?.type !== 'composite') return;
+    if (
+      basemapAuxLayersStore.hasVisibility(
+        basemap.file,
+        SYNTHETIC_AUX_LAYER_KEY.MERS
+      )
+    ) {
+      return;
+    }
+    basemapAuxLayersStore.setVisible(
+      basemap.file,
+      SYNTHETIC_AUX_LAYER_KEY.MERS,
+      false
+    );
+  }
+
   async function handleSelectBasemap(
     basemap: BasemapMetadata,
     options: { allowToggleOff?: boolean; source?: BasemapSource } = {}
@@ -962,6 +984,8 @@
       selectedBasemap: basemap.file,
       basemapSource: options.source ?? BasemapSource.CATALOG
     });
+
+    hideSeaOnCompositeBasemap(basemap);
 
     // Non-blocking prefetch: fetch the basemap geometry while the join
     // computes; the render path awaits the same deduplicated load later.
