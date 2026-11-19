@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   },
   projectionStore: {
     renderProjection: null as unknown,
-    isProjectedCoordinates: false
+    isProjectedCoordinates: false,
+    renderScale: 1
   }
 }));
 
@@ -75,6 +76,16 @@ describe('map-anchor-projection helper', () => {
     mocks.mapInstanceStore.unprojectViewportPxToData.mockReturnValue(null);
     mocks.projectionStore.renderProjection = null;
     mocks.projectionStore.isProjectedCoordinates = false;
+    mocks.projectionStore.renderScale = 1;
+  });
+
+  it('should return page px when MapLibre draws the page at a reduced scale', () => {
+    mocks.mapInstanceStore.map = createMapLibreMock();
+    mocks.mapInstanceStore.isMapLoaded = true;
+    mocks.projectionStore.renderScale = 0.5;
+
+    expect(dataToScreenPx({ lon: 4, lat: 5 })).toEqual({ x: 80, y: 100 });
+    expect(screenPxToData(80, 100)).toEqual({ lon: 4, lat: 5 });
   });
 
   it('uses MapLibre project/unproject when a map is present', () => {
