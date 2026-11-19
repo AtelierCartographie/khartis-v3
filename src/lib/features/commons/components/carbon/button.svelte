@@ -11,6 +11,8 @@
   interface Props extends Record<string, unknown> {
     children?: Snippet;
     iconDescription?: string;
+    /** Shown as keycaps after the tooltip text. */
+    shortcut?: string;
     tooltipPosition?: CarbonTooltipDirection;
     tooltipAlignment?: CarbonTooltipAlignment;
     hideTooltip?: boolean;
@@ -23,6 +25,7 @@
   const {
     children,
     iconDescription,
+    shortcut,
     tooltipPosition = 'bottom',
     tooltipAlignment = 'center',
     hideTooltip = false,
@@ -144,6 +147,7 @@
 {#if tooltipOpen && canShowPortalTooltip}
   <TooltipBubble
     text={iconDescription ?? ''}
+    shortcut={shortcut}
     trigger={triggerElement}
     direction={tooltipPosition}
     align={tooltipAlignment}

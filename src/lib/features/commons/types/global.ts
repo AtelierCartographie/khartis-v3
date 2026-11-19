@@ -22,6 +22,7 @@ export interface GlobalState {
   isCreateProjectModalOpen: boolean;
   isDuplicateModalOpen: boolean;
   isDeleteModalOpen: boolean;
+  isShortcutsSheetOpen: boolean;
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { splitShortcutKeys } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
     type CarbonTooltipAlignment,
@@ -9,6 +10,7 @@
 
   interface Props {
     text: string;
+    shortcut?: string;
     trigger: HTMLElement | null;
     direction?: CarbonTooltipDirection;
     align?: CarbonTooltipAlignment;
@@ -16,6 +18,7 @@
 
   const {
     text,
+    shortcut,
     trigger,
     direction = 'bottom',
     align = 'center'
@@ -63,6 +66,7 @@
   $effect(() => {
     void trigger;
     void text;
+    void shortcut;
     void direction;
     void align;
     void reposition();
@@ -95,7 +99,12 @@
     style={bubbleStyle}
     role="tooltip"
   >
-    {text}
+    {text}{#if shortcut}<span
+        class="khartis-tooltip-keys"
+        class:khartis-tooltip-keys--after-text={text}
+        >{#each splitShortcutKeys(shortcut) as key (key)}<kbd>{key}</kbd
+          >{/each}</span
+      >{/if}
   </div>
 </div>
 
@@ -127,6 +136,29 @@
     word-break: break-word;
     /* Measured before it is placed; revealing it early flashes it at the origin. */
     visibility: hidden;
+  }
+
+  :global(.khartis-tooltip-keys) {
+    display: inline-flex;
+    gap: 0.125rem;
+    vertical-align: baseline;
+  }
+
+  :global(.khartis-tooltip-keys--after-text) {
+    margin-inline-start: 0.5rem;
+  }
+
+  :global(.khartis-tooltip-keys kbd) {
+    min-width: 1.25rem;
+    padding: 0 0.3125rem;
+    border: 1px solid currentColor;
+    border-radius: 0.1875rem;
+    box-shadow: 0 1px 0 currentColor;
+    font-family: inherit;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    text-align: center;
+    opacity: 0.85;
   }
 
   :global(.khartis-carbon-tooltip--placed) {

@@ -10,6 +10,9 @@
     HeaderUtilities
   } from 'carbon-components-svelte';
   import { Help } from 'carbon-icons-svelte';
+  import { onMount } from 'svelte';
+  import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
+  import { getShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import DownloadButton from './components/download-button.svelte';
   import Logo from '$lib/features/commons/components/logo.svelte';
   import ProjectTitle from './components/project-title.svelte';
@@ -17,6 +20,36 @@
   // Carbon forwards unknown props to the logo link but does not type them.
   const logoLinkAttributes: Record<string, string> = $derived({
     'aria-label': m.header_logo_open_home()
+  });
+
+  const MENU_TOGGLE_SELECTOR = '#khartis-header .bx--header__menu-toggle';
+
+  let menuToggle = $state<HTMLElement | null>(null);
+  let isMenuToggleHovered = $state(false);
+
+  const menuTooltip = $derived(
+    globalState.isSideNavOpen ? m.a11y_close_menu() : m.a11y_open_menu()
+  );
+
+  // Carbon renders the hamburger button itself and offers no tooltip for it.
+  onMount(() => {
+    const toggle = document.querySelector<HTMLElement>(MENU_TOGGLE_SELECTOR);
+    if (!toggle) return;
+
+    const show = () => (isMenuToggleHovered = true);
+    const hide = () => (isMenuToggleHovered = false);
+    menuToggle = toggle;
+    toggle.addEventListener('pointerenter', show);
+    toggle.addEventListener('pointerleave', hide);
+    toggle.addEventListener('focus', show);
+    toggle.addEventListener('blur', hide);
+
+    return () => {
+      toggle.removeEventListener('pointerenter', show);
+      toggle.removeEventListener('pointerleave', hide);
+      toggle.removeEventListener('focus', show);
+      toggle.removeEventListener('blur', hide);
+    };
   });
 
   function openHome(event: MouseEvent): void {
@@ -67,6 +100,16 @@
       <DownloadButton />
     </HeaderUtilities>
   </CbsHeader>
+
+  {#if isMenuToggleHovered && menuToggle}
+    <TooltipBubble
+      text={menuTooltip}
+      shortcut={getShortcut('mainMenu')}
+      trigger={menuToggle}
+      direction="bottom"
+      align="start"
+    />
+  {/if}
 </div>
 
 <style>
