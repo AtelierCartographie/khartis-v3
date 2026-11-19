@@ -4,6 +4,7 @@
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
   import { AreaCustom, Image, Pen, TextCreation } from 'carbon-icons-svelte';
+  import { onDestroy } from 'svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -28,6 +29,14 @@
     { icon: Pen, label: m.annotations_drawing(), iconSize: 16 },
     { icon: Image, label: m.annotations_image(), iconSize: 16 }
   ]);
+
+  // Clearing on close rather than on open keeps the selection made by a
+  // click on the map, which opens the tool and selects in the same turn.
+  onDestroy(() => {
+    if (getAnnotationsState().selectedId) {
+      annotationsActions.selectAnnotation(null);
+    }
+  });
 
   const activeIndex = $derived(
     Math.max(0, TAB_KINDS.indexOf(annotationsState.activeType))

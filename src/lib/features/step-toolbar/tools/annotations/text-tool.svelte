@@ -29,7 +29,8 @@
   } from 'carbon-icons-svelte';
   import {
     annotationsActions,
-    getAnnotationsState
+    getAnnotationsState,
+    resolveMatchingPredefinedStyle
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
   import { getTextAnnotationName } from './_shared/annotation-name';
@@ -53,6 +54,14 @@
     { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
   ]);
+
+  const matchingPredefinedStyle = $derived(
+    resolveMatchingPredefinedStyle(
+      effectiveStyle,
+      annotationsState.predefinedStyle || ANNOTATION_ROLE.NOTE,
+      selectedText?.role
+    )
+  );
 
   const formatToggles = $derived([
     {
@@ -208,19 +217,25 @@
       />
     </div>
 
-    <Select
-      size="sm"
-      labelText={m.annotations_predefined_style()}
-      selected={annotationsState.predefinedStyle || 'note'}
-      on:change={(e) =>
-        annotationsActions.setPredefinedStyle(
-          (e.currentTarget as HTMLSelectElement).value
-        )}
+    <div
+      class="predefined-style"
+      class:predefined-style--none={!matchingPredefinedStyle}
     >
-      {#each predefinedStyles as style (style.value)}
-        <SelectItem value={style.value} text={style.text} />
-      {/each}
-    </Select>
+      <Select
+        size="sm"
+        labelText={m.annotations_predefined_style()}
+        selected={matchingPredefinedStyle ?? ''}
+        on:change={(e) =>
+          annotationsActions.setPredefinedStyle(
+            (e.currentTarget as HTMLSelectElement).value
+          )}
+      >
+        <SelectItem value="" text={m.none()} disabled hidden />
+        {#each predefinedStyles as style (style.value)}
+          <SelectItem value={style.value} text={style.text} />
+        {/each}
+      </Select>
+    </div>
 
     <div class="text-style-row">
       <div class="text-style-font">
@@ -361,6 +376,14 @@
     min-height: 112px;
     height: 112px;
     resize: vertical;
+  }
+
+  .predefined-style--none :global(.bx--select-input) {
+    color: var(--cds-text-placeholder, #a8a8a8);
+  }
+
+  .predefined-style--none :global(.bx--select-option) {
+    color: var(--cds-text-primary, #161616);
   }
 
   .text-style-row {
