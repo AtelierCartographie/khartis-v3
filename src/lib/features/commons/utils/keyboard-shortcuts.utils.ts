@@ -1,4 +1,5 @@
-import { m } from '$lib/paraglide/messages';
+import { getLocale } from '$lib/paraglide/runtime';
+import { StylingTools, ToolbarStep, VisualizationTools } from '../types/global';
 
 type NavigatorLike = {
   platform?: string;
@@ -7,36 +8,129 @@ type NavigatorLike = {
   };
 };
 
-export type SideNavShortcutKey =
-  | 'newProject'
-  | 'openProject'
-  | 'saveProject'
-  | 'duplicateProject'
-  | 'deleteProject';
+export type ShortcutLocale = 'fr' | 'en';
 
-export const SHORTCUT_CODE = {
-  projectPrefix: 'KeyK',
-  openSideNav: 'KeyB',
-  newProject: 'KeyN',
-  openProject: 'KeyO',
-  saveProject: 'KeyS',
-  duplicateProject: 'KeyD',
-  deleteProject: 'KeyX',
-  zoomModeToggle: 'KeyZ'
-} as const;
+export type ShortcutAction =
+  | { kind: 'step'; step: ToolbarStep }
+  | { kind: 'tool'; tool: StylingTools | VisualizationTools }
+  | { kind: 'menu' }
+  | { kind: 'zoomMode' };
 
-export const PROJECT_SHORTCUT_TIMEOUT_MS = 2000;
+interface SingleKeyShortcut {
+  readonly id: string;
+  /** Letter to press, by interface language. Always typed without modifier. */
+  readonly keys: Readonly<Record<ShortcutLocale, string>>;
+  /** Limits the shortcut to one step. Absent: active in every step. */
+  readonly step?: ToolbarStep;
+  readonly action: ShortcutAction;
+}
 
-const APPLE_PLATFORM_PATTERN = /(mac|iphone|ipad|ipod|ios)/i;
-const CHORD_SEPARATOR = ' ';
+/**
+ * Letters are those of the tool names in each language, so a letter can differ
+ * between French and English. Within one scope (global, or one step) a letter
+ * is never used twice, in either language: the unit test guards it.
+ */
+export const SINGLE_KEY_SHORTCUTS = [
+  {
+    id: 'stepData',
+    keys: { fr: 'D', en: 'D' },
+    action: { kind: 'step', step: ToolbarStep.Data }
+  },
+  {
+    id: 'stepVisualizations',
+    keys: { fr: 'V', en: 'V' },
+    action: { kind: 'step', step: ToolbarStep.Visualizations }
+  },
+  {
+    id: 'stepStyling',
+    keys: { fr: 'H', en: 'L' },
+    action: { kind: 'step', step: ToolbarStep.Styling }
+  },
+  {
+    id: 'mainMenu',
+    keys: { fr: 'M', en: 'M' },
+    action: { kind: 'menu' }
+  },
+  {
+    id: 'zoomMode',
+    keys: { fr: 'Z', en: 'Z' },
+    action: { kind: 'zoomMode' }
+  },
+  {
+    id: 'toolSearch',
+    keys: { fr: 'R', en: 'F' },
+    step: ToolbarStep.Visualizations,
+    action: { kind: 'tool', tool: VisualizationTools.Search }
+  },
+  {
+    id: 'toolLayers',
+    keys: { fr: 'C', en: 'Y' },
+    step: ToolbarStep.Visualizations,
+    action: { kind: 'tool', tool: VisualizationTools.Layers }
+  },
+  {
+    id: 'toolProjection',
+    keys: { fr: 'P', en: 'P' },
+    step: ToolbarStep.Visualizations,
+    action: { kind: 'tool', tool: VisualizationTools.Projection }
+  },
+  {
+    id: 'toolSimplification',
+    keys: { fr: 'S', en: 'S' },
+    step: ToolbarStep.Visualizations,
+    action: { kind: 'tool', tool: VisualizationTools.Simplification }
+  },
+  {
+    id: 'toolFacets',
+    keys: { fr: 'K', en: 'K' },
+    step: ToolbarStep.Visualizations,
+    action: { kind: 'tool', tool: VisualizationTools.Facets }
+  },
+  {
+    id: 'toolFormat',
+    keys: { fr: 'F', en: 'F' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'tool', tool: StylingTools.Format }
+  },
+  {
+    id: 'toolLegend',
+    keys: { fr: 'L', en: 'K' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'tool', tool: StylingTools.Legend }
+  },
+  {
+    id: 'toolGeoIndications',
+    keys: { fr: 'I', en: 'E' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'tool', tool: StylingTools.GeoIndications }
+  },
+  {
+    id: 'toolAnnotations',
+    keys: { fr: 'A', en: 'A' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'tool', tool: StylingTools.Annotations }
+  },
+  {
+    id: 'toolColorBlindness',
+    keys: { fr: 'B', en: 'C' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'tool', tool: StylingTools.ColorBlindness }
+  }
+] as const satisfies readonly SingleKeyShortcut[];
 
-const SIDE_NAV_SHORTCUT_LETTER: Record<SideNavShortcutKey, string> = {
+export type SingleKeyShortcutId = (typeof SINGLE_KEY_SHORTCUTS)[number]['id'];
+
+/** Letters pressed together with Cmd (Apple) or Ctrl (other platforms). */
+export const PRIMARY_KEY_SHORTCUTS = {
   newProject: 'N',
   openProject: 'O',
   saveProject: 'S',
-  duplicateProject: 'D',
-  deleteProject: 'X'
-};
+  download: 'E'
+} as const;
+
+export type PrimaryKeyShortcutId = keyof typeof PRIMARY_KEY_SHORTCUTS;
+
+const APPLE_PLATFORM_PATTERN = /(mac|iphone|ipad|ipod|ios)/i;
 
 function getNavigatorPlatform(navigatorLike?: NavigatorLike): string {
   if (!navigatorLike) return '';
@@ -58,31 +152,9 @@ export function detectApplePlatform(
   return APPLE_PLATFORM_PATTERN.test(platform);
 }
 
-export function getSideNavShortcutLabels(
-  isApplePlatform: boolean
-): Record<SideNavShortcutKey, string> {
-  const prefixLabel = isApplePlatform
-    ? m.shortcut_prefix_apple()
-    : m.shortcut_prefix_other();
-
-  return {
-    newProject: [prefixLabel, SIDE_NAV_SHORTCUT_LETTER.newProject].join(
-      CHORD_SEPARATOR
-    ),
-    openProject: [prefixLabel, SIDE_NAV_SHORTCUT_LETTER.openProject].join(
-      CHORD_SEPARATOR
-    ),
-    saveProject: [prefixLabel, SIDE_NAV_SHORTCUT_LETTER.saveProject].join(
-      CHORD_SEPARATOR
-    ),
-    duplicateProject: [
-      prefixLabel,
-      SIDE_NAV_SHORTCUT_LETTER.duplicateProject
-    ].join(CHORD_SEPARATOR),
-    deleteProject: [prefixLabel, SIDE_NAV_SHORTCUT_LETTER.deleteProject].join(
-      CHORD_SEPARATOR
-    )
-  };
+/** Anything that is not French takes the English letters. */
+export function resolveShortcutLocale(locale: string): ShortcutLocale {
+  return locale.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
 export function hasAnyPrimaryModifier(
@@ -102,19 +174,72 @@ export function hasPlatformPrimaryModifier(
   return event.ctrlKey;
 }
 
-export function isShortcutCode(
-  eventCode: string,
-  expectedCode: string
-): boolean {
-  return eventCode === expectedCode;
+/**
+ * The action a bare letter triggers in the given step, if any. The letter is
+ * read from `event.key`, so it is the one printed on the user's keyboard
+ * layout, the one the tooltips show.
+ */
+export function resolveSingleKeyAction(
+  key: string,
+  locale: ShortcutLocale,
+  step: ToolbarStep | undefined
+): ShortcutAction | undefined {
+  const pressed = key.toUpperCase();
+  const matches = SINGLE_KEY_SHORTCUTS.filter(
+    (shortcut) => shortcut.keys[locale] === pressed
+  );
+
+  const scoped = matches.find(
+    (shortcut) => 'step' in shortcut && shortcut.step === step
+  );
+  const global = matches.find((shortcut) => !('step' in shortcut));
+  return (scoped ?? global)?.action;
 }
 
-/** The modifier names the zoom shortcuts read as on this platform. */
+export function getSingleKeyShortcutLabel(
+  id: SingleKeyShortcutId,
+  locale: ShortcutLocale
+): string {
+  const shortcut = SINGLE_KEY_SHORTCUTS.find(
+    (candidate) => candidate.id === id
+  );
+  return shortcut ? shortcut.keys[locale] : '';
+}
+
+export function getPrimaryShortcutLabel(
+  id: PrimaryKeyShortcutId,
+  isApplePlatform: boolean
+): string {
+  const letter = PRIMARY_KEY_SHORTCUTS[id];
+  return isApplePlatform ? `⌘${letter}` : `Ctrl+${letter}`;
+}
+
+/** The modifier name the zoom shortcuts read as on this platform. */
 export function getZoomShortcutModifiers(isApplePlatform: boolean): {
   primary: string;
-  alt: string;
 } {
-  return isApplePlatform
-    ? { primary: '⌘', alt: '⌥' }
-    : { primary: 'Ctrl', alt: 'Alt' };
+  return { primary: isApplePlatform ? '⌘' : 'Ctrl' };
+}
+
+/** Shortcut of a bare-letter command, in the current interface language. */
+export function getShortcut(id: SingleKeyShortcutId): string {
+  return getSingleKeyShortcutLabel(id, resolveShortcutLocale(getLocale()));
+}
+
+/** Shortcut of a Cmd/Ctrl command, adapted to the user's platform. */
+export function getPrimaryShortcut(id: PrimaryKeyShortcutId): string {
+  return getPrimaryShortcutLabel(id, detectApplePlatform());
+}
+
+/** The keycaps of a shortcut label: `Ctrl+S` gives `Ctrl`, `S`. */
+export function splitShortcutKeys(shortcut: string): string[] {
+  if (shortcut.includes('+')) {
+    return shortcut.split('+').filter(Boolean);
+  }
+
+  if (shortcut.startsWith('⌘') && shortcut.length > 1) {
+    return ['⌘', shortcut.slice(1)];
+  }
+
+  return shortcut ? [shortcut] : [];
 }

@@ -6,27 +6,20 @@
   import { createProjectActions } from '../stores/create-project.store.svelte';
   import { projectStore } from '../stores/project.store.svelte';
   import { ExportTab, useExportModal } from '$lib/features/header';
-  import {
-    StylingTools,
-    ToolbarState,
-    ToolbarStep,
-    VisualizationTools
-  } from '../types/global';
+  import { selectTool } from '$lib/features/step-toolbar';
+  import { StylingTools, ToolbarState, ToolbarStep } from '../types/global';
   import {
     detectApplePlatform,
     hasAnyPrimaryModifier,
     hasPlatformPrimaryModifier,
-    isShortcutCode,
-    PROJECT_SHORTCUT_TIMEOUT_MS,
-    SHORTCUT_CODE
+    PRIMARY_KEY_SHORTCUTS,
+    resolveShortcutLocale,
+    resolveSingleKeyAction,
+    type ShortcutAction
   } from '../utils/keyboard-shortcuts.utils';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { EVENT, KEY } from '../constants/dom.constants';
 
-  const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
-    '1': ToolbarStep.Data,
-    '2': ToolbarStep.Visualizations,
-    '3': ToolbarStep.Styling
-  };
   const STYLING_TOOL_IDS: readonly string[] = [
     StylingTools.Format,
     StylingTools.Legend,
@@ -34,22 +27,9 @@
     StylingTools.Annotations,
     StylingTools.ColorBlindness
   ];
-  const TOOL_SHORTCUTS_BY_STEP = {
-    [ToolbarStep.Visualizations]: {
-      '1': VisualizationTools.Search,
-      '2': VisualizationTools.Layers,
-      '3': VisualizationTools.Projection,
-      '4': VisualizationTools.Simplification,
-      '5': VisualizationTools.Facets
-    },
-    [ToolbarStep.Styling]: {
-      '1': StylingTools.Format,
-      '2': StylingTools.Legend,
-      '3': StylingTools.GeoIndications,
-      '4': StylingTools.Annotations,
-      '5': StylingTools.ColorBlindness
-    }
-  } as const;
+  const TYPING_TARGET_SELECTOR =
+    'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"]';
+  const VISIBLE_MODAL_SELECTOR = '.bx--modal.is-visible';
 
   const WORKSPACE_SELECTOR = '.workspace-viewport';
   const WHEEL_LINE_HEIGHT_PX = 16;
@@ -61,19 +41,6 @@
 
   onMount(() => {
     const isApplePlatform = detectApplePlatform();
-    let projectShortcutExpiresAt = 0;
-
-    function clearProjectShortcutPrefix(): void {
-      projectShortcutExpiresAt = 0;
-    }
-
-    function hasProjectShortcutPrefix(): boolean {
-      return projectShortcutExpiresAt > Date.now();
-    }
-
-    function setProjectShortcutPrefix(): void {
-      projectShortcutExpiresAt = Date.now() + PROJECT_SHORTCUT_TIMEOUT_MS;
-    }
 
     function clearSelectedTool(): void {
       const selectedTool = globalState.selectedTool;
@@ -87,12 +54,17 @@
       }
     }
 
-    function isInputField(target: HTMLElement): boolean {
+    function isTypingTarget(target: EventTarget | null): boolean {
       return (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.contentEditable === 'true'
+        target instanceof Element &&
+        target.closest(TYPING_TARGET_SELECTOR) !== null
+      );
+    }
+
+    function isModalOpen(): boolean {
+      return (
+        globalState.isCreateProjectModalOpen ||
+        document.querySelector(VISIBLE_MODAL_SELECTOR) !== null
       );
     }
 
@@ -124,10 +96,7 @@
       return false;
     }
 
-    function handleNavigationKey(key: string): void {
-      const step = NAVIGATION_SHORTCUTS[key];
-      if (!step) return;
-
+    function handleNavigationStep(step: ToolbarStep): void {
       clearSelectedTool();
       globalActions.setNavigationState(step);
       if (
@@ -170,23 +139,6 @@
       }
     }
 
-    function handleZoomModeToggle(): void {
-      zoomModeStore.toggle();
-    }
-
-    function handleToolShortcut(event: KeyboardEvent): boolean {
-      const shortcuts =
-        TOOL_SHORTCUTS_BY_STEP[
-          globalState.selectedStep as keyof typeof TOOL_SHORTCUTS_BY_STEP
-        ];
-      const tool = shortcuts?.[event.key as keyof typeof shortcuts];
-      if (!tool) return false;
-
-      event.preventDefault();
-      globalActions.setSelectedTool(tool);
-      return true;
-    }
-
     function handleNewProject(): void {
       createProjectActions.resetAllTabs();
       createProjectActions.selectTab(1);
@@ -208,145 +160,107 @@
       }
     }
 
-    function handleDuplicateProject(): void {
-      if (!projectStore.currentProject) return;
-      globalState.isDuplicateModalOpen = true;
+    function runSingleKeyAction(action: ShortcutAction): void {
+      switch (action.kind) {
+        case 'step':
+          handleNavigationStep(action.step);
+          return;
+        case 'tool':
+          selectTool(action.tool);
+          return;
+        case 'menu':
+          globalState.isSideNavOpen = !globalState.isSideNavOpen;
+          return;
+        case 'zoomMode':
+          zoomModeStore.toggle();
+          return;
+      }
     }
 
-    function handleDeleteProject(): void {
-      if (!projectStore.currentProject) return;
-      globalState.isDeleteModalOpen = true;
-    }
+    function handlePrimaryShortcut(event: KeyboardEvent): boolean {
+      const pressed = event.key.toUpperCase();
 
-    function handleOpenSideNav(): void {
-      globalState.isSideNavOpen = true;
-    }
-
-    function handleProjectShortcutChord(event: KeyboardEvent): boolean {
-      if (!hasProjectShortcutPrefix()) {
-        return false;
+      switch (pressed) {
+        case PRIMARY_KEY_SHORTCUTS.newProject:
+          handleNewProject();
+          return true;
+        case PRIMARY_KEY_SHORTCUTS.openProject:
+          handleOpenProject();
+          return true;
+        case PRIMARY_KEY_SHORTCUTS.saveProject:
+          void handleSaveProject();
+          return true;
+        case PRIMARY_KEY_SHORTCUTS.download:
+          useExportModal().open();
+          return true;
+        default:
+          return false;
       }
-
-      if (event.metaKey || event.altKey || event.shiftKey) {
-        clearProjectShortcutPrefix();
-        return false;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.openSideNav)) {
-        event.preventDefault();
-        handleOpenSideNav();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.newProject)) {
-        event.preventDefault();
-        handleNewProject();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.openProject)) {
-        event.preventDefault();
-        handleOpenProject();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.duplicateProject)) {
-        event.preventDefault();
-        handleDuplicateProject();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.deleteProject)) {
-        event.preventDefault();
-        handleDeleteProject();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      if (isShortcutCode(event.code, SHORTCUT_CODE.saveProject)) {
-        event.preventDefault();
-        void handleSaveProject();
-        clearProjectShortcutPrefix();
-        return true;
-      }
-
-      clearProjectShortcutPrefix();
-      return false;
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
-      const target = event.target as HTMLElement;
-
       if (event.key === KEY.ESCAPE) {
-        const handled = handleEscapeKey();
-        if (handled) {
+        if (handleEscapeKey()) {
           event.preventDefault();
         }
         return;
       }
 
-      if (isInputField(target)) {
+      if (event.isComposing || isModalOpen()) {
         return;
       }
 
-      if (handleProjectShortcutChord(event)) {
-        return;
-      }
-
-      const hasShortcutModifier = hasPlatformPrimaryModifier(
+      const hasPrimaryModifier = hasPlatformPrimaryModifier(
         event,
         isApplePlatform
       );
-      const hasModifier = hasShortcutModifier || event.altKey;
 
-      if (!hasModifier && event.key in NAVIGATION_SHORTCUTS) {
-        event.preventDefault();
-        handleNavigationKey(event.key);
+      if (hasPrimaryModifier && !event.altKey && !event.shiftKey) {
+        // Project commands also work from a text field, like in any editor.
+        if (handlePrimaryShortcut(event)) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      if (isTypingTarget(event.target)) {
         return;
       }
 
-      if (
-        event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.shiftKey &&
-        handleToolShortcut(event)
-      ) {
-        return;
-      }
-
-      if (hasShortcutModifier && handleZoomKey(event.key)) {
+      if (hasPrimaryModifier && handleZoomKey(event.key)) {
         event.preventDefault();
         return;
       }
 
       if (
+        event.key === KEY.QUESTION_MARK &&
         !event.ctrlKey &&
         !event.metaKey &&
-        !event.shiftKey &&
-        event.altKey &&
-        isShortcutCode(event.code, SHORTCUT_CODE.zoomModeToggle)
+        !event.altKey
       ) {
         event.preventDefault();
-        handleZoomModeToggle();
+        globalState.isShortcutsSheetOpen = true;
         return;
       }
 
-      const startsProjectShortcutPrefix =
-        event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        isShortcutCode(event.code, SHORTCUT_CODE.projectPrefix);
-
-      if (startsProjectShortcutPrefix) {
-        event.preventDefault();
-        setProjectShortcutPrefix();
+      if (
+        event.repeat ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey
+      ) {
         return;
+      }
+
+      const action = resolveSingleKeyAction(
+        event.key,
+        resolveShortcutLocale(getLocale()),
+        globalState.selectedStep
+      );
+      if (action) {
+        event.preventDefault();
+        runSingleKeyAction(action);
       }
     }
 

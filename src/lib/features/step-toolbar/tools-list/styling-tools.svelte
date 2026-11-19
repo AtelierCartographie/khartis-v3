@@ -4,6 +4,7 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
+  import { getShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     Compass,
@@ -61,6 +62,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_format()}
+        shortcut={getShortcut('toolFormat')}
         icon={Crop}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.Format}
@@ -76,6 +78,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_legend()}
+          shortcut={getShortcut('toolLegend')}
           icon={Legend}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Legend}
@@ -98,6 +101,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_geo_indications()}
+        shortcut={getShortcut('toolGeoIndications')}
         icon={Compass}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.GeoIndications}
@@ -112,6 +116,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_annotations()}
+        shortcut={getShortcut('toolAnnotations')}
         icon={WatsonHealthTextAnnotationToggle}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.Annotations}
@@ -127,6 +132,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_color_blindness()}
+          shortcut={getShortcut('toolColorBlindness')}
           icon={SettingsView}
           size="small"
           isSelected={globalState.selectedTool ===
