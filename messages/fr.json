@@ -2085,6 +2085,7 @@
   "a11y_tool_badge_active": "Filtre actif",
   "download_map_georeference": "Joindre le géoréférencement (SIG)",
   "download_map_georeference_helper": "Télécharge un .zip : la carte, son SCR et sa position, lus par QGIS et ArcGIS, et un mémo pour caler un export de mise en page.",
+  "download_map_georeference_info": "Contenu du géoréférencement",
   "export_georeference_failed_title": "Géoréférencement impossible",
   "export_georeference_failed": "La carte n'a pas pu être calée sur son SCR : elle est exportée sans fichiers de géoréférencement.",
   "georeference_readme_title": "Géoréférencement de {image}",

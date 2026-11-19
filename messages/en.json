@@ -2085,6 +2085,7 @@
   "a11y_tool_badge_active": "Filter active",
   "download_map_georeference": "Include georeferencing (GIS)",
   "download_map_georeference_helper": "Downloads a .zip: the map, its CRS and position, read by QGIS and ArcGIS, and a memo to line up a layout export.",
+  "download_map_georeference_info": "What georeferencing includes",
   "export_georeference_failed_title": "Georeferencing failed",
   "export_georeference_failed": "The map could not be fitted to its CRS: it is exported without georeferencing files.",
   "georeference_readme_title": "Georeferencing of {image}",
