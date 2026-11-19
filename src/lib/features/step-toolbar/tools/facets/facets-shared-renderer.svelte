@@ -665,6 +665,8 @@
           parent: rendererContainer,
           deviceProps: {
             type: DECK_DEVICE_TYPE,
+            // The translucent text halo writes each pixel once through the stencil.
+            webgl: { stencil: true },
             debugGPUTime: IS_DEV
           },
           useDevicePixels: renderPixelRatio,
