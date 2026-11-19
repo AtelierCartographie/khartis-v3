@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeDrawingBounds,
+  getDrawingAnchorPoints,
   simplifyDrawingStroke,
   smoothDrawingPath
 } from './annotation-drawing.utils';
@@ -139,5 +140,38 @@ describe('annotation drawing utils', () => {
     ];
 
     expect(simplifyDrawingStroke(segment, 2.5)).toBe(segment);
+  });
+
+  it('should place every anchor on the smoothed stroke when the drawing is smoothed', () => {
+    const zigzag = [
+      { x: 0, y: 0 },
+      { x: 40, y: 60 },
+      { x: 80, y: 0 },
+      { x: 120, y: 60 }
+    ];
+    const stroke = extractPathPoints(smoothDrawingPath(zigzag, 100, false));
+
+    const anchors = getDrawingAnchorPoints(zigzag, 100, false);
+
+    expect(anchors).toHaveLength(zigzag.length);
+    anchors.forEach((anchor) => {
+      expect(
+        stroke.some(
+          (point) =>
+            Math.abs(point.x - anchor.x) < 1e-6 &&
+            Math.abs(point.y - anchor.y) < 1e-6
+        )
+      ).toBe(true);
+    });
+    expect(anchors[1]).not.toEqual(zigzag[1]);
+  });
+
+  it('should keep the anchors on the control points when the drawing is not smoothed', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 50, y: 20 }
+    ];
+
+    expect(getDrawingAnchorPoints(line, 0, false)).toBe(line);
   });
 });
