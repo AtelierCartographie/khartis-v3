@@ -89,16 +89,21 @@ export function createDraggablePageItemController({
 
     const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const position = normalizePosition({
-      x: (event.clientX - rect.left) / scale - dragOffsetX,
-      y: (event.clientY - rect.top) / scale - dragOffsetY
-    });
+    const position = normalizePosition(
+      alignToPage(
+        {
+          x: (event.clientX - rect.left) / scale - dragOffsetX,
+          y: (event.clientY - rect.top) / scale - dragOffsetY
+        },
+        scale
+      )
+    );
 
-    setPosition(alignToPage(position, scale));
+    setPosition(position);
   }
 
-  // A guide close by wins over the grid snapping of normalizePosition, on the
-  // axis it applies to.
+  // The guide pulls the raw position; normalizePosition then clamps it and
+  // applies the grid, so an aligned item never leaves its area.
   function alignToPage(
     position: DraggablePageItemPoint,
     scale: number
