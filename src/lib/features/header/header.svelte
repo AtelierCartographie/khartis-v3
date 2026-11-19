@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
@@ -12,11 +13,29 @@
   import DownloadButton from './components/download-button.svelte';
   import Logo from '$lib/features/commons/components/logo.svelte';
   import ProjectTitle from './components/project-title.svelte';
+
+  // Carbon forwards unknown props to the logo link but does not type them.
+  const logoLinkAttributes: Record<string, string> = $derived({
+    'aria-label': m.header_logo_open_home()
+  });
+
+  function openHome(event: MouseEvent): void {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+      return;
+    event.preventDefault();
+    globalState.isSideNavOpen = false;
+    if (globalState.isCreateProjectModalOpen) return;
+    createProjectActions.resetAllTabs();
+    globalState.isCreateProjectModalOpen = true;
+  }
 </script>
 
 <div id="khartis-header">
   <CbsHeader
     href={resolve('/')}
+    uiShellAriaLabel={m.app_name()}
+    {...logoLinkAttributes}
+    on:click={openHome}
     persistentHamburgerMenu={true}
     ariaLabelMenu={globalState.isSideNavOpen
       ? m.a11y_close_menu()
