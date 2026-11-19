@@ -16,7 +16,8 @@
     formatActions,
     formatState,
     MIN_PAGE_AREA_SIZE,
-    resolvePageInsetBox
+    resolvePageInsetBox,
+    scalePageInsetsToPage
   } from '$lib/features/step-toolbar/tools/format';
   import { FormatMode } from '../commons/constants/ui.constants';
   import { EVENT } from '../commons/constants/dom.constants';
@@ -530,44 +531,12 @@
     }
     formatActions.setSize(width, height);
     formatActions.setMapFrame(
-      scaleMapFrameToPage(startFrame, startWidth, startHeight, width, height)
+      scalePageInsetsToPage(
+        startFrame,
+        { width: startWidth, height: startHeight },
+        { width, height }
+      )
     );
-  }
-
-  // The map frame keeps its proportions when the page is resized: it grows
-  // or shrinks around the same relative centre instead of being recropped
-  // by margins that stay fixed.
-  function scaleMapFrameToPage(
-    frame: { top: number; right: number; bottom: number; left: number },
-    startWidth: number,
-    startHeight: number,
-    width: number,
-    height: number
-  ): { top: number; right: number; bottom: number; left: number } {
-    const frameWidth = startWidth - frame.left - frame.right;
-    const frameHeight = startHeight - frame.top - frame.bottom;
-    if (frameWidth <= 0 || frameHeight <= 0) return frame;
-
-    const factor = Math.min(width / startWidth, height / startHeight);
-    const nextWidth = frameWidth * factor;
-    const nextHeight = frameHeight * factor;
-    const centerX = ((frame.left + frameWidth / 2) / startWidth) * width;
-    const centerY = ((frame.top + frameHeight / 2) / startHeight) * height;
-    const left = Math.min(
-      Math.max(centerX - nextWidth / 2, 0),
-      width - nextWidth
-    );
-    const top = Math.min(
-      Math.max(centerY - nextHeight / 2, 0),
-      height - nextHeight
-    );
-
-    return {
-      top: Math.round(top),
-      left: Math.round(left),
-      right: Math.round(width - left - nextWidth),
-      bottom: Math.round(height - top - nextHeight)
-    };
   }
 
   // In page mode the map does not pan: a drag on the map itself moves its

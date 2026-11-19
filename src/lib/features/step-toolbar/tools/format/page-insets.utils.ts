@@ -90,3 +90,38 @@ export function resolvePageInsetBox(
     )
   };
 }
+
+/**
+ * The map frame of a resized page, scaled like an image: same proportions,
+ * same relative centre, so the map grows or shrinks without being recropped.
+ */
+export function scalePageInsetsToPage(
+  frame: PageInsets,
+  from: { width: number; height: number },
+  to: { width: number; height: number }
+): PageInsets {
+  const frameWidth = from.width - frame.left - frame.right;
+  const frameHeight = from.height - frame.top - frame.bottom;
+  if (frameWidth <= 0 || frameHeight <= 0) return frame;
+
+  const factor = Math.min(to.width / from.width, to.height / from.height);
+  const nextWidth = frameWidth * factor;
+  const nextHeight = frameHeight * factor;
+  const centerX = ((frame.left + frameWidth / 2) / from.width) * to.width;
+  const centerY = ((frame.top + frameHeight / 2) / from.height) * to.height;
+  const left = Math.min(
+    Math.max(centerX - nextWidth / 2, 0),
+    to.width - nextWidth
+  );
+  const top = Math.min(
+    Math.max(centerY - nextHeight / 2, 0),
+    to.height - nextHeight
+  );
+
+  return {
+    top: Math.round(top),
+    left: Math.round(left),
+    right: Math.round(to.width - left - nextWidth),
+    bottom: Math.round(to.height - top - nextHeight)
+  };
+}
