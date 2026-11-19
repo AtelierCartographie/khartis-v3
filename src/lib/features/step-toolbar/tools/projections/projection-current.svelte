@@ -4,7 +4,6 @@
   import { m } from '$lib/paraglide/messages';
   import {
     CheckmarkOutline,
-    Reset,
     SettingsAdjust,
     WarningAlt
   } from 'carbon-icons-svelte';
@@ -14,7 +13,6 @@
     getCurrentProjectionContext,
     getMapGeoreferenceAvailability
   } from './projection-georeference.utils';
-  import { projectionActions } from './projection.store.svelte';
   import {
     getCrsCatalogVersion,
     resolveCoordinateSystem
@@ -38,15 +36,10 @@
       void resolveCoordinateSystem(`EPSG:${nativeEpsg}`);
     }
   });
-  const isTiledBasemapEnabled = $derived(context.tiled !== null);
   const gisAvailability = $derived.by(() => {
     void context;
     return getMapGeoreferenceAvailability();
   });
-  const hasManualProjection = $derived(
-    context.state.overrideActive === true &&
-      context.state.overrideSource === 'manual'
-  );
   const display = $derived(
     context.tiled
       ? {
@@ -82,27 +75,15 @@
     />
 
     <div class="projection-current-actions">
-      {#if hasManualProjection && !isTiledBasemapEnabled}
-        <Button
-          kind="ghost"
-          size="small"
-          icon={Reset}
-          iconDescription={m.projection_current_reset_to_basemap()}
-          tooltipPosition="bottom"
-          on:click={() => projectionActions.resetToBasemapProjection()}
-        />
-      {/if}
-      {#if !isTiledBasemapEnabled}
-        <Button
-          kind="tertiary"
-          size="small"
-          icon={SettingsAdjust}
-          iconDescription={m.projection_current_settings()}
-          tooltipPosition="bottom"
-          tooltipAlignment="end"
-          on:click={onopensettings}
-        />
-      {/if}
+      <Button
+        kind="tertiary"
+        size="small"
+        icon={SettingsAdjust}
+        iconDescription={m.projection_current_settings()}
+        tooltipPosition="bottom"
+        tooltipAlignment="end"
+        on:click={onopensettings}
+      />
     </div>
   </div>
 </div>
