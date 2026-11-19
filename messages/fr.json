@@ -1290,6 +1290,7 @@
   "annotations_shape_line": "Ligne",
   "annotations_add_shape": "Ajouter une forme",
   "annotations_shape_resize_handle": "Redimensionner la forme d'annotation",
+  "annotations_image_resize_handle": "Redimensionner l'image d'annotation",
   "annotations_text_resize_handle": "Redimensionner la zone de texte",
   "annotations_shape_rotate_handle": "Faire pivoter la forme d'annotation",
   "annotations_curve_handle": "Glissez cette poignée pour courber le segment",

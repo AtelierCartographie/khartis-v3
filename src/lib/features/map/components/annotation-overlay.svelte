@@ -109,6 +109,8 @@
   const TEXT_LINE_HEIGHT = 1.2;
   const TEXT_MIN_WIDTH_PX = PAGE_GRID_SIZE_PX * 2;
   const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
+  // An image keeps its proportions: it is resized from its corners only.
+  const IMAGE_RESIZE_HANDLES = ['nw', 'ne', 'se', 'sw'] as const;
   const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
   const DEFAULT_DRAWING_PLACEMENT_SIZE = { width: 132, height: 80 } as const;
 
@@ -1435,6 +1437,29 @@
       return;
     }
 
+    if (item.type === AnnotationKind.IMAGE) {
+      const image =
+        event.currentTarget instanceof HTMLElement
+          ? event.currentTarget
+              .closest<HTMLElement>('.image-frame')
+              ?.querySelector<HTMLImageElement>('img')
+          : null;
+      const width = image?.offsetWidth ?? item.style?.size ?? 200;
+      resizeState = {
+        id: item.id,
+        handle,
+        startAnnotationX: item.position.x,
+        startAnnotationY: item.position.y,
+        startW: width,
+        startH: image?.offsetHeight ?? width,
+        startPointerX: event.clientX,
+        startPointerY: event.clientY
+      };
+      window.addEventListener(EVENT.POINTERMOVE, handleResizePointerMove);
+      window.addEventListener(EVENT.POINTERUP, handleResizePointerUp);
+      return;
+    }
+
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     resizeState = {
@@ -1471,6 +1496,11 @@
       return;
     }
 
+    if (item.type === AnnotationKind.IMAGE) {
+      resizeImageAnnotation(item, resizeState, dx, dy);
+      return;
+    }
+
     const resizedBounds = resolveResizedShapeBounds(
       item,
       resizeState.handle,
@@ -1498,6 +1528,42 @@
       x: resizedBounds.x,
       y: resizedBounds.y
     });
+  }
+
+  // The dragged corner sets the width, the height follows the image ratio,
+  // and the opposite corner stays in place.
+  function resizeImageAnnotation(
+    item: Annotation,
+    state: NonNullable<typeof resizeState>,
+    dx: number,
+    dy: number
+  ): void {
+    const ratio = state.startH > 0 ? state.startW / state.startH : 1;
+    const growsRight = state.handle.includes('e');
+    const growsDown = state.handle.includes('s');
+    const widthFromX = state.startW + (growsRight ? dx : -dx);
+    const widthFromY = (state.startH + (growsDown ? dy : -dy)) * ratio;
+    const width = Math.max(
+      MIN_IMAGE_PLACEMENT_SIZE_PX,
+      Math.abs(widthFromX - state.startW) >= Math.abs(widthFromY - state.startW)
+        ? widthFromX
+        : widthFromY
+    );
+    const height = width / ratio;
+    const position = {
+      x: growsRight
+        ? state.startAnnotationX
+        : state.startAnnotationX + state.startW - width,
+      y: growsDown
+        ? state.startAnnotationY
+        : state.startAnnotationY + state.startH - height
+    };
+
+    annotationsActions.updateAnnotation(item.id, {
+      position,
+      style: { ...(item.style ?? {}), size: Math.round(width) }
+    });
+    refreshMapAnchorIfPresent(item, position);
   }
 
   // Only the width is resizable: the height follows the wrapped text. Resizing
@@ -2700,13 +2766,30 @@
         {@const imgSrc = String(item.content ?? '')}
         {@const size = item.style?.size ?? 200}
         {@const opacity = toOpacityUnit(item.style?.opacity)}
+        {@const isImageSelected = isAnnotationEditing && selectedId === item.id}
         {#if imgSrc}
-          <img
-            src={imgSrc}
-            alt={m.annotationImageAlt()}
-            class="annotation-image"
-            style="width: {size}px; height: auto; opacity: {opacity};"
-          />
+          <div class="image-frame">
+            <img
+              src={imgSrc}
+              alt={m.annotationImageAlt()}
+              class="annotation-image"
+              style="width: {size}px; height: auto; opacity: {opacity};"
+            />
+            {#if isImageSelected}
+              <div class="shape-handles" role="presentation">
+                {#each IMAGE_RESIZE_HANDLES as handle (handle)}
+                  <div
+                    class="resize-handle resize-{handle}"
+                    role="button"
+                    tabindex="-1"
+                    aria-label={m.annotations_image_resize_handle()}
+                    onpointerdown={(e: PointerEvent) =>
+                      handleResizePointerDown(e, item, handle)}
+                  ></div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/if}
       {/if}
     </div>
@@ -3082,6 +3165,11 @@
     right: 0;
     bottom: 0;
     pointer-events: none;
+  }
+
+  .image-frame {
+    position: relative;
+    display: inline-block;
   }
 
   .resize-handle {
