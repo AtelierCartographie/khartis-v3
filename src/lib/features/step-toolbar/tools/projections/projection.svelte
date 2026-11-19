@@ -9,7 +9,7 @@
   import { tick } from 'svelte';
   import { InlineNotification } from 'carbon-components-svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     getProjectionState,
