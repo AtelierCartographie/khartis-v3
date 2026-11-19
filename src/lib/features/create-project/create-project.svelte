@@ -144,11 +144,15 @@
 
   // The modal mounts and unmounts already open, so Carbon's own transition
   // never runs: the whole dialog fades and its panel rises with it.
-  function revealModal(_node: HTMLElement): TransitionConfig {
+  function revealModal(node: HTMLElement): TransitionConfig {
+    const container = node.querySelector<HTMLElement>('.bx--modal-container');
     return {
       duration: motionDuration(240),
       easing: cubicOut,
-      css: (t) => `opacity: ${t}; --kh-modal-rise: ${(1 - t) * 16}px;`
+      css: (t) => `opacity: ${t};`,
+      tick: (t) => {
+        container?.style.setProperty('translate', `0 ${(1 - t) * 16}px`);
+      }
     };
   }
 </script>
@@ -307,8 +311,26 @@
     color: inherit;
   }
 
+  /* Fading lowers the wrapper's opacity, which makes it a stacking context:
+     it must sit above the app itself, or the dialog fades behind the header
+     and the panels and only shows once opaque. */
+  #khartis-create-project {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+  }
+
+  /* Closing removes Carbon's is-visible class, which hides the dialog at
+     once; the wrapper's fade carries the exit instead. */
+  #khartis-create-project :global(.bx--modal) {
+    opacity: 1;
+    visibility: inherit;
+    transition: none;
+  }
+
   #khartis-create-project :global(.bx--modal-container) {
-    translate: 0 var(--kh-modal-rise, 0);
+    transform: none;
+    transition: none;
   }
 
   @media (min-width: 1024px) {
@@ -320,13 +342,13 @@
       background: var(--cds-background);
     }
 
-    /* The body takes the height of the selected card, up to the space the
-       header leaves; a longer card scrolls inside it. */
+    /* The body keeps the height « Ouvrir un projet » needs, whatever card
+       is selected, within the space the header leaves; the selected card
+       scrolls inside it. */
     #khartis-create-project :global(.fixed-modal-body) {
       display: flex;
       flex-direction: column;
-      height: auto;
-      max-height: calc(90vh - 7.5rem);
+      height: min(40rem, calc(90vh - 7.5rem));
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
