@@ -5,6 +5,10 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import {
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
@@ -80,7 +84,12 @@
   });
 </script>
 
-<aside class="data-tool-panel" style:right={panelRight}>
+<aside
+  in:floatingPanelIn|global
+  out:floatingPanelOut|global
+  class="data-tool-panel"
+  style:right={panelRight}
+>
   <PanelHeader
     title={title}
     closeLabel={m.data_tool_close()}
