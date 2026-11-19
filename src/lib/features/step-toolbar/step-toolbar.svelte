@@ -15,6 +15,10 @@
     uiDensityStore
   } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { m } from '$lib/paraglide/messages';
+  import {
+    getShortcut,
+    type SingleKeyShortcutId
+  } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Component } from 'svelte';
@@ -107,6 +111,12 @@
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
   }));
+
+  const STEP_SHORTCUT_IDS: Record<ToolbarStep, SingleKeyShortcutId> = {
+    [ToolbarStep.Data]: 'stepData',
+    [ToolbarStep.Visualizations]: 'stepVisualizations',
+    [ToolbarStep.Styling]: 'stepStyling'
+  };
 
   const steps = $derived([
     {
@@ -251,9 +261,10 @@
       {/each}
     </div>
 
-    {#if isCompact && hoveredStep !== null}
+    {#if hoveredStep !== null}
       <TooltipBubble
-        text={stepLabels[hoveredStep]}
+        text={isCompact ? stepLabels[hoveredStep] : ''}
+        shortcut={getShortcut(STEP_SHORTCUT_IDS[hoveredStep])}
         trigger={stepButtons[hoveredStep] ?? null}
         direction="right"
       />

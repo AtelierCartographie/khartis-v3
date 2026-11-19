@@ -20,6 +20,7 @@
     fullWidthClass?: string;
     hideInactiveLabel?: boolean;
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
+    tabShortcut?: (index: number) => string | undefined;
     tooltipPosition?: CarbonTooltipDirection;
     size?: 'sm' | 'md';
   }
@@ -34,6 +35,7 @@
     fullWidthClass = 'full-width',
     hideInactiveLabel = true,
     tabTitle,
+    tabShortcut,
     tooltipPosition = 'bottom',
     size = 'sm'
   }: Props = $props();
@@ -183,6 +185,7 @@
 {#if tooltipTrigger && tooltipText}
   <TooltipBubble
     text={tooltipText}
+    shortcut={hoveredIndex === null ? undefined : tabShortcut?.(hoveredIndex)}
     trigger={tooltipTrigger}
     direction={tooltipPosition}
   />

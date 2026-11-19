@@ -8,6 +8,7 @@
   } from '$lib/features/commons/constants/ui.constants';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { m } from '$lib/paraglide/messages';
+  import { getPrimaryShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
@@ -265,6 +266,7 @@
     tooltipPosition="bottom"
     tooltipAlignment="end"
     iconDescription={m.download_tooltip()}
+    shortcut={getPrimaryShortcut('download')}
     kind="primary"
     icon={Download}
     on:click={() => modal.open()}
