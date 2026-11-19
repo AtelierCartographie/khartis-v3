@@ -23,6 +23,7 @@
   import { zoomModeStore } from '../../commons/stores/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
   import {
+    getShortcut,
     detectApplePlatform,
     getZoomShortcutModifiers
   } from '../../commons/utils/keyboard-shortcuts.utils';
@@ -335,6 +336,8 @@
       items={zoomItems}
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
+      tabTitle={() => m.zoom_mode_toggle_hint()}
+      tabShortcut={() => getShortcut('zoomMode')}
       ondblclick={handleTabDoubleClick}
       className="zoom-mode-tabs"
       activeClass="active"

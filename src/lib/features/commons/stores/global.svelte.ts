@@ -92,6 +92,7 @@ function createGlobalStore() {
     isCreateProjectModalOpen: false,
     isDuplicateModalOpen: false,
     isDeleteModalOpen: false,
+    isShortcutsSheetOpen: false,
     selectedStep: initialStep,
     selectedTool: undefined,
     toolbarState: resolveInitialToolbarState(initialStep),
@@ -574,6 +575,12 @@ function createGlobalStore() {
     },
     set isDuplicateModalOpen(value: boolean) {
       state.isDuplicateModalOpen = value;
+    },
+    get isShortcutsSheetOpen() {
+      return state.isShortcutsSheetOpen;
+    },
+    set isShortcutsSheetOpen(value: boolean) {
+      state.isShortcutsSheetOpen = value;
     },
     get isDeleteModalOpen() {
       return state.isDeleteModalOpen;
