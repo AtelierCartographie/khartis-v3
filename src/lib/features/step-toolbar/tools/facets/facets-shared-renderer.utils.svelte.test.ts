@@ -13,8 +13,7 @@ function createLayout(columns: number): FacetsLayout {
     gap: 16,
     frameVisible: true,
     frameColor: '#c6c6c6',
-    frameThickness: 1,
-    titleFontSize: null
+    frameThickness: 1
   };
 }
 

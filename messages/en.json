@@ -2191,7 +2191,6 @@
   "font_category_handwritten": "Handwritten",
   "basemap_attribution_tooltip": "This credit is not exported. When styling the map, add this basemap's credit along with the sources and signature.",
   "open_project_sort_short": "Sort",
-  "facets_title_size_label": "Title size",
   "projection_web_mercator_title": "Web Mercator",
   "projection_web_mercator_description": "The projection of reference basemaps: keeps local shapes but enlarges high latitudes.",
   "projection_globe_description": "A view of the globe, undistorted near its centre, to rotate on the map.",

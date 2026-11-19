@@ -132,12 +132,13 @@
       ? null
       : mapInstanceStore.measureFramingScale()
   );
-  // Map titles are set like the legend titles: same font and weight, and the
-  // legend title size unless the collection sets its own; scaled with the
-  // page as the legend is.
+  const FACET_TITLE_SIZE_STEP = 2;
+  // Map titles are set like the legend titles, same font and weight, and
+  // stay a step above them whatever the legend size; scaled with the page
+  // as the legend is.
   const facetTitleFontSize = $derived(
-    (facetsStore.layout.titleFontSize ??
-      legendTitleFontSize(getLegendState().style.fontSize)) *
+    (legendTitleFontSize(getLegendState().style.fontSize) +
+      FACET_TITLE_SIZE_STEP) *
       Math.max(globalState.zoom.pageZoomScale, 0.1)
   );
   const facetTitleFontFamily = $derived(

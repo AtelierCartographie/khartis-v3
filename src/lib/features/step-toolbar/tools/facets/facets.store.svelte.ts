@@ -1,4 +1,3 @@
-import { clampFontSize } from '$lib/features/step-toolbar/fonts.constants';
 import {
   getEnabledPrimitiveFilters,
   type VisualizationConfig,
@@ -93,8 +92,6 @@ export interface FacetsLayout {
   frameVisible: boolean;
   frameColor: string;
   frameThickness: number;
-  /** Map title size in points; null follows the legend title size. */
-  titleFontSize: number | null;
 }
 
 export interface FacetsDraft {
@@ -126,8 +123,7 @@ const DEFAULT_STATE: FacetsState = {
     gap: 16,
     frameVisible: true,
     frameColor: DEFAULT_FACETS_FRAME_COLOR,
-    frameThickness: 1,
-    titleFontSize: null
+    frameThickness: 1
   },
   scaleMode: SCALE_MODE.SHARED,
   generatedVisualizationIds: [],
@@ -142,12 +138,6 @@ function clampColumns(value: unknown, facetCount: number): number {
     return Math.min(DEFAULT_STATE.layout.columns, max);
   }
   return Math.min(max, Math.max(1, Math.floor(parsed)));
-}
-
-function normalizeTitleFontSize(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? clampFontSize(parsed) : null;
 }
 
 function clampFrameThickness(value: unknown): number {
@@ -437,8 +427,7 @@ function createFacetsStore() {
           restoredLayout.frameColor.length > 0
             ? restoredLayout.frameColor
             : DEFAULT_STATE.layout.frameColor,
-        frameThickness: clampFrameThickness(restoredLayout?.frameThickness),
-        titleFontSize: normalizeTitleFontSize(restoredLayout?.titleFontSize)
+        frameThickness: clampFrameThickness(restoredLayout?.frameThickness)
       };
 
       nextState.facetTitles =
@@ -1043,11 +1032,6 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
-  function setTitleFontSize(size: number | null): void {
-    state.layout.titleFontSize = normalizeTitleFontSize(size);
-    notifyPersistence();
-  }
-
   async function toggleScaleMode(): Promise<void> {
     if (isRegenerating) return;
     if (
@@ -1218,7 +1202,6 @@ function createFacetsStore() {
     setFrameVisible,
     setFrameColor,
     setFrameThickness,
-    setTitleFontSize,
     toggleScaleMode,
     getFacetTitle,
     setFacetTitle,
