@@ -427,7 +427,7 @@
       {#if storageStatus}
         <div class="storage-gauge grid gap-2">
           <div class="flex items-baseline justify-between gap-3 text-sm">
-            <span>{m.open_project_storage_label()}</span>
+            <span class="storage-label">{m.open_project_storage_label()}</span>
             <span class="text-grey">
               {m.open_project_storage_usage({
                 used: formatApproximateSize(projectBytes),
@@ -556,6 +556,10 @@
     font-size: var(--kh-font-label);
     line-height: var(--kh-line-label);
     color: var(--cds-text-secondary);
+  }
+
+  .storage-label {
+    color: var(--cds-text-helper);
   }
 
   .storage-gauge {

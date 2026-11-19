@@ -262,10 +262,11 @@
 
   :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact) {
     min-width: 0;
-    max-width: 15rem;
-    padding: var(--cds-spacing-03) var(--cds-spacing-04);
-    font-size: var(--kh-font-label);
-    line-height: var(--kh-line-label);
+    max-width: 16rem;
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    line-height: var(--cds-helper-text-01-line-height, 1.33333);
+    letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
   }
 
   :global(.khartis-carbon-rich-tooltip::before) {
