@@ -1492,6 +1492,7 @@
   "aspect_common_auto_color": "Automatic color",
   "aspect_common_stroke_unique": "Fixed stroke width",
   "aspect_common_pattern": "Pattern",
+  "aspect_pattern_category_limit": "Patterns stay readable up to {max} categories: this variable has {count}.",
   "per_category_aspect": "Style",
   "per_category_shape": "Shape",
   "per_category_color": "Color",

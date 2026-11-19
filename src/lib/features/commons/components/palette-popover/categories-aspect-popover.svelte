@@ -11,7 +11,11 @@
   } from '$lib/features/commons/utils/floating-panel.svelte';
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
-  import { Dropdown, TextInput } from 'carbon-components-svelte';
+  import {
+    Dropdown,
+    InlineNotification,
+    TextInput
+  } from 'carbon-components-svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -146,8 +150,15 @@
 
   // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
   const MAX_PATTERN_PREVIEW_CATEGORIES = 24;
+  // Beyond that count the map draws no motif: the toggle says so instead.
+  const isPatternUnavailable = $derived(
+    primitiveKind === 'polygons' &&
+      draftCategories.length > MAX_PATTERN_PREVIEW_CATEGORIES
+  );
   const showCategoryPattern = $derived(
-    primitiveKind === 'polygons' && draftCommonAspect.pattern
+    primitiveKind === 'polygons' &&
+      draftCommonAspect.pattern &&
+      !isPatternUnavailable
   );
   const resolvedPatternConfig = $derived<PatternPaletteConfig>(
     draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
@@ -801,18 +812,29 @@
                       >
                       <div class="toggle-control">
                         <Switch
-                          toggled={draftCommonAspect.pattern}
+                          toggled={showCategoryPattern}
+                          disabled={isPatternUnavailable}
                           hideLabel
                           labelText={m.aspect_common_pattern()}
                           onchange={(value) =>
                             handleCommonAspectChange('pattern', value)}
                         />
                         <span class="toggle-state">
-                          {draftCommonAspect.pattern ? m.yes() : m.no()}
+                          {showCategoryPattern ? m.yes() : m.no()}
                         </span>
                       </div>
                     </div>
-                    {#if draftCommonAspect.pattern}
+                    {#if isPatternUnavailable}
+                      <InlineNotification
+                        kind="info"
+                        lowContrast
+                        hideCloseButton
+                        subtitle={m.aspect_pattern_category_limit({
+                          max: MAX_PATTERN_PREVIEW_CATEGORIES,
+                          count: draftCategories.length
+                        })}
+                      />
+                    {:else if draftCommonAspect.pattern}
                       <div class="common-field--full">
                         <ToggleWithLabel
                           label={m.pattern_colorize()}
