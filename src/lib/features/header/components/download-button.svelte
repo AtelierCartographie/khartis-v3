@@ -10,7 +10,8 @@
   import { m } from '$lib/paraglide/messages';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
+  import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import {
     describeMapGeoreferenceAvailability,
     getMapGeoreferenceAvailability,
@@ -44,10 +45,10 @@
   const georeferenceAvailability = $derived(
     modal.isOpen ? getMapGeoreferenceAvailability() : null
   );
-  const georeferenceHelper = $derived(
-    !georeferenceAvailability || georeferenceAvailability.available
-      ? m.download_map_georeference_helper()
-      : describeMapGeoreferenceAvailability(georeferenceAvailability)
+  const georeferenceUnavailableReason = $derived(
+    georeferenceAvailability && !georeferenceAvailability.available
+      ? describeMapGeoreferenceAvailability(georeferenceAvailability)
+      : null
   );
   const currentFormat = $derived(getFormatState());
   const isQgisFormat = $derived(modal.mapFormat === MAP_FORMAT.QGIS);
@@ -329,76 +330,92 @@
               wrapLabels
             />
 
-            {#if isQgisFormat}
-              <section class="export-summary" aria-live="polite">
-                <p class="summary-heading">{m.download_map_qgis_content()}</p>
-                <dl class="summary-grid">
-                  <div class="summary-item">
-                    <dt>{m.download_map_qgis_crs()}</dt>
-                    <dd>{qgisCrsLabel}</dd>
-                  </div>
-                </dl>
-                {#if qgisCrsReason}
-                  <p class="georeference-helper">{qgisCrsReason}</p>
-                {/if}
-              </section>
-              <div class="option-section">
-                <p class="georeference-helper">
-                  {m.download_map_qgis_helper()}
-                </p>
-                <p class="georeference-helper">
-                  {m.download_map_qgis_not_included()}
-                </p>
-              </div>
-            {:else}
-              <section class="export-summary" aria-live="polite">
-                <p class="summary-heading">{m.download_map_current_page()}</p>
-                <dl class="summary-grid">
-                  <div class="summary-item">
-                    <dt>{m.download_map_current_format()}</dt>
-                    <dd>{currentPageFormatLabel}</dd>
-                  </div>
-
-                  <div class="summary-item">
-                    <dt>{m.download_map_current_size()}</dt>
-                    <dd>{currentPageSizeLabel}</dd>
-                  </div>
-
-                  {#if modal.mapFormat !== MAP_FORMAT.SVG}
+            <SwitchedContent value={modal.mapFormat}>
+              {#if isQgisFormat}
+                <section class="export-summary" aria-live="polite">
+                  <p class="summary-heading">{m.download_map_qgis_content()}</p>
+                  <dl class="summary-grid">
                     <div class="summary-item">
-                      <dt>{m.download_map_export_size()}</dt>
-                      <dd>{selectedExportSizeLabel}</dd>
+                      <dt>{m.download_map_qgis_crs()}</dt>
+                      <dd>{qgisCrsLabel}</dd>
                     </div>
+                  </dl>
+                  {#if qgisCrsReason}
+                    <p class="georeference-helper">{qgisCrsReason}</p>
                   {/if}
-                </dl>
-              </section>
-
-              {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                </section>
                 <div class="option-section">
-                  <SimpleRadioGroup
-                    name="map-export-resolution"
-                    legendText={m.download_map_resolution()}
-                    items={resolutionOptions.map((o) => ({
-                      value: o.id,
-                      labelText: o.label
-                    }))}
-                    selected={modal.resolution}
-                    onchange={(value) => handleResolutionChange(value)}
-                  />
+                  <p class="georeference-helper">
+                    {m.download_map_qgis_helper()}
+                  </p>
+                  <p class="georeference-helper">
+                    {m.download_map_qgis_not_included()}
+                  </p>
+                </div>
+              {:else}
+                <section class="export-summary" aria-live="polite">
+                  <p class="summary-heading">{m.download_map_current_page()}</p>
+                  <dl class="summary-grid">
+                    <div class="summary-item">
+                      <dt>{m.download_map_current_format()}</dt>
+                      <dd>{currentPageFormatLabel}</dd>
+                    </div>
+
+                    <div class="summary-item">
+                      <dt>{m.download_map_current_size()}</dt>
+                      <dd>{currentPageSizeLabel}</dd>
+                    </div>
+
+                    {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                      <div class="summary-item">
+                        <dt>{m.download_map_export_size()}</dt>
+                        <dd>{selectedExportSizeLabel}</dd>
+                      </div>
+                    {/if}
+                  </dl>
+                </section>
+
+                {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                  <div class="option-section">
+                    <SimpleRadioGroup
+                      name="map-export-resolution"
+                      legendText={m.download_map_resolution()}
+                      items={resolutionOptions.map((o) => ({
+                        value: o.id,
+                        labelText: o.label
+                      }))}
+                      selected={modal.resolution}
+                      onchange={(value) => handleResolutionChange(value)}
+                    />
+                  </div>
+                {/if}
+
+                <div class="option-section">
+                  <div class="georeference-toggle">
+                    <Switch
+                      size="sm"
+                      labelText={m.download_map_georeference()}
+                      toggled={modal.georeference &&
+                        georeferenceAvailability?.available === true}
+                      disabled={georeferenceAvailability?.available !== true}
+                      onchange={(checked) => modal.setGeoreference(checked)}
+                    />
+                    <Tooltip
+                      size="compact"
+                      direction="top"
+                      iconDescription={m.download_map_georeference_info()}
+                    >
+                      <p>{m.download_map_georeference_helper()}</p>
+                    </Tooltip>
+                  </div>
+                  {#if georeferenceUnavailableReason}
+                    <p class="georeference-helper">
+                      {georeferenceUnavailableReason}
+                    </p>
+                  {/if}
                 </div>
               {/if}
-
-              <div class="option-section georeference-option">
-                <SimpleCheckbox
-                  labelText={m.download_map_georeference()}
-                  checked={modal.georeference &&
-                    georeferenceAvailability?.available === true}
-                  disabled={georeferenceAvailability?.available !== true}
-                  onchange={(checked) => modal.setGeoreference(checked)}
-                />
-                <p class="georeference-helper">{georeferenceHelper}</p>
-              </div>
-            {/if}
+            </SwitchedContent>
           {:else}
             <div class="panel-heading">
               <p class="panel-description">{m.download_data_description()}</p>
@@ -630,6 +647,12 @@
 
   .option-section {
     display: grid;
+    gap: var(--cds-spacing-03);
+  }
+
+  .georeference-toggle {
+    display: flex;
+    align-items: center;
     gap: var(--cds-spacing-03);
   }
 

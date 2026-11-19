@@ -12,6 +12,16 @@
 
   let hasRendered = false;
 
+  // A display: contents element has no box, so opacity and transform on it
+  // render nothing: a nested switched content is animated through its children.
+  function boxedChildren(node: Element): Element[] {
+    return Array.from(node.children).flatMap((child) =>
+      getComputedStyle(child).display === 'contents'
+        ? boxedChildren(child)
+        : [child]
+    );
+  }
+
   // The wrapper is display: contents so it never enters the host's layout;
   // its children carry the motion instead.
   function reveal(node: HTMLElement): void {
@@ -21,7 +31,7 @@
     }
     const duration = motionDuration(220);
     if (duration === 0) return;
-    for (const child of Array.from(node.children)) {
+    for (const child of boxedChildren(node)) {
       child.animate(
         [
           { opacity: 0, transform: 'translateY(4px)' },
