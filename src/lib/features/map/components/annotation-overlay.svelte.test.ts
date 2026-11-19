@@ -248,6 +248,7 @@ describe('annotation overlay drawing interactions', () => {
       bottom: 0,
       left: 0
     });
+    formatActions.setMapFrame({ top: 0, right: 0, bottom: 0, left: 0 });
   });
 
   afterEach(() => {
@@ -262,6 +263,7 @@ describe('annotation overlay drawing interactions', () => {
       PAGE_PRESETS[PageModel.A4_LANDSCAPE].height
     );
     formatActions.setMargins({ ...DEFAULT_MARGINS });
+    formatActions.setMapFrame({ ...DEFAULT_MARGINS });
   });
 
   it('keeps the untouched vector anchor visually fixed when another anchor changes bounds', async () => {
@@ -428,6 +430,7 @@ describe('annotation overlay drawing interactions', () => {
       bottom: 60,
       left: 60
     });
+    formatActions.setMapFrame({ top: 60, right: 60, bottom: 60, left: 60 });
     annotationsActions.beginPlacement(
       AnnotationKind.IMAGE,
       'data:image/svg+xml;base64,PHN2Zy8+'
