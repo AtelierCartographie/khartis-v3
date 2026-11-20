@@ -869,6 +869,19 @@ export const createProjectActions = {
     }
   },
 
+  /**
+   * Closing the menu without a project would leave an empty app: the home
+   * modal, which opened the menu, comes back.
+   */
+  dismissSideNav(): void {
+    globalState.isSideNavOpen = false;
+    if (projectStore.currentProject || globalState.isCreateProjectModalOpen) {
+      return;
+    }
+    this.resetAllTabs();
+    globalState.isCreateProjectModalOpen = true;
+  },
+
   reset(): void {
     Object.assign(createProjectInternalState, structuredClone(DEFAULT_STATE));
   }

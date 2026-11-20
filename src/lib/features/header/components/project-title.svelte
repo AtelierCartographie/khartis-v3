@@ -127,6 +127,12 @@
     height: 100%;
   }
 
+  /* Disabled only means nothing to save: the forbidden cursor reads as an
+     error. */
+  .project-title-save :global(.bx--btn:disabled) {
+    cursor: default;
+  }
+
   #khartis-project-title :global(input::placeholder) {
     text-align: center;
   }

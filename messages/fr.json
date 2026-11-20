@@ -1222,10 +1222,9 @@
   "error_loading_subtitle": "Une erreur est survenue lors du chargement de la carte",
   "geo_scale_bar_aria": "Barre d'échelle",
   "geo_north_indicator_aria": "Flèche Nord",
-  "zoom_reset_title": "Niveau de zoom\nRaccourcis : {primary} + Plus/Moins pour zoomer, {primary} + 0 pour réinitialiser, Z pour changer de mode",
   "zoom_reset": "Réinitialiser le zoom",
-  "zoom_fit_page": "Ajuster la page à la fenêtre",
-  "zoom_fit_page_title": "Niveau de zoom de la page (100 % : taille réelle)\nRaccourcis : {primary} + Plus/Moins pour zoomer, {primary} + 0 pour ajuster à la fenêtre, {primary} + 1 pour la taille réelle, Z pour changer de mode",
+  "zoom_fit_page": "Ajuster à l'écran",
+  "zoom_actual_size": "Taille réelle",
   "zoom_value_input_label": "Niveau de zoom",
   "zoom_in": "Zoom avant",
   "zoom_out": "Zoom arrière",
@@ -1547,6 +1546,7 @@
   "missing_data_shape_square": "Carré",
   "filter_data": "Filtrer",
   "filter_add_filter": "Ajouter un filtre",
+  "filter_add_new_filter": "Ajouter un nouveau filtre",
   "filter_remove": "Supprimer le filtre",
   "filter_panel_title": "Filtres",
   "filter_stats_filtered": "{count} valeurs filtrées",
@@ -2214,5 +2214,10 @@
   "shortcuts_open_sheet": "Afficher cette liste",
   "shortcuts_close": "Fermer une fenêtre ou un outil",
   "zoom_mode_toggle_hint": "Bascule Carte / Page",
-  "sidenav_keyboard_shortcuts": "Raccourcis clavier"
+  "sidenav_keyboard_shortcuts": "Raccourcis clavier",
+  "label_edit_in_styling_title": "Étiquettes modifiables à l'étape Habillage",
+  "label_edit_in_styling_subtitle": "Pour modifier le texte d'une étiquette ou la déplacer, passez à l'étape Habillage.",
+  "legend_resize_handle": "Redimensionner la légende (double-clic : largeur d'origine)",
+  "shortcuts_toggle_grid": "Afficher ou masquer la grille et le magnétisme",
+  "format_grid_shortcut": "Raccourci clavier :"
 }

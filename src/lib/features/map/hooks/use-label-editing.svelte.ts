@@ -1,7 +1,9 @@
 import type { PickingInfo } from '@deck.gl/core';
 
+import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import {
   attachLabelDragController,
+  pickLabelInContainer,
   type LabelEditRequest,
   type LabelHoverBox
 } from '../interactions/label-drag.controller';
@@ -11,6 +13,9 @@ interface UseLabelEditingOptions {
   /** Labels can be moved and edited only while this holds. */
   isEnabled: () => boolean;
   pick: (x: number, y: number, radius: number) => PickingInfo | null;
+  /** While editing is off, a double-click on a label calls onLockedLabel. */
+  isHintEnabled?: () => boolean;
+  onLockedLabel?: () => void;
 }
 
 /**
@@ -20,7 +25,9 @@ interface UseLabelEditingOptions {
 export function useLabelEditing({
   getContainer,
   isEnabled,
-  pick
+  pick,
+  isHintEnabled,
+  onLockedLabel
 }: UseLabelEditingOptions) {
   let hoverBox = $state.raw<LabelHoverBox | null>(null);
   let editRequest = $state.raw<LabelEditRequest | null>(null);
@@ -47,6 +54,20 @@ export function useLabelEditing({
       hoverBox = null;
       editRequest = null;
     };
+  });
+
+  $effect(() => {
+    const container = getContainer();
+    if (!container || !onLockedLabel || isEnabled() || !isHintEnabled?.()) {
+      return;
+    }
+
+    const handleDoubleClick = (event: MouseEvent) => {
+      if (pickLabelInContainer(container, pick, event)) onLockedLabel();
+    };
+    container.addEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
+    return () =>
+      container.removeEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
   });
 
   return {

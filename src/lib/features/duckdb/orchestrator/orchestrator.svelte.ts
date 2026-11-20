@@ -312,6 +312,16 @@ function restorePersistedTableFilters(data: unknown): void {
     };
 }
 
+function resolveColumnTypeName(
+  dataset: { columns?: { name: string; type?: unknown }[] },
+  columnName: string
+): string | null {
+  const type = dataset.columns?.find(
+    (column) => column.name === columnName
+  )?.type;
+  return typeof type === 'string' ? type : null;
+}
+
 function applyPersistedTableFilters(): void {
   if (!pendingPersistedTableFilters) {
     return;
@@ -331,6 +341,8 @@ function applyPersistedTableFilters(): void {
         dataset.tableName,
         {
           column: filter.column,
+          // Without its type, a code column such as 2A compares as a number.
+          columnType: resolveColumnTypeName(dataset, filter.column),
           operator: filter.operator,
           value: filter.value,
           secondaryValue: filter.secondaryValue,

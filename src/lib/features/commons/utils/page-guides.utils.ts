@@ -66,21 +66,54 @@ function snapAxis(
     : { position: start, line: null };
 }
 
+/** The margins and the centre lines of the page, in page coordinates. */
+export function getPageGuideLines(page: PageGuideFrame): {
+  vertical: number[];
+  horizontal: number[];
+} {
+  return {
+    vertical: [
+      page.margins.left,
+      page.width / 2,
+      page.width - page.margins.right
+    ],
+    horizontal: [
+      page.margins.top,
+      page.height / 2,
+      page.height - page.margins.bottom
+    ]
+  };
+}
+
+/**
+ * Shift held during a move keeps it on one axis, as in design tools: the
+ * axis the pointer has travelled furthest along from the start wins.
+ */
+export function lockMoveToAxis(
+  start: { x: number; y: number },
+  position: { x: number; y: number }
+): { x: number; y: number } {
+  return Math.abs(position.x - start.x) >= Math.abs(position.y - start.y)
+    ? { x: position.x, y: start.y }
+    : { x: start.x, y: position.y };
+}
+
+/** A single edge pulled onto the closest line, as when resizing a frame. */
+export function snapEdgeToPageGuides(
+  position: number,
+  lines: number[],
+  threshold: number
+): { position: number; line: number | null } {
+  return snapAxis(position, 0, lines, threshold);
+}
+
 export function snapRectToPageGuides(
   rect: PageGuideRect,
   page: PageGuideFrame,
   threshold: number
 ): PageGuideSnap {
-  const verticalLines = [
-    page.margins.left,
-    page.width / 2,
-    page.width - page.margins.right
-  ];
-  const horizontalLines = [
-    page.margins.top,
-    page.height / 2,
-    page.height - page.margins.bottom
-  ];
+  const { vertical: verticalLines, horizontal: horizontalLines } =
+    getPageGuideLines(page);
   const offsetX = page.offset?.x ?? 0;
   const offsetY = page.offset?.y ?? 0;
   const x = snapAxis(rect.x + offsetX, rect.width, verticalLines, threshold);

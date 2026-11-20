@@ -22,6 +22,8 @@
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
     tabShortcut?: (index: number) => string | undefined;
     tooltipPosition?: CarbonTooltipDirection;
+    /** One tooltip for the whole group, pointing at its centre. */
+    groupTooltip?: boolean;
     size?: 'sm' | 'md';
   }
 
@@ -37,6 +39,7 @@
     tabTitle,
     tabShortcut,
     tooltipPosition = 'bottom',
+    groupTooltip = false,
     size = 'sm'
   }: Props = $props();
 
@@ -47,6 +50,7 @@
   const HOVER_INTENT_DELAY = 120;
   const LEAVE_GRACE_DELAY = 160;
 
+  let groupElement = $state<HTMLDivElement | null>(null);
   let tabElements = $state<Array<HTMLButtonElement | null>>([]);
   let labelElements = $state<Array<HTMLSpanElement | null>>([]);
   let hoveredIndex = $state<number | null>(null);
@@ -55,7 +59,11 @@
   let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const tooltipTrigger = $derived(
-    hoveredIndex === null ? null : (tabElements[hoveredIndex] ?? null)
+    hoveredIndex === null
+      ? null
+      : groupTooltip
+        ? groupElement
+        : (tabElements[hoveredIndex] ?? null)
   );
   // A tab unfolds on hover and shows its label: only an extra hint from
   // tabTitle is worth a tooltip.
@@ -143,6 +151,7 @@
   class:size-md={size === 'md'}
   class:all-labels={!hideInactiveLabel}
   role="group"
+  bind:this={groupElement}
   onpointerleave={handleGroupPointerLeave}
 >
   {#each items as item, index (index)}

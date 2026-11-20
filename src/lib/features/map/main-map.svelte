@@ -7,7 +7,10 @@
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { zoomModeStore } from '../commons/stores/zoom-mode.store.svelte';
   import {
+    getPageGuideLines,
+    lockMoveToAxis,
     PAGE_GUIDE_THRESHOLD_PX,
+    snapEdgeToPageGuides,
     snapRectToPageGuides
   } from '../commons/utils/page-guides.utils';
   import { pageGuidesStore } from './stores/page-guides.store.svelte';
@@ -372,7 +375,9 @@
     dx: number,
     dy: number,
     startFrame: { top: number; right: number; bottom: number; left: number },
-    lockAspectRatio = false
+    lockAspectRatio = false,
+    /** In page units; set while a pointer drags the edge. */
+    guideThreshold: number | null = null
   ): void {
     let { top, right, bottom, left } = startFrame;
     const { width, height } = formatState;
@@ -400,12 +405,67 @@
       else top = height - startFrame.bottom - nextHeight;
     }
 
+    // A dragged edge close to a margin or a centre line lands on it, which
+    // wins over the grid; a proportional resize keeps its ratio instead.
+    const guides: { vertical: number[]; horizontal: number[] } = {
+      vertical: [],
+      horizontal: []
+    };
+    const snappedEdges: string[] = [];
+    if (guideThreshold !== null && !proportional) {
+      const lines = getPageGuideLines({
+        width,
+        height,
+        margins: formatState.margins
+      });
+      const pull = (
+        position: number,
+        axis: 'vertical' | 'horizontal'
+      ): number | null => {
+        const snapped = snapEdgeToPageGuides(
+          position,
+          lines[axis],
+          guideThreshold
+        );
+        if (snapped.line === null) return null;
+        guides[axis].push(snapped.line);
+        return snapped.position;
+      };
+      const west = edge.includes('w') ? pull(left, 'vertical') : null;
+      const east = edge.includes('e') ? pull(width - right, 'vertical') : null;
+      const north = edge.includes('n') ? pull(top, 'horizontal') : null;
+      const south = edge.includes('s')
+        ? pull(height - bottom, 'horizontal')
+        : null;
+      if (west !== null) {
+        left = west;
+        snappedEdges.push('w');
+      }
+      if (east !== null) {
+        right = width - east;
+        snappedEdges.push('e');
+      }
+      if (north !== null) {
+        top = north;
+        snappedEdges.push('n');
+      }
+      if (south !== null) {
+        bottom = height - south;
+        snappedEdges.push('s');
+      }
+      pageGuidesStore.show(guides);
+    }
+
     // The frame edges snap in page coordinates, where layout objects snap too.
     const snap = formatState.gridEnabled && !proportional;
-    top = snapToPageGrid(top, snap);
-    left = snapToPageGrid(left, snap);
-    right = width - snapToPageGrid(width - right, snap);
-    bottom = height - snapToPageGrid(height - bottom, snap);
+    if (!snappedEdges.includes('n')) top = snapToPageGrid(top, snap);
+    if (!snappedEdges.includes('w')) left = snapToPageGrid(left, snap);
+    if (!snappedEdges.includes('e')) {
+      right = width - snapToPageGrid(width - right, snap);
+    }
+    if (!snappedEdges.includes('s')) {
+      bottom = height - snapToPageGrid(height - bottom, snap);
+    }
 
     formatActions.setMapFrame({
       top: Math.round(top),
@@ -440,12 +500,20 @@
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    resizeMapFrame(edge, dx, dy, startFrame, event.shiftKey);
+    resizeMapFrame(
+      edge,
+      dx,
+      dy,
+      startFrame,
+      event.shiftKey,
+      PAGE_GUIDE_THRESHOLD_PX / scale
+    );
   }
 
   function handleResizeUp(): void {
     globalState.isResizingMapFrame = false;
     resizeState = null;
+    pageGuidesStore.clear();
     hoveredResizeEdge = null;
     window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
@@ -578,10 +646,17 @@
     const frameHeight = height - startFrame.top - startFrame.bottom;
     const snap = formatState.gridEnabled;
     // A centre line or a margin close by wins over the grid.
+    const start = { x: startFrame.left, y: startFrame.top };
+    const pointer = {
+      x: startFrame.left + (event.clientX - startX) / scale,
+      y: startFrame.top + (event.clientY - startY) / scale
+    };
+    const moved = event.shiftKey ? lockMoveToAxis(start, pointer) : pointer;
+    const lockedX = event.shiftKey && moved.x === start.x;
+    const lockedY = event.shiftKey && moved.y === start.y;
     const aligned = snapRectToPageGuides(
       {
-        x: startFrame.left + (event.clientX - startX) / scale,
-        y: startFrame.top + (event.clientY - startY) / scale,
+        ...moved,
         width: frameWidth,
         height: frameHeight
       },
@@ -589,12 +664,14 @@
       PAGE_GUIDE_THRESHOLD_PX / scale
     );
     pageGuidesStore.show(aligned.guides);
-    const alignedX =
-      aligned.guides.vertical.length > 0
+    const alignedX = lockedX
+      ? start.x
+      : aligned.guides.vertical.length > 0
         ? aligned.x
         : snapToPageGrid(aligned.x, snap);
-    const alignedY =
-      aligned.guides.horizontal.length > 0
+    const alignedY = lockedY
+      ? start.y
+      : aligned.guides.horizontal.length > 0
         ? aligned.y
         : snapToPageGrid(aligned.y, snap);
     const left = Math.min(Math.max(alignedX, 0), width - frameWidth);

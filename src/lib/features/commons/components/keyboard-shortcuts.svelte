@@ -7,6 +7,7 @@
   import { projectStore } from '../stores/project.store.svelte';
   import { ExportTab, useExportModal } from '$lib/features/header';
   import { selectTool } from '$lib/features/step-toolbar';
+  import { formatActions } from '$lib/features/step-toolbar/tools/format';
   import { StylingTools, ToolbarState, ToolbarStep } from '../types/global';
   import {
     detectApplePlatform,
@@ -19,6 +20,7 @@
   } from '../utils/keyboard-shortcuts.utils';
   import { getLocale } from '$lib/paraglide/runtime';
   import { EVENT, KEY } from '../constants/dom.constants';
+  import { stepNumberInputOnShiftArrow } from '../utils/number-input-step.utils';
 
   const STYLING_TOOL_IDS: readonly string[] = [
     StylingTools.Format,
@@ -79,7 +81,7 @@
       }
 
       if (globalState.isSideNavOpen) {
-        globalState.isSideNavOpen = false;
+        createProjectActions.dismissSideNav();
         return true;
       }
 
@@ -169,10 +171,17 @@
           selectTool(action.tool);
           return;
         case 'menu':
-          globalState.isSideNavOpen = !globalState.isSideNavOpen;
+          if (globalState.isSideNavOpen) {
+            createProjectActions.dismissSideNav();
+          } else {
+            globalState.isSideNavOpen = true;
+          }
           return;
         case 'zoomMode':
           zoomModeStore.toggle();
+          return;
+        case 'toggleGrid':
+          formatActions.toggleGrid();
           return;
       }
     }
@@ -199,6 +208,12 @@
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
+      if (stepNumberInputOnShiftArrow(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (event.key === KEY.ESCAPE) {
         if (handleEscapeKey()) {
           event.preventDefault();

@@ -234,6 +234,8 @@ function createMapInstanceStore() {
   // The base view frames the reference at its fit size: a reset asks the map
   // to refit that size to the current frame.
   let orthographicResetRevision = $state(0);
+  /** Asks the MapLibre map to fit its basemap again: the store has no bounds. */
+  let mapLibreResetRevision = $state(0);
   let pendingMapLibreRestore: PendingMapLibreViewState | null = null;
   let lastSerializedViewState: SerializedViewState | null = null;
   let synchronizedViewportController: SynchronizedViewportController | null =
@@ -854,7 +856,7 @@ function createMapInstanceStore() {
     if (state.map) {
       markViewportManual();
       pendingMapLibreRestore = null;
-      state.map.setZoom(state.baseZoomLevel);
+      mapLibreResetRevision += 1;
       return;
     }
 
@@ -1071,6 +1073,9 @@ function createMapInstanceStore() {
   }
 
   return {
+    get mapLibreResetRevision(): number {
+      return mapLibreResetRevision;
+    },
     get orthographicResetRevision(): number {
       return orthographicResetRevision;
     },

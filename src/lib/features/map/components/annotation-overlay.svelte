@@ -155,6 +155,8 @@
     width: number;
     height: number;
     role?: PageElementRole;
+    /** The box a rotated text covers, from its upright position. */
+    covered?: { x: number; y: number; width: number; height: number };
   };
 
   let overlayElement = $state<HTMLDivElement | null>(null);
@@ -168,6 +170,7 @@
     startClientY: number;
     didDrag: boolean;
     role?: PageElementRole;
+    covered?: AnnotationPositionBoundsContext['covered'];
   } | null>(null);
   let resizeState = $state<{
     id: string;
@@ -1090,16 +1093,29 @@
     const rect = layer.getBoundingClientRect();
 
     const isPageElement = context.scope === 'page' && context.role;
-    const maxX = isPageElement
-      ? Math.max(0, formatState.width - context.width)
-      : Math.max(0, rect.width / scale - context.width);
-    const maxY = isPageElement
-      ? Math.max(0, formatState.height - context.height)
-      : Math.max(0, rect.height / scale - context.height);
+    // A rotated text is kept on the page by the box it covers.
+    const covered = context.covered ?? {
+      x: 0,
+      y: 0,
+      width: context.width,
+      height: context.height
+    };
+    const areaWidth = isPageElement ? formatState.width : rect.width / scale;
+    const areaHeight = isPageElement ? formatState.height : rect.height / scale;
+    const minX = -covered.x;
+    const minY = -covered.y;
 
     return {
-      x: clamp(position.x, 0, maxX),
-      y: clamp(position.y, 0, maxY)
+      x: clamp(
+        position.x,
+        minX,
+        Math.max(minX, areaWidth - covered.width - covered.x)
+      ),
+      y: clamp(
+        position.y,
+        minY,
+        Math.max(minY, areaHeight - covered.height - covered.y)
+      )
     };
   }
 
@@ -1143,6 +1159,7 @@
       const draggedItem = getDraggedAnnotation();
       return draggedItem ? getLocalRenderedPosition(draggedItem) : null;
     },
+    getCoveredBox: () => dragState?.covered ?? null,
     normalizePosition: normalizeAnnotationDragPosition,
     setPosition: setAnnotationDragPosition,
     onDraggingChange: (active) => {
@@ -1189,7 +1206,8 @@
       startClientX: event.clientX,
       startClientY: event.clientY,
       didDrag: false,
-      role: item.role
+      role: item.role,
+      covered: getTextCoveredBox(item, currentTarget)
     };
 
     const started = annotationDragController.start({
@@ -1256,7 +1274,37 @@
       scope: getAnnotationScope(item),
       width: rect ? rect.width / scale : 0,
       height: rect ? rect.height / scale : 0,
-      role: item.role
+      role: item.role,
+      covered: getTextCoveredBox(item, targetElement)
+    };
+  }
+
+  // The covered box of a rotated text is its text block's bounding box,
+  // relative to the upright item: the block turns about its own centre,
+  // which is not the item's when it is narrower and aligned inside it.
+  function getTextCoveredBox(
+    item: Annotation,
+    itemElement: HTMLElement | null
+  ): AnnotationPositionBoundsContext['covered'] {
+    const textBox = itemElement?.querySelector<HTMLElement>(
+      '.annotation-text-box'
+    );
+    if (
+      item.type !== AnnotationKind.TEXT ||
+      !item.style?.rotation ||
+      !itemElement ||
+      !textBox
+    ) {
+      return undefined;
+    }
+    const scale = getPageScale();
+    const itemRect = itemElement.getBoundingClientRect();
+    const boxRect = textBox.getBoundingClientRect();
+    return {
+      x: (boxRect.left - itemRect.left) / scale,
+      y: (boxRect.top - itemRect.top) / scale,
+      width: boxRect.width / scale,
+      height: boxRect.height / scale
     };
   }
 
@@ -2438,7 +2486,14 @@
       bind:offsetWidth={measuredItemWidths[item.id]}
     >
       {#if item.type === AnnotationKind.TEXT}
-        <div class="annotation-text-box">
+        {@const textRotation = item.style?.rotation ?? 0}
+        <div
+          class="annotation-text-box"
+          data-rotation={textRotation || undefined}
+          style:transform={textRotation
+            ? `rotate(${textRotation}deg)`
+            : undefined}
+        >
           <div class="annotation-text" style={getTextStyle(item)}>
             {item.content || ''}
           </div>

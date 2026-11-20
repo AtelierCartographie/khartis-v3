@@ -1486,8 +1486,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             basemapCtx,
             additionalData
           );
+          // A basemap can hide its sea on its own (composite basemaps start
+          // that way), on top of the shared Mers/Océans row.
+          const isSeaShownForBasemap = currentMetadata
+            ? basemapAuxLayersStore.isVisible(
+                currentMetadata.file,
+                SYNTHETIC_AUX_LAYER_KEY.MERS,
+                true
+              )
+            : true;
           basemapBackgroundLayers =
-            shouldShowBasemapLayers || shouldShowGeneratedOceanLayer
+            (shouldShowBasemapLayers || shouldShowGeneratedOceanLayer) &&
+            isSeaShownForBasemap
               ? basemapGroups.background
               : basemapGroups.background.filter(
                   (layer) => !isGeneratedOceanLayer(layer)

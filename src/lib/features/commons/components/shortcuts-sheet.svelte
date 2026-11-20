@@ -37,7 +37,8 @@
     toolLegend: () => m.tool_legend(),
     toolGeoIndications: () => m.tool_geo_indications(),
     toolAnnotations: () => m.tool_annotations(),
-    toolColorBlindness: () => m.tool_color_blindness()
+    toolColorBlindness: () => m.tool_color_blindness(),
+    toggleGrid: () => m.shortcuts_toggle_grid()
   };
 
   function singleKeyRows(ids: SingleKeyShortcutId[]): ShortcutRow[] {
@@ -85,7 +86,8 @@
           'toolLegend',
           'toolGeoIndications',
           'toolAnnotations',
-          'toolColorBlindness'
+          'toolColorBlindness',
+          'toggleGrid'
         ])
       },
       {

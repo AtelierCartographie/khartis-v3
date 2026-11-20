@@ -1222,10 +1222,9 @@
   "error_loading_subtitle": "An error occurred while loading the map",
   "geo_scale_bar_aria": "Scale bar",
   "geo_north_indicator_aria": "North arrow",
-  "zoom_reset_title": "Zoom level\nShortcuts: {primary} + Plus/Minus to zoom, {primary} + 0 to reset, Z to change mode",
   "zoom_reset": "Reset zoom",
-  "zoom_fit_page": "Fit page to window",
-  "zoom_fit_page_title": "Page zoom level (100%: actual size)\nShortcuts: {primary} + Plus/Minus to zoom, {primary} + 0 to fit to window, {primary} + 1 for actual size, Z to change mode",
+  "zoom_fit_page": "Fit to screen",
+  "zoom_actual_size": "Actual size",
   "zoom_value_input_label": "Zoom level",
   "zoom_in": "Zoom in",
   "zoom_out": "Zoom out",
@@ -1547,6 +1546,7 @@
   "missing_data_shape_square": "Square",
   "filter_data": "Filter",
   "filter_add_filter": "Add a filter",
+  "filter_add_new_filter": "Add a new filter",
   "filter_remove": "Remove filter",
   "filter_panel_title": "Filters",
   "filter_stats_filtered": "{count} filtered values",
@@ -2214,5 +2214,10 @@
   "shortcuts_open_sheet": "Show this list",
   "shortcuts_close": "Close a window or a tool",
   "zoom_mode_toggle_hint": "Toggle Map / Page",
-  "sidenav_keyboard_shortcuts": "Keyboard shortcuts"
+  "sidenav_keyboard_shortcuts": "Keyboard shortcuts",
+  "label_edit_in_styling_title": "Labels can be edited in the Layout step",
+  "label_edit_in_styling_subtitle": "To edit a label's text or move it, go to the Layout step.",
+  "legend_resize_handle": "Resize the legend (double-click: original width)",
+  "shortcuts_toggle_grid": "Show or hide the grid and snapping",
+  "format_grid_shortcut": "Keyboard shortcut:"
 }

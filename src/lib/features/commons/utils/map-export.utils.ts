@@ -4085,15 +4085,20 @@ function buildAnnotationItem(
 
   const textElement = item.querySelector('.annotation-text');
   if (textElement instanceof HTMLElement) {
-    return injectRootAttribute(
-      buildNativeTextLayer(
-        textElement,
-        getRelativeRect(item, pageContainer),
-        id,
-        pageContainer
-      ),
-      nameAttribute
-    );
+    // A rotated text is measured upright, then turned about its centre,
+    // which the rotation leaves in place.
+    const textBox = item.querySelector<HTMLElement>('.annotation-text-box');
+    const rotation = Number(textBox?.dataset.rotation ?? 0);
+    const previousTransform = textBox?.style.transform ?? '';
+    if (rotation && textBox) textBox.style.transform = 'none';
+    const rect = getRelativeRect(item, pageContainer);
+    const layer = buildNativeTextLayer(textElement, rect, id, pageContainer);
+    if (rotation && textBox) textBox.style.transform = previousTransform;
+    const turned =
+      rotation && layer
+        ? `<g transform="rotate(${roundSvgValue(rotation)} ${roundSvgValue(rect.x + rect.width / 2)} ${roundSvgValue(rect.y + rect.height / 2)})">${layer}</g>`
+        : layer;
+    return injectRootAttribute(turned, nameAttribute);
   }
 
   const svgElement = item.querySelector('svg');
