@@ -156,6 +156,21 @@ export function clampPageElementPosition(
   style?: AnnotationStyle
 ): { x: number; y: number } {
   const boxWidth = getPageElementBoxWidth(role, layout, style);
+  if (style?.rotation) {
+    // A rotated text turns about the centre of its text block, known only on
+    // screen: the drag keeps it on the page and aligns its covered box with
+    // the margins, which a grid on its upright corner would undo.
+    return snapPointWithinBounds(
+      position,
+      {
+        minX: -layout.width,
+        maxX: layout.width,
+        minY: -layout.height,
+        maxY: layout.height
+      },
+      false
+    );
+  }
   return snapPointWithinBounds(
     position,
     {
