@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { get_max_scale } from '../core/projscreen';
 import type { BBox } from '../types';
-import { measureDrawnExtent, resolveFittedMapFrame } from './map-frame.utils';
+import {
+  measureDrawnExtent,
+  resolveDrawnMapView,
+  resolveFittedMapFrame
+} from './map-frame.utils';
 
 const A4_LANDSCAPE = { width: 842, height: 595 };
 const MARGINS = { top: 32, right: 32, bottom: 32, left: 32 };
@@ -137,5 +141,38 @@ describe('measureDrawnExtent', () => {
     expect(
       measureDrawnExtent([polygon, [path, null, hidden], { props: {} }])
     ).toEqual([-3, 0, 10, 12]);
+  });
+});
+
+describe('resolveDrawnMapView', () => {
+  it('zooms the drawn map until it meets the frame, centred on it', () => {
+    const frameSize = { width: 400, height: 300 };
+    const referenceBbox: BBox = [0, 0, 1000, 1000];
+    const drawnBbox: BBox = [100, 200, 500, 400];
+    const view = resolveDrawnMapView({
+      frameSize,
+      referenceBbox,
+      drawnBbox,
+      fitPaddingPx: 10
+    });
+
+    const scale =
+      get_max_scale(frameSize, referenceBbox, 10) * 2 ** (view?.zoom ?? 0);
+    // The drawn map is 400 x 200: its width meets the frame.
+    expect(400 * scale).toBeCloseTo(400);
+    expect(200 * scale).toBeLessThanOrEqual(300);
+    expect(view?.centerRatio[0]).toBeCloseTo(-0.2);
+    expect(view?.centerRatio[1]).toBeCloseTo(-0.2);
+  });
+
+  it('gives no view without a drawn extent', () => {
+    expect(
+      resolveDrawnMapView({
+        frameSize: { width: 400, height: 300 },
+        referenceBbox: [0, 0, 10, 10],
+        drawnBbox: null,
+        fitPaddingPx: 0
+      })
+    ).toBeNull();
   });
 });
