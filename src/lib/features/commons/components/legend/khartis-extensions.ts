@@ -208,6 +208,7 @@ export function draw_khartis_proportional_line_legend(
   const rowWidth =
     ordered.length * segmentLength + (ordered.length - 1) * segmentGap;
   const bodyWidth = Math.max(
+    options.minWidth ?? 0,
     margin * 2 + rowWidth,
     footerItems.length > 0
       ? margin * 2 + footerShapeWidth + gap + footerLabelWidth
@@ -369,7 +370,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       measureLegendLongestToken(options.subtitle, subtitleFont),
       measureLegendLongestToken(options.note, noteFont)
     );
-  const bodyWidth = Math.max(contentWidth, textWidth);
+  const bodyWidth = Math.max(options.minWidth ?? 0, contentWidth, textWidth);
   const maxTextWidth = bodyWidth - margin * 2;
   const header = renderLegendHeader({
     title: options.title,

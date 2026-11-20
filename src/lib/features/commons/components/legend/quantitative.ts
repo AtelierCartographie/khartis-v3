@@ -172,6 +172,7 @@ export function draw_quanti_color_legend(
     fontFamily: resolvedFontFamily
   });
   const body_width = Math.max(
+    options.minWidth ?? 0,
     scale_body_width,
     nodata_body_width,
     margin_left +
@@ -435,6 +436,7 @@ function draw_vertical_quanti_color_legend(
     ? margin + cell_width + label_gap + nodata_label_width + margin
     : 0;
   const body_width = Math.max(
+    options.minWidth ?? 0,
     scale_body_width,
     nodata_body_width,
     margin * 2 +
