@@ -200,6 +200,13 @@ pour des paliers perceptuellement réguliers. `generateColorsForBreaks()`
 appelle `sequential()` ou `divergentSequential()`, puis `resolvePalette()` pour
 la sortie WebGL.
 
+Chaque couleur est contrainte au gamut sRGB (option `gamut` d'ok-palette, `srgb`
+par défaut) : la chroma est plafonnée classe par classe au maximum affichable
+pour sa clarté et sa teinte, qui restent inchangées. Le navigateur n'a donc
+plus rien à écrêter, et l'écart perceptuel entre classes survit à l'affichage.
+Les gamuts CMJN (`cmyk-coated`, `cmyk-uncoated`) existent dans la bibliothèque
+mais ne sont pas exposés dans Khartis.
+
 Quatre types (`PALETTE_TYPE`) : `sequential`, `diverging`, `qualitative` et
 `pattern`. Le type suit la nature de la variable : une palette qualitative sur
 une variable ordonnée détruit l'ordre que la carte doit montrer.
