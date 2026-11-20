@@ -992,6 +992,7 @@ export function getLegendSegments(
       const svg = draft.create(
         {
           ...getLegendTextOptions(item, index, drafts.length, legendTextStyle),
+          minWidth: layout.width ?? undefined,
           entrySpacing: layout.entrySpacing
         },
         {
