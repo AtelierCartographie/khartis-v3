@@ -52,7 +52,11 @@
   import LabelHoverFrame from './label-hover-frame.svelte';
   import LabelTextEditor from './label-text-editor.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
-  import { rowScopeStore } from '../stores/row-scope.store.svelte';
+  import {
+    buildDatasetPreviewScopeId,
+    rowScopeStore
+  } from '../stores/row-scope.store.svelte';
+  import { selectRowsInScope } from '../utils/arrow-filter.utils';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
@@ -106,6 +110,7 @@
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
   import {
     measureDrawnExtent,
+    resolveDrawnMapView,
     resolveFittedMapFrame
   } from '../utils/map-frame.utils';
   import {
@@ -136,6 +141,7 @@
   import TooltipBubble from '$lib/features/commons/components/carbon/tooltip-bubble.svelte';
   import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { showInfo } from '$lib/features/commons/utils/notification.utils.svelte';
 
   let {
     tables,
@@ -866,9 +872,47 @@
     untrack(() => {
       if (mapInit.isMapLoaded && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         refitProjectionToCanvas();
+        fitDrawnMapInFrame();
       }
     });
   });
+
+  $effect(() => {
+    if (mapInstanceStore.mapLibreResetRevision === 0) {
+      return;
+    }
+
+    untrack(() => {
+      if (mapInit.viewMode !== ViewMode.MAPLIBRE || !mapInit.map) return;
+      const bounds =
+        getCatalogBasemapBounds() ??
+        resolveFilteredUserDataBounds() ??
+        getBasemapViewportPreset(basemapStyleStore.selectedStyle)?.bounds;
+      if (bounds) {
+        mapBounds.fitToBounds(bounds, { animate: true, reason: 'reset' });
+        mapInstanceStore.markViewportManual();
+      }
+    });
+  });
+
+  // A reset shows the whole drawn map in the frame as it is: the base view
+  // saved with the project may come from another frame, and an automatic fit
+  // would move the frame the user placed.
+  function fitDrawnMapInFrame(): void {
+    const referenceBbox = projectionStore.referenceBbox;
+    const view = resolveDrawnMapView({
+      frameSize: projectionStore.fitSize,
+      referenceBbox,
+      drawnBbox:
+        referenceBbox && drawnMapExtent
+          ? fromReferenceRatio(drawnMapExtent, referenceBbox)
+          : null,
+      fitPaddingPx: logicalMapViewportFitPaddingPx
+    });
+    if (!view) return;
+    mapInstanceStore.setOrthographicBaseView(view.zoom, view.centerRatio);
+    mapInstanceStore.fitToOrthographicBounds();
+  }
 
   function queueSuggestedPreviewViewportSettled(): void {
     requestAnimationFrame(() => {
@@ -1120,6 +1164,20 @@
       }
     }
     return null;
+  }
+
+  // The rows the data step filters keep: those are the data on the map.
+  function resolveFilteredUserDataBounds() {
+    if (!firstTable || !firstDatasetId) return null;
+    const rowIds = rowScopeStore.getScopedRowIds(
+      buildDatasetPreviewScopeId(firstDatasetId),
+      undefined
+    );
+    if (!rowIds) return resolveUserDataBounds();
+    const scoped = selectRowsInScope(firstTable, rowIds);
+    return scoped.numRows > 0
+      ? calculateBoundsFromGeoArrow(scoped, { fromRows: true })
+      : null;
   }
 
   function applyPendingMapLibreViewportPreset(): void {
@@ -2398,7 +2456,17 @@
     pick: (x, y, radius) => {
       const target = mapInit.deckOverlay ?? mapInit.deckInstance;
       return target?.pickObject({ x, y, radius }) ?? null;
-    }
+    },
+    isHintEnabled: () =>
+      !isFacetCell &&
+      globalState.selectedStep === ToolbarStep.Visualizations &&
+      !globalState.isMapExporting,
+    onLockedLabel: () =>
+      showInfo(
+        m.label_edit_in_styling_title(),
+        m.label_edit_in_styling_subtitle(),
+        'top-left'
+      )
   });
 
   onMount(() => {

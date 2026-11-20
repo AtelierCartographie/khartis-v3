@@ -119,6 +119,42 @@ export function resolveFittedMapFrame({
   };
 }
 
+/**
+ * Base view that shows the whole drawn map in a frame that keeps its size,
+ * meeting the frame as the automatic frame does: the zoom past the fit of
+ * the reference in that frame (which keeps its padding), and the view centre
+ * on the drawn map. Null when either extent has no area.
+ */
+export function resolveDrawnMapView({
+  frameSize,
+  referenceBbox,
+  drawnBbox,
+  fitPaddingPx
+}: {
+  frameSize: { width: number; height: number };
+  referenceBbox: BBox | null;
+  drawnBbox: BBox | null;
+  fitPaddingPx: number;
+}): { zoom: number; centerRatio: [number, number] } | null {
+  if (!hasArea(referenceBbox) || !hasArea(drawnBbox)) {
+    return null;
+  }
+
+  const referenceScale = get_max_scale(frameSize, referenceBbox, fitPaddingPx);
+  const drawnScale = get_max_scale(frameSize, drawnBbox);
+  return {
+    zoom: Math.log2(drawnScale / referenceScale),
+    centerRatio: [
+      ((drawnBbox[0] + drawnBbox[2]) / 2 -
+        (referenceBbox[0] + referenceBbox[2]) / 2) /
+        (referenceBbox[2] - referenceBbox[0]),
+      ((drawnBbox[1] + drawnBbox[3]) / 2 -
+        (referenceBbox[1] + referenceBbox[3]) / 2) /
+        (referenceBbox[3] - referenceBbox[1])
+    ]
+  };
+}
+
 const drawnExtentCache = new WeakMap<object, BBox | null>();
 
 function readPositions(
