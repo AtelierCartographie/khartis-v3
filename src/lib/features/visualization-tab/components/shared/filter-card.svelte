@@ -181,7 +181,6 @@
       titleText={m.filter_operator()}
       items={availOps.map((op) => ({ id: op.value, text: op.label }))}
       selectedId={filter.operator}
-      direction="top"
       on:select={(e) =>
         handleOperatorChange(e.detail.selectedId as VizFilterOperator)}
       type="default"

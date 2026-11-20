@@ -73,7 +73,6 @@
   title={m.geo_inset_map()}
   open={open}
   onToggle={onToggle}
-  animateBody
   scrollIntoViewOnOpen
   showToggle={true}
   toggleChecked={geoState.insetMap.enabled && insetMapAvailable}

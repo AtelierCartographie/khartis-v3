@@ -47,6 +47,7 @@ import {
 } from '$lib/features/map';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 import { BASEMAP_WATER_FILL_OPACITY_RATIO } from '$lib/features/map/layers/basemap-layers';
 import {
@@ -448,7 +449,17 @@ function sphereRing(): Array<[number, number]> {
 
 function resolveSeaColor(): string | undefined {
   const sea = basemapLayersStore.layers.find((layer) => layer.id === 'mers');
-  return sea?.id === 'mers' && sea.visible ? sea.color : undefined;
+  const basemapFile = basemapService.currentMetadata?.file;
+  const isShownForBasemap = basemapFile
+    ? basemapAuxLayersStore.isVisible(
+        basemapFile,
+        SYNTHETIC_AUX_LAYER_KEY.MERS,
+        true
+      )
+    : true;
+  return sea?.id === 'mers' && sea.visible && isShownForBasemap
+    ? sea.color
+    : undefined;
 }
 
 function lineCoordinates(collection: {

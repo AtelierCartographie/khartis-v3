@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button as CarbonButton } from 'carbon-components-svelte';
   import type { Snippet } from 'svelte';
-  import TooltipBubble from './tooltip-bubble.svelte';
+  import TooltipBubble, { type TooltipLine } from './tooltip-bubble.svelte';
   import type {
     CarbonTooltipAlignment,
     CarbonTooltipDirection
@@ -11,6 +11,10 @@
   interface Props extends Record<string, unknown> {
     children?: Snippet;
     iconDescription?: string;
+    /** Shown as keycaps after the tooltip text. */
+    shortcut?: string;
+    /** Several commands in the tooltip, each with its shortcut. */
+    tooltipLines?: TooltipLine[];
     tooltipPosition?: CarbonTooltipDirection;
     tooltipAlignment?: CarbonTooltipAlignment;
     hideTooltip?: boolean;
@@ -23,6 +27,8 @@
   const {
     children,
     iconDescription,
+    shortcut,
+    tooltipLines,
     tooltipPosition = 'bottom',
     tooltipAlignment = 'center',
     hideTooltip = false,
@@ -144,6 +150,8 @@
 {#if tooltipOpen && canShowPortalTooltip}
   <TooltipBubble
     text={iconDescription ?? ''}
+    shortcut={shortcut}
+    lines={tooltipLines}
     trigger={triggerElement}
     direction={tooltipPosition}
     align={tooltipAlignment}

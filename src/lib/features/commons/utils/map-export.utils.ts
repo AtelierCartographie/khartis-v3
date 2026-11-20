@@ -160,25 +160,6 @@ interface StructuredSvgOptions {
   mapLibreBackgroundDataUrl?: string | null;
 }
 
-const SVG_EXPORT_STYLE_PROPERTIES = [
-  'color',
-  'fill',
-  'stroke',
-  'stroke-width',
-  'stroke-dasharray',
-  'stroke-linecap',
-  'stroke-linejoin',
-  'font-family',
-  'font-size',
-  'font-style',
-  'font-weight',
-  'font-variant',
-  'text-anchor',
-  'dominant-baseline',
-  'opacity',
-  'vector-effect'
-] as const;
-
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   width: 1920,
   height: 1080
@@ -496,13 +477,166 @@ function escapeXml(value: string): string {
     .replaceAll("'", '&apos;');
 }
 
-function isTransparentColor(value: string): boolean {
+interface CssColor {
+  hex: string;
+  opacity: number;
+}
+
+const NAMED_CSS_COLORS: Record<string, string> = {
+  black: '#000000',
+  white: '#ffffff'
+};
+
+function toHexByte(value: number): string {
+  return Math.round(clamp(value, 0, 255))
+    .toString(16)
+    .padStart(2, '0');
+}
+
+function parseHexColor(value: string): CssColor | null {
+  const match = value.match(/^#([0-9a-f]{3,8})$/i);
+  if (!match) return null;
+
+  const digits = match[1];
+  const expanded =
+    digits.length <= 4
+      ? digits
+          .split('')
+          .map((digit) => digit + digit)
+          .join('')
+      : digits;
+  if (expanded.length !== 6 && expanded.length !== 8) return null;
+
+  const alpha =
+    expanded.length === 8 ? Number.parseInt(expanded.slice(6), 16) / 255 : 1;
+  return { hex: `#${expanded.slice(0, 6).toLowerCase()}`, opacity: alpha };
+}
+
+function parseRgbFunction(value: string): CssColor | null {
+  const match = value.match(/^rgba?\(([^)]*)\)$/i);
+  if (!match) return null;
+
+  const tokens = match[1].split(/[\s,/]+/).filter(Boolean);
+  if (tokens.length < 3) return null;
+
+  const channel = (token: string): number =>
+    token.endsWith('%')
+      ? (Number.parseFloat(token) / 100) * 255
+      : Number.parseFloat(token);
+  const [red, green, blue] = tokens.slice(0, 3).map(channel);
+  const alphaToken = tokens[3];
+  const alpha =
+    alphaToken === undefined
+      ? 1
+      : alphaToken.endsWith('%')
+        ? Number.parseFloat(alphaToken) / 100
+        : Number.parseFloat(alphaToken);
+
+  if (![red, green, blue, alpha].every(Number.isFinite)) return null;
+
+  return {
+    hex: `#${toHexByte(red)}${toHexByte(green)}${toHexByte(blue)}`,
+    opacity: clamp(alpha, 0, 1)
+  };
+}
+
+let colorNormalizationContext: OffscreenCanvasRenderingContext2D | null = null;
+
+// Modern colour syntaxes (`oklch()`, `color()`) survive getComputedStyle;
+// the canvas serializes them back to hex or rgba.
+function normalizeColorThroughCanvas(value: string): string | null {
+  if (typeof OffscreenCanvas === 'undefined') return null;
+
+  colorNormalizationContext ??= new OffscreenCanvas(1, 1).getContext('2d');
+  if (!colorNormalizationContext) return null;
+
+  colorNormalizationContext.fillStyle = '#010203';
+  colorNormalizationContext.fillStyle = value;
+  const normalized = String(colorNormalizationContext.fillStyle ?? '');
+  return normalized && normalized !== '#010203' ? normalized : null;
+}
+
+// Design tools read SVG 1.1 paint only: `rgba()`, `hsl()` or `transparent`
+// render black in Inkscape and are dropped by Illustrator and Figma.
+function parseCssColor(value: string): CssColor | null {
   const normalized = value.trim().toLowerCase();
-  return (
-    normalized === '' ||
-    normalized === 'transparent' ||
-    normalized === 'rgba(0, 0, 0, 0)'
-  );
+  if (!normalized || normalized === 'none') return null;
+  if (normalized === 'transparent') return { hex: '#000000', opacity: 0 };
+
+  const named = NAMED_CSS_COLORS[normalized];
+  if (named) return { hex: named, opacity: 1 };
+
+  const parsed = parseHexColor(normalized) ?? parseRgbFunction(normalized);
+  if (parsed) return parsed;
+
+  const canvasColor = normalizeColorThroughCanvas(normalized);
+  return canvasColor
+    ? (parseHexColor(canvasColor) ?? parseRgbFunction(canvasColor))
+    : null;
+}
+
+function isTransparentColor(value: string): boolean {
+  if (!value.trim()) return true;
+  const color = parseCssColor(value);
+  return color !== null && color.opacity <= 0;
+}
+
+function resolveSvgPaintUrl(value: string): string | null {
+  const match = value.match(/^url\(\s*["']?[^"')]*?(#[^"')]+)["']?\s*\)$/i);
+  return match ? `url(${match[1]})` : null;
+}
+
+// Paint as `#rrggbb` plus a separate opacity attribute, the form every
+// design tool reads. An unparsable value is kept as is.
+function cssPaintAttributeEntries(
+  attribute: 'fill' | 'stroke',
+  value: string,
+  extraOpacity = 1
+): [string, string][] {
+  const trimmed = value.trim();
+  const url = resolveSvgPaintUrl(trimmed);
+  if (url) {
+    return extraOpacity < 1
+      ? [
+          [attribute, url],
+          [`${attribute}-opacity`, roundSvgValue(extraOpacity)]
+        ]
+      : [[attribute, url]];
+  }
+
+  if (!trimmed || trimmed.toLowerCase() === 'none') {
+    return [[attribute, 'none']];
+  }
+
+  const color = parseCssColor(trimmed);
+  if (!color) return [[attribute, trimmed]];
+
+  const opacity = clamp(color.opacity * extraOpacity, 0, 1);
+  if (opacity <= 0) return [[attribute, 'none']];
+
+  return opacity < 1
+    ? [
+        [attribute, color.hex],
+        [`${attribute}-opacity`, roundSvgValue(opacity)]
+      ]
+    : [[attribute, color.hex]];
+}
+
+function cssPaintAttributes(
+  attribute: 'fill' | 'stroke',
+  value: string,
+  extraOpacity = 1
+): string {
+  return cssPaintAttributeEntries(attribute, value, extraOpacity)
+    .map(([name, entry]) => `${name}="${escapeXml(entry)}"`)
+    .join(' ');
+}
+
+function opacityAttribute(value: string): string {
+  const opacity = Number.parseFloat(value);
+  return Number.isFinite(opacity) && opacity < 1
+    ? `opacity="${roundSvgValue(clamp(opacity, 0, 1))}"`
+    : '';
 }
 
 interface ParsedBoxShadow {
@@ -531,27 +665,15 @@ function parseBoxShadow(value: string): ParsedBoxShadow | null {
   if (numbers.length < 2) return null;
 
   const [offsetX, offsetY, blur = 0] = numbers;
-  let color = colorToken;
-  let opacity = 1;
-
-  const rgbaMatch = colorToken.match(/rgba?\(([^)]+)\)/i);
-  if (rgbaMatch) {
-    const components = rgbaMatch[1]
-      .split(',')
-      .map((token) => Number(token.trim()));
-    if (components.length >= 3) {
-      const [r, g, b, a] = components;
-      color = `rgb(${r}, ${g}, ${b})`;
-      opacity = Number.isFinite(a) ? a : 1;
-    }
-  }
+  const color = parseCssColor(colorToken);
+  if (!color || color.opacity <= 0) return null;
 
   return {
     offsetX,
     offsetY,
     blur,
-    color,
-    opacity: clamp(opacity, 0, 1)
+    color: color.hex,
+    opacity: color.opacity
   };
 }
 
@@ -2407,10 +2529,24 @@ function buildTextElementMarkup(
   hoistAnchor: boolean,
   hoistFill: boolean
 ): string {
+  // Illustrator drops `stroke-opacity` on text: a halo, whose fill and
+  // stroke share one colour, carries its opacity on the element instead.
+  const strokeColor = element.strokeColor;
+  const sharedOpacity =
+    strokeColor &&
+    Math.abs(strokeColor.opacity - element.fillColor.opacity) < 1e-3 &&
+    strokeColor.opacity < 1
+      ? strokeColor.opacity
+      : null;
+  const fillColor =
+    sharedOpacity === null
+      ? element.fillColor
+      : { ...element.fillColor, opacity: 1 };
   const attributes = [
-    hoistFill ? '' : colorAttributes('fill', element.fillColor),
-    element.strokeColor
-      ? `${colorAttributes('stroke', element.strokeColor)} stroke-width="${roundSvgValue(element.strokeWidth)}" stroke-linejoin="round"`
+    sharedOpacity === null ? '' : `opacity="${roundSvgValue(sharedOpacity)}"`,
+    hoistFill ? '' : colorAttributes('fill', fillColor),
+    strokeColor
+      ? `${colorAttributes('stroke', sharedOpacity === null ? strokeColor : { ...strokeColor, opacity: 1 })} stroke-width="${roundSvgValue(element.strokeWidth)}" stroke-linejoin="round"`
       : 'stroke="none"',
     hoistSize ? '' : `font-size="${roundSvgValue(element.size)}"`,
     hoistAnchor ? '' : `text-anchor="${escapeXml(element.anchor)}"`
@@ -2955,29 +3091,278 @@ function parseCssPixels(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getSvgComputedStyle(element: SVGElement): string {
-  const computed = getComputedStyle(element);
+const SVG_PRESENTATION_ATTRIBUTES = [
+  'color',
+  'fill',
+  'fill-opacity',
+  'stroke',
+  'stroke-opacity',
+  'stroke-width',
+  'stroke-dasharray',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-weight',
+  'font-variant',
+  'letter-spacing',
+  'text-anchor',
+  'dominant-baseline',
+  'alignment-baseline',
+  'vector-effect',
+  'opacity'
+] as const;
 
-  return SVG_EXPORT_STYLE_PROPERTIES.map((property) => {
-    if (property !== 'color' && element.hasAttribute(property)) {
-      return '';
-    }
+const SVG_PAINTED_TAGS = new Set([
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'path',
+  'polygon',
+  'polyline',
+  'text',
+  'tspan',
+  'use'
+]);
 
-    const value = computed.getPropertyValue(property).trim();
-    return value ? `${property}: ${value}` : '';
-  })
-    .filter(Boolean)
-    .join('; ');
+const SVG_TEXT_TAGS = new Set(['text', 'tspan']);
+
+function readSvgStyle(
+  element: SVGElement,
+  computed: CSSStyleDeclaration,
+  property: string
+): string {
+  return (
+    computed.getPropertyValue(property).trim() ||
+    element.getAttribute(property)?.trim() ||
+    ''
+  );
 }
 
-function inlineSvgComputedStyles(source: SVGElement, clone: SVGElement): void {
-  const computedStyle = getSvgComputedStyle(source);
-  const existingStyle = clone.getAttribute('style')?.trim();
-  const style = [existingStyle, computedStyle].filter(Boolean).join('; ');
+function stripCssPixels(value: string): string {
+  return value
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((token) => {
+      const parsed = Number.parseFloat(token);
+      return Number.isFinite(parsed) ? roundSvgValue(parsed) : token;
+    })
+    .join(' ');
+}
 
-  if (style) {
-    clone.setAttribute('style', style);
+function isOpaqueOpacity(value: string): boolean {
+  const opacity = Number.parseFloat(value);
+  return !Number.isFinite(opacity) || opacity >= 1;
+}
+
+const NEUTRAL_DOMINANT_BASELINES = new Set(['', 'auto', 'alphabetic']);
+
+// Illustrator, Affinity and Canva ignore `dominant-baseline`: the text is
+// moved by the offset the browser measures between the authored baseline
+// and the alphabetic one, then written on that alphabetic baseline.
+function measureAlphabeticBaselineShift(text: SVGGraphicsElement): number {
+  if (typeof text.getBBox !== 'function') return 0;
+
+  const nodes = [
+    text,
+    ...Array.from(text.querySelectorAll<SVGElement>('tspan'))
+  ];
+  const needsShift = nodes.some(
+    (node) =>
+      !NEUTRAL_DOMINANT_BASELINES.has(
+        readSvgStyle(node, getComputedStyle(node), 'dominant-baseline')
+      )
+  );
+  if (!needsShift) return 0;
+
+  const previousValues = nodes.map((node) =>
+    node.style.getPropertyValue('dominant-baseline')
+  );
+  try {
+    const authored = text.getBBox();
+    nodes.forEach((node) =>
+      node.style.setProperty('dominant-baseline', 'alphabetic')
+    );
+    const alphabetic = text.getBBox();
+    if (authored.height <= 0 || alphabetic.height <= 0) return 0;
+    return authored.y - alphabetic.y;
+  } catch {
+    return 0;
+  } finally {
+    nodes.forEach((node, index) => {
+      const previous = previousValues[index];
+      if (previous) {
+        node.style.setProperty('dominant-baseline', previous);
+      } else {
+        node.style.removeProperty('dominant-baseline');
+      }
+    });
   }
+}
+
+function shiftSvgYAttribute(element: Element, delta: number): boolean {
+  const value = element.getAttribute('y');
+  if (value === null) return true;
+
+  const values = value
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (values.some((entry) => !Number.isFinite(entry))) return false;
+
+  element.setAttribute(
+    'y',
+    values.map((entry) => roundSvgValue(entry + delta)).join(' ')
+  );
+  return true;
+}
+
+function applyAlphabeticBaselineShift(clone: SVGElement, delta: number): void {
+  if (Math.abs(delta) < 0.01) return;
+
+  const positioned = [clone, ...Array.from(clone.querySelectorAll('tspan'))];
+  const allNumeric = positioned.every((element) =>
+    /^[\s\d.,eE+-]*$/.test(element.getAttribute('y') ?? '')
+  );
+
+  if (allNumeric) {
+    if (clone.getAttribute('y') === null) {
+      clone.setAttribute('y', roundSvgValue(delta));
+    }
+    positioned.forEach((element) => shiftSvgYAttribute(element, delta));
+    return;
+  }
+
+  const transform = clone.getAttribute('transform');
+  clone.setAttribute(
+    'transform',
+    `${transform ? `${transform} ` : ''}translate(0, ${roundSvgValue(delta)})`
+  );
+}
+
+function setSvgAttributes(
+  element: SVGElement,
+  entries: [string, string][]
+): void {
+  entries.forEach(([name, value]) => element.setAttribute(name, value));
+}
+
+// Illustrator and Figma neither apply the CSS of a `style` attribute
+// reliably nor inherit paint from a group: every painted element carries
+// its resolved style as presentation attributes, groups only their opacity.
+function applySvgPresentation(source: SVGElement, clone: SVGElement): void {
+  const computed = getComputedStyle(source);
+  const tagName = source.localName;
+  const read = (property: string): string =>
+    readSvgStyle(source, computed, property);
+  const hasComputedPaint = computed.getPropertyValue('fill').trim() !== '';
+  const isPainted = SVG_PAINTED_TAGS.has(tagName);
+  const isText = SVG_TEXT_TAGS.has(tagName);
+
+  const entries: [string, string][] = [];
+  const opacity = read('opacity');
+  if (!isOpaqueOpacity(opacity)) {
+    entries.push(['opacity', roundSvgValue(Number.parseFloat(opacity))]);
+  }
+
+  if (isPainted) {
+    const fill = read('fill');
+    if (fill) {
+      entries.push(
+        ...cssPaintAttributeEntries(
+          'fill',
+          fill,
+          Number.parseFloat(read('fill-opacity') || '1')
+        )
+      );
+    }
+
+    const stroke = read('stroke');
+    if (stroke) {
+      const strokeEntries = cssPaintAttributeEntries(
+        'stroke',
+        stroke,
+        Number.parseFloat(read('stroke-opacity') || '1')
+      );
+      entries.push(...strokeEntries);
+
+      if (strokeEntries[0]?.[1] !== 'none') {
+        const strokeWidth = read('stroke-width');
+        if (strokeWidth) {
+          entries.push(['stroke-width', stripCssPixels(strokeWidth)]);
+        }
+        const dashArray = read('stroke-dasharray');
+        if (dashArray && dashArray !== 'none') {
+          entries.push(['stroke-dasharray', stripCssPixels(dashArray)]);
+        }
+        const lineCap = read('stroke-linecap');
+        if (lineCap && lineCap !== 'butt') {
+          entries.push(['stroke-linecap', lineCap]);
+        }
+        const lineJoin = read('stroke-linejoin');
+        if (lineJoin && lineJoin !== 'miter') {
+          entries.push(['stroke-linejoin', lineJoin]);
+        }
+      }
+    }
+
+    const vectorEffect = read('vector-effect');
+    if (vectorEffect === 'non-scaling-stroke') {
+      entries.push(['vector-effect', vectorEffect]);
+    }
+  }
+
+  if (isText) {
+    const fontFamily = read('font-family');
+    if (fontFamily) entries.push(['font-family', fontFamily]);
+    const fontSize = read('font-size');
+    if (fontSize) entries.push(['font-size', stripCssPixels(fontSize)]);
+    const fontStyle = read('font-style');
+    if (fontStyle && fontStyle !== 'normal') {
+      entries.push(['font-style', fontStyle]);
+    }
+    const fontWeight = read('font-weight');
+    if (fontWeight && fontWeight !== 'normal' && fontWeight !== '400') {
+      entries.push(['font-weight', fontWeight]);
+    }
+    if (read('font-variant') === 'small-caps') {
+      entries.push(['font-variant', 'small-caps']);
+    }
+    const letterSpacing = read('letter-spacing');
+    if (letterSpacing && letterSpacing !== 'normal') {
+      const spacing = stripCssPixels(letterSpacing);
+      if (spacing !== '0') entries.push(['letter-spacing', spacing]);
+    }
+    const textAnchor = read('text-anchor');
+    if (textAnchor && textAnchor !== 'start') {
+      entries.push(['text-anchor', textAnchor]);
+    }
+  }
+
+  const baselineShift =
+    tagName === 'text' && source instanceof SVGGraphicsElement
+      ? measureAlphabeticBaselineShift(source)
+      : 0;
+
+  if (isPainted || hasComputedPaint) {
+    clone.removeAttribute('style');
+    SVG_PRESENTATION_ATTRIBUTES.forEach((attribute) =>
+      clone.removeAttribute(attribute)
+    );
+    setSvgAttributes(clone, entries);
+    if (tagName === 'text' && hasComputedPaint) {
+      clone
+        .querySelectorAll('tspan')
+        .forEach((tspan) =>
+          ['dominant-baseline', 'alignment-baseline'].forEach((attribute) =>
+            tspan.removeAttribute(attribute)
+          )
+        );
+    }
+  }
+  applyAlphabeticBaselineShift(clone, baselineShift);
 
   const sourceChildren = Array.from(source.children).filter(
     (child): child is SVGElement => child instanceof SVGElement
@@ -2988,9 +3373,17 @@ function inlineSvgComputedStyles(source: SVGElement, clone: SVGElement): void {
 
   sourceChildren.forEach((sourceChild, index) => {
     const cloneChild = cloneChildren[index];
-    if (cloneChild) {
-      inlineSvgComputedStyles(sourceChild, cloneChild);
+    if (!cloneChild) return;
+
+    const childComputed = getComputedStyle(sourceChild);
+    if (
+      childComputed.display === 'none' ||
+      childComputed.visibility === 'hidden'
+    ) {
+      cloneChild.remove();
+      return;
     }
+    applySvgPresentation(sourceChild, cloneChild);
   });
 }
 
@@ -3042,7 +3435,7 @@ function serializeSvgNode(
   position?: Partial<RelativeRect>
 ): string {
   const clone = element.cloneNode(true) as SVGElement;
-  inlineSvgComputedStyles(element, clone);
+  applySvgPresentation(element, clone);
 
   const x = position?.x ?? 0;
   const y = position?.y ?? 0;
@@ -3099,13 +3492,21 @@ function buildDropShadowFilter(shadow: ParsedBoxShadow): {
       width="140%"
       height="140%"
     >
-      <feDropShadow
+      <feGaussianBlur in="SourceAlpha" stdDeviation="${roundSvgValue(shadow.blur / 2)}" />
+      <feOffset
         dx="${roundSvgValue(shadow.offsetX)}"
         dy="${roundSvgValue(shadow.offsetY)}"
-        stdDeviation="${roundSvgValue(shadow.blur / 2)}"
+        result="khartis-shadow-offset"
+      />
+      <feFlood
         flood-color="${escapeXml(shadow.color)}"
         flood-opacity="${roundSvgValue(shadow.opacity)}"
       />
+      <feComposite in2="khartis-shadow-offset" operator="in" />
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
     </filter>
   `;
   return { id, markup };
@@ -3134,10 +3535,9 @@ function buildElementBackgroundRect(
   }
 
   const radius = parseCssPixels(styles.borderTopLeftRadius);
-  const fill = isTransparentColor(backgroundColor) ? 'none' : backgroundColor;
   const strokeAttributes = hasBorder
-    ? `stroke="${escapeXml(styles.borderColor)}" stroke-width="${roundSvgValue(borderWidth)}"`
-    : 'stroke="none"';
+    ? `${cssPaintAttributes('stroke', styles.borderColor)} stroke-width="${roundSvgValue(borderWidth)}"`
+    : '';
   const shadow = parseBoxShadow(styles.boxShadow);
   const filter = shadow ? buildDropShadowFilter(shadow) : null;
 
@@ -3148,11 +3548,10 @@ function buildElementBackgroundRect(
       y="0"
       width="${roundSvgValue(width)}"
       height="${roundSvgValue(height)}"
-      rx="${roundSvgValue(radius)}"
-      ry="${roundSvgValue(radius)}"
-      fill="${escapeXml(fill)}"
+      ${radius > 0 ? `rx="${roundSvgValue(radius)}" ry="${roundSvgValue(radius)}"` : ''}
+      ${cssPaintAttributes('fill', backgroundColor)}
       ${strokeAttributes}
-      opacity="${escapeXml(styles.opacity || '1')}"
+      ${opacityAttribute(styles.opacity)}
       ${filter ? `filter="url(#${filter.id})"` : ''}
     />
   `;
@@ -3193,8 +3592,10 @@ function resolveAlignedTextX(
 
 interface NativeTextLine {
   text: string;
-  x: number;
-  y: number;
+  left: number;
+  right: number;
+  top: number;
+  height: number;
 }
 
 function collectTextNodes(element: HTMLElement): Text[] {
@@ -3215,9 +3616,9 @@ function collectTextNodes(element: HTMLElement): Text[] {
 
 function findNativeTextLine(
   lines: NativeTextLine[],
-  y: number
+  top: number
 ): NativeTextLine | null {
-  return lines.find((line) => Math.abs(line.y - y) < 1.5) ?? null;
+  return lines.find((line) => Math.abs(line.top - top) < 1.5) ?? null;
 }
 
 function collectNativeTextLinesFromRanges(
@@ -3232,60 +3633,61 @@ function collectNativeTextLinesFromRanges(
   if (typeof range.getClientRects !== 'function') return [];
   let lastLine: NativeTextLine | null = null;
 
-  try {
-    for (const textNode of collectTextNodes(element)) {
-      const text = textNode.textContent ?? '';
+  for (const textNode of collectTextNodes(element)) {
+    const text = textNode.textContent ?? '';
 
-      for (let index = 0; index < text.length; index++) {
-        const character = text[index] ?? '';
-        if (character === '\n') {
-          lastLine = null;
-          continue;
-        }
-
-        range.setStart(textNode, index);
-        range.setEnd(textNode, index + 1);
-        const charRect = Array.from(range.getClientRects()).find(
-          (rect) => rect.width > 0 || rect.height > 0
-        );
-
-        if (!charRect) {
-          if (lastLine) {
-            lastLine.text += character;
-          }
-          continue;
-        }
-
-        const x = charRect.left - containerRect.left;
-        const y = charRect.top - containerRect.top;
-        const existingLine = findNativeTextLine(lines, y);
-        const line =
-          existingLine ??
-          ({
-            text: '',
-            x,
-            y
-          } satisfies NativeTextLine);
-
-        if (!existingLine) {
-          lines.push(line);
-        }
-
-        line.text += character;
-        line.x = Math.min(line.x, x);
-        lastLine = line;
+    for (let index = 0; index < text.length; index++) {
+      const character = text[index] ?? '';
+      if (character === '\n') {
+        lastLine = null;
+        continue;
       }
-    }
-  } finally {
-    if (typeof range.detach === 'function') {
-      range.detach();
+
+      range.setStart(textNode, index);
+      range.setEnd(textNode, index + 1);
+      const charRect = Array.from(range.getClientRects()).find(
+        (rect) => rect.width > 0 || rect.height > 0
+      );
+
+      if (!charRect) {
+        if (lastLine) {
+          lastLine.text += character;
+        }
+        continue;
+      }
+
+      const left = charRect.left - containerRect.left;
+      const right = charRect.right - containerRect.left;
+      const top = charRect.top - containerRect.top;
+      const existingLine = findNativeTextLine(lines, top);
+      const line =
+        existingLine ??
+        ({
+          text: '',
+          left,
+          right,
+          top,
+          height: charRect.height
+        } satisfies NativeTextLine);
+
+      if (!existingLine) {
+        lines.push(line);
+      }
+
+      line.text += character;
+      line.left = Math.min(line.left, left);
+      if (character.trim()) {
+        line.right = Math.max(line.right, right);
+      }
+      line.height = Math.max(line.height, charRect.height);
+      lastLine = line;
     }
   }
 
   return lines
-    .map((line) => ({ ...line, text: line.text.trimEnd() }))
-    .filter((line) => line.text.trim().length > 0)
-    .sort((a, b) => a.y - b.y || a.x - b.x);
+    .map((line) => ({ ...line, text: line.text.trim() }))
+    .filter((line) => line.text.length > 0)
+    .sort((a, b) => a.top - b.top || a.left - b.left);
 }
 
 function buildFallbackNativeTextLines(
@@ -3294,16 +3696,61 @@ function buildFallbackNativeTextLines(
   computed: CSSStyleDeclaration
 ): NativeTextLine[] {
   const lineHeight = resolveLineHeight(computed);
+  const fontSize = parseCssPixels(computed.fontSize) || lineHeight / 1.2;
+  const contentHeight = fontSize * 1.2;
   const topPadding = parseCssPixels(computed.paddingTop);
   const x = resolveAlignedTextX(rect, computed);
 
   return text.split('\n').map((line, index) => ({
-    text: line.trimEnd(),
-    x,
-    y: rect.y + topPadding + lineHeight * index
+    text: line.trim(),
+    left: x,
+    right: x,
+    top:
+      rect.y +
+      topPadding +
+      lineHeight * index +
+      (lineHeight - contentHeight) / 2,
+    height: contentHeight
   }));
 }
 
+const DEFAULT_FONT_ASCENT_RATIO = 0.8;
+
+let fontMetricsContext: OffscreenCanvasRenderingContext2D | null = null;
+
+// A text range's box spans the font's ascent plus descent: the baseline
+// sits at the ascent share of that box, whatever the line-height.
+function resolveFontAscentRatio(computed: CSSStyleDeclaration): number {
+  if (typeof OffscreenCanvas === 'undefined') return DEFAULT_FONT_ASCENT_RATIO;
+
+  fontMetricsContext ??= new OffscreenCanvas(1, 1).getContext('2d');
+  if (typeof fontMetricsContext?.measureText !== 'function') {
+    return DEFAULT_FONT_ASCENT_RATIO;
+  }
+
+  fontMetricsContext.font = `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
+  const metrics = fontMetricsContext.measureText('Hg');
+  const ascent = Number(metrics?.fontBoundingBoxAscent);
+  const descent = Number(metrics?.fontBoundingBoxDescent);
+  const total = ascent + descent;
+
+  return Number.isFinite(total) && total > 0
+    ? ascent / total
+    : DEFAULT_FONT_ASCENT_RATIO;
+}
+
+function resolveNativeLineAnchor(
+  line: NativeTextLine,
+  textAnchor: string
+): number {
+  if (textAnchor === 'middle') return (line.left + line.right) / 2;
+  if (textAnchor === 'end') return line.right;
+  return line.left;
+}
+
+// Lines are anchored on the side the layout aligns them to and written on
+// their alphabetic baseline: a design tool that substitutes the font, or
+// ignores `dominant-baseline`, keeps each line in place.
 function buildNativeTextLayer(
   element: HTMLElement,
   rect: RelativeRect,
@@ -3316,9 +3763,15 @@ function buildNativeTextLayer(
   }
 
   const computed = getComputedStyle(element);
-  const fontSize = parseCssPixels(computed.fontSize);
-  const lineHeight = resolveLineHeight(computed);
+  // Layout items can be scaled with the page (CSS transform): computed font
+  // sizes ignore it, while the measured line boxes include it.
+  const layoutScale =
+    element.offsetWidth > 0
+      ? element.getBoundingClientRect().width / element.offsetWidth
+      : 1;
+  const fontSize = parseCssPixels(computed.fontSize) * layoutScale;
   const textAnchor = resolveTextAnchor(computed.textAlign);
+  const ascentRatio = resolveFontAscentRatio(computed);
   const rangeLines = collectNativeTextLinesFromRanges(
     element,
     coordinateContainer
@@ -3333,38 +3786,37 @@ function buildNativeTextLayer(
     rect.height
   );
   const transform = `translate(${roundSvgValue(rect.x)}, ${roundSvgValue(rect.y)})`;
-  const textDecoration =
+  const textAttributes = [
+    cssPaintAttributes('fill', computed.color),
+    opacityAttribute(computed.opacity),
+    `font-family="${escapeXml(computed.fontFamily)}"`,
+    `font-size="${roundSvgValue(fontSize)}"`,
+    computed.fontStyle && computed.fontStyle !== 'normal'
+      ? `font-style="${escapeXml(computed.fontStyle)}"`
+      : '',
+    computed.fontWeight &&
+    computed.fontWeight !== 'normal' &&
+    computed.fontWeight !== '400'
+      ? `font-weight="${escapeXml(computed.fontWeight)}"`
+      : '',
+    textAnchor !== 'start' ? `text-anchor="${textAnchor}"` : '',
+    computed.letterSpacing && computed.letterSpacing !== 'normal'
+      ? `letter-spacing="${roundSvgValue(parseCssPixels(computed.letterSpacing) * layoutScale)}"`
+      : '',
     computed.textDecorationLine && computed.textDecorationLine !== 'none'
       ? `text-decoration="${escapeXml(computed.textDecorationLine)}"`
-      : '';
-  const letterSpacing =
-    computed.letterSpacing && computed.letterSpacing !== 'normal'
-      ? `letter-spacing="${escapeXml(computed.letterSpacing)}"`
-      : '';
+      : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return `
     <g id="${escapeXml(id)}" transform="${transform}">
       ${background}
       ${lines
         .map(
-          (line) => `
-            <text
-              x="${roundSvgValue(line.x - rect.x)}"
-              y="${roundSvgValue(line.y - rect.y)}"
-              fill="${escapeXml(computed.color)}"
-              opacity="${escapeXml(computed.opacity || '1')}"
-              font-family="${escapeXml(computed.fontFamily)}"
-              font-size="${roundSvgValue(fontSize)}"
-              font-style="${escapeXml(computed.fontStyle)}"
-              font-weight="${escapeXml(computed.fontWeight)}"
-              dominant-baseline="text-before-edge"
-              text-anchor="${escapeXml(rangeLines.length > 0 ? 'start' : textAnchor)}"
-              line-height="${roundSvgValue(lineHeight)}"
-              xml:space="preserve"
-              ${letterSpacing}
-              ${textDecoration}
-            >${escapeXml(line.text)}</text>
-          `
+          (line) =>
+            `<text x="${roundSvgValue(resolveNativeLineAnchor(line, textAnchor) - rect.x)}" y="${roundSvgValue(line.top + line.height * ascentRatio - rect.y)}" ${textAttributes} xml:space="preserve">${escapeXml(line.text)}</text>`
         )
         .join('')}
     </g>
@@ -3391,7 +3843,7 @@ function buildImageLayer(
         width="${roundSvgValue(rect.width)}"
         height="${roundSvgValue(rect.height)}"
         href="${escapeXml(href)}"
-        opacity="${escapeXml(computed.opacity || '1')}"
+        ${opacityAttribute(computed.opacity)}
         preserveAspectRatio="none"
       />
     </g>
@@ -3448,7 +3900,7 @@ function buildLegendLayer(
         y="0"
         width="${roundSvgValue(legendRect.width)}"
         height="${roundSvgValue(legendRect.height)}"
-        fill="${escapeXml(styles.backgroundColor)}"
+        ${cssPaintAttributes('fill', styles.backgroundColor)}
         ${filter ? `filter="url(#${filter.id})"` : ''}
       />
     `);
@@ -3633,15 +4085,20 @@ function buildAnnotationItem(
 
   const textElement = item.querySelector('.annotation-text');
   if (textElement instanceof HTMLElement) {
-    return injectRootAttribute(
-      buildNativeTextLayer(
-        textElement,
-        getRelativeRect(item, pageContainer),
-        id,
-        pageContainer
-      ),
-      nameAttribute
-    );
+    // A rotated text is measured upright, then turned about its centre,
+    // which the rotation leaves in place.
+    const textBox = item.querySelector<HTMLElement>('.annotation-text-box');
+    const rotation = Number(textBox?.dataset.rotation ?? 0);
+    const previousTransform = textBox?.style.transform ?? '';
+    if (rotation && textBox) textBox.style.transform = 'none';
+    const rect = getRelativeRect(item, pageContainer);
+    const layer = buildNativeTextLayer(textElement, rect, id, pageContainer);
+    if (rotation && textBox) textBox.style.transform = previousTransform;
+    const turned =
+      rotation && layer
+        ? `<g transform="rotate(${roundSvgValue(rotation)} ${roundSvgValue(rect.x + rect.width / 2)} ${roundSvgValue(rect.y + rect.height / 2)})">${layer}</g>`
+        : layer;
+    return injectRootAttribute(turned, nameAttribute);
   }
 
   const svgElement = item.querySelector('svg');
@@ -3830,7 +4287,7 @@ function buildPageLayer(
         y="0"
         width="${roundSvgValue(geometry.width)}"
         height="${roundSvgValue(geometry.height)}"
-        fill="${escapeXml(pageBackgroundColor)}"
+        ${cssPaintAttributes('fill', pageBackgroundColor)}
       />
     `
   ];
@@ -3858,7 +4315,7 @@ function buildPageLayer(
         y="${roundSvgValue(geometry.mapFrame.y)}"
         width="${roundSvgValue(geometry.mapFrame.width)}"
         height="${roundSvgValue(geometry.mapFrame.height)}"
-        fill="${escapeXml(mapBackgroundColor)}"
+        ${cssPaintAttributes('fill', mapBackgroundColor)}
       />
     `);
   }
@@ -3984,6 +4441,7 @@ export async function exportMapToSvg(
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   await fontAssetsStore.ensureLoaded();
+  await fontAssetsStore.whenFontsSettled();
 
   const pageContainer = document.querySelector(
     EXPORT_PAGE_SELECTOR
@@ -4040,6 +4498,7 @@ export async function exportMapToJpg(
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
   let placement = null as MapExportPlacement | null;
   await fontAssetsStore.ensureLoaded();
+  await fontAssetsStore.whenFontsSettled();
 
   const pageContainer = document.querySelector(
     EXPORT_PAGE_SELECTOR

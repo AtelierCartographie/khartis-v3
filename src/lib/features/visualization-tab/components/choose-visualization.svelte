@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { mapRevealStore } from '$lib/features/map';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
@@ -58,6 +59,23 @@
 
   let selectedDatasetId = $state<string>(datasetsStore.selectedDatasetId ?? '');
   let suggestionsExpanded = $state(true);
+
+  // Working in section 2 means a visualization is chosen: the suggestions
+  // fold away. Section 2 is a sibling component, hence the document listener;
+  // the capture phase still sees clicks a control stops.
+  $effect(() => {
+    const collapseOnConfigureClick = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('#configure-visualization')
+      ) {
+        suggestionsExpanded = false;
+      }
+    };
+    document.addEventListener('click', collapseOnConfigureClick, true);
+    return () =>
+      document.removeEventListener('click', collapseOnConfigureClick, true);
+  });
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
@@ -172,6 +190,7 @@
     }
 
     const suggestionKey = getSuggestionSignature(suggestion);
+    mapRevealStore.request();
     applySuggestionToVisualization(targetViz.id, suggestion, {
       origin: buildSuggestionOrigin(targetViz, {
         mode: 'manual-suggestion',
@@ -601,7 +620,6 @@
         icon={Edit}
         kind="secondary"
         on:click={handleCreateVisualization}
-        style="width: 100%;"
       >
         {m.create_visualization_button()}
       </Button>
@@ -668,9 +686,15 @@
   .create-section {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: var(--kh-gap-param);
     margin: 0;
     padding: 0 var(--cds-spacing-05);
+  }
+
+  /* Carbon caps buttons at 20rem; this one spans its section. */
+  .create-section :global(.bx--btn) {
+    width: 100%;
+    max-width: none;
   }
 </style>

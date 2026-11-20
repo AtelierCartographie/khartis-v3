@@ -38,6 +38,13 @@ export interface UseMapBasemapReturn {
   readonly isStyleLoading: boolean;
 }
 
+// isStyleLoaded() also waits for every tile and sprite, still loading when
+// 'style.load' fires: a sync that bails on it leaves the style's own layer
+// visibility in place. getStyle() is defined once the document is applied.
+function hasStyleDocument(map: MapLibreMap): boolean {
+  return map.getStyle() !== undefined;
+}
+
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   const {
     getMap,
@@ -335,7 +342,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncOSMRasterLayer(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
@@ -396,7 +403,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncBasemapLanguage(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const locale = getBasemapLabelLocale();
@@ -430,7 +437,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncLabelsVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const show = basemapStyleStore.showLabels;
@@ -468,7 +475,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncGroupVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const groupVisibility = basemapStyleStore.groupVisibility;
@@ -554,7 +561,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncBasemapOpacity(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     if (originalOpacitiesStyleKey !== lastAppliedStyleKey) {

@@ -4,12 +4,28 @@ import { m } from '$lib/paraglide/messages';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
-import type { KhartisProject, SavedProjectMetadata } from '../types';
+import type {
+  KhartisProject,
+  ListedProjectMetadata,
+  SavedProjectMetadata
+} from '../types';
+import type { ProjectAssetUsage } from '../core/asset-usage';
+import {
+  PROJECT_SEARCH_VERSION,
+  type ProjectSearchIndex
+} from '../core/project-search';
+import {
+  buildProjectSearchIndex,
+  loadSearchCatalog
+} from './project-search.service';
 import { ProjectStorageKey } from '../types';
 import {
   ensureUploadedFileAssets,
+  loadProjectAssetUsage,
+  loadTotalAssetBytes,
   removeProjectAssetRefs,
-  syncProjectAssetRefs
+  syncProjectAssetRefs,
+  withAssetWriteLock
 } from './asset-store.service';
 import { collectCustomBasemapAssetRefs } from './custom-basemap-source.service';
 import { deserialize, prepareForIndexedDB } from './serializer.service';
@@ -18,6 +34,7 @@ import {
   loadMetadataStoreValue,
   openDatabase as openProjectDatabase
 } from './database-access.service';
+import { toStorageQuotaError } from './storage-quota.service';
 import {
   assertCurrentProjectSchema,
   migrateIfNeeded
@@ -240,7 +257,9 @@ async function enqueueProjectSave(
   }
 
   try {
-    await save();
+    await withAssetWriteLock(save);
+  } catch (error) {
+    throw toStorageQuotaError(error, { projectId });
   } finally {
     releaseCurrentSave();
     if (projectSaveQueues.get(projectId) === queuedSave) {
@@ -357,7 +376,13 @@ export async function saveProject(
       projectForStorage.data.sourceFiles,
       collectCustomBasemapAssetRefs(serialized.data)
     );
-    await updateMetadata(projectForStorage, thumbnail, exampleId, sizeBytes);
+    await updateMetadata(
+      projectForStorage,
+      thumbnail,
+      exampleId,
+      sizeBytes,
+      buildProjectSearchIndex(serialized)
+    );
   });
 }
 
@@ -373,7 +398,13 @@ export async function saveSerializedProject(
       (project.data?.sourceFiles ?? []).map(deserializeUploadedFile),
       collectCustomBasemapAssetRefs(project.data)
     );
-    await updateMetadata(project);
+    await updateMetadata(
+      project,
+      undefined,
+      undefined,
+      undefined,
+      buildProjectSearchIndex(project)
+    );
   });
 }
 
@@ -427,7 +458,8 @@ export const projectRepository = {
   loadSerialized: loadSerializedProject,
   saveSerialized: saveSerializedProject,
   remove: removeProject,
-  listMetadata
+  listMetadata,
+  measureStorage: measureProjectStorage
 };
 export async function removeProject(id: string): Promise<void> {
   const database = await ensureDb();
@@ -452,14 +484,107 @@ export async function removeProject(id: string): Promise<void> {
   await removeFromMetadata(id);
 }
 
-export async function listMetadata(): Promise<SavedProjectMetadata[]> {
-  const metadata = await loadProjectMetadata();
+/** Bytes held by saved projects: their snapshots plus every stored file once. */
+export async function measureProjectStorage(): Promise<number> {
+  const [metadata, assetBytes] = await Promise.all([
+    loadProjectMetadata(),
+    loadTotalAssetBytes()
+  ]);
+  return metadata.reduce((total, entry) => total + entry.size, assetBytes);
+}
 
-  const normalized = metadata.map((entry) => ({
-    ...entry,
-    createdAt: new Date(entry.createdAt),
-    updatedAt: new Date(entry.updatedAt)
-  }));
+async function loadStoredSnapshots(
+  ids: readonly string[]
+): Promise<SerializedProject[]> {
+  const database = await ensureDb();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(
+      [PROJECT_CONST.DB.STORE_NAME],
+      'readonly'
+    );
+    const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
+    const snapshots: SerializedProject[] = [];
+
+    for (const id of ids) {
+      const request = store.get(id);
+      request.onsuccess = () => {
+        if (isSerializedProject(request.result)) {
+          snapshots.push(request.result);
+        }
+      };
+    }
+    transaction.oncomplete = () => resolve(snapshots);
+    transaction.onerror = () =>
+      reject(
+        transaction.error ||
+          new Error(m.error_failed_load_project_persistence())
+      );
+  });
+}
+
+/**
+ * Projects saved before the search index existed, or under an older version
+ * of it, get theirs built once from their snapshot.
+ */
+async function withSearchIndex(
+  metadata: SavedProjectMetadata[]
+): Promise<SavedProjectMetadata[]> {
+  const staleIds = metadata
+    .filter((entry) => entry.search?.version !== PROJECT_SEARCH_VERSION)
+    .map((entry) => entry.id);
+  if (staleIds.length === 0) {
+    return metadata;
+  }
+
+  try {
+    const snapshots = await loadStoredSnapshots(staleIds);
+    await loadSearchCatalog();
+    const indexes = new Map(
+      snapshots.map((snapshot) => [
+        snapshot.id,
+        buildProjectSearchIndex(snapshot)
+      ])
+    );
+    const withIndex = (entries: SavedProjectMetadata[]) =>
+      entries.map((entry) => {
+        const search = indexes.get(entry.id);
+        return search ? { ...entry, search } : entry;
+      });
+
+    await mutateProjectMetadata(withIndex);
+    return withIndex(metadata);
+  } catch (error) {
+    logger.warn(
+      'Failed to build the project search index',
+      LogCategory.PERSISTENCE,
+      error
+    );
+    return metadata;
+  }
+}
+
+export async function listMetadata(): Promise<ListedProjectMetadata[]> {
+  const metadata = await withSearchIndex(await loadProjectMetadata());
+  const assetUsage = await loadProjectAssetUsage().catch((error: unknown) => {
+    logger.warn(
+      'Failed to measure project file storage',
+      LogCategory.PERSISTENCE,
+      error
+    );
+    return new Map<string, ProjectAssetUsage>();
+  });
+
+  const normalized = metadata.map((entry) => {
+    const usage = assetUsage.get(entry.id);
+    return {
+      ...entry,
+      createdAt: new Date(entry.createdAt),
+      updatedAt: new Date(entry.updatedAt),
+      storageBytes: entry.size + (usage?.assetBytes ?? 0),
+      reclaimableBytes: entry.size + (usage?.exclusiveAssetBytes ?? 0)
+    };
+  });
 
   return normalized.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -470,7 +595,8 @@ async function updateMetadata(
   project: KhartisProject | SerializedProject,
   thumbnail?: string,
   exampleId?: string,
-  sizeBytes?: number
+  sizeBytes?: number,
+  search?: ProjectSearchIndex
 ): Promise<void> {
   await mutateProjectMetadata((metadata) => {
     const index = metadata.findIndex((entry) => entry.id === project.id);
@@ -486,7 +612,8 @@ async function updateMetadata(
       // Keep the last thumbnail when this save cannot capture one.
       thumbnail: thumbnail ?? previous?.thumbnail,
       // Keep exampleId once set.
-      exampleId: exampleId ?? previous?.exampleId
+      exampleId: exampleId ?? previous?.exampleId,
+      search: search ?? previous?.search
     };
 
     if (index >= 0) {

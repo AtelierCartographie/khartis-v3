@@ -152,13 +152,27 @@
     tabMenu.close();
   }
 
-  function handleTabClick(sourceFileId: string, isCurrentlySelected: boolean) {
-    if (!isCurrentlySelected) {
-      resetDataTabStores();
-      globalActions.selectDataButton(sourceFileId, {
-        notifyDataTabReset: true
-      });
+  /** The name of the tab already selected turns into a text field. */
+  function isTabLabelClick(event: MouseEvent): boolean {
+    return (
+      event.target instanceof Element && !!event.target.closest('.tab-label')
+    );
+  }
+
+  function handleTabClick(
+    event: MouseEvent,
+    sourceFileId: string,
+    label: string,
+    isCurrentlySelected: boolean
+  ) {
+    if (isCurrentlySelected) {
+      if (isTabLabelClick(event)) startEditingTab(sourceFileId, label);
+      return;
     }
+    resetDataTabStores();
+    globalActions.selectDataButton(sourceFileId, {
+      notifyDataTabReset: true
+    });
   }
 
   let datasetToDelete = $state<{ id: string; name: string } | null>(null);
@@ -489,7 +503,13 @@
   let isDeleteConfirmOpen = $state(false);
   let fileToDelete = $state<{ id: string; name: string } | null>(null);
 
-  const vizTabs = $derived.by(() => {
+  interface VizTab {
+    id: string;
+    label: string;
+    isSelected: boolean;
+  }
+
+  const vizTabs = $derived.by((): VizTab[] => {
     const vizs = visualizationStore.visualizations.filter((viz) => !viz.facet);
     return vizs.map((viz, idx) => ({
       id: viz.id,
@@ -500,13 +520,34 @@
 
   let editingVizId = $state<string | null>(null);
   let editedVizName = $state('');
+  let vizNameInputRef = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (editingVizId && vizNameInputRef) {
+      vizNameInputRef.focus();
+      vizNameInputRef.select();
+    }
+  });
+
+  function handleVizTabClick(event: MouseEvent, vizTab: VizTab) {
+    if (vizTab.isSelected) {
+      if (isTabLabelClick(event)) startEditingViz(vizTab.id, vizTab.label);
+      return;
+    }
+    visualizationStore.selectVisualization(vizTab.id);
+  }
+
+  function startEditingViz(vizId: string, label: string) {
+    editingVizId = vizId;
+    editedVizName = label;
+  }
   let vizToDelete = $state<{ id: string; name: string } | null>(null);
   let isVizDeleteConfirmOpen = $state(false);
 
   function handleVizRenameFromMenu(vizId: string, label: string, event: Event) {
     event.stopPropagation();
-    editingVizId = vizId;
-    editedVizName = label;
+    tabMenu.close();
+    startEditingViz(vizId, label);
   }
 
   function saveVizRename() {
@@ -519,15 +560,13 @@
   }
 
   function handleVizRenameKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === KEY.ENTER) {
+      event.preventDefault();
       saveVizRename();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === KEY.ESCAPE) {
+      event.preventDefault();
       editingVizId = null;
     }
-  }
-
-  function handleVizNameInput(event: CarbonValueEvent) {
-    editedVizName = readCarbonStringValue(event, editedVizName);
   }
 
   function handleDatasetNameInput(event: CarbonValueEvent) {
@@ -673,16 +712,29 @@
         >
           <Button
             isSelected={vizTab.isSelected}
-            kind={vizTab.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-            on:click={() => visualizationStore.selectVisualization(vizTab.id)}
+            kind={ButtonKind.Ghost}
+            on:click={(event: MouseEvent) => handleVizTabClick(event, vizTab)}
             class="tab-button"
             title={vizTab.label}
             aria-label={vizTab.label}
           >
             <div class="tab-content">
-              <span class="tab-label">
-                {vizTab.label}
-              </span>
+              {#if editingVizId === vizTab.id}
+                <input
+                  type="text"
+                  class="tab-name-input"
+                  aria-label={m.viz_list_rename()}
+                  bind:value={editedVizName}
+                  bind:this={vizNameInputRef}
+                  onkeydown={handleVizRenameKeydown}
+                  onblur={saveVizRename}
+                  onclick={(e: MouseEvent) => e.stopPropagation()}
+                />
+              {:else}
+                <span class="tab-label">
+                  {vizTab.label}
+                </span>
+              {/if}
             </div>
           </Button>
           <button
@@ -707,31 +759,16 @@
               tabindex="-1"
               onkeydown={tabMenu.handleKeydown}
             >
-              {#if editingVizId === vizTab.id}
-                <div class="tab-menu-item-dataset-row">
-                  <TextInput
-                    size="sm"
-                    hideLabel
-                    labelText={m.viz_list_rename()}
-                    value={editedVizName}
-                    on:input={handleVizNameInput}
-                    on:keydown={handleVizRenameKeydown}
-                    on:blur={saveVizRename}
-                    on:click={(e) => e.stopPropagation()}
-                  />
-                </div>
-              {:else}
-                <button
-                  type="button"
-                  class="tab-menu-item"
-                  onclick={(e: Event) =>
-                    handleVizRenameFromMenu(vizTab.id, vizTab.label, e)}
-                  role="menuitem"
-                >
-                  <Edit size={16} />
-                  {m.viz_list_rename()}
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="tab-menu-item"
+                onclick={(e: Event) =>
+                  handleVizRenameFromMenu(vizTab.id, vizTab.label, e)}
+                role="menuitem"
+              >
+                <Edit size={16} />
+                {m.viz_list_rename()}
+              </button>
               <button
                 type="button"
                 class="tab-menu-item"
@@ -783,9 +820,14 @@
         >
           <Button
             isSelected={dataButton.isSelected}
-            kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-            on:click={() =>
-              handleTabClick(dataButton.id, dataButton.isSelected)}
+            kind={ButtonKind.Ghost}
+            on:click={(event: MouseEvent) =>
+              handleTabClick(
+                event,
+                dataButton.id,
+                dataButton.label,
+                dataButton.isSelected
+              )}
             class="tab-button"
             title={`${kindLabel}${m.aria_label_separator()}${displayName}`}
             aria-label={`${kindLabel}${m.aria_label_separator()}${displayName}`}
@@ -1033,6 +1075,8 @@
 
   .tabs-scroller {
     display: flex;
+    align-self: stretch;
+    align-items: flex-end;
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
@@ -1044,7 +1088,23 @@
 
   .add-btn-wrapper {
     flex: 0 0 auto;
+    align-self: flex-end;
+    margin-bottom: 1px;
     margin-left: var(--cds-spacing-03);
+  }
+
+  .add-btn-wrapper :global(.bx--btn--ghost) {
+    height: var(--kh-size-md);
+    min-height: 0;
+    background-color: var(--cds-ui-02);
+    border: 1px solid var(--cds-border-subtle-01);
+    border-bottom: none;
+    color: var(--cds-text-secondary);
+  }
+
+  .add-btn-wrapper :global(.bx--btn--ghost:hover) {
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-text-primary);
   }
 
   .scrollbar-hidden {
@@ -1072,11 +1132,44 @@
        shows part of the title, then let the scroller overflow horizontally. */
     min-width: 8rem;
     max-width: 250px;
-    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    align-self: flex-end;
+    height: var(--kh-size-md);
+    margin-bottom: 1px;
+    background-color: var(--cds-ui-02);
+    border: 1px solid var(--cds-border-subtle-01);
+    border-bottom: none;
 
-    &:last-child {
-      border-right: none;
+    & + & {
+      margin-left: -1px;
     }
+  }
+
+  /* The selected tab takes the panel's colour and covers the header's bottom
+     rule, so it reads as one sheet with the content under it. */
+  .tab-button-wrapper.selected {
+    z-index: var(--z-base);
+    height: calc(var(--kh-size-md) + 1px);
+    margin-bottom: 0;
+    background-color: var(--cds-ui-01);
+  }
+
+  .tab-button-wrapper :global(.tab-button.bx--btn--ghost) {
+    height: 100%;
+    min-height: 0;
+    color: var(--cds-text-secondary);
+  }
+
+  .tab-button-wrapper.selected :global(.tab-button.bx--btn--ghost) {
+    color: var(--cds-text-primary);
+  }
+
+  .tab-button-wrapper :global(.tab-button.bx--btn--ghost:hover) {
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-text-primary);
+  }
+
+  .tab-button-wrapper.selected :global(.tab-button.bx--btn--ghost:hover) {
+    background-color: transparent;
   }
 
   .tab-button-wrapper :global(.tab-button) {
@@ -1111,13 +1204,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
-    cursor: text;
     padding: 2px 4px;
     border-radius: 2px;
     transition: background-color 0.15s;
   }
 
-  .tab-label:hover {
+  .tab-button-wrapper.selected .tab-label {
+    cursor: text;
+  }
+
+  .tab-button-wrapper.selected .tab-label:hover {
     background-color: var(--cds-hover-ui);
   }
 
@@ -1128,7 +1224,7 @@
     font-size: inherit;
     font-family: inherit;
     font-weight: inherit;
-    color: var(--cds-text-on-color);
+    color: var(--cds-text-primary);
     background: transparent;
     border: none;
     border-radius: 2px;
@@ -1183,12 +1279,7 @@
   }
 
   .tab-button-wrapper.selected .tab-menu-button :global(svg) {
-    fill: var(--cds-icon-on-color, #ffffff);
-    opacity: 1;
-  }
-
-  .tab-button-wrapper.selected .tab-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.15);
+    fill: var(--cds-text-01);
   }
 
   .tab-context-menu {

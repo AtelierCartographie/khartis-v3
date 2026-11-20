@@ -31,6 +31,11 @@ export interface CommonLegendTextOptions {
   note?: string | null;
   fontSize?: number;
   fontFamily?: string;
+  /**
+   * Width the user set the legend to, in legend units: the block is never
+   * narrower, so its title wraps less.
+   */
+  minWidth?: number;
 }
 
 export interface RenderedLegendTextBlock {

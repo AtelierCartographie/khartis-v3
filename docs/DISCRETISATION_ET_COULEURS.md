@@ -103,7 +103,7 @@ part en pas calendaire.
   - k-means et quantiles : chaque côté est classé à part, comme pour un
     nombre, avec le nombre de classes du curseur ;
   - manuel : la pivot ne fait que répartir les couleurs, comme pour un nombre
-    (classe centrale neutre si elle tombe dans une classe).
+    (une classe qui la contient passe du côté supérieur).
     Les seuils sont libellés à leur propre précision : dans une série en années,
     une pivot au 10 mai s'affiche « 10 mai 1981 » et les classes voisines au jour.
 - **Unités.** Bornes, `min` et `max` sont en millisecondes epoch : c'est
@@ -186,9 +186,12 @@ classes sous le pivot, pour que légende et palette se répartissent comme la
 carte.
 
 `computeDivergingSplit()` répartit la palette selon la position réelle des
-bornes. Si une classe chevauche le pivot, elle reçoit la couleur centrale ;
-sinon, les classes se partagent entre les deux côtés, éventuellement de façon
-asymétrique. La couleur neutre tombe ainsi sur le pivot réel.
+bornes : les classes dont la borne haute est inférieure ou égale au pivot sont
+du côté inférieur, les autres du côté supérieur, éventuellement de façon
+asymétrique. Une palette divergente n'a pas de classe centrale : le pivot est
+une borne, et la transition entre les deux teintes tombe sur lui. Seul un pivot
+fini rend la palette divergente (`isDivergingBreakpoint()`) ; sinon elle reste
+séquentielle.
 
 ## Palettes
 
@@ -196,6 +199,13 @@ Les couleurs sont produites par `@ateliercartographie/ok-palette`, en OKLCH,
 pour des paliers perceptuellement réguliers. `generateColorsForBreaks()`
 appelle `sequential()` ou `divergentSequential()`, puis `resolvePalette()` pour
 la sortie WebGL.
+
+Chaque couleur est contrainte au gamut sRGB (option `gamut` d'ok-palette, `srgb`
+par défaut) : la chroma est plafonnée classe par classe au maximum affichable
+pour sa clarté et sa teinte, qui restent inchangées. Le navigateur n'a donc
+plus rien à écrêter, et l'écart perceptuel entre classes survit à l'affichage.
+Les gamuts CMJN (`cmyk-coated`, `cmyk-uncoated`) existent dans la bibliothèque
+mais ne sont pas exposés dans Khartis.
 
 Quatre types (`PALETTE_TYPE`) : `sequential`, `diverging`, `qualitative` et
 `pattern`. Le type suit la nature de la variable : une palette qualitative sur
@@ -219,6 +229,30 @@ Les trames viennent de `@ateliercartographie/motif.js`. Elles forment un type
 de palette (`pattern`) et marquent aussi l'absence de données. Sur la carte,
 elles passent par une texture (`map/layers/pattern-texture.ts`) ; dans les
 aperçus et la légende, par des `defs` SVG.
+
+La taille d'un motif est la part de la tuile qu'il couvre : c'est elle qui
+ordonne une palette de motifs (`sequentialPatterns`), comme la clarté ordonne
+une palette de couleurs.
+
+Avec un pivot, `resolveClassPatterns()` reçoit la répartition et produit une
+rampe par côté, qui grandit en s'éloignant du pivot. La taille porte l'ordre,
+la couleur porte seulement le côté : chaque côté prend une teinte fixe
+(`PatternPaletteConfig.divergingColors`, sinon `DEFAULT_DIVERGING_COLORS`),
+que le contraste ne change pas. Quatre formes sont proposées, et l'angle choisi
+par l'utilisateur reste réglable, le côté inférieur gardant l'écart qui oppose
+les deux côtés :
+
+| Forme       | Sous le pivot              | Au-dessus    |
+| ----------- | -------------------------- | ------------ |
+| Ligne       | ligne à α + 90°            | ligne à α    |
+| Quadrillage | quadrillage à α            | ligne à α    |
+| Triangle    | triangle à α + 180°        | triangle à α |
+| Plus        | plus à α + 45° (une croix) | plus à α     |
+
+Une croix est un plus tourné de 45° ; les autres formes retombent sur la ligne.
+La taille plafonne à 43 % pour le triangle et le plus
+(`DIVERGING_PATTERN_MAX_SIZE`) : au-delà, la forme touche ses voisines, la part
+peinte ne vaut plus la taille et la rampe perd son ordre.
 
 ## Simulation des troubles de la vision
 

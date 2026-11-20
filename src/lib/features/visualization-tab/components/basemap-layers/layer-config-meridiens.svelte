@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import * as m from '$lib/paraglide/messages';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -132,23 +133,25 @@
     onchange={(index) => handleModeChange(modeTabs[index].mode)}
   />
 
-  {#if effectiveMode === BasemapGraticuleMode.REGULAR}
-    <div class="control-group">
-      <label class="field-label" for="graticule-spacing-input">
-        {m.basemap_config_spacing_degrees()}
-      </label>
-      <CompactNumberInput
-        value={spacingDegrees}
-        min={BASEMAP_LAYER_CONFIG.graticuleSpacing.min}
-        max={BASEMAP_LAYER_CONFIG.graticuleSpacing.max}
-        width="100%"
-        id="graticule-spacing-input"
-        ariaDecrement={m.basemap_config_spacing_degrees_decrement()}
-        ariaIncrement={m.basemap_config_spacing_degrees_increment()}
-        onchange={handleSpacingChange}
-      />
-    </div>
-  {/if}
+  <SwitchedContent value={effectiveMode}>
+    {#if effectiveMode === BasemapGraticuleMode.REGULAR}
+      <div class="control-group">
+        <label class="field-label" for="graticule-spacing-input">
+          {m.basemap_config_spacing_degrees()}
+        </label>
+        <CompactNumberInput
+          value={spacingDegrees}
+          min={BASEMAP_LAYER_CONFIG.graticuleSpacing.min}
+          max={BASEMAP_LAYER_CONFIG.graticuleSpacing.max}
+          width="100%"
+          id="graticule-spacing-input"
+          ariaDecrement={m.basemap_config_spacing_degrees_decrement()}
+          ariaIncrement={m.basemap_config_spacing_degrees_increment()}
+          onchange={handleSpacingChange}
+        />
+      </div>
+    {/if}
+  </SwitchedContent>
 
   <SingleColorPreview
     label={m.basemap_config_color()}

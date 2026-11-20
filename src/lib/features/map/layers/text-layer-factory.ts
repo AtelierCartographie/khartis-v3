@@ -88,6 +88,9 @@ import {
   type LabelLeaderSegment
 } from './label-leader-layer';
 import { sortBySizeDescending, withOpacity } from './layer-helpers';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
 import {
   isMissingThematicValue,
   resolvePointMissingColumn
@@ -243,6 +246,70 @@ export function createTextOverlayLayers(
   return layers;
 }
 
+// Deck draws every glyph quad with its own SDF outline, so a translucent
+// halo darkens where the outlines of neighbouring letters overlap, and a
+// translucent text shows the outlines of its neighbours through its fill. The halo
+// is drawn first by a layer of its own, opaque and faded as a whole, whose
+// stencil test lets each pixel be written once; the text follows without an
+// outline. MapLibre keeps tile clipping in the stencil buffer, so the
+// interleaved engine keeps the single layer.
+const HALO_STENCIL_PARAMETERS = {
+  ...THEMATIC_OVERLAY_PARAMETERS,
+  stencilReadMask: 0xff,
+  stencilWriteMask: 0xff,
+  stencilCompare: 'equal',
+  // luma.gl applies the pass operation only alongside the two others.
+  stencilFailOperation: 'keep',
+  stencilDepthFailOperation: 'keep',
+  stencilPassOperation: 'increment-clamp'
+} as const;
+
+// The stencil counts any fragment drawn, and the faint antialiased fringe of
+// a glyph quad would block its neighbour's halo, leaving seams: the halo
+// layer drops fragments under this coverage (tested before the layer opacity).
+const HALO_ALPHA_CUTOFF = 0.5;
+
+function splitTranslucentHalo(
+  textLayer: TextLayer<TextLayerDatum>,
+  haloColor: [number, number, number],
+  haloOpacity: number,
+  textOpacity: number
+): TextLayer<TextLayerDatum>[] {
+  const outlineWidth = Number(textLayer.props.outlineWidth ?? 0);
+  const interleaved = shouldUseMapLibreInterleaved({
+    requiresMapLibre: basemapStyleStore.requiresMapLibre,
+    hasOSMBasemap: osmBasemapStore.isActive
+  });
+  if (
+    outlineWidth <= 0 ||
+    (haloOpacity >= 1 && textOpacity >= 1) ||
+    interleaved
+  ) {
+    return [textLayer];
+  }
+
+  const opaqueHalo: [number, number, number, number] = [...haloColor, 255];
+  const halo = textLayer.clone({
+    id: `${textLayer.id}-halo`,
+    getColor: opaqueHalo,
+    outlineColor: opaqueHalo,
+    opacity: haloOpacity * (textLayer.props.opacity ?? 1),
+    background: false,
+    pickable: false,
+    parameters: HALO_STENCIL_PARAMETERS,
+    _subLayerProps: {
+      ...textLayer.props._subLayerProps,
+      characters: { alphaCutoff: HALO_ALPHA_CUTOFF }
+    },
+    updateTriggers: {
+      ...textLayer.props.updateTriggers,
+      getColor: [haloColor.join(',')]
+    }
+  });
+  const text = textLayer.clone({ outlineWidth: 0 });
+  return [halo, text];
+}
+
 function buildTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
@@ -254,7 +321,11 @@ function buildTextOverlayLayers(
   if (!viz || !textConfig?.enabled || !textConfig.labelColumn) {
     return [];
   }
-  if (!fontAssetsStore.ready) {
+  const primaryFontReady = fontAssetsStore.isFontReady(textConfig.fontFamily);
+  const secondaryFontReady =
+    !textConfig.secondaryLabels.enabled ||
+    fontAssetsStore.isFontReady(textConfig.secondaryLabels.fontFamily);
+  if (!primaryFontReady || !secondaryFontReady) {
     return [];
   }
   const pageDisplayScale = resolvePageDisplayScale(ctx);
@@ -1475,8 +1546,14 @@ function buildTextOverlayLayers(
         }
       };
 
-      secondaryTextLayer = new TextLayer<TextLayerDatum>(labelLayerProps);
-      layers.push(secondaryTextLayer as ThematicLayer);
+      const secondaryLayers = splitTranslucentHalo(
+        new TextLayer<TextLayerDatum>(labelLayerProps),
+        resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
+        normalizeOpacity(secondaryLabelsConfig.haloOpacity, 1),
+        labelOpacity
+      );
+      secondaryTextLayer = secondaryLayers[secondaryLayers.length - 1];
+      layers.push(...(secondaryLayers as ThematicLayer[]));
     }
   }
 
@@ -1645,8 +1722,15 @@ function buildTextOverlayLayers(
           getBorderColor: []
         }
       });
+      const primaryLayers = splitTranslucentHalo(
+        primaryTextLayer,
+        resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
+        normalizeOpacity(textConfig.haloOpacity, 1),
+        textOpacity
+      );
+      primaryTextLayer = primaryLayers[primaryLayers.length - 1];
       if (textData.length > 0) {
-        layers.push(primaryTextLayer as ThematicLayer);
+        layers.push(...(primaryLayers as ThematicLayer[]));
       }
       const ghostLayer = primaryTextLayer;
       buildHiddenLabelGhost = (featureKey) => {
