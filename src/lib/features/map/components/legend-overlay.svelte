@@ -21,7 +21,7 @@
     clampFontSize,
     resolveFontFamilyStack
   } from '$lib/features/step-toolbar/fonts.constants';
-  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     clampPointToBounds,
     getDragBounds,
@@ -762,6 +762,86 @@
     }
   }
 
+  // The side handles set the width the legend is drawn to, in legend units:
+  // a wider frame lets a long title stay on one line. The renderer never goes
+  // narrower than the content, so dragging in stops at it.
+  let frameResize: {
+    itemId: string;
+    edge: 'w' | 'e';
+    startClientX: number;
+    startRenderedWidth: number;
+    unitsPerScreenPx: number;
+    screenPxPerPageUnit: number;
+    startPosition: PageGridPoint | null;
+  } | null = null;
+
+  function handleFrameResizePointerDown(
+    event: PointerEvent,
+    item: LegendItem,
+    edge: 'w' | 'e'
+  ): void {
+    const element = frameElements[item.id];
+    const svg = element?.querySelector('svg');
+    if (!isLegendDraggable || !element || !svg) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const svgRect = svg.getBoundingClientRect();
+    const svgUnits = Number(svg.getAttribute('width'));
+    if (!(svgRect.width > 0) || !(svgUnits > 0)) return;
+    frameResize = {
+      itemId: item.id,
+      edge,
+      startClientX: event.clientX,
+      startRenderedWidth: svgRect.width,
+      unitsPerScreenPx: svgUnits / svgRect.width,
+      screenPxPerPageUnit:
+        element.getBoundingClientRect().width /
+        Math.max(element.offsetWidth, 1),
+      startPosition: getFramePosition(item) ?? getMeasuredFramePosition(item.id)
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function handleFrameResizeMove(event: PointerEvent): void {
+    if (!frameResize) return;
+    const { itemId, edge, startClientX, startRenderedWidth, startPosition } =
+      frameResize;
+    const delta = event.clientX - startClientX;
+    const renderedWidth = Math.max(
+      1,
+      startRenderedWidth + (edge === 'e' ? delta : -delta)
+    );
+    legendActions.updateLegendItemLayout(itemId, {
+      width: Math.round(renderedWidth * frameResize.unitsPerScreenPx)
+    });
+    // The west edge follows the pointer: the frame moves by what it grew.
+    if (edge === 'w' && startPosition) {
+      legendActions.updateLegendItem(itemId, {
+        dragPosition: {
+          x:
+            startPosition.x -
+            (renderedWidth - startRenderedWidth) /
+              frameResize.screenPxPerPageUnit,
+          y: startPosition.y
+        }
+      });
+    }
+  }
+
+  function handleFrameResizeUp(): void {
+    frameResize = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function resetFrameWidth(event: MouseEvent, item: LegendItem): void {
+    event.preventDefault();
+    event.stopPropagation();
+    legendActions.updateLegendItemLayout(item.id, { width: undefined });
+  }
+
   function handleFrameClick(
     event: MouseEvent | KeyboardEvent,
     item: LegendItem
@@ -958,6 +1038,20 @@
             {/if}
           {/if}
         </div>
+        {#if isLegendDraggable && !inline && legendSegments.length > 0}
+          {#each ['w', 'e'] as const as edge (edge)}
+            <div
+              class="legend-resize-edge legend-resize-{edge}"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={m.legend_resize_handle()}
+              title={m.legend_resize_handle()}
+              onpointerdown={(event: PointerEvent) =>
+                handleFrameResizePointerDown(event, item, edge)}
+              ondblclick={(event: MouseEvent) => resetFrameWidth(event, item)}
+            ></div>
+          {/each}
+        {/if}
       </div>
     {/each}
   </div>
@@ -1032,6 +1126,43 @@
 
   .legend-overlay:not(.inline) .legend-container:hover {
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+  }
+
+  .legend-resize-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: calc(8px / var(--legend-page-scale));
+    cursor: ew-resize;
+    touch-action: none;
+    opacity: 0;
+  }
+
+  .legend-resize-w {
+    left: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-e {
+    right: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-edge::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(8px / var(--legend-page-scale));
+    height: calc(8px / var(--legend-page-scale));
+    box-sizing: border-box;
+    background: white;
+    border: calc(2px / var(--legend-page-scale)) solid
+      var(--cds-interactive-01, #0072c3);
+    border-radius: 2px;
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  .legend-overlay:not(.inline) .legend-container:hover .legend-resize-edge {
+    opacity: 1;
   }
 
   .legend-container.dragging {

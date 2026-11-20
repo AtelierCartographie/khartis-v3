@@ -267,6 +267,7 @@
     tooltipAlignment="end"
     iconDescription={m.download_tooltip()}
     shortcut={getPrimaryShortcut('download')}
+    portalTooltip
     kind="primary"
     icon={Download}
     on:click={() => modal.open()}

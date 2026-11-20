@@ -212,6 +212,7 @@ export function draw_categorical_legend(
     lineHeight: noteSize * 1.2
   });
   const body_width = Math.max(
+    options.minWidth ?? 0,
     category_body_width,
     footer_body_width,
     margin.left +

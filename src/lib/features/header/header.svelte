@@ -36,15 +36,21 @@
     const toggle = document.querySelector<HTMLElement>(MENU_TOGGLE_SELECTOR);
     if (!toggle) return;
 
+    // Carbon flips isSideNavOpen in its own click handler, which runs first.
+    const handleToggleClick = () => {
+      if (!globalState.isSideNavOpen) createProjectActions.dismissSideNav();
+    };
     const show = () => (isMenuToggleHovered = true);
     const hide = () => (isMenuToggleHovered = false);
     menuToggle = toggle;
+    toggle.addEventListener('click', handleToggleClick);
     toggle.addEventListener('pointerenter', show);
     toggle.addEventListener('pointerleave', hide);
     toggle.addEventListener('focus', show);
     toggle.addEventListener('blur', hide);
 
     return () => {
+      toggle.removeEventListener('click', handleToggleClick);
       toggle.removeEventListener('pointerenter', show);
       toggle.removeEventListener('pointerleave', hide);
       toggle.removeEventListener('focus', show);
