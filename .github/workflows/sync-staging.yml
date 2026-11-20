@@ -1,0 +1,46 @@
+name: Sync staging with main
+
+# A stable tag sits on the promotion merge commit of main, which staging only
+# reaches through this merge. Without it, the next prerelease is computed from
+# an older stable tag. Kept out of release.yml so that a merge conflict does not
+# fail the run that the deployment gate of deploy-local.mjs reads.
+on:
+  workflow_run:
+    # Must match the name of release.yml.
+    workflows: [Release Automation]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-staging
+  cancel-in-progress: false
+
+jobs:
+  merge-main:
+    name: Merge main into staging
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # A merge pushed with GITHUB_TOKEN starts no release run on staging: the
+      # next prerelease comes with the next push to staging.
+      - name: Merge the released commit into staging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if ! response="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/merges" \
+            -f base=staging \
+            -f head="${RELEASED_SHA}" \
+            -f commit_message="chore(release): merge main into staging")"; then
+            echo "::error::Could not merge ${RELEASED_SHA} into staging. Merge main into staging by hand, see docs/CONTRIBUER_ET_TESTER.md."
+            exit 1
+          fi
+          if [ -z "${response}" ]; then
+            echo "staging already contains ${RELEASED_SHA}."
+          else
+            echo "staging now contains ${RELEASED_SHA} (merge commit $(jq -r '.sha' <<<"${response}"))."
+          fi
