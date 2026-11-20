@@ -59,6 +59,23 @@
 
   let selectedDatasetId = $state<string>(datasetsStore.selectedDatasetId ?? '');
   let suggestionsExpanded = $state(true);
+
+  // Working in section 2 means a visualization is chosen: the suggestions
+  // fold away. Section 2 is a sibling component, hence the document listener;
+  // the capture phase still sees clicks a control stops.
+  $effect(() => {
+    const collapseOnConfigureClick = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('#configure-visualization')
+      ) {
+        suggestionsExpanded = false;
+      }
+    };
+    document.addEventListener('click', collapseOnConfigureClick, true);
+    return () =>
+      document.removeEventListener('click', collapseOnConfigureClick, true);
+  });
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);

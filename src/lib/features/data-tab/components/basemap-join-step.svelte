@@ -120,6 +120,21 @@
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
+  // Undefined until the user or an interaction elsewhere decides: the
+  // catalogue tab then opens the suggestions when it has some.
+  let suggestionsOpen = $state<boolean | undefined>(undefined);
+  let joinSectionZone = $state<HTMLDivElement | null>(null);
+
+  // Working on the join means a basemap is chosen: the suggestions fold away.
+  $effect(() => {
+    const zone = joinSectionZone;
+    if (!zone) return;
+    const collapseSuggestions = () => {
+      suggestionsOpen = false;
+    };
+    zone.addEventListener('click', collapseSuggestions);
+    return () => zone.removeEventListener('click', collapseSuggestions);
+  });
   // Suggestions and join grading follow the table filters (see JoinRowScope).
   const tableFilterKey = $derived.by(() => {
     void duckDBDatasetsVersion;
@@ -2203,6 +2218,8 @@
     allBasemaps={allBasemaps}
     basemapSelected={basemapSelected}
     onSelectBasemap={handleSelectSuggestedBasemap}
+    suggestionsOpen={suggestionsOpen}
+    onSuggestionsToggle={(expanded) => (suggestionsOpen = expanded)}
   />
 {/snippet}
 
@@ -2237,39 +2254,41 @@
 {/snippet}
 
 {#snippet joinSection()}
-  <JoinAssistedSection
-    joinRows={joinRows}
-    duplicates={duplicates}
-    unknowns={unknowns}
-    joinedCount={joinedCount}
-    toVerifyCount={toVerifyCount}
-    duplicateTotal={duplicateTotal}
-    unrecognizedTotal={unrecognizedTotal}
-    fuzzyPassEstimate={fuzzyPassEstimate}
-    fuzzyPassRunning={fuzzyPassRunning}
-    onRunFullFuzzyPass={handleRunFullFuzzyPass}
-    linkedVariableName={dataTabState.geolocation.linkedVariableName}
-    basemapValues={basemapAttributes.values}
-    loading={joinLoading}
-    joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-    joinedEntitiesList={joinedPageRows}
-    joinedPage={joinedPage}
-    joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
-    joinedBasemapValues={joinedBasemapValues}
-    onJoinedPageChange={handleJoinedPageChange}
-    onRequestJoinedEntities={handleRequestJoinedEntities}
-    ignoredEntities={ignoredEntities}
-    duplicateLines={dataTabState.basemapJoin.duplicateLines}
-    basemapAliasesByValue={basemapAttributes.aliasesByValue}
-    basemapValuesLoading={basemapAttributes.loading}
-    onRequestBasemapValues={basemapAttributes.requestValues}
-    onFinalizeJoin={handleFinalizeJoin}
-    onManualCorrection={handleManualCorrection}
-    onMappingChange={dataTabActions.updateJoinMapping}
-    onIgnoreEntities={handleIgnoreEntities}
-    onRestoreEntities={handleRestoreEntities}
-    onValidateEntities={handleValidateEntities}
-  />
+  <div class="join-section-zone" bind:this={joinSectionZone}>
+    <JoinAssistedSection
+      joinRows={joinRows}
+      duplicates={duplicates}
+      unknowns={unknowns}
+      joinedCount={joinedCount}
+      toVerifyCount={toVerifyCount}
+      duplicateTotal={duplicateTotal}
+      unrecognizedTotal={unrecognizedTotal}
+      fuzzyPassEstimate={fuzzyPassEstimate}
+      fuzzyPassRunning={fuzzyPassRunning}
+      onRunFullFuzzyPass={handleRunFullFuzzyPass}
+      linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      basemapValues={basemapAttributes.values}
+      loading={joinLoading}
+      joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
+      joinedEntitiesList={joinedPageRows}
+      joinedPage={joinedPage}
+      joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
+      joinedBasemapValues={joinedBasemapValues}
+      onJoinedPageChange={handleJoinedPageChange}
+      onRequestJoinedEntities={handleRequestJoinedEntities}
+      ignoredEntities={ignoredEntities}
+      duplicateLines={dataTabState.basemapJoin.duplicateLines}
+      basemapAliasesByValue={basemapAttributes.aliasesByValue}
+      basemapValuesLoading={basemapAttributes.loading}
+      onRequestBasemapValues={basemapAttributes.requestValues}
+      onFinalizeJoin={handleFinalizeJoin}
+      onManualCorrection={handleManualCorrection}
+      onMappingChange={dataTabActions.updateJoinMapping}
+      onIgnoreEntities={handleIgnoreEntities}
+      onRestoreEntities={handleRestoreEntities}
+      onValidateEntities={handleValidateEntities}
+    />
+  </div>
 {/snippet}
 
 <section id="basemap-join-step">
@@ -2321,6 +2340,10 @@
   .kh-help {
     margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
     padding-top: var(--kh-pad-panel);
+  }
+
+  .join-section-zone {
+    display: contents;
   }
 
   .step-content {
