@@ -38,6 +38,25 @@ interface LabelDragControllerOptions {
   onEditLabel: (request: LabelEditRequest) => void;
 }
 
+/** The thematic label under a point of the page, if any. */
+export function pickLabelInContainer(
+  container: HTMLElement,
+  pick: (x: number, y: number, radius: number) => PickingInfo | null,
+  point: { clientX: number; clientY: number }
+): { picked: PickedLabel; info: PickingInfo } | null {
+  const rect = container.getBoundingClientRect();
+  const info = pick(
+    point.clientX - rect.left,
+    point.clientY - rect.top,
+    PICK_RADIUS_PX
+  );
+  const context = getLabelEditingContext(info?.layer);
+  const datum = info?.object as TextLayerDatum | undefined;
+  if (!info || !context || !datum) return null;
+  const featureKey = context.resolveFeatureKey(datum);
+  return featureKey ? { picked: { context, datum, featureKey }, info } : null;
+}
+
 interface ActiveDrag extends PickedLabel {
   pointerId: number;
   startClientX: number;
@@ -69,17 +88,7 @@ export function attachLabelDragController({
     clientX: number;
     clientY: number;
   }): { picked: PickedLabel; info: PickingInfo } | null {
-    const rect = container.getBoundingClientRect();
-    const info = pick(
-      point.clientX - rect.left,
-      point.clientY - rect.top,
-      PICK_RADIUS_PX
-    );
-    const context = getLabelEditingContext(info?.layer);
-    const datum = info?.object as TextLayerDatum | undefined;
-    if (!info || !context || !datum) return null;
-    const featureKey = context.resolveFeatureKey(datum);
-    return featureKey ? { picked: { context, datum, featureKey }, info } : null;
+    return pickLabelInContainer(container, pick, point);
   }
 
   function pickLabel(point: {
@@ -159,9 +168,13 @@ export function attachLabelDragController({
     }
 
     const scale = drag.context.pageDisplayScale;
+    // Shift keeps the move on the axis the pointer travels most.
+    const isHorizontal = Math.abs(deltaX) >= Math.abs(deltaY);
     drag.center = [
-      drag.startCenter[0] + deltaX / scale,
-      drag.startCenter[1] + deltaY / scale
+      drag.startCenter[0] +
+        (event.shiftKey && !isHorizontal ? 0 : deltaX / scale),
+      drag.startCenter[1] +
+        (event.shiftKey && isHorizontal ? 0 : deltaY / scale)
     ];
 
     if (!drag.isMoving) {

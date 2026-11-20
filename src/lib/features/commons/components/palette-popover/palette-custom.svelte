@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
@@ -215,8 +216,24 @@
     }
   }
 
+  // A diverging motif starts from the darkest color of each side of the
+  // palette in progress, kept as is whatever the contrast.
+  function seedDivergingColors(): [string, string] | undefined {
+    if (paletteType !== PALETTE_TYPE.DIVERGING || currentColors.length < 2) {
+      return undefined;
+    }
+    const first = currentColors[0];
+    const last = currentColors[currentColors.length - 1];
+    return inverted ? [last, first] : [first, last];
+  }
+
   function emitPatternPaletteChange(config: PatternPaletteConfig) {
-    draftPatternPaletteConfig = { ...config, contrast: resolvedContrast };
+    const divergingColors = config.divergingColors ?? seedDivergingColors();
+    draftPatternPaletteConfig = {
+      ...config,
+      contrast: resolvedContrast,
+      ...(divergingColors ? { divergingColors } : {})
+    };
     onPatternPaletteChange?.(draftPatternPaletteConfig);
   }
 
@@ -296,34 +313,37 @@
     />
 
     <div class="tab-content">
-      {#if activeTab === 0}
-        <SingleColorPreview
-          label={m.color()}
-          allowPattern={false}
-          color={singleColor}
-          onchange={handleSingleColorChange}
-        />
-      {:else if activeTab === 1}
-        <div class="two-colors">
+      <SwitchedContent value={activeTab}>
+        {#if activeTab === 0}
           <SingleColorPreview
             label={m.color()}
             allowPattern={false}
-            color={startColor}
-            onchange={handleStartColorChange}
+            color={singleColor}
+            onchange={handleSingleColorChange}
           />
-          <SingleColorPreview
-            label={m.color()}
-            allowPattern={false}
-            color={endColor}
-            onchange={handleEndColorChange}
+        {:else if activeTab === 1}
+          <div class="two-colors">
+            <SingleColorPreview
+              label={m.color()}
+              allowPattern={false}
+              color={startColor}
+              onchange={handleStartColorChange}
+            />
+            <SingleColorPreview
+              label={m.color()}
+              allowPattern={false}
+              color={endColor}
+              onchange={handleEndColorChange}
+            />
+          </div>
+        {:else if activeTab === 2}
+          <PatternPalettePicker
+            config={draftPatternPaletteConfig}
+            diverging={paletteType === PALETTE_TYPE.DIVERGING}
+            onchange={handlePatternPaletteChange}
           />
-        </div>
-      {:else if activeTab === 2}
-        <PatternPalettePicker
-          config={draftPatternPaletteConfig}
-          onchange={handlePatternPaletteChange}
-        />
-      {/if}
+        {/if}
+      </SwitchedContent>
     </div>
 
     <div class="contrast-section">

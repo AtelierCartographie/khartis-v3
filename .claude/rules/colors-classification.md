@@ -16,7 +16,7 @@ Color and discretization are the heart of thematic semiology: a wrong break or p
 ## Three palette families, matched to the variable
 
 - **Sequential** (`sequential`): ordered quantitative data, light to dark.
-- **Diverging** (`divergentSequential`): quantitative data with a meaningful breakpoint. Pass the diverging split (`hasCenterClass`) computed from the break position; reversing a sequential ramp does not produce one.
+- **Diverging** (`divergentSequential`): quantitative data with a meaningful breakpoint, either a series that crosses zero or a value the user sets. Only a finite breakpoint makes a classification diverging (`isDivergingBreakpoint`); otherwise the palette stays sequential. The breakpoint is a break, so there is no center class: `computeDivergingSplit` returns the class counts below and above it. Reversing a sequential ramp does not produce a diverging one.
 - **Qualitative**: nominal categories, from the project presets (`qualitative-palette.constants.ts`).
 
 Generate class colors with `generateColorsForBreaks()` in `classification.service.ts`, and export them to the renderer with `resolvePalette(..., { format: 'webgl' })` then `webglToHex`. Inverting a palette flips the resolved array; it does not regenerate it.
@@ -25,7 +25,7 @@ Generate class colors with `generateColorsForBreaks()` in `classification.servic
 
 - Methods live in `ClassificationMethod` (equal interval, quantiles, k-means, q6, nested means, head/tail, manual) and map to DuckDB break macros through `mapMethodToMacro()`. A new method is added there and computed in DuckDB.
 - The user's class count and manually edited bounds are always honored. `manual` recomputes nothing except the counts per class.
-- A breakpoint turns the ramp diverging (`calculateDivergingBreaks`, `computeDivergingSplit`). Validate it with `Number.isFinite` and keep the frequency histogram in sync.
+- A breakpoint turns the ramp diverging (`calculateDivergingBreaks`, `computeDivergingSplit`). Validate it with `isDivergingBreakpoint` and keep the frequency histogram in sync.
 - Class bounds are rounded to the data with the existing rounding step. Raw floats are not shown as breaks.
 
 ## Color-blindness
@@ -44,6 +44,7 @@ Generate class colors with `generateColorsForBreaks()` in `classification.servic
 
 - A pattern palette replaces the flat fill (one motif per class over `PatternPaletteConfig.background`); it is not an overlay. An absent background leaves the polygon unpainted so the layers beneath show through, and previews draw it as a checkerboard. Under a motif the flat color (`fillColor`, `missingData.color`) is not drawn. Projects before schema 3.17.0 get their former background (white, or the missing-data color) by migration.
 - Class pattern sets come from ok-palette (`sequentialPatterns`, `categoricalPatterns`) through `resolveClassPatterns()` in `pattern-palette.service.ts`. Size and angle ramps are not hand-rolled.
+- The motif size is the share of the tile it paints, and it alone orders a pattern ramp. With a breakpoint, pass the diverging split to `resolveClassPatterns()`: one ramp per side grows away from the breakpoint, each side has one fixed hue (`divergingColors`) that contrast never changes, and only `DIVERGING_PATTERN_SHAPES` are drawn, the lower side rotated by 180° / symmetry order (plaid against line). A shape that would touch its neighbours is capped (`DIVERGING_PATTERN_MAX_SIZE`) so the painted share stays exact.
 - `PatternPaletteConfig.scale` is in native motif units: the design tile is scale × 10 CSS px, and the UI slider shows the ×10 value. Categorical pattern palettes are capped at `MAX_CATEGORICAL_PATTERN_COUNT`.
 - Atlas frame widths scaled by `devicePixelRatio` are not fed to the Deck.gl shader, and previews are not built from `motif().tile()` (canvas tiles are DPR-scaled and unrotated). Use the SVG-defs helpers: `buildPatternSvgBackground`, `buildClassPatternSvgBackground`, the legend `patternFill`.
 - The legacy single-motif model (`patternId`, `patternParams`, `PATTERN_TYPE_MAP`) remains only for unique fills, symbols and missing data.

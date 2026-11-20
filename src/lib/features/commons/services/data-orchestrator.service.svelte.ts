@@ -61,7 +61,8 @@ import {
   calculateBreaks,
   calculateDivergingBreaks,
   computeDivergingSplit,
-  generateColorsForBreaks
+  generateColorsForBreaks,
+  isDivergingBreakpoint
 } from './classification.service';
 import { resolveValueScopeClause } from './row-scope.service';
 import {
@@ -866,10 +867,15 @@ function createDataOrchestratorService() {
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
-          const paletteType =
-            viz.classification?.breakpointValue != null
-              ? 'diverging'
-              : 'sequential';
+          const breakpointValue = viz.classification?.breakpointValue;
+          const divergingSplit = isDivergingBreakpoint(breakpointValue)
+            ? computeDivergingSplit(
+                actualNumClasses,
+                result.breaks,
+                breakpointValue
+              )
+            : undefined;
+          const paletteType = divergingSplit ? 'diverging' : 'sequential';
           const contrast = isColorBlindnessActive(getColorBlindnessState())
             ? ('high' as const)
             : undefined;
@@ -877,14 +883,6 @@ function createDataOrchestratorService() {
             ? findPaletteById(viz.classification.paletteId)
             : undefined;
           const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-          const divergingSplit =
-            paletteType === 'diverging'
-              ? computeDivergingSplit(
-                  actualNumClasses,
-                  result.breaks,
-                  viz.classification?.breakpointValue ?? null
-                )
-              : undefined;
           colors =
             userPalette && !isPatternPalette
               ? generatePaletteColors(

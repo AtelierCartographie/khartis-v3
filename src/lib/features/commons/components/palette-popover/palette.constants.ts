@@ -118,7 +118,6 @@ export interface Palette {
 export interface DivergingPaletteSplit {
   lowerCount: number;
   upperCount: number;
-  hasCenterClass: boolean;
 }
 
 export const SUGGESTION_PRESET = {
@@ -501,16 +500,12 @@ export function generatePaletteColors(
         palette.colors.length > 1
           ? palette.colors[palette.colors.length - 1]
           : undefined;
-      const split = divergingSplit ?? {
-        lowerCount: Math.floor(count / 2),
-        upperCount: Math.floor(count / 2),
-        hasCenterClass: count % 2 === 1
-      };
+      const lowerCount = divergingSplit?.lowerCount ?? Math.floor(count / 2);
       const cssColors = divergentSequential({
         colorA,
         colorB,
-        steps: [split.lowerCount, split.upperCount],
-        hasCenterClass: split.hasCenterClass,
+        steps: [lowerCount, divergingSplit?.upperCount ?? count - lowerCount],
+        hasCenterClass: false,
         contrast
       });
       return (
@@ -843,7 +838,8 @@ export function normalizePaletteId(id: string | undefined): string | undefined {
 export function resolvePaletteTypeForBreakpoint(
   classification: { breakpointValue?: number | null } | null | undefined
 ): PaletteType {
-  return classification?.breakpointValue != null
+  const breakpointValue = classification?.breakpointValue;
+  return typeof breakpointValue === 'number' && Number.isFinite(breakpointValue)
     ? PALETTE_TYPE.DIVERGING
     : PALETTE_TYPE.SEQUENTIAL;
 }

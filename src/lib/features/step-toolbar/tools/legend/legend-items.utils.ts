@@ -66,6 +66,8 @@ export interface ResolvedLegendItemLayout {
   lowAtBottom: boolean;
   /** Share of the default gap, from 0 to 1. */
   entrySpacing: number;
+  /** Width the frame was dragged to, in legend units, or null for its own. */
+  width: number | null;
 }
 
 // A saved project is untrusted JSON: anything unexpected falls back to the
@@ -75,6 +77,7 @@ export function resolveLegendItemLayout(
 ): ResolvedLegendItemLayout {
   const layout = item.layout;
   const spacing = layout?.entrySpacing;
+  const width = layout?.width;
 
   return {
     proportionalClasses: layout?.proportionalClasses === true,
@@ -84,7 +87,11 @@ export function resolveLegendItemLayout(
     entrySpacing:
       typeof spacing === 'number' && Number.isFinite(spacing)
         ? Math.max(0, Math.min(100, spacing)) / 100
-        : 1
+        : 1,
+    width:
+      typeof width === 'number' && Number.isFinite(width) && width > 0
+        ? width
+        : null
   };
 }
 

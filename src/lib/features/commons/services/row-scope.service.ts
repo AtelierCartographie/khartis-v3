@@ -61,11 +61,20 @@ export function resolveRowScope(request: RowScopeRequest): RowScope | null {
     (dataset.columns ?? []).map((column) => [column.name, column.type_simple])
   );
 
+  const tableClause = buildFilterWhereClause(
+    duckDBOrchestrator.getFilters(dataset.tableName)
+  );
+  const joinedRowsClause = resolveJoinedRowsClause(dataset);
   const clause = combineFilterClauses([
-    buildFilterWhereClause(duckDBOrchestrator.getFilters(dataset.tableName)),
+    tableClause,
     buildFilterClause(
       dataset.tableName,
-      vizFilters.map((filter) => toFilterInput(filter, columnTypes))
+      vizFilters.map((filter) => toFilterInput(filter, columnTypes)),
+      // Only the rows on the map compete for a top filter.
+      combineFilterClauses([
+        tableClause ? `(${tableClause})` : null,
+        joinedRowsClause
+      ])
     )
   ]);
 
@@ -74,7 +83,7 @@ export function resolveRowScope(request: RowScopeRequest): RowScope | null {
     clause,
     valueClause: combineFilterClauses([
       clause ? `(${clause})` : null,
-      resolveJoinedRowsClause(dataset)
+      joinedRowsClause
     ])
   };
 }

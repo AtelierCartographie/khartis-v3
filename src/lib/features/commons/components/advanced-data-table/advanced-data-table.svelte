@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
@@ -836,7 +839,14 @@
                 scope="col"
               >
                 {#if isSelectionMode}
-                  <div class="selection-header-content">
+                  <div
+                    class="selection-header-content"
+                    in:scale={{
+                      duration: motionDuration(180),
+                      start: 0.6,
+                      easing: cubicOut
+                    }}
+                  >
                     <SimpleCheckbox
                       checked={areVisibleRowsSelected}
                       indeterminate={hasVisibleSelection &&

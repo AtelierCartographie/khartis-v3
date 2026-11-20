@@ -28,7 +28,7 @@ export function useSideNav(): UseSideNavReturn {
       if (target.closest(`#${SIDENAV_CONTAINER_ID}`)) return;
       if (target.closest(HAMBURGER_SELECTOR)) return;
 
-      globalState.isSideNavOpen = false;
+      createProjectActions.dismissSideNav();
     }
 
     const timeoutId = setTimeout(() => {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { resolveClassificationPatternConfig } from '$lib/features/commons/services/pattern-palette.service';
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { type Snippet, untrack } from 'svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
@@ -190,12 +192,16 @@
   const resolvedCategoryCount = $derived(categoryLabels.count);
   const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
     ...DEFAULT_COMMON_ASPECT,
+    // Read like the map reads it, so a project saved with a legacy
+    // patternId shows its motif too.
     pattern:
       categoriesVariant === 'polygons' &&
-      Boolean(visualization?.classification?.pattern),
+      Boolean(
+        resolveClassificationPatternConfig(visualization?.classification)
+      ),
     patternConfig:
       (categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern
+        ? resolveClassificationPatternConfig(visualization?.classification)
         : undefined) ?? DEFAULT_COMMON_ASPECT.patternConfig
   });
   const selectableValueFields = $derived(
@@ -266,122 +272,127 @@
   />
 </div>
 
-{#if fillMode === FillMode.UNIQUE}
-  {#if uniqueSnippet}
-    {@render uniqueSnippet()}
-  {:else}
-    <SingleColorPreview
-      exclusive
-      allowPattern={categoriesVariant === 'polygons'}
-      label={m.color()}
-      color={fillColor}
-      patternPaletteConfig={categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern
-        : undefined}
-      onchange={onFillColorChange}
-      onpatternchange={(config) => {
-        if (categoriesVariant === 'polygons') {
-          onClassificationChange({
-            pattern: config,
-            patternId: undefined,
-            patternParams: undefined
-          });
-        }
+<SwitchedContent value={fillMode}>
+  {#if fillMode === FillMode.UNIQUE}
+    {#if uniqueSnippet}
+      {@render uniqueSnippet()}
+    {:else}
+      <SingleColorPreview
+        exclusive
+        allowPattern={categoriesVariant === 'polygons'}
+        label={m.color()}
+        color={fillColor}
+        patternPaletteConfig={categoriesVariant === 'polygons'
+          ? visualization?.classification?.pattern
+          : undefined}
+        onchange={onFillColorChange}
+        onpatternchange={(config) => {
+          if (categoriesVariant === 'polygons') {
+            onClassificationChange({
+              pattern: config,
+              patternId: undefined,
+              patternParams: undefined
+            });
+          }
+        }}
+      />
+    {/if}
+  {:else if fillMode === FillMode.DENSITY && densitySnippet}
+    {@render densitySnippet()}
+  {:else if fillMode === FillMode.CLASSES}
+    {#if valueMapFills.length > 0}
+      {@render mapFillPickers(valueMapFills, selectableValueFields)}
+    {:else}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={valuePickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableValueFields}
+          selectedFieldId={selectedValueFieldId}
+          selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
+          isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
+          onSelect={onValueFieldSelect}
+          onCollectionChange={(ids) =>
+            onFacetsVariablesChange(valueColumnName, facetsValueSlotPath, ids)}
+          onToggleCollection={(en) => onFacetsToggle(facetsValueSlotPath, en)}
+        />
+      </div>
+    {/if}
+    <DiscretizationRow
+      label={m.discretization()}
+      value={discretizationLabel}
+      onsettings={onOpenDiscretization}
+    />
+    <PalettePreview
+      label={m.color_palette()}
+      colors={currentPalette}
+      selectedPaletteId={visualization?.classification?.paletteId}
+      inverted={visualization?.classification?.inverted ?? false}
+      showInvertButton={false}
+      paletteType={resolvePaletteTypeForBreakpoint(
+        visualization?.classification
+      )}
+      classification={visualization?.classification}
+      categoriesVariant={categoriesVariant}
+      oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
+    />
+  {:else if fillMode === FillMode.CATEGORIES && categoriesSnippet}
+    {@render categoriesSnippet()}
+  {:else if fillMode === FillMode.CATEGORIES}
+    {#if categoryMapFills.length > 0}
+      {@render mapFillPickers(categoryMapFills, selectableCategoryFields)}
+    {:else}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={categoryPickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableCategoryFields}
+          selectedFieldId={selectedCategoryFieldId}
+          selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
+          isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
+          onSelect={onCategoryFieldSelect}
+          onCollectionChange={(ids) =>
+            onFacetsVariablesChange(
+              categoryColumnName,
+              facetsCategorySlotPath,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            onFacetsToggle(facetsCategorySlotPath, en)}
+        />
+      </div>
+    {/if}
+    <DiscretizationRow
+      label={m.category_aspect()}
+      value={(isSingularCount(resolvedCategoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
+      settingsIconDescription={m.palette_categories_aspect_title()}
+      onsettings={() => {
+        categoriesPopoverOpen = true;
       }}
     />
+    <PalettePreview
+      label={m.color_palette()}
+      colors={currentQualPalette}
+      selectedPaletteId={visualization?.classification?.paletteId}
+      inverted={visualization?.classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.QUALITATIVE}
+      categoriesMode={true}
+      categoriesVariant={categoriesVariant}
+      categoriesCommonAspect={categoriesCommonAspect}
+      showCategoriesCommonAspect={categoriesVariant === 'polygons'}
+      categoryLabels={categoryLabels.labels}
+      classification={visualization?.classification}
+      bind:categoriesPopoverOpen={categoriesPopoverOpen}
+      oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
+    />
   {/if}
-{:else if fillMode === FillMode.DENSITY && densitySnippet}
-  {@render densitySnippet()}
-{:else if fillMode === FillMode.CLASSES}
-  {#if valueMapFills.length > 0}
-    {@render mapFillPickers(valueMapFills, selectableValueFields)}
-  {:else}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={valuePickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableValueFields}
-        selectedFieldId={selectedValueFieldId}
-        selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
-        isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
-        onSelect={onValueFieldSelect}
-        onCollectionChange={(ids) =>
-          onFacetsVariablesChange(valueColumnName, facetsValueSlotPath, ids)}
-        onToggleCollection={(en) => onFacetsToggle(facetsValueSlotPath, en)}
-      />
-    </div>
-  {/if}
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    showInvertButton={false}
-    paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
-    classification={visualization?.classification}
-    categoriesVariant={categoriesVariant}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-{:else if fillMode === FillMode.CATEGORIES && categoriesSnippet}
-  {@render categoriesSnippet()}
-{:else if fillMode === FillMode.CATEGORIES}
-  {#if categoryMapFills.length > 0}
-    {@render mapFillPickers(categoryMapFills, selectableCategoryFields)}
-  {:else}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={categoryPickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableCategoryFields}
-        selectedFieldId={selectedCategoryFieldId}
-        selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
-        isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
-        onSelect={onCategoryFieldSelect}
-        onCollectionChange={(ids) =>
-          onFacetsVariablesChange(
-            categoryColumnName,
-            facetsCategorySlotPath,
-            ids
-          )}
-        onToggleCollection={(en) => onFacetsToggle(facetsCategorySlotPath, en)}
-      />
-    </div>
-  {/if}
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={(isSingularCount(resolvedCategoryCount)
-      ? m.categories_count_one
-      : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
-    settingsIconDescription={m.palette_categories_aspect_title()}
-    onsettings={() => {
-      categoriesPopoverOpen = true;
-    }}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentQualPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.QUALITATIVE}
-    categoriesMode={true}
-    categoriesVariant={categoriesVariant}
-    categoriesCommonAspect={categoriesCommonAspect}
-    showCategoriesCommonAspect={categoriesVariant === 'polygons'}
-    categoryLabels={categoryLabels.labels}
-    classification={visualization?.classification}
-    bind:categoriesPopoverOpen={categoriesPopoverOpen}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-{/if}
+</SwitchedContent>
 
 {#if showOpacitySlider && fillMode !== FillMode.NONE && fillMode !== FillMode.DENSITY}
   <SliderWithInput

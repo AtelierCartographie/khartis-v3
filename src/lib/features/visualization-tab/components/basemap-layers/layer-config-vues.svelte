@@ -1,14 +1,13 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
-    FONT_SIZE_OPTIONS,
-    normalizeFontFamily
+    FONT_SIZE_OPTIONS
   } from '$lib/features/step-toolbar/fonts.constants';
   import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -33,21 +32,12 @@
     onchange
   }: Props = $props();
 
-  const fontOptions = AVAILABLE_FONTS.map((fontFamily) => ({
-    id: fontFamily,
-    text: fontFamily
-  }));
   const fontSizeOptions = FONT_SIZE_OPTIONS.map((fontSize) => ({
     id: fontSize,
     text: fontSize
   }));
 
   const getOnChange = () => onchange;
-  const handleFontFamilyChange = createLayerConfigSelectedIdHandler<string>(
-    getOnChange,
-    'labelFontFamily',
-    (selectedId) => selectedId
-  );
   const handleSizeChange = createLayerConfigSelectedIdHandler<number>(
     getOnChange,
     'labelSize',
@@ -62,15 +52,11 @@
 <div class="layer-config-content">
   <div class="label-style-row">
     <div class="label-font-control">
-      <Dropdown
-        translateWithId={translateCarbonId}
-        translateWithIdSelection={translateCarbonId}
-        size="sm"
-        titleText={m.basemap_config_label_font()}
-        selectedId={normalizeFontFamily(labelFontFamily) ??
-          CARTOGRAPHIC_FONT_FAMILY}
-        items={fontOptions}
-        on:select={handleFontFamilyChange}
+      <FontFamilySelect
+        labelText={m.basemap_config_label_font()}
+        value={labelFontFamily}
+        fallback={CARTOGRAPHIC_FONT_FAMILY}
+        onchange={(font) => getOnChange()?.({ labelFontFamily: font })}
       />
     </div>
 

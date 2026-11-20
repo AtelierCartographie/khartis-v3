@@ -55,6 +55,7 @@ function safeReadGeometryValue(
 }
 
 const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
+const rowBoundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
 
 function isValidBbox(
   minLng: number,
@@ -293,15 +294,21 @@ function calculateBoundsFromGeometryData(
   return finalizeBoundsAccumulator(bounds);
 }
 
+/**
+ * `fromRows` reads the geometry instead of the bbox in the GeoArrow metadata:
+ * a table narrowed to some rows keeps the metadata of the whole table.
+ */
 export function calculateBoundsFromGeoArrow(
-  jsTable: ArrowTable
+  jsTable: ArrowTable,
+  { fromRows = false }: { fromRows?: boolean } = {}
 ): LngLatBoundsLike | null {
-  const cached = boundsCache.get(jsTable);
+  const cache = fromRows ? rowBoundsCache : boundsCache;
+  const cached = cache.get(jsTable);
   if (cached !== undefined) return cached;
 
   try {
     if (jsTable.numRows === 0) {
-      boundsCache.set(jsTable, null);
+      cache.set(jsTable, null);
       return null;
     }
 
@@ -315,7 +322,7 @@ export function calculateBoundsFromGeoArrow(
         ? jsonMeta.columns?.[primaryColumn]
         : null;
 
-      if (columnMeta?.bbox && Array.isArray(columnMeta.bbox)) {
+      if (!fromRows && columnMeta?.bbox && Array.isArray(columnMeta.bbox)) {
         const bbox = columnMeta.bbox;
 
         if (bbox.length === 4) {
@@ -332,7 +339,7 @@ export function calculateBoundsFromGeoArrow(
               [minLng, minLat],
               [maxLng, maxLat]
             ];
-            boundsCache.set(jsTable, result);
+            cache.set(jsTable, result);
             return result;
           }
         }
@@ -342,7 +349,7 @@ export function calculateBoundsFromGeoArrow(
     if (primaryColumn) {
       const bounds = calculateBoundsFromGeometryData(jsTable, primaryColumn);
       if (bounds) {
-        boundsCache.set(jsTable, bounds);
+        cache.set(jsTable, bounds);
         return bounds;
       }
     }
@@ -351,7 +358,7 @@ export function calculateBoundsFromGeoArrow(
     if (geoColumn && geoColumn !== primaryColumn) {
       const bounds = calculateBoundsFromGeometryData(jsTable, geoColumn);
       if (bounds) {
-        boundsCache.set(jsTable, bounds);
+        cache.set(jsTable, bounds);
         return bounds;
       }
     }
@@ -360,16 +367,16 @@ export function calculateBoundsFromGeoArrow(
       if (field.name === primaryColumn || field.name === geoColumn) continue;
       const bounds = calculateBoundsFromGeometryData(jsTable, field.name);
       if (bounds) {
-        boundsCache.set(jsTable, bounds);
+        cache.set(jsTable, bounds);
         return bounds;
       }
     }
 
-    boundsCache.set(jsTable, null);
+    cache.set(jsTable, null);
     return null;
   } catch (error) {
     logger.error('Failed to calculate GeoArrow bounds', LogCategory.MAP, error);
-    boundsCache.set(jsTable, null);
+    cache.set(jsTable, null);
     return null;
   }
 }

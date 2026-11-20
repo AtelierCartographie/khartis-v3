@@ -1181,6 +1181,12 @@
   }
 
   const geoIndicationsDragController = createDraggablePageItemController({
+    getPageFrame: () => ({
+      width: formatState.width,
+      height: formatState.height,
+      margins: formatState.margins,
+      offset: { x: formatState.margins.left, y: formatState.margins.top }
+    }),
     getOverlayElement: () => overlayElement,
     getPageScale,
     getCurrentPosition: () =>

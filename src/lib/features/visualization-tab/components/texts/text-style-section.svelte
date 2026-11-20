@@ -1,12 +1,7 @@
 <script lang="ts">
-  import { Dropdown } from 'carbon-components-svelte';
-  import {
-    AVAILABLE_FONTS,
-    CARTOGRAPHIC_FONT_FAMILY,
-    normalizeFontFamily
-  } from '$lib/features/step-toolbar/fonts.constants';
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
+  import { CARTOGRAPHIC_FONT_FAMILY } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
-  import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { TextBold, TextItalic } from 'carbon-icons-svelte';
   import {
     nextAlignment,
@@ -26,10 +21,6 @@
     onAlignmentChange: (align: TextAlignment) => void;
   }
 
-  type DropdownSelectEvent = CustomEvent<{
-    selectedId?: string | number;
-  }>;
-
   interface Props {
     title: string;
     section: TextStyleSectionHandlers | undefined;
@@ -40,22 +31,6 @@
   const enabled = $derived(Boolean(section));
   const align = $derived<TextAlignment>(section?.align ?? 'center');
   const AlignmentIcon = $derived(resolveAlignmentIcon(align));
-  const fontItems = $derived(
-    AVAILABLE_FONTS.map((fontFamily) => ({
-      id: fontFamily,
-      text: fontFamily
-    }))
-  );
-
-  function handleFontFamilySelect(event: DropdownSelectEvent) {
-    if (!section) return;
-    const value =
-      typeof event.detail.selectedId === 'string'
-        ? event.detail.selectedId
-        : undefined;
-    if (value === undefined) return;
-    section.onFontFamilyChange(value);
-  }
 </script>
 
 <section
@@ -71,20 +46,13 @@
     <div class="compact-field compact-field--wide">
       <span class="compact-field__label">{m.annotations_font()}</span>
       <div class="compact-field__control" aria-disabled={!enabled}>
-        <Dropdown
-          translateWithId={translateCarbonId}
-          translateWithIdSelection={translateCarbonId}
-          class="compact-dropdown"
+        <FontFamilySelect
           hideLabel
           labelText={m.annotations_font()}
-          aria-label={m.annotations_font()}
-          items={fontItems}
-          selectedId={normalizeFontFamily(section?.fontFamily) ??
-            CARTOGRAPHIC_FONT_FAMILY}
+          value={section?.fontFamily}
+          fallback={CARTOGRAPHIC_FONT_FAMILY}
           disabled={!enabled}
-          size="sm"
-          type="default"
-          on:select={handleFontFamilySelect}
+          onchange={(font) => section?.onFontFamilyChange(font)}
         />
       </div>
     </div>

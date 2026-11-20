@@ -16,7 +16,11 @@ export interface NotificationOptions {
   caption?: string;
   timeout?: number;
   lowContrast?: boolean;
+  /** Bottom right by default; top left for a hint about where to act. */
+  placement?: NotificationPlacement;
 }
+
+export type NotificationPlacement = 'bottom-right' | 'top-left';
 
 interface Notification extends NotificationOptions {
   id: string;
@@ -124,6 +128,10 @@ export function showWarning(title: string, subtitle?: string): void {
   notificationManager.warning({ title, subtitle });
 }
 
-export function showInfo(title: string, subtitle?: string): void {
-  notificationManager.info({ title, subtitle });
+export function showInfo(
+  title: string,
+  subtitle?: string,
+  placement?: NotificationPlacement
+): void {
+  notificationManager.info({ title, subtitle, placement });
 }

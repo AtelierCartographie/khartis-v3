@@ -86,4 +86,18 @@ describe('format store page resize', () => {
       left: 10
     });
   });
+
+  it('should scale the map frame like an image when the page is resized', () => {
+    formatActions.setModel(PageModel.A4_LANDSCAPE);
+    formatActions.setMapFrame({ top: 95, right: 142, bottom: 100, left: 100 });
+
+    formatActions.setSize(1684, 1190);
+
+    expect(getFormatState().mapFrame).toEqual({
+      top: 190,
+      right: 284,
+      bottom: 200,
+      left: 200
+    });
+  });
 });

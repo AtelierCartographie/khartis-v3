@@ -43,6 +43,10 @@ function createBasemapAuxLayersStore() {
       : defaultVisible;
   }
 
+  function hasVisibility(basemapFile: string, layerFile: string): boolean {
+    return state.visibility.has(buildKey(basemapFile, layerFile));
+  }
+
   function setVisible(
     basemapFile: string,
     layerFile: string,
@@ -147,6 +151,7 @@ function createBasemapAuxLayersStore() {
 
   return {
     isVisible,
+    hasVisibility,
     setVisible,
     reset,
     getStyle,

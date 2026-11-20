@@ -157,7 +157,8 @@ vi.mock('./pattern-texture', async () => {
 
 vi.mock('$lib/features/commons/stores/font-assets.store.svelte', () => ({
   fontAssetsStore: {
-    ready: true
+    ready: true,
+    isFontReady: () => true
   }
 }));
 

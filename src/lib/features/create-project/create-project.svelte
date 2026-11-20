@@ -7,7 +7,7 @@
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { cubicIn, cubicOut } from 'svelte/easing';
-  import { fade, fly } from 'svelte/transition';
+  import { fade, fly, type TransitionConfig } from 'svelte/transition';
   import {
     ComposedModal,
     Link,
@@ -141,9 +141,24 @@
       (tabElement as HTMLElement)?.focus();
     }
   }
+
+  // The modal mounts and unmounts already open, so Carbon's own transition
+  // never runs: the whole dialog fades and its panel rises with it.
+  function revealModal(node: HTMLElement): TransitionConfig {
+    const container = node.querySelector<HTMLElement>('.bx--modal-container');
+    return {
+      duration: motionDuration(240),
+      easing: cubicOut,
+      css: (t) => `opacity: ${t};`,
+      tick: (t) => {
+        container?.style.setProperty('translate', `0 ${(1 - t) * 16}px`);
+      }
+    };
+  }
 </script>
 
 <div
+  transition:revealModal|global
   id="khartis-create-project"
   data-testid="create-project-modal"
   use:linkDialogToTitle
@@ -296,6 +311,28 @@
     color: inherit;
   }
 
+  /* Fading lowers the wrapper's opacity, which makes it a stacking context:
+     it must sit above the app itself, or the dialog fades behind the header
+     and the panels and only shows once opaque. */
+  #khartis-create-project {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+  }
+
+  /* Closing removes Carbon's is-visible class, which hides the dialog at
+     once; the wrapper's fade carries the exit instead. */
+  #khartis-create-project :global(.bx--modal) {
+    opacity: 1;
+    visibility: inherit;
+    transition: none;
+  }
+
+  #khartis-create-project :global(.bx--modal-container) {
+    transform: none;
+    transition: none;
+  }
+
   @media (min-width: 1024px) {
     #khartis-create-project :global(.bx--modal-container) {
       width: 90vw;
@@ -305,11 +342,13 @@
       background: var(--cds-background);
     }
 
-    /* The body keeps the height « Ouvrir un projet » needs, whatever the
-       header wraps to; the space left for the header caps it. */
+    /* The body keeps the height « Ouvrir un projet » needs, whatever card
+       is selected, within the space the header leaves; the selected card
+       scrolls inside it. */
     #khartis-create-project :global(.fixed-modal-body) {
-      height: 40rem;
-      max-height: calc(90vh - 7.5rem);
+      display: flex;
+      flex-direction: column;
+      height: min(40rem, calc(90vh - 7.5rem));
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
@@ -332,7 +371,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .project-type-selector {
@@ -351,7 +391,7 @@
   /* The leaving and arriving panes share one cell while they swap. */
   .tab-content {
     display: grid;
-    grid-auto-rows: minmax(100%, auto);
+    grid-auto-rows: auto;
     flex: 1;
     min-height: 0;
     overflow-y: auto;

@@ -7,6 +7,7 @@
   import {
     buildClassPatternSvgBackground,
     buildPatternSvgBackground,
+    type DivergingPaletteSplit,
     PALETTE_TYPE,
     type PaletteType,
     type PatternId,
@@ -27,6 +28,7 @@
     newPatternPaletteConfig?: PatternPaletteConfig;
     currentInverted?: boolean;
     newInverted?: boolean;
+    divergingSplit?: DivergingPaletteSplit;
   }
 
   let {
@@ -40,7 +42,8 @@
     currentPatternPaletteConfig,
     newPatternPaletteConfig,
     currentInverted = false,
-    newInverted = false
+    newInverted = false,
+    divergingSplit
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
@@ -112,7 +115,8 @@
       config,
       'sequential',
       config.contrast,
-      inverted
+      inverted,
+      divergingSplit
     );
     return patterns.map((pattern) => buildClassPatternSvgBackground(pattern));
   }

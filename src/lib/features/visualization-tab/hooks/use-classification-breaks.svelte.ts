@@ -10,6 +10,7 @@ import {
   computeDivergingSplit,
   detectDivergingBreakpoint,
   generateColorsForBreaks,
+  isDivergingBreakpoint,
   isTemporalColumn
 } from '$lib/features/commons/services/classification.service';
 import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
@@ -94,12 +95,12 @@ export function buildClassificationColorParamsKey(
     ? Math.max(target.classification?.labels?.length ?? 0, 0)
     : (target.classification?.classes ?? 0);
   const breakpointValue = target.classification?.breakpointValue;
-  const paletteType =
-    breakpointValue != null ? PALETTE_TYPE.DIVERGING : PALETTE_TYPE.SEQUENTIAL;
-  const breakpointKey =
-    paletteType === PALETTE_TYPE.DIVERGING && Number.isFinite(breakpointValue)
-      ? String(breakpointValue)
-      : '';
+  const paletteType = isDivergingBreakpoint(breakpointValue)
+    ? PALETTE_TYPE.DIVERGING
+    : PALETTE_TYPE.SEQUENTIAL;
+  const breakpointKey = isDivergingBreakpoint(breakpointValue)
+    ? String(breakpointValue)
+    : '';
   const breaksKey =
     paletteType === PALETTE_TYPE.DIVERGING
       ? (target.classification?.breaks ?? []).join(',')
@@ -288,18 +289,16 @@ export function resolveClassificationColors({
 
     const resolvedBreakpointValue =
       breakpointValue ?? classification.breakpointValue;
-    const paletteType =
-      resolvedBreakpointValue != null
-        ? PALETTE_TYPE.DIVERGING
-        : PALETTE_TYPE.SEQUENTIAL;
-    const divergingSplit =
-      paletteType === PALETTE_TYPE.DIVERGING
-        ? computeDivergingSplit(
-            resolvedClassCount,
-            breakValues ?? classification.breaks ?? [],
-            resolvedBreakpointValue
-          )
-        : undefined;
+    const divergingSplit = isDivergingBreakpoint(resolvedBreakpointValue)
+      ? computeDivergingSplit(
+          resolvedClassCount,
+          breakValues ?? classification.breaks ?? [],
+          resolvedBreakpointValue
+        )
+      : undefined;
+    const paletteType = divergingSplit
+      ? PALETTE_TYPE.DIVERGING
+      : PALETTE_TYPE.SEQUENTIAL;
 
     if (
       userPalette &&

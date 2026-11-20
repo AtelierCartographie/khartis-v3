@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
@@ -70,13 +71,15 @@
   {/if}
 
   <div class="basemap-tab-body">
-    {#if activeTabIndex === 0}
-      {@render catalogContent()}
-    {:else if activeTabIndex === 1}
-      {@render importContent()}
-    {:else}
-      {@render osmContent()}
-    {/if}
+    <SwitchedContent value={activeTabIndex}>
+      {#if activeTabIndex === 0}
+        {@render catalogContent()}
+      {:else if activeTabIndex === 1}
+        {@render importContent()}
+      {:else}
+        {@render osmContent()}
+      {/if}
+    </SwitchedContent>
   </div>
 
   {#if showJoinSection && joinSection}

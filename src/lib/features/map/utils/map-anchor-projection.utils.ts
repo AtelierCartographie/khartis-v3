@@ -8,9 +8,10 @@ import type { AnnotationDataAnchor } from '$lib/features/step-toolbar/tools/anno
  * the on-screen position inside the map area (LOGICAL/unscaled pixels relative
  * to the map-area top-left) for BOTH render engines:
  *
- *  - MapLibre interleaved: `map.project` / `map.unproject` (the MapLibre canvas
- *    fills the map area, so its CSS pixels already are map-area-local logical
- *    px).
+ *  - MapLibre interleaved: `map.project` / `map.unproject`. The MapLibre
+ *    canvas draws at the rendered page size, so its CSS pixels are logical px
+ *    times the render scale: they are divided by it, or the anchors drift
+ *    away from the map as it zooms or as the frame is resized.
  *  - Deck orthographic: the d3 `renderProjection` (when the geometry is
  *    projected) composed with the store's OrthographicView pan/zoom math
  *    (`projectDataToViewportPx` / `unprojectViewportPxToData`). When the
@@ -44,6 +45,11 @@ function getMapLibreProjector(): LngLatProjector | null {
     return null;
   }
   return map as unknown as LngLatProjector;
+}
+
+function getMapLibreRenderScale(): number {
+  const renderScale = projectionStore.renderScale;
+  return Number.isFinite(renderScale) && renderScale > 0 ? renderScale : 1;
 }
 
 function isInvertibleProjection(
@@ -103,7 +109,8 @@ export function dataToScreenPx(
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
       return null;
     }
-    return { x: point.x, y: point.y };
+    const renderScale = getMapLibreRenderScale();
+    return { x: point.x / renderScale, y: point.y / renderScale };
   }
 
   const ortho = resolveOrthographicProjection();
@@ -227,7 +234,8 @@ export function screenPxToData(
 
   const maplibre = getMapLibreProjector();
   if (maplibre) {
-    const lngLat = maplibre.unproject([x, y]);
+    const renderScale = getMapLibreRenderScale();
+    const lngLat = maplibre.unproject([x * renderScale, y * renderScale]);
     if (
       !lngLat ||
       !Number.isFinite(lngLat.lng) ||

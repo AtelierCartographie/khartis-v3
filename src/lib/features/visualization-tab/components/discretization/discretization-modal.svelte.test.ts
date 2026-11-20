@@ -19,9 +19,10 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
   calculateBreaks: vi.fn(async () => null),
   computeDivergingSplit: vi.fn(() => ({
     lowerCount: 2,
-    upperCount: 2,
-    hasCenterClass: true
+    upperCount: 3
   })),
+  isDivergingBreakpoint: (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value),
   generateColorsForBreaks: vi.fn(() => []),
   isTemporalColumn: vi.fn(async () => false)
 }));

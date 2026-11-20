@@ -4,12 +4,25 @@
     ariaLabel?: string;
     activeIndex?: number;
     onchange?: (index: number) => void;
+    /** Long labels wrap onto two lines instead of being cut. */
+    wrapLabels?: boolean;
   }
 
-  let { items, ariaLabel, activeIndex = 0, onchange }: Props = $props();
+  let {
+    items,
+    ariaLabel,
+    activeIndex = 0,
+    onchange,
+    wrapLabels = false
+  }: Props = $props();
 </script>
 
-<div class="content-switcher" role="group" aria-label={ariaLabel}>
+<div
+  class="content-switcher"
+  class:wrap-labels={wrapLabels}
+  role="group"
+  aria-label={ariaLabel}
+>
   {#each items as item, i (i)}
     <button
       type="button"
@@ -74,6 +87,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
+  }
+
+  .wrap-labels .switcher-item {
+    padding-block: var(--cds-spacing-03);
+  }
+
+  .wrap-labels .switcher-label {
+    white-space: normal;
+    text-overflow: clip;
   }
 
   .switcher-divider {

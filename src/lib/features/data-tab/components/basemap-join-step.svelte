@@ -24,6 +24,8 @@
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+  import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
     BasemapMetadata,
@@ -118,6 +120,21 @@
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
+  // Undefined until the user or an interaction elsewhere decides: the
+  // catalogue tab then opens the suggestions when it has some.
+  let suggestionsOpen = $state<boolean | undefined>(undefined);
+  let joinSectionZone = $state<HTMLDivElement | null>(null);
+
+  // Working on the join means a basemap is chosen: the suggestions fold away.
+  $effect(() => {
+    const zone = joinSectionZone;
+    if (!zone) return;
+    const collapseSuggestions = () => {
+      suggestionsOpen = false;
+    };
+    zone.addEventListener('click', collapseSuggestions);
+    return () => zone.removeEventListener('click', collapseSuggestions);
+  });
   // Suggestions and join grading follow the table filters (see JoinRowScope).
   const tableFilterKey = $derived.by(() => {
     void duckDBDatasetsVersion;
@@ -917,6 +934,26 @@
     }
   }
 
+  // A composite basemap sets several territories side by side: a sea
+  // around each inset weighs on the page, so it starts hidden. Only a fresh
+  // pick applies it, never a user choice already made for that basemap.
+  function hideSeaOnCompositeBasemap(basemap: BasemapMetadata): void {
+    if (basemap.proj_to?.type !== 'composite') return;
+    if (
+      basemapAuxLayersStore.hasVisibility(
+        basemap.file,
+        SYNTHETIC_AUX_LAYER_KEY.MERS
+      )
+    ) {
+      return;
+    }
+    basemapAuxLayersStore.setVisible(
+      basemap.file,
+      SYNTHETIC_AUX_LAYER_KEY.MERS,
+      false
+    );
+  }
+
   async function handleSelectBasemap(
     basemap: BasemapMetadata,
     options: { allowToggleOff?: boolean; source?: BasemapSource } = {}
@@ -962,6 +999,8 @@
       selectedBasemap: basemap.file,
       basemapSource: options.source ?? BasemapSource.CATALOG
     });
+
+    hideSeaOnCompositeBasemap(basemap);
 
     // Non-blocking prefetch: fetch the basemap geometry while the join
     // computes; the render path awaits the same deduplicated load later.
@@ -2179,6 +2218,8 @@
     allBasemaps={allBasemaps}
     basemapSelected={basemapSelected}
     onSelectBasemap={handleSelectSuggestedBasemap}
+    suggestionsOpen={suggestionsOpen}
+    onSuggestionsToggle={(expanded) => (suggestionsOpen = expanded)}
   />
 {/snippet}
 
@@ -2213,39 +2254,41 @@
 {/snippet}
 
 {#snippet joinSection()}
-  <JoinAssistedSection
-    joinRows={joinRows}
-    duplicates={duplicates}
-    unknowns={unknowns}
-    joinedCount={joinedCount}
-    toVerifyCount={toVerifyCount}
-    duplicateTotal={duplicateTotal}
-    unrecognizedTotal={unrecognizedTotal}
-    fuzzyPassEstimate={fuzzyPassEstimate}
-    fuzzyPassRunning={fuzzyPassRunning}
-    onRunFullFuzzyPass={handleRunFullFuzzyPass}
-    linkedVariableName={dataTabState.geolocation.linkedVariableName}
-    basemapValues={basemapAttributes.values}
-    loading={joinLoading}
-    joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-    joinedEntitiesList={joinedPageRows}
-    joinedPage={joinedPage}
-    joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
-    joinedBasemapValues={joinedBasemapValues}
-    onJoinedPageChange={handleJoinedPageChange}
-    onRequestJoinedEntities={handleRequestJoinedEntities}
-    ignoredEntities={ignoredEntities}
-    duplicateLines={dataTabState.basemapJoin.duplicateLines}
-    basemapAliasesByValue={basemapAttributes.aliasesByValue}
-    basemapValuesLoading={basemapAttributes.loading}
-    onRequestBasemapValues={basemapAttributes.requestValues}
-    onFinalizeJoin={handleFinalizeJoin}
-    onManualCorrection={handleManualCorrection}
-    onMappingChange={dataTabActions.updateJoinMapping}
-    onIgnoreEntities={handleIgnoreEntities}
-    onRestoreEntities={handleRestoreEntities}
-    onValidateEntities={handleValidateEntities}
-  />
+  <div class="join-section-zone" bind:this={joinSectionZone}>
+    <JoinAssistedSection
+      joinRows={joinRows}
+      duplicates={duplicates}
+      unknowns={unknowns}
+      joinedCount={joinedCount}
+      toVerifyCount={toVerifyCount}
+      duplicateTotal={duplicateTotal}
+      unrecognizedTotal={unrecognizedTotal}
+      fuzzyPassEstimate={fuzzyPassEstimate}
+      fuzzyPassRunning={fuzzyPassRunning}
+      onRunFullFuzzyPass={handleRunFullFuzzyPass}
+      linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      basemapValues={basemapAttributes.values}
+      loading={joinLoading}
+      joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
+      joinedEntitiesList={joinedPageRows}
+      joinedPage={joinedPage}
+      joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
+      joinedBasemapValues={joinedBasemapValues}
+      onJoinedPageChange={handleJoinedPageChange}
+      onRequestJoinedEntities={handleRequestJoinedEntities}
+      ignoredEntities={ignoredEntities}
+      duplicateLines={dataTabState.basemapJoin.duplicateLines}
+      basemapAliasesByValue={basemapAttributes.aliasesByValue}
+      basemapValuesLoading={basemapAttributes.loading}
+      onRequestBasemapValues={basemapAttributes.requestValues}
+      onFinalizeJoin={handleFinalizeJoin}
+      onManualCorrection={handleManualCorrection}
+      onMappingChange={dataTabActions.updateJoinMapping}
+      onIgnoreEntities={handleIgnoreEntities}
+      onRestoreEntities={handleRestoreEntities}
+      onValidateEntities={handleValidateEntities}
+    />
+  </div>
 {/snippet}
 
 <section id="basemap-join-step">
@@ -2297,6 +2340,10 @@
   .kh-help {
     margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
     padding-top: var(--kh-pad-panel);
+  }
+
+  .join-section-zone {
+    display: contents;
   }
 
   .step-content {

@@ -274,6 +274,7 @@
   const CATALOG_BATCH_SIZE = 24;
   let catalogBatchCount = $state(1);
   let catalogSlider = $state<HTMLDivElement | null>(null);
+  let catalogueSection = $state<HTMLDivElement | null>(null);
   let catalogSentinel = $state<HTMLDivElement | null>(null);
 
   $effect(() => {
@@ -311,6 +312,19 @@
   const catalogPanelOpen = $derived(
     catalogOpen ?? suggestedBasemaps.length === 0
   );
+
+  // Working in the catalogue means the suggestions were not enough: they
+  // fold away. Listening to click, not pointerdown, lets the catalogue
+  // header toggle before the suggestions above it collapse.
+  $effect(() => {
+    const section = catalogueSection;
+    if (!section) return;
+    const collapseSuggestions = () => {
+      if (suggestionsPanelOpen) onSuggestionsToggle?.(false);
+    };
+    section.addEventListener('click', collapseSuggestions);
+    return () => section.removeEventListener('click', collapseSuggestions);
+  });
 
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
     const lang = getLocale();
@@ -423,7 +437,7 @@
     </ExpandableSection>
   </div>
 
-  <div class="catalogue-section">
+  <div class="catalogue-section" bind:this={catalogueSection}>
     <ExpandableSection
       title={m.basemap_catalog_all()}
       open={catalogPanelOpen}

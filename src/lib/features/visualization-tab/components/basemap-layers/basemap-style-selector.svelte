@@ -265,7 +265,7 @@
       activeIndex={selectedZoneIndex}
       onchange={handleZoneToggle}
       className="scale-toggle-tabs"
-      hideInactiveLabel={true}
+      hideInactiveLabel={false}
     />
   </div>
 
@@ -298,16 +298,18 @@
       {/each}
     </div>
     <p class="groups-helper">{m.basemap_tiled_zoom_helper()}</p>
-    <SliderWithInput
-      label={m.legend_opacity()}
-      value={basemapStyleStore.opacity}
-      min={0}
-      max={100}
-      step={1}
-      inputWidth="72px"
-      showSteppers={false}
-      onchange={(opacity) => basemapStyleStore.setOpacity(opacity)}
-    />
+    <div class="opacity-control">
+      <SliderWithInput
+        label={m.legend_opacity()}
+        value={basemapStyleStore.opacity}
+        min={0}
+        max={100}
+        step={1}
+        inputWidth="72px"
+        showSteppers={false}
+        onchange={(opacity) => basemapStyleStore.setOpacity(opacity)}
+      />
+    </div>
   </div>
 
   <Button
@@ -423,6 +425,11 @@
   .groups-list :global(.kh-checkbox-native) {
     align-items: center;
     width: fit-content;
+  }
+
+  /* Set apart from the helper above, which belongs to the layer list. */
+  .opacity-control {
+    margin-top: var(--kh-gap-group);
   }
 
   .groups-helper {

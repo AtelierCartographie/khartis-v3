@@ -455,19 +455,11 @@ export function createJoinControlLayers(
   for (const status of JOIN_CONTROL_STATUSES) {
     const pattern = resolveStatusPattern(status);
     if (!pattern || territories.counts[status] === 0) continue;
-    // The motif keeps its size on the page as the page zooms.
-    const props =
-      pageScale === 1
-        ? pattern.props
-        : {
-            ...pattern.props,
-            getFillPatternScale: pattern.props.getFillPatternScale * pageScale
-          };
     const overlay = createBinaryPolygonPatternOverlayLayer(
       layerId,
       status,
       polyData,
-      props,
+      pattern.props,
       ctx,
       (featureId) =>
         statusOf(featureId) === status

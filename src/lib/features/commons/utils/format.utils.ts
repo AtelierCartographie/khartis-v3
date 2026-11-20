@@ -49,6 +49,30 @@ export function formatFileSize(bytes: number): string {
   return `${formattedSize} ${units[i]}`;
 }
 
+/**
+ * Size rounded for an estimate: whole Ko under 1 Mo, whole Mo under 1 Go, then
+ * one decimal up to 10 Go and whole Go beyond.
+ */
+export function formatApproximateSize(bytes: number): string {
+  const KIB = 1024;
+  const MIB = KIB * 1024;
+  const GIB = MIB * 1024;
+  const format = (value: number, fractionDigits = 0) =>
+    value.toLocaleString(resolveLocale(), {
+      maximumFractionDigits: fractionDigits
+    });
+
+  if (bytes < MIB) {
+    const kib = bytes > 0 ? Math.max(1, Math.round(bytes / KIB)) : 0;
+    return `${format(kib)} ${m.file_size_unit_kb()}`;
+  }
+  if (bytes < GIB) {
+    return `${format(Math.round(bytes / MIB))} ${m.file_size_unit_mb()}`;
+  }
+  const gib = bytes / GIB;
+  return `${format(gib, gib < 10 ? 1 : 0)} ${m.file_size_unit_gb()}`;
+}
+
 export function formatDate(date: Date | string, locale?: string): string {
   locale = locale ?? resolveLocale();
   const d = typeof date === 'string' ? new Date(date) : date;

@@ -504,7 +504,11 @@ export function createPolygonLayerStack(
           : polygonFillMode === FillMode.CATEGORIES
             ? createCategoryIndexAccessor(
                 polygonCategoryColumn!,
-                polygonClassification?.labels ?? [],
+                // Keyed like the category colours: on the raw values, which
+                // stay put when a label is renamed for display.
+                polygonClassification?.categoryValues ??
+                  polygonClassification?.labels ??
+                  [],
                 polygonClassification?.disabledLabels ?? []
               )
             : createUniqueClassPatternIndexAccessor(ctx)

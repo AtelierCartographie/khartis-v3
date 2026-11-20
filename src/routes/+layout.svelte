@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
+  import ShortcutsSheet from '$lib/features/commons/components/shortcuts-sheet.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import CookiebotConsent from '$lib/features/commons/components/cookiebot-consent.svelte';
   import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
@@ -442,6 +443,7 @@
   <Sidenav />
 
   <KeyboardShortcuts />
+  <ShortcutsSheet />
 
   <main
     class:mobile-view={globalState.isMobileView}

@@ -8,10 +8,11 @@
 
   interface Props {
     value?: PatternShape;
+    shapes?: readonly PatternShape[];
     onselect: (shape: PatternShape) => void;
   }
 
-  let { value, onselect }: Props = $props();
+  let { value, shapes = PATTERN_SHAPES, onselect }: Props = $props();
 
   const shapeLabels: Record<PatternShape, string> = $derived({
     line: m.pattern_shape_line(),
@@ -26,7 +27,7 @@
 </script>
 
 <div class="shape-chips">
-  {#each PATTERN_SHAPES as shape (shape)}
+  {#each shapes as shape (shape)}
     <button
       type="button"
       class="shape-chip"

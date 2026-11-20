@@ -474,6 +474,38 @@ describe('annotations store', () => {
     expect(legacyShape.position).toEqual({ x: 40, y: 72 });
   });
 
+  it('should anchor a text to the map when it is placed inside the map frame', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Golfe');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 200, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Golfe'
+    });
+
+    expect(text?.coordinateSpace).toBe('map');
+    expect(text?.position).toEqual({ x: 120, y: 100 });
+  });
+
+  it('should keep a text on the page when it is placed in the page margins', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Note');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 20, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Note'
+    });
+
+    expect(text?.coordinateSpace).toBe('page');
+    expect(text?.position).toEqual({ x: 20, y: 150 });
+  });
+
   it('starts placement without spawning the annotation until commit', () => {
     annotationsActions.beginPlacement(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
 
@@ -499,7 +531,7 @@ describe('annotations store', () => {
     expect(createdShape).toBeTruthy();
     // Drawn-on-the-map shapes are created in `'map'` space (no `role`) so they
     // follow the basemap; the page-space placement position is converted to
-    // map-area-local (page top-left minus the page margins).
+    // map-area-local (page top-left minus the map frame insets).
     expect(createdShape?.coordinateSpace).toBe('map');
     expect(createdShape?.position).toEqual({ x: 96 - 32, y: 128 - 32 });
     expect(createdShape?.anchor).toBeUndefined();

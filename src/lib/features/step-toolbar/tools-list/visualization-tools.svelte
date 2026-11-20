@@ -3,6 +3,7 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { VisualizationTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
+  import { getShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     Globe,
@@ -68,6 +69,7 @@
       <IconButton
         kind="ghost"
         iconDescription={m.tool_search()}
+        shortcut={getShortcut('toolSearch')}
         tooltipPosition="right"
         icon={Search}
         size="small"
@@ -83,6 +85,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_layers()}
+        shortcut={getShortcut('toolLayers')}
         icon={Layers}
         size="small"
         isSelected={globalState.selectedTool === VisualizationTools.Layers}
@@ -98,6 +101,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_projection()}
+          shortcut={getShortcut('toolProjection')}
           icon={Globe}
           size="small"
           isSelected={globalState.selectedTool ===
@@ -125,6 +129,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_simplification()}
+        shortcut={getShortcut('toolSimplification')}
         icon={WatsonHealthScalpelSelect}
         size="small"
         isSelected={globalState.selectedTool ===
@@ -141,6 +146,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_facets()}
+          shortcut={getShortcut('toolFacets')}
           icon={GridIcon}
           size="small"
           isSelected={globalState.selectedTool === VisualizationTools.Facets}

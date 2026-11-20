@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     basemapService,
@@ -340,158 +341,160 @@
       hideInactiveLabel={true}
     />
 
-    {#if !isCodeView}
-      <div class="projection-content">
-        {#if selectedCatalogueUnavailable}
-          <InlineNotification
-            kind="warning"
-            lowContrast
-            hideCloseButton
-            title={m.projection_catalog_unavailable_title()}
-            subtitle={m.projection_catalog_unavailable_subtitle()}
-          />
-        {/if}
-
-        <div class="projection-header">
-          <p class="projection-helper">{description}</p>
-        </div>
-
-        {#if items.length > 0}
-          {#key catalogueItemsSignature}
-            <ComboBox
-              translateWithId={translateCarbonId}
-              translateWithIdSelection={translateCarbonId}
-              size="sm"
-              items={catalogueComboItems}
-              selectedId={activeCatalogueSelectionId}
-              labelText={catalogueLabel}
-              hideLabel
-              placeholder={m.projection_catalog_search_placeholder()}
-              shouldFilterItem={(comboItem, value) =>
-                !value ||
-                comboItem.text.toLowerCase().includes(value.toLowerCase())}
-              on:select={handleCatalogueSelect}
+    <SwitchedContent value={isCodeView}>
+      {#if !isCodeView}
+        <div class="projection-content">
+          {#if selectedCatalogueUnavailable}
+            <InlineNotification
+              kind="warning"
+              lowContrast
+              hideCloseButton
+              title={m.projection_catalog_unavailable_title()}
+              subtitle={m.projection_catalog_unavailable_subtitle()}
             />
-          {/key}
-        {:else}
-          <div class="projection-empty-state">
-            <p class="projection-empty-title">
-              {m.projection_catalog_unavailable_title()}
-            </p>
-            <p class="projection-empty-subtitle">
-              {m.projection_catalog_unavailable_subtitle()}
-            </p>
+          {/if}
+
+          <div class="projection-header">
+            <p class="projection-helper">{description}</p>
           </div>
-        {/if}
-      </div>
-    {:else if !customCodeEnabled}
-      <InlineNotification
-        kind="info"
-        lowContrast
-        hideCloseButton
-        title=""
-        subtitle={m.projection_code_unavailable_tiled()}
-      />
-    {:else}
-      <div class="code-view">
-        <p class="intro">{codeIntro}</p>
-        <div class="code-form">
-          <TextArea
-            value={crsCode}
-            labelText={codeLabel}
-            placeholder={codePlaceholder}
-            helperText={codeHelper}
-            rows={8}
-            light={true}
-            on:input={handleCrsCodeInput}
-          />
-          <div class="code-status" role="status" aria-live="polite">
-            {#if diagnosis.status === 'valid'}
-              {#if isDiagnosisApplied}
-                <InlineLoading
-                  status={isMapReprojecting ? 'active' : 'finished'}
-                  description={isMapReprojecting
-                    ? m.projection_code_status_computing()
-                    : m.projection_code_status_applied()}
-                />
-              {:else if diagnosis.coverage !== 'none'}
-                <p class="code-status-recognized">
-                  <CheckmarkOutline size={16} />
-                  {m.projection_code_status_recognized()}
+
+          {#if items.length > 0}
+            {#key catalogueItemsSignature}
+              <ComboBox
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
+                size="sm"
+                items={catalogueComboItems}
+                selectedId={activeCatalogueSelectionId}
+                labelText={catalogueLabel}
+                hideLabel
+                placeholder={m.projection_catalog_search_placeholder()}
+                shouldFilterItem={(comboItem, value) =>
+                  !value ||
+                  comboItem.text.toLowerCase().includes(value.toLowerCase())}
+                on:select={handleCatalogueSelect}
+              />
+            {/key}
+          {:else}
+            <div class="projection-empty-state">
+              <p class="projection-empty-title">
+                {m.projection_catalog_unavailable_title()}
+              </p>
+              <p class="projection-empty-subtitle">
+                {m.projection_catalog_unavailable_subtitle()}
+              </p>
+            </div>
+          {/if}
+        </div>
+      {:else if !customCodeEnabled}
+        <InlineNotification
+          kind="info"
+          lowContrast
+          hideCloseButton
+          title=""
+          subtitle={m.projection_code_unavailable_tiled()}
+        />
+      {:else}
+        <div class="code-view">
+          <p class="intro">{codeIntro}</p>
+          <div class="code-form">
+            <TextArea
+              value={crsCode}
+              labelText={codeLabel}
+              placeholder={codePlaceholder}
+              helperText={codeHelper}
+              rows={8}
+              light={true}
+              on:input={handleCrsCodeInput}
+            />
+            <div class="code-status" role="status" aria-live="polite">
+              {#if diagnosis.status === 'valid'}
+                {#if isDiagnosisApplied}
+                  <InlineLoading
+                    status={isMapReprojecting ? 'active' : 'finished'}
+                    description={isMapReprojecting
+                      ? m.projection_code_status_computing()
+                      : m.projection_code_status_applied()}
+                  />
+                {:else if diagnosis.coverage !== 'none'}
+                  <p class="code-status-recognized">
+                    <CheckmarkOutline size={16} />
+                    {m.projection_code_status_recognized()}
+                  </p>
+                {/if}
+                <p class="code-crs-name">
+                  {getProjectionCodeDisplayName(crsCode, diagnosis.crs)}
                 </p>
-              {/if}
-              <p class="code-crs-name">
-                {getProjectionCodeDisplayName(crsCode, diagnosis.crs)}
-              </p>
-              <p class="code-crs-details">
-                {formatProjectionCodeCrs(diagnosis.crs)}
-              </p>
-              {#if diagnosis.coverage === 'partial'}
+                <p class="code-crs-details">
+                  {formatProjectionCodeCrs(diagnosis.crs)}
+                </p>
+                {#if diagnosis.coverage === 'partial'}
+                  <InlineNotification
+                    kind="warning"
+                    lowContrast
+                    hideCloseButton
+                    title=""
+                    subtitle={m.projection_code_coverage_partial()}
+                  />
+                {/if}
+              {:else if diagnosis.status === 'catalogue-equivalent'}
+                {#if isDiagnosisApplied}
+                  <InlineLoading
+                    status={isMapReprojecting ? 'active' : 'finished'}
+                    description={isMapReprojecting
+                      ? m.projection_code_status_computing()
+                      : m.projection_code_status_applied()}
+                  />
+                {/if}
                 <InlineNotification
-                  kind="warning"
+                  kind="info"
                   lowContrast
                   hideCloseButton
                   title=""
-                  subtitle={m.projection_code_coverage_partial()}
+                  subtitle={m.projection_code_catalogue_equivalent({
+                    method: diagnosis.method,
+                    name:
+                      getProjectionById(diagnosis.catalogueId)?.name ??
+                      diagnosis.catalogueId
+                  })}
                 />
               {/if}
-            {:else if diagnosis.status === 'catalogue-equivalent'}
-              {#if isDiagnosisApplied}
+              {#if diagnosis.status === 'unresolved-authority-code' && !lookupFailed}
                 <InlineLoading
-                  status={isMapReprojecting ? 'active' : 'finished'}
-                  description={isMapReprojecting
-                    ? m.projection_code_status_computing()
-                    : m.projection_code_status_applied()}
+                  status="active"
+                  description={m.projection_code_lookup_pending({
+                    code: diagnosis.code
+                  })}
                 />
               {/if}
-              <InlineNotification
-                kind="info"
-                lowContrast
-                hideCloseButton
-                title=""
-                subtitle={m.projection_code_catalogue_equivalent({
-                  method: diagnosis.method,
-                  name:
-                    getProjectionById(diagnosis.catalogueId)?.name ??
-                    diagnosis.catalogueId
-                })}
-              />
-            {/if}
-            {#if diagnosis.status === 'unresolved-authority-code' && !lookupFailed}
-              <InlineLoading
-                status="active"
-                description={m.projection_code_lookup_pending({
-                  code: diagnosis.code
-                })}
-              />
-            {/if}
-            {#if diagnosisError}
-              <InlineNotification
-                kind="error"
-                lowContrast
-                hideCloseButton
-                title=""
-                subtitle={diagnosisError}
-              />
-            {/if}
-          </div>
-          <div class="actions">
-            <Button
-              kind="tertiary"
-              size="small"
-              disabled={isEmpty()}
-              on:click={onReset}>{resetLabel}</Button
-            >
-            <Button
-              kind="primary"
-              size="small"
-              disabled={!canApply || isDiagnosisApplied}
-              on:click={onApply}>{submitLabel}</Button
-            >
+              {#if diagnosisError}
+                <InlineNotification
+                  kind="error"
+                  lowContrast
+                  hideCloseButton
+                  title=""
+                  subtitle={diagnosisError}
+                />
+              {/if}
+            </div>
+            <div class="actions">
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={isEmpty()}
+                on:click={onReset}>{resetLabel}</Button
+              >
+              <Button
+                kind="primary"
+                size="small"
+                disabled={!canApply || isDiagnosisApplied}
+                on:click={onApply}>{submitLabel}</Button
+              >
+            </div>
           </div>
         </div>
-      </div>
-    {/if}
+      {/if}
+    </SwitchedContent>
   </div>
 </div>
 

@@ -27,6 +27,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 
 import {
   computeDivergingSplit,
+  isDivergingBreakpoint,
   sanitizeBreaks
 } from '$lib/features/commons/services/classification.service';
 
@@ -61,83 +62,49 @@ describe('sanitizeBreaks', () => {
 });
 
 describe('computeDivergingSplit', () => {
-  it('falls back to symmetric split when breakpoint is null', () => {
-    expect(computeDivergingSplit(5, [20, 40, 60, 80], null)).toEqual({
-      lowerCount: 2,
-      upperCount: 2,
-      hasCenterClass: true
-    });
-  });
-
-  it('falls back to symmetric split on even class counts when breakpoint is null', () => {
-    expect(computeDivergingSplit(4, [25, 50, 75], null)).toEqual({
-      lowerCount: 2,
-      upperCount: 2,
-      hasCenterClass: false
-    });
-  });
-
-  it('falls back to symmetric split when breaks length does not match classes − 1', () => {
-    expect(computeDivergingSplit(5, [20, 40], 30)).toEqual({
-      lowerCount: 2,
-      upperCount: 2,
-      hasCenterClass: true
-    });
-  });
-
-  it('marks the straddled class as centre when breakpoint sits inside a class', () => {
-    expect(computeDivergingSplit(5, [20, 40, 60, 80], 50)).toEqual({
-      lowerCount: 2,
-      upperCount: 2,
-      hasCenterClass: true
-    });
-  });
-
-  it('splits asymmetrically when breakpoint sits inside the first class', () => {
-    expect(computeDivergingSplit(5, [20, 40, 60, 80], 10)).toEqual({
-      lowerCount: 0,
-      upperCount: 4,
-      hasCenterClass: true
-    });
-  });
-
-  it('splits asymmetrically when breakpoint sits inside the last class', () => {
-    expect(computeDivergingSplit(5, [20, 40, 60, 80], 90)).toEqual({
-      lowerCount: 4,
-      upperCount: 0,
-      hasCenterClass: true
-    });
-  });
-
-  it('splits cleanly on an exact break boundary with no centre class', () => {
+  it('splits on the breakpoint used as a break', () => {
     expect(computeDivergingSplit(5, [20, 40, 60, 80], 40)).toEqual({
       lowerCount: 2,
-      upperCount: 3,
-      hasCenterClass: false
+      upperCount: 3
     });
   });
 
   it('counts a breakpoint equal to the last break as lower-side', () => {
     expect(computeDivergingSplit(5, [20, 40, 60, 80], 80)).toEqual({
       lowerCount: 4,
-      upperCount: 1,
-      hasCenterClass: false
+      upperCount: 1
     });
   });
 
-  it('treats a breakpoint below all breaks as fully upper', () => {
+  it('never creates a center class: every class sits on one side', () => {
+    for (const breakpoint of [-100, 10, 30, 50, 90, 500]) {
+      const split = computeDivergingSplit(5, [20, 40, 60, 80], breakpoint);
+      expect(split.lowerCount + split.upperCount).toBe(5);
+    }
+  });
+
+  it('puts every class above a breakpoint below the data', () => {
     expect(computeDivergingSplit(4, [25, 50, 75], -100)).toEqual({
       lowerCount: 0,
-      upperCount: 3,
-      hasCenterClass: true
+      upperCount: 4
     });
   });
 
-  it('treats a breakpoint above all breaks as fully lower', () => {
-    expect(computeDivergingSplit(4, [25, 50, 75], 500)).toEqual({
-      lowerCount: 3,
-      upperCount: 0,
-      hasCenterClass: true
+  it('splits evenly while the breaks lag behind the class count', () => {
+    expect(computeDivergingSplit(5, [20, 40], 30)).toEqual({
+      lowerCount: 2,
+      upperCount: 3
     });
+  });
+});
+
+describe('isDivergingBreakpoint', () => {
+  it('accepts only a finite number', () => {
+    expect(isDivergingBreakpoint(0)).toBe(true);
+    expect(isDivergingBreakpoint(-2.5)).toBe(true);
+    expect(isDivergingBreakpoint(null)).toBe(false);
+    expect(isDivergingBreakpoint(undefined)).toBe(false);
+    expect(isDivergingBreakpoint(Number.NaN)).toBe(false);
+    expect(isDivergingBreakpoint(Number.POSITIVE_INFINITY)).toBe(false);
   });
 });

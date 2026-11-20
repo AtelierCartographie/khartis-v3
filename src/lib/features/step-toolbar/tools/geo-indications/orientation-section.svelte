@@ -47,7 +47,6 @@
   title={m.geo_orientation()}
   open={open}
   onToggle={onToggle}
-  animateBody
   showToggle={true}
   toggleChecked={geoState.orientation.enabled}
   onToggleChange={() => store.toggleOrientation()}

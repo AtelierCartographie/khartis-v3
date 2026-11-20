@@ -186,6 +186,7 @@ export function draw_symbols_legend(
       measureLegendLongestToken(note, note_font)
     );
   const width = Math.max(
+    options.minWidth ?? 0,
     main_body_width,
     nodata_body_width,
     sign_legend_body_width,

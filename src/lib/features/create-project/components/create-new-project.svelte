@@ -418,38 +418,44 @@
     </div>
 
     <div class="paste-container" bind:this={pasteContainer}>
-      <TextArea
-        labelText={m.create_project_paste_data()}
-        hideLabel
-        value={pastedDataValue}
-        placeholder={hasPastedFile
-          ? m.create_project_paste_another()
-          : m.create_project_paste_data()}
-        rows={4}
-        on:input={handlePastedDataInput}
-        on:blur={handlePastedDataBlur}
-        invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
-        invalidText={pastedDataValidation?.errors[0] || ''}
-        warn={!isImportingPaste &&
-          !!pastedDataValidation &&
-          pastedDataValidation.warnings.length > 0}
-        warnText={pastedDataValidation?.warnings[0] || ''}
-      />
-      {#if pastedFile}
-        <div class="paste-feedback" role="status" data-testid="paste-feedback">
-          <CheckmarkFilled size={20} class="paste-feedback-icon" />
-          <span class="paste-feedback-title">
-            {m.create_project_paste_added()}
-          </span>
-          <span class="paste-feedback-metrics">
-            {formatValue(pastedFile.rowCount ?? 0)}
-            {rowsLabel(pastedFile.rowCount ?? 0)}
-            {m.separator_middle_dot_space()}
-            {formatValue(pastedFile.columnCount ?? 0)}
-            {columnsLabel(pastedFile.columnCount ?? 0)}
-          </span>
-        </div>
-      {/if}
+      <div class="paste-field">
+        <TextArea
+          labelText={m.create_project_paste_data()}
+          hideLabel
+          value={pastedDataValue}
+          placeholder={hasPastedFile
+            ? m.create_project_paste_another()
+            : m.create_project_paste_data()}
+          rows={4}
+          on:input={handlePastedDataInput}
+          on:blur={handlePastedDataBlur}
+          invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+          invalidText={pastedDataValidation?.errors[0] || ''}
+          warn={!isImportingPaste &&
+            !!pastedDataValidation &&
+            pastedDataValidation.warnings.length > 0}
+          warnText={pastedDataValidation?.warnings[0] || ''}
+        />
+        {#if pastedFile}
+          <div
+            class="paste-feedback"
+            role="status"
+            data-testid="paste-feedback"
+          >
+            <CheckmarkFilled size={20} class="paste-feedback-icon" />
+            <span class="paste-feedback-title">
+              {m.create_project_paste_added()}
+            </span>
+            <span class="paste-feedback-metrics">
+              {formatValue(pastedFile.rowCount ?? 0)}
+              {rowsLabel(pastedFile.rowCount ?? 0)}
+              {m.separator_middle_dot_space()}
+              {formatValue(pastedFile.columnCount ?? 0)}
+              {columnsLabel(pastedFile.columnCount ?? 0)}
+            </span>
+          </div>
+        {/if}
+      </div>
       {#if pastedDataValue.trim() && !isImportingPaste}
         <div class="paste-actions">
           <Button
@@ -803,7 +809,8 @@
     background-color: var(--cds-field-01);
   }
 
-  .paste-container {
+  /* The feedback covers the field alone, not the actions under it. */
+  .paste-field {
     position: relative;
   }
 

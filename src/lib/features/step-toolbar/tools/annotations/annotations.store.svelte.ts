@@ -7,6 +7,7 @@ import {
   getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
+import { hslToHex } from '$lib/features/commons/utils/color-utils';
 import { snapPointToPageGrid } from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
@@ -16,6 +17,7 @@ import {
 import {
   CARTOGRAPHIC_FONT_FAMILY,
   clampFontSize,
+  DEFAULT_FONT_SIZE,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -43,7 +45,6 @@ import {
   isBottomRightPageElementRole,
   isGridEnabled,
   isPageElementRole,
-  type PageLayout,
   reconcileAutoPageElementStyle,
   remapPageElementPosition,
   resolvePageLayout,
@@ -61,7 +62,9 @@ import {
 } from './annotations-placeholders.utils';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
-const DEFAULT_NOTE_FONT_SIZE = 8;
+const NOTE_FONT_SIZE = 9;
+const MAIN_TEXT_COLOR = '#000000';
+const NOTE_TEXT_COLOR = '#6f6f6f';
 const DEFAULT_DRAWING_SMOOTHNESS = 0;
 
 const DEFAULT_STATE: AnnotationsState = {
@@ -80,13 +83,13 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingInProgress: [],
   defaultStyle: {
     font: CARTOGRAPHIC_FONT_FAMILY,
-    fontSize: DEFAULT_NOTE_FONT_SIZE,
+    fontSize: NOTE_FONT_SIZE,
     bold: false,
-    italic: false,
+    italic: true,
     underlined: false,
     textAlign: TextAlign.Center,
     opacity: 100,
-    color: '#000000',
+    color: NOTE_TEXT_COLOR,
     smoothness: DEFAULT_DRAWING_SMOOTHNESS
   }
 };
@@ -143,28 +146,107 @@ type AnnotationsActions = {
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   note: {
-    fontSize: DEFAULT_NOTE_FONT_SIZE,
+    fontSize: NOTE_FONT_SIZE,
     bold: false,
-    italic: false
+    italic: true,
+    color: NOTE_TEXT_COLOR
   },
   title: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.titleFontSize,
     bold: true,
     italic: false,
+    color: MAIN_TEXT_COLOR,
     textAlign: TextAlign.Left
   },
   subtitle: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.subtitleFontSize,
     bold: false,
     italic: false,
+    color: MAIN_TEXT_COLOR,
     textAlign: TextAlign.Left
   },
   caption: {
-    fontSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize,
+    fontSize: 12,
     bold: false,
-    italic: false
+    italic: false,
+    color: MAIN_TEXT_COLOR
   }
 };
+
+function toComparableColor(color: AnnotationStyle['color']): string {
+  if (!color) return MAIN_TEXT_COLOR;
+  if (typeof color === 'string') return color.toLowerCase();
+  return hslToHex(color.hue, color.saturation, color.lightness).toLowerCase();
+}
+
+// Page texts keep the size of their print format rather than the preset one.
+function getPageElementFontSize(role: Annotation['role']): number | null {
+  const fmt = getFormatState();
+  const tokens = resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmt));
+  switch (role) {
+    case ANNOTATION_ROLE.TITLE:
+      return tokens.annotations.titleFontSize;
+    case ANNOTATION_ROLE.SUBTITLE:
+      return tokens.annotations.subtitleFontSize;
+    case ANNOTATION_ROLE.SOURCE:
+    case ANNOTATION_ROLE.BASEMAP_SOURCE:
+    case ANNOTATION_ROLE.SIGNATURE:
+    case ANNOTATION_ROLE.CREDIT:
+      return tokens.annotations.captionFontSize;
+    default:
+      return null;
+  }
+}
+
+function matchesPredefinedStyle(
+  style: AnnotationStyle,
+  styleName: string,
+  role: Annotation['role']
+): boolean {
+  const preset = PREDEFINED_STYLES[styleName];
+  if (!preset) return false;
+  const pageFontSize =
+    role && getPredefinedStyleForRole(role) === styleName
+      ? getPageElementFontSize(role)
+      : null;
+  return Object.entries(preset).every(([key, expected]) => {
+    switch (key) {
+      case 'fontSize': {
+        const fontSize = clampFontSize(style.fontSize, DEFAULT_FONT_SIZE);
+        return fontSize === expected || fontSize === pageFontSize;
+      }
+      case 'bold':
+        return !!style.bold === expected;
+      case 'italic':
+        return !!style.italic === expected;
+      case 'color':
+        return (
+          toComparableColor(style.color) ===
+          toComparableColor(expected as AnnotationStyle['color'])
+        );
+      default:
+        return style[key as keyof AnnotationStyle] === expected;
+    }
+  });
+}
+
+/**
+ * The predefined style the text style still matches, the remembered one
+ * first; null once the user has changed a setting of the preset.
+ */
+export function resolveMatchingPredefinedStyle(
+  style: AnnotationStyle,
+  preferred: string,
+  role?: Annotation['role']
+): string | null {
+  const candidates = [
+    preferred,
+    ...Object.keys(PREDEFINED_STYLES).filter((name) => name !== preferred)
+  ];
+  return (
+    candidates.find((name) => matchesPredefinedStyle(style, name, role)) ?? null
+  );
+}
 
 function normalizeAnnotationStyleUpdates(
   styleUpdates: Partial<AnnotationStyle>
@@ -180,7 +262,7 @@ function normalizeAnnotationStyleUpdates(
   if (styleUpdates.fontSize !== undefined) {
     normalizedUpdates.fontSize = clampFontSize(
       styleUpdates.fontSize,
-      DEFAULT_NOTE_FONT_SIZE
+      DEFAULT_FONT_SIZE
     );
   }
   return normalizedUpdates;
@@ -191,7 +273,11 @@ function getPredefinedStyleForItem(item: Annotation): string | null {
     return null;
   }
 
-  switch (item.role) {
+  return getPredefinedStyleForRole(item.role);
+}
+
+function getPredefinedStyleForRole(role: Annotation['role']): string | null {
+  switch (role) {
     case ANNOTATION_ROLE.TITLE:
       return ANNOTATION_ROLE.TITLE;
     case ANNOTATION_ROLE.SUBTITLE:
@@ -253,35 +339,53 @@ function clearCreationState(state: AnnotationsState): void {
 }
 
 // Map anchors use map-area coordinates; the overlay re-adds page margins.
-function toMapAreaLocalPosition(
-  position: { x: number; y: number },
-  layout: PageLayout
-): { x: number; y: number } {
+// The map area is the map frame, which can sit anywhere on the page: it
+// is no longer the margin box.
+function toMapAreaLocalPosition(position: { x: number; y: number }): {
+  x: number;
+  y: number;
+} {
+  const { mapFrame } = getFormatState();
   return {
-    x: position.x - layout.margins.left,
-    y: position.y - layout.margins.top
+    x: position.x - mapFrame.left,
+    y: position.y - mapFrame.top
   };
 }
 
-// Only marks drawn directly on the map can be map-anchored.
+// Every annotation the user places on the map follows it; one placed in the
+// page margins, and the page elements (title, subtitle, source, credit,
+// which carry a role), stay on the page.
 const MAP_ANCHORABLE_SHAPE_KINDS: ReadonlySet<AnnotationKind> = new Set([
   AnnotationKind.SHAPE,
-  AnnotationKind.DRAWING
+  AnnotationKind.DRAWING,
+  AnnotationKind.TEXT,
+  AnnotationKind.IMAGE
 ]);
 
 // The overlay writes WGS84 anchors for new map-space shapes on first render.
-function anchorShapeToMap(
-  annotation: Annotation,
-  layout: PageLayout
-): Annotation {
-  if (annotation.role || !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type)) {
+function isInsideMapFrame(position: { x: number; y: number }): boolean {
+  const { width, height, mapFrame } = getFormatState();
+  return (
+    position.x >= mapFrame.left &&
+    position.x <= width - mapFrame.right &&
+    position.y >= mapFrame.top &&
+    position.y <= height - mapFrame.bottom
+  );
+}
+
+function anchorShapeToMap(annotation: Annotation): Annotation {
+  if (
+    annotation.role ||
+    !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type) ||
+    !isInsideMapFrame(annotation.position)
+  ) {
     return annotation;
   }
 
   return {
     ...annotation,
     coordinateSpace: 'map',
-    position: toMapAreaLocalPosition(annotation.position, layout)
+    position: toMapAreaLocalPosition(annotation.position)
   };
 }
 
@@ -501,8 +605,7 @@ const { actions, getState } = createToolStore<
             content: resolvedPreview.content ?? s.pendingContent
           },
           s.pendingStyle
-        ),
-        resolvePageLayout()
+        )
       );
 
       s.items = [...s.items, newAnnotation];
@@ -627,18 +730,15 @@ const { actions, getState } = createToolStore<
         relativePoints
       );
 
-      const newAnnotation = anchorShapeToMap(
-        {
-          id: createAnnotationId(),
-          type: AnnotationKind.DRAWING,
-          content: relativePoints,
-          position,
-          coordinateSpace: 'page',
-          positionMode: 'manual',
-          style
-        },
-        layout
-      );
+      const newAnnotation = anchorShapeToMap({
+        id: createAnnotationId(),
+        type: AnnotationKind.DRAWING,
+        content: relativePoints,
+        position,
+        coordinateSpace: 'page',
+        positionMode: 'manual',
+        style
+      });
 
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
@@ -917,7 +1017,7 @@ const { actions, getState } = createToolStore<
           )
           .map((item) => ({
             content: String(item.content),
-            fontSize: item.style?.fontSize ?? DEFAULT_NOTE_FONT_SIZE,
+            fontSize: item.style?.fontSize ?? DEFAULT_FONT_SIZE,
             pageY:
               resolveAnnotationCoordinateSpace(item) === 'page'
                 ? item.position.y

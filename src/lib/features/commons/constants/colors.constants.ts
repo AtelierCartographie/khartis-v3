@@ -53,6 +53,12 @@ export const DEFAULT_VISUALIZATION_SECONDARY_COLOR = '#ff832b';
 export const DEFAULT_VISUALIZATION_NEUTRAL_COLOR =
   NEUTRAL_CARTOGRAPHY_COLORS.dataFill;
 
+/** Hues below and above the breakpoint of the default diverging palette. */
+export const DEFAULT_DIVERGING_COLORS: readonly [string, string] = [
+  '#b2182b',
+  '#2166ac'
+];
+
 export const DEFAULT_STROKE_COLOR = '#ffffff';
 
 export const DEFAULT_STYLE_OPACITY = {

@@ -6,7 +6,13 @@ import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
 import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
 import '@fontsource/noto-sans-jp/japanese-400.css';
 import '@fontsource/noto-sans-jp/japanese-700.css';
-import { FONT_FACE_LOAD_REQUESTS } from '$lib/features/step-toolbar/fonts.constants';
+import {
+  FONT_FACE_LOAD_REQUESTS,
+  PRELOADED_FONTS,
+  getFontFaceLoadRequests,
+  normalizeFontFamily,
+  type AvailableFont
+} from '$lib/features/step-toolbar/fonts.constants';
 import { EXPLICIT_TEXT_CHARACTER_SET } from '$lib/features/map/layers/text-character-set';
 import { LogCategory, logger } from '../utils/logger';
 
@@ -46,6 +52,50 @@ function createFontAssetsStore() {
   let loadingPromise: Promise<void> | null = null;
   const loadedFallbacks = new Set<RequiredFallbackFont>();
   const loadingFallbacks = new Map<RequiredFallbackFont, Promise<void>>();
+  const loadedFonts = new Set<AvailableFont>(PRELOADED_FONTS);
+  const loadingFonts = new Map<AvailableFont, Promise<void>>();
+
+  function loadFont(font: AvailableFont): Promise<void> {
+    const pending = loadingFonts.get(font);
+    if (pending) return pending;
+
+    const promise = (async () => {
+      try {
+        await Promise.all(
+          getFontFaceLoadRequests(font).map((descriptor) =>
+            document.fonts.load(descriptor, PRELOAD_TEXT_HINT)
+          )
+        );
+      } catch (error) {
+        logger.error('Failed to load font assets', LogCategory.MAP, error);
+      } finally {
+        loadedFonts.add(font);
+        loadingFonts.delete(font);
+        resetTextAtlasCache();
+        version += 1;
+      }
+    })();
+    loadingFonts.set(font, promise);
+    return promise;
+  }
+
+  /**
+   * Whether a label layer can draw with this font now. A font that is not
+   * loaded yet starts loading and bumps `version` once it is ready: drawing
+   * before that would bake the fallback glyphs into Deck's font atlas.
+   */
+  function isFontReady(fontFamily?: string | null): boolean {
+    if (!ready) return false;
+    const font = normalizeFontFamily(fontFamily);
+    if (!font || loadedFonts.has(font)) return true;
+    if (canUseDocumentFonts()) void loadFont(font);
+    return false;
+  }
+
+  /** Resolves once every font a label layer has asked for is loaded. */
+  async function whenFontsSettled(): Promise<void> {
+    await Promise.all(loadingFonts.values());
+  }
 
   async function ensureLoaded(): Promise<void> {
     if (ready) {
@@ -148,6 +198,9 @@ function createFontAssetsStore() {
     loadingPromise = null;
     loadedFallbacks.clear();
     loadingFallbacks.clear();
+    loadedFonts.clear();
+    PRELOADED_FONTS.forEach((font) => loadedFonts.add(font));
+    loadingFonts.clear();
   }
 
   return {
@@ -158,6 +211,8 @@ function createFontAssetsStore() {
       return version;
     },
     ensureLoaded,
+    isFontReady,
+    whenFontsSettled,
     loadFallbackFonts,
     getLoadedFallbacks,
     reset

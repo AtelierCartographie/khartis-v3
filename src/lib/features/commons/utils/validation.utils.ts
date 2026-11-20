@@ -87,32 +87,5 @@ export const ProjectValidator = {
     }
 
     return result;
-  },
-
-  validateStorageCapacity(currentProjectCount: number): ValidationResult {
-    const result: ValidationResult = {
-      isValid: true,
-      errors: [],
-      warnings: []
-    };
-
-    if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount) {
-      result.isValid = false;
-      result.errors.push(
-        m.validation_project_count_limit({
-          limit: String(STORAGE_LIMITS.maxProjectCount)
-        })
-      );
-    }
-
-    if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount * 0.8) {
-      result.warnings.push(
-        m.validation_project_count_approaching({
-          limit: String(STORAGE_LIMITS.maxProjectCount)
-        })
-      );
-    }
-
-    return result;
   }
 } as const;

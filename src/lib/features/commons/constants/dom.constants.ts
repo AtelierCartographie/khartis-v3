@@ -16,6 +16,7 @@ export const KEY = {
   PLUS: '+',
   MINUS: '-',
   EQUALS: '=',
+  QUESTION_MARK: '?',
   ZERO: '0',
   A: 'a',
   C: 'c',

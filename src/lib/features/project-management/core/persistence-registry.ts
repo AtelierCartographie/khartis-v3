@@ -157,8 +157,24 @@ class PersistenceRegistryImpl {
   }
 
   register<T>(entry: PersistenceEntry<T>): void {
-    // HMR can re-run store modules; replacing by key keeps registration idempotent.
-    this.entries.set(entry.key, entry as PersistenceEntry);
+    // HMR can re-run store modules; replacing by key keeps registration
+    // idempotent. The re-run store starts empty: it takes over the state of
+    // the one it replaces, or the next save would write it empty over the
+    // project. A production build registers each key once.
+    const replacing = entry as PersistenceEntry;
+    const previous = this.entries.get(entry.key);
+    if (previous && import.meta.hot) {
+      try {
+        replacing.deserialize(previous.serialize());
+      } catch (error) {
+        logger.warn(
+          `Failed to carry store "${entry.key}" over a hot reload`,
+          LogCategory.PERSISTENCE,
+          error
+        );
+      }
+    }
+    this.entries.set(entry.key, replacing);
   }
 
   unregister(key: string): void {

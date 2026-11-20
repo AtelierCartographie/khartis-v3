@@ -5,7 +5,10 @@ import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
-import { DEFAULT_VISUALIZATION_COLOR } from '../constants/colors.constants';
+import {
+  DEFAULT_DIVERGING_COLORS,
+  DEFAULT_VISUALIZATION_COLOR
+} from '../constants/colors.constants';
 import type { ContrastMode, WebGLColor } from '@ateliercartographie/ok-palette';
 import {
   divergentSequential,
@@ -31,8 +34,6 @@ import {
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';
 const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
-const DIVERGING_COLOR_A = '#b2182b';
-const DIVERGING_COLOR_B = '#2166ac';
 
 export interface BreaksResult {
   breaks: number[];
@@ -1249,68 +1250,41 @@ export async function calculateDateDataBreaks(
   }
 }
 
+/** Classes below and above the breakpoint. A diverging palette has no center class. */
 export interface DivergingSplit {
   lowerCount: number;
   upperCount: number;
-  hasCenterClass: boolean;
+}
+
+/** Only a finite breakpoint makes a classification diverging. */
+export function isDivergingBreakpoint(
+  breakpointValue: number | null | undefined
+): breakpointValue is number {
+  return (
+    typeof breakpointValue === 'number' && Number.isFinite(breakpointValue)
+  );
+}
+
+export function splitDivergingEvenly(numClasses: number): DivergingSplit {
+  const steps = Math.max(2, Math.floor(numClasses));
+  const lowerCount = Math.floor(steps / 2);
+  return { lowerCount, upperCount: steps - lowerCount };
 }
 
 export function computeDivergingSplit(
   numClasses: number,
   breaks: readonly number[],
-  breakpointValue: number | null | undefined
+  breakpointValue: number
 ): DivergingSplit {
   const steps = Math.max(2, Math.floor(numClasses));
-
-  if (
-    breakpointValue == null ||
-    !Number.isFinite(breakpointValue) ||
-    breaks.length !== steps - 1
-  ) {
-    const hasCenterClass = steps % 2 === 1;
-    const half = Math.floor(steps / 2);
-    return { lowerCount: half, upperCount: half, hasCenterClass };
+  // Breaks out of step with the class count are a transient state between two
+  // recomputations: the breakpoint cannot be located yet.
+  if (breaks.length !== steps - 1) {
+    return splitDivergingEvenly(steps);
   }
 
-  let lowerCount = 0;
-  let straddlesClass = false;
-  let resolvedStraddle = false;
-  for (let index = 0; index < breaks.length; index++) {
-    const upperBoundary = breaks[index];
-    if (upperBoundary <= breakpointValue) {
-      lowerCount += 1;
-      continue;
-    }
-    const lowerBoundary = index === 0 ? -Infinity : breaks[index - 1];
-    if (lowerBoundary < breakpointValue && breakpointValue < upperBoundary) {
-      straddlesClass = true;
-    }
-    resolvedStraddle = true;
-    break;
-  }
-
-  if (!resolvedStraddle) {
-    const lastLowerBoundary = breaks[breaks.length - 1];
-    if (lastLowerBoundary < breakpointValue) {
-      straddlesClass = true;
-    }
-  }
-
-  if (straddlesClass) {
-    const upperCount = steps - lowerCount - 1;
-    return {
-      lowerCount: Math.max(0, lowerCount),
-      upperCount: Math.max(0, upperCount),
-      hasCenterClass: true
-    };
-  }
-
-  const upperCount = steps - lowerCount;
-  return {
-    lowerCount: Math.max(0, lowerCount),
-    upperCount: Math.max(0, upperCount),
-    hasCenterClass: false
-  };
+  const lowerCount = breaks.filter((value) => value <= breakpointValue).length;
+  return { lowerCount, upperCount: steps - lowerCount };
 }
 
 export function generateColorsForBreaks(
@@ -1323,16 +1297,12 @@ export function generateColorsForBreaks(
 
   let cssColors: string[];
   if (palette === 'diverging') {
-    const split = divergingSplit ?? {
-      lowerCount: Math.floor(steps / 2),
-      upperCount: Math.floor(steps / 2),
-      hasCenterClass: steps % 2 === 1
-    };
+    const split = divergingSplit ?? splitDivergingEvenly(steps);
     cssColors = divergentSequential({
-      colorA: DIVERGING_COLOR_A,
-      colorB: DIVERGING_COLOR_B,
+      colorA: DEFAULT_DIVERGING_COLORS[0],
+      colorB: DEFAULT_DIVERGING_COLORS[1],
       steps: [split.lowerCount, split.upperCount],
-      hasCenterClass: split.hasCenterClass,
+      hasCenterClass: false,
       contrast
     });
   } else {

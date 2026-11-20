@@ -1,4 +1,11 @@
 import { EVENT } from '$lib/features/commons/constants/dom.constants';
+import {
+  lockMoveToAxis,
+  PAGE_GUIDE_THRESHOLD_PX,
+  snapRectToPageGuides,
+  type PageGuideFrame
+} from '$lib/features/commons/utils/page-guides.utils';
+import { pageGuidesStore } from '../stores/page-guides.store.svelte';
 import { setStylingToolPopoverDragging } from './tool-popover-drag-visibility.utils';
 
 export interface DraggablePageItemPoint {
@@ -17,6 +24,21 @@ interface DraggablePageItemControllerOptions {
   onDraggingChange: (active: boolean) => void;
   onPointerMove?: (event: PointerEvent) => void;
   onPointerUp?: () => void;
+  /**
+   * The page the item is laid on, when its positions are page coordinates:
+   * the item is then pulled onto the page centre lines and margins.
+   */
+  getPageFrame?: () => PageGuideFrame | null;
+  /**
+   * The box the item covers, from its position, when it differs from its
+   * upright box (a rotated text): guides align that box.
+   */
+  getCoveredBox?: () => {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 interface DraggablePageItemStartOptions {
@@ -39,7 +61,9 @@ export function createDraggablePageItemController({
   setPosition,
   onDraggingChange,
   onPointerMove,
-  onPointerUp
+  onPointerUp,
+  getPageFrame,
+  getCoveredBox
 }: DraggablePageItemControllerOptions): {
   start: (options: DraggablePageItemStartOptions) => boolean;
   stop: () => void;
@@ -47,8 +71,11 @@ export function createDraggablePageItemController({
   let isDragging = false;
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let itemSize = { width: 0, height: 0 };
+  let startPosition: DraggablePageItemPoint = { x: 0, y: 0 };
 
   function stop(): void {
+    if (getPageFrame) pageGuidesStore.clear();
     isDragging = false;
     onDraggingChange(false);
     setStylingToolPopoverDragging(false);
@@ -75,12 +102,51 @@ export function createDraggablePageItemController({
 
     const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const position = normalizePosition({
+    const pointerPosition = {
       x: (event.clientX - rect.left) / scale - dragOffsetX,
       y: (event.clientY - rect.top) / scale - dragOffsetY
-    });
+    };
+    const locked = event.shiftKey
+      ? lockMoveToAxis(startPosition, pointerPosition)
+      : pointerPosition;
+    const aligned = alignToPage(locked, scale);
+    // A guide must not pull a locked move off its axis.
+    const position = normalizePosition(
+      event.shiftKey
+        ? {
+            x: locked.x === startPosition.x ? startPosition.x : aligned.x,
+            y: locked.y === startPosition.y ? startPosition.y : aligned.y
+          }
+        : aligned
+    );
 
     setPosition(position);
+  }
+
+  // The guide pulls the raw position; normalizePosition then clamps it and
+  // applies the grid, so an aligned item never leaves its area.
+  function alignToPage(
+    position: DraggablePageItemPoint,
+    scale: number
+  ): DraggablePageItemPoint {
+    const frame = getPageFrame?.();
+    if (!frame) return position;
+    const covered = getCoveredBox?.() ?? { x: 0, y: 0, ...itemSize };
+    const snap = snapRectToPageGuides(
+      {
+        x: position.x + covered.x,
+        y: position.y + covered.y,
+        width: covered.width,
+        height: covered.height
+      },
+      frame,
+      PAGE_GUIDE_THRESHOLD_PX / scale
+    );
+    pageGuidesStore.show(snap.guides);
+    return {
+      x: snap.guides.vertical.length > 0 ? snap.x - covered.x : position.x,
+      y: snap.guides.horizontal.length > 0 ? snap.y - covered.y : position.y
+    };
   }
 
   function start({
@@ -95,6 +161,10 @@ export function createDraggablePageItemController({
     const scale = getPageScale();
     const overlayRect = overlayElement.getBoundingClientRect();
     const itemRect = itemElement.getBoundingClientRect();
+    itemSize = {
+      width: itemRect.width / scale,
+      height: itemRect.height / scale
+    };
     const currentX = (itemRect.left - overlayRect.left) / scale;
     const currentY = (itemRect.top - overlayRect.top) / scale;
     const currentPosition = getCurrentPosition();
@@ -109,6 +179,7 @@ export function createDraggablePageItemController({
       setPosition(dragPosition);
     }
 
+    startPosition = dragPosition;
     dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPosition.x;
     dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPosition.y;
 

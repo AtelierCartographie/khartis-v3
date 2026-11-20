@@ -27,7 +27,6 @@
     titleClass?: string;
     actionsEnd?: boolean;
     scrollIntoViewOnOpen?: boolean;
-    animateBody?: boolean;
   }
 
   const {
@@ -48,14 +47,13 @@
     onToggle,
     titleClass = '',
     actionsEnd = false,
-    scrollIntoViewOnOpen = false,
-    animateBody = false
+    scrollIntoViewOnOpen = false
   }: Props = $props();
 
   // slide fades in over its first frames only; the body fades with its height.
   function revealBody(node: HTMLElement): TransitionConfig {
     const config = slide(node, {
-      duration: animateBody ? motionDuration(200) : 0,
+      duration: motionDuration(200),
       easing: cubicOut
     });
     return {
@@ -80,9 +78,11 @@
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
   );
 
+  // A section the parent opens through `open` stays as the parent says:
+  // its switch turning on elsewhere must not open it next to another one.
   $effect(() => {
     const checked = toggleChecked;
-    if (!showToggle) return;
+    if (!showToggle || open !== undefined) return;
     expanded = checked;
   });
 

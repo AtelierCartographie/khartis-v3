@@ -45,9 +45,10 @@ function scopeClause(
   level1: DataTableFilterInput[],
   level2: DataTableFilterInput[]
 ): string | null {
+  const tableClause = buildFilterWhereClause(tableFilters(...level1));
   return combineFilterClauses([
-    buildFilterWhereClause(tableFilters(...level1)),
-    buildFilterClause(TABLE, level2)
+    tableClause,
+    buildFilterClause(TABLE, level2, tableClause)
   ]);
 }
 
@@ -164,6 +165,43 @@ describe('row scope against DuckDB', () => {
     );
 
     await expect(namesInScope(clause)).resolves.toEqual(['Lille', 'Roubaix']);
+  });
+
+  it('should rank a top-N primitive filter among the rows the table filter keeps', async () => {
+    const corse: DataTableFilterInput = {
+      column: 'region',
+      columnType: 'varchar',
+      operator: FilterOperatorEnum.EQUALS,
+      value: 'Corse'
+    };
+
+    await expect(
+      namesInScope(
+        scopeClause(
+          [corse],
+          [{ column: 'pop', operator: FilterOperatorEnum.TOP_DESC, limit: 2 }]
+        )
+      )
+    ).resolves.toEqual(['Ajaccio', 'Bastia']);
+  });
+
+  it('should rank a top-N filter after the other filters of the primitive', async () => {
+    await expect(
+      namesInScope(
+        scopeClause(
+          [],
+          [
+            {
+              column: 'region',
+              columnType: 'varchar',
+              operator: FilterOperatorEnum.EQUALS,
+              value: 'Corse'
+            },
+            { column: 'pop', operator: FilterOperatorEnum.TOP_DESC, limit: 1 }
+          ]
+        )
+      )
+    ).resolves.toEqual(['Ajaccio']);
   });
 
   it('narrows the value domain the discretization reads', async () => {

@@ -129,10 +129,13 @@ export function resolveResizedShapeBounds(
   handle: string,
   dx: number,
   dy: number,
-  startBounds: AnnotationShapeBounds
+  startBounds: AnnotationShapeBounds,
+  /** Shift held: any element resizes in proportion. */
+  lockAspectRatio = false
 ): AnnotationShapeBounds {
   const shapeType = String(item.content ?? '');
-  const preserveAspectRatio = isShapeAspectRatioLocked(shapeType);
+  const preserveAspectRatio =
+    lockAspectRatio || isShapeAspectRatioLocked(shapeType);
   const startRight = startBounds.x + startBounds.width;
   const startBottom = startBounds.y + startBounds.height;
   const startCenterX = startBounds.x + startBounds.width / 2;

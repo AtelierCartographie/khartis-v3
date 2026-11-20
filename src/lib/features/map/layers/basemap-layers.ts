@@ -987,7 +987,12 @@ function createVillesLabelLayer(
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
-  if (!fontAssetsStore.ready) return null;
+  if (
+    !fontAssetsStore.isFontReady(
+      config.labelFontFamily ?? CARTOGRAPHIC_FONT_FAMILY
+    )
+  )
+    return null;
 
   const labelledCities = getLabelledCitiesForConfig(cities, config);
 

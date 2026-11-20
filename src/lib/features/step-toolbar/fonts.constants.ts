@@ -1,13 +1,72 @@
-export const AVAILABLE_FONTS = [
-  'Open Sans',
+export const FONT_CATEGORIES = [
+  'sans',
+  'condensed',
+  'serif',
+  'slab',
+  'handwritten'
+] as const;
+export type FontCategory = (typeof FONT_CATEGORIES)[number];
+
+const GENERIC_FAMILY: Record<FontCategory, string> = {
+  sans: 'sans-serif',
+  condensed: 'sans-serif',
+  serif: 'serif',
+  slab: 'serif',
+  handwritten: 'cursive'
+};
+
+/** Grouped and sorted as the font selects list them. */
+const FONTS_BY_CATEGORY = {
+  sans: [
+    'Atkinson Hyperlegible',
+    'Cabin',
+    'IBM Plex Sans',
+    'Inter',
+    'Josefin Sans',
+    'Lato',
+    'Noto Sans',
+    'Open Sans'
+  ],
+  condensed: ['Fira Sans Condensed', 'Roboto Condensed'],
+  serif: [
+    'EB Garamond',
+    'IM Fell English',
+    'Merriweather',
+    'Noto Serif',
+    'Source Serif 4'
+  ],
+  slab: ['Special Elite', 'Zilla Slab'],
+  handwritten: ['Amatic SC', 'Caveat', 'Kalam', 'Patrick Hand']
+} as const satisfies Record<FontCategory, readonly string[]>;
+
+export type AvailableFont = (typeof FONTS_BY_CATEGORY)[FontCategory][number];
+
+export const FONT_GROUPS: ReadonlyArray<{
+  category: FontCategory;
+  fonts: readonly AvailableFont[];
+}> = FONT_CATEGORIES.map((category) => ({
+  category,
+  fonts: FONTS_BY_CATEGORY[category]
+}));
+
+export const AVAILABLE_FONTS: readonly AvailableFont[] = FONT_GROUPS.flatMap(
+  (group) => group.fonts
+);
+
+/**
+ * Loaded with the map before any label is drawn. The other fonts load the
+ * first time a label layer asks for them, which keeps them off the start of
+ * every project.
+ */
+export const PRELOADED_FONTS: readonly AvailableFont[] = [
   'Cabin',
   'IBM Plex Sans',
   'Inter',
   'Lato',
-  'Noto Sans'
-] as const;
+  'Noto Sans',
+  'Open Sans'
+];
 
-export type AvailableFont = (typeof AVAILABLE_FONTS)[number];
 export const DEFAULT_FONT_FAMILY: AvailableFont = 'Cabin';
 export const CARTOGRAPHIC_FONT_FAMILY: AvailableFont = 'Open Sans';
 export const FONT_SIZES = [
@@ -20,24 +79,19 @@ export const MIN_FONT_SIZE: FontSize = FONT_SIZES[0];
 export const MAX_FONT_SIZE: FontSize = FONT_SIZES[FONT_SIZES.length - 1];
 export const DEFAULT_FONT_SIZE: FontSize = 8;
 
-const FONT_FAMILY_STACKS: Record<AvailableFont, string> = {
-  Cabin: '"Cabin", sans-serif',
-  'IBM Plex Sans': '"IBM Plex Sans", sans-serif',
-  Inter: '"Inter", sans-serif',
-  Lato: '"Lato", sans-serif',
-  'Open Sans': '"Open Sans", sans-serif',
-  'Noto Sans':
-    '"Noto Sans", "Noto Sans Arabic", "Noto Sans SC", "Noto Sans JP", sans-serif'
-};
+const FONT_CATEGORY_BY_FONT = new Map<AvailableFont, FontCategory>(
+  FONT_GROUPS.flatMap(({ category, fonts }) =>
+    fonts.map((font) => [font, category] as const)
+  )
+);
 
-const FONT_FAMILY_NAMES: Record<AvailableFont, string> = {
-  Cabin: '"Cabin"',
-  'IBM Plex Sans': '"IBM Plex Sans"',
-  Inter: '"Inter"',
-  Lato: '"Lato"',
-  'Open Sans': '"Open Sans"',
-  'Noto Sans': '"Noto Sans"'
-};
+function buildFontFamilyStack(font: AvailableFont): string {
+  if (font === 'Noto Sans') {
+    return '"Noto Sans", "Noto Sans Arabic", "Noto Sans SC", "Noto Sans JP", sans-serif';
+  }
+  const category = FONT_CATEGORY_BY_FONT.get(font) ?? 'sans';
+  return `"${font}", ${GENERIC_FAMILY[category]}`;
+}
 
 const FONT_LOAD_VARIANTS = [
   { style: 'normal', weight: 400 },
@@ -70,23 +124,16 @@ export function normalizeFontFamily(
 export function resolveFontFamilyStack(fontFamily?: string | null): string {
   const normalized = normalizeFontFamily(fontFamily);
   if (normalized) {
-    return FONT_FAMILY_STACKS[normalized];
+    return buildFontFamilyStack(normalized);
   }
 
   if (!fontFamily?.trim()) {
-    return FONT_FAMILY_STACKS[DEFAULT_FONT_FAMILY];
+    return buildFontFamilyStack(DEFAULT_FONT_FAMILY);
   }
 
   return fontFamily.includes(',')
     ? fontFamily
     : `"${stripFontQuotes(fontFamily)}", sans-serif`;
-}
-
-function resolveFontFaceFamily(fontFamily?: string | null): string {
-  const normalized = normalizeFontFamily(fontFamily);
-  return normalized
-    ? FONT_FAMILY_NAMES[normalized]
-    : FONT_FAMILY_NAMES[DEFAULT_FONT_FAMILY];
 }
 
 export function clampFontSize(
@@ -120,11 +167,13 @@ export function resolveFontSizeOptions(
   );
 }
 
-export const FONT_FACE_LOAD_REQUESTS = AVAILABLE_FONTS.flatMap((fontFamily) =>
-  FONT_LOAD_VARIANTS.flatMap(({ style, weight }) =>
-    FONT_LOAD_SIZES_PX.map(
-      (size) =>
-        `${style} ${weight} ${size}px ${resolveFontFaceFamily(fontFamily)}`
-    )
-  )
+/** The `document.fonts.load` descriptors that bring one font's faces in. */
+export function getFontFaceLoadRequests(font: AvailableFont): string[] {
+  return FONT_LOAD_VARIANTS.flatMap(({ style, weight }) =>
+    FONT_LOAD_SIZES_PX.map((size) => `${style} ${weight} ${size}px "${font}"`)
+  );
+}
+
+export const FONT_FACE_LOAD_REQUESTS = PRELOADED_FONTS.flatMap(
+  getFontFaceLoadRequests
 );

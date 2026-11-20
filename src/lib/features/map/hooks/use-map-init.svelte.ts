@@ -476,6 +476,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           parent: container,
           deviceProps: {
             type: DECK_DEVICE_TYPE,
+            // The translucent text halo writes each pixel once through the stencil.
+            webgl: { stencil: true },
             debugGPUTime: isDeckDebugEnabled()
           },
           useDevicePixels: renderPixelRatio,

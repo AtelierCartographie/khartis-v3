@@ -1,14 +1,14 @@
 <script lang="ts">
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
   import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     DEFAULT_FONT_SIZE,
@@ -17,15 +17,7 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Column,
-    Grid,
-    Row,
-    Select,
-    SelectItem,
-    Slider,
-    TextArea
-  } from 'carbon-components-svelte';
+  import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
   import {
     Add,
     TextAlignCenter,
@@ -37,11 +29,12 @@
   } from 'carbon-icons-svelte';
   import {
     annotationsActions,
-    getAnnotationsState
+    getAnnotationsState,
+    resolveMatchingPredefinedStyle
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
   import { getTextAnnotationName } from './_shared/annotation-name';
-  import SelectionHeader from './_shared/selection-header.svelte';
+  import AnnotationToolPanel from './_shared/annotation-tool-panel.svelte';
   import {
     getPageElementPlaceholder,
     hasPageElementDefaultWording
@@ -62,9 +55,60 @@
     { value: 'caption', text: m.annotations_style_caption() }
   ]);
 
-  function handleAlignChange(align: TextAlign) {
-    annotationsActions.applyStyle({ textAlign: align });
-  }
+  const matchingPredefinedStyle = $derived(
+    resolveMatchingPredefinedStyle(
+      effectiveStyle,
+      annotationsState.predefinedStyle || ANNOTATION_ROLE.NOTE,
+      selectedText?.role
+    )
+  );
+
+  const formatToggles = $derived([
+    {
+      key: 'bold',
+      label: m.annotations_bold(),
+      icon: TextBold,
+      active: !!effectiveStyle.bold,
+      toggle: () =>
+        annotationsActions.applyStyle({ bold: !effectiveStyle.bold })
+    },
+    {
+      key: 'italic',
+      label: m.annotations_italic(),
+      icon: TextItalic,
+      active: !!effectiveStyle.italic,
+      toggle: () =>
+        annotationsActions.applyStyle({ italic: !effectiveStyle.italic })
+    },
+    {
+      key: 'underline',
+      label: m.annotations_underline(),
+      icon: TextUnderline,
+      active: !!effectiveStyle.underlined,
+      toggle: () =>
+        annotationsActions.applyStyle({
+          underlined: !effectiveStyle.underlined
+        })
+    }
+  ]);
+
+  const alignToggles = $derived([
+    {
+      value: TextAlign.Left,
+      label: m.annotations_align_left(),
+      icon: TextAlignLeft
+    },
+    {
+      value: TextAlign.Center,
+      label: m.annotations_align_center(),
+      icon: TextAlignCenter
+    },
+    {
+      value: TextAlign.Right,
+      label: m.annotations_align_right(),
+      icon: TextAlignRight
+    }
+  ]);
 
   // A page text still at its default wording shows it as the field's hint,
   // so that typing writes the text instead of editing « Ajouter un titre ».
@@ -75,11 +119,9 @@
   );
 
   const textEditorValue = $derived(
-    selectedText
-      ? selectedPlaceholder
-        ? ''
-        : String(selectedText.content ?? '')
-      : annotationsState.textContent
+    selectedText && !selectedPlaceholder
+      ? String(selectedText.content ?? '')
+      : ''
   );
 
   function deleteSelectedText(): void {
@@ -88,37 +130,24 @@
     }
   }
 
-  function handleAddText() {
-    if (textEditorValue.trim().length === 0) {
-      const textarea = document.getElementById(
-        'text-content'
-      ) as HTMLTextAreaElement | null;
-      textarea?.focus();
-      return;
-    }
-
-    annotationsActions.beginPlacement(AnnotationKind.TEXT, textEditorValue);
+  function handleAddText(): void {
+    annotationsActions.beginPlacement(
+      AnnotationKind.TEXT,
+      m.annotations_text_default_content()
+    );
   }
 
-  function handleContentInput(e: Event) {
+  function handleContentInput(e: Event): void {
+    if (!selectedText) return;
     const value = (e.currentTarget as HTMLTextAreaElement).value;
-    if (selectedText) {
-      // A cleared page text goes back to its placeholder.
-      const placeholder =
-        value === '' && selectedText.role
-          ? getPageElementPlaceholder(selectedText.role)
-          : null;
-      annotationsActions.updateAnnotation(selectedText.id, {
-        content: placeholder ?? value
-      });
-    } else {
-      annotationsActions.setTextContent(value);
-    }
-  }
-
-  function handleOpacityChange(e: CustomEvent<number>) {
-    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
-    annotationsActions.applyStyle({ opacity: e.detail });
+    // A cleared page text goes back to its placeholder.
+    const placeholder =
+      value === '' && selectedText.role
+        ? getPageElementPlaceholder(selectedText.role)
+        : null;
+    annotationsActions.updateAnnotation(selectedText.id, {
+      content: placeholder ?? value
+    });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -166,304 +195,215 @@
   });
 </script>
 
-<Grid noGutter fullWidth>
-  <Row>
-    <Column>
+<AnnotationToolPanel
+  help={m.annotations_text_help()}
+  actionLabel={m.annotations_add_text()}
+  actionIcon={Add}
+  onaction={handleAddText}
+  selectionLabel={m.annotations_selected_text()}
+  selectedName={selectedText ? getTextAnnotationName(selectedText) : undefined}
+  deleteLabel={m.annotations_delete_text()}
+  ondelete={deleteSelectedText}
+>
+  {#snippet properties()}
+    <div class="textarea-wrapper">
+      <TextArea
+        id="text-content"
+        labelText={m.annotations_content()}
+        value={textEditorValue}
+        on:input={handleContentInput}
+        placeholder={selectedPlaceholder ?? ''}
+        rows={5}
+      />
+    </div>
+
+    <div
+      class="predefined-style"
+      class:predefined-style--none={!matchingPredefinedStyle}
+    >
       <Select
         size="sm"
         labelText={m.annotations_predefined_style()}
-        selected={annotationsState.predefinedStyle || 'note'}
+        selected={matchingPredefinedStyle ?? ''}
         on:change={(e) =>
           annotationsActions.setPredefinedStyle(
             (e.currentTarget as HTMLSelectElement).value
           )}
       >
+        <SelectItem value="" text={m.none()} disabled hidden />
         {#each predefinedStyles as style (style.value)}
           <SelectItem value={style.value} text={style.text} />
         {/each}
       </Select>
-    </Column>
-  </Row>
+    </div>
 
-  <!-- Add button intentionally placed before textarea to match Figma spec -->
-  <Row>
-    <Column>
-      <div class="section add-btn-section">
-        <Button size="field" kind="primary" icon={Add} onclick={handleAddText}>
-          {m.annotations_add_text()}
-        </Button>
-        <p class="helper">{m.annotations_add_text_description()}</p>
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        <SelectionHeader
-          title={selectedText
-            ? m.annotations_selected_text()
-            : m.annotations_new_text()}
-          name={selectedText ? getTextAnnotationName(selectedText) : undefined}
-          deleteLabel={m.annotations_delete_text()}
-          ondelete={selectedText ? deleteSelectedText : undefined}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section textarea-wrapper">
-        <TextArea
-          id="text-content"
-          labelText={m.annotations_content()}
-          value={textEditorValue}
-          on:input={handleContentInput}
-          placeholder={selectedText
-            ? (selectedPlaceholder ?? '')
-            : m.annotations_no_content()}
-          rows={5}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        <div class="text-style-row">
-          <div class="text-style-font">
-            <Select
-              id="annotation-font-select"
-              labelText={m.legend_font()}
-              selected={localFont}
-              on:change={(event) => {
-                const nextFont = (event.currentTarget as HTMLSelectElement)
-                  .value;
-                localFont = nextFont;
-                annotationsActions.applyStyle({ font: nextFont });
-              }}
-              size="sm"
-            >
-              {#each AVAILABLE_FONTS as f (f)}
-                <SelectItem value={f} text={f} />
-              {/each}
-            </Select>
-          </div>
-          <div class="text-style-size">
-            <Select
-              id="annotation-font-size"
-              labelText={m.legend_font_size()}
-              selected={String(localFontSize)}
-              on:change={(event) => {
-                const nextFontSize = Number(
-                  (event.currentTarget as HTMLSelectElement).value
-                );
-                if (!Number.isFinite(nextFontSize)) {
-                  return;
-                }
-
-                localFontSize = nextFontSize;
-                annotationsActions.applyStyle({ fontSize: nextFontSize });
-              }}
-              size="sm"
-            >
-              {#each fontSizeOptions as sizeOption (sizeOption)}
-                <SelectItem value={sizeOption} text={sizeOption} />
-              {/each}
-            </Select>
-          </div>
-        </div>
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section text-format-controls">
-        <div class="format-buttons">
-          <div class:format-btn-active={effectiveStyle.bold}>
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_bold()}
-              icon={TextBold}
-              onclick={() =>
-                annotationsActions.applyStyle({ bold: !effectiveStyle.bold })}
-            />
-          </div>
-          <div class:format-btn-active={effectiveStyle.italic}>
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_italic()}
-              icon={TextItalic}
-              onclick={() =>
-                annotationsActions.applyStyle({
-                  italic: !effectiveStyle.italic
-                })}
-            />
-          </div>
-          <div class:format-btn-active={effectiveStyle.underlined}>
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_underline()}
-              icon={TextUnderline}
-              onclick={() =>
-                annotationsActions.applyStyle({
-                  underlined: !effectiveStyle.underlined
-                })}
-            />
-          </div>
-          <div class="separator"></div>
-          <div
-            class:format-btn-active={effectiveStyle.textAlign ===
-              TextAlign.Left}
-          >
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_align_left()}
-              icon={TextAlignLeft}
-              onclick={() => handleAlignChange(TextAlign.Left)}
-            />
-          </div>
-          <div
-            class:format-btn-active={effectiveStyle.textAlign ===
-              TextAlign.Center}
-          >
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_align_center()}
-              icon={TextAlignCenter}
-              onclick={() => handleAlignChange(TextAlign.Center)}
-            />
-          </div>
-          <div
-            class:format-btn-active={effectiveStyle.textAlign ===
-              TextAlign.Right}
-          >
-            <IconButton
-              kind="ghost"
-              size="field"
-              iconDescription={m.annotations_align_right()}
-              icon={TextAlignRight}
-              onclick={() => handleAlignChange(TextAlign.Right)}
-            />
-          </div>
-        </div>
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        <ColorPicker
-          triggerLabel={m.color()}
-          hex={effectiveTextColor.hex}
-          hue={effectiveTextColor.hue}
-          saturation={effectiveTextColor.saturation}
-          lightness={effectiveTextColor.lightness}
-          onValidate={({
-            hue,
-            saturation,
-            lightness
-          }: {
-            hex: string;
-            hue: number;
-            saturation: number;
-            lightness: number;
-          }) => {
-            annotationsActions.applyStyle({
-              color: { hue, saturation, lightness }
-            });
+    <div class="text-style-row">
+      <div class="text-style-font">
+        <FontFamilySelect
+          id="annotation-font-select"
+          labelText={m.legend_font()}
+          value={localFont}
+          fallback={CARTOGRAPHIC_FONT_FAMILY}
+          onchange={(nextFont) => {
+            localFont = nextFont;
+            annotationsActions.applyStyle({ font: nextFont });
           }}
         />
       </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.annotations_opacity()}
-          value={toOpacityPercent(effectiveStyle.opacity)}
-          min={0}
-          max={100}
-          step={5}
-          stepMultiplier={4}
-          on:input={handleOpacityChange}
-          on:change={handleOpacityChange}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        <BackgroundSettings
-          enabled={backgroundEnabled}
-          color={bgColorValue}
-          opacity={bgOpacity}
-          shadow={effectiveStyle.backgroundShadow ?? false}
-          onEnabledChange={(enabled) =>
-            annotationsActions.applyStyle(
-              enabled
-                ? { backgroundColor: '#ffffff', backgroundOpacity: bgOpacity }
-                : {
-                    backgroundColor: undefined,
-                    backgroundOpacity: undefined,
-                    backgroundShadow: undefined
-                  }
-            )}
-          onColorChange={(backgroundColor) =>
-            annotationsActions.applyStyle({ backgroundColor })}
-          onOpacityChange={(backgroundOpacity) => {
-            if (backgroundOpacity !== bgOpacity) {
-              annotationsActions.applyStyle({ backgroundOpacity });
+      <div class="text-style-size">
+        <Select
+          id="annotation-font-size"
+          labelText={m.legend_font_size()}
+          selected={String(localFontSize)}
+          on:change={(event) => {
+            const nextFontSize = Number(
+              (event.currentTarget as HTMLSelectElement).value
+            );
+            if (!Number.isFinite(nextFontSize)) {
+              return;
             }
+
+            localFontSize = nextFontSize;
+            annotationsActions.applyStyle({ fontSize: nextFontSize });
           }}
-          onShadowChange={(backgroundShadow) =>
-            annotationsActions.applyStyle({ backgroundShadow })}
-        />
+          size="sm"
+        >
+          {#each fontSizeOptions as sizeOption (sizeOption)}
+            <SelectItem value={sizeOption} text={sizeOption} />
+          {/each}
+        </Select>
       </div>
-    </Column>
-  </Row>
-</Grid>
+    </div>
+
+    <div class="format-buttons">
+      {#each formatToggles as toggle (toggle.key)}
+        <div class:format-btn-active={toggle.active}>
+          <IconButton
+            kind="ghost"
+            size="field"
+            iconDescription={toggle.label}
+            icon={toggle.icon}
+            aria-pressed={toggle.active}
+            onclick={toggle.toggle}
+          />
+        </div>
+      {/each}
+      <div class="separator"></div>
+      {#each alignToggles as align (align.value)}
+        {@const active = effectiveStyle.textAlign === align.value}
+        <div class:format-btn-active={active}>
+          <IconButton
+            kind="ghost"
+            size="field"
+            iconDescription={align.label}
+            icon={align.icon}
+            aria-pressed={active}
+            onclick={() =>
+              annotationsActions.applyStyle({ textAlign: align.value })}
+          />
+        </div>
+      {/each}
+    </div>
+
+    <ColorPicker
+      triggerLabel={m.color()}
+      hex={effectiveTextColor.hex}
+      hue={effectiveTextColor.hue}
+      saturation={effectiveTextColor.saturation}
+      lightness={effectiveTextColor.lightness}
+      onValidate={({
+        hue,
+        saturation,
+        lightness
+      }: {
+        hex: string;
+        hue: number;
+        saturation: number;
+        lightness: number;
+      }) => {
+        annotationsActions.applyStyle({
+          color: { hue, saturation, lightness }
+        });
+      }}
+    />
+
+    <SliderWithInput
+      label={m.annotations_rotation()}
+      value={effectiveStyle.rotation ?? 0}
+      min={0}
+      max={359}
+      step={1}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(rotation) => {
+        if ((effectiveStyle.rotation ?? 0) === rotation) return;
+        annotationsActions.applyStyle({ rotation });
+      }}
+    />
+
+    <SliderWithInput
+      label={m.annotations_opacity()}
+      value={toOpacityPercent(effectiveStyle.opacity)}
+      min={0}
+      max={100}
+      step={5}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(opacity) => {
+        if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
+        annotationsActions.applyStyle({ opacity });
+      }}
+    />
+
+    <hr class="annotation-divider" />
+
+    <BackgroundSettings
+      enabled={backgroundEnabled}
+      color={bgColorValue}
+      opacity={bgOpacity}
+      shadow={effectiveStyle.backgroundShadow ?? false}
+      onEnabledChange={(enabled) =>
+        annotationsActions.applyStyle(
+          enabled
+            ? { backgroundColor: '#ffffff', backgroundOpacity: bgOpacity }
+            : {
+                backgroundColor: undefined,
+                backgroundOpacity: undefined,
+                backgroundShadow: undefined
+              }
+        )}
+      onColorChange={(backgroundColor) =>
+        annotationsActions.applyStyle({ backgroundColor })}
+      onOpacityChange={(backgroundOpacity) => {
+        if (backgroundOpacity !== bgOpacity) {
+          annotationsActions.applyStyle({ backgroundOpacity });
+        }
+      }}
+      onShadowChange={(backgroundShadow) =>
+        annotationsActions.applyStyle({ backgroundShadow })}
+    />
+  {/snippet}
+</AnnotationToolPanel>
 
 <style>
-  .section {
-    margin-top: var(--cds-spacing-04);
-  }
-
-  .helper {
-    margin: var(--cds-spacing-03) 0 0 0;
-    color: var(--cds-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  .add-btn-section :global(.bx--btn) {
-    width: 100%;
-    max-width: 100%;
-  }
-
   .textarea-wrapper :global(.bx--text-area) {
     min-height: 112px;
     height: 112px;
     resize: vertical;
   }
 
+  .predefined-style--none :global(.bx--select-input) {
+    color: var(--cds-text-placeholder, #a8a8a8);
+  }
+
+  .predefined-style--none :global(.bx--select-option) {
+    color: var(--cds-text-primary, #161616);
+  }
+
   .text-style-row {
     display: flex;
     align-items: flex-end;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-inline);
   }
 
   .text-style-font {
@@ -476,16 +416,9 @@
     flex-shrink: 0;
   }
 
-  .text-format-controls {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
   .format-buttons {
     display: flex;
     align-items: center;
-    gap: 0;
   }
 
   .format-btn-active :global(.bx--btn--ghost) {
@@ -500,6 +433,4 @@
     margin: 0 var(--cds-spacing-02);
     flex-shrink: 0;
   }
-
-  /* Background controls: toggle and color picker side by side. */
 </style>
