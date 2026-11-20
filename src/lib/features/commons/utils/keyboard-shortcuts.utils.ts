@@ -14,7 +14,8 @@ export type ShortcutAction =
   | { kind: 'step'; step: ToolbarStep }
   | { kind: 'tool'; tool: StylingTools | VisualizationTools }
   | { kind: 'menu' }
-  | { kind: 'zoomMode' };
+  | { kind: 'zoomMode' }
+  | { kind: 'toggleGrid' };
 
 interface SingleKeyShortcut {
   readonly id: string;
@@ -109,6 +110,12 @@ export const SINGLE_KEY_SHORTCUTS = [
     keys: { fr: 'A', en: 'A' },
     step: ToolbarStep.Styling,
     action: { kind: 'tool', tool: StylingTools.Annotations }
+  },
+  {
+    id: 'toggleGrid',
+    keys: { fr: 'G', en: 'G' },
+    step: ToolbarStep.Styling,
+    action: { kind: 'toggleGrid' }
   },
   {
     id: 'toolColorBlindness',
@@ -210,8 +217,15 @@ export function getPrimaryShortcutLabel(
   id: PrimaryKeyShortcutId,
   isApplePlatform: boolean
 ): string {
-  const letter = PRIMARY_KEY_SHORTCUTS[id];
-  return isApplePlatform ? `⌘${letter}` : `Ctrl+${letter}`;
+  return getPrimaryKeyLabel(PRIMARY_KEY_SHORTCUTS[id], isApplePlatform);
+}
+
+/** A key pressed with Cmd (Apple) or Ctrl, such as `+` or `0` for zoom. */
+export function getPrimaryKeyLabel(
+  key: string,
+  isApplePlatform: boolean = detectApplePlatform()
+): string {
+  return isApplePlatform ? `⌘${key}` : `Ctrl+${key}`;
 }
 
 /** The modifier name the zoom shortcuts read as on this platform. */
@@ -233,12 +247,14 @@ export function getPrimaryShortcut(id: PrimaryKeyShortcutId): string {
 
 /** The keycaps of a shortcut label: `Ctrl+S` gives `Ctrl`, `S`. */
 export function splitShortcutKeys(shortcut: string): string[] {
-  if (shortcut.includes('+')) {
-    return shortcut.split('+').filter(Boolean);
-  }
-
   if (shortcut.startsWith('⌘') && shortcut.length > 1) {
     return ['⌘', shortcut.slice(1)];
+  }
+
+  if (shortcut.length > 1 && shortcut.includes('+')) {
+    const keys = shortcut.split('+').filter(Boolean);
+    // `Ctrl++` names the plus key itself.
+    return shortcut.endsWith('++') ? [...keys, '+'] : keys;
   }
 
   return shortcut ? [shortcut] : [];
