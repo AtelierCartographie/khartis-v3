@@ -247,7 +247,8 @@ export function createTextOverlayLayers(
 }
 
 // Deck draws every glyph quad with its own SDF outline, so a translucent
-// halo darkens where the outlines of neighbouring letters overlap. The halo
+// halo darkens where the outlines of neighbouring letters overlap, and a
+// translucent text shows the outlines of its neighbours through its fill. The halo
 // is drawn first by a layer of its own, opaque and faded as a whole, whose
 // stencil test lets each pixel be written once; the text follows without an
 // outline. MapLibre keeps tile clipping in the stencil buffer, so the
@@ -257,20 +258,33 @@ const HALO_STENCIL_PARAMETERS = {
   stencilReadMask: 0xff,
   stencilWriteMask: 0xff,
   stencilCompare: 'equal',
+  // luma.gl applies the pass operation only alongside the two others.
+  stencilFailOperation: 'keep',
+  stencilDepthFailOperation: 'keep',
   stencilPassOperation: 'increment-clamp'
 } as const;
+
+// The stencil counts any fragment drawn, and the faint antialiased fringe of
+// a glyph quad would block its neighbour's halo, leaving seams: the halo
+// layer drops fragments under this coverage (tested before the layer opacity).
+const HALO_ALPHA_CUTOFF = 0.5;
 
 function splitTranslucentHalo(
   textLayer: TextLayer<TextLayerDatum>,
   haloColor: [number, number, number],
-  haloOpacity: number
+  haloOpacity: number,
+  textOpacity: number
 ): TextLayer<TextLayerDatum>[] {
   const outlineWidth = Number(textLayer.props.outlineWidth ?? 0);
   const interleaved = shouldUseMapLibreInterleaved({
     requiresMapLibre: basemapStyleStore.requiresMapLibre,
     hasOSMBasemap: osmBasemapStore.isActive
   });
-  if (outlineWidth <= 0 || haloOpacity >= 1 || interleaved) {
+  if (
+    outlineWidth <= 0 ||
+    (haloOpacity >= 1 && textOpacity >= 1) ||
+    interleaved
+  ) {
     return [textLayer];
   }
 
@@ -283,6 +297,10 @@ function splitTranslucentHalo(
     background: false,
     pickable: false,
     parameters: HALO_STENCIL_PARAMETERS,
+    _subLayerProps: {
+      ...textLayer.props._subLayerProps,
+      characters: { alphaCutoff: HALO_ALPHA_CUTOFF }
+    },
     updateTriggers: {
       ...textLayer.props.updateTriggers,
       getColor: [haloColor.join(',')]
@@ -1531,7 +1549,8 @@ function buildTextOverlayLayers(
       const secondaryLayers = splitTranslucentHalo(
         new TextLayer<TextLayerDatum>(labelLayerProps),
         resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
-        normalizeOpacity(secondaryLabelsConfig.haloOpacity, 1)
+        normalizeOpacity(secondaryLabelsConfig.haloOpacity, 1),
+        labelOpacity
       );
       secondaryTextLayer = secondaryLayers[secondaryLayers.length - 1];
       layers.push(...(secondaryLayers as ThematicLayer[]));
@@ -1706,7 +1725,8 @@ function buildTextOverlayLayers(
       const primaryLayers = splitTranslucentHalo(
         primaryTextLayer,
         resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
-        normalizeOpacity(textConfig.haloOpacity, 1)
+        normalizeOpacity(textConfig.haloOpacity, 1),
+        textOpacity
       );
       primaryTextLayer = primaryLayers[primaryLayers.length - 1];
       if (textData.length > 0) {
