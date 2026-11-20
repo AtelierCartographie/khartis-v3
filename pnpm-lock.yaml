@@ -40,8 +40,8 @@ importers:
         specifier: ^0.1.5
         version: 0.1.5
       '@ateliercartographie/ok-palette':
-        specifier: ^0.1.4
-        version: 0.1.4
+        specifier: ^0.3.0
+        version: 0.3.0
       '@ateliercartographie/proj-suggest':
         specifier: ^0.1.0
         version: 0.1.0
@@ -399,8 +399,8 @@ packages:
   '@ateliercartographie/motif.js@0.1.5':
     resolution: {integrity: sha512-of4obGxpTyw1YGd/ExO0iGV7HixL1AO7WTvLwOI0kZ5nCsYTYs43sMugpZzA+3jIk9lWGBxLWayxsg0MJOGfIA==}
 
-  '@ateliercartographie/ok-palette@0.1.4':
-    resolution: {integrity: sha512-HSLgx0l1zAIKXkHdAM9/jujZZXe85FFHdspMwWD1GZY7W55zRR5zKxMblTf2ToXchtSMtegG1Fanqw645Zpr4w==}
+  '@ateliercartographie/ok-palette@0.3.0':
+    resolution: {integrity: sha512-Rbh3S6vgCwJwWcGMYPqadSs9e32IaVIC/ACis+eeFG9guILN5I0EVWJ/ifoHXFf4HqS7zJHlnzm2kK3z93bJLQ==}
 
   '@ateliercartographie/proj-suggest@0.1.0':
     resolution: {integrity: sha512-hP0v+RlkQ2boMimoQYOPVgDB3X8m8MvSK8ExIzvkMxy8FQjTh8R0dJicizTCHOgTycfkhNFO1FdsXBxEDclpgQ==}
@@ -6582,7 +6582,7 @@ snapshots:
     dependencies:
       d3-path: 3.1.0
 
-  '@ateliercartographie/ok-palette@0.1.4': {}
+  '@ateliercartographie/ok-palette@0.3.0': {}
 
   '@ateliercartographie/proj-suggest@0.1.0': {}
 
