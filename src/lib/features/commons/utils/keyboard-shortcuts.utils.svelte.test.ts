@@ -48,4 +48,10 @@ describe('splitShortcutKeys', () => {
     expect(splitShortcutKeys('C')).toEqual(['C']);
     expect(splitShortcutKeys('')).toEqual([]);
   });
+
+  it('keeps the plus key of a zoom shortcut', () => {
+    expect(splitShortcutKeys('⌘+')).toEqual(['⌘', '+']);
+    expect(splitShortcutKeys('Ctrl++')).toEqual(['Ctrl', '+']);
+    expect(splitShortcutKeys('Ctrl+-')).toEqual(['Ctrl', '-']);
+  });
 });
