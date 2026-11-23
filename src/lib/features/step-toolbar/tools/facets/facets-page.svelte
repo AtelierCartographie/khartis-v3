@@ -6,6 +6,7 @@
   import GeoIndicationsOverlay from '$lib/features/map/components/geo-indications-overlay.svelte';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
   import PageGridOverlay from '$lib/features/map/components/page-grid-overlay.svelte';
+  import PageGuidesOverlay from '$lib/features/map/components/page-guides-overlay.svelte';
   import {
     DEFAULT_PAGE_COLOR,
     getFormatState
@@ -115,6 +116,7 @@
       displayScale={pageDisplayScale}
     />
   {/if}
+  <PageGuidesOverlay displayScale={pageDisplayScale} />
 
   <div class="facets-map-stage" style={mapStageStyle}>
     <FacetsGrid
