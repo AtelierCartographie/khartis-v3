@@ -34,6 +34,7 @@
     type BBox,
     getPreferredBasemapFile,
     labelLayoutStore,
+    LabelHoverFrame,
     LabelTextEditor,
     mapHighlightStore,
     mapProjectionStore,
@@ -131,10 +132,13 @@
       ? null
       : mapInstanceStore.measureFramingScale()
   );
-  // Map titles are set like the legend titles: same size, font and weight,
-  // scaled with the page as the legend is.
+  const FACET_TITLE_SIZE_STEP = 2;
+  // Map titles are set like the legend titles, same font and weight, and
+  // stay a step above them whatever the legend size; scaled with the page
+  // as the legend is.
   const facetTitleFontSize = $derived(
-    legendTitleFontSize(getLegendState().style.fontSize) *
+    (legendTitleFontSize(getLegendState().style.fontSize) +
+      FACET_TITLE_SIZE_STEP) *
       Math.max(globalState.zoom.pageZoomScale, 0.1)
   );
   const facetTitleFontFamily = $derived(
@@ -662,6 +666,8 @@
           parent: rendererContainer,
           deviceProps: {
             type: DECK_DEVICE_TYPE,
+            // The translucent text halo writes each pixel once through the stencil.
+            webgl: { stencil: true },
             debugGPUTime: IS_DEV
           },
           useDevicePixels: renderPixelRatio,
@@ -940,6 +946,7 @@
       class="shared-facets-canvas"
       class:is-over-label={labelEditing.isOverLabel}
     ></div>
+    <LabelHoverFrame box={labelEditing.hoverBox} />
 
     <div class="facets-overlay">
       {#each descriptors as descriptor (descriptor.facetId)}

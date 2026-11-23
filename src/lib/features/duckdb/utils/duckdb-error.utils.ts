@@ -10,6 +10,7 @@ export type DuckDBErrorKind =
   | 'file-unreadable'
   | 'multiple-layers'
   | 'crs-not-found'
+  | 'unknown-crs'
   | 'thread-pool';
 
 const PATTERNS: Record<DuckDBErrorKind, RegExp> = {
@@ -21,6 +22,7 @@ const PATTERNS: Record<DuckDBErrorKind, RegExp> = {
   'multiple-layers': /Multiple layers|more than one layer/,
   // Raised by the WASM spatial build only, never by the native engine.
   'crs-not-found': /crs not found/i,
+  'unknown-crs': /unrecognized coordinate system/i,
   'thread-pool':
     /thread constructor failed|resource temporarily unavailable|pthread_create/i
 };

@@ -62,9 +62,14 @@ function formatTextFilterValue(value: string | number | undefined): string {
   return sqlString(trimmed);
 }
 
+/**
+ * `rankScope` limits the rows a top filter ranks: a top 10 is the top 10 of
+ * the rows the other filters keep, not of the whole table.
+ */
 export function buildFilterSQL(
   tableName: string,
-  filter: DataTableFilterInput
+  filter: DataTableFilterInput,
+  rankScope: string | null = null
 ): string {
   const columnRef = sqlIdentifier(filter.column);
   const tableRef = sqlIdentifier(tableName);
@@ -78,7 +83,8 @@ export function buildFilterSQL(
     if (!Number.isFinite(limit) || limit <= 0) {
       throw new DuckDBError(m.filter_top_requires_number());
     }
-    return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM ${tableRef} ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
+    const where = rankScope ? ` WHERE ${rankScope}` : '';
+    return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM ${tableRef}${where} ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };
 
   const isNumericValue = isNumericLiteral(value);
@@ -235,15 +241,37 @@ export function createFilterRecord(
   };
 }
 
+/**
+ * Top filters rank among the rows the other filters keep, together with
+ * `rankScope` (the table filters and the joined rows, for a visualization).
+ */
 export function buildFilterClause(
   tableName: string,
-  inputs: DataTableFilterInput[]
+  inputs: DataTableFilterInput[],
+  rankScope: string | null = null
 ): string | null {
   if (inputs.length === 0) {
     return null;
   }
 
-  return inputs.map((input) => buildFilterSQL(tableName, input)).join(' AND ');
+  const isTop = (input: DataTableFilterInput) =>
+    input.operator === FilterOperatorEnum.TOP_ASC ||
+    input.operator === FilterOperatorEnum.TOP_DESC;
+  const plainClauses = inputs
+    .filter((input) => !isTop(input))
+    .map((input) => buildFilterSQL(tableName, input));
+  const topRankScope = combineFilterClauses([
+    rankScope ? `(${rankScope})` : null,
+    ...plainClauses
+  ]);
+
+  return inputs
+    .map((input) =>
+      isTop(input)
+        ? buildFilterSQL(tableName, input, topRankScope)
+        : buildFilterSQL(tableName, input)
+    )
+    .join(' AND ');
 }
 
 export function combineFilterClauses(

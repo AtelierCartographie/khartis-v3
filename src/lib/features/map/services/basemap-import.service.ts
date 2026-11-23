@@ -416,7 +416,7 @@ export function resolveCustomBasemapLayerType(
   )?.type;
 }
 
-export async function createArrowTableFromDuckTable(
+async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {

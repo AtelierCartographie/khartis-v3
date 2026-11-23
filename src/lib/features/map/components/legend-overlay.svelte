@@ -7,7 +7,10 @@
     StylingTools,
     ToolbarStep
   } from '$lib/features/commons/types/global';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
+  import {
+    layoutDropShadow,
+    LegendPosition
+  } from '$lib/features/commons/constants/ui.constants';
   import {
     type VisualizationConfig,
     visualizationStore
@@ -18,7 +21,7 @@
     clampFontSize,
     resolveFontFamilyStack
   } from '$lib/features/step-toolbar/fonts.constants';
-  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     clampPointToBounds,
     getDragBounds,
@@ -59,6 +62,7 @@
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
@@ -297,7 +301,9 @@
 
     if (hasBackground) {
       styles.push(`background-color: ${bgHsl}`);
-      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
+      styles.push(
+        `box-shadow: ${legendState.style.background.shadow ? layoutDropShadow(bgOpacity) : 'none'}`
+      );
     } else {
       styles.push('background-color: transparent');
       styles.push('box-shadow: none');
@@ -314,6 +320,7 @@
   let overlayElement = $state<HTMLDivElement | null>(null);
   let frameElements = $state<Record<string, HTMLDivElement | null>>({});
   let autoPositions = $state<Record<string, PageGridPoint>>({});
+  let frameSizeRevision = $state(0);
   let draggingItemId = $state<string | null>(null);
   let centeredItemId = $state<string | null>(null);
   let dragStartClientX = 0;
@@ -615,7 +622,10 @@
       return;
     }
 
-    const observer = new ResizeObserver(() => resolveAutoPositions());
+    const observer = new ResizeObserver(() => {
+      resolveAutoPositions();
+      frameSizeRevision += 1;
+    });
     for (const element of observed) {
       observer.observe(element);
     }
@@ -623,7 +633,38 @@
     return () => observer.disconnect();
   });
 
+  // Labels placed automatically keep clear of the page legend.
+  $effect(() => {
+    if (inline) {
+      return;
+    }
+
+    void frameSizeRevision;
+    const items = legendState.visible ? visibleItems : [];
+    const boxes = items.flatMap((item) => {
+      const position = getFramePosition(item);
+      const size = getFrameSize(item.id);
+      return position && size && size.width > 0 && size.height > 0
+        ? [
+            [
+              position.x,
+              position.y,
+              position.x + size.width,
+              position.y + size.height
+            ] as [number, number, number, number]
+          ]
+        : [];
+    });
+    pageItemObstaclesStore.setBoxes('legend', boxes);
+  });
+
   const legendDragController = createDraggablePageItemController({
+    getPageFrame: () => ({
+      width: formatState.width,
+      height: formatState.height,
+      margins: formatState.margins,
+      offset: { x: formatState.margins.left, y: formatState.margins.top }
+    }),
     getOverlayElement: () => overlayElement,
     getPageScale,
     getCurrentPosition: () => {
@@ -721,6 +762,86 @@
     }
   }
 
+  // The side handles set the width the legend is drawn to, in legend units:
+  // a wider frame lets a long title stay on one line. The renderer never goes
+  // narrower than the content, so dragging in stops at it.
+  let frameResize: {
+    itemId: string;
+    edge: 'w' | 'e';
+    startClientX: number;
+    startRenderedWidth: number;
+    unitsPerScreenPx: number;
+    screenPxPerPageUnit: number;
+    startPosition: PageGridPoint | null;
+  } | null = null;
+
+  function handleFrameResizePointerDown(
+    event: PointerEvent,
+    item: LegendItem,
+    edge: 'w' | 'e'
+  ): void {
+    const element = frameElements[item.id];
+    const svg = element?.querySelector('svg');
+    if (!isLegendDraggable || !element || !svg) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const svgRect = svg.getBoundingClientRect();
+    const svgUnits = Number(svg.getAttribute('width'));
+    if (!(svgRect.width > 0) || !(svgUnits > 0)) return;
+    frameResize = {
+      itemId: item.id,
+      edge,
+      startClientX: event.clientX,
+      startRenderedWidth: svgRect.width,
+      unitsPerScreenPx: svgUnits / svgRect.width,
+      screenPxPerPageUnit:
+        element.getBoundingClientRect().width /
+        Math.max(element.offsetWidth, 1),
+      startPosition: getFramePosition(item) ?? getMeasuredFramePosition(item.id)
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function handleFrameResizeMove(event: PointerEvent): void {
+    if (!frameResize) return;
+    const { itemId, edge, startClientX, startRenderedWidth, startPosition } =
+      frameResize;
+    const delta = event.clientX - startClientX;
+    const renderedWidth = Math.max(
+      1,
+      startRenderedWidth + (edge === 'e' ? delta : -delta)
+    );
+    legendActions.updateLegendItemLayout(itemId, {
+      width: Math.round(renderedWidth * frameResize.unitsPerScreenPx)
+    });
+    // The west edge follows the pointer: the frame moves by what it grew.
+    if (edge === 'w' && startPosition) {
+      legendActions.updateLegendItem(itemId, {
+        dragPosition: {
+          x:
+            startPosition.x -
+            (renderedWidth - startRenderedWidth) /
+              frameResize.screenPxPerPageUnit,
+          y: startPosition.y
+        }
+      });
+    }
+  }
+
+  function handleFrameResizeUp(): void {
+    frameResize = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function resetFrameWidth(event: MouseEvent, item: LegendItem): void {
+    event.preventDefault();
+    event.stopPropagation();
+    legendActions.updateLegendItemLayout(item.id, { width: undefined });
+  }
+
   function handleFrameClick(
     event: MouseEvent | KeyboardEvent,
     item: LegendItem
@@ -749,7 +870,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function resetFrameCentering(): void {
@@ -758,7 +879,7 @@
     }
 
     centeredItemId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
@@ -782,7 +903,13 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleFrameBlur(): void {
+    if (isLegendActive) {
+      return;
+    }
+
     resetFrameCentering();
   }
 
@@ -849,6 +976,9 @@
   });
 
   onDestroy(() => {
+    if (!inline) {
+      pageItemObstaclesStore.setBoxes('legend', []);
+    }
     centeredItemId = null;
     clearSuppressedLegendClick();
     stopDragging();
@@ -869,6 +999,7 @@
         class="legend-container {getFrameAnchorClass(item)}"
         class:draggable={isLegendDraggable}
         class:dragging={draggingItemId === item.id}
+        data-legend-item-id={item.id}
         data-workspace-pan-ignore="true"
         style={getFrameStyle(item)}
         role="button"
@@ -907,6 +1038,20 @@
             {/if}
           {/if}
         </div>
+        {#if isLegendDraggable && !inline && legendSegments.length > 0}
+          {#each ['w', 'e'] as const as edge (edge)}
+            <div
+              class="legend-resize-edge legend-resize-{edge}"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={m.legend_resize_handle()}
+              title={m.legend_resize_handle()}
+              onpointerdown={(event: PointerEvent) =>
+                handleFrameResizePointerDown(event, item, edge)}
+              ondblclick={(event: MouseEvent) => resetFrameWidth(event, item)}
+            ></div>
+          {/each}
+        {/if}
       </div>
     {/each}
   </div>
@@ -981,6 +1126,43 @@
 
   .legend-overlay:not(.inline) .legend-container:hover {
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+  }
+
+  .legend-resize-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: calc(8px / var(--legend-page-scale));
+    cursor: ew-resize;
+    touch-action: none;
+    opacity: 0;
+  }
+
+  .legend-resize-w {
+    left: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-e {
+    right: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-edge::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(8px / var(--legend-page-scale));
+    height: calc(8px / var(--legend-page-scale));
+    box-sizing: border-box;
+    background: white;
+    border: calc(2px / var(--legend-page-scale)) solid
+      var(--cds-interactive-01, #0072c3);
+    border-radius: 2px;
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  .legend-overlay:not(.inline) .legend-container:hover .legend-resize-edge {
+    opacity: 1;
   }
 
   .legend-container.dragging {

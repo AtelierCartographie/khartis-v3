@@ -44,8 +44,7 @@ import { selectBasemapJoinKeyColumns } from '../utils/basemap-join-key-columns.u
 import {
   sqlIdentifier,
   sqlString,
-  sqlNamePart,
-  sqlTempName
+  sqlNamePart
 } from '$lib/features/commons/utils/sql.utils';
 import type { DuckClient } from '../duck';
 import { CATALOG_ATTRIBUTES_TABLE } from './geo-detection-ops';
@@ -141,6 +140,9 @@ const pendingSimilarityCacheBuilds = new Map<
  * for would silently vanish on the next stats refresh.
  */
 const fullFuzzyPassRequests = new Set<string>();
+// Basemap values the user picked for source values, per column. They stand in
+// for the scored matches, so the source data keeps its own values.
+const joinCorrectionsByColumn = new Map<string, Record<string, string>>();
 
 function getColumnKey(
   datasetTable: string,
@@ -379,6 +381,19 @@ async function ensureSimilarityCached(
       await ensureBasemapAttributesLoaded(Duck);
     }
 
+    const correctionRows = Object.entries(
+      attributesTable === CATALOG_ATTRIBUTES_TABLE
+        ? (joinCorrectionsByColumn.get(
+            getColumnKey(dataset.tableName, geoColumn)
+          ) ?? {})
+        : {}
+    )
+      .map(
+        ([original, corrected]) =>
+          `(${sqlString(original)}, ${sqlString(corrected)})`
+      )
+      .join(', ');
+
     // Build the similarity cache in two phases:
     // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
     //          Cap rows per source value and basemap so broad codes such as
@@ -408,6 +423,38 @@ async function ensureSimilarityCached(
         SELECT DISTINCT original_name, source_dup_count, normalized_name
         FROM source_data
       ),
+      corrections AS (
+        ${
+          correctionRows
+            ? `SELECT * FROM (VALUES ${correctionRows}) AS k(original_name, corrected)`
+            : 'SELECT NULL::VARCHAR AS original_name, NULL::VARCHAR AS corrected WHERE FALSE'
+        }
+      ),
+      -- A corrected value matches the basemap value the user picked, exactly,
+      -- instead of what scoring finds.
+      corrected_matches AS (
+        SELECT
+          c.original_name,
+          c.source_dup_count,
+          1.0 AS match_score,
+          'exact' AS typo_match,
+          ba.id AS match_id,
+          ba.raw AS match_raw,
+          ba.variant AS match_variant,
+          ba.basemap AS match_basemap,
+          ba.basemap_count AS match_basemap_count
+        FROM candidates c
+        JOIN corrections k ON k.original_name = c.original_name
+        JOIN ${sqlIdentifier(attributesTable)} ba ON ba.raw = k.corrected
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY c.original_name, ba.basemap
+          ORDER BY ba.id, ba.variant
+        ) = 1
+      ),
+      uncorrected AS (
+        SELECT * FROM candidates
+        WHERE original_name NOT IN (SELECT original_name FROM corrections)
+      ),
       -- Phase 1: exact match via equi-join (hash join)
       exact_raw AS (
         SELECT
@@ -424,7 +471,7 @@ async function ensureSimilarityCached(
             PARTITION BY c.original_name, ba.basemap
             ORDER BY ba.id
           ) AS exact_rank
-        FROM candidates c
+        FROM uncorrected c
         JOIN ${sqlIdentifier(attributesTable)} ba ON c.normalized_name = ba.normalized
       ),
       exact_matches AS (
@@ -444,7 +491,7 @@ async function ensureSimilarityCached(
       -- Phase 2: fuzzy Jaro-Winkler only for candidates without any exact match
       unmatched AS (
         SELECT c.*
-        FROM candidates c
+        FROM uncorrected c
         WHERE NOT EXISTS (
           SELECT 1 FROM exact_matches e WHERE e.original_name = c.original_name
         )
@@ -502,6 +549,8 @@ async function ensureSimilarityCached(
         WHERE f.match_score > 0
       ),
       all_matches AS (
+        SELECT * FROM corrected_matches
+        UNION ALL
         SELECT * FROM exact_matches
         UNION ALL
         SELECT * FROM fuzzy_matches
@@ -1125,6 +1174,160 @@ export async function getTargetJoinedValues(
   );
 
   return (rows ?? []).flatMap((row) => (row.value ? [row.value] : []));
+}
+
+/**
+ * What the finalized join leaves on one basemap entity: one row joined,
+ * joined through a value to verify (`check` or `ambiguous`), several rows on
+ * the same entity, or no row at all.
+ */
+export type JoinTerritoryStatus = 'matched' | 'check' | 'duplicate' | 'no_data';
+
+export interface JoinTerritoryStatusOptions extends JoinGradingOptions {
+  /**
+   * Associations picked and not applied yet, by source value: the value joins
+   * that basemap value instead, or nothing when it is empty.
+   */
+  pendingMappings?: Record<string, string>;
+}
+
+export interface JoinTerritoryStatusRow {
+  territoryId: string;
+  territoryName: string;
+  status: JoinTerritoryStatus;
+  rowCount: number;
+  /** Distinct source values joined to the entity, first ones only. */
+  dataValues: string[];
+  valueCount: number;
+}
+
+const MAX_TERRITORY_DATA_VALUES = 3;
+
+/**
+ * Grade every entity of the joined basemap from the finalized table. Like the
+ * finalization it reads the whole table, so lifting a table filter changes
+ * nothing on the map; values to verify come from the grading the join panel
+ * shows.
+ */
+export async function getJoinTerritoryStatuses(
+  dataset: DuckDBDataset,
+  basemap: BasemapMetadata,
+  geoColumn: string,
+  Duck: DuckClient,
+  options: JoinTerritoryStatusOptions = {}
+): Promise<JoinTerritoryStatusRow[]> {
+  const basemapId = getBasemapAttributesId(basemap);
+  const pendingRows = Object.entries(options.pendingMappings ?? {})
+    .map(
+      ([dataValue, basemapValue]) =>
+        `(${sqlString(dataValue)}, ${sqlString(basemapValue)})`
+    )
+    .join(', ');
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const cacheTableName = await ensureSimilarityCached(
+    dataset,
+    geoColumn,
+    Duck,
+    'full'
+  );
+  const gradedTable = await ensureGradedMaterialized(
+    cacheTableName,
+    basemapId,
+    Duck,
+    options.excludedValues ?? []
+  );
+
+  const rows = (await Duck.query(
+    `WITH territories AS (
+      SELECT DISTINCT CAST(id AS VARCHAR) AS territory_id
+      FROM ${sqlIdentifier(CATALOG_ATTRIBUTES_TABLE)}
+      WHERE basemap = ${sqlString(basemapId)} AND id IS NOT NULL
+    ),
+    display_names AS (
+      ${buildDisplayNamesQuery(
+        CATALOG_ATTRIBUTES_TABLE,
+        basemapId,
+        getBasemapDisplayVariants(basemap)
+      )}
+    ),
+    pending AS (
+      ${
+        pendingRows
+          ? `SELECT * FROM (VALUES ${pendingRows}) AS p(data_value, basemap_value)`
+          : 'SELECT NULL::VARCHAR AS data_value, NULL::VARCHAR AS basemap_value WHERE FALSE'
+      }
+    ),
+    pending_targets AS (
+      SELECT p.data_value, MIN(CAST(a.id AS VARCHAR)) AS territory_id
+      FROM pending p
+      LEFT JOIN ${sqlIdentifier(CATALOG_ATTRIBUTES_TABLE)} a
+        ON a.basemap = ${sqlString(basemapId)} AND a.raw = p.basemap_value
+      GROUP BY p.data_value
+    ),
+    joined_rows AS (
+      SELECT
+        CASE
+          WHEN pt.data_value IS NOT NULL THEN pt.territory_id
+          ELSE CAST(t.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR)
+        END AS territory_id,
+        CAST(t.${sqlIdentifier(geoColumn)} AS VARCHAR) AS data_value,
+        g.status AS value_status
+      FROM ${sqlIdentifier(dataset.tableName)} t
+      LEFT JOIN ${sqlIdentifier(gradedTable)} g
+        ON CAST(t.${sqlIdentifier(geoColumn)} AS VARCHAR) = g.original_name
+      LEFT JOIN pending_targets pt
+        ON CAST(t.${sqlIdentifier(geoColumn)} AS VARCHAR) = pt.data_value
+      WHERE CASE
+        WHEN pt.data_value IS NOT NULL THEN pt.territory_id IS NOT NULL
+        ELSE t.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} IS NOT NULL
+      END
+    ),
+    per_territory AS (
+      SELECT
+        territory_id,
+        COUNT(*) AS row_count,
+        bool_or(value_status IN ('check', 'ambiguous')) AS needs_check,
+        list(DISTINCT data_value ORDER BY data_value) AS data_values
+      FROM joined_rows
+      GROUP BY territory_id
+    )
+    SELECT
+      t.territory_id,
+      COALESCE(CAST(n.raw AS VARCHAR), t.territory_id) AS territory_name,
+      CASE
+        WHEN p.territory_id IS NULL THEN 'no_data'
+        WHEN p.row_count > 1 THEN 'duplicate'
+        WHEN p.needs_check THEN 'check'
+        ELSE 'matched'
+      END AS status,
+      COALESCE(p.row_count, 0) AS row_count,
+      COALESCE(p.data_values[1:${MAX_TERRITORY_DATA_VALUES}], []) AS data_values,
+      COALESCE(len(p.data_values), 0) AS value_count
+    FROM territories t
+    LEFT JOIN display_names n ON CAST(n.id AS VARCHAR) = t.territory_id
+    LEFT JOIN per_territory p ON p.territory_id = t.territory_id
+    ORDER BY t.territory_id`,
+    { format: 'array' }
+  )) as Array<{
+    territory_id: string;
+    territory_name: string;
+    status: JoinTerritoryStatus;
+    row_count: number | bigint;
+    data_values: string[] | null;
+    value_count: number | bigint;
+  }>;
+
+  return (rows ?? []).map((row) => ({
+    territoryId: row.territory_id,
+    territoryName: row.territory_name,
+    status: row.status,
+    rowCount: Number(row.row_count),
+    dataValues: (row.data_values ?? []).filter(
+      (value): value is string => value !== null
+    ),
+    valueCount: Number(row.value_count)
+  }));
 }
 
 /** Per-basemap similarity scores; candidate share and basemap share use different scales. */
@@ -1762,6 +1965,28 @@ export async function getBasemapAttributeValues(
   return rows.map((r) => r.raw);
 }
 
+/** Each basemap entity's display name in the interface locale, by id. */
+export async function getBasemapDisplayNames(
+  basemap: BasemapMetadata,
+  Duck: DuckClient
+): Promise<Map<string, string>> {
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const rows = (await Duck.query(
+    `SELECT CAST(id AS VARCHAR) AS id, CAST(raw AS VARCHAR) AS name
+     FROM (${buildDisplayNamesQuery(
+       CATALOG_ATTRIBUTES_TABLE,
+       basemapId,
+       getBasemapDisplayVariants(basemap)
+     )})
+     WHERE id IS NOT NULL`,
+    { format: 'array' }
+  )) as Array<{ id: string; name: string }>;
+
+  return new Map((rows ?? []).map((row) => [row.id, row.name]));
+}
+
 export interface BasemapAlias {
   value: string;
   variant: string | null;
@@ -1772,8 +1997,16 @@ const FALLBACK_DISPLAY_VARIANTS: Record<'fr' | 'en', string[]> = {
   en: ['name_engl', 'name_fren']
 };
 
-function getBasemapDisplayVariants(basemap: BasemapMetadata): string[] {
-  const locale = getLocale() === 'fr' ? 'fr' : 'en';
+type DisplayLocale = 'fr' | 'en';
+
+function getInterfaceDisplayLocale(): DisplayLocale {
+  return getLocale() === 'fr' ? 'fr' : 'en';
+}
+
+function getBasemapDisplayVariants(
+  basemap: BasemapMetadata,
+  locale: DisplayLocale = getInterfaceDisplayLocale()
+): string[] {
   const configured =
     locale === 'fr'
       ? [basemap.display_id_fr, basemap.display_id_en]
@@ -1842,65 +2075,41 @@ export async function getBasemapAttributeAliasesByValue(
   return result;
 }
 
-export async function applyJoinCorrections(
+/**
+ * Records the basemap values the user picked for source values of a column:
+ * the next join reads them in place of the scored matches. A value corrected
+ * to itself goes back to scoring. The source data is left untouched.
+ */
+export function applyJoinCorrections(
   dataset: DuckDBDataset,
   geoColumn: string,
   corrections: Record<string, string>,
   Duck: DuckClient
-): Promise<void> {
+): void {
   const entries = Object.entries(corrections);
   if (entries.length === 0) return;
 
-  const valueRows = entries
-    .map(
-      ([original, corrected]) =>
-        `(${sqlString(original)}, ${sqlString(corrected)})`
-    )
-    .join(', ');
-
-  const correctionsTable = sqlTempName('corrections');
-
-  try {
-    await Duck.query(
-      `CREATE TEMP TABLE ${sqlIdentifier(correctionsTable)} (original VARCHAR, corrected VARCHAR)`
-    );
-    await Duck.query(
-      `INSERT INTO ${sqlIdentifier(correctionsTable)} VALUES ${valueRows}`
-    );
-
-    await Duck.mutate(
-      dataset.tableName,
-      `
-      UPDATE ${sqlIdentifier(dataset.tableName)}
-      SET ${sqlIdentifier(geoColumn)} = c.corrected
-      FROM ${sqlIdentifier(correctionsTable)} c
-      WHERE ${sqlIdentifier(geoColumn)} = c.original
-    `
-    );
-  } finally {
-    await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(correctionsTable)}`);
+  const columnKey = getColumnKey(dataset.tableName, geoColumn);
+  const merged = { ...(joinCorrectionsByColumn.get(columnKey) ?? {}) };
+  for (const [original, corrected] of entries) {
+    if (corrected === original) delete merged[original];
+    else merged[original] = corrected;
   }
+  joinCorrectionsByColumn.set(columnKey, merged);
+
+  invalidateSimilarityCache(dataset.tableName, Duck);
 }
 
-async function applyCachedJoinAssociation(
-  datasetTableName: string,
-  geoColumn: string,
+/**
+ * One display name per entity id: the display variant names the entity
+ * whatever value matched it (a code, an alias); a basemap without one keeps the
+ * matched value.
+ */
+function buildDisplayNamesQuery(
+  attributesTable: string,
   basemapId: string,
-  cacheTableName: string,
-  Duck: DuckClient,
-  excludedValues: string[] = [],
-  displayVariants: string[] = []
-): Promise<void> {
-  const excludeClause = await getJoinColumnExcludeClause(
-    datasetTableName,
-    Duck
-  );
-  const excludedValuesClause =
-    excludedValues.length > 0
-      ? `AND original_name NOT IN (${excludedValues.map(sqlString).join(', ')})`
-      : '';
-  // The display variant names the entity whatever value matched it (a code,
-  // an alias); a basemap without one keeps the matched value.
+  displayVariants: string[]
+): string {
   const displayRank =
     displayVariants.length > 0
       ? `CASE ${displayVariants
@@ -1911,19 +2120,46 @@ async function applyCachedJoinAssociation(
           .join(' ')} END`
       : 'NULL';
 
+  return `SELECT id, raw
+      FROM (
+        SELECT id, raw, ${displayRank} AS display_rank
+        FROM ${sqlIdentifier(attributesTable)}
+        WHERE basemap = ${sqlString(basemapId)} AND raw IS NOT NULL
+      )
+      WHERE display_rank IS NOT NULL
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY display_rank, raw) = 1`;
+}
+
+async function applyCachedJoinAssociation(
+  datasetTableName: string,
+  geoColumn: string,
+  basemapId: string,
+  cacheTableName: string,
+  Duck: DuckClient,
+  excludedValues: string[],
+  basemap: BasemapMetadata
+): Promise<void> {
+  const excludeClause = await getJoinColumnExcludeClause(
+    datasetTableName,
+    Duck
+  );
+  const excludedValuesClause =
+    excludedValues.length > 0
+      ? `AND original_name NOT IN (${excludedValues.map(sqlString).join(', ')})`
+      : '';
+
+  const interfaceNamesAlias =
+    getInterfaceDisplayLocale() === 'fr' ? 'd_fr' : 'd_en';
+
   await Duck.mutate(
     datasetTableName,
     `
     CREATE OR REPLACE TABLE ${sqlIdentifier(datasetTableName)} AS
-    WITH display_names AS (
-      SELECT id, raw
-      FROM (
-        SELECT id, raw, ${displayRank} AS display_rank
-        FROM basemap_attributes
-        WHERE basemap = ${sqlString(basemapId)} AND raw IS NOT NULL
-      )
-      WHERE display_rank IS NOT NULL
-      QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY display_rank, raw) = 1
+    WITH display_names_fr AS (
+      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, getBasemapDisplayVariants(basemap, 'fr'))}
+    ),
+    display_names_en AS (
+      ${buildDisplayNamesQuery(CATALOG_ATTRIBUTES_TABLE, basemapId, getBasemapDisplayVariants(basemap, 'en'))}
     ),
     all_basemap_matches AS (
       SELECT
@@ -1966,12 +2202,16 @@ async function applyCachedJoinAssociation(
       j.id AS "${JOINED_BASEMAP_COLUMN.ID}",
       j.label AS "${JOINED_BASEMAP_COLUMN.LABEL}",
       j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}",
-      COALESCE(d.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME}"
+      COALESCE(${interfaceNamesAlias}.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME}",
+      COALESCE(d_fr.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME_FR}",
+      COALESCE(d_en.raw, j.label) AS "${JOINED_BASEMAP_COLUMN.NAME_EN}"
     FROM ${sqlIdentifier(datasetTableName)} t
     LEFT JOIN ranked_join j
       ON t.${sqlIdentifier(geoColumn)} = j.geoname
-    LEFT JOIN display_names d
-      ON d.id = j.id
+    LEFT JOIN display_names_fr d_fr
+      ON d_fr.id = j.id
+    LEFT JOIN display_names_en d_en
+      ON d_en.id = j.id
   `,
     { preserveJoinSimilarity: true }
   );
@@ -2033,7 +2273,7 @@ export async function finalizeJoin(
     cacheTableName,
     Duck,
     options.excludedValues ?? [],
-    getBasemapDisplayVariants(basemap)
+    basemap
   );
 
   perfMeasure(PERF_PHASE.JOIN_FINALIZE);

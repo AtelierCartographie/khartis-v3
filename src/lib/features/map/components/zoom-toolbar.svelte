@@ -4,6 +4,7 @@
     Add,
     Document,
     Earth,
+    FitToScreen,
     Subtract,
     ZoomReset
   } from 'carbon-icons-svelte';
@@ -22,8 +23,8 @@
   import { zoomModeStore } from '../../commons/stores/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
   import {
-    detectApplePlatform,
-    getZoomShortcutModifiers
+    getShortcut,
+    getPrimaryKeyLabel
   } from '../../commons/utils/keyboard-shortcuts.utils';
   import {
     MAP_ZOOM_INPUT_STEP,
@@ -55,7 +56,12 @@
     bad: m.deck_debug_metric_gpu_state_bad
   };
 
-  const zoomShortcutModifiers = getZoomShortcutModifiers(detectApplePlatform());
+  const zoomShortcuts = {
+    zoomIn: getPrimaryKeyLabel('+'),
+    zoomOut: getPrimaryKeyLabel('-'),
+    fit: getPrimaryKeyLabel('0'),
+    actualSize: getPrimaryKeyLabel('1')
+  };
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
   const showDeckDebugPanel = $derived(isDeckDebugEnabled());
@@ -123,15 +129,10 @@
     fitActiveMode();
   }
 
-  function tabTitle(index: number, isActive: boolean): string | undefined {
-    if (!isActive) return undefined;
-    return m.zoom_tab_double_click_hint(zoomShortcutModifiers);
-  }
-
   const currentZoomValue = $derived(
     activeTabIndex === 0
       ? mapInstanceStore.zoomLevel
-      : globalState.zoom.pageZoomLevel
+      : Math.round(globalState.zoom.pageZoomScale * 100)
   );
   const activeMinZoomPercent = $derived(
     activeTabIndex === 0 ? MIN_MAP_ZOOM_PERCENT : globalState.zoom.minPageZoom
@@ -149,7 +150,7 @@
     if (activeTabIndex === 0) {
       mapInstanceStore.setZoomPercent(clamped);
     } else {
-      globalActions.setPageZoom(clamped);
+      globalActions.setPageZoomPercent(clamped);
     }
   }
 
@@ -339,16 +340,18 @@
       items={zoomItems}
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
+      tabTitle={() => m.zoom_mode_toggle_hint()}
+      tabShortcut={() => getShortcut('zoomMode')}
+      tooltipPosition={zoomButtonTooltipPosition}
+      groupTooltip
       ondblclick={handleTabDoubleClick}
-      tabTitle={tabTitle}
-      tooltipPosition="top"
       className="zoom-mode-tabs"
       activeClass="active"
       fullWidthClass="full-width"
-      hideInactiveLabel={true}
+      hideInactiveLabel={false}
     />
 
-    <div class="zoom-section" title={m.zoom_reset_title(zoomShortcutModifiers)}>
+    <div class="zoom-section">
       <div class="zoom-value">
         <input
           id="khartis-zoom-toolbar-input"
@@ -371,8 +374,20 @@
           kind="ghost"
           size="small"
           class="zoom-button"
-          icon={ZoomReset}
-          iconDescription={m.zoom_reset()}
+          icon={activeTabIndex === 0 ? ZoomReset : FitToScreen}
+          iconDescription={activeTabIndex === 0
+            ? m.zoom_reset()
+            : m.zoom_fit_page()}
+          shortcut={zoomShortcuts.fit}
+          tooltipLines={activeTabIndex === 0
+            ? undefined
+            : [
+                { text: m.zoom_fit_page(), shortcut: zoomShortcuts.fit },
+                {
+                  text: m.zoom_actual_size(),
+                  shortcut: zoomShortcuts.actualSize
+                }
+              ]}
           tooltipPosition={zoomButtonTooltipPosition}
           on:click={fitActiveMode}
         />
@@ -383,6 +398,7 @@
           class="zoom-button"
           icon={Subtract}
           iconDescription={m.zoom_out()}
+          shortcut={zoomShortcuts.zoomOut}
           tooltipPosition={zoomButtonTooltipPosition}
           on:click={handleZoomOut}
         />
@@ -393,6 +409,7 @@
           class="zoom-button"
           icon={Add}
           iconDescription={m.zoom_in()}
+          shortcut={zoomShortcuts.zoomIn}
           tooltipPosition={zoomButtonTooltipPosition}
           on:click={handleZoomIn}
         />
@@ -684,8 +701,8 @@
   .zoom-controls::before {
     content: '';
     position: absolute;
-    top: 8px;
-    bottom: 8px;
+    top: 0;
+    bottom: 0;
     width: 1px;
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
@@ -712,12 +729,21 @@
     box-shadow: inset 1px 0 0 var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:hover),
-  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:active),
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:hover) {
+    background: var(--cds-layer-hover-01, #e8e8e8);
+  }
+
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:active) {
+    background: var(--cds-layer-active-01, #c6c6c6);
+  }
+
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn:focus) {
-    background: transparent;
-    box-shadow: none;
     outline: none;
+  }
+
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:focus-visible) {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
   }
 
   @media (min-width: 1024px) and (max-height: 720px) {
@@ -738,7 +764,7 @@
     }
 
     .zoom-toolbar {
-      width: 150px;
+      width: 172px;
     }
 
     .zoom-section {
@@ -746,6 +772,11 @@
     }
 
     .zoom-value {
+      display: none;
+    }
+
+    /* Without the zoom value beside it, the reset button needs no divider. */
+    .zoom-controls::before {
       display: none;
     }
 

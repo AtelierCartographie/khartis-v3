@@ -22,6 +22,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { untrack } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { basemapService } from '../services/basemap.service.svelte';
+import { isOSMBasemapFileId } from '../services/osm-tile.service';
 import { densityLoadingStore } from '../stores/density-loading.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
@@ -730,7 +731,14 @@ export function useMapDisplayData(
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
         await loadGPSData(datasetId, duckDBDataset.id, generation);
         await loadDensityTableForDisplay(dataset, generation);
-      } else if (joinedBasemap && tableName) {
+      } else if (
+        joinedBasemap &&
+        tableName &&
+        // A dataset joined to tiles is drawn from its GPS columns: during a
+        // restore, its GPS mode may not be back yet, and the tiles have no
+        // geometry to join.
+        !isOSMBasemapFileId(joinedBasemap)
+      ) {
         await loadJoinedBasemap(dataset, joinedBasemap, tableName, generation);
         await loadDensityTableForDisplay(dataset, generation);
       } else {

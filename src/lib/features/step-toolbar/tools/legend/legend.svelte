@@ -1,4 +1,7 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
+  import BackgroundSettings from '$lib/features/commons/components/background-settings.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
@@ -11,10 +14,14 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import { TableOfContents, TextFont } from 'carbon-icons-svelte';
-  import { Select, SelectItem, TextArea } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    Select,
+    SelectItem,
+    TextArea
+  } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     normalizeFontFamily,
@@ -74,7 +81,14 @@
       (item) => !item.primitive || !hasNothingToDraw(item.id)
     )
   );
-  const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
+  // Without a visualization there is no legend to style: the panel only says
+  // to create one first.
+  const hasVisualizations = $derived(
+    visualizationStore.visualizations.length > 0
+  );
+  const isContentTab = $derived(
+    !hasVisualizations || legendState.activeTab === LegendTab.CONTENT
+  );
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
@@ -134,9 +148,6 @@
 
   const backgroundEnabled = $derived(legendState.style.background.enabled);
   const bgColor = $derived(legendState.style.background.color);
-  const bgHex = $derived(
-    hslToHex(bgColor.hue, bgColor.saturation, bgColor.lightness)
-  );
   const textColor = $derived(legendState.style.textColor);
   const textColorHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
@@ -178,8 +189,7 @@
     }
   }
 
-  function handleFontFamilyChange(event: Event): void {
-    const nextFontFamily = (event.currentTarget as HTMLSelectElement).value;
+  function handleFontFamilyChange(nextFontFamily: string): void {
     localFontFamily = nextFontFamily;
 
     if (nextFontFamily !== legendState.style.fontFamily) {
@@ -313,247 +323,230 @@
   >
     <ToggleTabs
       size="md"
-      activeIndex={legendState.activeTab === LegendTab.CONTENT ? 0 : 1}
+      activeIndex={isContentTab ? 0 : 1}
       items={[
         { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },
-        { icon: TextFont, label: m.legend_style(), iconSize: 16 }
+        {
+          icon: TextFont,
+          label: m.legend_style(),
+          iconSize: 16,
+          disabled: !hasVisualizations
+        }
       ]}
       onchange={(index) =>
         handleTabChange(index === 0 ? LegendTab.CONTENT : LegendTab.STYLE)}
     />
   </div>
 
-  {#if isContentTab}
-    <div id="legend-content-panel" class="legend-panel" role="tabpanel">
-      <div class="expandable-stack">
-        {#each items as item (item.id)}
-          {@const segments = getRenderedLegendSegments(item.id)}
-          {@const layout = resolveLegendItemLayout(item)}
-          <ExpandableSection
-            title={getItemHeaderTitle(item)}
-            showToggle={true}
-            toggleChecked={item.visible}
-            open={isItemExpanded(item.id)}
-            scrollIntoViewOnOpen
-            onToggle={(expanded) => setItemExpanded(item.id, expanded)}
-            onToggleChange={(checked) =>
-              handleItemVisibilityChange(item, checked)}
-          >
-            <div class="legend-fields">
-              {#each TEXT_FIELDS as field (field.key)}
-                <TextArea
-                  labelText={field.label()}
-                  placeholder={field.placeholder()}
-                  id={`${item.id}-${field.key}`}
-                  rows={Math.max(1, item[field.key].split('\n').length)}
-                  value={item[field.key]}
-                  on:input={(e: Event) =>
-                    updateItemField(item.id, field.key, getTextAreaValue(e))}
-                />
-              {/each}
-
-              {#if item.primitive && segments.some((segment) => segment.kind === 'unique')}
-                <TextArea
-                  labelText={m.legend_entry_label()}
-                  placeholder={ENTRY_LABEL_PLACEHOLDERS[item.primitive]()}
-                  id={`${item.id}-entry-label`}
-                  rows={1}
-                  value={item.entryLabel ?? ''}
-                  on:input={(e: Event) =>
-                    updateEntryLabel(item, getTextAreaValue(e))}
-                />
-              {/if}
-
-              {#if segments.some((segment) => segment.kind === 'class-bar')}
-                <div class="legend-layout-group">
-                  <SimpleRadioGroup
-                    name={`${item.id}-orientation`}
-                    legendText={m.legend_layout()}
-                    items={[
-                      {
-                        value: 'horizontal',
-                        labelText: m.legend_orientation_horizontal()
-                      },
-                      {
-                        value: 'vertical',
-                        labelText: m.legend_orientation_vertical()
-                      }
-                    ]}
-                    selected={layout.classBarOrientation === 'vertical'
-                      ? 'vertical'
-                      : 'horizontal'}
-                    onchange={(orientation) =>
-                      updateItemLayout(item, {
-                        classBarOrientation:
-                          orientation === 'vertical' ? 'vertical' : 'horizontal'
-                      })}
+  <SwitchedContent value={isContentTab}>
+    {#if isContentTab}
+      <div id="legend-content-panel" class="legend-panel" role="tabpanel">
+        {#if !hasVisualizations}
+          <div class="kh-notification-stack legend-empty-notice">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              subtitle={m.legend_no_visualization()}
+            />
+          </div>
+        {/if}
+        <div class="expandable-stack">
+          {#each items as item (item.id)}
+            {@const segments = getRenderedLegendSegments(item.id)}
+            {@const layout = resolveLegendItemLayout(item)}
+            <ExpandableSection
+              title={getItemHeaderTitle(item)}
+              showToggle={true}
+              toggleChecked={item.visible}
+              open={isItemExpanded(item.id)}
+              scrollIntoViewOnOpen
+              onToggle={(expanded) => setItemExpanded(item.id, expanded)}
+              onToggleChange={(checked) =>
+                handleItemVisibilityChange(item, checked)}
+            >
+              <div class="legend-fields">
+                {#each TEXT_FIELDS as field (field.key)}
+                  <TextArea
+                    labelText={field.label()}
+                    placeholder={field.placeholder()}
+                    id={`${item.id}-${field.key}`}
+                    rows={Math.max(1, item[field.key].split('\n').length)}
+                    value={item[field.key]}
+                    on:input={(e: Event) =>
+                      updateItemField(item.id, field.key, getTextAreaValue(e))}
                   />
-                  {#if layout.classBarOrientation === 'vertical'}
+                {/each}
+
+                {#if item.primitive && segments.some((segment) => segment.kind === 'unique')}
+                  <TextArea
+                    labelText={m.legend_entry_label()}
+                    placeholder={ENTRY_LABEL_PLACEHOLDERS[item.primitive]()}
+                    id={`${item.id}-entry-label`}
+                    rows={1}
+                    value={item.entryLabel ?? ''}
+                    on:input={(e: Event) =>
+                      updateEntryLabel(item, getTextAreaValue(e))}
+                  />
+                {/if}
+
+                {#if segments.some((segment) => segment.kind === 'class-bar')}
+                  <div class="legend-layout-group">
                     <SimpleRadioGroup
-                      name={`${item.id}-order`}
-                      legendText={m.legend_order()}
+                      name={`${item.id}-orientation`}
+                      legendText={m.legend_layout()}
                       items={[
                         {
-                          value: 'ascending',
-                          labelText: m.legend_order_ascending()
+                          value: 'horizontal',
+                          labelText: m.legend_orientation_horizontal()
                         },
                         {
-                          value: 'descending',
-                          labelText: m.legend_order_descending()
+                          value: 'vertical',
+                          labelText: m.legend_orientation_vertical()
                         }
                       ]}
-                      selected={layout.lowAtBottom ? 'descending' : 'ascending'}
-                      onchange={(order) =>
+                      selected={layout.classBarOrientation === 'vertical'
+                        ? 'vertical'
+                        : 'horizontal'}
+                      onchange={(orientation) =>
                         updateItemLayout(item, {
-                          lowAtBottom: order === 'descending'
+                          classBarOrientation:
+                            orientation === 'vertical'
+                              ? 'vertical'
+                              : 'horizontal'
                         })}
                     />
-                  {/if}
-                  <div class="legend-switch-row">
-                    <span class="legend-field-label"
-                      >{m.legend_proportional_classes()}</span
-                    >
-                    <Switch
-                      labelText={m.legend_proportional_classes()}
-                      hideLabel
-                      size="sm"
-                      toggled={layout.proportionalClasses}
-                      labelA={m.no()}
-                      labelB={m.yes()}
-                      showStateLabel
-                      onchange={(toggled) =>
-                        updateItemLayout(item, {
-                          proportionalClasses: toggled
-                        })}
-                    />
+                    {#if layout.classBarOrientation === 'vertical'}
+                      <SimpleRadioGroup
+                        name={`${item.id}-order`}
+                        legendText={m.legend_order()}
+                        items={[
+                          {
+                            value: 'ascending',
+                            labelText: m.legend_order_ascending()
+                          },
+                          {
+                            value: 'descending',
+                            labelText: m.legend_order_descending()
+                          }
+                        ]}
+                        selected={layout.lowAtBottom
+                          ? 'descending'
+                          : 'ascending'}
+                        onchange={(order) =>
+                          updateItemLayout(item, {
+                            lowAtBottom: order === 'descending'
+                          })}
+                      />
+                    {/if}
+                    <div class="legend-switch-row">
+                      <span class="legend-field-label"
+                        >{m.legend_proportional_classes()}</span
+                      >
+                      <Switch
+                        labelText={m.legend_proportional_classes()}
+                        hideLabel
+                        size="sm"
+                        toggled={layout.proportionalClasses}
+                        labelA={m.no()}
+                        labelB={m.yes()}
+                        showStateLabel
+                        onchange={(toggled) =>
+                          updateItemLayout(item, {
+                            proportionalClasses: toggled
+                          })}
+                      />
+                    </div>
                   </div>
-                </div>
-              {/if}
+                {/if}
 
-              {#if segments.some((segment) => segment.kind === 'entries')}
-                <SliderWithInput
-                  label={m.legend_entry_spacing()}
-                  value={Math.round(layout.entrySpacing * 100)}
-                  min={0}
-                  max={100}
-                  step={5}
-                  showMinMax
-                  minLabel="0"
-                  maxLabel="100"
-                  inputWidth="72px"
-                  showSteppers={false}
-                  onchange={(value) =>
-                    updateItemLayout(item, { entrySpacing: value })}
-                />
-              {/if}
-            </div>
-          </ExpandableSection>
-        {/each}
-      </div>
-    </div>
-  {:else}
-    <div
-      id="legend-style-panel"
-      class="legend-panel legend-style-panel"
-      role="tabpanel"
-    >
-      <p class="legend-description">{m.legend_common_settings()}</p>
-
-      <div class="legend-style-section">
-        <div class="legend-text-style-row">
-          <Select
-            id={DOM_IDS.FONT_SELECT}
-            labelText={m.legend_font()}
-            selected={localFontFamily}
-            on:change={handleFontFamilyChange}
-            size="sm"
-          >
-            {#each AVAILABLE_FONTS as font (font)}
-              <SelectItem value={font} text={font} />
-            {/each}
-          </Select>
-          <Select
-            id={DOM_IDS.FONT_SIZE}
-            labelText={m.legend_font_size()}
-            selected={String(localFontSize)}
-            on:change={handleFontSizeChange}
-            size="sm"
-          >
-            {#each fontSizeOptions as sizeOption (sizeOption)}
-              <SelectItem value={sizeOption} text={sizeOption} />
-            {/each}
-          </Select>
+                {#if segments.some((segment) => segment.kind === 'entries')}
+                  <SliderWithInput
+                    label={m.legend_entry_spacing()}
+                    value={Math.round(layout.entrySpacing * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    inputWidth="72px"
+                    showSteppers={false}
+                    onchange={(value) =>
+                      updateItemLayout(item, { entrySpacing: value })}
+                  />
+                {/if}
+              </div>
+            </ExpandableSection>
+          {/each}
         </div>
-
-        <ColorPicker
-          triggerLabel={m.legend_text_color()}
-          hex={textColorHex}
-          hue={textColor.hue}
-          saturation={textColor.saturation}
-          lightness={textColor.lightness}
-          onValidate={({
-            hue,
-            saturation,
-            lightness
-          }: ColorPickerValidateEvent) => {
-            handleTextColorChange({ hue, saturation, lightness });
-          }}
-        />
       </div>
+    {:else}
+      <div
+        id="legend-style-panel"
+        class="legend-panel legend-style-panel"
+        role="tabpanel"
+      >
+        <p class="legend-description">{m.legend_common_settings()}</p>
 
-      <div class="legend-divider"></div>
+        <div class="legend-style-section">
+          <div class="legend-text-style-row">
+            <FontFamilySelect
+              id={DOM_IDS.FONT_SELECT}
+              labelText={m.legend_font()}
+              value={localFontFamily}
+              fallback={CARTOGRAPHIC_FONT_FAMILY}
+              onchange={handleFontFamilyChange}
+            />
+            <Select
+              id={DOM_IDS.FONT_SIZE}
+              labelText={m.legend_font_size()}
+              selected={String(localFontSize)}
+              on:change={handleFontSizeChange}
+              size="sm"
+            >
+              {#each fontSizeOptions as sizeOption (sizeOption)}
+                <SelectItem value={sizeOption} text={sizeOption} />
+              {/each}
+            </Select>
+          </div>
 
-      <div class="legend-background-row">
-        <div class="legend-background-toggle">
-          <span class="legend-field-label">{m.legend_background()}</span>
-          <Switch
-            labelText={m.legend_background()}
-            hideLabel
-            size="sm"
-            toggled={backgroundEnabled}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={handleBackgroundEnabledChange}
+          <ColorPicker
+            triggerLabel={m.legend_text_color()}
+            hex={textColorHex}
+            hue={textColor.hue}
+            saturation={textColor.saturation}
+            lightness={textColor.lightness}
+            onValidate={({
+              hue,
+              saturation,
+              lightness
+            }: ColorPickerValidateEvent) => {
+              handleTextColorChange({ hue, saturation, lightness });
+            }}
           />
         </div>
 
-        <ColorPicker
-          triggerLabel={m.legend_background_color()}
-          hex={bgHex}
-          hue={bgColor.hue}
-          saturation={bgColor.saturation}
-          lightness={bgColor.lightness}
-          disabled={!backgroundEnabled}
-          onValidate={({
-            hue,
-            saturation,
-            lightness
-          }: ColorPickerValidateEvent) => {
-            handleBackgroundColorChange({ hue, saturation, lightness });
-          }}
+        <div class="legend-divider"></div>
+
+        <BackgroundSettings
+          enabled={backgroundEnabled}
+          color={bgColor}
+          opacity={localOpacity}
+          shadow={legendState.style.background.shadow}
+          onEnabledChange={handleBackgroundEnabledChange}
+          onColorChange={handleBackgroundColorChange}
+          onOpacityChange={handleOpacityChange}
+          onShadowChange={(shadow) =>
+            legendActions.updateBackground({ shadow })}
         />
       </div>
-
-      <SliderWithInput
-        label={m.legend_opacity()}
-        bind:value={localOpacity}
-        disabled={!backgroundEnabled}
-        min={0}
-        max={100}
-        step={1}
-        showMinMax
-        minLabel="0"
-        maxLabel="100"
-        inputWidth="72px"
-        showSteppers={false}
-        onchange={handleOpacityChange}
-      />
-    </div>
-  {/if}
+    {/if}
+  </SwitchedContent>
 </div>
 
 <style>
+  .legend-empty-notice :global(.bx--inline-notification) {
+    max-width: none;
+  }
+
   .legend-tool {
     display: flex;
     flex-direction: column;
@@ -598,28 +591,10 @@
     gap: var(--cds-spacing-02);
   }
 
-  .legend-background-row {
-    display: grid;
-    grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
-    gap: var(--cds-spacing-05);
-    align-items: end;
-  }
-
   @media (max-width: 480px) {
     .legend-text-style-row {
       grid-template-columns: 1fr;
     }
-
-    .legend-background-row {
-      grid-template-columns: 1fr;
-      gap: var(--cds-spacing-03);
-    }
-  }
-
-  .legend-background-toggle {
-    display: flex;
-    flex-direction: column;
-    gap: var(--kh-gap-label);
   }
 
   .legend-field-label {
@@ -653,11 +628,6 @@
 
   :global(#khartis-legend-tool .bx--label) {
     margin-bottom: 8px;
-  }
-
-  :global(#khartis-legend-tool .legend-background-toggle .kh-switch-native) {
-    gap: var(--cds-spacing-03);
-    min-height: var(--kh-size-sm);
   }
 
   :global(#khartis-legend-tool .bx--text-area) {

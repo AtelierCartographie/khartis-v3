@@ -1,6 +1,9 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
+  import {
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import {
     SHAPE_TYPE,
     SHAPE_TYPES,
@@ -12,22 +15,15 @@
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    Column,
-    Grid,
-    Row,
-    Select,
-    SelectItem,
-    Slider
-  } from 'carbon-components-svelte';
+  import { Select, SelectItem } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
-  import SelectionHeader from './_shared/selection-header.svelte';
+  import { getOrdinalAnnotationName } from './_shared/annotation-name';
+  import AnnotationToolPanel from './_shared/annotation-tool-panel.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -67,12 +63,21 @@
     { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
   ]);
 
-  const selectedShapeName = $derived(
-    selectedShapeAnnotation
-      ? (shapes.find((shape) => shape.value === selectedShapeAnnotation.content)
-          ?.text ?? m.annotations_shape())
-      : undefined
-  );
+  const selectedShapeName = $derived.by(() => {
+    const item = selectedShapeAnnotation;
+    if (!item) return undefined;
+    const name =
+      shapes.find((shape) => shape.value === item.content)?.text ??
+      m.annotations_shape();
+    return getOrdinalAnnotationName(
+      annotationsState.items,
+      item,
+      name,
+      (candidate) =>
+        candidate.type === AnnotationKind.SHAPE &&
+        candidate.content === item.content
+    );
+  });
 
   function deleteSelectedShape(): void {
     if (selectedShapeAnnotation) {
@@ -153,11 +158,6 @@
     const value = (e.currentTarget as HTMLSelectElement).value;
     if (SHAPE_TYPES.includes(value as ShapeTypeValue)) {
       selectedShape = value as ShapeTypeValue;
-      if (selectedShapeAnnotation) {
-        annotationsActions.updateAnnotation(selectedShapeAnnotation.id, {
-          content: selectedShape
-        });
-      }
       if (isShapePlacementActive) {
         annotationsActions.beginPlacement(AnnotationKind.SHAPE, selectedShape);
       }
@@ -168,27 +168,6 @@
     annotationsActions.beginPlacement(AnnotationKind.SHAPE, selectedShape);
   }
 
-  function handleThicknessChange(e: CustomEvent<number>) {
-    if (effectiveStyle.strokeWidth === e.detail) return;
-    annotationsActions.applyStyle({ strokeWidth: e.detail });
-  }
-
-  function handleRotationChange(e: CustomEvent<number>) {
-    if ((effectiveStyle.rotation ?? 0) === e.detail) return;
-    annotationsActions.applyStyle({ rotation: e.detail });
-  }
-
-  function handleOpacityChange(e: CustomEvent<number>) {
-    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
-    annotationsActions.applyStyle({ opacity: e.detail });
-  }
-
-  function toggleDashed(on: boolean) {
-    annotationsActions.applyStyle({
-      strokeStyle: on ? 'dashed' : 'solid'
-    });
-  }
-
   function toOpacityPercent(value: number | undefined): number {
     if (value === undefined) {
       return 100;
@@ -197,214 +176,134 @@
   }
 </script>
 
-<Grid noGutter fullWidth>
-  <Row>
-    <Column>
-      <Select
-        size="sm"
-        labelText={m.shape()}
-        selected={selectedShape}
-        on:change={handleShapeChange}
-      >
-        {#each shapes as s (s.value)}
-          <SelectItem value={s.value} text={s.text} />
-        {/each}
-      </Select>
-    </Column>
-  </Row>
+<AnnotationToolPanel
+  help={m.annotations_shape_help()}
+  actionLabel={m.annotations_add_shape()}
+  actionIcon={Add}
+  onaction={handleAddShape}
+  instructions={m.annotations_shape_instructions()}
+  selectionLabel={m.annotations_selected_shape()}
+  selectedName={selectedShapeName}
+  deleteLabel={m.annotations_delete_shape()}
+  ondelete={deleteSelectedShape}
+>
+  {#snippet creationOptions()}
+    <Select
+      size="sm"
+      labelText={m.shape()}
+      selected={selectedShape}
+      disabled={!!selectedShapeAnnotation}
+      on:change={handleShapeChange}
+    >
+      {#each shapes as s (s.value)}
+        <SelectItem value={s.value} text={s.text} />
+      {/each}
+    </Select>
+  {/snippet}
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Button size="field" kind="primary" icon={Add} onclick={handleAddShape}>
-          {m.annotations_add_shape()}
-        </Button>
-        <p class="helper">{m.annotations_shape_helper()}</p>
-        {#if isVectorShape}
-          <p class="helper">{m.annotations_vector_helper()}</p>
-        {/if}
-      </div>
-    </Column>
-  </Row>
+  {#snippet properties()}
+    <SliderWithInput
+      label={m.thickness()}
+      value={effectiveStyle.strokeWidth || 2}
+      min={1}
+      max={10}
+      step={1}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(strokeWidth) => {
+        if (effectiveStyle.strokeWidth === strokeWidth) return;
+        annotationsActions.applyStyle({ strokeWidth });
+      }}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <SelectionHeader
-          title={selectedShapeAnnotation
-            ? m.annotations_selected_shape()
-            : m.annotations_new_shape()}
-          name={selectedShapeName}
-          deleteLabel={m.annotations_delete_shape()}
-          ondelete={selectedShapeAnnotation ? deleteSelectedShape : undefined}
-        />
-      </div>
-    </Column>
-  </Row>
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={effectiveStyle.strokeStyle === 'dashed'}
+      ontoggle={(on) =>
+        annotationsActions.applyStyle({ strokeStyle: on ? 'dashed' : 'solid' })}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.thickness()}
-          value={effectiveStyle.strokeWidth || 2}
-          min={1}
-          max={10}
-          step={1}
-          stepMultiplier={1}
-          on:input={handleThicknessChange}
-          on:change={handleThicknessChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
+    <ColorPicker
+      hex={strokeColor}
+      hue={hue}
+      saturation={saturation}
+      lightness={lightness}
+      triggerLabel={m.color()}
+      onValidate={({
+        hex,
+        hue,
+        saturation,
+        lightness
+      }: {
+        hex: string;
+        hue: number;
+        saturation: number;
+        lightness: number;
+      }) => {
+        strokeColor = hex;
+        annotationsActions.applyStyle({
+          strokeColor: hex,
+          color: { hue, saturation, lightness }
+        });
+      }}
+      onCancel={() => {}}
+    />
 
-  {#if !isVectorShape}
-    <Row>
-      <Column>
-        <div class="section">
-          <Slider
-            labelText={m.annotations_rotation()}
-            value={effectiveStyle.rotation ?? 0}
-            min={0}
-            max={359}
-            step={1}
-            stepMultiplier={15}
-            on:input={handleRotationChange}
-            on:change={handleRotationChange}
-            minLabel=""
-            maxLabel=""
-          />
-        </div>
-      </Column>
-    </Row>
-  {/if}
+    <SliderWithInput
+      label={m.opacity()}
+      value={toOpacityPercent(effectiveStyle.opacity)}
+      min={0}
+      max={100}
+      step={5}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(opacity) => {
+        if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
+        annotationsActions.applyStyle({ opacity });
+      }}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <div class="toggle-row">
-          <span class="toggle-label">{m.dashed()}</span>
-          <Switch
-            toggled={effectiveStyle.strokeStyle === 'dashed'}
-            labelText={m.dashed()}
-            hideLabel
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={toggleDashed}
-          />
-        </div>
-      </div>
-    </Column>
-  </Row>
+    {#if FILLED_SHAPES.includes(selectedShape)}
+      <ColorPicker
+        hex={fillColor}
+        hue={fillHue}
+        saturation={fillSaturation}
+        lightness={fillLightness}
+        triggerLabel={m.annotations_fill_color()}
+        onValidate={({
+          hex,
+          hue,
+          saturation,
+          lightness
+        }: {
+          hex: string;
+          hue: number;
+          saturation: number;
+          lightness: number;
+        }) => {
+          fillColor = hex;
+          annotationsActions.applyStyle({
+            fillColor: { hue, saturation, lightness }
+          });
+        }}
+        onCancel={() => {}}
+      />
+    {/if}
 
-  <Row>
-    <Column>
-      <div class="section">
-        <ColorPicker
-          hex={strokeColor}
-          hue={hue}
-          saturation={saturation}
-          lightness={lightness}
-          triggerLabel={m.color()}
-          onValidate={({
-            hex,
-            hue,
-            saturation,
-            lightness
-          }: {
-            hex: string;
-            hue: number;
-            saturation: number;
-            lightness: number;
-          }) => {
-            strokeColor = hex;
-            annotationsActions.applyStyle({
-              strokeColor: hex,
-              color: { hue, saturation, lightness }
-            });
-          }}
-          onCancel={() => {}}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  {#if FILLED_SHAPES.includes(selectedShape)}
-    <Row>
-      <Column>
-        <div class="section">
-          <ColorPicker
-            hex={fillColor}
-            hue={fillHue}
-            saturation={fillSaturation}
-            lightness={fillLightness}
-            triggerLabel={m.annotations_fill_color()}
-            onValidate={({
-              hex,
-              hue,
-              saturation,
-              lightness
-            }: {
-              hex: string;
-              hue: number;
-              saturation: number;
-              lightness: number;
-            }) => {
-              fillColor = hex;
-              annotationsActions.applyStyle({
-                fillColor: { hue, saturation, lightness }
-              });
-            }}
-            onCancel={() => {}}
-          />
-        </div>
-      </Column>
-    </Row>
-  {/if}
-
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.opacity()}
-          value={toOpacityPercent(effectiveStyle.opacity)}
-          min={0}
-          max={100}
-          step={5}
-          stepMultiplier={5}
-          on:input={handleOpacityChange}
-          on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
-</Grid>
-
-<style>
-  .section {
-    margin-top: var(--cds-spacing-05);
-  }
-
-  .helper {
-    margin: var(--cds-spacing-03) 0 0 0;
-    color: var(--cds-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .toggle-label {
-    color: var(--cds-text-secondary);
-    font-size: 0.875rem;
-  }
-</style>
+    {#if !isVectorShape}
+      <SliderWithInput
+        label={m.annotations_rotation()}
+        value={effectiveStyle.rotation ?? 0}
+        min={0}
+        max={359}
+        step={1}
+        inputWidth="72px"
+        showSteppers={false}
+        onchange={(rotation) => {
+          if ((effectiveStyle.rotation ?? 0) === rotation) return;
+          annotationsActions.applyStyle({ rotation });
+        }}
+      />
+    {/if}
+  {/snippet}
+</AnnotationToolPanel>

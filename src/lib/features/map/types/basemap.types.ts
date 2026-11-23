@@ -25,12 +25,22 @@ export interface ProjectionConfig {
   proj4?: string | null;
 }
 
+// Where a view name sits against its cell: in the top or bottom corner,
+// inside the cell or just outside its edge.
+export type ViewLabelPlacement =
+  'top-inside' | 'top-outside' | 'bottom-inside' | 'bottom-outside';
+
 export interface ProjectionPresetEntry {
   id: string;
   proj4: string;
   bounds: [[number, number], [number, number]];
   layout: { x: number; y: number; width: number; height: number };
   scaleMultiplier?: number;
+  // Territory shown in an inset view, drawn by the View names layer; a
+  // line break splits a long name.
+  name_fr?: string;
+  name_en?: string;
+  label_placement?: ViewLabelPlacement;
 }
 
 export interface ProjectionPreset {

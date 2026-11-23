@@ -18,6 +18,8 @@ export interface LegendItemLayout {
   lowAtBottom?: boolean;
   /** Gap kept between two entries of a list legend, in percent of the default. */
   entrySpacing?: number;
+  /** Width the frame was dragged to, in legend units; the content may exceed it. */
+  width?: number;
 }
 
 export interface LegendItem {
@@ -64,6 +66,7 @@ export interface LegendStyle {
       lightness: number;
     };
     opacity: number;
+    shadow: boolean;
   };
 }
 

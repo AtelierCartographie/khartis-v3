@@ -6,6 +6,8 @@ import type {
   PrimitiveFilter,
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { JoinCategoryTone } from '$lib/features/commons/types/data-tab.types';
+import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
 
 export type DeckDataRow = Record<string, unknown>;
 
@@ -21,11 +23,44 @@ export interface GeometryInfo {
 
 export type RGBColor = [number, number, number];
 
+export interface TooltipColumn {
+  label: string;
+  value: string;
+}
+
+export interface TooltipGlyph {
+  primitive: PrimitiveFilter;
+  channel: 'color' | 'size' | 'stroke' | 'label' | 'density';
+  /** The second variable of double proportional symbols, in its own color. */
+  secondary?: boolean;
+  /** A symbol's shape, the hovered row's own when shapes follow categories. */
+  shape?: ShapeType;
+  /** The color the hovered row is drawn in, when this glyph carries it. */
+  color?: string;
+  /** The row's outline color, for a glyph drawn as an outline. */
+  outline?: string;
+}
+
 export interface TooltipEntry {
   key: string;
   value: string;
   /** The column drives one of the hovered layer's visualizations. */
   isVizColumn?: boolean;
+  /** How the variable is drawn: by which primitive, through which channel. */
+  glyphs?: TooltipGlyph[];
+  /** A heading's value drawn as a join category count. */
+  tone?: JoinCategoryTone;
+  /** The fields of a `columns` entry, side by side like a join table row. */
+  columns?: TooltipColumn[];
+  /**
+   * A title (the entity, key, with an optional lighter name as value), a
+   * heading (key in the accent color, then its value), a subtitle (the key
+   * alone, muted), a divider, or fields side by side, instead of a key/value
+   * row.
+   */
+  role?: 'title' | 'heading' | 'subtitle' | 'divider' | 'columns';
+  /** Shown only once the inspector is pinned. */
+  pinnedOnly?: boolean;
 }
 
 export interface OrthographicMainViewState {
@@ -112,6 +147,8 @@ export interface LayerContext {
   textRepresentativePointGeometryInfo?: GeometryInfo;
 
   customProjection?: ProjectionLike;
+  /** Visible basemap land layers, whose outline labels keep clear of. */
+  labelOutlineTables?: ArrowTable[];
 
   primitiveOrder?: PrimitiveFilter[];
   densityTable?: ArrowTable;

@@ -2,7 +2,10 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { computeDivergingSplit } from '$lib/features/commons/services/classification.service';
+  import {
+    computeDivergingSplit,
+    isDivergingBreakpoint
+  } from '$lib/features/commons/services/classification.service';
   import PalettePopover from './palette-popover.svelte';
   import PaletteDropdown from './palette-dropdown.svelte';
   import CategoriesAspectPopover from './categories-aspect-popover.svelte';
@@ -14,11 +17,16 @@
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type { Palette, PaletteType } from './palette.constants';
   import {
+    buildClassPatternSvgBackground,
     findPaletteById,
     normalizePaletteId,
     PALETTE_TYPE,
     resolvePaletteForType
   } from './palette.constants';
+  import {
+    resolveClassificationPatternConfig,
+    resolveClassPatterns
+  } from '$lib/features/commons/services/pattern-palette.service';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
@@ -74,12 +82,45 @@
   let triggerRef = $state<HTMLDivElement>();
 
   const MAX_PREVIEW_SWATCHES = 20;
-  const displayColors = $derived.by(() => {
-    if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
-    const step = colors.length / MAX_PREVIEW_SWATCHES;
+  // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
+  const MAX_CATEGORICAL_PATTERN_COUNT = 24;
+
+  function sampleForPreview<T>(items: readonly T[]): T[] {
+    if (items.length <= MAX_PREVIEW_SWATCHES) return [...items];
+    const step = items.length / MAX_PREVIEW_SWATCHES;
     return Array.from(
       { length: MAX_PREVIEW_SWATCHES },
-      (_, i) => colors[Math.min(colors.length - 1, Math.round(i * step))]
+      (_, i) => items[Math.min(items.length - 1, Math.round(i * step))]
+    );
+  }
+
+  const displayColors = $derived(sampleForPreview(colors));
+
+  // The map draws the classification's motifs instead of its colors, so the
+  // trigger must show the same motifs (see resolveClassPatternPalette).
+  const displayPatternBackgrounds = $derived.by(() => {
+    if (categoriesVariant !== 'polygons') return undefined;
+    const config = resolveClassificationPatternConfig(classification);
+    if (!config) return undefined;
+
+    const count = categoriesMode
+      ? (classification?.labels?.length ?? colors.length)
+      : colors.length;
+    if (count === 0) return undefined;
+    if (categoriesMode && count > MAX_CATEGORICAL_PATTERN_COUNT) {
+      return undefined;
+    }
+
+    const patterns = resolveClassPatterns(
+      count,
+      config,
+      categoriesMode ? 'categorical' : 'sequential',
+      config.contrast,
+      inverted,
+      categoriesMode ? undefined : divergingSplit
+    );
+    return sampleForPreview(
+      patterns.map((pattern) => buildClassPatternSvgBackground(pattern))
     );
   });
   const dropdownPreviewCount = $derived(
@@ -99,9 +140,10 @@
       (colors.length || 5)
   );
   const divergingSplit = $derived.by(() => {
+    const breakpointValue = classification?.breakpointValue;
     if (
       paletteType !== 'diverging' ||
-      classification?.breakpointValue == null ||
+      !isDivergingBreakpoint(breakpointValue) ||
       resolvedClassCount <= 0
     ) {
       return undefined;
@@ -110,7 +152,7 @@
     return computeDivergingSplit(
       resolvedClassCount,
       classification?.breaks ?? [],
-      classification.breakpointValue
+      breakpointValue
     );
   });
 
@@ -168,9 +210,9 @@
   function handleDropdownSelect(palette: Palette, newColors: string[]) {
     onselect?.(palette);
     onClassificationChange?.({
-      colors: newColors,
+      colors: inverted ? [...newColors].reverse() : newColors,
       paletteId: palette.id,
-      inverted: false,
+      inverted,
       patternId: palette.patternId ?? undefined,
       patternParams: undefined,
       pattern: undefined
@@ -212,7 +254,11 @@
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
   ): PatternPaletteConfig | undefined {
-    if (!commonAspect.pattern || !commonAspect.patternConfig) {
+    if (
+      !commonAspect.pattern ||
+      !commonAspect.patternConfig ||
+      next.length > MAX_CATEGORICAL_PATTERN_COUNT
+    ) {
       return undefined;
     }
 
@@ -341,13 +387,19 @@
       aria-expanded={dropdownOpen}
     >
       <div class="palette-preview">
-        {#each displayColors as color, i (i)}
-          <div
-            class="palette-color"
-            style="background-color: {color}"
-            title={color}
-          ></div>
-        {/each}
+        {#if displayPatternBackgrounds}
+          {#each displayPatternBackgrounds as background, i (i)}
+            <div class="palette-color" style="background: {background}"></div>
+          {/each}
+        {:else}
+          {#each displayColors as color, i (i)}
+            <div
+              class="palette-color"
+              style="background-color: {color}"
+              title={color}
+            ></div>
+          {/each}
+        {/if}
       </div>
       <ChevronDown size={16} />
     </button>

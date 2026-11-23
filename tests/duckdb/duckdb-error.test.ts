@@ -24,6 +24,7 @@ const KINDS: DuckDBErrorKind[] = [
   'file-unreadable',
   'multiple-layers',
   'crs-not-found',
+  'unknown-crs',
   'thread-pool'
 ];
 
@@ -89,5 +90,11 @@ describe('DuckDB error classification', () => {
 
     expect(kindsOf(error)).toEqual(['csv']);
     expect(getCsvErrorLine(error)).toBe(1);
+  });
+
+  it('should classify an unknown CRS when a GEOMETRY type names a code PROJ does not know', async () => {
+    const error = await failureOf(`SELECT NULL::GEOMETRY('EPSG:999999')`);
+
+    expect(kindsOf(error)).toEqual(['unknown-crs']);
   });
 });

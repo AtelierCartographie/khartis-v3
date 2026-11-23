@@ -32,19 +32,19 @@
   import { Visualization as VizualisationTab } from '$lib/features/visualization-tab';
   import { mainToolbarActions } from './stores/main-toolbar.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { findDatasetAttachment } from '$lib/features/commons/utils/dataset-attachment.utils';
   import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     motionDuration,
+    PANEL_EASING,
+    PANEL_MOTION_MS,
     trackStepDirection
   } from '$lib/features/commons/utils/step-transition.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
   let panelElement = $state<HTMLElement | null>(null);
-
-  const PANEL_MOTION_MS = 300;
-  const PANEL_EASING = 'cubic-bezier(0.2, 0, 0.38, 0.9)';
 
   // Habillage slides the panel out. It keeps the width it had, rather than
   // the collapsed state the step sets, so that it does not shrink first.
@@ -227,7 +227,7 @@
     'panel-hidden': isPanelHidden
   })}
 >
-  <header class="flex sticky z-1000 border-b main-toolbar-header">
+  <header class="flex sticky z-1000 main-toolbar-header">
     {#if hasToolbarPanel}
       <IconButton
         kind="ghost"
@@ -280,7 +280,9 @@
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
     {@const canVisualizeNow =
-      dataTabStore.isReadyForVisualization || isAttachedTable}
+      (dataTabStore.isReadyForVisualization || isAttachedTable) &&
+      joinControlStore.getClearedValues(datasetsStore.selectedDatasetId ?? '')
+        .size === 0}
 
     <footer
       class={clsx(
@@ -470,10 +472,13 @@
     overflow: hidden;
   }
 
+  /* The tabs sit on the page background, like the app header; only the
+     selected tab takes the panel's colour. */
   .main-toolbar-header {
     top: 1px !important;
-    background-color: var(--cds-ui-01);
-    border-color: var(--cds-border-subtle-00);
+    background-color: var(--cds-ui-background);
+    /* A shadow rather than a border: the selected tab paints over it. */
+    box-shadow: inset 0 -1px 0 var(--cds-border-subtle-01);
   }
 
   /* The leaving and arriving steps share one cell while they swap. */

@@ -24,6 +24,8 @@
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+  import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
     BasemapMetadata,
@@ -96,7 +98,10 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
-  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+  import {
+    BasemapSource,
+    GeoreferenceType
+  } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/gps-columns.utils';
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
@@ -109,11 +114,27 @@
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const datasetIdForOrchestrator = $derived.by(() =>
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
+  // Undefined until the user or an interaction elsewhere decides: the
+  // catalogue tab then opens the suggestions when it has some.
+  let suggestionsOpen = $state<boolean | undefined>(undefined);
+  let joinSectionZone = $state<HTMLDivElement | null>(null);
+
+  // Working on the join means a basemap is chosen: the suggestions fold away.
+  $effect(() => {
+    const zone = joinSectionZone;
+    if (!zone) return;
+    const collapseSuggestions = () => {
+      suggestionsOpen = false;
+    };
+    zone.addEventListener('click', collapseSuggestions);
+    return () => zone.removeEventListener('click', collapseSuggestions);
+  });
   // Suggestions and join grading follow the table filters (see JoinRowScope).
   const tableFilterKey = $derived.by(() => {
     void duckDBDatasetsVersion;
@@ -368,8 +389,11 @@
   let previousLinkedVariableName: string | null = null;
   let loadSuggestionsAbortController: AbortController | null = null;
   let hasDismissedSuggestedBasemap = $state(false);
+  // A table holding coordinates may still be geolocated by its entities.
   const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
+    if (dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES)
+      return false;
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
@@ -700,6 +724,43 @@
     await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
   }
 
+  async function refinalizeGPSJoin(
+    basemap: BasemapMetadata,
+    resolvedDatasetId: string,
+    abortSignal: AbortSignal
+  ): Promise<void> {
+    const sourceSnapshot = resolveSourceSnapshot();
+    const stepIndex = basemapStepIndex;
+    try {
+      const preFinalizeColumns =
+        await capturePreFinalizeAnalysis(sourceSnapshot);
+      await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
+      if (abortSignal.aborted) return;
+
+      await persistJoinSnapshot(
+        resolveGPSJoinSnapshot(basemap.file, resolvedDatasetId),
+        sourceSnapshot,
+        preFinalizeColumns
+      );
+      if (abortSignal.aborted) return;
+
+      syncSelectedDatasetJoinedBasemap(basemap.file);
+      dataTabStore.markStepComplete(stepIndex);
+    } catch (error) {
+      if (
+        abortSignal.aborted ||
+        isDatasetNotFoundError(error, resolvedDatasetId)
+      )
+        return;
+      logger.error(
+        'Failed to finalize GPS mode after a reference change',
+        LogCategory.MAP,
+        error
+      );
+      showError(m.join_error_title(), m.join_error_message());
+    }
+  }
+
   async function capturePreFinalizeAnalysis(
     sourceSnapshot: SourceSnapshot | null
   ): Promise<AnalysisResults | undefined> {
@@ -873,6 +934,26 @@
     }
   }
 
+  // A composite basemap sets several territories side by side: a sea
+  // around each inset weighs on the page, so it starts hidden. Only a fresh
+  // pick applies it, never a user choice already made for that basemap.
+  function hideSeaOnCompositeBasemap(basemap: BasemapMetadata): void {
+    if (basemap.proj_to?.type !== 'composite') return;
+    if (
+      basemapAuxLayersStore.hasVisibility(
+        basemap.file,
+        SYNTHETIC_AUX_LAYER_KEY.MERS
+      )
+    ) {
+      return;
+    }
+    basemapAuxLayersStore.setVisible(
+      basemap.file,
+      SYNTHETIC_AUX_LAYER_KEY.MERS,
+      false
+    );
+  }
+
   async function handleSelectBasemap(
     basemap: BasemapMetadata,
     options: { allowToggleOff?: boolean; source?: BasemapSource } = {}
@@ -918,6 +999,8 @@
       selectedBasemap: basemap.file,
       basemapSource: options.source ?? BasemapSource.CATALOG
     });
+
+    hideSeaOnCompositeBasemap(basemap);
 
     // Non-blocking prefetch: fetch the basemap geometry while the join
     // computes; the render path awaits the same deduplicated load later.
@@ -1246,15 +1329,8 @@
   ): Record<string, string> {
     const merged: Record<string, string> = { ...(existing ?? {}) };
     for (const [original, corrected] of Object.entries(addition)) {
-      const previous = merged[original];
-      if (previous && previous !== corrected) {
-        merged[previous] = corrected;
-        delete merged[original];
-      } else if (corrected === original) {
-        delete merged[original];
-      } else {
-        merged[original] = corrected;
-      }
+      if (corrected === original) delete merged[original];
+      else merged[original] = corrected;
     }
     return merged;
   }
@@ -1768,6 +1844,22 @@
           );
           if (controller.signal.aborted || !datasetReady) return;
 
+          // Corrections live beside the source data, which keeps its values:
+          // every later grading or finalization of this column reads them.
+          const persistedCorrections =
+            getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
+          if (
+            persistedCorrections &&
+            Object.keys(persistedCorrections).length > 0
+          ) {
+            await duckDBOrchestrator.applyJoinCorrections(
+              resolvedDatasetId,
+              linkedVariableName,
+              persistedCorrections
+            );
+            if (controller.signal.aborted) return;
+          }
+
           const joinContext = `${resolvedDatasetId}::${basemap.file}`;
           if (
             isCatalogJoinFinalizedForBasemap(
@@ -1797,20 +1889,6 @@
 
           const loadingRequestId = beginJoinLoading();
           try {
-            const persistedCorrections =
-              getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
-            if (
-              persistedCorrections &&
-              Object.keys(persistedCorrections).length > 0
-            ) {
-              await duckDBOrchestrator.applyJoinCorrections(
-                resolvedDatasetId,
-                linkedVariableName,
-                persistedCorrections
-              );
-              if (controller.signal.aborted) return;
-            }
-
             const stats = await duckDBOrchestrator.computeJoinStats(
               resolvedDatasetId,
               basemap,
@@ -1931,7 +2009,25 @@
     if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates) {
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
-      previousLinkedVariableName = linkedVariableName || null;
+      // Back to entities, the linked variable joins again.
+      previousLinkedVariableName = null;
+      // Back to coordinates, the points replace the entity join.
+      const basemap = allBasemapsForLookup.find(
+        (b) => b.file === selectedBasemapId
+      );
+      if (
+        hasGPSCoordinates &&
+        basemap &&
+        !isGPSJoinFinalizedForBasemap(basemap.file, resolvedDatasetId)
+      ) {
+        abortCurrentJoin();
+        currentJoinAbortController = new AbortController();
+        void refinalizeGPSJoin(
+          basemap,
+          resolvedDatasetId,
+          currentJoinAbortController.signal
+        );
+      }
       return;
     }
 
@@ -2122,6 +2218,8 @@
     allBasemaps={allBasemaps}
     basemapSelected={basemapSelected}
     onSelectBasemap={handleSelectSuggestedBasemap}
+    suggestionsOpen={suggestionsOpen}
+    onSuggestionsToggle={(expanded) => (suggestionsOpen = expanded)}
   />
 {/snippet}
 
@@ -2156,38 +2254,41 @@
 {/snippet}
 
 {#snippet joinSection()}
-  <JoinAssistedSection
-    joinRows={joinRows}
-    duplicates={duplicates}
-    unknowns={unknowns}
-    joinedCount={joinedCount}
-    toVerifyCount={toVerifyCount}
-    duplicateTotal={duplicateTotal}
-    unrecognizedTotal={unrecognizedTotal}
-    fuzzyPassEstimate={fuzzyPassEstimate}
-    fuzzyPassRunning={fuzzyPassRunning}
-    onRunFullFuzzyPass={handleRunFullFuzzyPass}
-    linkedVariableName={dataTabState.geolocation.linkedVariableName}
-    basemapValues={basemapAttributes.values}
-    loading={joinLoading}
-    joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-    joinedEntitiesList={joinedPageRows}
-    joinedPage={joinedPage}
-    joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
-    joinedBasemapValues={joinedBasemapValues}
-    onJoinedPageChange={handleJoinedPageChange}
-    onRequestJoinedEntities={handleRequestJoinedEntities}
-    ignoredEntities={ignoredEntities}
-    duplicateLines={dataTabState.basemapJoin.duplicateLines}
-    basemapAliasesByValue={basemapAttributes.aliasesByValue}
-    onRequestBasemapValues={basemapAttributes.requestValues}
-    onFinalizeJoin={handleFinalizeJoin}
-    onManualCorrection={handleManualCorrection}
-    onMappingChange={dataTabActions.updateJoinMapping}
-    onIgnoreEntities={handleIgnoreEntities}
-    onRestoreEntities={handleRestoreEntities}
-    onValidateEntities={handleValidateEntities}
-  />
+  <div class="join-section-zone" bind:this={joinSectionZone}>
+    <JoinAssistedSection
+      joinRows={joinRows}
+      duplicates={duplicates}
+      unknowns={unknowns}
+      joinedCount={joinedCount}
+      toVerifyCount={toVerifyCount}
+      duplicateTotal={duplicateTotal}
+      unrecognizedTotal={unrecognizedTotal}
+      fuzzyPassEstimate={fuzzyPassEstimate}
+      fuzzyPassRunning={fuzzyPassRunning}
+      onRunFullFuzzyPass={handleRunFullFuzzyPass}
+      linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      basemapValues={basemapAttributes.values}
+      loading={joinLoading}
+      joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
+      joinedEntitiesList={joinedPageRows}
+      joinedPage={joinedPage}
+      joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
+      joinedBasemapValues={joinedBasemapValues}
+      onJoinedPageChange={handleJoinedPageChange}
+      onRequestJoinedEntities={handleRequestJoinedEntities}
+      ignoredEntities={ignoredEntities}
+      duplicateLines={dataTabState.basemapJoin.duplicateLines}
+      basemapAliasesByValue={basemapAttributes.aliasesByValue}
+      basemapValuesLoading={basemapAttributes.loading}
+      onRequestBasemapValues={basemapAttributes.requestValues}
+      onFinalizeJoin={handleFinalizeJoin}
+      onManualCorrection={handleManualCorrection}
+      onMappingChange={dataTabActions.updateJoinMapping}
+      onIgnoreEntities={handleIgnoreEntities}
+      onRestoreEntities={handleRestoreEntities}
+      onValidateEntities={handleValidateEntities}
+    />
+  </div>
 {/snippet}
 
 <section id="basemap-join-step">
@@ -2239,6 +2340,10 @@
   .kh-help {
     margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
     padding-top: var(--kh-pad-panel);
+  }
+
+  .join-section-zone {
+    display: contents;
   }
 
   .step-content {

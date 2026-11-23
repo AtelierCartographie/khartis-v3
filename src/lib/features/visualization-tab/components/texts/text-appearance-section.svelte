@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import {
     ColorMode,
     SLIDER_LIMITS
@@ -153,105 +154,108 @@
     />
   </div>
 
-  {#if colorMode === ColorMode.CLASSES}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={colorPickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableValueDataFields}
-        selectedFieldId={valueFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          FACET_SLOT.TEXT_VALUE
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          FACET_SLOT.TEXT_VALUE
-        )}
-        onSelect={onValueFieldSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            valueColumnName,
-            FACET_SLOT.TEXT_VALUE,
-            ids
+  <SwitchedContent value={colorMode}>
+    {#if colorMode === ColorMode.CLASSES}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={colorPickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableValueDataFields}
+          selectedFieldId={valueFieldSelection.selectedFieldId}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.TEXT_VALUE
           )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
-      />
-    </div>
-    <DiscretizationRow
-      label={m.discretization()}
-      value={colorDiscretizationLabel}
-      onsettings={onOpenColorDiscretization}
-    />
-    <PalettePreview
-      label={m.color_palette()}
-      colors={palette}
-      selectedPaletteId={classification?.paletteId}
-      inverted={classification?.inverted ?? false}
-      paletteType={resolvePaletteTypeForBreakpoint(classification)}
-      classification={classification}
-      oninvert={onInvertPalette}
-      onClassificationChange={onClassificationChange}
-    />
-  {:else if colorMode === ColorMode.CATEGORIES}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={categoryPickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableCategoryDataFields}
-        selectedFieldId={categoryFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          FACET_SLOT.TEXT_CATEGORY
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          FACET_SLOT.TEXT_CATEGORY
-        )}
-        onSelect={onCategoryFieldSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            categoryColumnName,
-            FACET_SLOT.TEXT_CATEGORY,
-            ids
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.TEXT_VALUE
           )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(FACET_SLOT.TEXT_CATEGORY, enabled)}
+          onSelect={onValueFieldSelect}
+          onCollectionChange={(ids) =>
+            facetsSelection.updateVariables(
+              valueColumnName,
+              FACET_SLOT.TEXT_VALUE,
+              ids
+            )}
+          onToggleCollection={(enabled) =>
+            facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
+        />
+      </div>
+      <DiscretizationRow
+        label={m.discretization()}
+        value={colorDiscretizationLabel}
+        onsettings={onOpenColorDiscretization}
       />
-    </div>
-    <DiscretizationRow
-      label={m.category_aspect()}
-      value={(isSingularCount(categoryCount)
-        ? m.categories_count_one
-        : m.categories_count)({ count: formatValue(categoryCount) })}
-      settingsIconDescription={m.palette_categories_aspect_title()}
-      onsettings={() => {
-        categoriesPopoverOpen = true;
-      }}
-    />
-    <PalettePreview
-      label={m.color_palette()}
-      colors={categoriesPalette}
-      selectedPaletteId={classification?.paletteId}
-      inverted={classification?.inverted ?? false}
-      paletteType={PALETTE_TYPE.QUALITATIVE}
-      categoriesMode={true}
-      categoriesVariant="lines"
-      categoryLabels={categoryLabels}
-      bind:categoriesPopoverOpen={categoriesPopoverOpen}
-      oninvert={onInvertPalette}
-      onClassificationChange={onClassificationChange}
-    />
-  {:else}
-    <div class="field-group">
-      <ColorSelector
-        exclusive
-        label={m.color()}
-        value={color}
-        presets={getColorSuggestions(COLOR_ROLE.TEXT_FILL)}
-        onchange={onColorChange}
+      <PalettePreview
+        label={m.color_palette()}
+        colors={palette}
+        selectedPaletteId={classification?.paletteId}
+        inverted={classification?.inverted ?? false}
+        paletteType={resolvePaletteTypeForBreakpoint(classification)}
+        classification={classification}
+        oninvert={onInvertPalette}
+        onClassificationChange={onClassificationChange}
       />
-    </div>
-  {/if}
+    {:else if colorMode === ColorMode.CATEGORIES}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={categoryPickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableCategoryDataFields}
+          selectedFieldId={categoryFieldSelection.selectedFieldId}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.TEXT_CATEGORY
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.TEXT_CATEGORY
+          )}
+          onSelect={onCategoryFieldSelect}
+          onCollectionChange={(ids) =>
+            facetsSelection.updateVariables(
+              categoryColumnName,
+              FACET_SLOT.TEXT_CATEGORY,
+              ids
+            )}
+          onToggleCollection={(enabled) =>
+            facetsSelection.toggle(FACET_SLOT.TEXT_CATEGORY, enabled)}
+        />
+      </div>
+      <DiscretizationRow
+        label={m.category_aspect()}
+        value={(isSingularCount(categoryCount)
+          ? m.categories_count_one
+          : m.categories_count)({ count: formatValue(categoryCount) })}
+        settingsIconDescription={m.palette_categories_aspect_title()}
+        onsettings={() => {
+          categoriesPopoverOpen = true;
+        }}
+      />
+      <PalettePreview
+        label={m.color_palette()}
+        colors={categoriesPalette}
+        selectedPaletteId={classification?.paletteId}
+        inverted={classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.QUALITATIVE}
+        categoriesMode={true}
+        categoriesVariant="lines"
+        categoryLabels={categoryLabels}
+        classification={classification}
+        bind:categoriesPopoverOpen={categoriesPopoverOpen}
+        oninvert={onInvertPalette}
+        onClassificationChange={onClassificationChange}
+      />
+    {:else}
+      <div class="field-group">
+        <ColorSelector
+          exclusive
+          label={m.color()}
+          value={color}
+          presets={getColorSuggestions(COLOR_ROLE.TEXT_FILL)}
+          onchange={onColorChange}
+        />
+      </div>
+    {/if}
+  </SwitchedContent>
 
   <SliderWithInput
     label={m.opacity()}
@@ -259,7 +263,6 @@
     max={SLIDER_LIMITS.textOpacity.max}
     step={SLIDER_LIMITS.textOpacity.step}
     value={opacity}
-    showMinMax
     inputWidth="64px"
     onchange={onOpacityChange}
   />
@@ -285,7 +288,6 @@
       max={SLIDER_LIMITS.haloWidth.max}
       step={SLIDER_LIMITS.haloWidth.step}
       value={haloWidth}
-      showMinMax
       inputWidth="64px"
       onchange={onHaloWidthChange}
     />
@@ -296,7 +298,6 @@
       max={SLIDER_LIMITS.textOpacity.max}
       step={SLIDER_LIMITS.textOpacity.step}
       value={haloOpacity}
-      showMinMax
       inputWidth="64px"
       onchange={onHaloOpacityChange}
     />

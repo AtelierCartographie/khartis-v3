@@ -3,6 +3,9 @@
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import BasemapCatalogTab from '../basemap-join/basemap-catalog-tab.svelte';
   import BasemapPanelContent from '../basemap-join/basemap-panel-content.svelte';
+  import ActiveBasemapBanner from '../basemap-join/active-basemap-banner.svelte';
+  import { resolveActiveBasemapOrigin } from '../../utils/active-basemap.utils';
+  import { basemapCatalogService } from '$lib/features/map';
   import { BasemapImportDropzone, OSMBasemapSelector } from '../index';
 
   interface BasemapSuggestionItem {
@@ -63,6 +66,25 @@
     TAB_INDEX_TO_SOURCE[basemapTabIndex] ?? BasemapSource.CATALOG
   );
 
+  const activeBasemap = $derived(
+    selectedBasemapId
+      ? (basemapCatalogService.basemaps.find(
+          (basemap) => basemap.file === selectedBasemapId
+        ) ?? null)
+      : null
+  );
+  const activeBasemapOrigin = $derived(
+    activeBasemap ? resolveActiveBasemapOrigin(activeBasemap) : null
+  );
+  // The Import tab already shows the imported basemap's card.
+  const showActiveBasemapBanner = $derived(
+    activeBasemap !== null &&
+      !(
+        activeBasemapOrigin === 'import' &&
+        selectedSource === BasemapSource.IMPORT
+      )
+  );
+
   function handleSourceChange(source: BasemapSource): void {
     const nextIndex = TAB_INDEX_TO_SOURCE.indexOf(source);
     if (nextIndex < 0 || nextIndex === basemapTabIndex) return;
@@ -103,11 +125,20 @@
   />
 {/snippet}
 
+{#snippet activeBasemapBanner()}
+  {#if activeBasemap && activeBasemapOrigin}
+    <ActiveBasemapBanner basemap={activeBasemap} origin={activeBasemapOrigin} />
+  {/if}
+{/snippet}
+
 <BasemapPanelContent
   selectedSource={selectedSource}
   onSourceChange={handleSourceChange}
   catalogContent={catalogContent}
   importContent={importContent}
   osmContent={osmContent}
+  activeBasemapBanner={showActiveBasemapBanner
+    ? activeBasemapBanner
+    : undefined}
   showJoinSection={false}
 />

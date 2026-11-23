@@ -418,36 +418,44 @@
     </div>
 
     <div class="paste-container" bind:this={pasteContainer}>
-      <TextArea
-        value={pastedDataValue}
-        placeholder={hasPastedFile
-          ? m.create_project_paste_another()
-          : m.create_project_paste_data()}
-        rows={4}
-        on:input={handlePastedDataInput}
-        on:blur={handlePastedDataBlur}
-        invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
-        invalidText={pastedDataValidation?.errors[0] || ''}
-        warn={!isImportingPaste &&
-          !!pastedDataValidation &&
-          pastedDataValidation.warnings.length > 0}
-        warnText={pastedDataValidation?.warnings[0] || ''}
-      />
-      {#if pastedFile}
-        <div class="paste-feedback" role="status" data-testid="paste-feedback">
-          <CheckmarkFilled size={20} class="paste-feedback-icon" />
-          <span class="paste-feedback-title">
-            {m.create_project_paste_added()}
-          </span>
-          <span class="paste-feedback-metrics">
-            {formatValue(pastedFile.rowCount ?? 0)}
-            {rowsLabel(pastedFile.rowCount ?? 0)}
-            {m.separator_middle_dot_space()}
-            {formatValue(pastedFile.columnCount ?? 0)}
-            {columnsLabel(pastedFile.columnCount ?? 0)}
-          </span>
-        </div>
-      {/if}
+      <div class="paste-field">
+        <TextArea
+          labelText={m.create_project_paste_data()}
+          hideLabel
+          value={pastedDataValue}
+          placeholder={hasPastedFile
+            ? m.create_project_paste_another()
+            : m.create_project_paste_data()}
+          rows={4}
+          on:input={handlePastedDataInput}
+          on:blur={handlePastedDataBlur}
+          invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+          invalidText={pastedDataValidation?.errors[0] || ''}
+          warn={!isImportingPaste &&
+            !!pastedDataValidation &&
+            pastedDataValidation.warnings.length > 0}
+          warnText={pastedDataValidation?.warnings[0] || ''}
+        />
+        {#if pastedFile}
+          <div
+            class="paste-feedback"
+            role="status"
+            data-testid="paste-feedback"
+          >
+            <CheckmarkFilled size={20} class="paste-feedback-icon" />
+            <span class="paste-feedback-title">
+              {m.create_project_paste_added()}
+            </span>
+            <span class="paste-feedback-metrics">
+              {formatValue(pastedFile.rowCount ?? 0)}
+              {rowsLabel(pastedFile.rowCount ?? 0)}
+              {m.separator_middle_dot_space()}
+              {formatValue(pastedFile.columnCount ?? 0)}
+              {columnsLabel(pastedFile.columnCount ?? 0)}
+            </span>
+          </div>
+        {/if}
+      </div>
       {#if pastedDataValue.trim() && !isImportingPaste}
         <div class="paste-actions">
           <Button
@@ -489,32 +497,6 @@
           status="active"
           description={m.create_project_loading_status()}
         />
-      {:else}
-        <div class="learn-more">
-          <span>{m.create_project_learn_more_title()}</span>
-          <ul>
-            <li>
-              <Link
-                href={DOC_LINK.IMPORT_DATA}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_data()}
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={DOC_LINK.JOIN_BASEMAP}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_basemaps()}
-              </Link>
-            </li>
-          </ul>
-        </div>
       {/if}
     </div>
 
@@ -776,6 +758,22 @@
       {/each}
     </div>
   </div>
+
+  <div class="learn-more">
+    <span>{m.create_project_learn_more_title()}</span>
+    <ul>
+      <li>
+        <Link href={DOC_LINK.IMPORT_DATA} target="_blank" icon={Launch}>
+          {m.create_project_learn_more_data()}
+        </Link>
+      </li>
+      <li>
+        <Link href={DOC_LINK.JOIN_BASEMAP} target="_blank" icon={Launch}>
+          {m.create_project_learn_more_basemaps()}
+        </Link>
+      </li>
+    </ul>
+  </div>
 </section>
 
 {#snippet shapefileComponents(relatedFiles?: readonly string[])}
@@ -799,6 +797,8 @@
 
   .is-modal-create-project {
     margin-bottom: 0 !important;
+    min-height: 100%;
+    grid-template-rows: auto auto auto 1fr;
   }
 
   #khartis-create-new-project :global(.bx--file__selected-file) {
@@ -809,7 +809,8 @@
     background-color: var(--cds-field-01);
   }
 
-  .paste-container {
+  /* The feedback covers the field alone, not the actions under it. */
+  .paste-field {
     position: relative;
   }
 
@@ -820,9 +821,14 @@
   }
 
   .learn-more {
-    font-size: var(--kh-font-label);
-    line-height: var(--kh-line-label);
-    color: var(--cds-text-secondary);
+    align-self: end;
+    color: var(--cds-text-05);
+  }
+
+  .learn-more :global(.bx--link) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
   }
 
   .paste-feedback {
@@ -898,10 +904,6 @@
     gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-03);
     justify-content: flex-end;
-  }
-
-  .is-modal-create-project .files-section {
-    min-height: 7.125rem;
   }
 
   .files-section {
@@ -1040,6 +1042,19 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--cds-spacing-05);
+  }
+
+  /* The drop zone takes the paste area's height and first line. */
+  .import-grid :global(.bx--file__drop-container),
+  .import-grid :global(.bx--text-area) {
+    height: 6.5rem;
+  }
+
+  .import-grid :global(.bx--file__drop-container) {
+    align-items: flex-start;
+    padding: 0.6875rem var(--cds-spacing-05);
+    line-height: 1.25rem;
+    color: var(--cds-text-05);
   }
 
   @media (max-width: 672px) {

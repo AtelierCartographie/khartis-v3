@@ -6,6 +6,7 @@ import {
   buildProjectionFromCatalogueId,
   fitProjectionToBbox,
   getProjectionD3ConfigById,
+  isBeyondHorizon,
   isWorldScaleProjectionId
 } from '$lib/features/commons/utils/projection.utils';
 import {
@@ -60,9 +61,12 @@ function getResolvedD3ProjectionName(
   );
 }
 
+// `relative`: longitude and latitude offset the projection's own frame (a
+// proj4 CRS centred on its lon_0) instead of replacing it.
 function orientProjectionToParams(
   projection: GeoProjection,
-  params: UserProjectionBuildParams
+  params: UserProjectionBuildParams,
+  relative = false
 ): void {
   const [longitude, latitude] = params.center ?? [
     params.longitude,
@@ -72,7 +76,7 @@ function orientProjectionToParams(
   // intrinsic roll (gamma) of the base projection is preserved so oblique
   // suggestions (e.g. Atlantis) keep their orientation; rotation adds an
   // in-plane angle on top.
-  const [, , gamma = 0] = projection.rotate();
+  const [baseLambda, basePhi, gamma = 0] = projection.rotate();
   const projectionName = getResolvedD3ProjectionName(params);
   const lonEpsilon = isClipPolygonProjection(projectionName)
     ? CLIP_DEGENERACY_EPSILON
@@ -80,14 +84,17 @@ function orientProjectionToParams(
   const latEpsilon = isPolarClipDegeneracyProjection(projectionName)
     ? CLIP_DEGENERACY_EPSILON
     : 0;
-  projection.rotate([-longitude + lonEpsilon, -latitude + latEpsilon, gamma]);
+  const lambda = (relative ? baseLambda : 0) - longitude;
+  const phi = (relative ? basePhi : 0) - latitude;
+  projection.rotate([lambda + lonEpsilon, phi + latEpsilon, gamma]);
 }
 
 function applyUserProjectionTransform(
   projection: GeoProjection,
-  params: UserProjectionBuildParams
+  params: UserProjectionBuildParams,
+  relative = false
 ): void {
-  orientProjectionToParams(projection, params);
+  orientProjectionToParams(projection, params, relative);
   if (params.rotation) {
     projection.angle(projection.angle() + params.rotation);
   }
@@ -185,9 +192,12 @@ function buildFittedUserProjection(
   const { fitBbox, width, height, padding } = params;
 
   if (params.customCode) {
-    const projection = proj4d3(params.customCode);
+    // A CRS tilted in the settings keeps the frame it was saved with: the
+    // tilt axis depends on it, and a reopened project must not move.
+    const [, latitude] = params.center ?? [params.longitude, params.latitude];
+    const projection = proj4d3(params.customCode, { orient: latitude === 0 });
     fitProjectionToBbox(projection, fitBbox, width, height, padding);
-    applyUserProjectionTransform(projection, params);
+    applyUserProjectionTransform(projection, params, true);
     return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
   }
 
@@ -216,7 +226,12 @@ function buildFittedUserProjection(
   fitProjectionToRenderTarget(projection, params, isWorldScaleCatalogue);
   applyUserProjectionTransform(projection, params);
 
-  if (isUsableGeoProjection(projection, fitBbox)) {
+  // An orientation the user set may face away from the data: keep it.
+  const isPinned = hasExplicitProjectionOrientation(params);
+  if (
+    isUsableGeoProjection(projection, fitBbox) &&
+    (isPinned || !isBeyondHorizon(projection, getBboxCenter(fitBbox)))
+  ) {
     return projection;
   }
 
@@ -226,7 +241,7 @@ function buildFittedUserProjection(
   // only scales/translates, so it then collapses to a degenerate extent.
   // When the user hasn't pinned an orientation, re-center the projection on
   // the basemap and refit so fitExtent measures the visible hemisphere.
-  if (hasExplicitProjectionOrientation(params)) {
+  if (isPinned) {
     return undefined;
   }
 

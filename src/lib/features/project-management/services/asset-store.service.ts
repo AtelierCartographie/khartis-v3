@@ -8,11 +8,20 @@ import {
 } from '$lib/features/commons/pipeline.errors';
 import { FILE_EXTENSION_GROUPS, MIME } from '$lib/features/commons/constants';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
+import {
+  computeProjectAssetUsage,
+  selectStorageGarbage,
+  type ProjectAssetUsage,
+  type StorageGarbage,
+  type StoredAssetRef
+} from '../core/asset-usage';
 import { collectFileAssetRefs } from '../core/file-asset-refs';
 import { getProjectDatabase } from './database-access.service';
+import { toStorageQuotaError } from './storage-quota.service';
 
 // Legacy archive layers were persisted as GeoJSON snapshots and stay readable.
 const ARCHIVE_SNAPSHOT_EXTENSIONS = [
@@ -46,6 +55,9 @@ const { ASSET_STORE_NAME, ASSET_CHUNK_STORE_NAME, ASSET_REF_STORE_NAME } =
   PROJECT_CONST.DB;
 
 const { CHUNK_SIZE } = PROJECT_CONST.ASSETS;
+
+const ASSET_WRITE_LOCK = 'khartis-asset-writes';
+const UNSAVED_ASSET_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE =
   'PROJECT_ASSET_STORAGE_INSUFFICIENT';
@@ -90,6 +102,26 @@ export async function assetExists(assetId: string): Promise<boolean> {
   });
 }
 
+async function putAssetChunk(
+  db: IDBDatabase,
+  assetId: string,
+  chunkIndex: number,
+  data: ArrayBuffer
+): Promise<void> {
+  // put() clones `data` synchronously, so the caller may reuse it afterwards.
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_CHUNK_STORE_NAME], 'readwrite');
+    tx.objectStore(ASSET_CHUNK_STORE_NAME).put({
+      assetId,
+      chunkIndex,
+      data
+    } satisfies StoredAssetChunk);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_write_asset_chunk()));
+  });
+}
+
 async function writeAssetChunks(
   db: IDBDatabase,
   assetId: string,
@@ -102,74 +134,172 @@ async function writeAssetChunks(
     const end = Math.min(start + CHUNK_SIZE, blob.size);
     const chunk = await blob.slice(start, end).arrayBuffer();
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([ASSET_CHUNK_STORE_NAME], 'readwrite');
-      tx.objectStore(ASSET_CHUNK_STORE_NAME).put({
-        assetId,
-        chunkIndex,
-        data: cloneArrayBuffer(chunk)
-      } satisfies StoredAssetChunk);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () =>
-        reject(tx.error || new Error(m.error_failed_write_asset_chunk()));
-    });
+    await putAssetChunk(db, assetId, chunkIndex, cloneArrayBuffer(chunk));
   }
+}
+
+async function writeAssetChunkStream(
+  db: IDBDatabase,
+  assetId: string,
+  source: ReadableStream<Uint8Array>
+): Promise<number> {
+  const reader = source.getReader();
+  const chunk = new Uint8Array(CHUNK_SIZE);
+  let filled = 0;
+  let chunkIndex = 0;
+  let size = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      let offset = 0;
+      while (offset < value.length) {
+        const count = Math.min(CHUNK_SIZE - filled, value.length - offset);
+        chunk.set(value.subarray(offset, offset + count), filled);
+        filled += count;
+        offset += count;
+        size += count;
+
+        if (filled === CHUNK_SIZE) {
+          await putAssetChunk(db, assetId, chunkIndex, chunk.buffer);
+          chunkIndex += 1;
+          filled = 0;
+        }
+      }
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  }
+
+  if (filled > 0 || chunkIndex === 0) {
+    await putAssetChunk(db, assetId, chunkIndex, chunk.buffer.slice(0, filled));
+  }
+
+  return size;
+}
+
+async function putAssetMetadata(
+  db: IDBDatabase,
+  ref: AssetRef,
+  size: number
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_STORE_NAME], 'readwrite');
+    tx.objectStore(ASSET_STORE_NAME).put({
+      assetId: ref.assetId,
+      mimeType: ref.mimeType,
+      size: ref.size,
+      chunkCount: getChunkCount(size),
+      chunkSize: CHUNK_SIZE,
+      createdAt: new Date().toISOString()
+    } satisfies StoredAssetMetadata);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_create_asset_metadata()));
+  });
+}
+
+async function assertStorageHeadroom(
+  ref: AssetRef,
+  requiredBytes: number
+): Promise<void> {
+  const hasHeadroom = await estimateStorageHeadroom(requiredBytes);
+  if (!hasHeadroom) {
+    throw new PipelineError(
+      m.error_insufficient_storage(),
+      PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE,
+      {
+        assetId: ref.assetId,
+        requiredBytes
+      }
+    );
+  }
+}
+
+/**
+ * Runs `task` while holding the cross-tab asset write lock in shared mode, so
+ * the storage sweep never sees a write in progress. The sweep only ever asks
+ * for the exclusive lock with `ifAvailable`, which is never queued: a nested
+ * shared request cannot wait behind it.
+ */
+export async function withAssetWriteLock<T>(
+  task: () => Promise<T>
+): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) {
+    return task();
+  }
+
+  return locks.request(ASSET_WRITE_LOCK, { mode: 'shared' }, task);
+}
+
+async function discardPartialAsset(assetId: string): Promise<void> {
+  await deleteAsset(assetId).catch((error: unknown) => {
+    logger.warn(
+      'Failed to discard a partially written asset',
+      LogCategory.PERSISTENCE,
+      { assetId, error }
+    );
+  });
 }
 
 export async function persistAssetBlob(
   blob: Blob,
   ref: AssetRef
 ): Promise<AssetRef> {
-  const db = await getDb();
-  const alreadyExists = await assetExists(ref.assetId);
+  return withAssetWriteLock(async () => {
+    const db = await getDb();
+    const alreadyExists = await assetExists(ref.assetId);
 
-  if (!alreadyExists) {
-    const hasHeadroom = await estimateStorageHeadroom(blob.size);
-    if (!hasHeadroom) {
-      throw new PipelineError(
-        m.error_insufficient_storage(),
-        PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE,
-        {
-          assetId: ref.assetId,
-          requiredBytes: blob.size
-        }
-      );
+    if (!alreadyExists) {
+      await assertStorageHeadroom(ref, blob.size);
+      try {
+        await writeAssetChunks(db, ref.assetId, blob);
+        await putAssetMetadata(db, ref, blob.size);
+      } catch (error) {
+        await discardPartialAsset(ref.assetId);
+        throw toStorageQuotaError(error, { assetId: ref.assetId });
+      }
     }
 
-    await writeAssetChunks(db, ref.assetId, blob);
-
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction([ASSET_STORE_NAME], 'readwrite');
-      tx.objectStore(ASSET_STORE_NAME).put({
-        assetId: ref.assetId,
-        mimeType: ref.mimeType,
-        size: ref.size,
-        chunkCount: getChunkCount(blob.size),
-        chunkSize: CHUNK_SIZE,
-        createdAt: new Date().toISOString()
-      } satisfies StoredAssetMetadata);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () =>
-        reject(tx.error || new Error(m.error_failed_create_asset_metadata()));
-    });
-  }
-
-  return ref;
+    return ref;
+  });
 }
 
-export async function persistAssetContent(
-  content: string | ArrayBuffer,
-  params: Omit<AssetRef, 'assetId'>
+/**
+ * Writes an asset chunk by chunk as the stream yields it, so the whole
+ * payload never sits in memory. `ref.size` is the expected size, used for the
+ * storage headroom check; the returned ref carries the size actually written.
+ */
+export async function persistAssetStream(
+  source: ReadableStream<Uint8Array>,
+  ref: AssetRef
 ): Promise<AssetRef> {
-  const blob = new Blob([content], { type: params.mimeType });
+  return withAssetWriteLock(async () => {
+    const db = await getDb();
+    const alreadyExists = await assetExists(ref.assetId);
 
-  const ref: AssetRef = {
-    ...params,
-    assetId: crypto.randomUUID(),
-    size: blob.size
-  };
+    if (alreadyExists) {
+      await source.cancel();
+      return ref;
+    }
 
-  return persistAssetBlob(blob, ref);
+    await assertStorageHeadroom(ref, ref.size);
+    try {
+      const size = await writeAssetChunkStream(db, ref.assetId, source);
+      const writtenRef = { ...ref, size };
+      await putAssetMetadata(db, writtenRef, size);
+      return writtenRef;
+    } catch (error) {
+      await discardPartialAsset(ref.assetId);
+      throw toStorageQuotaError(error, { assetId: ref.assetId });
+    }
+  });
 }
 
 export async function persistAssetBytes(
@@ -206,20 +336,6 @@ function findCompanionFiles(file: UploadedFile): File[] {
 
   return file.relatedFileObjects.filter(
     (candidate) => candidate.name.toLowerCase() !== mainFileName
-  );
-}
-
-function buildCompanionContentEntries(
-  file: UploadedFile
-): Array<[string, ArrayBuffer]> {
-  if (!file.relatedFilesData) {
-    return [];
-  }
-
-  const mainFileName = file.name.toLowerCase();
-
-  return Object.entries(file.relatedFilesData).filter(
-    ([name]) => name.toLowerCase() !== mainFileName
   );
 }
 
@@ -273,13 +389,6 @@ export async function ensureUploadedFileAssets(
         'primary',
         preparedFile.name
       );
-    } else if (preparedFile.content) {
-      preparedFile.assetRef = await persistAssetContent(preparedFile.content, {
-        originalName: preparedFile.name,
-        mimeType: preparedFile.type || 'application/octet-stream',
-        size: preparedFile.size,
-        kind: 'primary'
-      });
     }
   }
 
@@ -292,7 +401,7 @@ export async function ensureUploadedFileAssets(
           )
         )
       ).every(Boolean)) ||
-    (!preparedFile.relatedFileObjects && !preparedFile.relatedFilesData)
+    !preparedFile.relatedFileObjects
   ) {
     return preparedFile;
   }
@@ -307,25 +416,6 @@ export async function ensureUploadedFileAssets(
         await createAssetRefFromFile(companion, 'companion')
       );
     }
-
-    return preparedFile;
-  }
-
-  const companionEntries = buildCompanionContentEntries(preparedFile);
-  if (companionEntries.length === 0) {
-    return preparedFile;
-  }
-
-  preparedFile.companionAssetRefs = [];
-  for (const [name, buffer] of companionEntries) {
-    preparedFile.companionAssetRefs.push(
-      await persistAssetContent(buffer, {
-        originalName: name,
-        mimeType: 'application/octet-stream',
-        size: buffer.byteLength,
-        kind: 'companion'
-      })
-    );
   }
 
   return preparedFile;
@@ -438,6 +528,50 @@ async function loadProjectAssetIds(projectId: string): Promise<string[]> {
     request.onerror = () =>
       reject(request.error || new Error(m.error_failed_read_project_refs()));
   });
+}
+
+/** Reads asset metadata and references only, never the chunks. */
+export async function loadProjectAssetUsage(): Promise<
+  Map<string, ProjectAssetUsage>
+> {
+  const db = await getDb();
+
+  const [assets, refs] = await new Promise<
+    [StoredAssetMetadata[], StoredProjectAssetRef[]]
+  >((resolve, reject) => {
+    const tx = db.transaction(
+      [ASSET_STORE_NAME, ASSET_REF_STORE_NAME],
+      'readonly'
+    );
+    const assetsRequest = tx.objectStore(ASSET_STORE_NAME).getAll();
+    const refsRequest = tx.objectStore(ASSET_REF_STORE_NAME).getAll();
+
+    tx.oncomplete = () =>
+      resolve([
+        assetsRequest.result as StoredAssetMetadata[],
+        refsRequest.result as StoredProjectAssetRef[]
+      ]);
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_read_project_refs()));
+  });
+
+  return computeProjectAssetUsage(assets, refs);
+}
+
+export async function loadTotalAssetBytes(): Promise<number> {
+  const db = await getDb();
+
+  const assets = await new Promise<StoredAssetMetadata[]>((resolve, reject) => {
+    const request = db
+      .transaction([ASSET_STORE_NAME], 'readonly')
+      .objectStore(ASSET_STORE_NAME)
+      .getAll();
+    request.onsuccess = () => resolve(request.result as StoredAssetMetadata[]);
+    request.onerror = () =>
+      reject(request.error || new Error(m.error_failed_load_asset_metadata()));
+  });
+
+  return assets.reduce((total, asset) => total + asset.size, 0);
 }
 
 export async function syncProjectAssetRefs(
@@ -586,4 +720,111 @@ export async function estimateStorageHeadroom(
   } catch {
     return true;
   }
+}
+
+async function readStorageInventory(db: IDBDatabase): Promise<{
+  projectIds: Set<string>;
+  refs: StoredProjectAssetRef[];
+  assets: StoredAssetMetadata[];
+  chunkAssetIds: Set<string>;
+}> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(
+      [
+        PROJECT_CONST.DB.STORE_NAME,
+        ASSET_REF_STORE_NAME,
+        ASSET_STORE_NAME,
+        ASSET_CHUNK_STORE_NAME
+      ],
+      'readonly'
+    );
+    const projectKeys = tx
+      .objectStore(PROJECT_CONST.DB.STORE_NAME)
+      .getAllKeys();
+    const refs = tx.objectStore(ASSET_REF_STORE_NAME).getAll();
+    const assets = tx.objectStore(ASSET_STORE_NAME).getAll();
+    const chunkAssetIds = new Set<string>();
+    const chunkCursor = tx
+      .objectStore(ASSET_CHUNK_STORE_NAME)
+      .index('assetId')
+      .openKeyCursor(null, 'nextunique');
+
+    chunkCursor.onsuccess = () => {
+      const cursor = chunkCursor.result;
+      if (cursor) {
+        chunkAssetIds.add(String(cursor.key));
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () =>
+      resolve({
+        projectIds: new Set(projectKeys.result.map(String)),
+        refs: refs.result as StoredProjectAssetRef[],
+        assets: assets.result as StoredAssetMetadata[],
+        chunkAssetIds
+      });
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_read_project_refs()));
+  });
+}
+
+async function deleteAssetRefs(
+  db: IDBDatabase,
+  refs: readonly StoredAssetRef[]
+): Promise<void> {
+  if (refs.length === 0) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction([ASSET_REF_STORE_NAME], 'readwrite');
+    const store = tx.objectStore(ASSET_REF_STORE_NAME);
+    refs.forEach((ref) =>
+      store.delete(createProjectAssetRefId(ref.projectId, ref.assetId))
+    );
+    tx.oncomplete = () => resolve();
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_remove_project_refs()));
+  });
+}
+
+async function collectStorageGarbage(
+  now: number,
+  noWriteInProgress: boolean
+): Promise<StorageGarbage> {
+  const db = await getDb();
+  const inventory = await readStorageInventory(db);
+  const garbage = selectStorageGarbage({
+    ...inventory,
+    now,
+    graceMs: UNSAVED_ASSET_GRACE_MS,
+    noWriteInProgress
+  });
+
+  await deleteAssetRefs(db, garbage.staleRefs);
+  for (const assetId of garbage.orphanAssetIds) {
+    await deleteAsset(assetId);
+  }
+
+  return garbage;
+}
+
+/**
+ * Deletes the files no saved project references any more: an import abandoned
+ * before the first save, a write cut short, a project deletion interrupted
+ * between its steps. Skipped when another tab is writing.
+ */
+export async function sweepStorageGarbage(
+  now = Date.now()
+): Promise<StorageGarbage | null> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) {
+    return collectStorageGarbage(now, false);
+  }
+
+  return locks.request(
+    ASSET_WRITE_LOCK,
+    { mode: 'exclusive', ifAvailable: true },
+    (lock) => (lock ? collectStorageGarbage(now, true) : null)
+  );
 }

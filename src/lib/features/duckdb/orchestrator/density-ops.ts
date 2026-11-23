@@ -4,6 +4,11 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import {
@@ -17,17 +22,16 @@ import {
   fetchArrowTableWithGeometry
 } from './arrow-ops';
 import { findGeometryColumnByName } from '../utils/geometry-column.utils';
-import {
-  sqlIdentifier,
-  sqlString,
-  sqlNamePart,
-  sqlTempName
-} from '$lib/features/commons/utils/sql.utils';
 
 const GEOMETRY_COLUMN = 'geometry';
 const DENSITY_CACHE_MAX_ENTRIES = 12;
 const densityCache = new Map<string, ArrowTable>();
 const densityCacheTableIndex = new Map<string, Set<string>>();
+const densityInFlight = new Map<
+  string,
+  { sourceTables: readonly string[]; run: Promise<ArrowTable> }
+>();
+const densityTableVersions = new Map<string, number>();
 
 interface GeometryColumnInfo {
   column_name: string;
@@ -89,7 +93,7 @@ function evictOldestDensityEntry(): void {
 }
 
 function setDensityCacheEntry(
-  tableName: string,
+  sourceTables: readonly string[],
   key: string,
   arrow: ArrowTable
 ): void {
@@ -99,16 +103,65 @@ function setDensityCacheEntry(
     evictOldestDensityEntry();
   }
   densityCache.set(key, arrow);
-  indexDensityCacheEntry(tableName, key);
+  for (const tableName of sourceTables) {
+    indexDensityCacheEntry(tableName, key);
+  }
 }
 
 function invalidateDensityCacheForTable(tableName: string): void {
+  densityTableVersions.set(
+    tableName,
+    (densityTableVersions.get(tableName) ?? 0) + 1
+  );
   const bucket = densityCacheTableIndex.get(tableName);
   if (!bucket) return;
   for (const key of bucket) {
     densityCache.delete(key);
   }
   densityCacheTableIndex.delete(tableName);
+  for (const [key, pending] of densityInFlight) {
+    if (pending.sourceTables.includes(tableName)) {
+      densityInFlight.delete(key);
+    }
+  }
+}
+
+function readTableVersions(sourceTables: readonly string[]): string {
+  return sourceTables
+    .map((tableName) => densityTableVersions.get(tableName) ?? 0)
+    .join(':');
+}
+
+/**
+ * Serves a density table from the cache, or shares the generation already
+ * running for the same key: map reloads fire several loads for one change.
+ * A result whose source tables changed while it ran is returned but not cached.
+ */
+function getOrGenerateDensity(
+  sourceTables: readonly string[],
+  key: string,
+  generate: () => Promise<ArrowTable>
+): Promise<ArrowTable> {
+  const cached = densityCache.get(key);
+  if (cached) return Promise.resolve(cached);
+  const pending = densityInFlight.get(key);
+  if (pending) return pending.run;
+
+  const versionsAtStart = readTableVersions(sourceTables);
+  const run = generate()
+    .then((arrow) => {
+      if (readTableVersions(sourceTables) === versionsAtStart) {
+        setDensityCacheEntry(sourceTables, key, arrow);
+      }
+      return arrow;
+    })
+    .finally(() => {
+      if (densityInFlight.get(key)?.run === run) {
+        densityInFlight.delete(key);
+      }
+    });
+  densityInFlight.set(key, { sourceTables, run });
+  return run;
 }
 
 registerTableMutationCallback((table: string) => {
@@ -202,6 +255,33 @@ export async function generateDotDensityFromJoin(
   ratio: number,
   options: { seed?: number } = {}
 ): Promise<ArrowTable> {
+  const cacheKey = buildDensityCacheKey(
+    `${datasetTableName}+${geometryTableName}`,
+    dataColumn,
+    ratio,
+    options.seed
+  );
+  return getOrGenerateDensity(
+    [datasetTableName, geometryTableName],
+    cacheKey,
+    () =>
+      generateJoinedDensity(
+        geometryTableName,
+        datasetTableName,
+        dataColumn,
+        ratio,
+        options
+      )
+  );
+}
+
+async function generateJoinedDensity(
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  ratio: number,
+  options: { seed?: number }
+): Promise<ArrowTable> {
   const geomCols = await getTableColumns(geometryTableName);
   const joinColumn = findJoinColumn(geomCols);
   if (!joinColumn) {
@@ -221,17 +301,7 @@ export async function generateDotDensityFromJoin(
     );
   }
 
-  const cacheTableId = `${datasetTableName}+${geometryTableName}`;
-  const cacheKey = buildDensityCacheKey(
-    cacheTableId,
-    dataColumn,
-    ratio,
-    options.seed
-  );
-  const cached = densityCache.get(cacheKey);
-  if (cached) return cached;
-
-  const viewName = `density_src_${sqlNamePart(datasetTableName)}`;
+  const viewName = sqlTempName('density_src', datasetTableName);
 
   await Duck.query(`
     CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(viewName)} AS
@@ -244,15 +314,13 @@ export async function generateDotDensityFromJoin(
   `);
 
   try {
-    const arrow = await generateDotDensityArrow(
+    return await generateDotDensityArrow(
       viewName,
       'geom',
       'value',
       ratio,
       options
     );
-    setDensityCacheEntry(cacheTableId, cacheKey, arrow);
-    return arrow;
   } finally {
     await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
       useProxy: false
@@ -328,34 +396,35 @@ export async function generateDotDensityFromGpsJoin(
     ratio,
     options.seed
   );
-  const cached = densityCache.get(cacheKey);
-  if (cached) return cached;
+  return getOrGenerateDensity(
+    [datasetTableName, geometryTableName],
+    cacheKey,
+    async () => {
+      const viewName = sqlTempName('density_gps_src', datasetTableName);
+      await createGpsDensitySourceView(
+        viewName,
+        geometryTableName,
+        datasetTableName,
+        dataColumn,
+        latColumn,
+        lonColumn
+      );
 
-  const viewName = `density_gps_src_${sqlNamePart(datasetTableName)}`;
-  await createGpsDensitySourceView(
-    viewName,
-    geometryTableName,
-    datasetTableName,
-    dataColumn,
-    latColumn,
-    lonColumn
+      try {
+        return await generateDotDensityArrow(
+          viewName,
+          'geom',
+          'value',
+          ratio,
+          options
+        );
+      } finally {
+        await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
+          useProxy: false
+        });
+      }
+    }
   );
-
-  try {
-    const arrow = await generateDotDensityArrow(
-      viewName,
-      'geom',
-      'value',
-      ratio,
-      options
-    );
-    setDensityCacheEntry(cacheTableId, cacheKey, arrow);
-    return arrow;
-  } finally {
-    await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`, {
-      useProxy: false
-    });
-  }
 }
 
 /**
@@ -374,7 +443,7 @@ export async function computeDensityLevelsFromJoin(
     return computeDensityLevels(datasetTableName, dataColumn, maxPoints);
   }
 
-  const viewName = `density_levels_${sqlNamePart(datasetTableName)}`;
+  const viewName = sqlTempName('density_levels', datasetTableName);
 
   await Duck.query(`
     CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(viewName)} AS
@@ -402,7 +471,7 @@ export async function computeDensityLevelsFromGpsJoin(
   lonColumn: string,
   maxPoints: number = 100000
 ): Promise<DensityLevelOption[]> {
-  const viewName = `density_gps_levels_${sqlNamePart(datasetTableName)}`;
+  const viewName = sqlTempName('density_gps_levels', datasetTableName);
   await createGpsDensitySourceView(
     viewName,
     geometryTableName,
@@ -433,26 +502,23 @@ export async function generateDotDensityFromGeoTable(
     ratio,
     options.seed
   );
-  const cached = densityCache.get(cacheKey);
-  if (cached) return cached;
+  return getOrGenerateDensity([tableName], cacheKey, async () => {
+    const cols = await getTableColumns(tableName);
+    const geometryColumn = findGeometryColumnByName(cols);
+    if (!geometryColumn) {
+      throw new DataValidationError(
+        m.error_table_no_geometry_density({ tableName }),
+        'geometry',
+        { tableName }
+      );
+    }
 
-  const cols = await getTableColumns(tableName);
-  const geometryColumn = findGeometryColumnByName(cols);
-  if (!geometryColumn) {
-    throw new DataValidationError(
-      m.error_table_no_geometry_density({ tableName }),
-      'geometry',
-      { tableName }
+    return generateDotDensityArrow(
+      tableName,
+      geometryColumn.column_name,
+      dataColumn,
+      ratio,
+      options
     );
-  }
-
-  const arrow = await generateDotDensityArrow(
-    tableName,
-    geometryColumn.column_name,
-    dataColumn,
-    ratio,
-    options
-  );
-  setDensityCacheEntry(tableName, cacheKey, arrow);
-  return arrow;
+  });
 }

@@ -1,7 +1,10 @@
 <script lang="ts">
   import { type AnalysisResult, RefineOperation } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
+  import {
+    VARIABLE_BADGE_STYLES,
+    type VariableBadgeType
+  } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
   import {
     formatValue,
@@ -13,6 +16,7 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
+  import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -69,6 +73,9 @@
     { value: 'number', label: m.column_type_number() },
     { value: 'date', label: m.column_type_date() }
   ]);
+
+  // The refine operations rewrite text: they mean nothing on numbers or dates.
+  const canRefine = $derived(isTextLikeColumnType(column.type));
 
   const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
@@ -220,6 +227,25 @@
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
+
+  // The header tooltip names the column in full and sums its type up.
+  const valueType = $derived.by((): VariableBadgeType => {
+    const typeSimple = analysis?.type_simple;
+    if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'date') return 'date';
+    if (typeSimple === 'boolean') return 'boolean';
+    return 'string';
+  });
+  const valueTypeLabel = $derived(
+    valueType === 'numeric'
+      ? m.column_type_number()
+      : valueType === 'date'
+        ? m.column_type_date()
+        : valueType === 'boolean'
+          ? m.column_type_boolean()
+          : m.column_type_text()
+  );
+  const valueTypeStyle = $derived(VARIABLE_BADGE_STYLES[valueType]);
 
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
@@ -623,7 +649,16 @@
             role="tooltip"
           >
             <div class="simple-tooltip-arrow"></div>
-            {typeTooltipMessage}
+            <span class="tooltip-column-name">{displayName ?? column.name}</span
+            >
+            <span
+              class="tooltip-column-type"
+              style:color={valueTypeStyle.color}
+              style:background-color={valueTypeStyle.bgColor}
+              style:border-color={valueTypeStyle.borderColor}
+            >
+              {valueTypeLabel}
+            </span>
           </div>
         </Portal>
       {/if}
@@ -742,31 +777,33 @@
                   </button>
                 {/if}
 
-                <button
-                  type="button"
-                  class="menu-item submenu-trigger"
-                  role="menuitem"
-                  aria-haspopup="menu"
-                  aria-expanded={activeSubmenu === 'refine'}
-                  bind:this={refineSubmenuTriggerRef}
-                  onclick={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef, {
-                      focusFirst: true
-                    })}
-                  onkeydown={(event: KeyboardEvent) =>
-                    handleSubmenuTriggerKeydown(
-                      event,
-                      'refine',
-                      refineSubmenuTriggerRef
-                    )}
-                  onmouseenter={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                  onfocus={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                >
-                  {m.column_refine_label()}
-                  <span class="submenu-arrow">&#9654;</span>
-                </button>
+                {#if canRefine}
+                  <button
+                    type="button"
+                    class="menu-item submenu-trigger"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={activeSubmenu === 'refine'}
+                    bind:this={refineSubmenuTriggerRef}
+                    onclick={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef, {
+                        focusFirst: true
+                      })}
+                    onkeydown={(event: KeyboardEvent) =>
+                      handleSubmenuTriggerKeydown(
+                        event,
+                        'refine',
+                        refineSubmenuTriggerRef
+                      )}
+                    onmouseenter={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                    onfocus={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                  >
+                    {m.column_refine_label()}
+                    <span class="submenu-arrow">&#9654;</span>
+                  </button>
+                {/if}
 
                 <div class="menu-divider"></div>
 
@@ -839,7 +876,7 @@
               </div>
             </Portal>
           {/if}
-          {#if activeSubmenu === 'refine'}
+          {#if activeSubmenu === 'refine' && canRefine}
             <Portal>
               <div
                 class="dropdown-menu submenu-portal"
@@ -1084,11 +1121,14 @@
     gap: 0;
   }
 
+  /* As tall as the column menu, so a column without one (the joined entity)
+     keeps its badge on the same line as the others. */
   .col-title-row {
     display: flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
+    min-height: var(--kh-size-xs);
   }
 
   .col-title-row :global(.variable-badge) {
@@ -1600,5 +1640,20 @@
     white-space: normal;
     max-width: 240px;
     text-align: left;
+  }
+
+  .tooltip-column-name {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-column-type {
+    display: inline-block;
+    margin-top: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-02);
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 </style>

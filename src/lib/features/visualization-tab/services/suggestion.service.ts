@@ -683,17 +683,21 @@ export function resolveSuggestionBehavior(
     allowIdLikeFallback: true,
     excludeLikelyCoordinates: true
   });
-  // Every behavior reading this column classes it, and a date is classed on calendar steps.
-  const preferredDateColumn = dataset.columns?.find(
-    (column) =>
-      column.name === suggestion.columns?.[0] && column.type === 'date'
-  )?.name;
-  const primaryNumericColumn = preferredDateColumn ?? numericColumn;
-  const secondaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
-    preferred: suggestion.columns?.[1],
-    allowIdLikeFallback: true,
-    excludeLikelyCoordinates: true
-  });
+  // A date is suggested only as a classed color (never as a quantity), so
+  // whichever column position names it, the behavior classes that date.
+  const findSuggestedDateColumn = (position: number) =>
+    dataset.columns?.find(
+      (column) =>
+        column.name === suggestion.columns?.[position] && column.type === 'date'
+    )?.name;
+  const primaryNumericColumn = findSuggestedDateColumn(0) ?? numericColumn;
+  const secondaryNumericColumn =
+    findSuggestedDateColumn(1) ??
+    findPreferredNumericColumn(dataset.columns, {
+      preferred: suggestion.columns?.[1],
+      allowIdLikeFallback: true,
+      excludeLikelyCoordinates: true
+    });
   const proportionalSizeColumn =
     findLatestYearNumericColumn(dataset.columns) ?? numericColumn;
   const primaryTextColumn = findPreferredTextColumn(dataset.columns, {

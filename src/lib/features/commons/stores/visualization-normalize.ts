@@ -319,6 +319,7 @@ export function buildSymbolPrimitiveConfig(
       visualization.modes?.categoryShape ??
       CategoryShapeMode.UNIQUE,
     commonScale: existing?.commonScale ?? true,
+    knockout: existing?.knockout ?? true,
     positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
     breakValueA: existing?.breakValueA ?? null,
     breakValueB: existing?.breakValueB ?? null,
@@ -457,6 +458,16 @@ export function buildTextPrimitiveConfig(
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??
       true,
+    automaticPlacement:
+      existing?.automaticPlacement ??
+      visualization.style.textAutomaticPlacement ??
+      false,
+    labelColumns:
+      existing?.labelColumns ?? visualization.style.textLabelColumns ?? false,
+    filteredLabelsOptional:
+      existing?.filteredLabelsOptional ??
+      visualization.style.textFilteredLabelsOptional ??
+      false,
     dxpMasking:
       existing?.dxpMasking ?? visualization.style.textDxpMasking ?? false,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,

@@ -124,6 +124,8 @@
     <div class="url-import-row">
       <TextInput
         size="sm"
+        labelText={m.basemap_import_url_label()}
+        hideLabel
         value={importUrl}
         placeholder={m.url_placeholder()}
         on:input={handleImportUrlInput}

@@ -2,6 +2,9 @@
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { onDestroy, tick, untrack } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
+  import { slide, type TransitionConfig } from 'svelte/transition';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import Switch from './switch.svelte';
 
@@ -47,6 +50,24 @@
     scrollIntoViewOnOpen = false
   }: Props = $props();
 
+  // slide fades in over its first frames only; the body fades with its height.
+  function revealBody(node: HTMLElement): TransitionConfig {
+    const config = slide(node, {
+      duration: motionDuration(200),
+      easing: cubicOut
+    });
+    return {
+      ...config,
+      css: (t, u) => {
+        const slideCss = (config.css?.(t, u) ?? '').replace(
+          /opacity:[^;]*;/,
+          ''
+        );
+        return `${slideCss.replace(/;?\s*$/, ';')}opacity: ${t};`;
+      }
+    };
+  }
+
   const REVEAL_SETTLE_DELAYS_MS = [0, 80, 200, 400];
 
   let containerElement = $state<HTMLDivElement | undefined>(undefined);
@@ -57,9 +78,11 @@
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
   );
 
+  // A section the parent opens through `open` stays as the parent says:
+  // its switch turning on elsewhere must not open it next to another one.
   $effect(() => {
     const checked = toggleChecked;
-    if (!showToggle) return;
+    if (!showToggle || open !== undefined) return;
     expanded = checked;
   });
 
@@ -252,7 +275,7 @@
   </div>
 
   {#if expanded && !disabled}
-    <div class="section-body">
+    <div class="section-body" transition:revealBody>
       {@render children?.()}
     </div>
   {/if}

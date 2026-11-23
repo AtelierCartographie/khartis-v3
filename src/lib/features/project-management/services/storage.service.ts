@@ -7,32 +7,12 @@ import { PipelineError } from '$lib/features/commons/pipeline.errors';
 import { m } from '$lib/paraglide/messages';
 import { PROJECT_CONST } from '../constants';
 import { getProjectDatabase } from './database-access.service';
+import { toStorageQuotaError } from './storage-quota.service';
 
 const PROJECT_STORAGE_ERROR_CODE = 'PROJECT_STORAGE_ERROR';
-const PROJECT_STORAGE_QUOTA_ERROR_CODE = 'PROJECT_STORAGE_QUOTA_EXCEEDED';
 
 async function getDb(): Promise<IDBDatabase> {
   return getProjectDatabase();
-}
-
-function isQuotaExceededError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const candidate = error as {
-    cause?: unknown;
-    code?: unknown;
-    name?: unknown;
-  };
-
-  return (
-    candidate.name === 'QuotaExceededError' ||
-    candidate.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-    candidate.code === 22 ||
-    candidate.code === 1014 ||
-    isQuotaExceededError(candidate.cause)
-  );
 }
 
 function createProjectStorageError(
@@ -79,19 +59,14 @@ export async function saveToStorage<T>(key: string, data: T): Promise<void> {
       LogCategory.PERSISTENCE,
       { key, error }
     );
-    const isQuotaExceeded = isQuotaExceededError(error);
-    const message = isQuotaExceeded
-      ? m.error_storage_quota_exceeded()
-      : m.error_storage_save_failed();
+    const quotaError = toStorageQuotaError(error, { key });
+    if (quotaError !== error) {
+      throw quotaError;
+    }
     throw new PipelineError(
-      message,
-      isQuotaExceeded
-        ? PROJECT_STORAGE_QUOTA_ERROR_CODE
-        : PROJECT_STORAGE_ERROR_CODE,
-      {
-        key,
-        cause: error
-      }
+      m.error_storage_save_failed(),
+      PROJECT_STORAGE_ERROR_CODE,
+      { key, cause: error }
     );
   }
 }

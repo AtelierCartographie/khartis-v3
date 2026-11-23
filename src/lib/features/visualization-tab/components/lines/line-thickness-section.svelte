@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import { Dropdown } from 'carbon-components-svelte';
@@ -160,119 +161,118 @@
   />
 </div>
 
-{#if thicknessMode === ThicknessMode.UNIQUE}
-  <SliderWithInput
-    label={m.thickness()}
-    min={SLIDER_LIMITS.lineWidth.min}
-    max={SLIDER_LIMITS.lineWidth.max}
-    step={SLIDER_LIMITS.lineWidth.step}
-    value={thickness}
-    showMinMax
-    inputWidth="128px"
-    onchange={onThicknessChange}
-  />
-  {@render dashedControl()}
-{:else if thicknessMode === ThicknessMode.PROPORTIONAL}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={pickerOpen}
-      titleText={m.thickness_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableSizeDataFields}
-      selectedFieldId={sizeFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.LINE_SIZE
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.LINE_SIZE
-      )}
-      onSelect={sizeFieldSelection.handleSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          sizeColumnName,
-          FACET_SLOT.LINE_SIZE,
-          ids
-        )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(FACET_SLOT.LINE_SIZE, en)}
+<SwitchedContent value={thicknessMode}>
+  {#if thicknessMode === ThicknessMode.UNIQUE}
+    <SliderWithInput
+      label={m.thickness()}
+      min={SLIDER_LIMITS.lineWidth.min}
+      max={SLIDER_LIMITS.lineWidth.max}
+      step={SLIDER_LIMITS.lineWidth.step}
+      value={thickness}
+      inputWidth="128px"
+      onchange={onThicknessChange}
     />
-  </div>
-  <SliderWithInput
-    label={m.max_thickness()}
-    min={SLIDER_LIMITS.lineMaxWidth.min}
-    max={SLIDER_LIMITS.lineMaxWidth.max}
-    step={SLIDER_LIMITS.lineMaxWidth.step}
-    value={maxThickness}
-    showMinMax
-    inputWidth="128px"
-    onchange={onMaxThicknessChange}
-  />
-  {@render dashedControl()}
-  <MissingDataSection
-    show={showMissingData}
-    onshowchange={onMissingDataShowChange}
-    color={missingDataColor}
-    oncolorchange={onMissingDataColorChange}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    showDashedToggle={true}
-    dashed={missingDataDashed}
-    dashedPattern={missingDataDashedPattern}
-    ondashedchange={onMissingDataDashedChange}
-    ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{:else if thicknessMode === ThicknessMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={pickerOpen}
-      titleText={m.thickness_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableValueDataFields}
-      selectedFieldId={valueFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.LINE_THICKNESS_VALUE
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.LINE_THICKNESS_VALUE
-      )}
-      onSelect={valueFieldSelection.handleSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          valueColumnName,
-          FACET_SLOT.LINE_THICKNESS_VALUE,
-          ids
+    {@render dashedControl()}
+  {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={pickerOpen}
+        titleText={m.thickness_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableSizeDataFields}
+        selectedFieldId={sizeFieldSelection.selectedFieldId}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          FACET_SLOT.LINE_SIZE
         )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(FACET_SLOT.LINE_THICKNESS_VALUE, en)}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          FACET_SLOT.LINE_SIZE
+        )}
+        onSelect={sizeFieldSelection.handleSelect}
+        onCollectionChange={(ids) =>
+          facetsSelection.updateVariables(
+            sizeColumnName,
+            FACET_SLOT.LINE_SIZE,
+            ids
+          )}
+        onToggleCollection={(en) =>
+          facetsSelection.toggle(FACET_SLOT.LINE_SIZE, en)}
+      />
+    </div>
+    <SliderWithInput
+      label={m.max_thickness()}
+      min={SLIDER_LIMITS.lineMaxWidth.min}
+      max={SLIDER_LIMITS.lineMaxWidth.max}
+      step={SLIDER_LIMITS.lineMaxWidth.step}
+      value={maxThickness}
+      inputWidth="128px"
+      onchange={onMaxThicknessChange}
     />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={thicknessDiscretizationLabel}
-    onsettings={onOpenThicknessDiscretization}
-  />
-  <SliderWithInput
-    label={m.max_thickness()}
-    min={SLIDER_LIMITS.lineMaxWidth.min}
-    max={SLIDER_LIMITS.lineMaxWidth.max}
-    step={SLIDER_LIMITS.lineMaxWidth.step}
-    value={maxThickness}
-    showMinMax
-    inputWidth="128px"
-    onchange={onMaxThicknessChange}
-  />
-  {@render dashedControl()}
-  <MissingDataSection
-    show={showMissingData}
-    onshowchange={onMissingDataShowChange}
-    color={missingDataColor}
-    oncolorchange={onMissingDataColorChange}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    showDashedToggle={true}
-    dashed={missingDataDashed}
-    dashedPattern={missingDataDashedPattern}
-    ondashedchange={onMissingDataDashedChange}
-    ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{/if}
+    {@render dashedControl()}
+    <MissingDataSection
+      show={showMissingData}
+      onshowchange={onMissingDataShowChange}
+      color={missingDataColor}
+      oncolorchange={onMissingDataColorChange}
+      showShapeSelector={false}
+      showSizeSlider={false}
+      showDashedToggle={true}
+      dashed={missingDataDashed}
+      dashedPattern={missingDataDashedPattern}
+      ondashedchange={onMissingDataDashedChange}
+      ondashedpatternchange={onMissingDataDashedPatternChange}
+    />
+  {:else if thicknessMode === ThicknessMode.CLASSES}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={pickerOpen}
+        titleText={m.thickness_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableValueDataFields}
+        selectedFieldId={valueFieldSelection.selectedFieldId}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          FACET_SLOT.LINE_THICKNESS_VALUE
+        )}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          FACET_SLOT.LINE_THICKNESS_VALUE
+        )}
+        onSelect={valueFieldSelection.handleSelect}
+        onCollectionChange={(ids) =>
+          facetsSelection.updateVariables(
+            valueColumnName,
+            FACET_SLOT.LINE_THICKNESS_VALUE,
+            ids
+          )}
+        onToggleCollection={(en) =>
+          facetsSelection.toggle(FACET_SLOT.LINE_THICKNESS_VALUE, en)}
+      />
+    </div>
+    <DiscretizationRow
+      label={m.discretization()}
+      value={thicknessDiscretizationLabel}
+      onsettings={onOpenThicknessDiscretization}
+    />
+    <SliderWithInput
+      label={m.max_thickness()}
+      min={SLIDER_LIMITS.lineMaxWidth.min}
+      max={SLIDER_LIMITS.lineMaxWidth.max}
+      step={SLIDER_LIMITS.lineMaxWidth.step}
+      value={maxThickness}
+      inputWidth="128px"
+      onchange={onMaxThicknessChange}
+    />
+    {@render dashedControl()}
+    <MissingDataSection
+      show={showMissingData}
+      onshowchange={onMissingDataShowChange}
+      color={missingDataColor}
+      oncolorchange={onMissingDataColorChange}
+      showShapeSelector={false}
+      showSizeSlider={false}
+      showDashedToggle={true}
+      dashed={missingDataDashed}
+      dashedPattern={missingDataDashedPattern}
+      ondashedchange={onMissingDataDashedChange}
+      ondashedpatternchange={onMissingDataDashedPatternChange}
+    />
+  {/if}
+</SwitchedContent>

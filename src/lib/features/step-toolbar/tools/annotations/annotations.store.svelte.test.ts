@@ -159,6 +159,79 @@ describe('annotations store', () => {
     );
   });
 
+  it('should not seed the page texts an older project already wrote as free texts', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'title',
+          type: AnnotationKind.TEXT,
+          content: 'Paris : âge du bâti\ndans le 13e arrondissement',
+          position: { x: 32, y: 24 },
+          coordinateSpace: 'page',
+          style: { fontSize: 14 }
+        },
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content:
+            'Sources : Apur, 2025. Fond de carte : Eurostat - GISCO, 2024.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          content: 'Réalisation : Atelier de cartographie, 2026.',
+          position: { x: 424, y: 556 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'label',
+          type: AnnotationKind.TEXT,
+          content: 'Océan Atlantique',
+          position: { x: 40, y: 300 },
+          style: { fontSize: 14 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([]);
+  });
+
+  it('should seed only the page texts an older project did not write', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content: 'Source: Eurostat, 2025.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([
+      ANNOTATION_ROLE.TITLE,
+      ANNOTATION_ROLE.SUBTITLE,
+      ANNOTATION_ROLE.BASEMAP_SOURCE,
+      ANNOTATION_ROLE.CREDIT
+    ]);
+  });
+
   it('turns the source placeholder into its lead-in once clicked', () => {
     annotationsActions.initPageElements({ withPlaceholders: true });
 
@@ -320,7 +393,13 @@ describe('annotations store', () => {
       return;
     }
 
+    // The credit box spans half the page: it cannot start past the middle.
     annotationsActions.moveAnnotation(credit.id, { x: 600, y: 560 });
+    expect(
+      getAnnotationsState().items.find((item) => item.id === credit.id)
+        ?.position
+    ).toEqual({ x: 421, y: 560 });
+
     annotationsActions.redistributePageElements(
       { width: 1191, height: 842 },
       { width: 842, height: 595 }
@@ -329,7 +408,35 @@ describe('annotations store', () => {
     expect(
       getAnnotationsState().items.find((item) => item.id === credit.id)
         ?.position
-    ).toEqual({ x: 949, y: 807 });
+    ).toEqual({ x: 595.5, y: 807 });
+  });
+
+  it('keeps a right-aligned caption on the page side of its text when the page shrinks', () => {
+    formatActions.toggleGrid();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const credit = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.CREDIT
+    );
+    expect(credit?.style?.textAlign).toBe(TextAlign.Right);
+    if (!credit) {
+      return;
+    }
+
+    // Box from 150 to 571 on an 842 px page: the text ends 271 px from the
+    // right edge, though the box starts closer to the left one.
+    annotationsActions.moveAnnotation(credit.id, { x: 150, y: 300 });
+    annotationsActions.redistributePageElements(
+      { width: 595, height: 595 },
+      { width: 842, height: 595 }
+    );
+
+    const position = getAnnotationsState().items.find(
+      (item) => item.id === credit.id
+    )?.position;
+    expect(position).toEqual({ x: 26.5, y: 300 });
+    // The text end keeps its gap to the right edge of the page.
+    expect(595 - ((position?.x ?? 0) + 595 / 2)).toBe(271);
   });
 
   it('uses the custom page sizing profile when page elements are initialized', () => {
@@ -367,6 +474,38 @@ describe('annotations store', () => {
     expect(legacyShape.position).toEqual({ x: 40, y: 72 });
   });
 
+  it('should anchor a text to the map when it is placed inside the map frame', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Golfe');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 200, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Golfe'
+    });
+
+    expect(text?.coordinateSpace).toBe('map');
+    expect(text?.position).toEqual({ x: 120, y: 100 });
+  });
+
+  it('should keep a text on the page when it is placed in the page margins', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Note');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 20, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Note'
+    });
+
+    expect(text?.coordinateSpace).toBe('page');
+    expect(text?.position).toEqual({ x: 20, y: 150 });
+  });
+
   it('starts placement without spawning the annotation until commit', () => {
     annotationsActions.beginPlacement(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
 
@@ -392,7 +531,7 @@ describe('annotations store', () => {
     expect(createdShape).toBeTruthy();
     // Drawn-on-the-map shapes are created in `'map'` space (no `role`) so they
     // follow the basemap; the page-space placement position is converted to
-    // map-area-local (page top-left minus the page margins).
+    // map-area-local (page top-left minus the map frame insets).
     expect(createdShape?.coordinateSpace).toBe('map');
     expect(createdShape?.position).toEqual({ x: 96 - 32, y: 128 - 32 });
     expect(createdShape?.anchor).toBeUndefined();

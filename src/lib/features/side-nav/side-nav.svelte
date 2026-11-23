@@ -8,7 +8,7 @@
   } from '$lib/features/commons/stores/ui-density.store.svelte';
   import {
     detectApplePlatform,
-    getSideNavShortcutLabels
+    getPrimaryShortcutLabel
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages';
   import {
@@ -36,9 +36,9 @@
     CopyFile,
     DocumentAdd,
     Download,
-    Education,
     FolderOpen,
     Information,
+    Keyboard,
     Launch,
     Save,
     TrashCan
@@ -57,7 +57,11 @@
     /^v/i,
     ''
   );
-  let shortcutLabels = $state(getSideNavShortcutLabels(false));
+  let shortcutLabels = $state({
+    newProject: getPrimaryShortcutLabel('newProject', false),
+    openProject: getPrimaryShortcutLabel('openProject', false),
+    saveProject: getPrimaryShortcutLabel('saveProject', false)
+  });
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);
   let isInstalledAsApp = $state(false);
@@ -245,6 +249,11 @@
     );
   }
 
+  function openShortcutsSheet() {
+    globalState.isSideNavOpen = false;
+    globalState.isShortcutsSheetOpen = true;
+  }
+
   async function handleInstallApp() {
     sideNav.closeSideNav();
 
@@ -273,7 +282,12 @@
   }
 
   onMount(() => {
-    shortcutLabels = getSideNavShortcutLabels(detectApplePlatform());
+    const isApplePlatform = detectApplePlatform();
+    shortcutLabels = {
+      newProject: getPrimaryShortcutLabel('newProject', isApplePlatform),
+      openProject: getPrimaryShortcutLabel('openProject', isApplePlatform),
+      saveProject: getPrimaryShortcutLabel('saveProject', isApplePlatform)
+    };
 
     currentBrowser = detectBrowserFamily(window.navigator.userAgent);
     isInstalledAsApp = detectInstalledDisplayMode();
@@ -418,9 +432,6 @@
               on:click={openDuplicateModal}
             >
               {m.sidenav_duplicate_project()}
-              <span class="shortcut-icon"
-                >{shortcutLabels.duplicateProject}</span
-              >
             </Button>
 
             <Button
@@ -433,7 +444,6 @@
               on:click={openDeleteModal}
             >
               {m.sidenav_delete_project()}
-              <span class="shortcut-icon">{shortcutLabels.deleteProject}</span>
             </Button>
           </Column>
         </Row>
@@ -465,6 +475,18 @@
             </Button>
 
             <ClearCacheButton />
+
+            <Button
+              size="small"
+              kind="ghost"
+              icon={Keyboard}
+              class="menu-bar-item"
+              data-testid="sidenav-keyboard-shortcuts"
+              on:click={openShortcutsSheet}
+            >
+              {m.sidenav_keyboard_shortcuts()}
+              <span class="shortcut-icon">?</span>
+            </Button>
           </Column>
         </Row>
       </Grid>
@@ -501,7 +523,7 @@
             <Button
               size="small"
               kind="ghost"
-              icon={Education}
+              icon={Launch}
               class="menu-bar-item"
               disabled
             >
@@ -701,6 +723,19 @@
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
     padding-left: var(--safe-area-left);
+    /* Carbon hides the closed menu with a transform it does not animate. */
+    transition: transform 240ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  #khartis-side-nav :global(.bx--side-nav--collapsed) {
+    transition: transform 180ms cubic-bezier(0.2, 0, 1, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #khartis-side-nav :global(.bx--side-nav),
+    #khartis-side-nav :global(.bx--side-nav--collapsed) {
+      transition: none;
+    }
   }
 
   #khartis-side-nav :global(.bx--side-nav__overlay) {
