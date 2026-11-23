@@ -7,9 +7,12 @@ import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import {
   clampToRange,
+  getAreaGridOrigin,
+  getPageGridOrigin,
   PAGE_GRID_SIZE_PX,
   remapPointToResizedArea,
-  snapPointWithinBounds
+  snapPointWithinBounds,
+  type PageGridPoint
 } from '$lib/features/commons/utils/page-grid.utils';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
@@ -108,6 +111,22 @@ export function isGridEnabled(): boolean {
   return getFormatState().gridEnabled;
 }
 
+/**
+ * Where the page grid starts in an annotation's coordinates: the page, or the
+ * map frame for an annotation placed on the map, so both snap on the visible
+ * grid points.
+ */
+export function getAnnotationGridOrigin(
+  coordinateSpace: AnnotationCoordinateSpace,
+  page: Pick<PageLayout, 'width' | 'height'> = getFormatState()
+): PageGridPoint {
+  if (coordinateSpace === 'page') {
+    return getPageGridOrigin(page);
+  }
+  const { mapFrame } = getFormatState();
+  return getAreaGridOrigin(page, { x: mapFrame.left, y: mapFrame.top });
+}
+
 function resolveMapFrame(layout: PageLayout): PageFrame {
   const left = layout.margins.left;
   const top = layout.margins.top;
@@ -182,7 +201,8 @@ export function clampPageElementPosition(
       minY: 0,
       maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
-    isGridEnabled() && snapToGridEnabled
+    isGridEnabled() && snapToGridEnabled,
+    getPageGridOrigin(layout)
   );
 }
 
@@ -319,7 +339,8 @@ export function clampAnnotationPosition(
       minY,
       maxY
     },
-    isGridEnabled()
+    isGridEnabled(),
+    getAnnotationGridOrigin(coordinateSpace, layout)
   );
 }
 

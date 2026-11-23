@@ -725,7 +725,9 @@ describe('legend overlay visibility', () => {
 
     const [first, second] = getLegendState().items;
     expect(first.dragPosition ?? null).toBeNull();
-    expect(second.dragPosition).toEqual({ x: 40, y: 84 });
+    // On the grid centred on the default A4 landscape page, which starts at
+    // 1, 3: 33, 35 in the map area behind the 32 px margins.
+    expect(second.dragPosition).toEqual({ x: 37, y: 83 });
   });
 
   it('snaps legend dragging to the page snap step when enabled', async () => {
@@ -765,7 +767,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getFirstLegendFramePosition()).toEqual({ x: 40, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 37, y: 35 });
 
     await fireEvent.pointerUp(window);
 
@@ -893,7 +895,7 @@ describe('legend overlay visibility', () => {
       clientY: 21.5
     });
 
-    expect(getFirstLegendFramePosition()).toEqual({ x: 40, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 37, y: 35 });
   });
 
   it('keeps a dragged legend at its distance to the nearest edges when the page shrinks', async () => {

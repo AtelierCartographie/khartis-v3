@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getAreaGridOrigin,
+  getContrastRatio,
   getDragBounds,
+  getPageGridOrigin,
+  getPageGridPointColor,
+  PAGE_GRID_POINT_CONTRAST,
   getGridAlignedRange,
   LAYOUT_UNIT_PX,
   PAGE_GRID_SIZE_PX,
@@ -10,6 +15,11 @@ import {
   snapPointWithinBounds,
   snapToPageGrid
 } from './page-grid.utils';
+import { hexToRgb } from './color-utils';
+
+function parseRgb(color: string): [number, number, number] {
+  return color.match(/\d+/g)!.map(Number) as [number, number, number];
+}
 
 describe('page-grid utils', () => {
   it('derives the snap step and the visible grid from one base unit', () => {
@@ -106,5 +116,57 @@ describe('page-grid utils', () => {
       minY: 0,
       maxY: 0
     });
+  });
+
+  it('centres the grid so the gaps to opposite page edges differ by at most a pixel', () => {
+    for (const extent of [595, 640, 842, 1000, 1191, 600]) {
+      const { x } = getPageGridOrigin({ width: extent, height: extent });
+      const lastPoint =
+        x + Math.floor((extent - x) / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
+      const startGap = x;
+      const endGap = extent - lastPoint;
+      expect(Number.isInteger(x)).toBe(true);
+      expect(endGap - startGap).toBeGreaterThanOrEqual(0);
+      expect(endGap - startGap).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('snaps page positions onto the centred grid points', () => {
+    const page = { width: 595, height: 640 };
+    const origin = getPageGridOrigin(page);
+    expect(origin).toEqual({ x: 3, y: 2 });
+    expect(snapToPageGrid(13, true, origin.x)).toBe(15);
+    expect(snapPointToPageGrid({ x: 13, y: 13 }, true, origin)).toEqual({
+      x: 15,
+      y: 14
+    });
+    expect(getGridAlignedRange(0, 20, origin.x)).toEqual({ min: 3, max: 19 });
+  });
+
+  it('expresses the page grid origin in the coordinates of an area', () => {
+    const page = { width: 595, height: 640 };
+    const areaOrigin = getAreaGridOrigin(page, { x: 32, y: 69 });
+    const snapped = snapPointToPageGrid({ x: 10, y: 10 }, true, areaOrigin);
+    const onPage = { x: snapped.x + 32, y: snapped.y + 69 };
+    const pageOrigin = getPageGridOrigin(page);
+    expect((onPage.x - pageOrigin.x) % PAGE_SNAP_STEP_PX).toBe(0);
+    expect((onPage.y - pageOrigin.y) % PAGE_SNAP_STEP_PX).toBe(0);
+  });
+
+  it('gives the grid points the same contrast on light, mid and dark pages', () => {
+    for (const page of [
+      '#ffffff',
+      '#f3efe6',
+      '#9aa3ad',
+      '#1f2a44',
+      '#000000'
+    ]) {
+      const ratio = getContrastRatio(
+        hexToRgb(page),
+        parseRgb(getPageGridPointColor(page))
+      );
+      expect(ratio).toBeGreaterThanOrEqual(PAGE_GRID_POINT_CONTRAST - 0.05);
+      expect(ratio).toBeLessThan(PAGE_GRID_POINT_CONTRAST + 0.15);
+    }
   });
 });
