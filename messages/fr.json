@@ -488,6 +488,7 @@
   "button_cancel": "Annuler",
   "button_validate": "Valider",
   "button_apply": "Appliquer",
+  "format_equal_margins": "Marges égales",
   "format_margin_top": "Marge haute (px)",
   "format_margin_bottom": "Marge basse (px)",
   "format_margin_left": "Marge gauche (px)",

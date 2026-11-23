@@ -488,6 +488,7 @@
   "button_cancel": "Cancel",
   "button_validate": "Confirm",
   "button_apply": "Apply",
+  "format_equal_margins": "Equal margins",
   "format_margin_top": "Top margin (px)",
   "format_margin_bottom": "Bottom margin (px)",
   "format_margin_left": "Left margin (px)",
