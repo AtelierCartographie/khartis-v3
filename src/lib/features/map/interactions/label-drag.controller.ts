@@ -108,7 +108,11 @@ export function attachLabelDragController({
     const world = matrix
       ? Array.from(new Matrix4(Array.from(matrix)).transformAsPoint([x, y, 0]))
       : [x, y, 0];
-    const [ax, ay] = info.viewport.project(world);
+    // A projected point is relative to its own view: each map of a collection
+    // has one, set apart in the shared canvas.
+    const [px, py] = info.viewport.project(world);
+    const ax = px + info.viewport.x;
+    const ay = py + info.viewport.y;
     const [cx, cy] = context.resolveBlockCenter(datum);
     const [hw, hh] = context.resolveTextHalfSize(datum);
     const scale = context.pageDisplayScale;
