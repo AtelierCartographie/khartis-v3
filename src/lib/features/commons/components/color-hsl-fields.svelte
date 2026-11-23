@@ -366,8 +366,12 @@
     box-sizing: border-box;
   }
 
+  /* Carbon keeps 64 px for the icon (16 px wide, 16 px from the edge): 40 px
+     leave the same 8 px before it and the label on one line in a field-wide
+     menu. */
   :global(.pick-button.bx--btn) {
     width: 100%;
     max-width: 100%;
+    padding-right: calc(var(--cds-spacing-05) * 2 + var(--cds-spacing-03));
   }
 </style>
