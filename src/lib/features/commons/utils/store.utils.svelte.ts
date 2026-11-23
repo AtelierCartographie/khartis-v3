@@ -34,6 +34,11 @@ export interface ToolStorePersistenceConfig<T extends object> {
   key: string;
   priority?: SavePriorityType;
   serializeFilter?: (state: T) => Partial<T>;
+  /**
+   * Editing preferences of the session: never saved, and back to their
+   * default whenever a project is restored, whatever an older save holds.
+   */
+  sessionKeys?: ReadonlyArray<keyof T>;
 }
 
 export function createToolStore<T extends object, A extends object = object>(
@@ -72,10 +77,16 @@ export function createToolStore<T extends object, A extends object = object>(
   const persistedSetState =
     getSetStateOverride<T>(custom) ?? baseActions.setState;
 
+  const sessionKeys = persistence?.sessionKeys ?? [];
+  const omitSessionKeys = (value: object): Partial<T> => {
+    const persisted = { ...value } as Partial<T>;
+    for (const key of sessionKeys) delete persisted[key];
+    return persisted;
+  };
   const serializeState = () =>
-    persistence?.serializeFilter
-      ? (persistence.serializeFilter(state) as T)
-      : state;
+    omitSessionKeys(
+      persistence?.serializeFilter ? persistence.serializeFilter(state) : state
+    ) as T;
 
   const getState = () => state;
 
@@ -90,7 +101,12 @@ export function createToolStore<T extends object, A extends object = object>(
       key: persistence.key,
       serialize: () => serializeState(),
       deserialize: (data: unknown) =>
-        persistedSetState(createPersistedState(defaultState, data)),
+        persistedSetState(
+          createPersistedState(
+            defaultState,
+            isRecord(data) ? omitSessionKeys(data) : data
+          )
+        ),
       reset: () => baseActions.reset(),
       priority: persistence.priority ?? SavePriority.DEBOUNCED
     });

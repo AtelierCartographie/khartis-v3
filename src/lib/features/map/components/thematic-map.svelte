@@ -2585,7 +2585,11 @@
 {:else}
   <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
-      <PageGridOverlay displayScale={pageDisplayScale} />
+      <PageGridOverlay
+        page={pageSize}
+        pageColor={pageBackgroundColor}
+        displayScale={pageDisplayScale}
+      />
     {/if}
     {#if !isFacetCell}
       <PageGuidesOverlay displayScale={pageDisplayScale} />

@@ -86,21 +86,22 @@ describe('annotations store', () => {
         .map((item) => [item.role, item])
     );
 
+    // Snapped on the grid centred on the default page, which starts at 1, 3.
     expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.position).toEqual({
-      x: 44,
-      y: 44
+      x: 45,
+      y: 43
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.position).toEqual({
-      x: 44,
-      y: 68
+      x: 45,
+      y: 67
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
-      x: 364,
-      y: 480
+      x: 365,
+      y: 479
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
-      x: 364,
-      y: 528
+      x: 365,
+      y: 527
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
       TextAlign.Right
@@ -349,7 +350,7 @@ describe('annotations store', () => {
       (item) => item.role === ANNOTATION_ROLE.NOTE
     );
 
-    expect(note?.position).toEqual({ x: 364, y: 456 });
+    expect(note?.position).toEqual({ x: 365, y: 455 });
     expect(note?.coordinateSpace).toBe('page');
     expect(note?.positionMode).toBe('manual');
   });
@@ -466,12 +467,13 @@ describe('annotations store', () => {
       ]
     });
 
-    annotationsActions.moveAnnotation('legacy-shape', { x: 40, y: 72 });
+    // A grid point of the map frame, whose page grid starts at 1, 3.
+    annotationsActions.moveAnnotation('legacy-shape', { x: 41, y: 71 });
 
     const [legacyShape] = getAnnotationsState().items;
 
     expect(legacyShape.coordinateSpace).toBe('map');
-    expect(legacyShape.position).toEqual({ x: 40, y: 72 });
+    expect(legacyShape.position).toEqual({ x: 41, y: 71 });
   });
 
   it('should anchor a text to the map when it is placed inside the map frame', () => {
@@ -583,19 +585,20 @@ describe('annotations store', () => {
 
   it('creates finished drawings in map space with a margin-relative position', () => {
     annotationsActions.beginDrawing(DrawingType.LINE);
-    // Origin on the 12px page grid so grid snapping is a no-op and the margin
-    // conversion is the only transform under test.
+    // Origin on the grid centred on the default A4 landscape page (which
+    // starts at 1, 3), so grid snapping is a no-op and the margin conversion
+    // is the only transform under test.
     annotationsActions.updateDrawing([
-      { x: 48, y: 60 },
-      { x: 120, y: 96 }
+      { x: 49, y: 63 },
+      { x: 121, y: 99 }
     ]);
 
     const drawing = annotationsActions.finishDrawing();
 
     // Drawn-on-the-map drawings follow the basemap: `'map'` space with the page
-    // origin (48, 60) shifted by the page margins (32) into map-area-local space.
+    // origin (49, 63) shifted by the page margins (32) into map-area-local space.
     expect(drawing?.coordinateSpace).toBe('map');
-    expect(drawing?.position).toEqual({ x: 48 - 32, y: 60 - 32 });
+    expect(drawing?.position).toEqual({ x: 49 - 32, y: 63 - 32 });
     expect(drawing?.anchor).toBeUndefined();
   });
 

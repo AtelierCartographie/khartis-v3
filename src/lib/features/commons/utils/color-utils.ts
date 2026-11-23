@@ -139,3 +139,22 @@ export function darkenHex(hex: string, ratio: number): string {
   const { hue, saturation, lightness } = hexToHsl(hex);
   return hslToHex(hue, saturation, Math.round(lightness * (1 - ratio)));
 }
+
+/** A typed `#rgb` or `#rrggbb` code, upper-case with the hash, or null. */
+export function normalizeHexInput(rawHex: string): string | null {
+  const sanitized = rawHex.trim().replace(/^#/, '');
+
+  if (/^[0-9a-fA-F]{3}$/.test(sanitized)) {
+    const expanded = sanitized
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('');
+    return `#${expanded.toUpperCase()}`;
+  }
+
+  if (/^[0-9a-fA-F]{6}$/.test(sanitized)) {
+    return `#${sanitized.toUpperCase()}`;
+  }
+
+  return null;
+}

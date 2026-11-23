@@ -109,7 +109,11 @@
 
 <div class="facets-page" style="{pageStyle}{colorBlindnessFilterStyle}">
   {#if showPageGrid}
-    <PageGridOverlay displayScale={pageDisplayScale} />
+    <PageGridOverlay
+      page={pageSize}
+      pageColor={pageBackgroundColor}
+      displayScale={pageDisplayScale}
+    />
   {/if}
 
   <div class="facets-map-stage" style={mapStageStyle}>
