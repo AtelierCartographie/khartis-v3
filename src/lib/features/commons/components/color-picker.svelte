@@ -291,7 +291,7 @@
       <div class="dropdown-actions">
         <Button
           kind="tertiary"
-          size="field"
+          size="small"
           onclick={() => {
             revertPreviewState();
             onCancel();
@@ -300,7 +300,7 @@
         >
         <Button
           kind="primary"
-          size="field"
+          size="small"
           icon={ArrowRight}
           onclick={() => {
             const validatedColor = getValidatedColor();
