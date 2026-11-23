@@ -1,5 +1,10 @@
 export { legendActions, getLegendState } from './legend.store.svelte';
-export { requestLegendItemFocus } from './legend-focus.svelte';
+export {
+  clearLegendItemCentering,
+  getPendingLegendItemCentering,
+  requestLegendItemFocus,
+  setSelectedLegendItem
+} from './legend-focus.svelte';
 export {
   resolveLegendEntryLabel,
   resolveLegendItemLayout,

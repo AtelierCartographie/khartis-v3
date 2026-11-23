@@ -12,6 +12,8 @@
     label: string;
     type?: VariableBadgeType;
     interactive?: boolean;
+    /** Shows the type pictogram after the name; the colours alone mark the type otherwise. */
+    showTypeIcon?: boolean;
     element?: HTMLElement;
     onclick?: (e: MouseEvent) => void;
     onmouseenter?: (e: MouseEvent) => void;
@@ -25,6 +27,7 @@
     label,
     type = 'string',
     interactive = true,
+    showTypeIcon = true,
     element = $bindable(),
     onclick,
     onmouseenter,
@@ -57,25 +60,27 @@
   tabindex={interactive ? undefined : -1}
 >
   <span class="badge-label" title={label}>{label}</span>
-  <span class="badge-divider"></span>
-  {#if type === 'geo'}
-    <span class="badge-icon">
-      <LocationFilled size={16} />
-    </span>
-  {:else if type === 'geo-ref'}
-    <span class="badge-icon">
-      <LocationStarFilled size={16} />
-    </span>
-  {:else if type === 'date'}
-    <span class="badge-icon">
-      <Calendar size={16} />
-    </span>
-  {:else if type === 'numeric'}
-    <span class="badge-icon-text">{m.variable_badge_number_example()}</span>
-  {:else if type === 'boolean'}
-    <span class="badge-icon-text">{m.variable_badge_boolean_example()}</span>
-  {:else if type === 'string'}
-    <span class="badge-icon-text">{m.variable_badge_text_example()}</span>
+  {#if showTypeIcon}
+    <span class="badge-divider"></span>
+    {#if type === 'geo'}
+      <span class="badge-icon">
+        <LocationFilled size={16} />
+      </span>
+    {:else if type === 'geo-ref'}
+      <span class="badge-icon">
+        <LocationStarFilled size={16} />
+      </span>
+    {:else if type === 'date'}
+      <span class="badge-icon">
+        <Calendar size={16} />
+      </span>
+    {:else if type === 'numeric'}
+      <span class="badge-icon-text">{m.variable_badge_number_example()}</span>
+    {:else if type === 'boolean'}
+      <span class="badge-icon-text">{m.variable_badge_boolean_example()}</span>
+    {:else if type === 'string'}
+      <span class="badge-icon-text">{m.variable_badge_text_example()}</span>
+    {/if}
   {/if}
 </svelte:element>
 
