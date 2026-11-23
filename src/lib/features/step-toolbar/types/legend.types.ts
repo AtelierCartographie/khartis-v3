@@ -9,6 +9,8 @@ import type {
 
 export type LegendClassBarOrientation = 'horizontal' | 'vertical';
 
+export type LegendTitleAlign = 'start' | 'center' | 'end';
+
 /** Drawing choices of one legend; every field is optional in a saved project. */
 export interface LegendItemLayout {
   /** Class bars: each class as long as its share of the value range. */
@@ -20,6 +22,10 @@ export interface LegendItemLayout {
   entrySpacing?: number;
   /** Width the frame was dragged to, in legend units; the content may exceed it. */
   width?: number;
+  /** Title and subtitle at the left of the entries instead of above them. */
+  titleSide?: boolean;
+  /** Vertical placement of a side title against the entries. */
+  titleAlign?: LegendTitleAlign;
 }
 
 export interface LegendItem {
