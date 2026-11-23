@@ -4,7 +4,10 @@ export {
 } from './annotations.store.svelte';
 export { drawingSmoothing } from './drawing-smoothing.svelte';
 export { isPageElementPlaceholder } from './annotations-placeholders.utils';
-export { stackBottomRightPageElements } from './annotations-page-layout.utils';
+export {
+  getAnnotationGridOrigin,
+  stackBottomRightPageElements
+} from './annotations-page-layout.utils';
 export type {
   PageElementRole,
   Annotation,
