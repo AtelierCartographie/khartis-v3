@@ -91,14 +91,18 @@
     return buildColorFromHsl(hue, saturation, lightness);
   }
 
+  // Closing without validating restores the colour the picker opened with,
+  // in the fields and the trigger swatch as on the map when previewed.
   function revertPreviewState(): void {
-    if (!livePreview || !initialColor) {
+    if (!initialColor) {
       return;
     }
 
     const nextColor = initialColor;
     applyColor(nextColor);
-    onPreview(nextColor);
+    if (livePreview) {
+      onPreview(nextColor);
+    }
   }
 
   function updateDropdownPosition(): void {
