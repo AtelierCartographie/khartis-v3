@@ -1,13 +1,7 @@
-import { computeFlippedScrollablePosition } from './dropdown-position.utils';
-
-interface RectLike {
-  top: number;
-  left: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
+import {
+  computeFlippedScrollablePosition,
+  type DropdownAnchorRect
+} from './dropdown-position.utils';
 
 interface ViewportLike {
   width: number;
@@ -15,7 +9,7 @@ interface ViewportLike {
 }
 
 interface ResolveColorPickerDropdownPositionOptions {
-  triggerRect: RectLike;
+  triggerRect: DropdownAnchorRect;
   dropdownHeight: number;
   viewport: ViewportLike;
   margin?: number;

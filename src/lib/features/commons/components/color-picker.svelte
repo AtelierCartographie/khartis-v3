@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolveColorPickerDropdownPosition } from '$lib/features/commons/utils/color-picker-position';
+  import { resolveRowAnchorRect } from '$lib/features/commons/utils/dropdown-position.utils';
   import {
     hexToHsl,
     hslToHex,
@@ -114,7 +115,7 @@
     }
 
     const nextPosition = resolveColorPickerDropdownPosition({
-      triggerRect: triggerEl.getBoundingClientRect(),
+      triggerRect: resolveRowAnchorRect(triggerEl),
       dropdownHeight: dropdownEl?.offsetHeight ?? 400,
       viewport: {
         width: window.innerWidth,
