@@ -237,6 +237,12 @@
 /* Carbon v10 sets list chevrons 1rem from the field edge. They sit 0.5rem
    away here, with the clear button against them and a divider in between,
    which leaves more room for the value. */
+/* A truncated tag (`maxWidth`) wraps its label in a tooltip trigger, a button
+   whose own colour hid the label on a dark tag: it keeps the tag's. */
+.bx--tag--truncate .bx--tooltip__trigger {
+  color: inherit;
+}
+
 .bx--list-box__menu-icon {
   right: 0.5rem;
 }
