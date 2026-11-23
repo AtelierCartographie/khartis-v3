@@ -110,11 +110,7 @@
 
 <div class="facets-page" style="{pageStyle}{colorBlindnessFilterStyle}">
   {#if showPageGrid}
-    <PageGridOverlay
-      page={pageSize}
-      pageColor={pageBackgroundColor}
-      displayScale={pageDisplayScale}
-    />
+    <PageGridOverlay page={pageSize} displayScale={pageDisplayScale} />
   {/if}
   <PageGuidesOverlay displayScale={pageDisplayScale} />
 

@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     getPageGridOrigin,
-    getPageGridPointColor,
     PAGE_GRID_SIZE_PX,
     type PageGridSize
   } from '$lib/features/commons/utils/page-grid.utils';
@@ -9,11 +8,10 @@
   interface Props {
     /** Page size in page units. */
     page: PageGridSize;
-    pageColor: string;
     displayScale?: number;
   }
 
-  let { page, pageColor, displayScale = 1 }: Props = $props();
+  let { page, displayScale = 1 }: Props = $props();
 
   // A fixed size on screen whatever the zoom, drawn on whole device pixels so
   // that every point stays crisp and alike.
@@ -35,7 +33,6 @@
   const pageDisplayScale = $derived(
     Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
   );
-  const pointColor = $derived(getPageGridPointColor(pageColor));
   // Device pixels per page unit.
   const scale = $derived(pageDisplayScale * devicePixelRatio);
   const viewWidth = $derived(Math.max(1, Math.round(page.width * scale)));
@@ -66,7 +63,7 @@
   preserveAspectRatio="none"
   shape-rendering="crispEdges"
 >
-  <path d={pointsPath} fill={pointColor} />
+  <path d={pointsPath} fill="#ffffff" />
 </svg>
 
 <style>
@@ -78,5 +75,9 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     overflow: hidden;
+    /* White points inverted against whatever lies beneath them, page or map:
+       dark on light grounds, light on dark ones. */
+    mix-blend-mode: difference;
+    opacity: 0.28;
   }
 </style>
