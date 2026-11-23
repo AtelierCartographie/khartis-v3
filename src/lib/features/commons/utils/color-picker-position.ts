@@ -29,7 +29,8 @@ interface ResolvedColorPickerDropdownPosition {
   openUpward: boolean;
 }
 
-const MIN_DROPDOWN_WIDTH = 240;
+// Room for the eyedropper button label on one line.
+const MIN_DROPDOWN_WIDTH = 320;
 const DEFAULT_MARGIN = 16;
 
 export function resolveColorPickerDropdownPosition({

@@ -13,8 +13,11 @@
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { m } from '$lib/paraglide/messages';
-  import { Button, Column, Grid, Row } from 'carbon-components-svelte';
-  import { ChevronDown } from 'carbon-icons-svelte';
+  import { Button } from 'carbon-components-svelte';
+  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
+  import { cubicOut } from 'svelte/easing';
+  import type { TransitionConfig } from 'svelte/transition';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import clsx from 'clsx';
   import { EVENT, KEY } from '../constants/dom.constants';
 
@@ -166,9 +169,23 @@
 
     if (!colorOpen) {
       onBeforeOpen();
+      // Placed before it shows, so that it unfolds from its field.
+      updateDropdownPosition();
     }
 
     colorOpen = !colorOpen;
+  }
+
+  // Unfolds from its field like the Carbon lists (max-height, 110 ms): the
+  // menu is revealed downward, or upward when it opens above the field.
+  function unfoldMenu(_node: Element): TransitionConfig {
+    const upward = openUpward;
+    return {
+      duration: motionDuration(110),
+      easing: cubicOut,
+      css: (t) =>
+        `clip-path: inset(${upward ? (1 - t) * 100 : 0}% 0 ${upward ? 0 : (1 - t) * 100}% 0); opacity: ${Math.min(1, t * 2)};`
+    };
   }
 
   $effect(() => {
@@ -261,46 +278,40 @@
       style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px; max-height: {dropdownPosition.maxHeight}px;"
       bind:this={dropdownEl}
       use:portal
+      transition:unfoldMenu
     >
       <ColorHslFields
+        variant="dropdown"
         bind:hex={hex}
         bind:hue={hue}
         bind:saturation={saturation}
         bind:lightness={lightness}
         onpickingchange={(picking) => (isPickingScreenColor = picking)}
       />
-      <Grid condensed class="mb-5">
-        <Row noGutter class="mt-4">
-          <Column sm={2} md={4} lg={8}>
-            <Button
-              kind="tertiary"
-              size="field"
-              class="action-button"
-              onclick={() => {
-                revertPreviewState();
-                onCancel();
-                colorOpen = false;
-              }}>{m.button_cancel()}</Button
-            >
-          </Column>
-
-          <Column sm={2} md={4} lg={8}>
-            <Button
-              kind="primary"
-              size="field"
-              class="action-button"
-              onclick={() => {
-                const validatedColor = getValidatedColor();
-                applyColor(validatedColor);
-                onValidate(validatedColor);
-                colorOpen = false;
-              }}
-            >
-              {m.button_apply()}
-            </Button>
-          </Column>
-        </Row>
-      </Grid>
+      <div class="dropdown-actions">
+        <Button
+          kind="tertiary"
+          size="field"
+          onclick={() => {
+            revertPreviewState();
+            onCancel();
+            colorOpen = false;
+          }}>{m.button_cancel()}</Button
+        >
+        <Button
+          kind="primary"
+          size="field"
+          icon={ArrowRight}
+          onclick={() => {
+            const validatedColor = getValidatedColor();
+            applyColor(validatedColor);
+            onValidate(validatedColor);
+            colorOpen = false;
+          }}
+        >
+          {m.button_validate()}
+        </Button>
+      </div>
     </div>
   {/if}
 </div>
@@ -375,6 +386,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--cds-ui-04);
     box-sizing: border-box;
+    padding: var(--cds-spacing-05);
     max-width: calc(100vw - 2 * var(--cds-spacing-05));
     overflow-x: hidden;
     overflow-y: auto;
@@ -385,7 +397,14 @@
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  .color-dropdown :global(.action-button) {
+  .dropdown-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--cds-spacing-05);
+    margin-top: var(--cds-spacing-05);
+  }
+
+  .dropdown-actions :global(.bx--btn) {
     width: 100%;
     max-width: 100%;
   }
