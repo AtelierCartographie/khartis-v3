@@ -65,9 +65,11 @@ const simplify_topology_normalized_macro = `CREATE OR REPLACE MACRO simplify_top
         FROM source_data
         SELECT list(geom ORDER BY _gid) as geom_list
     ),
+    -- simplify_boundary is spelled out: spatial 2.0 fails to bind the
+    -- two-argument form; true is its default.
     dumped_data AS (
         FROM ordered_data, calc_metric
-        SELECT UNNEST(ST_Dump(ST_CoverageSimplify(geom_list, computed_tolerance))) as d
+        SELECT UNNEST(ST_Dump(ST_CoverageSimplify(geom_list, computed_tolerance, true))) as d
     ),
     final_reconstruction AS (
         FROM dumped_data
