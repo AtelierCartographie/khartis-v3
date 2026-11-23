@@ -420,13 +420,23 @@ passe par `globalState.isMapExporting`, jamais par un changement d'étape.
 
 La page porte deux zones distinctes, enregistrées dans l'état du Format en
 unités de page. Les marges (`margins`) délimitent la zone de mise en page :
-grille, textes de page, légendes et indications géographiques s'y placent. Le
+textes de page, légendes et indications géographiques s'y placent. Le
 cadre de la carte (`mapFrame`) délimite le canevas de la carte et de la
 collection de cartes, et c'est lui que l'export rend. Changer les marges ne
 déplace pas la carte. Les bords gris de l'étape Habillage modifient le cadre :
 tirer un bord recadre la carte sans la redessiner (vue manuelle). Les bords de
 la page, juste à l'extérieur, la redimensionnent de la même manière ; la page
 reste centrée et grandit des deux côtés.
+
+La grille de l'étape Habillage couvre toute la page, un point tous les 12 px,
+et se centre sur elle : l'écart entre les points extrêmes et les bords est le
+même des deux côtés, au pixel près (`getPageGridOrigin`). Le magnétisme, au pas
+de 4 px, part de la même origine, y compris dans le cadre de la carte
+(`getAreaGridOrigin`), pour que les éléments s'aimantent sur les points
+visibles. Les points gardent une taille fixe à l'écran et une couleur tirée du
+fond de page, à contraste constant (`getPageGridPointColor`). L'affichage de la
+grille est une préférence de la session : il n'est pas enregistré, et la grille
+réapparaît à chaque ouverture de projet.
 
 Tant que la vue est automatique, un réajustement (données, fond, projection,
 format de page) colle le cadre à la carte dessinée, sans espace, dans la zone

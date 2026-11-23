@@ -30,6 +30,7 @@
   import {
     annotationsActions,
     drawingSmoothing,
+    getAnnotationGridOrigin,
     getAnnotationsState,
     isPageElementPlaceholder,
     resolveAnnotationCoordinateSpace,
@@ -1621,8 +1622,11 @@
     state: NonNullable<typeof resizeState>,
     dx: number
   ): void {
+    const gridOrigin = getAnnotationGridOrigin(
+      resolveAnnotationCoordinateSpace(item)
+    );
     const snapEdge = (value: number) =>
-      snapToPageGrid(value, formatState.gridEnabled);
+      snapToPageGrid(value, formatState.gridEnabled, gridOrigin.x);
     let left = state.startAnnotationX;
     let right = state.startAnnotationX + state.startW;
 

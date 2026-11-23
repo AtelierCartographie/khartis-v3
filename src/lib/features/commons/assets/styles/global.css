@@ -38,7 +38,9 @@
   --z-popover: 10001;
   --cds-interactive-04: #3c3838;
   --cds-active-primary: rgb(46, 44, 44);
-  --cds-hover-primary: #3c3838;
+  /* Carbon's hover step of the primary colour: lighter for a dark grey, as
+     Carbon does for gray-80 (#393939 → #474747). */
+  --cds-hover-primary: #4a4646;
   --cds-link-01: var(--cds-text-01);
   --cds-link-02: var(--cds-text-01);
   --cds-hover-primary-text: #515151;
@@ -77,7 +79,10 @@
   --cds-layer-selected-02: var(--cds-selected-ui);
   --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
-  --cds-hover-tertiary: #1a1a1a;
+  /* The tertiary outline (interactive-03) filled one Carbon hover step darker,
+     as gray-60 → #5e5e5e, then pressed in the primary colour. */
+  --cds-hover-tertiary: #615d5d;
+  --cds-active-tertiary: #3c3838;
   --cds-button-primary: #3c3838;
 
   /* Khartis additions - Suggestions theming */
@@ -182,6 +187,7 @@
   --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #e5e5e5;
+  --cds-active-tertiary: #c6c6c6;
   --cds-button-primary: white;
 
   /* Khartis additions - Suggestions theming (dark theme) */
@@ -231,6 +237,12 @@
 /* Carbon v10 sets list chevrons 1rem from the field edge. They sit 0.5rem
    away here, with the clear button against them and a divider in between,
    which leaves more room for the value. */
+/* A truncated tag (`maxWidth`) wraps its label in a tooltip trigger, a button
+   whose own colour hid the label on a dark tag: it keeps the tag's. */
+.bx--tag--truncate .bx--tooltip__trigger {
+  color: inherit;
+}
+
 .bx--list-box__menu-icon {
   right: 0.5rem;
 }

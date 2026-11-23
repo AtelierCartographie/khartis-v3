@@ -39,6 +39,7 @@ import { resolveAnnotationCoordinateSpace } from '../../types/annotations.types'
 import {
   clampAnnotationPosition,
   clampPageElementPosition,
+  getAnnotationGridOrigin,
   getNonPageAnnotationSpawnPosition,
   getPageElementPosition,
   getPageNoteSpawnPosition,
@@ -829,7 +830,8 @@ const { actions, getState } = createToolStore<
               x: original.position.x + 20,
               y: original.position.y + 20
             },
-            isGridEnabled()
+            isGridEnabled(),
+            getAnnotationGridOrigin(resolveAnnotationCoordinateSpace(original))
           )
         };
         s.items = [...s.items, duplicate];
@@ -850,7 +852,13 @@ const { actions, getState } = createToolStore<
                     true,
                     item.style
                   )
-                : snapPointToPageGrid(newPosition, isGridEnabled()),
+                : snapPointToPageGrid(
+                    newPosition,
+                    isGridEnabled(),
+                    getAnnotationGridOrigin(
+                      resolveAnnotationCoordinateSpace(item)
+                    )
+                  ),
               positionMode: 'manual'
             }
           : item
