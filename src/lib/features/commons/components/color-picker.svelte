@@ -397,15 +397,23 @@
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
   }
 
+  /* Two equal columns on the width of the fields, like the hex code and its
+     preview above. */
   .dropdown-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--cds-spacing-05);
     margin-top: var(--cds-spacing-05);
   }
 
   .dropdown-actions :global(.bx--btn) {
     width: 100%;
+    min-width: 0;
     max-width: 100%;
+  }
+
+  /* Same icon room as the eyedropper button (color-hsl-fields.svelte). */
+  .dropdown-actions :global(.bx--btn--primary) {
+    padding-right: calc(var(--cds-spacing-05) * 2 + var(--cds-spacing-03));
   }
 </style>
