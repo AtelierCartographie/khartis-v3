@@ -1509,6 +1509,7 @@
   "missing_data_none": "No missing values for this variable in the displayed data.",
   "text_position_title": "Position",
   "text_position_helper": "In the Styling step, click and drag the texts to move them. Hidden labels appear faded on hover: drag one to show it where you want.",
+  "text_position_facets_unavailable": "In a map collection, texts are placed by hand: in the Layout step, drag them where you want.",
   "text_automatic_placement": "Automatic placement",
   "text_automatic_placement_info": "Moves labels so they do not overlap and hides those that find no room, the least important first. A label kept by a filter stays visible unless you let them be hidden, and a label moved by hand keeps its position.",
   "text_label_columns": "Align in columns",
