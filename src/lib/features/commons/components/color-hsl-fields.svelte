@@ -36,9 +36,8 @@
     /** Told when the screen colour picker opens and closes. */
     onpickingchange?: (picking: boolean) => void;
     /**
-     * `dropdown`: hex code next to a preview and an eyedropper icon.
-     * `inline`: hex code, then a labelled eyedropper button; the panel
-     * around shows the preview.
+     * `inline`: in a white panel that shows the preview itself.
+     * `dropdown`: on the grey menu of a colour field, with its own preview.
      */
     variant?: 'dropdown' | 'inline';
     /** Called on each change the user makes, never on a value set from outside. */
@@ -94,11 +93,6 @@
     saturation = parsed.saturation;
     lightness = parsed.lightness;
     emit();
-  }
-
-  function readNumberInput(event: Event, fallback: number): number {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
-    return Number.isFinite(value) ? value : fallback;
   }
 
   function handleHexInput(event: Event): void {
@@ -157,7 +151,7 @@
     else setHsl(hue, saturation, next);
   }}
   <Row noGutter>
-    <Column sm={3} md={6} lg={variant === 'inline' ? 12 : 13}>
+    <Column sm={3} md={6} lg={12}>
       <div class="slider {className}" style:--slider-track={track}>
         <Slider
           min={0}
@@ -172,61 +166,45 @@
       </div>
     </Column>
 
-    <Column sm={1} md={2} lg={variant === 'inline' ? 4 : 3}>
+    <Column sm={1} md={2} lg={4}>
       <div class="input-wrapper">
-        {#if variant === 'inline'}
-          <!-- On the white panel, the field of the other sliders of the app. -->
-          <CompactNumberInput
-            id="{idPrefix}-{key}"
-            ariaLabel={label}
-            min={0}
-            max={max}
-            value={value}
-            showSteppers={false}
-            onchange={setChannel}
-          />
-        {:else}
-          <input
-            id="{idPrefix}-{key}"
-            class="number"
-            type="number"
-            aria-label={label}
-            min={0}
-            max={max}
-            step={1}
-            value={value}
-            inputmode="numeric"
-            oninput={(event: Event) =>
-              setChannel(readNumberInput(event, value))}
-          />
-        {/if}
+        <CompactNumberInput
+          id="{idPrefix}-{key}"
+          ariaLabel={label}
+          min={0}
+          max={max}
+          value={value}
+          showSteppers={false}
+          height={variant === 'dropdown' ? 'var(--kh-size-md)' : undefined}
+          onchange={setChannel}
+        />
       </div>
     </Column>
   </Row>
 {/snippet}
 
-<Grid condensed class={variant === 'dropdown' ? 'mt-5' : 'color-fields-inline'}>
-  {@render channel('hue', m.color_hue(), 359, hue, 'rainbow', undefined)}
-  {@render channel(
-    'saturation',
-    m.color_saturation(),
-    100,
-    saturation,
-    'gradient',
-    saturationTrack
-  )}
-  {@render channel(
-    'lightness',
-    m.color_brightness(),
-    100,
-    lightness,
-    'gradient',
-    lightnessTrack
-  )}
+<div class="color-fields" class:on-menu={variant === 'dropdown'}>
+  <Grid condensed class="color-fields-grid">
+    {@render channel('hue', m.color_hue(), 359, hue, 'rainbow', undefined)}
+    {@render channel(
+      'saturation',
+      m.color_saturation(),
+      100,
+      saturation,
+      'gradient',
+      saturationTrack
+    )}
+    {@render channel(
+      'lightness',
+      m.color_brightness(),
+      100,
+      lightness,
+      'gradient',
+      lightnessTrack
+    )}
 
-  {#if variant === 'dropdown'}
     <Row noGutter class="mt-4">
-      <Column sm={2} md={4} lg={8}>
+      <Column>
         <label class="form-label mb-2" for="{idPrefix}-hex"
           >{m.color_hex_code()}</label
         >
@@ -237,45 +215,14 @@
           oninput={handleHexInput}
         />
       </Column>
+    </Row>
 
-      <Column sm={2} md={4} lg={8}>
-        <span class="form-label mb-2">{m.color_preview()}</span>
-        <div class="preview-row">
-          <div class="preview" style={`background:${hex}`}></div>
-          {#if EyeDropperApi}
-            <Button
-              kind="ghost"
-              size="field"
-              icon={Eyedropper}
-              iconDescription={m.color_pick_from_screen()}
-              tooltipPosition="top"
-              tooltipAlignment="end"
-              onclick={pickScreenColor}
-            />
-          {/if}
-        </div>
-      </Column>
-    </Row>
-  {:else}
-    <Row noGutter class="mt-4">
-      <Column>
-        <label class="form-label mb-2" for="{idPrefix}-hex"
-          >{m.color_hex_code()}</label
-        >
-        <input
-          id="{idPrefix}-hex"
-          class="hex inline"
-          value={hex.toUpperCase()}
-          oninput={handleHexInput}
-        />
-      </Column>
-    </Row>
     {#if EyeDropperApi}
       <Row noGutter class="mt-4">
         <Column>
           <Button
             kind="tertiary"
-            size="small"
+            size={variant === 'dropdown' ? 'field' : 'small'}
             class="pick-button"
             icon={Eyedropper}
             onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
@@ -283,8 +230,17 @@
         </Column>
       </Row>
     {/if}
-  {/if}
-</Grid>
+
+    {#if variant === 'dropdown'}
+      <Row noGutter class="mt-4">
+        <Column>
+          <span class="form-label mb-2">{m.color_preview()}</span>
+          <div class="preview" style={`background:${hex}`}></div>
+        </Column>
+      </Row>
+    {/if}
+  </Grid>
+</div>
 
 <style>
   .form-label {
@@ -359,101 +315,48 @@
     align-items: flex-end;
   }
 
-  .input-wrapper .number {
-    width: 100%;
-    height: var(--kh-size-sm);
-    min-width: unset;
-    padding: 0 var(--cds-spacing-03);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-02);
-    color: var(--cds-text-01);
-    font-family: var(--cds-code-01-font-family);
-    line-height: var(--cds-body-short-01-line-height);
-    border-radius: 0;
-    box-sizing: border-box;
-    font-weight: 600;
-  }
-
-  .input-wrapper .number:focus {
-    border-bottom-color: var(--cds-border-strong);
-  }
-
-  .input-wrapper .number:focus-visible {
-    outline: 2px solid var(--cds-focus);
-    outline-offset: -2px;
-  }
-
-  .input-wrapper .number:disabled {
-    background: var(--cds-ui-03);
-    color: var(--cds-text-02);
-    cursor: not-allowed;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type='number'] {
-    appearance: textfield;
-    -moz-appearance: textfield;
-  }
-
-  .hex {
-    width: 100%;
-    height: var(--kh-size-md);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    padding: 0 var(--cds-spacing-03);
-    background: var(--cds-field-02);
-    color: var(--cds-text-01);
-    font-family: var(--cds-code-01-font-family);
-    font-size: var(--cds-body-short-01-font-size);
-    text-align: center;
-    font-weight: normal;
-    box-sizing: border-box;
-  }
-
-  /* Inline, the fields line up with the panel around them. */
-  :global(.bx--grid.color-fields-inline) {
+  /* The fields line up with what is around them. */
+  .color-fields :global(.bx--grid.color-fields-grid) {
     max-width: none;
     margin-inline: 0;
     padding-inline: 0;
   }
 
-  :global(.bx--grid.color-fields-inline > .bx--row) {
+  .color-fields :global(.bx--grid.color-fields-grid > .bx--row) {
     margin-inline: 0;
   }
 
-  /* The text field of the app on a white panel (compact-number-input.svelte). */
-  .hex.inline {
-    height: var(--kh-size-sm);
-    padding: 0 var(--cds-spacing-04, 12px);
+  /* The text field of the app (compact-number-input.svelte): grey on a white
+     panel, white on the grey menu of a colour field. */
+  .hex {
+    width: 100%;
+    height: var(--kh-size-md);
+    padding: 0 var(--cds-spacing-05, 16px);
+    border: none;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     background: var(--cds-field-01, #f4f4f4);
-    border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
+    color: var(--cds-text-primary, #161616);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem;
     letter-spacing: 0.16px;
-    text-align: left;
+    box-sizing: border-box;
     transition: border-bottom-color 0.1s ease;
   }
 
-  .hex.inline:focus-visible {
+  .hex:focus-visible {
     outline: none;
     border-bottom-color: var(--cds-focus, #0f62fe);
     box-shadow: inset 0 -1px 0 0 var(--cds-focus, #0f62fe);
   }
 
-  .hex:focus-visible {
-    outline: 2px solid var(--cds-focus);
-    outline-offset: -2px;
+  .color-fields:not(.on-menu) .hex {
+    height: var(--kh-size-sm);
+    padding: 0 var(--cds-spacing-04, 12px);
   }
 
-  .preview-row {
-    display: flex;
-    align-items: stretch;
+  .on-menu .hex,
+  .on-menu :global(.compact-number-input) {
+    background-color: var(--cds-field-02, #ffffff);
   }
 
   .preview {
