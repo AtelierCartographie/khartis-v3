@@ -175,7 +175,6 @@
           max={max}
           value={value}
           showSteppers={false}
-          height={variant === 'dropdown' ? 'var(--kh-size-md)' : undefined}
           onchange={setChannel}
         />
       </div>
@@ -203,41 +202,49 @@
       lightnessTrack
     )}
 
-    <Row noGutter class="mt-4">
-      <Column>
-        <label class="form-label mb-2" for="{idPrefix}-hex"
-          >{m.color_hex_code()}</label
-        >
-        <input
-          id="{idPrefix}-hex"
-          class="hex"
-          value={hex.toUpperCase()}
-          oninput={handleHexInput}
-        />
-      </Column>
-    </Row>
+    {#snippet pickButton()}
+      {#if EyeDropperApi}
+        <Row noGutter class="mt-4">
+          <Column>
+            <Button
+              kind="tertiary"
+              size="small"
+              class="pick-button"
+              icon={Eyedropper}
+              onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
+            >
+          </Column>
+        </Row>
+      {/if}
+    {/snippet}
 
-    {#if EyeDropperApi}
-      <Row noGutter class="mt-4">
-        <Column>
-          <Button
-            kind="tertiary"
-            size={variant === 'dropdown' ? 'field' : 'small'}
-            class="pick-button"
-            icon={Eyedropper}
-            onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
-          >
-        </Column>
-      </Row>
-    {/if}
+    {#snippet hexField()}
+      <label class="form-label mb-2" for="{idPrefix}-hex"
+        >{m.color_hex_code()}</label
+      >
+      <input
+        id="{idPrefix}-hex"
+        class="hex"
+        value={hex.toUpperCase()}
+        oninput={handleHexInput}
+      />
+    {/snippet}
 
     {#if variant === 'dropdown'}
-      <Row noGutter class="mt-4">
+      <!-- The eyedropper under the sliders, the hex code beside its preview. -->
+      {@render pickButton()}
+      <Row noGutter class="mt-4 hex-row">
+        <Column>{@render hexField()}</Column>
         <Column>
           <span class="form-label mb-2">{m.color_preview()}</span>
           <div class="preview" style={`background:${hex}`}></div>
         </Column>
       </Row>
+    {:else}
+      <Row noGutter class="mt-4">
+        <Column>{@render hexField()}</Column>
+      </Row>
+      {@render pickButton()}
     {/if}
   </Grid>
 </div>
@@ -357,6 +364,11 @@
   .on-menu .hex,
   .on-menu :global(.compact-number-input) {
     background-color: var(--cds-field-02, #ffffff);
+  }
+
+  .color-fields :global(.bx--row.hex-row) {
+    flex-wrap: nowrap;
+    gap: var(--cds-spacing-05);
   }
 
   .preview {
