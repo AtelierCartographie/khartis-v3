@@ -16,6 +16,8 @@
     count?: number;
     children?: Snippet;
     icon?: Snippet;
+    /** Replaces the visible title text; `title` still labels the controls. */
+    titleContent?: Snippet;
     showToggle?: boolean;
     toggleChecked?: boolean;
     toggleDisabled?: boolean;
@@ -37,6 +39,7 @@
     count,
     children,
     icon,
+    titleContent,
     showToggle = false,
     toggleChecked = false,
     toggleDisabled = false,
@@ -229,7 +232,11 @@
     >
       <div class="section-title-group">
         <span class="section-title {titleClass}">
-          {title}{count !== undefined ? ` (${count})` : ''}
+          {#if titleContent}
+            {@render titleContent()}
+          {:else}
+            {title}{count !== undefined ? ` (${count})` : ''}
+          {/if}
 
           {#if icon && !actionsEnd}
             <span

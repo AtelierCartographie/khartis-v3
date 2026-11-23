@@ -20,6 +20,12 @@ export {
   type QuantiColorSwatch
 } from './quantitative';
 export {
+  draw_legend_side_header,
+  draw_legend_side_note,
+  SIDE_TITLE_GAP,
+  SIDE_TITLE_MAX_WIDTH
+} from './side-title';
+export {
   draw_symbols_legend,
   type LegendColorSwatch,
   type SymbolType

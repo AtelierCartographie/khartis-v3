@@ -74,6 +74,8 @@ import {
   type CommonLegendTextOptions,
   createLegendSvg,
   draw_categorical_legend,
+  draw_legend_side_header,
+  draw_legend_side_note,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
   draw_khartis_proportional_line_legend,
@@ -986,13 +988,31 @@ export function getLegendSegments(
     : -1;
   const layout = resolveLegendItemLayout(item);
   const entryLabel = resolveLegendEntryLabel(item);
+  // A side title is drawn apart; the entries then fill the rest of the width
+  // the frame was dragged to.
+  const sideHeaderWidth = layout.titleSide
+    ? (getLegendSideHeader(item, legendTextStyle)?.width ?? 0)
+    : 0;
+  const minWidth =
+    layout.width !== null
+      ? Math.max(0, layout.width - sideHeaderWidth) || undefined
+      : undefined;
 
   return drafts
     .map((draft, index): LegendSegment | null => {
+      const textOptions = getLegendTextOptions(
+        item,
+        index,
+        drafts.length,
+        legendTextStyle
+      );
       const svg = draft.create(
         {
-          ...getLegendTextOptions(item, index, drafts.length, legendTextStyle),
-          minWidth: layout.width ?? undefined,
+          ...textOptions,
+          ...(layout.titleSide
+            ? { title: null, subtitle: null, note: null }
+            : {}),
+          minWidth,
           entrySpacing: layout.entrySpacing
         },
         {
@@ -1053,6 +1073,33 @@ function filterDraftsByComponent(
   return drafts.filter((draft) => {
     const component = getDraftComponent(draft);
     return component === null ? isFirstComponent : component === item.component;
+  });
+}
+
+/** The title and subtitle of a legend whose title sits at the left of its entries. */
+export function getLegendSideHeader(
+  item: LegendItem,
+  legendTextStyle: LegendTextStyle
+): LegendSvgDefinition | null {
+  return draw_legend_side_header({
+    title: item.title,
+    subtitle: item.subtitle,
+    fontSize: legendTextStyle.fontSize,
+    fontFamily: legendTextStyle.fontFamily
+  });
+}
+
+/** The note of a legend whose title sits at the left, across the whole frame. */
+export function getLegendSideNote(
+  item: LegendItem,
+  legendTextStyle: LegendTextStyle,
+  width: number
+): LegendSvgDefinition | null {
+  return draw_legend_side_note({
+    note: item.note,
+    width,
+    fontSize: legendTextStyle.fontSize,
+    fontFamily: legendTextStyle.fontFamily
   });
 }
 
