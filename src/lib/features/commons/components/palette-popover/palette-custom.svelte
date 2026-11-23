@@ -6,10 +6,9 @@
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPalettePicker from './pattern-palette-picker.svelte';
-  import {
-    ColorSelector,
-    ToggleWithLabel
-  } from '$lib/features/commons/components/viz-controls';
+  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
+  import ColorHslFields from '$lib/features/commons/components/color-hsl-fields.svelte';
+  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
   import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
@@ -72,6 +71,21 @@
   );
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
+
+  // The single colour is set straight from its sliders. They follow the
+  // colour from outside (a suggestion), except the one they just sent.
+  let singleColorFields = $state({
+    hex: FALLBACK_END_COLOR,
+    ...hexToHsl(FALLBACK_END_COLOR)
+  });
+  $effect(() => {
+    const color = singleColor;
+    untrack(() => {
+      if (color.toLowerCase() !== singleColorFields.hex.toLowerCase()) {
+        singleColorFields = { hex: color, ...hexToHsl(color) };
+      }
+    });
+  });
 
   const tabLabels = $derived(
     allowPattern
@@ -283,10 +297,13 @@
     <!-- Under a motif the flat color is not drawn: the motif has its own
          color and background. -->
     {#if !(allowPattern && motifEnabled)}
-      <ColorSelector
-        label={m.color()}
-        value={singleColor}
-        onchange={handleSingleColorChange}
+      <ColorHslFields
+        variant="inline"
+        bind:hex={singleColorFields.hex}
+        bind:hue={singleColorFields.hue}
+        bind:saturation={singleColorFields.saturation}
+        bind:lightness={singleColorFields.lightness}
+        onchange={(color) => handleSingleColorChange(color.hex)}
       />
     {/if}
 
