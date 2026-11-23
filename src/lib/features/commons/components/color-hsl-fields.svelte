@@ -17,6 +17,7 @@
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { Eyedropper } from 'carbon-icons-svelte';
   import { EVENT, KEY } from '../constants/dom.constants';
+  import CompactNumberInput from './compact-number-input.svelte';
   import {
     type CarbonValueEvent,
     readCarbonNumberValue
@@ -150,8 +151,13 @@
   className: string,
   track: string | undefined
 )}
+  {@const setChannel = (next: number) => {
+    if (key === 'hue') setHsl(next, saturation, lightness);
+    else if (key === 'saturation') setHsl(hue, next, lightness);
+    else setHsl(hue, saturation, next);
+  }}
   <Row noGutter>
-    <Column sm={3} md={6} lg={13}>
+    <Column sm={3} md={6} lg={variant === 'inline' ? 12 : 13}>
       <div class="slider {className}" style:--slider-track={track}>
         <Slider
           min={0}
@@ -160,35 +166,40 @@
           value={value}
           hideTextInput
           labelText={label}
-          on:input={(event: CarbonValueEvent) => {
-            const next = readCarbonNumberValue(event, value);
-            if (key === 'hue') setHsl(next, saturation, lightness);
-            else if (key === 'saturation') setHsl(hue, next, lightness);
-            else setHsl(hue, saturation, next);
-          }}
+          on:input={(event: CarbonValueEvent) =>
+            setChannel(readCarbonNumberValue(event, value))}
         />
       </div>
     </Column>
 
-    <Column sm={1} md={2} lg={3}>
+    <Column sm={1} md={2} lg={variant === 'inline' ? 4 : 3}>
       <div class="input-wrapper">
-        <input
-          id="{idPrefix}-{key}"
-          class="number"
-          type="number"
-          aria-label={label}
-          min={0}
-          max={max}
-          step={1}
-          value={value}
-          inputmode="numeric"
-          oninput={(event: Event) => {
-            const next = readNumberInput(event, value);
-            if (key === 'hue') setHsl(next, saturation, lightness);
-            else if (key === 'saturation') setHsl(hue, next, lightness);
-            else setHsl(hue, saturation, next);
-          }}
-        />
+        {#if variant === 'inline'}
+          <!-- On the white panel, the field of the other sliders of the app. -->
+          <CompactNumberInput
+            id="{idPrefix}-{key}"
+            ariaLabel={label}
+            min={0}
+            max={max}
+            value={value}
+            showSteppers={false}
+            onchange={setChannel}
+          />
+        {:else}
+          <input
+            id="{idPrefix}-{key}"
+            class="number"
+            type="number"
+            aria-label={label}
+            min={0}
+            max={max}
+            step={1}
+            value={value}
+            inputmode="numeric"
+            oninput={(event: Event) =>
+              setChannel(readNumberInput(event, value))}
+          />
+        {/if}
       </div>
     </Column>
   </Row>
@@ -264,7 +275,7 @@
         <Column>
           <Button
             kind="tertiary"
-            size="field"
+            size="small"
             class="pick-button"
             icon={Eyedropper}
             onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
@@ -416,8 +427,23 @@
     margin-inline: 0;
   }
 
+  /* The text field of the app on a white panel (compact-number-input.svelte). */
   .hex.inline {
+    height: var(--kh-size-sm);
+    padding: 0 var(--cds-spacing-04, 12px);
+    background: var(--cds-field-01, #f4f4f4);
+    border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.875rem;
+    letter-spacing: 0.16px;
     text-align: left;
+    transition: border-bottom-color 0.1s ease;
+  }
+
+  .hex.inline:focus-visible {
+    outline: none;
+    border-bottom-color: var(--cds-focus, #0f62fe);
+    box-shadow: inset 0 -1px 0 0 var(--cds-focus, #0f62fe);
   }
 
   .hex:focus-visible {
