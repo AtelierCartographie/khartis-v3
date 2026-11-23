@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   getAreaGridOrigin,
-  getContrastRatio,
   getDragBounds,
   getPageGridOrigin,
-  getPageGridPointColor,
-  PAGE_GRID_POINT_CONTRAST,
   getGridAlignedRange,
   LAYOUT_UNIT_PX,
   PAGE_GRID_SIZE_PX,
@@ -15,11 +12,6 @@ import {
   snapPointWithinBounds,
   snapToPageGrid
 } from './page-grid.utils';
-import { hexToRgb } from './color-utils';
-
-function parseRgb(color: string): [number, number, number] {
-  return color.match(/\d+/g)!.map(Number) as [number, number, number];
-}
 
 describe('page-grid utils', () => {
   it('derives the snap step and the visible grid from one base unit', () => {
@@ -151,22 +143,5 @@ describe('page-grid utils', () => {
     const pageOrigin = getPageGridOrigin(page);
     expect((onPage.x - pageOrigin.x) % PAGE_SNAP_STEP_PX).toBe(0);
     expect((onPage.y - pageOrigin.y) % PAGE_SNAP_STEP_PX).toBe(0);
-  });
-
-  it('gives the grid points the same contrast on light, mid and dark pages', () => {
-    for (const page of [
-      '#ffffff',
-      '#f3efe6',
-      '#9aa3ad',
-      '#1f2a44',
-      '#000000'
-    ]) {
-      const ratio = getContrastRatio(
-        hexToRgb(page),
-        parseRgb(getPageGridPointColor(page))
-      );
-      expect(ratio).toBeGreaterThanOrEqual(PAGE_GRID_POINT_CONTRAST - 0.05);
-      expect(ratio).toBeLessThan(PAGE_GRID_POINT_CONTRAST + 0.15);
-    }
   });
 });

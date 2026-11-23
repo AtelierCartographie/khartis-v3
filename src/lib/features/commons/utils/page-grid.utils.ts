@@ -4,7 +4,6 @@
  * indications) are multiples of it too, so their edges and contents can share
  * the same alignments.
  */
-import { hexToRgb } from './color-utils';
 
 export const LAYOUT_UNIT_PX = 4;
 /** @alias */
@@ -236,67 +235,4 @@ export function remapAreaPointToResizedPage(
     to
   );
   return { x: pagePoint.x - areaOffset.x, y: pagePoint.y - areaOffset.y };
-}
-
-type Rgb = [number, number, number];
-
-function toLinearChannel(channel: number): number {
-  const value = channel / 255;
-  return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-}
-
-function getRelativeLuminance([r, g, b]: Rgb): number {
-  return (
-    0.2126 * toLinearChannel(r) +
-    0.7152 * toLinearChannel(g) +
-    0.0722 * toLinearChannel(b)
-  );
-}
-
-export function getContrastRatio(a: Rgb, b: Rgb): number {
-  const [lighter, darker] = [
-    getRelativeLuminance(a),
-    getRelativeLuminance(b)
-  ].sort((first, second) => second - first);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function mixRgb(from: Rgb, to: Rgb, ratio: number): Rgb {
-  return from.map((channel, index) =>
-    Math.round(channel + (to[index] - channel) * ratio)
-  ) as Rgb;
-}
-
-/** Visible on any page colour, yet far below the contrast of text (4.5). */
-export const PAGE_GRID_POINT_CONTRAST = 1.6;
-// Luminance where black and white offer the same contrast.
-const LUMINANCE_CONTRAST_PIVOT = 0.18;
-
-/**
- * The page colour darkened, or lightened on a dark page, just enough for the
- * grid points to reach the same contrast whatever the page colour.
- */
-export function getPageGridPointColor(pageColorHex: string): string {
-  const page = hexToRgb(pageColorHex);
-  if (page.some((channel) => !Number.isFinite(channel))) {
-    return 'rgb(22, 22, 22)';
-  }
-  const target: Rgb =
-    getRelativeLuminance(page) > LUMINANCE_CONTRAST_PIVOT
-      ? [0, 0, 0]
-      : [255, 255, 255];
-  let low = 0;
-  let high = 1;
-  for (let step = 0; step < 16; step += 1) {
-    const ratio = (low + high) / 2;
-    if (
-      getContrastRatio(page, mixRgb(page, target, ratio)) <
-      PAGE_GRID_POINT_CONTRAST
-    ) {
-      low = ratio;
-    } else {
-      high = ratio;
-    }
-  }
-  return `rgb(${mixRgb(page, target, high).join(', ')})`;
 }
