@@ -1509,6 +1509,7 @@
   "missing_data_none": "Aucune valeur manquante pour cette variable dans les données affichées.",
   "text_position_title": "Position",
   "text_position_helper": "À l'étape Habillage, cliquez et glissez les textes pour les déplacer. Les étiquettes masquées apparaissent en transparence au survol : glissez-en une pour l'afficher à l'endroit voulu.",
+  "text_position_facets_unavailable": "Dans une collection de cartes, les textes se placent à la main : à l'étape Habillage, glissez-les à l'endroit voulu.",
   "text_automatic_placement": "Placement automatique",
   "text_automatic_placement_info": "Déplace les étiquettes pour éviter qu'elles se chevauchent et masque celles qui ne trouvent pas de place, en commençant par les moins importantes. Une étiquette retenue par un filtre reste visible, sauf si vous autorisez à les masquer, et une étiquette déplacée à la main garde sa position.",
   "text_label_columns": "Aligner en colonnes",
