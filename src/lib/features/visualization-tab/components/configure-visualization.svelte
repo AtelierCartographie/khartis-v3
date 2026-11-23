@@ -55,6 +55,7 @@
   import { facetsStore, SCALE_MODE } from '../adapters/facets-adapter';
   import { facetSlotRequiresNumericVariable } from '$lib/features/commons/constants/facets.constants';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
 
@@ -561,12 +562,16 @@
     </p>
     {#if isCollectionActive && supportsSharedScale}
       <div class="collection-scale-toggle">
-        <Switch
-          size="sm"
-          labelText={m.facets_scale_shared_label()}
-          toggled={isSharedScale}
-          onchange={handleScaleModeChange}
-        />
+        <span class="field-label">{m.facets_scale_shared_heading()}</span>
+        <div class="collection-scale-row">
+          <Switch
+            size="sm"
+            labelText={m.facets_scale_shared_label()}
+            toggled={isSharedScale}
+            onchange={handleScaleModeChange}
+          />
+          <InfoPopover text={m.facets_scale_shared_info()} />
+        </div>
       </div>
     {/if}
   </div>
@@ -698,7 +703,16 @@
   }
 
   .collection-scale-toggle {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-label);
     margin-top: 12px;
+  }
+
+  .collection-scale-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
   }
 
   .config-accordion {

@@ -525,6 +525,8 @@
   "facets_frame_visible_label": "Show a frame",
   "facets_reorder": "Reorder",
   "facets_scale_shared_label": "Shared legend",
+  "facets_scale_shared_heading": "Map collection",
+  "facets_scale_shared_info": "When on, the maps of the collection share the same classes, colors and sizes, computed over all their values: they compare directly. When off, each map has its own legend, fitted to its values.",
   "facets_distribution_section": "Distribution",
   "facets_distribution_helper": "Assign the variables to the maps according to their position.",
   "facets_toggle_create_collection": "Split into several maps",
