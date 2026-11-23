@@ -38,7 +38,9 @@
   --z-popover: 10001;
   --cds-interactive-04: #3c3838;
   --cds-active-primary: rgb(46, 44, 44);
-  --cds-hover-primary: #3c3838;
+  /* Carbon's hover step of the primary colour: lighter for a dark grey, as
+     Carbon does for gray-80 (#393939 → #474747). */
+  --cds-hover-primary: #4a4646;
   --cds-link-01: var(--cds-text-01);
   --cds-link-02: var(--cds-text-01);
   --cds-hover-primary-text: #515151;
@@ -77,7 +79,10 @@
   --cds-layer-selected-02: var(--cds-selected-ui);
   --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
-  --cds-hover-tertiary: #1a1a1a;
+  /* The tertiary outline (interactive-03) filled one Carbon hover step darker,
+     as gray-60 → #5e5e5e, then pressed in the primary colour. */
+  --cds-hover-tertiary: #615d5d;
+  --cds-active-tertiary: #3c3838;
   --cds-button-primary: #3c3838;
 
   /* Khartis additions - Suggestions theming */
@@ -182,6 +187,7 @@
   --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #e5e5e5;
+  --cds-active-tertiary: #c6c6c6;
   --cds-button-primary: white;
 
   /* Khartis additions - Suggestions theming (dark theme) */
