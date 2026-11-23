@@ -186,19 +186,24 @@ export function getPrimitiveLegendSubtitle(
   visualization: VisualizationConfig,
   primitive: LegendSubtitlePrimitive
 ): string {
+  return joinLegendSubtitleParts(
+    getPrimitiveLegendSubtitleParts(visualization, primitive)
+  );
+}
+
+function getPrimitiveLegendSubtitleParts(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): Array<string | undefined> {
   switch (primitive) {
     case 'point':
-      return joinLegendSubtitleParts(
-        getPointLegendSubtitleParts(visualization)
-      );
+      return getPointLegendSubtitleParts(visualization);
     case 'area':
-      return joinLegendSubtitleParts(
-        getPolygonLegendSubtitleParts(visualization)
-      );
+      return getPolygonLegendSubtitleParts(visualization);
     case 'line':
-      return joinLegendSubtitleParts(getLineLegendSubtitleParts(visualization));
+      return getLineLegendSubtitleParts(visualization);
     case 'text':
-      return joinLegendSubtitleParts(getTextLegendSubtitleParts(visualization));
+      return getTextLegendSubtitleParts(visualization);
   }
 }
 
@@ -425,4 +430,21 @@ export function getComponentLegendSubtitle(
   return joinLegendSubtitleParts(
     getComponentColumns(visualization, primitive)[component] ?? []
   );
+}
+
+/** The columns one legend reads, without duplicates, in drawing order. */
+export function getLegendColumns(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive,
+  component?: LegendComponent
+): string[] {
+  const parts = component
+    ? (getComponentColumns(visualization, primitive)[component] ?? [])
+    : getPrimitiveLegendSubtitleParts(visualization, primitive);
+  const columns: string[] = [];
+  for (const part of parts) {
+    const column = part?.trim();
+    if (column && !columns.includes(column)) columns.push(column);
+  }
+  return columns;
 }

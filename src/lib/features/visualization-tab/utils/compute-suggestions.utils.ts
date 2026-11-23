@@ -4,8 +4,6 @@ import {
   vizSuggester,
   type VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
-import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
-import { isNumericType } from '$lib/features/commons/utils/format.utils';
 import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
 import { resolveDatasetGeometryType } from '../services/suggestion.service';
 
@@ -102,17 +100,4 @@ export function computeVisualizationSuggestions(
       maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
     })
     .map((suggestion) => ({ ...suggestion, dataGeometry }));
-}
-
-export function resolveColumnBadgeType(
-  columns: ReadonlyArray<{ name: string; type?: string }>,
-  columnName: string
-): VariableBadgeType {
-  const col = columns.find((c) => c.name === columnName);
-  if (!col) return 'string';
-  const type = String(col.type || '').toLowerCase();
-  if (isNumericType(type)) return 'numeric';
-  if (type === 'boolean') return 'boolean';
-  if (type === 'date' || type === 'timestamp') return 'date';
-  return 'string';
 }
