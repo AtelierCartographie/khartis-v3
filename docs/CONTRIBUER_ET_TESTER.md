@@ -139,9 +139,8 @@ les deux workflows. Elle lance six contrôles en parallèle :
   brouillon compris, car le hook `commit-msg` peut être contourné.
 - `release.yml` l'appelle à chaque push sur `staging` ou `main`, puis lance
   `semantic-release` : prérelease `vX.Y.Z-pprd.N` depuis `staging`, release
-  stable `vX.Y.Z` depuis `main`.
-- `sync-staging.yml` fusionne dans `staging` le commit de `main` qui vient
-  d'être publié, après chaque run de release réussi sur `main` (voir
+  stable `vX.Y.Z` depuis `main`. Chaque release stable revient ensuite dans
+  `staging` par une pull request de retour (voir
   [Numéros de version](#numéros-de-version)).
 
 **Un arbre n'est validé qu'une fois.** Une pull request, le push qui la
@@ -176,12 +175,33 @@ semantic-release calcule la prérelease suivante à partir du tag le plus haut
 `staging` → `main` se fait par une pull request fusionnée avec un commit de
 fusion, et le tag stable est posé sur ce commit, que `staging` ne contient pas.
 Sans retour de `main` dans `staging`, la préprod reste bloquée sur l'ancienne
-base : c'est ce qui l'a laissée en `1.16.0-pprd.55` alors que la prod était en
-`1.28.0`. `sync-staging.yml` fait ce retour automatiquement : il fusionne le
-commit publié dans `staging` par l'API GitHub. Cette fusion, poussée avec le
-jeton de la CI, ne déclenche pas de run de release sur `staging` ; la
-prérelease suivante sort au prochain push. En cas de conflit, le run échoue et
-la fusion se fait à la main (étape 3 ci-dessous).
+base : c'est ce qui l'a laissée en `1.16.0-pprd.N` alors que la prod était en
+`1.32.0`. Ce retour se fait par une pull request, juste après chaque release
+stable : `staging` exige une pull request, ce qui exclut une fusion poussée
+directement, à la main comme par un workflow.
+
+### Retour de `main` dans `staging` (après chaque release stable)
+
+Une fois le run `release.yml` de `main` réussi et la release stable publiée :
+
+```bash
+git fetch origin --tags
+TAG=$(git describe --tags --abbrev=0 --exclude '*-*' origin/main)
+git switch -c "chore/return-$TAG" origin/main
+git push -u origin HEAD
+gh pr create --base staging --title "chore: ramener $TAG dans staging" \
+  --body "Retour de main dans staging après la release $TAG, pour que le tag stable soit atteignable depuis staging."
+```
+
+Fusionner cette pull request **avec un commit de fusion**. Un squash ou un
+rebase recopierait les changements sans rendre le tag atteignable, et la
+préprod resterait bloquée. Ses commits sont les commits de fusion de `main`,
+que commitlint ignore. La branche est supprimée à la fusion. Le push de la
+fusion ne publie une prérelease que si `staging` a reçu un commit publiable
+depuis la promotion.
+
+En cas de conflit, fusionner `origin/staging` dans la branche de retour,
+résoudre, pousser, puis fusionner la pull request de la même façon.
 
 ### Alignement sur Khartis V3 (une seule fois)
 
@@ -210,15 +230,8 @@ dans `staging` : dans l'ordre inverse, si `staging` porte des `feat:` ou
      --notes "Khartis V3 aligne son numéro de version sur le nom du produit. Cette version contient exactement le même code que $LAST : les versions 1.x étaient déjà celles de Khartis V3. Les fichiers projet ne changent pas (archive .kh v2, schéma 3.9.0) : les projets enregistrés s'ouvrent comme avant. Khartis V2 reste disponible séparément, en version obsolète."
    ```
 
-3. Fusionner `main` dans `staging`, si `sync-staging.yml` ne l'a pas déjà fait
-   (`git merge` répond alors `Already up to date`) :
-
-   ```bash
-   git switch staging
-   git pull --ff-only origin staging
-   git merge --no-edit origin/main
-   git push origin staging
-   ```
+3. Ramener `main` dans `staging` par la pull request de retour (section
+   précédente), fusionnée avec un commit de fusion.
 
 4. Vérifier que `v3.0.0` est atteignable depuis `staging` et simuler la
    prochaine release sans rien publier :
