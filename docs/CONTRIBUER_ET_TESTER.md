@@ -207,7 +207,8 @@ résoudre, pousser, puis fusionner la pull request de la même façon.
 
 Le produit s'appelle Khartis V3, mais ses versions ont commencé à 1.0.0. Le
 mainteneur aligne la numérotation en posant `v3.0.0` sur le dernier commit
-publié de `main`, sans nouveau code. Poser le tag **avant** de fusionner `main`
+publié de `main` (le 24/11/2026 : `v1.32.0`, commit `c10f408c`), sans nouveau
+code. Poser le tag **avant** de fusionner `main`
 dans `staging` : dans l'ordre inverse, si `staging` porte des `feat:` ou
 `fix:` non publiés, le push de la fusion publierait encore une `1.x.y-pprd.1`.
 
@@ -233,24 +234,25 @@ dans `staging` : dans l'ordre inverse, si `staging` porte des `feat:` ou
 3. Ramener `main` dans `staging` par la pull request de retour (section
    précédente), fusionnée avec un commit de fusion.
 
-4. Vérifier que `v3.0.0` est atteignable depuis `staging` et simuler la
-   prochaine release sans rien publier :
+4. Vérifier que `v3.0.0` est atteignable depuis `staging` et que le push de la
+   fusion a publié la prérelease suivante :
 
    ```bash
+   git fetch origin --tags
    git describe --tags --abbrev=0 --exclude '*-*' origin/staging
-   GITHUB_ACTIONS= pnpm exec semantic-release --dry-run --no-ci --plugins @semantic-release/commit-analyzer,@semantic-release/release-notes-generator
+   gh release list --limit 3
    ```
 
-   La première commande doit afficher `v3.0.0`. La seconde, lancée depuis
-   `staging` à jour, annonce `Found git tag v3.0.0` puis `3.1.0-pprd.1` (un
-   `feat:` depuis le tag), `3.0.1-pprd.1` (seulement des `fix:`) ou « no
-   relevant changes » (rien de publiable depuis le tag). Après le prochain push
-   publiable sur `staging`, `gh release list --limit 3` doit montrer cette
-   `3.x.y-pprd.1`.
+   La première commande doit afficher `v3.0.0`. La liste montre
+   `v3.1.0-pprd.1` si `staging` portait un `feat:` non publié, `v3.0.1-pprd.1`
+   si elle ne portait que des `fix:`, et aucune nouvelle prérelease sinon.
 
-5. Redéployer la prod pour afficher `Khartis v3.0.0` : `pnpm deploy:prod` prend
-   le tag stable le plus haut, donc `v3.0.0`. La préprod suit au prochain
-   `pnpm deploy:pprd`, une fois la `3.x.y-pprd.1` publiée.
+5. Ne pas déployer `v3.0.0`. La réécriture de l'historique du 24/11/2026 a
+   changé le commit de `v1.32.0`, qui n'a donc aucun run `release.yml` réussi :
+   `deploy-local.mjs` refuse ce tag, et `pnpm deploy:prod`, qui prend le tag
+   stable le plus haut, s'arrête sur ce contrôle. La prod reste en `v1.32.0`
+   jusqu'à la release stable suivante. La préprod passe en 3.x au prochain
+   `pnpm deploy:pprd`.
 
 ## Hooks git
 
