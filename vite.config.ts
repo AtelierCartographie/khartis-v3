@@ -8,8 +8,11 @@ import {
 import { createHash } from 'node:crypto';
 import { extname, resolve, sep } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
+import { optimizeCss, optimizeImports } from 'carbon-preprocess-svelte';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -288,7 +291,27 @@ export default defineConfig(({ mode }) => {
           template: 'treemap'
         }),
       serveTestDatasets(basePath),
-      sveltekit(),
+      sveltekit({
+        preprocess: [vitePreprocess(), optimizeImports(), optimizeCss()],
+        adapter: adapter({
+          pages: 'build',
+          assets: 'build',
+          fallback: 'index.html',
+          // CI only checks that the build succeeds; a deployed build keeps the
+          // Brotli and gzip sidecars, which deploy-local.mjs requires.
+          precompress: process.env.KHARTIS_SKIP_PRECOMPRESS !== 'true',
+          strict: true
+        }),
+        paths: {
+          // SvelteKit rejects a base path that does not start with "/".
+          base: basePath as '' | `/${string}`,
+          relative: false
+        },
+        version: {
+          ...(env.VITE_APP_VERSION ? { name: env.VITE_APP_VERSION } : {}),
+          pollInterval: 5 * 60 * 1000
+        }
+      }),
       paraglideVitePlugin({
         project: './project.inlang',
         outdir: './src/lib/paraglide',
