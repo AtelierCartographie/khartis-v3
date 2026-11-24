@@ -8,7 +8,10 @@ import {
   buildTableInBackground,
   Duck,
   GEO_CONSTANTS,
-  isGeometryColumnType
+  isGeometryColumnType,
+  isOutOfMemoryError,
+  runTableBuildInBackground,
+  waitForTableBuild
 } from '$lib/features/duckdb';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
 import { resolveCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
@@ -29,12 +32,6 @@ import {
   getDerivedOuterlinesTableName as getBasemapOuterlinesTableName,
   rebuildDerivedGeometryTables
 } from '$lib/features/duckdb/operations/derived-geometry';
-
-export {
-  getBasemapInnerlinesTableName,
-  getBasemapLandTableName,
-  getBasemapOuterlinesTableName
-};
 import {
   escapeIdentifier,
   escapeSqlString
@@ -59,6 +56,12 @@ import {
   fetchWithTimeout
 } from '$lib/features/commons/utils/fetch-with-timeout';
 import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
+
+export {
+  getBasemapInnerlinesTableName,
+  getBasemapLandTableName,
+  getBasemapOuterlinesTableName
+};
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -148,7 +151,7 @@ export async function processBasemapImport(
     // Restore skips a basemap whose table exists, so a failed import must not
     // leave a partial one behind.
     await dropBasemapImportTables(tableName);
-    if (error instanceof Error && error.message.includes('Out of Memory')) {
+    if (isOutOfMemoryError(error)) {
       throw new DuckDBError(m.basemap_import_error_out_of_memory(), undefined, {
         fileName: file.name,
         cause: error.message
@@ -277,7 +280,9 @@ async function readAndPrepareBasemap(
   const layerType = await queryGeometryType(duck, tableName, geometryColumn);
 
   await ensureFeatureIdColumn(duck, tableName);
-  await refreshImportedBasemapHelperTables(duck, tableName, layerType);
+  await refreshImportedBasemapHelperTables(duck, tableName, layerType, {
+    inBackground: true
+  });
 
   const basemap = await describeGeometryBasemap(duck, tableName, {
     title: file.name.replace(/\.[^/.]+$/, ''),
@@ -410,7 +415,7 @@ export function resolveCustomBasemapLayerType(
   )?.type;
 }
 
-export async function createArrowTableFromDuckTable(
+async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
@@ -450,7 +455,8 @@ async function prepareRepresentativePointTable(
   duck: typeof Duck,
   tableName: string,
   geometryColumn: string,
-  layerType: BasemapLayerType
+  layerType: BasemapLayerType,
+  after?: Promise<unknown>
 ): Promise<void> {
   const centroidsTableName = getBasemapCentroidsTableName(tableName);
   const escapedGeometryColumn = escapeIdentifier(geometryColumn);
@@ -465,7 +471,8 @@ async function prepareRepresentativePointTable(
     buildTableInBackground(duck, {
       sourceTable: tableName,
       targetTable: centroidsTableName,
-      projection
+      projection,
+      after
     });
     return;
   }
@@ -477,17 +484,40 @@ async function prepareRepresentativePointTable(
   `);
 }
 
+// The territory and limits only dress the map: the data step opens without
+// them, and the map draws them once their build settles.
+const DERIVED_GEOMETRY_IDLE_MS = 500;
+
 async function rebuildPolygonDerivedTables(
   duck: typeof Duck,
-  tableName: string
+  tableName: string,
+  options: HelperTablesOptions
 ): Promise<void> {
-  await rebuildDerivedGeometryTables(duck, tableName);
+  const derivedTables = [
+    getBasemapLandTableName(tableName),
+    getBasemapOuterlinesTableName(tableName),
+    getBasemapInnerlinesTableName(tableName)
+  ];
+  let derivedBuild: Promise<unknown> | undefined;
+  if (options.inBackground) {
+    derivedBuild = runTableBuildInBackground(
+      tableName,
+      derivedTables,
+      (isCurrent) =>
+        rebuildDerivedGeometryTables(duck, tableName, { isCurrent }),
+      DERIVED_GEOMETRY_IDLE_MS
+    );
+  } else {
+    await waitForTableBuild(derivedTables[0]);
+    await rebuildDerivedGeometryTables(duck, tableName);
+  }
 
   await prepareRepresentativePointTable(
     duck,
     tableName,
     INTERNAL_COLUMN.GEOM,
-    BasemapLayerType.POLYGON
+    BasemapLayerType.POLYGON,
+    derivedBuild
   );
 }
 
@@ -503,13 +533,18 @@ async function rebuildLineDerivedTables(
   );
 }
 
+interface HelperTablesOptions {
+  inBackground?: boolean;
+}
+
 export async function refreshImportedBasemapHelperTables(
   duck: typeof Duck,
   tableName: string,
-  layerType: BasemapLayerType
+  layerType: BasemapLayerType,
+  options: HelperTablesOptions = {}
 ): Promise<void> {
   if (isPolygonBasemapLayerType(layerType)) {
-    await rebuildPolygonDerivedTables(duck, tableName);
+    await rebuildPolygonDerivedTables(duck, tableName, options);
     return;
   }
 
@@ -571,22 +606,21 @@ export async function createBasemapFromGeometryTable(
   duck: typeof Duck,
   tableName: string,
   options: DatasetGeometryBasemapOptions
-): Promise<BasemapImportResult> {
+): Promise<BasemapMetadata> {
   const geometryColumn = options.geometryColumn ?? INTERNAL_COLUMN.GEOM;
   const layerType = await queryGeometryType(duck, tableName, geometryColumn);
 
-  await refreshImportedBasemapHelperTables(duck, tableName, layerType);
+  await refreshImportedBasemapHelperTables(duck, tableName, layerType, {
+    inBackground: true
+  });
 
-  const basemap = await describeGeometryBasemap(duck, tableName, {
+  return describeGeometryBasemap(duck, tableName, {
     title: options.title,
     geometryColumn,
     layerType,
     crs: options.crs,
     isDatasetGeometry: true
   });
-  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
-
-  return { basemap, tableName, geometryTable };
 }
 
 interface GeometryBasemapDescription {

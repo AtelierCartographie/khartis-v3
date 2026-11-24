@@ -5,9 +5,9 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import {
-  RefineOperation,
   type AnalysisResult,
-  type ArrowTableLike
+  type ArrowTableLike,
+  RefineOperation
 } from '../types';
 import { SQL_FUNCTIONS } from '../constants';
 import { buildNormalizedNumericTextSql } from '$lib/features/commons/utils/numeric-format.utils';

@@ -77,23 +77,69 @@ Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
 les métadonnées de l'asset, le snapshot, les références et les métadonnées de
 projet sont écrits dans des transactions distinctes.
 
+Une écriture d'asset qui échoue efface les blocs déjà écrits. Les autres
+restes (import abandonné avant la première sauvegarde, suppression de projet
+interrompue) sont repris au démarrage par `sweepStorageGarbage()`, lancé quand
+le navigateur est inactif :
+
+- les références d'un projet absent du store `projects` sont supprimées ;
+- un asset qu'aucun projet existant ne référence est supprimé s'il a plus de
+  24 h, car un projet neuf écrit ses assets avant sa première sauvegarde ;
+- des blocs sans métadonnées sont supprimés seulement si aucune écriture n'est
+  en cours dans un autre onglet.
+
+Les écritures d'assets et les sauvegardes de projet tiennent le verrou Web
+Locks `khartis-asset-writes` en mode partagé. Le balayage le demande en mode
+exclusif avec `ifAvailable` et s'abstient s'il ne l'obtient pas. Sans Web
+Locks, il ne traite que les assets datés.
+
 ## Quotas et tailles
 
 | Règle                             | Valeur              |
 | --------------------------------- | ------------------- |
-| CSV, TSV, GeoJSON, KML, KMZ, GPX  | 150 Mio par fichier |
+| CSV, TSV                          | 400 Mio par fichier |
+| GeoJSON                           | 250 Mio par fichier |
 | Shapefile, GeoPackage, GeoParquet | 200 Mio par fichier |
+| KML, KMZ, GPX                     | 150 Mio par fichier |
 | ZIP générique                     | 100 Mio par fichier |
-| Total d'un import                 | 200 Mio             |
+| Total d'un import                 | 400 Mio             |
 | Fichiers par import               | 20                  |
 | Snapshot sérialisé                | 150 Mio             |
-| Projets                           | 50                  |
 
 Avant d'écrire un asset, Khartis consulte `navigator.storage.estimate()` et
 exige la taille de l'asset plus une marge de max(20 %, 8 Mio). Sans estimation
 disponible, l'écriture est tentée et l'erreur de quota du navigateur reste
-possible. En production, la PWA demande le stockage persistant
+possible. Une erreur de quota levée par l'écriture d'un asset, d'un projet ou
+d'une métadonnée devient `PROJECT_STORAGE_QUOTA_EXCEEDED`, avec un message qui
+indique comment libérer de l'espace (`storage-quota.service.ts`). En
+production, la PWA demande le stockage persistant
 (`navigator.storage.persist()`), sans garantie que le navigateur l'accorde.
+
+L'écran « Ouvrir un projet » affiche l'espace des projets
+(`measureProjectStorage` : snapshots plus assets, chacun compté une fois) sur
+l'espace dont ils disposent, avertit au-delà de 80 %. L'espace disponible est le quota moins ce que l'origine occupe
+hors projets : le Service Worker garde en Cache Storage le moteur DuckDB et
+ses extensions, environ 70 Mio, sur le même quota. La part des projets est une
+estimation (taille JSON et taille brute des assets) ; le navigateur compresse
+ce qu'il stocke, et l'espace d'un projet supprimé n'est rendu qu'au compactage
+d'IndexedDB. Les tailles affichées sont donc arrondies
+(`formatApproximateSize`).
+
+La taille d'un projet est celle de son snapshot plus celle des assets qu'il
+référence (`computeProjectAssetUsage`). Les projets se trient par date ou par
+taille, et la confirmation de suppression donne l'espace libéré, sans les
+assets partagés avec un autre projet, par exemple après une duplication. Il
+n'y a pas de plafond du nombre de projets.
+
+La recherche de projets porte sur le nom, la description et un texte
+normalisé (minuscules, sans accents) rangé dans les métadonnées locales du
+projet (`search`), hors du snapshot et de l'archive `.kh` : textes de la mise
+en page (titre, sources, crédits), titres de légende, noms des visualisations,
+noms des fichiers importés et titre du fond de carte. Les noms de colonnes et
+les valeurs des données n'y sont pas. Le texte est reconstruit à chaque
+sauvegarde, et à l'ouverture de la liste pour un projet sans texte ou d'une
+version antérieure de `PROJECT_SEARCH_VERSION`. À la sauvegarde, le fond est
+nommé d'après le catalogue tel qu'il est chargé, sans attendre le réseau.
 
 Ces seuils sont des garde-fous : ils ne garantissent pas qu'un gros projet
 pourra être importé, enregistré et rouvert sur tous les navigateurs.
@@ -138,13 +184,18 @@ les assets ajoutés sans compression. L'export n'appelle pas
 **Import.**
 
 1. La taille du fichier est bornée avant lecture.
-2. `unzipSync()` ne décompresse que les entrées attendues, avec un plafond sur
-   leur nombre et sur les tailles déclarées.
+2. Le répertoire central du ZIP est lu par `File.slice`
+   (`io/kh-archive-reader.ts`), sans charger l'archive. Seules les entrées
+   attendues sont retenues, avec un plafond sur leur nombre et sur les tailles
+   déclarées. `manifest.json` et `project.json` sont alors lus seuls.
 3. La structure, la version du conteneur, le manifest (`assetCount`, chemin
    `assets/<assetId>`) et le schéma de `project.json` sont validés ; une
    version incompatible est rejetée avant toute écriture d'asset.
 4. Les assets sont restaurés (un `assetId` déjà présent localement est
-   conservé tel quel), puis le projet est désérialisé et enregistré.
+   conservé tel quel), puis le projet est désérialisé et enregistré. Chaque
+   asset passe en flux du fichier aux morceaux de 8 Mo d'IndexedDB
+   (`persistAssetStream`) : ni l'archive ni un asset entier ne sont copiés en
+   mémoire JS. Un asset compressé ne peut pas dépasser sa taille déclarée.
 5. Si l'identifiant du projet existe déjà localement, le projet importé reçoit
    un nouvel identifiant.
 
@@ -191,8 +242,9 @@ d'origine devient un asset, et ses tables DuckDB sont rejouées à la reprise.
 ## Limites connues
 
 - **Fond importé abandonné.** L'asset est écrit à l'import du fond, avant la
-  sauvegarde : un fond abandonné avant toute sauvegarde laisse un asset sans
-  référence. Si l'écriture échoue (quota), l'import du fond échoue.
+  sauvegarde : un fond abandonné avant toute sauvegarde occupe de l'espace
+  jusqu'au balayage qui suit ses 24 h. Si l'écriture échoue (quota), l'import
+  du fond échoue.
 - **Projets `3.9.0`.** Un fond importé dans un projet `3.9.0` n'a jamais
   conservé ses octets : aucune migration ne peut les recréer.
 - **Coût du replay.** Il refait tout le traitement d'import ; son coût à

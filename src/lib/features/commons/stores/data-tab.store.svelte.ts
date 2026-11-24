@@ -5,8 +5,8 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import { MAX_JOIN_BUCKET_LIST_VALUES } from '$lib/features/commons/constants/data.constants';
 import {
-  SavePriority,
-  persistenceRegistry
+  persistenceRegistry,
+  SavePriority
 } from '$lib/features/project-management/core';
 import type { JoinQuality } from '$lib/features/map/types/basemap.types';
 import type {

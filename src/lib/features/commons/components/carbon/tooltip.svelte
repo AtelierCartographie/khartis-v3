@@ -3,13 +3,13 @@
   import type { Snippet } from 'svelte';
   import { tick } from 'svelte';
   import * as m from '$lib/paraglide/messages';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
-    resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
-    type CarbonTooltipDirection
+    type CarbonTooltipDirection,
+    resolveCarbonTooltipPosition
   } from '$lib/features/commons/utils/carbon-tooltip-position';
 
   interface Props {
@@ -19,6 +19,8 @@
     icon?: typeof Information;
     iconDescription?: string;
     triggerText?: string;
+    /** `compact` sets a short note in the label size, closer to its text. */
+    size?: 'default' | 'compact';
   }
 
   const {
@@ -27,7 +29,8 @@
     direction = 'bottom',
     icon: Icon = Information,
     iconDescription = m.more_info(),
-    triggerText = ''
+    triggerText = '',
+    size = 'default'
   }: Props = $props();
 
   let open = $state(false);
@@ -195,6 +198,7 @@
     <div
       bind:this={tooltipElement}
       class="khartis-carbon-rich-tooltip khartis-carbon-rich-tooltip--{direction}"
+      class:khartis-carbon-rich-tooltip--compact={size === 'compact'}
       style={tooltipStyle}
       role="tooltip"
       onmouseenter={handleTooltipMouseEnter}
@@ -254,6 +258,23 @@
     line-height: var(--cds-body-short-01-line-height, 1.28572);
     letter-spacing: var(--cds-body-short-01-letter-spacing, 0.16px);
     word-wrap: break-word;
+  }
+
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact) {
+    min-width: 0;
+    max-width: 16rem;
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    line-height: var(--cds-helper-text-01-line-height, 1.33333);
+    letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
+  }
+
+  /* A paragraph inside keeps the compact size, not the one of its dialog. */
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact p) {
+    margin: 0;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
   }
 
   :global(.khartis-carbon-rich-tooltip::before) {

@@ -2,16 +2,16 @@ import type {
   ClassificationConfig,
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { ClassificationBreakTarget } from '../utils/classification-targets.utils';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { ClassificationBreakTarget } from '../utils/classification-targets.utils';
 import type { ClassableFieldKind } from './use-dataset-analysis.svelte';
 import {
   buildClassificationScopeKey,
   CLASSIFICATION_BREAKS_TRIGGER,
-  resolveScopeTargetPrimitive,
-  SYMBOL_FILL_SCOPE_TARGET,
   type ClassificationBreakTrigger,
   type ClassificationScopeTarget,
+  resolveScopeTargetPrimitive,
+  SYMBOL_FILL_SCOPE_TARGET,
   useClassificationBreaksController
 } from './use-classification-breaks.svelte';
 import type {

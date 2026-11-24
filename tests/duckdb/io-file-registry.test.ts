@@ -60,6 +60,7 @@ function createDbfWithFieldNames(fieldNames: string[]): File {
   });
 
   bytes[headerLength - 1] = 0x0d;
+  bytes[headerLength] = 0x1a;
 
   return new File([bytes], 'test.dbf', {
     type: 'application/x-dbf',
@@ -115,5 +116,8 @@ describe('registerFiles', () => {
       'li_couleur_',
       'li_couleu_2'
     ]);
+    const registeredBytes = new Uint8Array(await registeredDbf!.arrayBuffer());
+    expect(registeredBytes.length).toBe(dbf.size);
+    expect(registeredBytes.at(-1)).toBe(0x1a);
   });
 });

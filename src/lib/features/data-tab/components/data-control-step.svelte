@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import { FileType } from '$lib/features/commons/types/create-project.types';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
@@ -19,7 +21,6 @@
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import {
     createFileFromUpload,
     normalizeFormattedNumericColumns,
@@ -45,10 +46,11 @@
     Modal
   } from 'carbon-components-svelte';
   import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+  import { joinControlStore } from '$lib/features/map';
   import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import CalculatorPanel from './calculator-panel.svelte';
-  import CsvOptionsModal, { type CsvOptions } from './csv-options-modal.svelte';
+  import CsvOptionsPanel, { type CsvOptions } from './csv-options-panel.svelte';
   import DataToolPanel from './data-tool-panel.svelte';
   import DataToolsBar from './data-tools-bar.svelte';
   import ExpandedTableModal from './expanded-table-modal.svelte';
@@ -148,7 +150,6 @@
     };
   });
 
-  let csvOptionsModalOpen = $state(false);
   let currentCsvOptions = $state<CsvOptions>({
     header: true,
     decimalSeparator: '.',
@@ -157,6 +158,8 @@
   });
 
   let confirmReimportOpen = $state(false);
+
+  $effect(() => () => joinControlStore.setHoverTarget(null));
   let pendingCsvOptions = $state<CsvOptions | null>(null);
 
   $effect(() => {
@@ -220,11 +223,7 @@
   const canReimportCsv = $derived(
     isCsvFile &&
       !!sourceFile &&
-      Boolean(
-        sourceFile.originalFile ||
-        sourceFile.content ||
-        hasReimportableSourceAsset(sourceFile)
-      )
+      Boolean(sourceFile.originalFile || hasReimportableSourceAsset(sourceFile))
   );
 
   let forceRefreshKey = $state(0);
@@ -260,10 +259,6 @@
 
   function handleOpenReset() {
     resetModalOpen = true;
-  }
-
-  function handleOpenCsvOptions() {
-    csvOptionsModalOpen = true;
   }
 
   function handleShowHiddenColumns() {
@@ -416,16 +411,6 @@
     }
 
     let file = sourceFile.originalFile;
-
-    if (!file && sourceFile.content) {
-      const content =
-        typeof sourceFile.content === 'string'
-          ? sourceFile.content
-          : new TextDecoder().decode(sourceFile.content as ArrayBuffer);
-      file = new File([content], sourceFile.name, {
-        type: sourceFile.type || 'text/csv'
-      });
-    }
 
     // A restored project keeps the source bytes in IndexedDB only.
     if (!file && hasReimportableSourceAsset(sourceFile)) {
@@ -767,6 +752,17 @@
   const activeTool = $derived(dataToolsStore.activeTool);
   const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
 
+  // Opening another tool ends row deletion; only the tool change triggers
+  // this, so deletion can still start while a tool window is open.
+  $effect(() => {
+    if (activeTool === DataToolType.None) return;
+    untrack(() => {
+      if (!isDeleteMode) return;
+      isDeleteMode = false;
+      selectedRowIds = [];
+    });
+  });
+
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
       searchHighlight = {
@@ -830,6 +826,14 @@
           onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
       </DataToolPanel>
+    {:else if activeTool === DataToolType.CsvOptions && canReimportCsv}
+      <DataToolPanel title={m.csv_options_title()}>
+        <CsvOptionsPanel
+          currentOptions={currentCsvOptions}
+          onClose={() => dataToolsStore.closeTool()}
+          onApply={handleApplyCsvOptions}
+        />
+      </DataToolPanel>
     {/if}
   {/if}
 
@@ -857,13 +861,6 @@
     />
 
     {#if isCsvFile}
-      <CsvOptionsModal
-        open={csvOptionsModalOpen}
-        currentOptions={currentCsvOptions}
-        onClose={() => (csvOptionsModalOpen = false)}
-        onApply={handleApplyCsvOptions}
-      />
-
       <Modal
         iconDescription={m.a11y_close_dialog()}
         bind:open={confirmReimportOpen}
@@ -890,7 +887,6 @@
       onDelete={handleDeleteAction}
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
-      onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() =>
         dataTabActions.setDataControlState({
           showSummaryPlots: !showSummaryPlots
@@ -927,6 +923,10 @@
           onTableMutation={handleTableMutation}
           onSelectionChange={handleSelectionChange}
           onSortChange={handleSortChange}
+          onRowHover={(rowId) =>
+            joinControlStore.setHoverTarget(
+              rowId === null ? null : { rowIds: [rowId] }
+            )}
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
@@ -948,43 +948,45 @@
     {/if}
   </div>
 
-  {#if processedDataset && !variableTypesNotificationDismissed}
-    <InlineNotification
-      closeButtonDescription={m.a11y_close_notification()}
-      title={m.data_control_variable_types_title()}
-      subtitle={m.data_control_variable_types_subtitle()}
-      kind="info"
-      lowContrast
-      hideCloseButton={false}
-      on:close={() => (variableTypesNotificationDismissed = true)}
-    />
-  {/if}
+  <div class="kh-notification-stack data-control-notifications">
+    {#if processedDataset && !variableTypesNotificationDismissed}
+      <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
+        title={m.data_control_variable_types_title()}
+        subtitle={m.data_control_variable_types_subtitle()}
+        kind="info"
+        lowContrast
+        hideCloseButton={false}
+        on:close={() => (variableTypesNotificationDismissed = true)}
+      />
+    {/if}
 
-  {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
-    <InlineNotification
-      closeButtonDescription={m.a11y_close_notification()}
-      title={m.data_control_duplicate_rows_title()}
-      subtitle={duplicateRowCount === 1
-        ? m.data_control_duplicate_rows_subtitle_one()
-        : m.data_control_duplicate_rows_subtitle({
-            count: formatValue(duplicateRowCount)
-          })}
-      kind="warning"
-      lowContrast
-      hideCloseButton={false}
-      on:close={() => (duplicateRowsNotificationDismissed = true)}
-    />
-  {/if}
+    {#if duplicateRowCount > 0 && !duplicateRowsNotificationDismissed}
+      <InlineNotification
+        closeButtonDescription={m.a11y_close_notification()}
+        title={m.data_control_duplicate_rows_title()}
+        subtitle={duplicateRowCount === 1
+          ? m.data_control_duplicate_rows_subtitle_one()
+          : m.data_control_duplicate_rows_subtitle({
+              count: formatValue(duplicateRowCount)
+            })}
+        kind="warning"
+        lowContrast
+        hideCloseButton={false}
+        on:close={() => (duplicateRowsNotificationDismissed = true)}
+      />
+    {/if}
 
-  {#if isDeleteMode}
-    <InlineNotification
-      title={m.data_control_delete_mode_title()}
-      subtitle={m.data_control_delete_mode_subtitle()}
-      kind="info"
-      lowContrast
-      hideCloseButton
-    />
-  {/if}
+    {#if isDeleteMode}
+      <InlineNotification
+        title={m.data_control_delete_mode_title()}
+        subtitle={m.data_control_delete_mode_subtitle()}
+        kind="info"
+        lowContrast
+        hideCloseButton
+      />
+    {/if}
+  </div>
 
   <ExpandedTableModal
     bind:open={isModalOpen}
@@ -1012,6 +1014,10 @@
     flex-direction: column;
     position: relative;
     min-height: 0;
+  }
+
+  .data-control-notifications {
+    margin-block: 1rem;
   }
 
   .content-area {

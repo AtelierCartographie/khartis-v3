@@ -1,6 +1,11 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import {
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import {
     AnnotationKind,
     DrawingType
@@ -10,19 +15,21 @@
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages';
-  import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-
-  const drawingTypeOptions = $derived.by(() => [
-    { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
-    { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
-  ]);
-  import { Add, TrashCan } from 'carbon-icons-svelte';
+  import { Add } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
   import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
+  import { getOrdinalAnnotationName } from './_shared/annotation-name';
+  import AnnotationToolPanel from './_shared/annotation-tool-panel.svelte';
+  import { drawingSmoothing } from './drawing-smoothing.svelte';
+  import { onDestroy } from 'svelte';
+
+  const drawingTypeOptions = $derived.by(() => [
+    { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
+    { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
+  ]);
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -33,6 +40,23 @@
   const selectedDrawing = $derived(selectedAnnotation.selected);
 
   const effectiveStyle = $derived(selectedDrawing?.style ?? defaultStyle);
+
+  const selectedDrawingName = $derived(
+    selectedDrawing
+      ? getOrdinalAnnotationName(
+          annotationsState.items,
+          selectedDrawing,
+          m.annotations_drawing(),
+          (candidate) => candidate.type === AnnotationKind.DRAWING
+        )
+      : undefined
+  );
+
+  function deleteSelectedDrawing(): void {
+    if (selectedDrawing) {
+      annotationsActions.removeAnnotation(selectedDrawing.id);
+    }
+  }
 
   type StrokeColorDescriptor = {
     hue?: number;
@@ -117,28 +141,10 @@
 
   function handleDrawingTypeChange(type: DrawingType) {
     if (type === drawingType) return;
-    if (selectedDrawing) {
-      annotationsActions.selectAnnotation(null);
-    }
     drawingType = type;
     annotationsActions.updateDefaultStyle({
       drawingType: type
     });
-  }
-
-  function handleThicknessChange(e: CustomEvent<number>) {
-    if (effectiveStyle.strokeWidth === e.detail) return;
-    annotationsActions.applyStyle({ strokeWidth: e.detail });
-  }
-
-  function handleSmoothnessChange(e: CustomEvent<number>) {
-    if ((effectiveStyle.smoothness ?? 0) === e.detail) return;
-    annotationsActions.applyStyle({ smoothness: e.detail });
-  }
-
-  function handleOpacityChange(e: CustomEvent<number>) {
-    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
-    annotationsActions.applyStyle({ opacity: e.detail });
   }
 
   const activeDrawingType = $derived(
@@ -159,282 +165,192 @@
     }
     return value <= 1 ? value * 100 : value;
   }
+
+  onDestroy(() => drawingSmoothing.reset());
+
+  $effect(() => {
+    const release = (): void => drawingSmoothing.pointerUp();
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  });
 </script>
 
-<Grid noGutter fullWidth>
-  <Row>
-    <Column>
-      <SimpleRadioGroup
-        name="drawing-type"
-        legendText={m.annotations_type()}
-        items={drawingTypeOptions}
-        selected={drawingType}
-        onchange={(value) => handleDrawingTypeChange(value)}
+<AnnotationToolPanel
+  help={m.annotations_drawing_help()}
+  actionLabel={m.annotations_add_drawing()}
+  actionIcon={Add}
+  onaction={handleStartDrawing}
+  instructions={m.annotations_drawing_helper()}
+  actionOverride={isDrawingCreationActive ? drawingInProgress : undefined}
+  selectionLabel={m.annotations_selected_drawing()}
+  selectedName={selectedDrawingName}
+  deleteLabel={m.annotations_delete_drawing()}
+  ondelete={deleteSelectedDrawing}
+>
+  {#snippet creationOptions()}
+    <SimpleRadioGroup
+      name="drawing-type"
+      legendText={m.annotations_type()}
+      items={drawingTypeOptions}
+      selected={activeDrawingType}
+      disabled={!!selectedDrawing || isDrawingCreationActive}
+      onchange={(value) => handleDrawingTypeChange(value)}
+    />
+  {/snippet}
+
+  {#snippet properties()}
+    <SliderWithInput
+      label={m.thickness()}
+      value={effectiveStyle.strokeWidth || 2}
+      min={1}
+      max={10}
+      step={1}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(strokeWidth) => {
+        if (effectiveStyle.strokeWidth === strokeWidth) return;
+        annotationsActions.applyStyle({ strokeWidth });
+      }}
+    />
+
+    <div
+      class="smoothness-control"
+      role="presentation"
+      onpointerdown={(event: PointerEvent) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest('.bx--slider')
+        ) {
+          drawingSmoothing.pointerDown();
+        }
+      }}
+    >
+      <SliderWithInput
+        label={m.annotations_smoothness()}
+        value={effectiveStyle.smoothness ?? 0}
+        min={0}
+        max={100}
+        step={1}
+        inputWidth="72px"
+        showSteppers={false}
+        onchange={(smoothness) => {
+          if ((effectiveStyle.smoothness ?? 0) === smoothness) return;
+          drawingSmoothing.changed();
+          annotationsActions.applyStyle({ smoothness });
+        }}
       />
-    </Column>
-  </Row>
+    </div>
 
-  {#if isDrawingCreationActive}
-    <Row>
-      <Column>
-        <div class="section drawing-mode-active">
-          <p class="helper-hint">{m.annotations_drawing_instructions()}</p>
-          <div class="drawing-mode-actions">
-            <Button
-              size="field"
-              kind="primary"
-              disabled={annotationsState.drawingInProgress.length <
-                minimumPointsToFinish}
-              onclick={() => annotationsActions.finishDrawing()}
-            >
-              {m.annotations_drawing_finish()}
-            </Button>
-            <Button
-              size="field"
-              kind="tertiary"
-              onclick={() => annotationsActions.cancelDrawing()}
-            >
-              {m.button_cancel()}
-            </Button>
-          </div>
-        </div>
-      </Column>
-    </Row>
-  {:else}
-    <Row>
-      <Column>
-        <div class="section">
-          <Button
-            size="field"
-            kind="primary"
-            icon={Add}
-            onclick={handleStartDrawing}
-          >
-            {m.annotations_add_drawing()}
-          </Button>
-          <p class="helper">{m.annotations_drawing_helper()}</p>
-        </div>
-      </Column>
-    </Row>
-  {/if}
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={effectiveStyle.strokeStyle === 'dashed'}
+      ontoggle={(on) =>
+        annotationsActions.applyStyle({ strokeStyle: on ? 'dashed' : 'solid' })}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.thickness()}
-          value={effectiveStyle.strokeWidth || 2}
-          min={1}
-          max={10}
-          step={1}
-          stepMultiplier={1}
-          on:input={handleThicknessChange}
-          on:change={handleThicknessChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
+    <ColorPicker
+      hex={strokeColor}
+      hue={hue}
+      saturation={saturation}
+      lightness={lightness}
+      triggerLabel={m.color()}
+      onValidate={({
+        hex,
+        hue,
+        saturation,
+        lightness
+      }: {
+        hex: string;
+        hue: number;
+        saturation: number;
+        lightness: number;
+      }) => {
+        strokeColor = hex;
+        annotationsActions.applyStyle({
+          strokeColor: hex,
+          color: { hue, saturation, lightness }
+        });
+      }}
+      onCancel={() => {}}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.annotations_smoothness()}
-          value={effectiveStyle.smoothness ?? 0}
-          min={0}
-          max={100}
-          step={1}
-          stepMultiplier={5}
-          on:input={handleSmoothnessChange}
-          on:change={handleSmoothnessChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
+    <SliderWithInput
+      label={m.opacity()}
+      value={toOpacityPercent(effectiveStyle.opacity)}
+      min={0}
+      max={100}
+      step={5}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(opacity) => {
+        if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
+        annotationsActions.applyStyle({ opacity });
+      }}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <div class="toggle-row">
-          <span class="toggle-label">{m.dashed()}</span>
-          <Switch
-            toggled={effectiveStyle.strokeStyle === 'dashed'}
-            labelText={m.dashed()}
-            hideLabel
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={(checked) => {
-              const nextStyle: 'dashed' | 'solid' = checked
-                ? 'dashed'
-                : 'solid';
-              annotationsActions.applyStyle({
-                strokeStyle: nextStyle
-              });
-            }}
-          />
-        </div>
-      </div>
-    </Column>
-  </Row>
+    {#if activeDrawingType === DrawingType.ZONE}
+      <ColorPicker
+        hex={fillColor}
+        hue={fillHue}
+        saturation={fillSaturation}
+        lightness={fillLightness}
+        triggerLabel={m.annotations_fill_color()}
+        onValidate={({
+          hex,
+          hue,
+          saturation,
+          lightness
+        }: {
+          hex: string;
+          hue: number;
+          saturation: number;
+          lightness: number;
+        }) => {
+          fillColor = hex;
+          annotationsActions.applyStyle({
+            fillColor: { hue, saturation, lightness }
+          });
+        }}
+        onCancel={() => {}}
+      />
+    {/if}
+  {/snippet}
+</AnnotationToolPanel>
 
-  <Row>
-    <Column>
-      <div class="section">
-        <ColorPicker
-          hex={strokeColor}
-          hue={hue}
-          saturation={saturation}
-          lightness={lightness}
-          triggerLabel={m.color()}
-          onValidate={({
-            hex,
-            hue,
-            saturation,
-            lightness
-          }: {
-            hex: string;
-            hue: number;
-            saturation: number;
-            lightness: number;
-          }) => {
-            strokeColor = hex;
-            annotationsActions.applyStyle({
-              strokeColor: hex,
-              color: { hue, saturation, lightness }
-            });
-          }}
-          onCancel={() => {}}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  {#if activeDrawingType === DrawingType.ZONE}
-    <Row>
-      <Column>
-        <div class="section">
-          <ColorPicker
-            hex={fillColor}
-            hue={fillHue}
-            saturation={fillSaturation}
-            lightness={fillLightness}
-            triggerLabel={m.annotations_fill_color()}
-            onValidate={({
-              hex,
-              hue,
-              saturation,
-              lightness
-            }: {
-              hex: string;
-              hue: number;
-              saturation: number;
-              lightness: number;
-            }) => {
-              fillColor = hex;
-              annotationsActions.applyStyle({
-                fillColor: { hue, saturation, lightness }
-              });
-            }}
-            onCancel={() => {}}
-          />
-        </div>
-      </Column>
-    </Row>
-  {/if}
-
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.opacity()}
-          value={toOpacityPercent(effectiveStyle.opacity)}
-          min={0}
-          max={100}
-          step={5}
-          stepMultiplier={5}
-          on:input={handleOpacityChange}
-          on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        {#if annotationsState.selectedId}
-          {@const selected = annotationsState.items.find(
-            (i) => i.id === annotationsState.selectedId
-          )}
-          <Button
-            size="field"
-            kind="danger-tertiary"
-            icon={TrashCan}
-            disabled={!selected || selected.type !== AnnotationKind.DRAWING}
-            onclick={() =>
-              selected &&
-              selected.type === AnnotationKind.DRAWING &&
-              annotationsActions.removeAnnotation(selected.id)}
-          >
-            {m.annotations_delete_drawing()}
-          </Button>
-        {:else}
-          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled
-            >{m.annotations_delete_drawing()}</Button
-          >
-        {/if}
-      </div>
-    </Column>
-  </Row>
-</Grid>
+{#snippet drawingInProgress()}
+  <p class="kh-help">{m.annotations_drawing_instructions()}</p>
+  <div class="drawing-mode-actions">
+    <Button
+      size="field"
+      kind="primary"
+      disabled={annotationsState.drawingInProgress.length <
+        minimumPointsToFinish}
+      onclick={() => annotationsActions.finishDrawing()}
+    >
+      {m.annotations_drawing_finish()}
+    </Button>
+    <Button
+      size="field"
+      kind="tertiary"
+      onclick={() => annotationsActions.cancelDrawing()}
+    >
+      {m.button_cancel()}
+    </Button>
+  </div>
+{/snippet}
 
 <style>
-  .section {
-    margin-top: var(--cds-spacing-05);
-  }
-
-  .helper {
-    margin: var(--cds-spacing-03) 0 0 0;
-    color: var(--cds-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  .helper-hint {
-    margin: 0 0 var(--cds-spacing-04) 0;
-    color: var(--cds-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1.2rem;
-  }
-
-  .drawing-mode-active {
-    display: flex;
-    flex-direction: column;
-  }
-
   .drawing-mode-actions {
     display: flex;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
   }
 
   .drawing-mode-actions :global(.bx--btn) {
     flex: 1;
     max-width: 100%;
-  }
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .toggle-label {
-    color: var(--cds-text-secondary);
-    font-size: 0.875rem;
   }
 </style>

@@ -1,18 +1,35 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
 
   interface Props {
     text: string;
+    title?: string;
     align?: 'top' | 'bottom';
     tags?: string[];
     disabled?: boolean;
+    /** Replaces the (i) icon; give `label` with it. */
+    icon?: Component<{ size?: number }>;
+    /** Accessible name of the button; defaults to « Plus d'informations ». */
+    label?: string;
+    /** Class for the button, to colour a status icon. */
+    buttonClass?: string;
   }
 
-  let { text, align = 'bottom', tags = [], disabled = false }: Props = $props();
+  let {
+    text,
+    title,
+    align = 'bottom',
+    tags = [],
+    disabled = false,
+    icon: Icon = Information,
+    label,
+    buttonClass
+  }: Props = $props();
 
   let open = $state(false);
   let pinned = $state(false);
@@ -128,10 +145,10 @@
 <span class="info-popover-wrapper">
   <button
     type="button"
-    class="info-btn"
+    class="info-btn {buttonClass ?? ''}"
     class:info-btn-disabled={disabled}
     bind:this={btnRef}
-    aria-label={m.more_info()}
+    aria-label={label ?? m.more_info()}
     aria-disabled={disabled ? 'true' : undefined}
     disabled={disabled}
     onclick={toggle}
@@ -140,7 +157,7 @@
     onfocus={show}
     onblur={hide}
   >
-    <Information size={16} />
+    <Icon size={16} />
   </button>
 </span>
 
@@ -162,6 +179,9 @@
       onmouseleave={handleTooltipMouseLeave}
     >
       <div class="info-tooltip-arrow"></div>
+      {#if title}
+        <p class="info-tooltip-title">{title}</p>
+      {/if}
       {#if tags.length > 0}
         <div class="info-tooltip-tags">
           {#each tags as tag (tag)}
@@ -264,6 +284,13 @@
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
     border-top: 6px solid var(--cds-inverse-01, #393939);
+  }
+
+  :global(.info-tooltip-title) {
+    margin: 0 0 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
   }
 
   :global(.info-tooltip-text) {

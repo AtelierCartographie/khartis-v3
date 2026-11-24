@@ -14,7 +14,6 @@ import {
 } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { DuckDBSimplifiedType } from '../types';
 import type {
   AnalyseOptions,
   AnalysisResult,
@@ -22,6 +21,7 @@ import type {
   ArrowTableLike,
   DuckDBContext
 } from '../types';
+import { DuckDBSimplifiedType } from '../types';
 
 registerTableMutationCallback((table, ctx) => {
   const table_metadata = ctx.table_metadata.get(table);
@@ -91,7 +91,7 @@ interface HistogramSpec {
 const HISTOGRAM_STRUCT_FIELDS: Record<HistogramMacro, readonly string[]> = {
   histogram_numeric: ['bin', 'count'],
   histogram_date: ['bin', 'count'],
-  histogram_categorical: ['category', 'count', 'percent']
+  histogram_categorical: ['category', 'count', 'percent', 'other_categories']
 };
 
 function columnBatches<T>(items: T[], size: number): T[][] {

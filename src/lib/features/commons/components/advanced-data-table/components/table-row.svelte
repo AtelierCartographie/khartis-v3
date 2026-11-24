@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { fade, scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import {
     formatValueByType,
@@ -57,10 +60,19 @@
       onToggleSelection?.(rowId);
     }
   }
+
+  // Local transitions: they play when the delete tool swaps the row number
+  // for a checkbox, not when a row mounts while the table scrolls.
+  const CELL_REVEAL = {
+    duration: motionDuration(180),
+    start: 0.6,
+    easing: cubicOut
+  };
 </script>
 
 <tr
   data-row-id={rowId}
+  class:alternate={rowIndex % 2 === 1}
   class:highlight-current={highlightType === 'current'}
   class:highlight-exact={highlightType === 'exact'}
   class:highlight-partial={highlightType === 'partial'}
@@ -68,16 +80,20 @@
 >
   {#if isSelectable}
     <td class="checkbox-cell">
-      <SimpleCheckbox
-        checked={isSelected}
-        labelText={m.table_select_row({ index: displayIndex })}
-        hideLabel
-        onchange={handleCheckboxChange}
-      />
+      <div class="cell-reveal" in:scale={CELL_REVEAL}>
+        <SimpleCheckbox
+          checked={isSelected}
+          labelText={m.table_select_row({ index: displayIndex })}
+          hideLabel
+          onchange={handleCheckboxChange}
+        />
+      </div>
     </td>
   {/if}
   {#if showRowNumbers}
-    <td class="row-index-cell">{displayIndex}</td>
+    <td class="row-index-cell">
+      <span class="cell-reveal" in:fade={CELL_REVEAL}>{displayIndex}</span>
+    </td>
   {/if}
   {#each visibleColumns as col (col.name)}
     {@const value = row[col.name]}
@@ -112,6 +128,11 @@
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     transition: background-color 0.15s;
     background-color: var(--cds-ui-01, #ffffff);
+  }
+
+  /* By data index, so that the alternation holds while rows are virtualised. */
+  tr.alternate {
+    background-color: var(--cds-ui-02, #ffffff);
   }
 
   tr:hover {
@@ -162,7 +183,7 @@
     padding: 0;
     position: sticky;
     left: 0;
-    background-color: var(--cds-ui-01, #ffffff);
+    background-color: inherit;
     z-index: var(--z-base);
     display: flex;
     align-items: center;

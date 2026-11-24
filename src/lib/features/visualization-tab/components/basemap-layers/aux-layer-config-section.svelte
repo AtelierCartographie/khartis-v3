@@ -8,16 +8,17 @@
   import LayerConfigMeridiens from './layer-config-meridiens.svelte';
   import LayerConfigVilles from './layer-config-villes.svelte';
   import LayerConfigMers from './layer-config-mers.svelte';
+  import LayerConfigVues from './layer-config-vues.svelte';
   import {
-    basemapLayersStore,
     type BasemapLayerConfig,
-    type BasemapLayerId
+    type BasemapLayerId,
+    basemapLayersStore
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import {
-    BasemapGraticuleMode,
-    type BasemapDottedPattern
+    type BasemapDottedPattern,
+    BasemapGraticuleMode
   } from '$lib/features/commons/constants/visualization.constants';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
@@ -99,6 +100,10 @@
     void basemapAuxLayersStore.version;
     return isVisible();
   });
+
+  const isEmpty = $derived(
+    layer.file ? basemapService.isLayerEmpty(layer.file) : false
+  );
 
   // Land/limit sections keep per-file overrides because legacy shared config couples levels.
   const isLandLayer = $derived(
@@ -331,7 +336,10 @@
   title={title}
   showToggle={true}
   toggleVariant="suggestions"
-  toggleChecked={visible}
+  toggleChecked={visible && !isEmpty}
+  description={isEmpty ? m.basemap_layer_empty() : undefined}
+  disabled={isEmpty}
+  disabledReason={isEmpty ? m.basemap_layer_empty_reason() : undefined}
   open={open}
   onToggle={onToggle}
   onToggleChange={handleToggle}
@@ -406,6 +414,13 @@
       labelSize={getConfig('villes')?.labelSize}
       labelColor={getConfig('villes')?.labelColor}
       onchange={(updates) => handleLayerChange('villes', updates)}
+    />
+  {:else if legacyId === 'vues'}
+    <LayerConfigVues
+      color={getConfig('vues')?.color}
+      labelFontFamily={getConfig('vues')?.labelFontFamily}
+      labelSize={getConfig('vues')?.labelSize}
+      onchange={(updates) => handleLayerChange('vues', updates)}
     />
   {:else if legacyId === 'mers'}
     <LayerConfigMers

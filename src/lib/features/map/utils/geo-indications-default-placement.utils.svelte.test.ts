@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
 import {
+  type GeoIndicationsPlacementContext,
   getDefaultInsetStyle,
   getDefaultOrientationStyle,
-  getDefaultScaleStyle,
-  type GeoIndicationsPlacementContext
+  getDefaultScaleStyle
 } from './geo-indications-default-placement.utils';
 
 function createContext(

@@ -86,21 +86,22 @@ describe('annotations store', () => {
         .map((item) => [item.role, item])
     );
 
+    // Snapped on the grid centred on the default page, which starts at 1, 3.
     expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.position).toEqual({
-      x: 44,
-      y: 44
+      x: 45,
+      y: 43
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.position).toEqual({
-      x: 44,
-      y: 68
+      x: 45,
+      y: 67
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
-      x: 572,
-      y: 456
+      x: 365,
+      y: 479
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
-      x: 572,
-      y: 528
+      x: 365,
+      y: 527
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
       TextAlign.Right
@@ -108,9 +109,7 @@ describe('annotations store', () => {
     expect(
       itemsByRole.get(ANNOTATION_ROLE.BASEMAP_SOURCE)?.style?.textAlign
     ).toBe(TextAlign.Right);
-    expect(itemsByRole.get(ANNOTATION_ROLE.SIGNATURE)?.style?.textAlign).toBe(
-      TextAlign.Right
-    );
+    expect(itemsByRole.has(ANNOTATION_ROLE.SIGNATURE)).toBe(false);
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
       TextAlign.Right
     );
@@ -120,6 +119,136 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.style?.textAlign).toBe(
       TextAlign.Left
     );
+  });
+
+  it('brings the page texts of older projects up to date and drops their untouched note', () => {
+    const year = new Date().getFullYear();
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.CREDIT,
+          content: 'Réalisé avec Khartis',
+          position: { x: 572, y: 528 }
+        },
+        {
+          id: 'note',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.SIGNATURE,
+          content: 'Ajouter une note',
+          position: { x: 572, y: 480 }
+        },
+        {
+          id: 'written-note',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.SIGNATURE,
+          content: 'Atelier de cartographie',
+          position: { x: 572, y: 456 },
+          positionMode: 'manual'
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const byId = new Map(getAnnotationsState().items.map((i) => [i.id, i]));
+    expect(byId.has('note')).toBe(false);
+    expect(byId.get('written-note')?.content).toBe('Atelier de cartographie');
+    expect(byId.get('credit')?.content).toBe(
+      `Ajouter l'auteur·rice, ${year}. Réalisé avec Khartis.`
+    );
+  });
+
+  it('should not seed the page texts an older project already wrote as free texts', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'title',
+          type: AnnotationKind.TEXT,
+          content: 'Paris : âge du bâti\ndans le 13e arrondissement',
+          position: { x: 32, y: 24 },
+          coordinateSpace: 'page',
+          style: { fontSize: 14 }
+        },
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content:
+            'Sources : Apur, 2025. Fond de carte : Eurostat - GISCO, 2024.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          content: 'Réalisation : Atelier de cartographie, 2026.',
+          position: { x: 424, y: 556 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        },
+        {
+          id: 'label',
+          type: AnnotationKind.TEXT,
+          content: 'Océan Atlantique',
+          position: { x: 40, y: 300 },
+          style: { fontSize: 14 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([]);
+  });
+
+  it('should seed only the page texts an older project did not write', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          content: 'Source: Eurostat, 2025.',
+          position: { x: 32, y: 536 },
+          coordinateSpace: 'page',
+          style: { fontSize: 8 }
+        }
+      ]
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const roles = getAnnotationsState()
+      .items.filter((item) => item.role)
+      .map((item) => item.role);
+    expect(roles).toEqual([
+      ANNOTATION_ROLE.TITLE,
+      ANNOTATION_ROLE.SUBTITLE,
+      ANNOTATION_ROLE.BASEMAP_SOURCE,
+      ANNOTATION_ROLE.CREDIT
+    ]);
+  });
+
+  it('turns the source placeholder into its lead-in once clicked', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const getSource = () =>
+      getAnnotationsState().items.find(
+        (item) => item.role === ANNOTATION_ROLE.SOURCE
+      );
+    const source = getSource();
+    expect(source?.content).toBe('Ajouter une source');
+    if (!source) {
+      return;
+    }
+
+    annotationsActions.selectAnnotation(source.id);
+
+    expect(getSource()?.content).toBe('Source\u00a0: ');
   });
 
   it('refreshes default page element placeholders when locale changes', async () => {
@@ -221,7 +350,7 @@ describe('annotations store', () => {
       (item) => item.role === ANNOTATION_ROLE.NOTE
     );
 
-    expect(note?.position).toEqual({ x: 572, y: 432 });
+    expect(note?.position).toEqual({ x: 365, y: 455 });
     expect(note?.coordinateSpace).toBe('page');
     expect(note?.positionMode).toBe('manual');
   });
@@ -265,7 +394,13 @@ describe('annotations store', () => {
       return;
     }
 
+    // The credit box spans half the page: it cannot start past the middle.
     annotationsActions.moveAnnotation(credit.id, { x: 600, y: 560 });
+    expect(
+      getAnnotationsState().items.find((item) => item.id === credit.id)
+        ?.position
+    ).toEqual({ x: 421, y: 560 });
+
     annotationsActions.redistributePageElements(
       { width: 1191, height: 842 },
       { width: 842, height: 595 }
@@ -274,7 +409,35 @@ describe('annotations store', () => {
     expect(
       getAnnotationsState().items.find((item) => item.id === credit.id)
         ?.position
-    ).toEqual({ x: 949, y: 807 });
+    ).toEqual({ x: 595.5, y: 807 });
+  });
+
+  it('keeps a right-aligned caption on the page side of its text when the page shrinks', () => {
+    formatActions.toggleGrid();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const credit = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.CREDIT
+    );
+    expect(credit?.style?.textAlign).toBe(TextAlign.Right);
+    if (!credit) {
+      return;
+    }
+
+    // Box from 150 to 571 on an 842 px page: the text ends 271 px from the
+    // right edge, though the box starts closer to the left one.
+    annotationsActions.moveAnnotation(credit.id, { x: 150, y: 300 });
+    annotationsActions.redistributePageElements(
+      { width: 595, height: 595 },
+      { width: 842, height: 595 }
+    );
+
+    const position = getAnnotationsState().items.find(
+      (item) => item.id === credit.id
+    )?.position;
+    expect(position).toEqual({ x: 26.5, y: 300 });
+    // The text end keeps its gap to the right edge of the page.
+    expect(595 - ((position?.x ?? 0) + 595 / 2)).toBe(271);
   });
 
   it('uses the custom page sizing profile when page elements are initialized', () => {
@@ -304,12 +467,45 @@ describe('annotations store', () => {
       ]
     });
 
-    annotationsActions.moveAnnotation('legacy-shape', { x: 40, y: 72 });
+    // A grid point of the map frame, whose page grid starts at 1, 3.
+    annotationsActions.moveAnnotation('legacy-shape', { x: 41, y: 71 });
 
     const [legacyShape] = getAnnotationsState().items;
 
     expect(legacyShape.coordinateSpace).toBe('map');
-    expect(legacyShape.position).toEqual({ x: 40, y: 72 });
+    expect(legacyShape.position).toEqual({ x: 41, y: 71 });
+  });
+
+  it('should anchor a text to the map when it is placed inside the map frame', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Golfe');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 200, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Golfe'
+    });
+
+    expect(text?.coordinateSpace).toBe('map');
+    expect(text?.position).toEqual({ x: 120, y: 100 });
+  });
+
+  it('should keep a text on the page when it is placed in the page margins', () => {
+    formatActions.setMapFrame({ top: 50, right: 60, bottom: 50, left: 80 });
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, 'Note');
+
+    const text = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.TEXT,
+      position: { x: 20, y: 150 },
+      size: { width: 40, height: 12 },
+      content: 'Note'
+    });
+
+    expect(text?.coordinateSpace).toBe('page');
+    expect(text?.position).toEqual({ x: 20, y: 150 });
   });
 
   it('starts placement without spawning the annotation until commit', () => {
@@ -337,7 +533,7 @@ describe('annotations store', () => {
     expect(createdShape).toBeTruthy();
     // Drawn-on-the-map shapes are created in `'map'` space (no `role`) so they
     // follow the basemap; the page-space placement position is converted to
-    // map-area-local (page top-left minus the page margins).
+    // map-area-local (page top-left minus the map frame insets).
     expect(createdShape?.coordinateSpace).toBe('map');
     expect(createdShape?.position).toEqual({ x: 96 - 32, y: 128 - 32 });
     expect(createdShape?.anchor).toBeUndefined();
@@ -389,19 +585,20 @@ describe('annotations store', () => {
 
   it('creates finished drawings in map space with a margin-relative position', () => {
     annotationsActions.beginDrawing(DrawingType.LINE);
-    // Origin on the 12px page grid so grid snapping is a no-op and the margin
-    // conversion is the only transform under test.
+    // Origin on the grid centred on the default A4 landscape page (which
+    // starts at 1, 3), so grid snapping is a no-op and the margin conversion
+    // is the only transform under test.
     annotationsActions.updateDrawing([
-      { x: 48, y: 60 },
-      { x: 120, y: 96 }
+      { x: 49, y: 63 },
+      { x: 121, y: 99 }
     ]);
 
     const drawing = annotationsActions.finishDrawing();
 
     // Drawn-on-the-map drawings follow the basemap: `'map'` space with the page
-    // origin (48, 60) shifted by the page margins (32) into map-area-local space.
+    // origin (49, 63) shifted by the page margins (32) into map-area-local space.
     expect(drawing?.coordinateSpace).toBe('map');
-    expect(drawing?.position).toEqual({ x: 48 - 32, y: 60 - 32 });
+    expect(drawing?.position).toEqual({ x: 49 - 32, y: 63 - 32 });
     expect(drawing?.anchor).toBeUndefined();
   });
 

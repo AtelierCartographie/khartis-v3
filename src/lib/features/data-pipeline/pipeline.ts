@@ -50,7 +50,10 @@ const Pipeline = {
     if (isZipFile(file)) {
       return processZipFile(file);
     }
-    return processFileInternal(file, { sourceFileId: options.sourceFileId });
+    return processFileInternal(file, {
+      sourceFileId: options.sourceFileId,
+      reportSkippedLines: true
+    });
   },
 
   async processUploadedFile(

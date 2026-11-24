@@ -1,3 +1,4 @@
+import { layoutDropShadow } from '$lib/features/commons/constants/ui.constants';
 import { hslToHex } from '$lib/features/commons/utils/color-utils';
 import {
   clampFontSize,
@@ -104,6 +105,9 @@ export function getTextStyleFromStyle(
       `background: color-mix(in srgb, ${bgColor} ${bgOpacity * 100}%, transparent)`
     );
     styles.push(`padding: ${TEXT_BACKGROUND_PADDING}`);
+    styles.push(
+      `box-shadow: ${resolvedStyle.backgroundShadow ? layoutDropShadow(bgOpacity) : 'none'}`
+    );
   } else {
     styles.push('background: transparent');
     styles.push('box-shadow: none');

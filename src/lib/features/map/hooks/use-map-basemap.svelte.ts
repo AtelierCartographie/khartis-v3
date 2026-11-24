@@ -13,8 +13,8 @@ import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
-  createOSMRasterSource,
-  createOSMRasterLayer
+  createOSMRasterLayer,
+  createOSMRasterSource
 } from '../services/osm-tile.service';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 
@@ -32,9 +32,17 @@ export interface UseMapBasemapReturn {
   syncBasemapLanguage: () => void;
   syncLabelsVisibility: () => void;
   syncGroupVisibility: () => void;
+  syncBasemapOpacity: () => void;
   syncProjection: () => void;
   cleanup: () => void;
   readonly isStyleLoading: boolean;
+}
+
+// isStyleLoaded() also waits for every tile and sprite, still loading when
+// 'style.load' fires: a sync that bails on it leaves the style's own layer
+// visibility in place. getStyle() is defined once the document is applied.
+function hasStyleDocument(map: MapLibreMap): boolean {
+  return map.getStyle() !== undefined;
 }
 
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
@@ -334,7 +342,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncOSMRasterLayer(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
@@ -395,7 +403,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncBasemapLanguage(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const locale = getBasemapLabelLocale();
@@ -429,7 +437,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncLabelsVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const show = basemapStyleStore.showLabels;
@@ -467,7 +475,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncGroupVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
       return;
 
     const groupVisibility = basemapStyleStore.groupVisibility;
@@ -491,6 +499,105 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     } catch (error) {
       logger.error(
         'Failed to sync MapLibre group visibility',
+        LogCategory.MAP,
+        error
+      );
+    }
+  }
+
+  // The reference basemap fades layer by layer: the thematic layers are drawn
+  // in the same canvas, so a canvas opacity would fade them too.
+  type PaintProperty = Parameters<MapLibreMap['getPaintProperty']>[1];
+  const OPACITY_PROPERTIES: Record<string, PaintProperty[]> = {
+    background: ['background-opacity'],
+    fill: ['fill-opacity'],
+    'fill-extrusion': ['fill-extrusion-opacity'],
+    line: ['line-opacity'],
+    raster: ['raster-opacity'],
+    circle: ['circle-opacity', 'circle-stroke-opacity'],
+    symbol: ['text-opacity', 'icon-opacity']
+  };
+  let originalOpacities = new Map<string, unknown>();
+  let originalOpacitiesStyleKey: string | null = null;
+
+  /** Scales a paint value, constant or zoom expression, by a factor. */
+  function scaleOpacityValue(value: unknown, factor: number): unknown {
+    if (value === undefined || value === null) return factor;
+    if (typeof value === 'number') return value * factor;
+    if (Array.isArray(value)) {
+      const [operator] = value;
+      if (operator === 'interpolate') {
+        return value.map((entry, index) =>
+          index >= 4 && index % 2 === 0
+            ? scaleOpacityValue(entry, factor)
+            : entry
+        );
+      }
+      if (operator === 'step') {
+        return value.map((entry, index) =>
+          index === 2 || (index > 2 && index % 2 === 0)
+            ? scaleOpacityValue(entry, factor)
+            : entry
+        );
+      }
+      return ['*', value, factor];
+    }
+    if (
+      typeof value === 'object' &&
+      'stops' in value &&
+      Array.isArray((value as { stops: unknown }).stops)
+    ) {
+      const fn = value as { stops: [unknown, unknown][] };
+      return {
+        ...fn,
+        stops: fn.stops.map(([zoom, stop]) => [
+          zoom,
+          scaleOpacityValue(stop, factor)
+        ])
+      };
+    }
+    return value;
+  }
+
+  function syncBasemapOpacity(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded() || isStyleLoading || !hasStyleDocument(map))
+      return;
+
+    if (originalOpacitiesStyleKey !== lastAppliedStyleKey) {
+      originalOpacities = new Map();
+      originalOpacitiesStyleKey = lastAppliedStyleKey;
+    }
+
+    const factor = basemapStyleStore.opacity / 100;
+    try {
+      const style = map.getStyle();
+      if (!style?.layers) return;
+
+      for (const layer of style.layers) {
+        for (const property of OPACITY_PROPERTIES[layer.type] ?? []) {
+          const key = `${layer.id}|${property}`;
+          if (!originalOpacities.has(key)) {
+            originalOpacities.set(
+              key,
+              map.getPaintProperty(layer.id, property)
+            );
+          }
+          const original = originalOpacities.get(key);
+          map.setPaintProperty(
+            layer.id,
+            property,
+            (factor === 1
+              ? original
+              : scaleOpacityValue(original, factor)) as Parameters<
+              MapLibreMap['setPaintProperty']
+            >[2]
+          );
+        }
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to sync MapLibre basemap opacity',
         LogCategory.MAP,
         error
       );
@@ -550,6 +657,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     syncBasemapLanguage,
     syncLabelsVisibility,
     syncGroupVisibility,
+    syncBasemapOpacity,
     syncProjection,
     cleanup,
     get isStyleLoading() {

@@ -1,4 +1,9 @@
 import { PipelineError } from '$lib/features/commons/pipeline.errors';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+import {
+  LEGACY_PATTERN_BACKGROUND,
+  PATTERN_SHAPES
+} from '$lib/features/commons/constants/pattern.constants';
 import * as m from '$lib/paraglide/messages';
 import { PROJECT_CONST } from '../constants';
 
@@ -16,10 +21,75 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-// No-op on purpose: each bump fences off builds that would drop saved state on
-// save (3.10.0: imported basemap sources, 3.11.0: tabular archive layers,
-// 3.12.0: enrichment snapshots, 3.13.0: manual label positions, 3.14.0:
-// per-facet fill variables, 3.15.0: origin of joined columns).
+// Up to 3.15.0 the page margins also bounded the map, so the map frame of an
+// older project is its margins.
+function withMapFrameFromMargins(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const projectData = isRecord(data.data) ? data.data : null;
+  const layout = isRecord(projectData?.layoutSettings)
+    ? projectData.layoutSettings
+    : null;
+  const format = isRecord(layout?.format) ? layout.format : null;
+  if (!projectData || !layout || !format || !isRecord(format.margins)) {
+    return { ...data };
+  }
+
+  return {
+    ...data,
+    data: {
+      ...projectData,
+      layoutSettings: {
+        ...layout,
+        format: { ...format, mapFrame: { ...format.margins } }
+      }
+    }
+  };
+}
+
+function isMotifConfig(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    (PATTERN_SHAPES as readonly unknown[]).includes(value.shape) &&
+    value.background === undefined
+  );
+}
+
+// Up to 3.16.0 a motif was painted over white, and a missing-data hatch over
+// the missing-data color. Since 3.17.0 the background belongs to the motif and
+// its absence leaves the polygon unpainted, so older motifs get theirs.
+function withMotifBackgrounds(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withMotifBackgrounds);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === 'pattern' && isMotifConfig(child)) {
+      next[key] = { ...child, background: LEGACY_PATTERN_BACKGROUND };
+    } else if (key === 'patternConfig' && isMotifConfig(child)) {
+      next[key] = {
+        ...child,
+        background:
+          typeof value.color === 'string'
+            ? value.color
+            : NEUTRAL_CARTOGRAPHY_COLORS.missingData
+      };
+    } else {
+      next[key] = withMotifBackgrounds(child);
+    }
+  }
+  return next;
+}
+
+// No-op on purpose up to 3.15.0: each bump fences off builds that would drop
+// saved state on save (3.10.0: imported basemap sources, 3.11.0: tabular
+// archive layers, 3.12.0: enrichment snapshots, 3.13.0: manual label
+// positions, 3.14.0: per-facet fill variables, 3.15.0: origin of joined
+// columns).
 export const schemaMigrations: readonly SchemaMigration[] = [
   {
     from: '3.9.0',
@@ -50,6 +120,19 @@ export const schemaMigrations: readonly SchemaMigration[] = [
     from: '3.14.0',
     to: '3.15.0',
     migrate: (data) => ({ ...data })
+  },
+  {
+    from: '3.15.0',
+    to: '3.16.0',
+    migrate: withMapFrameFromMargins
+  },
+  {
+    from: '3.16.0',
+    to: '3.17.0',
+    migrate: (data) =>
+      'data' in data
+        ? { ...data, data: withMotifBackgrounds(data.data) }
+        : { ...data }
   }
 ];
 

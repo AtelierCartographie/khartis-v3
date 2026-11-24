@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "devDependencies": {
-    "@huggingface/transformers": "^4.3.0",
-    "@jcode.labs/ragmir": "^6.0.1",
+    "@huggingface/transformers": "^4.3.2",
+    "@jcode.labs/ragmir": "^6.5.0",
     "apache-arrow": "18.1.0"
   }
 }

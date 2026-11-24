@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ContentSwitcher from '$lib/features/commons/components/palette-popover/content-switcher.svelte';
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import {
     FormatMode,
@@ -6,8 +8,16 @@
   } from '$lib/features/commons/constants/ui.constants';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { m } from '$lib/paraglide/messages';
+  import { getPrimaryShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
+  import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
+  import {
+    describeMapGeoreferenceAvailability,
+    getMapGeoreferenceAvailability,
+    resolveMapVectorCrs
+  } from '$lib/features/step-toolbar/tools/projections';
   import {
     DataStructured,
     DocumentExport,
@@ -15,25 +25,54 @@
     Image
   } from 'carbon-icons-svelte';
   import { useExportModal } from '../hooks/use-export-modal.svelte';
+  import type {
+    DataExportFormat,
+    ExportResolution,
+    ExportTabType,
+    MapExportFormat
+  } from '../types';
   import {
-    ExportTab,
-    MAP_FORMAT,
     DATA_FORMAT,
-    EXPORT_RESOLUTION
+    EXPORT_RESOLUTION,
+    ExportTab,
+    MAP_FORMAT
   } from '../types';
   import {
     formatExportDimensions,
     getExportDimensionsForPage
   } from '../export-dimensions.utils';
-  import type {
-    MapExportFormat,
-    DataExportFormat,
-    ExportTabType,
-    ExportResolution
-  } from '../types';
 
   const modal = useExportModal();
+  const georeferenceAvailability = $derived(
+    modal.isOpen ? getMapGeoreferenceAvailability() : null
+  );
+  const georeferenceUnavailableReason = $derived(
+    georeferenceAvailability && !georeferenceAvailability.available
+      ? describeMapGeoreferenceAvailability(georeferenceAvailability)
+      : null
+  );
   const currentFormat = $derived(getFormatState());
+  const isQgisFormat = $derived(modal.mapFormat === MAP_FORMAT.QGIS);
+  const qgisCrs = $derived(
+    modal.isOpen && isQgisFormat ? resolveMapVectorCrs() : null
+  );
+  const qgisCrsLabel = $derived(
+    !qgisCrs
+      ? ''
+      : qgisCrs.status === 'map'
+        ? qgisCrs.crsName
+        : m.download_map_qgis_crs_wgs84()
+  );
+  const qgisCrsReason = $derived(
+    qgisCrs?.status === 'wgs84'
+      ? describeMapGeoreferenceAvailability({
+          available: false,
+          reason: qgisCrs.reason
+        })
+      : qgisCrs?.composite
+        ? m.qgis_memo_crs_composite()
+        : null
+  );
 
   const currentPageFormatLabel = $derived.by(() => {
     if (currentFormat.mode === FormatMode.CUSTOM) {
@@ -132,6 +171,10 @@
     {
       id: MAP_FORMAT.SVG,
       label: m.download_map_svg()
+    },
+    {
+      id: MAP_FORMAT.QGIS,
+      label: m.download_map_qgis()
     }
   ]);
 
@@ -169,7 +212,11 @@
   ]);
 
   function isMapExportFormat(value: unknown): value is MapExportFormat {
-    return value === MAP_FORMAT.SVG || value === MAP_FORMAT.JPG;
+    return (
+      value === MAP_FORMAT.SVG ||
+      value === MAP_FORMAT.JPG ||
+      value === MAP_FORMAT.QGIS
+    );
   }
 
   function isDataExportFormat(value: unknown): value is DataExportFormat {
@@ -215,11 +262,12 @@
 
 <div id="khartis-download-button">
   <Button
-    class="h-full"
     size="small"
     tooltipPosition="bottom"
     tooltipAlignment="end"
     iconDescription={m.download_tooltip()}
+    shortcut={getPrimaryShortcut('download')}
+    portalTooltip
     kind="primary"
     icon={Download}
     on:click={() => modal.open()}
@@ -248,88 +296,146 @@
   {#if modal.isOpen}
     <div class="export-layout">
       <section class="export-panel">
-        {#if modal.selectedTab === ExportTab.PROJECT}
-          <div class="panel-heading">
-            <p class="panel-description">{m.download_project_description()}</p>
-          </div>
+        <SwitchedContent value={modal.selectedTab}>
+          {#if modal.selectedTab === ExportTab.PROJECT}
+            <div class="panel-heading">
+              <p class="panel-description">
+                {m.download_project_description()}
+              </p>
+            </div>
 
-          <div class="project-name-field">
-            <TextInput
-              size="sm"
-              light
-              labelText={m.download_project_name()}
-              value={modal.fileName}
-              placeholder={m.project_placeholder()}
-              on:input={(e) => modal.setFileName(String(e.detail ?? ''))}
-            />
-          </div>
-        {:else if modal.selectedTab === ExportTab.MAP}
-          <div class="panel-heading">
-            <p class="panel-description">{m.download_map_description()}</p>
-          </div>
-
-          <SimpleRadioGroup
-            name="map-export-format"
-            items={mapFormatOptions.map((o) => ({
-              value: o.id,
-              labelText: o.label
-            }))}
-            selected={modal.mapFormat}
-            onchange={(value) => handleMapFormatChange(value)}
-          />
-
-          <section class="export-summary" aria-live="polite">
-            <p class="summary-heading">{m.download_map_current_page()}</p>
-            <dl class="summary-grid">
-              <div class="summary-item">
-                <dt>{m.download_map_current_format()}</dt>
-                <dd>{currentPageFormatLabel}</dd>
-              </div>
-
-              <div class="summary-item">
-                <dt>{m.download_map_current_size()}</dt>
-                <dd>{currentPageSizeLabel}</dd>
-              </div>
-
-              {#if modal.mapFormat !== MAP_FORMAT.SVG}
-                <div class="summary-item">
-                  <dt>{m.download_map_export_size()}</dt>
-                  <dd>{selectedExportSizeLabel}</dd>
-                </div>
-              {/if}
-            </dl>
-          </section>
-
-          {#if modal.mapFormat !== MAP_FORMAT.SVG}
-            <div class="option-section">
-              <SimpleRadioGroup
-                name="map-export-resolution"
-                legendText={m.download_map_resolution()}
-                items={resolutionOptions.map((o) => ({
-                  value: o.id,
-                  labelText: o.label
-                }))}
-                selected={modal.resolution}
-                onchange={(value) => handleResolutionChange(value)}
+            <div class="project-name-field">
+              <TextInput
+                size="sm"
+                light
+                labelText={m.download_project_name()}
+                value={modal.fileName}
+                placeholder={m.project_placeholder()}
+                on:input={(e) => modal.setFileName(String(e.detail ?? ''))}
               />
             </div>
-          {/if}
-        {:else}
-          <div class="panel-heading">
-            <p class="panel-description">{m.download_data_description()}</p>
-          </div>
+          {:else if modal.selectedTab === ExportTab.MAP}
+            <div class="panel-heading">
+              <p class="panel-description">{m.download_map_description()}</p>
+            </div>
 
-          <SimpleRadioGroup
-            name="data-export-format"
-            orientation="vertical"
-            items={dataFormatOptions.map((o) => ({
-              value: o.id,
-              labelText: o.label
-            }))}
-            selected={modal.dataFormat}
-            onchange={(value) => handleDataFormatChange(value)}
-          />
-        {/if}
+            <ContentSwitcher
+              ariaLabel={m.download_map_description()}
+              items={mapFormatOptions.map((option) => option.label)}
+              activeIndex={Math.max(
+                0,
+                mapFormatOptions.findIndex(
+                  (option) => option.id === modal.mapFormat
+                )
+              )}
+              onchange={(index) =>
+                handleMapFormatChange(mapFormatOptions[index].id)}
+              wrapLabels
+            />
+
+            <SwitchedContent value={modal.mapFormat}>
+              {#if isQgisFormat}
+                <section class="export-summary" aria-live="polite">
+                  <p class="summary-heading">{m.download_map_qgis_content()}</p>
+                  <dl class="summary-grid">
+                    <div class="summary-item">
+                      <dt>{m.download_map_qgis_crs()}</dt>
+                      <dd>{qgisCrsLabel}</dd>
+                    </div>
+                  </dl>
+                  {#if qgisCrsReason}
+                    <p class="georeference-helper">{qgisCrsReason}</p>
+                  {/if}
+                </section>
+                <div class="option-section">
+                  <p class="georeference-helper">
+                    {m.download_map_qgis_helper()}
+                  </p>
+                  <p class="georeference-helper">
+                    {m.download_map_qgis_not_included()}
+                  </p>
+                </div>
+              {:else}
+                <section class="export-summary" aria-live="polite">
+                  <p class="summary-heading">{m.download_map_current_page()}</p>
+                  <dl class="summary-grid">
+                    <div class="summary-item">
+                      <dt>{m.download_map_current_format()}</dt>
+                      <dd>{currentPageFormatLabel}</dd>
+                    </div>
+
+                    <div class="summary-item">
+                      <dt>{m.download_map_current_size()}</dt>
+                      <dd>{currentPageSizeLabel}</dd>
+                    </div>
+
+                    {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                      <div class="summary-item">
+                        <dt>{m.download_map_export_size()}</dt>
+                        <dd>{selectedExportSizeLabel}</dd>
+                      </div>
+                    {/if}
+                  </dl>
+                </section>
+
+                {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                  <div class="option-section">
+                    <SimpleRadioGroup
+                      name="map-export-resolution"
+                      legendText={m.download_map_resolution()}
+                      items={resolutionOptions.map((o) => ({
+                        value: o.id,
+                        labelText: o.label
+                      }))}
+                      selected={modal.resolution}
+                      onchange={(value) => handleResolutionChange(value)}
+                    />
+                  </div>
+                {/if}
+
+                <div class="option-section">
+                  <div class="georeference-toggle">
+                    <Switch
+                      size="sm"
+                      labelText={m.download_map_georeference()}
+                      toggled={modal.georeference &&
+                        georeferenceAvailability?.available === true}
+                      disabled={georeferenceAvailability?.available !== true}
+                      onchange={(checked) => modal.setGeoreference(checked)}
+                    />
+                    <Tooltip
+                      size="compact"
+                      direction="top"
+                      iconDescription={m.download_map_georeference_info()}
+                    >
+                      <p>{m.download_map_georeference_helper()}</p>
+                    </Tooltip>
+                  </div>
+                  {#if georeferenceUnavailableReason}
+                    <p class="georeference-helper">
+                      {georeferenceUnavailableReason}
+                    </p>
+                  {/if}
+                </div>
+              {/if}
+            </SwitchedContent>
+          {:else}
+            <div class="panel-heading">
+              <p class="panel-description">{m.download_data_description()}</p>
+            </div>
+
+            <SimpleRadioGroup
+              name="data-export-format"
+              orientation="vertical"
+              items={dataFormatOptions.map((o) => ({
+                value: o.id,
+                labelText: o.label
+              }))}
+              selected={modal.dataFormat}
+              onchange={(value) => handleDataFormatChange(value)}
+            />
+          {/if}
+        </SwitchedContent>
       </section>
 
       <nav class="export-rail" aria-label={m.download_modal_title()}>
@@ -439,12 +545,16 @@
     grid-template-columns: minmax(0, 1fr) 7rem;
     gap: 0;
     align-items: stretch;
-    min-height: 19rem;
+    /* One height for every menu, the tallest one's (Carte as JPG): the
+       modal no longer jumps when the menu or the format changes. */
+    height: 27rem;
   }
 
   .export-panel {
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
     gap: var(--cds-spacing-04);
     padding: var(--cds-spacing-05) var(--cds-spacing-05) var(--cds-spacing-06) 0;
   }
@@ -543,6 +653,19 @@
     gap: var(--cds-spacing-03);
   }
 
+  .georeference-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .georeference-helper {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
   .export-summary {
     display: grid;
     gap: var(--cds-spacing-03);
@@ -591,6 +714,7 @@
     .export-layout {
       grid-template-columns: 1fr;
       gap: var(--cds-spacing-04);
+      height: auto;
     }
 
     .export-rail {

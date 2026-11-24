@@ -1,10 +1,10 @@
 import type { Color } from '@deck.gl/core';
 import type { DeckDataRow, RGBColor } from '../types';
 import {
+  getAbsoluteDomainMax,
   getClassedSizeForValue,
   getClassIndexForValue,
   getColorForValue,
-  getAbsoluteDomainMax,
   getProportionalLineWidthForValue,
   getProportionalSymbolSizeForValue
 } from '../utils/data-styling.utils';

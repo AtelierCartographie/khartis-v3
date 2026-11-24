@@ -547,9 +547,9 @@
             onMappingChange={joinHook.handleMappingChange}
             onFinalizeJoin={joinHook.handleFinalizeEnrichment}
             onManualCorrection={joinHook.handleManualCorrection}
-            onIgnoreEntity={joinHook.ignoreEntity}
-            onValidateEntity={joinHook.validateEntity}
-            onRestoreEntity={joinHook.restoreEntity}
+            onIgnoreEntities={joinHook.ignoreEntities}
+            onValidateEntities={joinHook.validateEntities}
+            onRestoreEntities={joinHook.restoreEntities}
           />
         {/if}
 
@@ -595,6 +595,7 @@
         onSelectOSM={basemapHook.handleSelectOSM}
         suggestionsOpen={dataTabState.uiPanels.enrichBasemapSuggestionsOpen}
         catalogOpen={dataTabState.uiPanels.enrichBasemapCatalogOpen}
+        rankedByExtent={Boolean(selectedDataset?.geometry)}
         onSuggestionsToggle={(expanded) =>
           dataTabActions.setUiPanelsState({
             enrichBasemapSuggestionsOpen: expanded

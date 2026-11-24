@@ -1,4 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type ClassificationConfig,
+  ClassificationMethod,
+  PrimitiveFilterType
+} from '$lib/features/commons/stores/visualization.store.svelte';
+
+import {
+  computeClassificationBreaks,
+  resolveClassificationBreakColors,
+  resolveClassificationColors,
+  useClassificationBreaksController
+} from './use-classification-breaks.svelte';
 
 const storeMocks = vi.hoisted(() => ({
   ClassificationMethod: {
@@ -23,10 +35,11 @@ const serviceMocks = vi.hoisted(() => ({
   calculateDivergingBreaks: vi.fn(),
   calculateBreaks: vi.fn(),
   computeDivergingSplit: vi.fn(() => ({
-    hasCenterClass: false,
     lowerCount: 2,
     upperCount: 2
   })),
+  isDivergingBreakpoint: (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value),
   detectDivergingBreakpoint: vi.fn(),
   isTemporalColumn: vi.fn(async () => false),
   generateColorsForBreaks: vi.fn((count: number) =>
@@ -83,19 +96,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   PrimitiveFilterType: storeMocks.PrimitiveFilterType,
   DEFAULT_CATEGORICAL_COLORS: ['#cat-0', '#cat-1', '#cat-2']
 }));
-
-import {
-  ClassificationMethod,
-  PrimitiveFilterType,
-  type ClassificationConfig
-} from '$lib/features/commons/stores/visualization.store.svelte';
-
-import {
-  computeClassificationBreaks,
-  resolveClassificationColors,
-  resolveClassificationBreakColors,
-  useClassificationBreaksController
-} from './use-classification-breaks.svelte';
 
 describe('use-classification-breaks', () => {
   beforeEach(() => {

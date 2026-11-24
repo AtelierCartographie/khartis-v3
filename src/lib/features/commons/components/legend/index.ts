@@ -13,13 +13,18 @@ export {
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type LegendPatternFill,
-  type KhartisLineWidthLegendStep,
-  type KhartisProportionalLineLegendStep
+  type KhartisLineWidthLegendStep
 } from './khartis-extensions';
 export {
   draw_quanti_color_legend,
   type QuantiColorSwatch
 } from './quantitative';
+export {
+  draw_legend_side_header,
+  draw_legend_side_note,
+  SIDE_TITLE_GAP,
+  SIDE_TITLE_MAX_WIDTH
+} from './side-title';
 export {
   draw_symbols_legend,
   type LegendColorSwatch,
@@ -29,7 +34,6 @@ export {
   categoryLegendEntry,
   classLegendEntry,
   createLegendSvg,
-  LEGEND_ENTRY_ATTRIBUTE,
   legendTitleFontSize,
   MAX_LEGEND_CATEGORIES,
   MISSING_LEGEND_ENTRY,

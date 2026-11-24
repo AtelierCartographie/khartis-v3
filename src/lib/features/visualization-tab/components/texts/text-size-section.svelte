@@ -1,6 +1,7 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Table, TextScale, TextAllCaps } from 'carbon-icons-svelte';
+  import { Table, TextAllCaps, TextScale } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     DiscretizationRow,
@@ -11,8 +12,8 @@
   import { SizeMode } from '$lib/features/commons/constants/visualization.constants';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    filterFieldsByKind,
-    type FieldSelection
+    type FieldSelection,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
 
@@ -98,47 +99,48 @@
   />
 </div>
 
-{#if usesSizeVariable}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={sizePickerOpen}
-      titleText={m.size_according()}
-      dataFields={numericDataFields}
-      singleSelectItems={selectableValueDataFields}
-      selectedFieldId={sizeFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.TEXT_VALUE
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.TEXT_VALUE
-      )}
-      onSelect={onSizeFieldSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          sizeColumnName,
-          FACET_SLOT.TEXT_VALUE,
-          ids
+<SwitchedContent value={sizeMode}>
+  {#if usesSizeVariable}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={sizePickerOpen}
+        titleText={m.size_according()}
+        dataFields={numericDataFields}
+        singleSelectItems={selectableValueDataFields}
+        selectedFieldId={sizeFieldSelection.selectedFieldId}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          FACET_SLOT.TEXT_VALUE
         )}
-      onToggleCollection={(enabled) =>
-        facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
-    />
-  </div>
-{/if}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          FACET_SLOT.TEXT_VALUE
+        )}
+        onSelect={onSizeFieldSelect}
+        onCollectionChange={(ids) =>
+          facetsSelection.updateVariables(
+            sizeColumnName,
+            FACET_SLOT.TEXT_VALUE,
+            ids
+          )}
+        onToggleCollection={(enabled) =>
+          facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
+      />
+    </div>
+  {/if}
 
-{#if sizeMode === SizeMode.CLASSES}
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel ?? m.discretization_none_placeholder()}
-    onsettings={onOpenDiscretization}
-  />
-{/if}
+  {#if sizeMode === SizeMode.CLASSES}
+    <DiscretizationRow
+      label={m.discretization()}
+      value={discretizationLabel ?? m.discretization_none_placeholder()}
+      onsettings={onOpenDiscretization}
+    />
+  {/if}
+</SwitchedContent>
 
 <SliderWithInput
   label={sizeSliderLabel}
   min={sizeMin}
   max={sizeMax}
   value={size}
-  showMinMax
   inputWidth="64px"
   onchange={onSizeChange}
 />

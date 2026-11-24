@@ -7,10 +7,13 @@
     StylingTools,
     ToolbarStep
   } from '$lib/features/commons/types/global';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import {
-    visualizationStore,
-    type VisualizationConfig
+    layoutDropShadow,
+    LegendPosition
+  } from '$lib/features/commons/constants/ui.constants';
+  import {
+    type VisualizationConfig,
+    visualizationStore
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -18,18 +21,18 @@
     clampFontSize,
     resolveFontFamilyStack
   } from '$lib/features/step-toolbar/fonts.constants';
-  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
-    PAGE_GRID_SIZE_PX,
-    PAGE_SNAP_STEP_PX,
     clampPointToBounds,
     getDragBounds,
+    PAGE_GRID_SIZE_PX,
+    PAGE_SNAP_STEP_PX,
+    type PageGridPoint,
+    type PageGridSize,
     remapAreaPointToResizedPage,
     roundToLayoutUnit,
     snapAreaPointWithinPage,
-    snapPointWithinBounds,
-    type PageGridPoint,
-    type PageGridSize
+    snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     getElementCenteringDelta,
@@ -40,12 +43,17 @@
     createDraggablePageItemController
   } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
+  import { alignSideTitle } from '../utils/side-title-align';
   import {
+    clearLegendItemCentering,
     getLegendState,
+    getPendingLegendItemCentering,
     legendActions,
     requestLegendItemFocus,
+    resolveLegendItemLayout,
     selectRenderedLegendItems,
-    setRenderedLegendSegments
+    setRenderedLegendSegments,
+    setSelectedLegendItem
   } from '$lib/features/step-toolbar/tools/legend';
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
@@ -55,16 +63,20 @@
     type PageResize
   } from '$lib/features/step-toolbar/tools/format';
   import * as m from '$lib/paraglide/messages';
-  import { tick, untrack, onDestroy } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { LegendSvg } from '$lib/features/commons/components/legend';
   import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
+    getLegendSideHeader,
+    getLegendSideNote,
     isMapSizeLegendSegment,
     type LegendSegment
   } from '../utils/legend-segments.utils';
+  import type { LegendSvgDefinition } from '$lib/features/commons/components/legend';
 
   // `scopeVizId`, `inline`, and `sizeScale` make legends facet-cell scoped.
   let {
@@ -151,6 +163,56 @@
     }
     return segments;
   });
+
+  interface LegendSideBlocks {
+    header: LegendSvgDefinition | null;
+    note: LegendSvgDefinition | null;
+    align: 'start' | 'center' | 'end';
+  }
+
+  // A legend with its title at the left draws the title and the note apart
+  // from its entries; the note spans the title and the entries.
+  const sideBlocksByItemId = $derived.by(() => {
+    void getLocale();
+    const blocks: Record<string, LegendSideBlocks> = {};
+    for (const item of candidateItems) {
+      const layout = resolveLegendItemLayout(item);
+      if (!layout.titleSide) continue;
+      const header = getLegendSideHeader(item, legendState.style);
+      const bodyWidth = Math.max(
+        0,
+        ...(segmentsByItemId[item.id] ?? []).map((segment) => segment.svg.width)
+      );
+      blocks[item.id] = {
+        header,
+        note: getLegendSideNote(
+          item,
+          legendState.style,
+          (header?.width ?? 0) + bodyWidth
+        ),
+        align: layout.titleAlign
+      };
+    }
+    return blocks;
+  });
+
+  function getSideTitleAlignKey(
+    item: LegendItem,
+    segments: LegendSegment[],
+    blocks: LegendSideBlocks | undefined
+  ): string {
+    if (!blocks) return '';
+    return [
+      getItemScale(item),
+      blocks.align,
+      blocks.header
+        ? `${blocks.header.markup.length}:${blocks.header.width}x${blocks.header.height}`
+        : '',
+      ...segments.map(
+        (segment) => `${segment.key}:${segment.svg.width}x${segment.svg.height}`
+      )
+    ].join('|');
+  }
 
   // A primitive legend that draws nothing (an outline repeating its fill)
   // gets no frame.
@@ -297,7 +359,9 @@
 
     if (hasBackground) {
       styles.push(`background-color: ${bgHsl}`);
-      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
+      styles.push(
+        `box-shadow: ${legendState.style.background.shadow ? layoutDropShadow(bgOpacity) : 'none'}`
+      );
     } else {
       styles.push('background-color: transparent');
       styles.push('box-shadow: none');
@@ -314,6 +378,7 @@
   let overlayElement = $state<HTMLDivElement | null>(null);
   let frameElements = $state<Record<string, HTMLDivElement | null>>({});
   let autoPositions = $state<Record<string, PageGridPoint>>({});
+  let frameSizeRevision = $state(0);
   let draggingItemId = $state<string | null>(null);
   let centeredItemId = $state<string | null>(null);
   let dragStartClientX = 0;
@@ -615,7 +680,10 @@
       return;
     }
 
-    const observer = new ResizeObserver(() => resolveAutoPositions());
+    const observer = new ResizeObserver(() => {
+      resolveAutoPositions();
+      frameSizeRevision += 1;
+    });
     for (const element of observed) {
       observer.observe(element);
     }
@@ -623,7 +691,38 @@
     return () => observer.disconnect();
   });
 
+  // Labels placed automatically keep clear of the page legend.
+  $effect(() => {
+    if (inline) {
+      return;
+    }
+
+    void frameSizeRevision;
+    const items = legendState.visible ? visibleItems : [];
+    const boxes = items.flatMap((item) => {
+      const position = getFramePosition(item);
+      const size = getFrameSize(item.id);
+      return position && size && size.width > 0 && size.height > 0
+        ? [
+            [
+              position.x,
+              position.y,
+              position.x + size.width,
+              position.y + size.height
+            ] as [number, number, number, number]
+          ]
+        : [];
+    });
+    pageItemObstaclesStore.setBoxes('legend', boxes);
+  });
+
   const legendDragController = createDraggablePageItemController({
+    getPageFrame: () => ({
+      width: formatState.width,
+      height: formatState.height,
+      margins: formatState.margins,
+      offset: { x: formatState.margins.left, y: formatState.margins.top }
+    }),
     getOverlayElement: () => overlayElement,
     getPageScale,
     getCurrentPosition: () => {
@@ -721,6 +820,86 @@
     }
   }
 
+  // The side handles set the width the legend is drawn to, in legend units:
+  // a wider frame lets a long title stay on one line. The renderer never goes
+  // narrower than the content, so dragging in stops at it.
+  let frameResize: {
+    itemId: string;
+    edge: 'w' | 'e';
+    startClientX: number;
+    startRenderedWidth: number;
+    unitsPerScreenPx: number;
+    screenPxPerPageUnit: number;
+    startPosition: PageGridPoint | null;
+  } | null = null;
+
+  function handleFrameResizePointerDown(
+    event: PointerEvent,
+    item: LegendItem,
+    edge: 'w' | 'e'
+  ): void {
+    const element = frameElements[item.id];
+    const svg = element?.querySelector('svg');
+    if (!isLegendDraggable || !element || !svg) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const svgRect = svg.getBoundingClientRect();
+    const svgUnits = Number(svg.getAttribute('width'));
+    if (!(svgRect.width > 0) || !(svgUnits > 0)) return;
+    frameResize = {
+      itemId: item.id,
+      edge,
+      startClientX: event.clientX,
+      startRenderedWidth: svgRect.width,
+      unitsPerScreenPx: svgUnits / svgRect.width,
+      screenPxPerPageUnit:
+        element.getBoundingClientRect().width /
+        Math.max(element.offsetWidth, 1),
+      startPosition: getFramePosition(item) ?? getMeasuredFramePosition(item.id)
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function handleFrameResizeMove(event: PointerEvent): void {
+    if (!frameResize) return;
+    const { itemId, edge, startClientX, startRenderedWidth, startPosition } =
+      frameResize;
+    const delta = event.clientX - startClientX;
+    const renderedWidth = Math.max(
+      1,
+      startRenderedWidth + (edge === 'e' ? delta : -delta)
+    );
+    legendActions.updateLegendItemLayout(itemId, {
+      width: Math.round(renderedWidth * frameResize.unitsPerScreenPx)
+    });
+    // The west edge follows the pointer: the frame moves by what it grew.
+    if (edge === 'w' && startPosition) {
+      legendActions.updateLegendItem(itemId, {
+        dragPosition: {
+          x:
+            startPosition.x -
+            (renderedWidth - startRenderedWidth) /
+              frameResize.screenPxPerPageUnit,
+          y: startPosition.y
+        }
+      });
+    }
+  }
+
+  function handleFrameResizeUp(): void {
+    frameResize = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleFrameResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleFrameResizeUp);
+  }
+
+  function resetFrameWidth(event: MouseEvent, item: LegendItem): void {
+    event.preventDefault();
+    event.stopPropagation();
+    legendActions.updateLegendItemLayout(item.id, { width: undefined });
+  }
+
   function handleFrameClick(
     event: MouseEvent | KeyboardEvent,
     item: LegendItem
@@ -749,7 +928,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function resetFrameCentering(): void {
@@ -758,7 +937,7 @@
     }
 
     centeredItemId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
@@ -782,7 +961,13 @@
     });
   }
 
+  // While the tool is open, focus moves into its panel: the page stays
+  // centred until the tool closes.
   function handleFrameBlur(): void {
+    if (isLegendActive) {
+      return;
+    }
+
     resetFrameCentering();
   }
 
@@ -821,6 +1006,17 @@
       return;
     }
 
+    // Delete hides the legend, as its switch in the legend tool does.
+    if (event.key === KEY.DELETE || event.key === KEY.BACKSPACE) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (centeredItemId === item.id) {
+        resetFrameCentering();
+      }
+      legendActions.updateLegendItem(item.id, { visible: false });
+      return;
+    }
+
     if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
@@ -848,7 +1044,32 @@
     }
   });
 
+  $effect(() => {
+    if (inline) return;
+    setSelectedLegendItem(centeredItemId);
+  });
+
+  // Opening a legend in the tool centres the page on its frame.
+  $effect(() => {
+    const itemId = getPendingLegendItemCentering();
+    if (inline || !itemId) return;
+
+    untrack(() => {
+      clearLegendItemCentering();
+      const frame = frameElements[itemId];
+      if (!frame || hidden) return;
+      centeredItemId = itemId;
+      void tick().then(() => {
+        centerFrameInViewport(frame);
+      });
+    });
+  });
+
   onDestroy(() => {
+    if (!inline) {
+      pageItemObstaclesStore.setBoxes('legend', []);
+      setSelectedLegendItem(null);
+    }
     centeredItemId = null;
     clearSuppressedLegendClick();
     stopDragging();
@@ -864,11 +1085,13 @@
   >
     {#each visibleItems as item (item.id)}
       {@const legendSegments = segmentsByItemId[item.id] ?? []}
+      {@const sideBlocks = sideBlocksByItemId[item.id]}
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
         class:draggable={isLegendDraggable}
         class:dragging={draggingItemId === item.id}
+        data-legend-item-id={item.id}
         data-workspace-pan-ignore="true"
         style={getFrameStyle(item)}
         role="button"
@@ -880,20 +1103,51 @@
         onpointerdown={(event: PointerEvent) =>
           handleFramePointerDown(event, item)}
       >
-        <div class="legend-item">
+        <div
+          class="legend-item"
+          class:legend-item--side={sideBlocks !== undefined}
+          use:alignSideTitle={{
+            align: sideBlocks?.align ?? 'start',
+            key: getSideTitleAlignKey(item, legendSegments, sideBlocks)
+          }}
+        >
           {#if legendSegments.length > 0}
             <!-- Chrome keeps SVG text metrics from the last painted ancestor scale; a fresh SVG root re-measures its labels. -->
             {#key getItemScale(item)}
-              {#each legendSegments as segment (segment.key)}
-                <LegendSvg
-                  activeEntry={getActiveEntry(item, segment)}
-                  markup={segment.svg.markup}
-                  width={segment.svg.width}
-                  height={segment.svg.height}
-                  class={segment.className}
-                  textColor={textHex}
-                />
-              {/each}
+              {#if sideBlocks?.header}
+                <div class="legend-side-head">
+                  <LegendSvg
+                    markup={sideBlocks.header.markup}
+                    width={sideBlocks.header.width}
+                    height={sideBlocks.header.height}
+                    class="legend-svg--side-title"
+                    textColor={textHex}
+                  />
+                </div>
+              {/if}
+              <div class="legend-entries">
+                {#each legendSegments as segment (segment.key)}
+                  <LegendSvg
+                    activeEntry={getActiveEntry(item, segment)}
+                    markup={segment.svg.markup}
+                    width={segment.svg.width}
+                    height={segment.svg.height}
+                    class={segment.className}
+                    textColor={textHex}
+                  />
+                {/each}
+              </div>
+              {#if sideBlocks?.note}
+                <div class="legend-side-note">
+                  <LegendSvg
+                    markup={sideBlocks.note.markup}
+                    width={sideBlocks.note.width}
+                    height={sideBlocks.note.height}
+                    class="legend-svg--side-note"
+                    textColor={textHex}
+                  />
+                </div>
+              {/if}
             {/key}
           {:else}
             {#if item.title}
@@ -907,6 +1161,20 @@
             {/if}
           {/if}
         </div>
+        {#if isLegendDraggable && !inline && legendSegments.length > 0}
+          {#each ['w', 'e'] as const as edge (edge)}
+            <div
+              class="legend-resize-edge legend-resize-{edge}"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={m.legend_resize_handle()}
+              title={m.legend_resize_handle()}
+              onpointerdown={(event: PointerEvent) =>
+                handleFrameResizePointerDown(event, item, edge)}
+              ondblclick={(event: MouseEvent) => resetFrameWidth(event, item)}
+            ></div>
+          {/each}
+        {/if}
       </div>
     {/each}
   </div>
@@ -983,6 +1251,43 @@
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
+  .legend-resize-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: calc(8px / var(--legend-page-scale));
+    cursor: ew-resize;
+    touch-action: none;
+    opacity: 0;
+  }
+
+  .legend-resize-w {
+    left: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-e {
+    right: calc(-4px / var(--legend-page-scale));
+  }
+
+  .legend-resize-edge::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(8px / var(--legend-page-scale));
+    height: calc(8px / var(--legend-page-scale));
+    box-sizing: border-box;
+    background: white;
+    border: calc(2px / var(--legend-page-scale)) solid
+      var(--cds-interactive-01, #0072c3);
+    border-radius: 2px;
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  .legend-overlay:not(.inline) .legend-container:hover .legend-resize-edge {
+    opacity: 1;
+  }
+
   .legend-container.dragging {
     cursor: grabbing;
     user-select: none;
@@ -1016,6 +1321,28 @@
 
   .legend-item {
     min-width: 0;
+  }
+
+  .legend-item--side {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+
+  .legend-side-head {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  .legend-item--side .legend-entries {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .legend-side-note {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .legend-title {

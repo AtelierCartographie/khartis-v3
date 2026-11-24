@@ -26,9 +26,16 @@ vi.mock('localforage', () => ({
 
 vi.mock('./asset-store.service', () => ({
   ensureUploadedFileAssets: mocks.ensureUploadedFileAssets,
+  loadProjectAssetUsage: async () => new Map(),
   registerAssetStores: mocks.registerAssetStores,
   removeProjectAssetRefs: mocks.removeProjectAssetRefs,
-  syncProjectAssetRefs: mocks.syncProjectAssetRefs
+  syncProjectAssetRefs: mocks.syncProjectAssetRefs,
+  withAssetWriteLock: (task: () => Promise<unknown>) => task()
+}));
+
+vi.mock('./project-search.service', () => ({
+  buildProjectSearchIndex: () => ({ version: 2, text: '' }),
+  loadSearchCatalog: async () => undefined
 }));
 
 vi.mock('./serializer.service', () => ({
@@ -76,7 +83,10 @@ class FakeObjectStore {
   }
 
   get(key: string) {
-    return createRequest(this.store.records.get(key));
+    const request = createRequest(this.store.records.get(key));
+    // A read-only transaction completes too, after its requests succeed.
+    this.scheduleComplete();
+    return request;
   }
 
   delete(key: string): void {
@@ -350,6 +360,54 @@ describe('project persistence', () => {
       [preparedFile],
       []
     );
+  });
+
+  it('should hand the stored asset refs back before the next queued save prepares its copy', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const sourceFile = {
+      id: 'file-1',
+      name: 'grid.parquet',
+      size: 4,
+      type: 'application/octet-stream',
+      fileType: 'parquet',
+      status: 'complete',
+      sourceType: 'file_upload'
+    };
+    const assetRef = {
+      assetId: 'asset-1',
+      originalName: 'grid.parquet',
+      mimeType: 'application/octet-stream',
+      size: 4,
+      kind: 'primary' as const
+    };
+    const project = {
+      id: 'project-assets',
+      manifest: {
+        version: PROJECT_CONST.SCHEMA_VERSION,
+        createdAt: new Date('2026-04-16T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T00:00:00.000Z'),
+        name: 'Queued Saves',
+        format: 'kh' as const
+      },
+      data: { sourceFiles: [sourceFile] as Array<Record<string, unknown>> }
+    };
+    mocks.ensureUploadedFileAssets.mockImplementation(async (file) =>
+      file.assetRef ? file : { ...file, assetRef }
+    );
+    const keepStoredFiles = (files: unknown[]) => {
+      project.data.sourceFiles = files as Array<Record<string, unknown>>;
+    };
+
+    const { saveProject } = await import('./persistence.service');
+    await Promise.all([
+      saveProject(project as never, undefined, undefined, 0, keepStoredFiles),
+      saveProject(project as never, undefined, undefined, 0, keepStoredFiles)
+    ]);
+
+    const secondSaveFile = mocks.ensureUploadedFileAssets.mock.calls[1]?.[0];
+    expect(secondSaveFile).toHaveProperty('assetRef', assetRef);
   });
 
   it('uses the caller-provided size for metadata instead of re-estimating the project', async () => {

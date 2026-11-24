@@ -42,4 +42,3 @@ export {
   getShapefileFilesFromArchive
 } from './utils/zip-handler';
 export { readFileIntoTable } from './processors';
-export type { FileTableRead } from './processors';

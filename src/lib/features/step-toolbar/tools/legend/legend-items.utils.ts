@@ -1,8 +1,8 @@
 import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, SCALE_MODE } from '../facets';
 import {
-  visualizationStore,
-  type VisualizationConfig
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   getEnabledLegendPrimitives,
@@ -13,8 +13,11 @@ import {
 import { LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendClassBarOrientation,
-  LegendItem
+  LegendItem,
+  LegendTitleAlign
 } from '../../types/legend.types';
+
+const TITLE_ALIGNS: readonly LegendTitleAlign[] = ['start', 'center', 'end'];
 
 /** One legend a visualization owns: a primitive, or one channel of it. */
 export interface LegendItemSlot {
@@ -66,6 +69,10 @@ export interface ResolvedLegendItemLayout {
   lowAtBottom: boolean;
   /** Share of the default gap, from 0 to 1. */
   entrySpacing: number;
+  /** Width the frame was dragged to, in legend units, or null for its own. */
+  width: number | null;
+  titleSide: boolean;
+  titleAlign: LegendTitleAlign;
 }
 
 // A saved project is untrusted JSON: anything unexpected falls back to the
@@ -75,6 +82,8 @@ export function resolveLegendItemLayout(
 ): ResolvedLegendItemLayout {
   const layout = item.layout;
   const spacing = layout?.entrySpacing;
+  const width = layout?.width;
+  const titleAlign = layout?.titleAlign;
 
   return {
     proportionalClasses: layout?.proportionalClasses === true,
@@ -84,7 +93,14 @@ export function resolveLegendItemLayout(
     entrySpacing:
       typeof spacing === 'number' && Number.isFinite(spacing)
         ? Math.max(0, Math.min(100, spacing)) / 100
-        : 1
+        : 1,
+    width:
+      typeof width === 'number' && Number.isFinite(width) && width > 0
+        ? width
+        : null,
+    titleSide: layout?.titleSide === true,
+    titleAlign:
+      titleAlign && TITLE_ALIGNS.includes(titleAlign) ? titleAlign : 'start'
   };
 }
 

@@ -7,6 +7,7 @@ import {
   getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
+import { hslToHex } from '$lib/features/commons/utils/color-utils';
 import { snapPointToPageGrid } from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
@@ -14,8 +15,9 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
-  clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
+  clampFontSize,
+  DEFAULT_FONT_SIZE,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -37,6 +39,7 @@ import { resolveAnnotationCoordinateSpace } from '../../types/annotations.types'
 import {
   clampAnnotationPosition,
   clampPageElementPosition,
+  getAnnotationGridOrigin,
   getNonPageAnnotationSpawnPosition,
   getPageElementPosition,
   getPageNoteSpawnPosition,
@@ -46,16 +49,23 @@ import {
   reconcileAutoPageElementStyle,
   remapPageElementPosition,
   resolvePageLayout,
-  shouldSnapAutoPageElement,
-  type PageLayout
+  shouldSnapAutoPageElement
 } from './annotations-page-layout.utils';
 import {
   getKnownPageElementDefaultContents,
-  getPageElementDefaultContent
+  getPageElementDefaultContent,
+  getPageElementRolesWrittenAsFreeText,
+  getSourcePrefix,
+  hasPageElementDefaultWording,
+  isLegacyPageElementContent,
+  isSourcePrefixOnly,
+  resolveMapYear
 } from './annotations-placeholders.utils';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
-const DEFAULT_NOTE_FONT_SIZE = 8;
+const NOTE_FONT_SIZE = 9;
+const MAIN_TEXT_COLOR = '#000000';
+const NOTE_TEXT_COLOR = '#6f6f6f';
 const DEFAULT_DRAWING_SMOOTHNESS = 0;
 
 const DEFAULT_STATE: AnnotationsState = {
@@ -74,13 +84,13 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingInProgress: [],
   defaultStyle: {
     font: CARTOGRAPHIC_FONT_FAMILY,
-    fontSize: DEFAULT_NOTE_FONT_SIZE,
+    fontSize: NOTE_FONT_SIZE,
     bold: false,
-    italic: false,
+    italic: true,
     underlined: false,
     textAlign: TextAlign.Center,
     opacity: 100,
-    color: '#000000',
+    color: NOTE_TEXT_COLOR,
     smoothness: DEFAULT_DRAWING_SMOOTHNESS
   }
 };
@@ -120,7 +130,6 @@ type AnnotationsActions = {
   }) => void;
   refreshPageElementPlaceholders: () => void;
   setPageElementsVisibility: (visible: boolean) => void;
-  pinPageElements: () => void;
   redistributePageElements: (
     layout?: {
       width?: number;
@@ -138,28 +147,107 @@ type AnnotationsActions = {
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   note: {
-    fontSize: DEFAULT_NOTE_FONT_SIZE,
+    fontSize: NOTE_FONT_SIZE,
     bold: false,
-    italic: false
+    italic: true,
+    color: NOTE_TEXT_COLOR
   },
   title: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.titleFontSize,
     bold: true,
     italic: false,
+    color: MAIN_TEXT_COLOR,
     textAlign: TextAlign.Left
   },
   subtitle: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.subtitleFontSize,
     bold: false,
     italic: false,
+    color: MAIN_TEXT_COLOR,
     textAlign: TextAlign.Left
   },
   caption: {
-    fontSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize,
+    fontSize: 12,
     bold: false,
-    italic: false
+    italic: false,
+    color: MAIN_TEXT_COLOR
   }
 };
+
+function toComparableColor(color: AnnotationStyle['color']): string {
+  if (!color) return MAIN_TEXT_COLOR;
+  if (typeof color === 'string') return color.toLowerCase();
+  return hslToHex(color.hue, color.saturation, color.lightness).toLowerCase();
+}
+
+// Page texts keep the size of their print format rather than the preset one.
+function getPageElementFontSize(role: Annotation['role']): number | null {
+  const fmt = getFormatState();
+  const tokens = resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmt));
+  switch (role) {
+    case ANNOTATION_ROLE.TITLE:
+      return tokens.annotations.titleFontSize;
+    case ANNOTATION_ROLE.SUBTITLE:
+      return tokens.annotations.subtitleFontSize;
+    case ANNOTATION_ROLE.SOURCE:
+    case ANNOTATION_ROLE.BASEMAP_SOURCE:
+    case ANNOTATION_ROLE.SIGNATURE:
+    case ANNOTATION_ROLE.CREDIT:
+      return tokens.annotations.captionFontSize;
+    default:
+      return null;
+  }
+}
+
+function matchesPredefinedStyle(
+  style: AnnotationStyle,
+  styleName: string,
+  role: Annotation['role']
+): boolean {
+  const preset = PREDEFINED_STYLES[styleName];
+  if (!preset) return false;
+  const pageFontSize =
+    role && getPredefinedStyleForRole(role) === styleName
+      ? getPageElementFontSize(role)
+      : null;
+  return Object.entries(preset).every(([key, expected]) => {
+    switch (key) {
+      case 'fontSize': {
+        const fontSize = clampFontSize(style.fontSize, DEFAULT_FONT_SIZE);
+        return fontSize === expected || fontSize === pageFontSize;
+      }
+      case 'bold':
+        return !!style.bold === expected;
+      case 'italic':
+        return !!style.italic === expected;
+      case 'color':
+        return (
+          toComparableColor(style.color) ===
+          toComparableColor(expected as AnnotationStyle['color'])
+        );
+      default:
+        return style[key as keyof AnnotationStyle] === expected;
+    }
+  });
+}
+
+/**
+ * The predefined style the text style still matches, the remembered one
+ * first; null once the user has changed a setting of the preset.
+ */
+export function resolveMatchingPredefinedStyle(
+  style: AnnotationStyle,
+  preferred: string,
+  role?: Annotation['role']
+): string | null {
+  const candidates = [
+    preferred,
+    ...Object.keys(PREDEFINED_STYLES).filter((name) => name !== preferred)
+  ];
+  return (
+    candidates.find((name) => matchesPredefinedStyle(style, name, role)) ?? null
+  );
+}
 
 function normalizeAnnotationStyleUpdates(
   styleUpdates: Partial<AnnotationStyle>
@@ -175,7 +263,7 @@ function normalizeAnnotationStyleUpdates(
   if (styleUpdates.fontSize !== undefined) {
     normalizedUpdates.fontSize = clampFontSize(
       styleUpdates.fontSize,
-      DEFAULT_NOTE_FONT_SIZE
+      DEFAULT_FONT_SIZE
     );
   }
   return normalizedUpdates;
@@ -186,7 +274,11 @@ function getPredefinedStyleForItem(item: Annotation): string | null {
     return null;
   }
 
-  switch (item.role) {
+  return getPredefinedStyleForRole(item.role);
+}
+
+function getPredefinedStyleForRole(role: Annotation['role']): string | null {
+  switch (role) {
     case ANNOTATION_ROLE.TITLE:
       return ANNOTATION_ROLE.TITLE;
     case ANNOTATION_ROLE.SUBTITLE:
@@ -248,35 +340,53 @@ function clearCreationState(state: AnnotationsState): void {
 }
 
 // Map anchors use map-area coordinates; the overlay re-adds page margins.
-function toMapAreaLocalPosition(
-  position: { x: number; y: number },
-  layout: PageLayout
-): { x: number; y: number } {
+// The map area is the map frame, which can sit anywhere on the page: it
+// is no longer the margin box.
+function toMapAreaLocalPosition(position: { x: number; y: number }): {
+  x: number;
+  y: number;
+} {
+  const { mapFrame } = getFormatState();
   return {
-    x: position.x - layout.margins.left,
-    y: position.y - layout.margins.top
+    x: position.x - mapFrame.left,
+    y: position.y - mapFrame.top
   };
 }
 
-// Only marks drawn directly on the map can be map-anchored.
+// Every annotation the user places on the map follows it; one placed in the
+// page margins, and the page elements (title, subtitle, source, credit,
+// which carry a role), stay on the page.
 const MAP_ANCHORABLE_SHAPE_KINDS: ReadonlySet<AnnotationKind> = new Set([
   AnnotationKind.SHAPE,
-  AnnotationKind.DRAWING
+  AnnotationKind.DRAWING,
+  AnnotationKind.TEXT,
+  AnnotationKind.IMAGE
 ]);
 
 // The overlay writes WGS84 anchors for new map-space shapes on first render.
-function anchorShapeToMap(
-  annotation: Annotation,
-  layout: PageLayout
-): Annotation {
-  if (annotation.role || !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type)) {
+function isInsideMapFrame(position: { x: number; y: number }): boolean {
+  const { width, height, mapFrame } = getFormatState();
+  return (
+    position.x >= mapFrame.left &&
+    position.x <= width - mapFrame.right &&
+    position.y >= mapFrame.top &&
+    position.y <= height - mapFrame.bottom
+  );
+}
+
+function anchorShapeToMap(annotation: Annotation): Annotation {
+  if (
+    annotation.role ||
+    !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type) ||
+    !isInsideMapFrame(annotation.position)
+  ) {
     return annotation;
   }
 
   return {
     ...annotation,
     coordinateSpace: 'map',
-    position: toMapAreaLocalPosition(annotation.position, layout)
+    position: toMapAreaLocalPosition(annotation.position)
   };
 }
 
@@ -496,8 +606,7 @@ const { actions, getState } = createToolStore<
             content: resolvedPreview.content ?? s.pendingContent
           },
           s.pendingStyle
-        ),
-        resolvePageLayout()
+        )
       );
 
       s.items = [...s.items, newAnnotation];
@@ -514,6 +623,19 @@ const { actions, getState } = createToolStore<
       clearCreationState(s);
       s.selectedId = id;
       if (id) {
+        const sourcePlaceholder = s.items.find(
+          (i) =>
+            i.id === id &&
+            i.role === ANNOTATION_ROLE.SOURCE &&
+            hasPageElementDefaultWording(i)
+        );
+        // « Ajouter une source » turns into « Source : », ready to complete.
+        if (sourcePlaceholder) {
+          s.items = s.items.map((i) =>
+            i.id === id ? { ...i, content: getSourcePrefix() } : i
+          );
+        }
+
         const item = s.items.find((i) => i.id === id);
         if (item) {
           s.activeType = item.type;
@@ -609,18 +731,15 @@ const { actions, getState } = createToolStore<
         relativePoints
       );
 
-      const newAnnotation = anchorShapeToMap(
-        {
-          id: createAnnotationId(),
-          type: AnnotationKind.DRAWING,
-          content: relativePoints,
-          position,
-          coordinateSpace: 'page',
-          positionMode: 'manual',
-          style
-        },
-        layout
-      );
+      const newAnnotation = anchorShapeToMap({
+        id: createAnnotationId(),
+        type: AnnotationKind.DRAWING,
+        content: relativePoints,
+        position,
+        coordinateSpace: 'page',
+        positionMode: 'manual',
+        style
+      });
 
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
@@ -711,7 +830,8 @@ const { actions, getState } = createToolStore<
               x: original.position.x + 20,
               y: original.position.y + 20
             },
-            isGridEnabled()
+            isGridEnabled(),
+            getAnnotationGridOrigin(resolveAnnotationCoordinateSpace(original))
           )
         };
         s.items = [...s.items, duplicate];
@@ -728,9 +848,17 @@ const { actions, getState } = createToolStore<
                 ? clampPageElementPosition(
                     newPosition,
                     item.role,
-                    resolvePageLayout()
+                    resolvePageLayout(),
+                    true,
+                    item.style
                   )
-                : snapPointToPageGrid(newPosition, isGridEnabled()),
+                : snapPointToPageGrid(
+                    newPosition,
+                    isGridEnabled(),
+                    getAnnotationGridOrigin(
+                      resolveAnnotationCoordinateSpace(item)
+                    )
+                  ),
               positionMode: 'manual'
             }
           : item
@@ -770,12 +898,21 @@ const { actions, getState } = createToolStore<
       const visible = options?.visible ?? true;
       const layout = resolvePageLayout();
       const basemapSource = resolveBasemapSourceText();
+      const year = resolveMapYear();
 
       const hasPageElements = s.items.some((item) =>
         isPageElementRole(item.role)
       );
       if (hasPageElements) {
-        s.items = s.items.map((item) => {
+        // Older projects keep an untouched note, now dropped, and their
+        // texts in the wording of the time: « Réalisé avec Khartis », and
+        // the basemap source without its « Fond de carte : » lead-in.
+        const keptItems = s.items.filter(
+          (item) =>
+            item.role !== ANNOTATION_ROLE.SIGNATURE ||
+            !isLegacyPageElementContent(item.role, item.content)
+        );
+        s.items = keptItems.map((item) => {
           if (!isPageElementRole(item.role)) {
             return item;
           }
@@ -783,12 +920,25 @@ const { actions, getState } = createToolStore<
           const defaultContent = getPageElementDefaultContent(
             item.role,
             basemapSource,
-            withPlaceholders
+            withPlaceholders,
+            getLocale(),
+            year
           );
+          const isOutdatedContent =
+            isLegacyPageElementContent(item.role, item.content) ||
+            (item.role === ANNOTATION_ROLE.BASEMAP_SOURCE &&
+              !!basemapSource &&
+              item.content === basemapSource);
           const positionMode = item.positionMode ?? 'auto';
           const position =
             positionMode === 'manual'
-              ? clampPageElementPosition(item.position, item.role, layout)
+              ? clampPageElementPosition(
+                  item.position,
+                  item.role,
+                  layout,
+                  true,
+                  item.style
+                )
               : clampPageElementPosition(
                   getPageElementPosition(item.role, layout),
                   item.role,
@@ -808,7 +958,8 @@ const { actions, getState } = createToolStore<
             position,
             style,
             content:
-              withPlaceholders && isEmptyContent(item.content)
+              isOutdatedContent ||
+              (withPlaceholders && isEmptyContent(item.content))
                 ? defaultContent
                 : item.content
           };
@@ -856,14 +1007,6 @@ const { actions, getState } = createToolStore<
           }
         },
         {
-          role: ANNOTATION_ROLE.SIGNATURE,
-          style: {
-            ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize,
-            textAlign: TextAlign.Right
-          }
-        },
-        {
           role: ANNOTATION_ROLE.CREDIT,
           style: {
             ...PREDEFINED_STYLES.caption,
@@ -873,43 +1016,77 @@ const { actions, getState } = createToolStore<
         }
       ];
 
+      const writtenRoles = getPageElementRolesWrittenAsFreeText(
+        s.items
+          .filter(
+            (item) =>
+              item.type === AnnotationKind.TEXT &&
+              typeof item.content === 'string'
+          )
+          .map((item) => ({
+            content: String(item.content),
+            fontSize: item.style?.fontSize ?? DEFAULT_FONT_SIZE,
+            pageY:
+              resolveAnnotationCoordinateSpace(item) === 'page'
+                ? item.position.y
+                : item.position.y + layout.margins.top
+          })),
+        {
+          maxY: layout.height / 4,
+          minFontSize: tokens.annotations.subtitleFontSize
+        }
+      );
+
       const timestamp = Date.now();
 
-      const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
-        id: `page-element-${el.role}-${timestamp}-${index}`,
-        type: AnnotationKind.TEXT,
-        content: getPageElementDefaultContent(
-          el.role,
-          basemapSource,
-          withPlaceholders
-        ),
-        position: clampPageElementPosition(
-          getPageElementPosition(el.role, layout),
-          el.role,
-          layout,
-          shouldSnapAutoPageElement(el.role)
-        ),
-        positionMode: 'auto',
-        style: { ...s.defaultStyle, ...el.style },
-        role: el.role,
-        visible
-      }));
+      const newAnnotations: Annotation[] = pageElements
+        .filter((el) => !writtenRoles.has(el.role))
+        .map((el, index) => ({
+          id: `page-element-${el.role}-${timestamp}-${index}`,
+          type: AnnotationKind.TEXT,
+          content: getPageElementDefaultContent(
+            el.role,
+            basemapSource,
+            withPlaceholders,
+            getLocale(),
+            year
+          ),
+          position: clampPageElementPosition(
+            getPageElementPosition(el.role, layout),
+            el.role,
+            layout,
+            shouldSnapAutoPageElement(el.role)
+          ),
+          positionMode: 'auto',
+          style: { ...s.defaultStyle, ...el.style },
+          role: el.role,
+          visible
+        }));
 
       s.items = [...s.items, ...newAnnotations];
     },
     refreshPageElementPlaceholders: () => {
       const basemapSource = resolveBasemapSourceText();
       const locale = getLocale();
+      const year = resolveMapYear();
 
       s.items = s.items.map((item) => {
         if (!isPageElementRole(item.role) || typeof item.content !== 'string') {
           return item;
         }
 
+        if (
+          item.role === ANNOTATION_ROLE.SOURCE &&
+          isSourcePrefixOnly(item.content)
+        ) {
+          return { ...item, content: getSourcePrefix(locale) };
+        }
+
         const knownContents = getKnownPageElementDefaultContents(
           item.role,
           basemapSource,
-          true
+          true,
+          year
         );
 
         if (!knownContents.has(item.content)) {
@@ -922,7 +1099,8 @@ const { actions, getState } = createToolStore<
             item.role,
             basemapSource,
             true,
-            locale
+            locale,
+            year
           )
         };
       });
@@ -930,21 +1108,6 @@ const { actions, getState } = createToolStore<
     setPageElementsVisibility: (visible: boolean) => {
       s.items = s.items.map((item) =>
         isPageElementRole(item.role) ? { ...item, visible } : item
-      );
-    },
-    pinPageElements: () => {
-      if (
-        !s.items.some(
-          (item) =>
-            isPageElementRole(item.role) && item.positionMode !== 'manual'
-        )
-      ) {
-        return;
-      }
-      s.items = s.items.map((item) =>
-        isPageElementRole(item.role) && item.positionMode !== 'manual'
-          ? { ...item, positionMode: 'manual' }
-          : item
       );
     },
     redistributePageElements: (layoutOverrides, previousPage) => {
@@ -970,11 +1133,14 @@ const { actions, getState } = createToolStore<
                     item.position,
                     item.role,
                     previousPage,
-                    layout
+                    layout,
+                    style
                   )
                 : item.position,
               item.role,
-              layout
+              layout,
+              true,
+              style
             )
           };
         }

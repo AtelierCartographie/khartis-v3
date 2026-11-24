@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -16,7 +17,7 @@
     Slider
   } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-  import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
+  import { Earth, LicenseGlobal, Undo } from 'carbon-icons-svelte';
   import type { SimplificationResult } from '../../types/simplification.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
@@ -28,8 +29,8 @@
   } from '$lib/features/map';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
-    simplificationActions,
-    getSimplificationState
+    getSimplificationState,
+    simplificationActions
   } from '../simplification/simplification.store.svelte';
   import { onDestroy } from 'svelte';
 
@@ -265,26 +266,73 @@
     hideInactiveLabel
   />
 
-  {#if simplState.source === SimplificationSource.Basemap}
-    {#if usesMapLibreInterleaved}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        kind="warning"
-        lowContrast
-        title={m.simplification_osm_not_available()}
-        subtitle={m.simplification_osm_explanation()}
-      />
-    {:else if !isImportedBasemap && !hasBasemapVariants}
-      <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
-        kind="info"
-        lowContrast
-        title={m.simplification_no_variants()}
-        subtitle={noVariantSubtitle}
-      />
+  <SwitchedContent value={simplState.source}>
+    {#if simplState.source === SimplificationSource.Basemap}
+      {#if usesMapLibreInterleaved}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          kind="warning"
+          lowContrast
+          title={m.simplification_osm_not_available()}
+          subtitle={m.simplification_osm_explanation()}
+        />
+      {:else if !isImportedBasemap && !hasBasemapVariants}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          kind="info"
+          lowContrast
+          title={m.simplification_no_variants()}
+          subtitle={noVariantSubtitle}
+        />
+      {/if}
+
+      {#if isImportedBasemap && !usesMapLibreInterleaved}
+        <InlineNotification
+          closeButtonDescription={m.a11y_close_notification()}
+          kind="warning"
+          lowContrast
+          title={m.simplification_warning_title()}
+          subtitle={m.simplification_warning_subtitle()}
+        />
+        <div>
+          <div class="form-label">{m.simplification_rate_label()}</div>
+          <div class="slider-row">
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={simplState.rate}
+              on:input={handleRateChange}
+              on:change={handleRateChange}
+              labelText={m.simplification_rate_label()}
+              hideLabel
+              fullWidth
+            />
+          </div>
+        </div>
+      {:else if !usesMapLibreInterleaved && hasBasemapVariants}
+        <div>
+          <div class="form-label">{m.simplification_level_label()}</div>
+          <SimpleRadioGroup
+            name="simplification-level"
+            disabled={isBasemapSourceBlocked}
+            items={availableBasemapLevels.map((level) => ({
+              value: level,
+              labelText: getLevelLabel(level)
+            }))}
+            selected={resolvedBasemapLevel}
+            onchange={(value) => {
+              if (isBasemapSourceBlocked) return;
+              if (value === resolvedBasemapLevel) return;
+              store.setLevel(value);
+              scheduleSimplificationApply('level-change');
+            }}
+          />
+        </div>
+      {/if}
     {/if}
 
-    {#if isImportedBasemap && !usesMapLibreInterleaved}
+    {#if simplState.source === SimplificationSource.Geo}
       <InlineNotification
         closeButtonDescription={m.a11y_close_notification()}
         kind="warning"
@@ -292,6 +340,24 @@
         title={m.simplification_warning_title()}
         subtitle={m.simplification_warning_subtitle()}
       />
+
+      {#if geoDropdownItems.length > 1}
+        <Dropdown
+          translateWithId={translateCarbonId}
+          translateWithIdSelection={translateCarbonId}
+          size="sm"
+          titleText={m.simplification_geo_dataset_label()}
+          selectedId={resolvedGeoDatasetId}
+          items={geoDropdownItems}
+          on:select={(e) => {
+            selectedGeoDatasetId = (e as CustomEvent).detail
+              .selectedId as string;
+            store.setRate(getDatasetAppliedRate(selectedGeoDatasetId));
+            lastResult = null;
+          }}
+        />
+      {/if}
+
       <div>
         <div class="form-label">{m.simplification_rate_label()}</div>
         <div class="slider-row">
@@ -304,78 +370,12 @@
             on:change={handleRateChange}
             labelText={m.simplification_rate_label()}
             hideLabel
-            minLabel="0"
-            maxLabel="100"
             fullWidth
           />
         </div>
       </div>
-    {:else if !usesMapLibreInterleaved && hasBasemapVariants}
-      <div>
-        <div class="form-label">{m.simplification_level_label()}</div>
-        <SimpleRadioGroup
-          name="simplification-level"
-          disabled={isBasemapSourceBlocked}
-          items={availableBasemapLevels.map((level) => ({
-            value: level,
-            labelText: getLevelLabel(level)
-          }))}
-          selected={resolvedBasemapLevel}
-          onchange={(value) => {
-            if (isBasemapSourceBlocked) return;
-            if (value === resolvedBasemapLevel) return;
-            store.setLevel(value);
-            scheduleSimplificationApply('level-change');
-          }}
-        />
-      </div>
     {/if}
-  {/if}
-
-  {#if simplState.source === SimplificationSource.Geo}
-    <InlineNotification
-      closeButtonDescription={m.a11y_close_notification()}
-      kind="warning"
-      lowContrast
-      title={m.simplification_warning_title()}
-      subtitle={m.simplification_warning_subtitle()}
-    />
-
-    {#if geoDropdownItems.length > 1}
-      <Dropdown
-        translateWithId={translateCarbonId}
-        translateWithIdSelection={translateCarbonId}
-        size="sm"
-        titleText={m.simplification_geo_dataset_label()}
-        selectedId={resolvedGeoDatasetId}
-        items={geoDropdownItems}
-        on:select={(e) => {
-          selectedGeoDatasetId = (e as CustomEvent).detail.selectedId as string;
-          store.setRate(getDatasetAppliedRate(selectedGeoDatasetId));
-          lastResult = null;
-        }}
-      />
-    {/if}
-
-    <div>
-      <div class="form-label">{m.simplification_rate_label()}</div>
-      <div class="slider-row">
-        <Slider
-          min={0}
-          max={100}
-          step={1}
-          value={simplState.rate}
-          on:input={handleRateChange}
-          on:change={handleRateChange}
-          labelText={m.simplification_rate_label()}
-          hideLabel
-          minLabel="0"
-          maxLabel="100"
-          fullWidth
-        />
-      </div>
-    </div>
-  {/if}
+  </SwitchedContent>
 
   {#if simplState.isProcessing}
     <div class="simplification-loader">

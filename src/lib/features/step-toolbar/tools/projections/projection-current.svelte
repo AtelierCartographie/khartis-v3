@@ -1,18 +1,22 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    basemapService,
-    mapProjectionStore,
-    osmBasemapStore
-  } from '$lib/features/map';
-  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { m } from '$lib/paraglide/messages';
-  import { SettingsAdjust } from 'carbon-icons-svelte';
+  import {
+    CheckmarkOutline,
+    SettingsAdjust,
+    WarningAlt
+  } from 'carbon-icons-svelte';
   import { resolveCurrentProjectionDisplay } from './projection-label.utils';
-  import { getNativeCrsEpsg } from './native-projection.utils';
-  import { getProjectionState } from './projection.store.svelte';
+  import {
+    describeMapGeoreferenceAvailability,
+    getCurrentProjectionContext,
+    getMapGeoreferenceAvailability
+  } from './projection-georeference.utils';
+  import {
+    getCrsCatalogVersion,
+    resolveCoordinateSystem
+  } from './crs-catalog.store.svelte';
 
   interface Props {
     onopensettings: () => void;
@@ -20,30 +24,34 @@
 
   let { onopensettings }: Props = $props();
 
-  const projectionState = $derived(getProjectionState());
-  const isTiledBasemapEnabled = $derived(
-    shouldUseMapLibreInterleaved({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive
-    })
-  );
+  const context = $derived.by(() => {
+    // Names read from the PROJ database land asynchronously.
+    void getCrsCatalogVersion();
+    return getCurrentProjectionContext();
+  });
+
+  $effect(() => {
+    const nativeEpsg = context.basemapProjection?.nativeEpsg;
+    if (nativeEpsg) {
+      void resolveCoordinateSystem(`EPSG:${nativeEpsg}`);
+    }
+  });
+  const gisAvailability = $derived.by(() => {
+    void context;
+    return getMapGeoreferenceAvailability();
+  });
   const display = $derived(
-    isTiledBasemapEnabled
+    context.tiled
       ? {
-          name: mapProjectionStore.isGlobe
+          name: context.tiled.globe
             ? m.map_projection_globe()
             : m.projection_current_web_mercator(),
           description: m.projection_tiled_helper()
         }
       : resolveCurrentProjectionDisplay(
-          projectionState,
-          {
-            ...basemapService.currentMetadata?.proj_to,
-            nativeEpsg: getNativeCrsEpsg(
-              basemapService.currentBasemap?.metadata
-            )
-          },
-          basemapService.projectionPresets
+          context.state,
+          context.basemapProjection,
+          context.projectionPresets
         )
   );
 </script>
@@ -51,24 +59,32 @@
 <div class="projection-current">
   <span class="projection-current-label">{m.projection_current_label()}</span>
   <div class="projection-current-row">
-    <div class="projection-current-name-row">
-      <span class="projection-current-name" title={display.name}
-        >{display.name}</span
-      >
-      {#if display.description}
-        <InfoPopover text={display.description} />
-      {/if}
-    </div>
+    <span class="projection-current-name" title={display.name}
+      >{display.name}</span
+    >
+    {#if display.description}
+      <InfoPopover text={display.description} />
+    {/if}
+    <InfoPopover
+      text={describeMapGeoreferenceAvailability(gisAvailability)}
+      icon={gisAvailability.available ? CheckmarkOutline : WarningAlt}
+      label={describeMapGeoreferenceAvailability(gisAvailability)}
+      buttonClass={gisAvailability.available
+        ? 'projection-gis-status is-available'
+        : 'projection-gis-status'}
+    />
 
-    {#if !isTiledBasemapEnabled}
+    <div class="projection-current-actions">
       <Button
-        kind="ghost"
+        kind="tertiary"
         size="small"
         icon={SettingsAdjust}
-        class="projection-current-settings"
-        on:click={onopensettings}>{m.projection_current_settings()}</Button
-      >
-    {/if}
+        iconDescription={m.projection_current_settings()}
+        tooltipPosition="bottom"
+        tooltipAlignment="end"
+        on:click={onopensettings}
+      />
+    </div>
   </div>
 </div>
 
@@ -85,8 +101,7 @@
   .projection-current-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--kh-gap-inline);
+    gap: var(--cds-spacing-02);
     min-width: 0;
   }
 
@@ -97,14 +112,24 @@
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
   }
 
-  .projection-current-name-row {
+  .projection-current-row :global(.projection-gis-status) {
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .projection-current-row :global(.projection-gis-status.is-available) {
+    color: var(--cds-support-success, #24a148);
+  }
+
+  .projection-current-actions {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
-    min-width: 0;
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
   .projection-current-name {
+    flex: 0 1 auto;
+    min-width: 0;
     overflow: hidden;
     color: var(--cds-text-primary, #161616);
     font-size: 0.875rem;

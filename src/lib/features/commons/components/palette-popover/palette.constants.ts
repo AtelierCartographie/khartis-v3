@@ -1,21 +1,22 @@
 import * as m from '$lib/paraglide/messages';
-import {
-  sequential,
-  divergentSequential,
-  categorical,
-  resolvePalette,
-  presets
-} from '@ateliercartographie/ok-palette';
 import type {
-  WebGLColor,
+  CategoricalColorOptions,
   ContrastMode,
-  CategoricalColorOptions
+  WebGLColor
+} from '@ateliercartographie/ok-palette';
+import {
+  categorical,
+  divergentSequential,
+  presets,
+  resolvePalette,
+  sequential
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
+import { escapeSvgAttribute } from '$lib/features/commons/components/legend/utils';
 import {
-  PatternType,
   type PatternParams,
-  type PatternShape
+  type PatternShape,
+  PatternType
 } from '$lib/features/commons/constants/pattern.constants';
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import {
@@ -24,8 +25,8 @@ import {
 } from '$lib/features/commons/utils/color-utils';
 import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
 import {
-  resolveMotifOptions,
-  type PatternName
+  type PatternName,
+  resolveMotifOptions
 } from '$lib/features/map/layers/pattern-texture';
 import {
   DEFAULT_QUALITATIVE_PRESET,
@@ -117,7 +118,6 @@ export interface Palette {
 export interface DivergingPaletteSplit {
   lowerCount: number;
   upperCount: number;
-  hasCenterClass: boolean;
 }
 
 export const SUGGESTION_PRESET = {
@@ -500,16 +500,12 @@ export function generatePaletteColors(
         palette.colors.length > 1
           ? palette.colors[palette.colors.length - 1]
           : undefined;
-      const split = divergingSplit ?? {
-        lowerCount: Math.floor(count / 2),
-        upperCount: Math.floor(count / 2),
-        hasCenterClass: count % 2 === 1
-      };
+      const lowerCount = divergingSplit?.lowerCount ?? Math.floor(count / 2);
       const cssColors = divergentSequential({
         colorA,
         colorB,
-        steps: [split.lowerCount, split.upperCount],
-        hasCenterClass: split.hasCenterClass,
+        steps: [lowerCount, divergingSplit?.upperCount ?? count - lowerCount],
+        hasCenterClass: false,
         contrast
       });
       return (
@@ -647,9 +643,16 @@ export function buildPatternBackground(
   return buildPatternSvgBackground(effectivePatternId, accent, base, params);
 }
 
+// Light checkerboard standing for "nothing painted" behind a transparent motif.
+const TRANSPARENT_CHECKERBOARD_DEFS =
+  '<defs><pattern id="kh-transparent-checker" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#ffffff"/><rect width="4" height="4" fill="#e0e0e0"/><rect x="4" y="4" width="4" height="4" fill="#e0e0e0"/></pattern></defs>';
+
+/**
+ * Previews a class motif over its own background, or over a checkerboard when
+ * the motif leaves the polygon unpainted.
+ */
 export function buildClassPatternSvgBackground(
   pattern: ClassPattern,
-  background = '#ffffff',
   opacity = 1
 ): string {
   const rendered = motif({
@@ -662,7 +665,11 @@ export function buildClassPatternSvgBackground(
     patchSize: pattern.patchSize
   });
   const fillOpacity = opacity < 1 ? ` opacity="${opacity}"` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${background}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
+  const backgroundFill = pattern.background
+    ? escapeSvgAttribute(pattern.background)
+    : 'url(#kh-transparent-checker)';
+  const checkerDefs = pattern.background ? '' : TRANSPARENT_CHECKERBOARD_DEFS;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${checkerDefs}${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${backgroundFill}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
 
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
@@ -831,7 +838,8 @@ export function normalizePaletteId(id: string | undefined): string | undefined {
 export function resolvePaletteTypeForBreakpoint(
   classification: { breakpointValue?: number | null } | null | undefined
 ): PaletteType {
-  return classification?.breakpointValue != null
+  const breakpointValue = classification?.breakpointValue;
+  return typeof breakpointValue === 'number' && Number.isFinite(breakpointValue)
     ? PALETTE_TYPE.DIVERGING
     : PALETTE_TYPE.SEQUENTIAL;
 }

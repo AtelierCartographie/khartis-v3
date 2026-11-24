@@ -1,6 +1,12 @@
 <script lang="ts">
   import { resolveColorPickerDropdownPosition } from '$lib/features/commons/utils/color-picker-position';
-  import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { resolveRowAnchorRect } from '$lib/features/commons/utils/dropdown-position.utils';
+  import {
+    hexToHsl,
+    hslToHex,
+    normalizeHexInput
+  } from '$lib/features/commons/utils/color-utils';
+  import ColorHslFields, { type ColorPayload } from './color-hsl-fields.svelte';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
@@ -8,26 +14,13 @@
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { m } from '$lib/paraglide/messages';
-  import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
-  import { ChevronDown, Eyedropper } from 'carbon-icons-svelte';
+  import { Button } from 'carbon-components-svelte';
+  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
+  import { cubicOut } from 'svelte/easing';
+  import type { TransitionConfig } from 'svelte/transition';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import clsx from 'clsx';
-  import { KEY, EVENT } from '../constants/dom.constants';
-  import {
-    readCarbonNumberValue,
-    type CarbonValueEvent
-  } from '$lib/features/commons/utils/carbon-events.utils';
-
-  // The EyeDropper API is Chromium-only and missing from the TypeScript DOM lib.
-  type EyeDropperConstructor = new () => {
-    open: () => Promise<{ sRGBHex: string }>;
-  };
-
-  type ColorPayload = {
-    hex: string;
-    hue: number;
-    saturation: number;
-    lightness: number;
-  };
+  import { EVENT, KEY } from '../constants/dom.constants';
 
   let {
     hex = '#fff',
@@ -53,17 +46,8 @@
   let openUpward = $state(false);
   let initialColor: ColorPayload | null = null;
   let isPickingScreenColor = false;
-  const EyeDropperApi = (globalThis as { EyeDropper?: EyeDropperConstructor })
-    .EyeDropper;
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('color-picker');
-  // Each track previews the colour its own axis reaches, the other two held.
-  const saturationTrack = $derived(
-    `linear-gradient(90deg, hsl(${hue} 0% ${lightness}%), hsl(${hue} 100% ${lightness}%))`
-  );
-  const lightnessTrack = $derived(
-    `linear-gradient(90deg, hsl(${hue} ${saturation}% 0%), hsl(${hue} ${saturation}% 50%), hsl(${hue} ${saturation}% 100%))`
-  );
   const effectiveTriggerAriaLabel = $derived(
     triggerAriaLabel || triggerLabel || undefined
   );
@@ -73,24 +57,6 @@
 
   function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
-  }
-
-  function normalizeHexInput(rawHex: string): string | null {
-    const sanitized = rawHex.trim().replace(/^#/, '');
-
-    if (/^[0-9a-fA-F]{3}$/.test(sanitized)) {
-      const expanded = sanitized
-        .split('')
-        .map((char) => `${char}${char}`)
-        .join('');
-      return `#${expanded.toUpperCase()}`;
-    }
-
-    if (/^[0-9a-fA-F]{6}$/.test(sanitized)) {
-      return `#${sanitized.toUpperCase()}`;
-    }
-
-    return null;
   }
 
   function buildColorFromHsl(
@@ -117,57 +83,6 @@
     lightness = color.lightness;
   }
 
-  function handleHueSliderInput(event: CarbonValueEvent): void {
-    hue = readCarbonNumberValue(event, hue);
-  }
-
-  function handleSaturationSliderInput(event: CarbonValueEvent): void {
-    saturation = readCarbonNumberValue(event, saturation);
-  }
-
-  function handleLightnessSliderInput(event: CarbonValueEvent): void {
-    lightness = readCarbonNumberValue(event, lightness);
-  }
-
-  function setColorFromHex(normalizedHex: string): void {
-    const parsedColor = hexToHsl(normalizedHex);
-    hex = normalizedHex;
-    hue = parsedColor.hue;
-    saturation = parsedColor.saturation;
-    lightness = parsedColor.lightness;
-  }
-
-  async function pickScreenColor(): Promise<void> {
-    if (!EyeDropperApi) {
-      return;
-    }
-
-    // Escape cancels the pick; it must not also close the picker or the
-    // styling tool, whose shortcuts listen on the document.
-    const swallowEscape = (event: KeyboardEvent) => {
-      if (event.key === KEY.ESCAPE) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
-    };
-    window.addEventListener(EVENT.KEYDOWN, swallowEscape, { capture: true });
-    isPickingScreenColor = true;
-    try {
-      const { sRGBHex } = await new EyeDropperApi().open();
-      const normalizedHex = normalizeHexInput(sRGBHex);
-      if (normalizedHex) {
-        setColorFromHex(normalizedHex);
-      }
-    } catch {
-      // Escape aborts the pick: the current colour stays.
-    } finally {
-      isPickingScreenColor = false;
-      window.removeEventListener(EVENT.KEYDOWN, swallowEscape, {
-        capture: true
-      });
-    }
-  }
-
   function getValidatedColor(): ColorPayload {
     const normalizedHex = normalizeHexInput(hex);
     if (normalizedHex) {
@@ -180,14 +95,18 @@
     return buildColorFromHsl(hue, saturation, lightness);
   }
 
+  // Closing without validating restores the colour the picker opened with,
+  // in the fields and the trigger swatch as on the map when previewed.
   function revertPreviewState(): void {
-    if (!livePreview || !initialColor) {
+    if (!initialColor) {
       return;
     }
 
     const nextColor = initialColor;
     applyColor(nextColor);
-    onPreview(nextColor);
+    if (livePreview) {
+      onPreview(nextColor);
+    }
   }
 
   function updateDropdownPosition(): void {
@@ -196,7 +115,7 @@
     }
 
     const nextPosition = resolveColorPickerDropdownPosition({
-      triggerRect: triggerEl.getBoundingClientRect(),
+      triggerRect: resolveRowAnchorRect(triggerEl),
       dropdownHeight: dropdownEl?.offsetHeight ?? 400,
       viewport: {
         width: window.innerWidth,
@@ -251,9 +170,23 @@
 
     if (!colorOpen) {
       onBeforeOpen();
+      // Placed before it shows, so that it unfolds from its field.
+      updateDropdownPosition();
     }
 
     colorOpen = !colorOpen;
+  }
+
+  // Unfolds from its field like the Carbon lists (max-height, 110 ms): the
+  // menu is revealed downward, or upward when it opens above the field.
+  function unfoldMenu(_node: Element): TransitionConfig {
+    const upward = openUpward;
+    return {
+      duration: motionDuration(110),
+      easing: cubicOut,
+      css: (t) =>
+        `clip-path: inset(${upward ? (1 - t) * 100 : 0}% 0 ${upward ? 0 : (1 - t) * 100}% 0); opacity: ${Math.min(1, t * 2)};`
+    };
   }
 
   $effect(() => {
@@ -346,178 +279,40 @@
       style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px; max-height: {dropdownPosition.maxHeight}px;"
       bind:this={dropdownEl}
       use:portal
+      transition:unfoldMenu
     >
-      <Grid condensed class="mt-5 mb-5">
-        <Row noGutter>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider rainbow">
-              <Slider
-                min={0}
-                max={359}
-                step={1}
-                value={hue}
-                hideTextInput
-                labelText={m.color_hue()}
-                on:input={handleHueSliderInput}
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <input
-                id="cp-hue-num"
-                class="number"
-                type="number"
-                aria-label={m.color_hue()}
-                min={0}
-                max={359}
-                step={1}
-                bind:value={hue}
-                inputmode="numeric"
-              />
-            </div>
-          </Column>
-        </Row>
-
-        <Row noGutter>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider gradient" style:--slider-track={saturationTrack}>
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={saturation}
-                hideTextInput
-                labelText={m.color_saturation()}
-                on:input={handleSaturationSliderInput}
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <input
-                id="cp-sat-num"
-                class="number"
-                type="number"
-                aria-label={m.color_saturation()}
-                min={0}
-                max={100}
-                step={1}
-                bind:value={saturation}
-                inputmode="numeric"
-              />
-            </div>
-          </Column>
-        </Row>
-
-        <Row noGutter>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider gradient" style:--slider-track={lightnessTrack}>
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={lightness}
-                hideTextInput
-                labelText={m.color_brightness()}
-                on:input={handleLightnessSliderInput}
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <input
-                id="cp-light-num"
-                class="number"
-                type="number"
-                aria-label={m.color_brightness()}
-                min={0}
-                max={100}
-                step={1}
-                bind:value={lightness}
-                inputmode="numeric"
-              />
-            </div>
-          </Column>
-        </Row>
-
-        <Row noGutter class="mt-4">
-          <Column sm={2} md={4} lg={8}>
-            <label class="form-label mb-2" for="cp-hex"
-              >{m.color_hex_code()}</label
-            >
-
-            <input
-              id="cp-hex"
-              class="hex"
-              bind:value={hex}
-              oninput={(e: InputEvent) => {
-                const target = e.target as HTMLInputElement;
-                const rawValue = target.value;
-                const normalizedHex = normalizeHexInput(rawValue);
-                if (!normalizedHex) {
-                  hex = rawValue;
-                  return;
-                }
-
-                setColorFromHex(normalizedHex);
-              }}
-            />
-          </Column>
-
-          <Column sm={2} md={4} lg={8}>
-            <span class="form-label mb-2">{m.color_preview()}</span>
-            <div class="preview-row">
-              <div class="preview" style={`background:${hex}`}></div>
-              {#if EyeDropperApi}
-                <Button
-                  kind="ghost"
-                  size="field"
-                  icon={Eyedropper}
-                  iconDescription={m.color_pick_from_screen()}
-                  tooltipPosition="top"
-                  tooltipAlignment="end"
-                  onclick={pickScreenColor}
-                />
-              {/if}
-            </div>
-          </Column>
-        </Row>
-
-        <Row noGutter class="mt-4">
-          <Column sm={2} md={4} lg={8}>
-            <Button
-              kind="tertiary"
-              size="field"
-              class="action-button"
-              onclick={() => {
-                revertPreviewState();
-                onCancel();
-                colorOpen = false;
-              }}>{m.button_cancel()}</Button
-            >
-          </Column>
-
-          <Column sm={2} md={4} lg={8}>
-            <Button
-              kind="primary"
-              size="field"
-              class="action-button"
-              onclick={() => {
-                const validatedColor = getValidatedColor();
-                applyColor(validatedColor);
-                onValidate(validatedColor);
-                colorOpen = false;
-              }}
-            >
-              {m.button_apply()}
-            </Button>
-          </Column>
-        </Row>
-      </Grid>
+      <ColorHslFields
+        variant="dropdown"
+        bind:hex={hex}
+        bind:hue={hue}
+        bind:saturation={saturation}
+        bind:lightness={lightness}
+        onpickingchange={(picking) => (isPickingScreenColor = picking)}
+      />
+      <div class="dropdown-actions">
+        <Button
+          kind="tertiary"
+          size="small"
+          onclick={() => {
+            revertPreviewState();
+            onCancel();
+            colorOpen = false;
+          }}>{m.button_cancel()}</Button
+        >
+        <Button
+          kind="primary"
+          size="small"
+          icon={ArrowRight}
+          onclick={() => {
+            const validatedColor = getValidatedColor();
+            applyColor(validatedColor);
+            onValidate(validatedColor);
+            colorOpen = false;
+          }}
+        >
+          {m.button_validate()}
+        </Button>
+      </div>
     </div>
   {/if}
 </div>
@@ -592,6 +387,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--cds-ui-04);
     box-sizing: border-box;
+    padding: var(--cds-spacing-05);
     max-width: calc(100vw - 2 * var(--cds-spacing-05));
     overflow-x: hidden;
     overflow-y: auto;
@@ -602,143 +398,23 @@
     box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  .slider {
+  /* Two equal columns on the width of the fields, like the hex code and its
+     preview above. */
+  .dropdown-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--cds-spacing-05);
+    margin-top: var(--cds-spacing-05);
+  }
+
+  .dropdown-actions :global(.bx--btn) {
     width: 100%;
-  }
-
-  .slider :global(.bx--slider) {
-    min-width: 160px !important;
-  }
-
-  .slider :global(.bx--slider__track) {
-    background: var(--cds-ui-03);
-  }
-
-  .slider :global(.bx--slider__filled-track) {
-    background: var(--cds-text-01);
-  }
-
-  .slider.rainbow :global(.bx--slider__track) {
-    background: linear-gradient(
-      90deg,
-      red,
-      yellow,
-      lime,
-      cyan,
-      blue,
-      magenta,
-      red
-    );
-  }
-
-  .slider.gradient :global(.bx--slider__track) {
-    background: var(--slider-track);
-  }
-
-  .slider.rainbow :global(.bx--slider__filled-track),
-  .slider.gradient :global(.bx--slider__filled-track) {
-    background: transparent;
-  }
-
-  .slider.rainbow :global(.bx--slider__track),
-  .slider.gradient :global(.bx--slider__track) {
-    height: var(--cds-spacing-04);
-    border-radius: var(--cds-spacing-02);
-    box-shadow: inset 0 0 0 1px var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .slider.rainbow :global(.bx--slider__thumb),
-  .slider.gradient :global(.bx--slider__thumb) {
-    width: var(--cds-spacing-05);
-    height: var(--cds-spacing-05);
-    background: var(--cds-field-01);
-    box-shadow:
-      0 0 0 2px var(--cds-text-01),
-      0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-
-  .input-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-  }
-
-  .input-wrapper .number {
-    width: 100%;
-    height: var(--kh-size-sm);
-    min-width: unset;
-    padding: 0 var(--cds-spacing-03);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-02);
-    color: var(--cds-text-01);
-    font-weight: normal;
-    font-family: var(--cds-code-01-font-family);
-    line-height: var(--cds-body-short-01-line-height);
-    border-radius: 0;
-    box-sizing: border-box;
-    font-weight: 600;
-  }
-
-  .input-wrapper .number:focus {
-    border-bottom-color: var(--cds-border-strong);
-  }
-
-  .input-wrapper .number:focus-visible {
-    outline: 2px solid var(--cds-focus);
-    outline-offset: -2px;
-  }
-
-  .input-wrapper .number:disabled {
-    background: var(--cds-ui-03);
-    color: var(--cds-text-02);
-    cursor: not-allowed;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type='number'] {
-    appearance: textfield;
-    -moz-appearance: textfield;
-  }
-
-  .hex {
-    width: 100%;
-    height: var(--kh-size-md);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    padding: 0 var(--cds-spacing-03);
-    background: var(--cds-field-02);
-    color: var(--cds-text-01);
-    font-family: var(--cds-code-01-font-family);
-    font-size: var(--cds-body-short-01-font-size);
-    text-align: center;
-    font-weight: normal;
-  }
-
-  .preview-row {
-    display: flex;
-    align-items: stretch;
-  }
-
-  .preview {
-    width: 100%;
-    height: var(--kh-size-md);
-    border: 1px solid var(--cds-ui-04);
-  }
-
-  .hex,
-  .preview {
-    box-sizing: border-box;
-  }
-
-  .color-dropdown :global(.action-button) {
-    width: 100%;
+    min-width: 0;
     max-width: 100%;
+  }
+
+  /* Same icon room as the eyedropper button (color-hsl-fields.svelte). */
+  .dropdown-actions :global(.bx--btn--primary) {
+    padding-right: calc(var(--cds-spacing-05) * 2 + var(--cds-spacing-03));
   }
 </style>

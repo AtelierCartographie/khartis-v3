@@ -18,6 +18,7 @@ import {
   getSymbolFillValueColumn,
   getSymbolPrimitive,
   PrimitiveFilterType,
+  type SymbolPrimitiveConfig,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
@@ -47,8 +48,8 @@ import {
   pointRadiusAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
-import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BinaryPointData } from '@ateliercartographie/geoarrow-deck-stream';
+import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   cloneScatterBinaryData,
   duplicateScatterBinaryGeometry,
@@ -64,9 +65,9 @@ import {
 } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
 import {
-  createClassedSizeAccessor,
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
+  createClassedSizeAccessor,
   createProportionalSymbolSizeAccessor,
   createStrokeClassificationAccessor,
   HIGHLIGHT_FILL_COLOR,
@@ -96,6 +97,15 @@ import {
 } from './symbol-layer.utils';
 import { MultiShapeLayer } from './multi-shape-layer';
 import { SYMBOL_STROKE_WIDTH_DIVISOR } from './stroke-width.constants';
+
+function isSymbolKnockout(
+  pointConfig: Pick<SymbolPrimitiveConfig, 'knockout' | 'mode'> | undefined
+): boolean {
+  return (
+    pointConfig?.knockout !== false &&
+    pointConfig?.mode === SymbolMode.PROPORTIONAL
+  );
+}
 
 // Size draws the absolute value, so a size column holding both signs leaves
 // the fill as the only channel telling them apart, whatever mode is stored.
@@ -534,6 +544,7 @@ function createDoubleProportionalPointLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
+      knockout: isSymbolKnockout(pointConfig),
       opacity: 1,
       radiusScale: layoutProps.radiusScale * pageDisplayScale,
       radiusUnits: 'pixels',
@@ -1207,6 +1218,7 @@ export function createRepresentativePointSymbolLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
+      knockout: isSymbolKnockout(pointConfig),
       opacity: 1,
       radiusScale: pageDisplayScale,
       radiusUnits: 'pixels',
@@ -1873,7 +1885,8 @@ export function createPointLayerStack(
       gapLength: pointStrokeDashSpec.shader.gap,
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
-      barWidth: pointBarWidth
+      barWidth: pointBarWidth,
+      knockout: isSymbolKnockout(pointConfig)
     })
   ];
 }

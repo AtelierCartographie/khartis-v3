@@ -6,10 +6,10 @@ import {
   getSymbolFillClassification,
   getSymbolPrimitive,
   getTextPrimitive,
-  PrimitiveFilterType,
   type PrimitiveFilter,
-  visualizationStore,
-  type VisualizationConfig
+  PrimitiveFilterType,
+  type VisualizationConfig,
+  visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   createReadonlyStateFacade,
@@ -21,19 +21,19 @@ import {
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  BASEMAP_LAYER_ID,
+  basemapAuxLayersStore,
+  type BasemapLayer,
+  type BasemapLayerConfig,
+  type BasemapLayerId,
+  basemapLayersStore,
+  type BasemapMetadata,
+  basemapService,
   BasemapStyle,
   DEFAULT_TILED_BASEMAP_STYLE,
-  basemapAuxLayersStore,
-  basemapLayersStore,
-  basemapService,
-  osmBasemapStore,
-  type BasemapLayer,
-  type BasemapMetadata,
-  BASEMAP_LAYER_ID,
   getBasemapRenderGroup,
   getPreferredBasemapFile,
-  type BasemapLayerConfig,
-  type BasemapLayerId
+  osmBasemapStore
 } from '$lib/features/map';
 import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -45,6 +45,7 @@ import {
 } from '$lib/features/map/constants/carte-facile-layer-groups';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+import { presetHasInsetNames } from '$lib/features/map/utils/projection-preset-names.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
@@ -64,12 +65,12 @@ import {
   buildTiledBasemapLayerId,
   buildVisualizationSubLayerId,
   getCustomBaseLayerType,
-  TILED_BASEMAP_LABELS_GROUP_ID,
   isBasemapLayersToolRenderableType,
   isPerKeyAuxLayerType,
   mapMetadataLayerTypeToBasemapLayerId,
   mergeLayerOrder,
-  resolveBasemapConfigRowId
+  resolveBasemapConfigRowId,
+  TILED_BASEMAP_LABELS_GROUP_ID
 } from '$lib/features/map/utils/layer-panel-row.utils';
 import { layerOrderStore } from './layer-order.store.svelte';
 
@@ -84,6 +85,7 @@ const VISUALIZATION_SUBLAYER_ORDER: PrimitiveFilter[] = [
   PrimitiveFilterType.POLYGON
 ];
 const BASEMAP_LAYER_DISPLAY_ORDER: BasemapLayerId[] = [
+  BASEMAP_LAYER_ID.VUES,
   BASEMAP_LAYER_ID.FRONTIERES,
   BASEMAP_LAYER_ID.EQUATEUR,
   BASEMAP_LAYER_ID.MERIDIENS,
@@ -363,6 +365,8 @@ function getBasemapLayerName(
       return m.basemap_layer_villes();
     case BASEMAP_LAYER_ID.SPHERE:
       return m.basemap_layer_sphere();
+    case BASEMAP_LAYER_ID.VUES:
+      return m.basemap_layer_vues();
     default:
       return layerId;
   }
@@ -479,12 +483,16 @@ function resolveActiveGraticuleLayerId(): BasemapLayerId {
 }
 
 // An imported geometry has no projection sphere to outline, so it gets no
-// sphere row.
+// sphere row; only a composite preset with named views gets a view-names row.
 function buildSyntheticBasemapEntries(
   basemapFile: string | null,
-  isCustom: boolean
+  isCustom: boolean,
+  hasViewNames: boolean
 ): BasemapDisplayEntry[] {
   const synthetics: { layerId: BasemapLayerId; key?: string }[] = [
+    ...(hasViewNames
+      ? [{ layerId: BASEMAP_LAYER_ID.VUES, key: SYNTHETIC_AUX_LAYER_KEY.VUES }]
+      : []),
     { layerId: BASEMAP_LAYER_ID.MERIDIENS },
     { layerId: BASEMAP_LAYER_ID.MERS, key: SYNTHETIC_AUX_LAYER_KEY.MERS },
     ...(isCustom
@@ -544,7 +552,12 @@ function buildBasemapDisplayEntries(): BasemapDisplayEntry[] {
   const isCustom = Boolean(metadata.isCustom);
   const entries: BasemapDisplayEntry[] = buildSyntheticBasemapEntries(
     metadata.file,
-    isCustom
+    isCustom,
+    metadata.proj_to?.type === 'composite' &&
+      presetHasInsetNames(
+        basemapService.projectionPresets,
+        metadata.proj_to.preset
+      )
   );
 
   const isCustomLine =

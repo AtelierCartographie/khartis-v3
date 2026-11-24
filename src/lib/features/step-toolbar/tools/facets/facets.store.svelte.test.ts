@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  FACET_SLOT,
+  facetsStore,
+  MAX_FACETS,
+  SCALE_MODE
+} from './facets.store.svelte';
+import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => ({
   notifyChangeMock: vi.fn(),
@@ -59,14 +66,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   },
   getEnabledPrimitiveFilters: mocks.getEnabledPrimitiveFiltersMock
 }));
-
-import {
-  FACET_SLOT,
-  facetsStore,
-  MAX_FACETS,
-  SCALE_MODE
-} from './facets.store.svelte';
-import * as m from '$lib/paraglide/messages';
 
 describe('facetsStore', () => {
   beforeEach(() => {

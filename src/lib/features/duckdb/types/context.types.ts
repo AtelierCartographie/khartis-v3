@@ -2,8 +2,8 @@ import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { TableMetadata } from './table.types';
 import type { DescribeResult } from './query.types';
 import type {
-  ExtensionsLoaded,
-  ExtensionLoadPromises
+  ExtensionLoadPromises,
+  ExtensionsLoaded
 } from './extension.types';
 
 export interface DuckDBContext {

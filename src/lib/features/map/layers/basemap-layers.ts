@@ -1,13 +1,13 @@
 import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
-import { GeoJsonLayer } from '@deck.gl/layers';
-import { PathStyleExtension } from '@deck.gl/extensions';
 import {
+  GeoJsonLayer,
   PathLayer,
   ScatterplotLayer,
   SolidPolygonLayer,
   TextLayer
 } from '@deck.gl/layers';
+import { PathStyleExtension } from '@deck.gl/extensions';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
@@ -15,9 +15,9 @@ import {
 } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   parsePaths,
+  parsePathsWithProjection,
   parsePointData,
   parseSolidPolygons,
-  parsePathsWithProjection,
   parseSolidPolygonsWithProjection,
   pathColorAttr,
   pathWidthAttr
@@ -27,34 +27,35 @@ import type { FeatureCollection } from 'geojson';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   ArrowExtension,
+  BASEMAP_DATASET_ID,
   createLayerId,
   DeckLayerId,
-  BASEMAP_DATASET_ID,
   DEFAULT_PROJECTION_SUFFIX
 } from '../constants';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { resolveBasemapConfigRowId } from '$lib/features/map/utils/layer-panel-row.utils';
 import { extractGeometryInfo } from '../io';
 import {
-  basemapLayersStore,
   BASEMAP_LAYER_ID,
-  getBasemapRenderGroup,
+  basemapLayersStore,
   type BasemapRenderGroup,
-  type TerreLayerConfig,
+  type VuesLayerConfig,
+  type EquateurLayerConfig,
+  type FrontieresLayerConfig,
+  getBasemapRenderGroup,
+  type LacsLayerConfig,
+  type MeridiensLayerConfig,
   type MersLayerConfig,
   type ReliefLayerConfig,
-  type FrontieresLayerConfig,
-  type EquateurLayerConfig,
-  type MeridiensLayerConfig,
-  type LacsLayerConfig,
   type RivieresLayerConfig,
+  type TerreLayerConfig,
   type VillesLayerConfig
 } from '../stores/basemap-layers.store.svelte';
 import {
   BASEMAP_LAYER_CONFIG,
+  BasemapCitySymbol,
   BasemapGraticuleMode,
-  BasemapRepresentation,
-  BasemapCitySymbol
+  BasemapRepresentation
 } from '$lib/features/commons/constants/visualization.constants';
 import { NEUTRAL_CARTOGRAPHY_RGB_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
@@ -65,9 +66,11 @@ import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
+import { dottedPatternToDashArray, withOpacity } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
+import type { ViewLabel } from '../utils/projection-preset-names.utils';
+import { createViewLabelsLayers } from './basemap-view-labels';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
   extendTextCharacterSet,
@@ -82,20 +85,20 @@ import {
   createScreenExtentPolygon,
   getEquatorGeoJSON,
   getGraticuleGeoJSON,
+  type GraticuleClipExtent,
   hasCompositeGraticuleSubProjections,
   normalizeLineBbox,
-  projectGraticuleFeatureCollectionIfNeeded,
-  type GraticuleClipExtent
+  projectGraticuleFeatureCollectionIfNeeded
 } from './basemap-graticule';
 import {
+  type BasemapCity,
   getCitiesFilterKey,
   getFilteredCitiesForConfig,
   getLabelledCitiesForConfig,
   getPolygonCitiesForConfig,
   projectBasemapCities,
   readBasemapCities,
-  resolveCityLabel,
-  type BasemapCity
+  resolveCityLabel
 } from './basemap-cities';
 import {
   resolveLandConfig,
@@ -116,7 +119,9 @@ const BASEMAP_TERRE_SHADOW_OPACITY = 0.65;
 const BASEMAP_TERRE_SHADOW_WIDTH_PX = 5;
 const BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX = 3;
 const BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX = 8;
-const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
+
+export const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
+
 const BASEMAP_RELIEF_ELEVATION_FILL_OPACITY_RATIO = 0.8;
 const BASEMAP_RELIEF_DEFAULT_FILL_OPACITY_RATIO = 0.5;
 const BASEMAP_RELIEF_ELEVATION_LINE_OPACITY_RATIO = 0.7;
@@ -140,6 +145,7 @@ interface BasemapLayerContext {
   excludeEquator?: boolean;
   graticuleClipExtent?: GraticuleClipExtent | null;
   unprojectedFrame?: GraticuleClipExtent | null;
+  pageDisplayScale?: number;
 }
 
 interface BaseLayerProps {
@@ -981,7 +987,12 @@ function createVillesLabelLayer(
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
-  if (!fontAssetsStore.ready) return null;
+  if (
+    !fontAssetsStore.isFontReady(
+      config.labelFontFamily ?? CARTOGRAPHIC_FONT_FAMILY
+    )
+  )
+    return null;
 
   const labelledCities = getLabelledCitiesForConfig(cities, config);
 
@@ -1240,6 +1251,8 @@ export interface BasemapAdditionalData {
   hasLandMetadataLayers?: boolean;
   hasLimitMetadataLayers?: boolean;
   stylePresets?: StylePresets | null;
+  // Label of each named view of the composite preset, by entry id.
+  viewLabels?: ReadonlyMap<string, ViewLabel>;
 }
 
 export interface BasemapRowOrderEntry {
@@ -1489,6 +1502,22 @@ export function createBasemapLayers(
           if (layers.length > 0) {
             targetGroups.push(layers);
           }
+          break;
+        }
+
+        case BASEMAP_LAYER_ID.VUES: {
+          const layers = createViewLabelsLayers({
+            config: config as VuesLayerConfig,
+            labels: additionalData?.viewLabels,
+            projection: ctx.projection,
+            modelMatrix: ctx.modelMatrix,
+            layerId: buildLayerId(
+              DeckLayerId.BASEMAP_VUES_LABELS,
+              ctx.projectionSuffix
+            ),
+            pageDisplayScale: ctx.pageDisplayScale ?? 1
+          });
+          if (layers.length > 0) targetGroups.push(layers);
           break;
         }
       }

@@ -1,20 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
 import { hexToOklchHue } from '$lib/features/commons/utils/color-utils';
+import {
+  divergingPalettes,
+  findPaletteById,
+  generateCategoricalColorsFromSeed,
+  generatePaletteColors,
+  getPalettesForType,
+  getQualitativeColorBands,
+  getSuggestionPalettes,
+  getSuggestionPresetsForType,
+  PALETTE_TYPE,
+  qualitativePalettes,
+  SUGGESTION_PRESET,
+  VIF_MIXTE_COLORS
+} from './palette.constants';
+import {
+  TOL_MUTED_COLORS,
+  WONG_COLORS
+} from '$lib/features/commons/constants/colorblind-palette.constants';
+import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 vi.mock('@ateliercartographie/ok-palette', async () => {
-  const divergentSequential = vi.fn(
-    ({
-      steps,
-      hasCenterClass
-    }: {
-      steps: [number, number];
-      hasCenterClass: boolean;
-    }) =>
-      Array.from(
-        { length: steps[0] + steps[1] + (hasCenterClass ? 1 : 0) },
-        (_, i) => `#mock-${i}`
-      )
+  const divergentSequential = vi.fn(({ steps }: { steps: [number, number] }) =>
+    Array.from({ length: steps[0] + steps[1] }, (_, i) => `#mock-${i}`)
   );
   const actual = await vi.importActual<
     typeof import('@ateliercartographie/ok-palette')
@@ -34,26 +43,6 @@ vi.mock('@ateliercartographie/ok-palette', async () => {
       })
   };
 });
-
-import {
-  PALETTE_TYPE,
-  divergingPalettes,
-  qualitativePalettes,
-  generatePaletteColors,
-  generateCategoricalColorsFromSeed,
-  getSuggestionPalettes,
-  getSuggestionPresetsForType,
-  getPalettesForType,
-  getQualitativeColorBands,
-  SUGGESTION_PRESET,
-  findPaletteById,
-  VIF_MIXTE_COLORS
-} from './palette.constants';
-import {
-  TOL_MUTED_COLORS,
-  WONG_COLORS
-} from '$lib/features/commons/constants/colorblind-palette.constants';
-import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 const HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -77,16 +66,15 @@ describe('palette.constants — palette collections', () => {
 describe('palette.constants — generatePaletteColors', () => {
   it('should forward an asymmetric diverging split to ok-palette for custom diverging palettes', () => {
     const p = divergingPalettes[0];
-    generatePaletteColors(p, 5, undefined, undefined, {
+    generatePaletteColors(p, 4, undefined, undefined, {
       lowerCount: 1,
-      upperCount: 3,
-      hasCenterClass: true
+      upperCount: 3
     });
 
     expect(vi.mocked(divergentSequential)).toHaveBeenLastCalledWith(
       expect.objectContaining({
         steps: [1, 3],
-        hasCenterClass: true
+        hasCenterClass: false
       })
     );
   });

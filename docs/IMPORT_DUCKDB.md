@@ -69,16 +69,16 @@ doit invalider elle-même les caches concernés (voir plus bas).
 l'extension `sqlite` pour GeoPackage, `ST_Read` pour les autres formats
 géographiques. GPX passe par son lecteur JavaScript dédié (`gpx-processor.ts`).
 
-| Format                | Comportement                                                                                                                                                                                                     |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CSV, TSV, texte collé | détection du séparateur, de l'en-tête et du format numérique avant `read_csv`                                                                                                                                    |
-| GeoJSON               | lecture géospatiale ; un `.json` qui n'est pas du GeoJSON est lu comme tableau                                                                                                                                   |
-| Shapefile             | `.shx` et `.dbf` obligatoires, en pratique transportés dans un ZIP                                                                                                                                               |
-| GeoPackage            | lu comme base SQLite par `sqlite_query`, géométrie décodée en SQL et étiquetée de son code EPSG (voir ci-dessous) ; à la création, chaque couche spatiale devient un jeu de données, comme les fichiers d'un ZIP |
-| Parquet, GeoParquet   | `read_parquet`, normalisation spatiale si les métadonnées `geo` sont présentes                                                                                                                                   |
-| GPX                   | lecteur JavaScript dédié                                                                                                                                                                                         |
-| KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                                                                                                                                        |
-| ZIP                   | un ou plusieurs jeux de données par archive                                                                                                                                                                      |
+| Format                | Comportement                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSV, TSV, texte collé | détection du séparateur, de l'en-tête et du format numérique avant `read_csv` ; un fichier qui n'est pas en UTF-8 est transcodé depuis Windows-1252 avant la relecture, car `ignore_errors` de DuckDB WASM écarte chaque ligne invalide ; les lignes que ce dernier repli écarte encore sont relevées par `store_rejects` et signalées par un avertissement persistant |
+| GeoJSON               | lecture géospatiale ; un `.json` qui n'est pas du GeoJSON est lu comme tableau                                                                                                                                                                                                                                                                                         |
+| Shapefile             | `.shx` et `.dbf` obligatoires, en pratique transportés dans un ZIP                                                                                                                                                                                                                                                                                                     |
+| GeoPackage            | lu comme base SQLite par `sqlite_query`, géométrie décodée en SQL et étiquetée de son code EPSG (voir ci-dessous) ; à la création, chaque couche spatiale devient un jeu de données, comme les fichiers d'un ZIP                                                                                                                                                       |
+| Parquet, GeoParquet   | `read_parquet`, normalisation spatiale si les métadonnées `geo` sont présentes                                                                                                                                                                                                                                                                                         |
+| GPX                   | lecteur JavaScript dédié                                                                                                                                                                                                                                                                                                                                               |
+| KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                                                                                                                                                                                                                                                                                              |
+| ZIP                   | un ou plusieurs jeux de données par archive                                                                                                                                                                                                                                                                                                                            |
 
 Après lecture, la colonne géométrique s'appelle toujours `geom`. `ST_Read` et
 `read_parquet` gardent le nom de la source (`geometry` chez GDAL et
@@ -173,6 +173,18 @@ Le grading de jointure (joint / à vérifier / non unique / non reconnu) est
 matérialisé dans des tables dérivées, **clés sur le cache de similarité** qui
 les a produites : invalider ce cache fait tomber les gradings. Des appels
 concurrents partagent un même calcul.
+`getJoinTerritoryStatuses` relit ce grading avec la table finalisée pour donner
+un statut à chaque entité du fond (joint, à vérifier, répété, sans donnée) :
+c'est la carte de contrôle de l'étape Données. Comme la finalisation, elle lit
+toute la table, sans les filtres.
+
+Une correction manuelle (une valeur non reconnue associée à une entité, une
+suggestion remplacée) ne réécrit pas la colonne source : `applyJoinCorrections`
+la garde par colonne et le cache de similarité la lit comme une correspondance
+exacte vers l'entité choisie, à la place des correspondances calculées. Grading,
+finalisation et statuts la suivent donc, et le tableau garde ses valeurs
+d'origine. Le projet enregistre ces corrections dans `joinCorrections` (valeur
+d'origine → valeur du fond), réappliquées à l'ouverture.
 
 La jointure à un fond et la jointure d'enrichissement (un tableau joint à un
 fichier géographique) passent par ce même moteur (`join-ops.ts`). Elles ne

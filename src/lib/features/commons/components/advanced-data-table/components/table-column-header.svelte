@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { RefineOperation, type AnalysisResult } from '$lib/features/duckdb';
+  import { type AnalysisResult, RefineOperation } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
+  import {
+    VARIABLE_BADGE_STYLES,
+    type VariableBadgeType
+  } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
   import {
     formatValue,
@@ -13,6 +16,7 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
+  import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -70,6 +74,9 @@
     { value: 'date', label: m.column_type_date() }
   ]);
 
+  // The refine operations rewrite text: they mean nothing on numbers or dates.
+  const canRefine = $derived(isTextLikeColumnType(column.type));
+
   const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
       value: RefineOperation.UPPERCASE,
@@ -99,6 +106,8 @@
     category: string | null;
     count: number;
     percent: number;
+    /** Set on the bar that groups the least frequent categories. */
+    otherCategories: number | null;
   }
   interface HistogramLike {
     toArray(): unknown[];
@@ -163,13 +172,17 @@
     const typeSimple = analysis.type_simple;
 
     if (typeSimple === 'string') {
-      const items = (analysis.histogram.toArray() as CategoryItem[]).map(
-        (item) => ({
-          category: item.category,
-          count: toNum(item.count),
-          percent: item.percent
-        })
-      );
+      const items = (
+        analysis.histogram.toArray() as Array<
+          Omit<CategoryItem, 'otherCategories'> & { other_categories?: unknown }
+        >
+      ).map((item) => ({
+        category: item.category,
+        count: toNum(item.count),
+        percent: item.percent,
+        otherCategories:
+          item.other_categories == null ? null : toNum(item.other_categories)
+      }));
       const isAllUnique = items.length === 1 && items[0]?.category === 'unique';
       return {
         kind: 'categorical' as const,
@@ -214,6 +227,25 @@
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
+
+  // The header tooltip names the column in full and sums its type up.
+  const valueType = $derived.by((): VariableBadgeType => {
+    const typeSimple = analysis?.type_simple;
+    if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'date') return 'date';
+    if (typeSimple === 'boolean') return 'boolean';
+    return 'string';
+  });
+  const valueTypeLabel = $derived(
+    valueType === 'numeric'
+      ? m.column_type_number()
+      : valueType === 'date'
+        ? m.column_type_date()
+        : valueType === 'boolean'
+          ? m.column_type_boolean()
+          : m.column_type_text()
+  );
+  const valueTypeStyle = $derived(VARIABLE_BADGE_STYLES[valueType]);
 
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
@@ -331,7 +363,9 @@
   } satisfies TooltipController;
 
   // `unique` is the categorical SQL sentinel for values occurring once.
-  function catColor(category: string | null): string {
+  function catColor(item: CategoryItem): string {
+    const { category } = item;
+    if (item.otherCategories !== null) return '#6f6f6f';
     if (category === null) return '#ff832b';
     if (category === 'unique') return '#005d5d';
     return '#9f1853';
@@ -345,7 +379,14 @@
     )({ count: formatValue(count) });
   }
 
+  function otherCategoriesLabel(count: number): string {
+    return m.summary_plot_other_categories({ count: formatValue(count) });
+  }
+
   function catLabel(item: CategoryItem): string {
+    if (item.otherCategories !== null) {
+      return otherCategoriesLabel(item.otherCategories);
+    }
     if (item.category === null) return '⌀';
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
     return item.category;
@@ -353,7 +394,10 @@
 
   function catTooltipText(item: CategoryItem): string {
     if (item.category === 'unique') return uniqueValuesLabel(item.count);
-    const name = item.category ?? m.column_null_label();
+    const name =
+      item.otherCategories !== null
+        ? otherCategoriesLabel(item.otherCategories)
+        : (item.category ?? m.column_null_label());
     return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
 
@@ -605,7 +649,16 @@
             role="tooltip"
           >
             <div class="simple-tooltip-arrow"></div>
-            {typeTooltipMessage}
+            <span class="tooltip-column-name">{displayName ?? column.name}</span
+            >
+            <span
+              class="tooltip-column-type"
+              style:color={valueTypeStyle.color}
+              style:background-color={valueTypeStyle.bgColor}
+              style:border-color={valueTypeStyle.borderColor}
+            >
+              {valueTypeLabel}
+            </span>
           </div>
         </Portal>
       {/if}
@@ -724,31 +777,33 @@
                   </button>
                 {/if}
 
-                <button
-                  type="button"
-                  class="menu-item submenu-trigger"
-                  role="menuitem"
-                  aria-haspopup="menu"
-                  aria-expanded={activeSubmenu === 'refine'}
-                  bind:this={refineSubmenuTriggerRef}
-                  onclick={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef, {
-                      focusFirst: true
-                    })}
-                  onkeydown={(event: KeyboardEvent) =>
-                    handleSubmenuTriggerKeydown(
-                      event,
-                      'refine',
-                      refineSubmenuTriggerRef
-                    )}
-                  onmouseenter={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                  onfocus={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                >
-                  {m.column_refine_label()}
-                  <span class="submenu-arrow">&#9654;</span>
-                </button>
+                {#if canRefine}
+                  <button
+                    type="button"
+                    class="menu-item submenu-trigger"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={activeSubmenu === 'refine'}
+                    bind:this={refineSubmenuTriggerRef}
+                    onclick={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef, {
+                        focusFirst: true
+                      })}
+                    onkeydown={(event: KeyboardEvent) =>
+                      handleSubmenuTriggerKeydown(
+                        event,
+                        'refine',
+                        refineSubmenuTriggerRef
+                      )}
+                    onmouseenter={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                    onfocus={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                  >
+                    {m.column_refine_label()}
+                    <span class="submenu-arrow">&#9654;</span>
+                  </button>
+                {/if}
 
                 <div class="menu-divider"></div>
 
@@ -821,7 +876,7 @@
               </div>
             </Portal>
           {/if}
-          {#if activeSubmenu === 'refine'}
+          {#if activeSubmenu === 'refine' && canRefine}
             <Portal>
               <div
                 class="dropdown-menu submenu-portal"
@@ -940,13 +995,13 @@
               <div class="hist-spacer"></div>
             {:else}
               <div class="hist-cat-bars">
-                {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
+                {#each histogramData.items as item, i (item.otherCategories !== null ? `other-${i}` : (item.category ?? `null-${i}`))}
                   <div
                     class="hist-cat-bar"
                     class:first={i === 0}
                     class:last={i === histogramData.items.length - 1}
                     style="flex-grow: {item.count}; background-color: {catColor(
-                      item.category
+                      item
                     )};"
                     role="img"
                     aria-label={catTooltipText(item)}
@@ -1066,11 +1121,14 @@
     gap: 0;
   }
 
+  /* As tall as the column menu, so a column without one (the joined entity)
+     keeps its badge on the same line as the others. */
   .col-title-row {
     display: flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
+    min-height: var(--kh-size-xs);
   }
 
   .col-title-row :global(.variable-badge) {
@@ -1582,5 +1640,20 @@
     white-space: normal;
     max-width: 240px;
     text-align: left;
+  }
+
+  .tooltip-column-name {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-column-type {
+    display: inline-block;
+    margin-top: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-02);
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 </style>

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
@@ -20,11 +23,11 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onDestroy, onMount, tick, untrack, type Component } from 'svelte';
+  import { type Component, onDestroy, onMount, tick, untrack } from 'svelte';
   import { LogCategory, logger } from '../../utils/logger';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
@@ -37,9 +40,9 @@
   import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import {
+    type ColumnType,
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
-    type ColumnType,
     type TableMutation
   } from './types';
 
@@ -97,6 +100,8 @@
     ) => void;
     onColumnDeleted?: (columnName: string) => void;
     onTableMutation?: (mutation: TableMutation) => Promise<void> | void;
+    /** The row under the pointer, `null` once it leaves the rows. */
+    onRowHover?: (rowId: number | null) => void;
   }
 
   let {
@@ -118,8 +123,26 @@
     onSelectionChange,
     onSortChange,
     onColumnDeleted,
-    onTableMutation
+    onTableMutation,
+    onRowHover
   }: Props = $props();
+
+  let hoveredRowId: number | null = null;
+
+  function setHoveredRow(rowId: number | null): void {
+    if (rowId === hoveredRowId) return;
+    hoveredRowId = rowId;
+    onRowHover?.(rowId);
+  }
+
+  function handleRowsPointerOver(event: PointerEvent): void {
+    const row =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('tr[data-row-id]')
+        : null;
+    const rowId = Number(row?.dataset.rowId);
+    setHoveredRow(Number.isFinite(rowId) && rowId >= 0 ? rowId : null);
+  }
 
   let histogramVisible = $state(true);
   const effectiveShowSummaryPlots = $derived(
@@ -262,6 +285,14 @@
       filters.filterStats.total > 0
   );
   const isSelectionMode = $derived(isSelectable && isEditMode);
+
+  // Rows picked for a selection that has ended are not picked for the next.
+  $effect(() => {
+    if (isSelectionMode) return;
+    untrack(() => {
+      if (rowSelection.hasSelection) rowSelection.clearSelection();
+    });
+  });
 
   const safeVisibleColumns = $derived.by(() =>
     columnOps.visibleColumns.filter(
@@ -808,7 +839,14 @@
                 scope="col"
               >
                 {#if isSelectionMode}
-                  <div class="selection-header-content">
+                  <div
+                    class="selection-header-content"
+                    in:scale={{
+                      duration: motionDuration(180),
+                      start: 0.6,
+                      easing: cubicOut
+                    }}
+                  >
                     <SimpleCheckbox
                       checked={areVisibleRowsSelected}
                       indeterminate={hasVisibleSelection &&
@@ -873,7 +911,10 @@
               {/each}
             </tr>
           </thead>
-          <tbody>
+          <tbody
+            onpointerover={onRowHover ? handleRowsPointerOver : undefined}
+            onpointerleave={onRowHover ? () => setHoveredRow(null) : undefined}
+          >
             {#each tableData.tableData as row, i (virtualScroll.rows[i] ?? `row-${i}`)}
               {@const rowIndex = virtualScroll.rows[i] ?? i}
               {@const rowId = (row.__id as number | undefined) ?? rowIndex + 1}

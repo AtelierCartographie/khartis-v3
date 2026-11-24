@@ -1,9 +1,23 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    closeFloatingPanelsAbove,
+    enterFloatingPanelScope,
+    floatingPanelIn,
+    floatingPanelOut,
+    floatingPanelVeil,
+    isFloatingPanelCovered,
+    isTopmostFloatingPanel
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
-  import { Dropdown, TextInput } from 'carbon-components-svelte';
+  import {
+    Dropdown,
+    InlineNotification,
+    TextInput
+  } from 'carbon-components-svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -12,24 +26,24 @@
     formatValue,
     isSingularCount
   } from '$lib/features/commons/utils/format.utils';
-  import { ArrowRight, Close, ChevronDown } from 'carbon-icons-svelte';
+  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
   import {
     CATEGORY_SHAPE_CYCLE,
     ShapeType
   } from '$lib/features/commons/constants/visualization.constants';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
@@ -40,25 +54,25 @@
   import PatternPalettePicker from './pattern-palette-picker.svelte';
   import ShapeChipRow from './shape-chip-row.svelte';
   import {
-    PALETTE_TYPE,
-    type QualitativePreset,
+    buildShapeSwatchBackground,
     DEFAULT_QUALITATIVE_PRESET,
     generateCategoricalColorsFromSeed,
-    buildShapeSwatchBackground
+    PALETTE_TYPE,
+    type QualitativePreset
   } from './palette.constants';
   import type {
     PatternPaletteConfig,
     PatternShape
   } from '$lib/features/commons/constants/pattern.constants';
   import {
-    resolveClassPatterns,
-    type ClassPattern
+    type ClassPattern,
+    resolveClassPatterns
   } from '$lib/features/commons/services/pattern-palette.service';
   import {
-    DEFAULT_COMMON_ASPECT,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
-    type CategoryDraft
+    type CategoryDraft,
+    DEFAULT_COMMON_ASPECT
   } from './categories-aspect-popover.types';
 
   interface Props {
@@ -136,8 +150,15 @@
 
   // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
   const MAX_PATTERN_PREVIEW_CATEGORIES = 24;
+  // Beyond that count the map draws no motif: the toggle says so instead.
+  const isPatternUnavailable = $derived(
+    primitiveKind === 'polygons' &&
+      draftCategories.length > MAX_PATTERN_PREVIEW_CATEGORIES
+  );
   const showCategoryPattern = $derived(
-    primitiveKind === 'polygons' && draftCommonAspect.pattern
+    primitiveKind === 'polygons' &&
+      draftCommonAspect.pattern &&
+      !isPatternUnavailable
   );
   const resolvedPatternConfig = $derived<PatternPaletteConfig>(
     draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
@@ -211,6 +232,17 @@
     sortMode = 'manual';
     popoverRight = toolbarWidth;
   }
+
+  const nestedInFloatingPanel = enterFloatingPanelScope();
+  const covered = $derived(open && isFloatingPanelCovered(handleClose));
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose, {
+      nested: nestedInFloatingPanel,
+      getElement: () => popoverRef
+    });
+  });
 
   function handleClose() {
     open = false;
@@ -476,6 +508,7 @@
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
+        if (!isTopmostFloatingPanel(handleClose)) return;
         handleClose();
         return;
       }
@@ -511,6 +544,8 @@
   <div use:portal class="categories-aspect-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="categories-aspect-popover"
       style:right={popoverRight}
       role="dialog"
@@ -527,541 +562,561 @@
       }}
       onoutsideclick={handlePopoverOutsideClick}
     >
-      <header class="popover-header">
-        <h3>{m.palette_categories_aspect_title()}</h3>
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Close}
-          iconDescription={m.button_cancel()}
-          on:click={handleClose}
+      <div class="kh-floating-panel-body" inert={covered}>
+        <PanelHeader
+          title={m.palette_categories_aspect_title()}
+          closeLabel={m.button_cancel()}
+          onclose={handleClose}
         />
-      </header>
 
-      <div class="popover-content">
-        {#if showSuggestions}
-          <PaletteSuggestions
-            paletteType={PALETTE_TYPE.QUALITATIVE}
-            qualitativeMode="categories"
-            selectedPaletteId="__custom__"
-            selectedColor={draftSuggestionSeedColor ?? selectedCategory?.color}
-            numClasses={draftCategories.length}
-            onColorSelect={handleSuggestionColor}
-            onPaletteSelect={applyExactPalette}
-            onQualitativePresetChange={handleQualitativePresetChange}
-          />
-        {/if}
-
-        {#if showCommonAspectSection}
-          <section class="aspect-section">
-            <div class="section-heading">
-              <span class="section-heading-text"
-                >{m.aspect_common_section()}</span
-              >
-              <div class="section-heading-line"></div>
-            </div>
-
-            {#if isSymbolsDifferentRank}
-              <div class="common-stack">
-                <div class="field-stack">
-                  <span class="field-label">{m.shape()}</span>
-                  <select
-                    class="common-select"
-                    aria-label={m.shape()}
-                    value={draftCommonAspect.shape ?? ShapeType.CIRCLE}
-                    onchange={(e: Event) =>
-                      handleCommonAspectChange(
-                        'shape',
-                        (e.currentTarget as HTMLSelectElement)
-                          .value as ShapeType
-                      )}
-                  >
-                    {#each shapeChoices as shapeChoice (shapeChoice.id)}
-                      <option value={shapeChoice.id}>{shapeChoice.label}</option
-                      >
-                    {/each}
-                  </select>
-                </div>
-
-                <div class="field-stack">
-                  <span class="field-label">{m.color()}</span>
-                  <SingleColorPreview
-                    color={draftCommonAspect.color ?? '#f287ac'}
-                    onchange={(hex) => handleCommonAspectChange('color', hex)}
-                  />
-                </div>
-
-                <div class="field-stack">
-                  <span class="field-label">{m.size()}</span>
-                  <SliderWithInput
-                    min={1}
-                    max={100}
-                    value={draftCommonAspect.size}
-                    showMinMax
-                    inputWidth="96px"
-                    onchange={(value) =>
-                      handleCommonAspectChange('size', value)}
-                  />
-                </div>
-              </div>
-            {:else if primitiveKind === 'symbols'}
-              <div class="common-symbols-layout">
-                <div class="common-paired-row common-paired-row--with-input">
-                  <div class="common-field common-field--toggle">
-                    <span class="field-label"
-                      >{m.aspect_common_size_unique()}</span
-                    >
-                    <div class="common-toggle-value">
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={draftCommonAspect.sizeUnique}
-                          hideLabel
-                          labelText={m.aspect_common_size_unique()}
-                          onchange={(value) =>
-                            handleCommonAspectChange('sizeUnique', value)}
-                        />
-                        <span class="toggle-state">
-                          {draftCommonAspect.sizeUnique ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="common-field common-field--input">
-                    <CompactNumberInput
-                      value={draftCommonAspect.size}
-                      min={1}
-                      max={100}
-                      width="100%"
-                      showSteppers={false}
-                      disabled={!draftCommonAspect.sizeUnique}
-                      ariaLabel={m.aspect_common_size_unique()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('size', value)}
-                    />
-                  </div>
-                </div>
-
-                <div class="common-divider"></div>
-
-                <div class="common-paired-row">
-                  <div class="common-field common-field--toggle">
-                    <span class="field-label"
-                      >{m.aspect_common_stroke_yesno()}</span
-                    >
-                    <div class="common-toggle-value">
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={draftCommonAspect.stroke}
-                          hideLabel
-                          labelText={m.aspect_common_stroke_yesno()}
-                          onchange={(value) =>
-                            handleCommonAspectChange('stroke', value)}
-                        />
-                        <span class="toggle-state">
-                          {draftCommonAspect.stroke ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="common-field common-field--toggle">
-                    <span class="field-label"
-                      >{m.aspect_common_auto_color()}</span
-                    >
-                    <div class="common-toggle-value">
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={draftCommonAspect.autoColor}
-                          hideLabel
-                          labelText={m.aspect_common_auto_color()}
-                          disabled={!draftCommonAspect.stroke}
-                          onchange={(value) =>
-                            handleCommonAspectChange('autoColor', value)}
-                        />
-                        <span class="toggle-state">
-                          {draftCommonAspect.autoColor ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="common-paired-row common-paired-row--with-input">
-                  <div class="common-field common-field--toggle">
-                    <span class="field-label"
-                      >{m.aspect_common_stroke_unique()}</span
-                    >
-                    <div class="common-toggle-value">
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={draftCommonAspect.strokeUnique ?? true}
-                          hideLabel
-                          labelText={m.aspect_common_stroke_unique()}
-                          disabled={!draftCommonAspect.stroke}
-                          onchange={(value) =>
-                            handleCommonAspectChange('strokeUnique', value)}
-                        />
-                        <span class="toggle-state">
-                          {(draftCommonAspect.strokeUnique ?? true)
-                            ? m.yes()
-                            : m.no()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="common-field common-field--input">
-                    <CompactNumberInput
-                      value={Math.max(1, draftCommonAspect.strokeSize)}
-                      min={1}
-                      max={20}
-                      width="100%"
-                      showSteppers={false}
-                      disabled={!draftCommonAspect.stroke ||
-                        !(draftCommonAspect.strokeUnique ?? true)}
-                      ariaLabel={m.aspect_common_stroke_unique()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('strokeSize', value)}
-                    />
-                  </div>
-                </div>
-
-                <div class="common-divider"></div>
-
-                <div
-                  class="common-field common-field--toggle common-field--full"
-                >
-                  <span class="field-label">{m.aspect_common_pattern()}</span>
-                  <div class="common-toggle-value">
-                    <div class="toggle-control">
-                      <Switch
-                        toggled={draftCommonAspect.pattern}
-                        hideLabel
-                        labelText={m.aspect_common_pattern()}
-                        onchange={(value) =>
-                          handleCommonAspectChange('pattern', value)}
-                      />
-                      <span class="toggle-state">
-                        {draftCommonAspect.pattern ? m.yes() : m.no()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {#if draftCommonAspect.pattern}
-                  <div class="common-field--full">
-                    <PatternPalettePicker
-                      config={resolvedPatternConfig}
-                      onchange={handlePatternConfigChange}
-                    />
-                  </div>
-                  <div class="common-field--full">
-                    <ToggleWithLabel
-                      label={m.pattern_colorize()}
-                      toggled={resolvedPatternConfig.colorize ?? false}
-                      ontoggle={handlePatternColorizeChange}
-                    />
-                  </div>
-                {/if}
-              </div>
-            {:else if primitiveKind === 'polygons'}
-              <div class="common-grid">
-                <div class="common-grid-row common-grid-row--full">
-                  <span class="field-label">{m.aspect_common_pattern()}</span>
-                  <div class="toggle-control">
-                    <Switch
-                      toggled={draftCommonAspect.pattern}
-                      hideLabel
-                      labelText={m.aspect_common_pattern()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('pattern', value)}
-                    />
-                    <span class="toggle-state">
-                      {draftCommonAspect.pattern ? m.yes() : m.no()}
-                    </span>
-                  </div>
-                </div>
-                {#if draftCommonAspect.pattern}
-                  <div class="common-grid-row common-grid-row--full">
-                    <ColorSelector
-                      label={m.color()}
-                      value={resolvedPatternConfig.color ?? '#000000'}
-                      onchange={(color) =>
-                        handlePatternConfigChange({
-                          ...resolvedPatternConfig,
-                          color
-                        })}
-                    />
-                    <ToggleWithLabel
-                      label={m.pattern_colorize()}
-                      toggled={resolvedPatternConfig.colorize ?? false}
-                      ontoggle={handlePatternColorizeChange}
-                    />
-                  </div>
-                  <div class="common-grid-row common-grid-row--full">
-                    <SliderWithInput
-                      label={m.pattern_scale()}
-                      min={1}
-                      max={30}
-                      step={1}
-                      value={Math.round(
-                        (resolvedPatternConfig.scale ?? 1) * 10
-                      )}
-                      onchange={(value) =>
-                        handlePatternConfigChange({
-                          ...resolvedPatternConfig,
-                          scale: value / 10
-                        })}
-                    />
-                  </div>
-                {/if}
-              </div>
+        <div class="kh-scroll-area">
+          <div class="popover-content" use:scrollShadows>
+            {#if showSuggestions}
+              <PaletteSuggestions
+                paletteType={PALETTE_TYPE.QUALITATIVE}
+                qualitativeMode="categories"
+                selectedPaletteId="__custom__"
+                selectedColor={draftSuggestionSeedColor ??
+                  selectedCategory?.color}
+                numClasses={draftCategories.length}
+                onColorSelect={handleSuggestionColor}
+                onPaletteSelect={applyExactPalette}
+                onQualitativePresetChange={handleQualitativePresetChange}
+              />
             {/if}
-          </section>
-        {/if}
 
-        <section class="aspect-section">
-          <div class="section-heading">
-            <span class="section-heading-text">
-              {m.palette_categories_custom_section()}
-            </span>
-            <div class="section-heading-line"></div>
-          </div>
+            {#if showCommonAspectSection}
+              <section class="aspect-section">
+                <div class="section-heading">
+                  <span class="section-heading-text"
+                    >{m.aspect_common_section()}</span
+                  >
+                  <div class="section-heading-line"></div>
+                </div>
 
-          <div class="field-stack">
-            <span class="field-label">{m.palette_categories_sort()}</span>
-            <Dropdown
-              translateWithId={translateCarbonId}
-              translateWithIdSelection={translateCarbonId}
-              size="sm"
-              items={sortItems}
-              selectedId={sortMode}
-              on:select={(e) => handleSortSelect(e.detail.selectedId)}
-              type="default"
-            />
-          </div>
-
-          <div class="field-stack">
-            <p class="list-label">{m.palette_categories_list_label()}</p>
-            <ul
-              class="category-list"
-              use:dragHandleZone={{
-                items: visibleDraftCategories,
-                flipDurationMs: FLIP_DURATION_MS,
-                dropTargetStyle: {},
-                useCursorForDetection: true
-              }}
-              onconsider={handleCategoryListReorder}
-              onfinalize={handleCategoryListReorder}
-            >
-              {#each visibleDraftCategories as category, index (category.id)}
-                <li
-                  class="category-item"
-                  class:category-item--disabled={!category.enabled}
-                >
-                  <div class="category-header">
-                    <div
-                      class="drag-handle"
-                      use:dragHandle
-                      aria-label={`${m.palette_categories_sort_manual()} ${category.label}`}
-                    >
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-
-                    <div
-                      class="category-marker"
-                      data-kind={primitiveKind}
-                      data-shape={categoryShape(category)}
-                      class:is-ranked={isSymbolsDifferentRank}
-                      style={categoryPreviewStyle(category, index)}
-                    >
-                      {#if primitiveKind === 'texts'}
-                        T
-                      {/if}
-                    </div>
-
-                    <div class="category-label-input">
-                      <TextInput
-                        hideLabel
-                        labelText={m.palette_categories_list_label()}
-                        size="sm"
-                        value={category.label}
-                        on:focus={() => selectCategory(category.id)}
-                        on:input={(event) =>
-                          handleCategoryLabelInput(
-                            category.id,
-                            category.label,
-                            event
+                {#if isSymbolsDifferentRank}
+                  <div class="common-stack">
+                    <div class="field-stack">
+                      <span class="field-label">{m.shape()}</span>
+                      <select
+                        class="common-select"
+                        aria-label={m.shape()}
+                        value={draftCommonAspect.shape ?? ShapeType.CIRCLE}
+                        onchange={(e: Event) =>
+                          handleCommonAspectChange(
+                            'shape',
+                            (e.currentTarget as HTMLSelectElement)
+                              .value as ShapeType
                           )}
+                      >
+                        {#each shapeChoices as shapeChoice (shapeChoice.id)}
+                          <option value={shapeChoice.id}
+                            >{shapeChoice.label}</option
+                          >
+                        {/each}
+                      </select>
+                    </div>
+
+                    <div class="field-stack">
+                      <span class="field-label">{m.color()}</span>
+                      <SingleColorPreview
+                        color={draftCommonAspect.color ?? '#f287ac'}
+                        onchange={(hex) =>
+                          handleCommonAspectChange('color', hex)}
                       />
                     </div>
 
-                    <div class="toggle-only-control">
-                      <Switch
-                        toggled={category.enabled}
-                        hideLabel
-                        labelText={category.label}
+                    <div class="field-stack">
+                      <span class="field-label">{m.size()}</span>
+                      <SliderWithInput
+                        min={1}
+                        max={100}
+                        value={draftCommonAspect.size}
+                        inputWidth="96px"
                         onchange={(value) =>
-                          handleCategoryToggle(category.id, value)}
+                          handleCommonAspectChange('size', value)}
                       />
                     </div>
                   </div>
-
-                  {#if showPerCategoryAspect}
-                    <button
-                      type="button"
-                      class="category-expand-button"
-                      onclick={() => handleCategoryExpand(category.id)}
-                      aria-expanded={expandedCategoryId === category.id}
+                {:else if primitiveKind === 'symbols'}
+                  <div class="common-symbols-layout">
+                    <div
+                      class="common-paired-row common-paired-row--with-input"
                     >
-                      <ChevronDown
-                        size={16}
-                        class={expandedCategoryId === category.id
-                          ? 'rotated'
-                          : undefined}
-                      />
-                      <span>{m.per_category_aspect()}</span>
-                    </button>
-
-                    {#if expandedCategoryId === category.id}
-                      <div class="category-aspect-body">
-                        {#if showCategoryShapePicker}
-                          <div class="field-stack">
-                            <span class="field-label"
-                              >{m.per_category_shape()}</span
-                            >
-                            <select
-                              class="common-select"
-                              aria-label={m.per_category_shape()}
-                              value={category.shape ?? ShapeType.CIRCLE}
-                              onchange={(e: Event) =>
-                                handleCategoryShape(
-                                  category.id,
-                                  (e.currentTarget as HTMLSelectElement).value
-                                )}
-                            >
-                              {#each shapeChoices as shapeChoice (shapeChoice.id)}
-                                <option value={shapeChoice.id}>
-                                  {shapeChoice.label}
-                                </option>
-                              {/each}
-                            </select>
+                      <div class="common-field common-field--toggle">
+                        <span class="field-label"
+                          >{m.aspect_common_size_unique()}</span
+                        >
+                        <div class="common-toggle-value">
+                          <div class="toggle-control">
+                            <Switch
+                              toggled={draftCommonAspect.sizeUnique}
+                              hideLabel
+                              labelText={m.aspect_common_size_unique()}
+                              onchange={(value) =>
+                                handleCommonAspectChange('sizeUnique', value)}
+                            />
+                            <span class="toggle-state">
+                              {draftCommonAspect.sizeUnique ? m.yes() : m.no()}
+                            </span>
                           </div>
-                        {/if}
+                        </div>
+                      </div>
 
-                        <div class="field-stack">
-                          <span class="field-label"
-                            >{m.per_category_color()}</span
-                          >
-                          <SingleColorPreview
-                            color={category.color}
-                            onchange={(hex) =>
-                              handleCategoryColor(category.id, hex)}
+                      <div class="common-field common-field--input">
+                        <CompactNumberInput
+                          value={draftCommonAspect.size}
+                          min={1}
+                          max={100}
+                          width="100%"
+                          showSteppers={false}
+                          disabled={!draftCommonAspect.sizeUnique}
+                          ariaLabel={m.aspect_common_size_unique()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('size', value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div class="common-divider"></div>
+
+                    <div class="common-paired-row">
+                      <div class="common-field common-field--toggle">
+                        <span class="field-label"
+                          >{m.aspect_common_stroke_yesno()}</span
+                        >
+                        <div class="common-toggle-value">
+                          <div class="toggle-control">
+                            <Switch
+                              toggled={draftCommonAspect.stroke}
+                              hideLabel
+                              labelText={m.aspect_common_stroke_yesno()}
+                              onchange={(value) =>
+                                handleCommonAspectChange('stroke', value)}
+                            />
+                            <span class="toggle-state">
+                              {draftCommonAspect.stroke ? m.yes() : m.no()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="common-field common-field--toggle">
+                        <span class="field-label"
+                          >{m.aspect_common_auto_color()}</span
+                        >
+                        <div class="common-toggle-value">
+                          <div class="toggle-control">
+                            <Switch
+                              toggled={draftCommonAspect.autoColor}
+                              hideLabel
+                              labelText={m.aspect_common_auto_color()}
+                              disabled={!draftCommonAspect.stroke}
+                              onchange={(value) =>
+                                handleCommonAspectChange('autoColor', value)}
+                            />
+                            <span class="toggle-state">
+                              {draftCommonAspect.autoColor ? m.yes() : m.no()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      class="common-paired-row common-paired-row--with-input"
+                    >
+                      <div class="common-field common-field--toggle">
+                        <span class="field-label"
+                          >{m.aspect_common_stroke_unique()}</span
+                        >
+                        <div class="common-toggle-value">
+                          <div class="toggle-control">
+                            <Switch
+                              toggled={draftCommonAspect.strokeUnique ?? true}
+                              hideLabel
+                              labelText={m.aspect_common_stroke_unique()}
+                              disabled={!draftCommonAspect.stroke}
+                              onchange={(value) =>
+                                handleCommonAspectChange('strokeUnique', value)}
+                            />
+                            <span class="toggle-state">
+                              {(draftCommonAspect.strokeUnique ?? true)
+                                ? m.yes()
+                                : m.no()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="common-field common-field--input">
+                        <CompactNumberInput
+                          value={Math.max(1, draftCommonAspect.strokeSize)}
+                          min={1}
+                          max={20}
+                          width="100%"
+                          showSteppers={false}
+                          disabled={!draftCommonAspect.stroke ||
+                            !(draftCommonAspect.strokeUnique ?? true)}
+                          ariaLabel={m.aspect_common_stroke_unique()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('strokeSize', value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div class="common-divider"></div>
+
+                    <div
+                      class="common-field common-field--toggle common-field--full"
+                    >
+                      <span class="field-label"
+                        >{m.aspect_common_pattern()}</span
+                      >
+                      <div class="common-toggle-value">
+                        <div class="toggle-control">
+                          <Switch
+                            toggled={draftCommonAspect.pattern}
+                            hideLabel
+                            labelText={m.aspect_common_pattern()}
+                            onchange={(value) =>
+                              handleCommonAspectChange('pattern', value)}
+                          />
+                          <span class="toggle-state">
+                            {draftCommonAspect.pattern ? m.yes() : m.no()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {#if draftCommonAspect.pattern}
+                      <div class="common-field--full">
+                        <ToggleWithLabel
+                          label={m.pattern_colorize()}
+                          toggled={resolvedPatternConfig.colorize ?? false}
+                          ontoggle={handlePatternColorizeChange}
+                        />
+                      </div>
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
+                        />
+                      </div>
+                    {/if}
+                  </div>
+                {:else if primitiveKind === 'polygons'}
+                  <div class="common-stack">
+                    <div class="common-grid-row common-grid-row--full">
+                      <span class="field-label"
+                        >{m.aspect_common_pattern()}</span
+                      >
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={showCategoryPattern}
+                          disabled={isPatternUnavailable}
+                          hideLabel
+                          labelText={m.aspect_common_pattern()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('pattern', value)}
+                        />
+                        <span class="toggle-state">
+                          {showCategoryPattern ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                    {#if isPatternUnavailable}
+                      <InlineNotification
+                        kind="info"
+                        lowContrast
+                        hideCloseButton
+                        subtitle={m.aspect_pattern_category_limit({
+                          max: MAX_PATTERN_PREVIEW_CATEGORIES,
+                          count: draftCategories.length
+                        })}
+                      />
+                    {:else if draftCommonAspect.pattern}
+                      <div class="common-field--full">
+                        <ToggleWithLabel
+                          label={m.pattern_colorize()}
+                          toggled={resolvedPatternConfig.colorize ?? false}
+                          ontoggle={handlePatternColorizeChange}
+                        />
+                      </div>
+                      <div class="common-field--full">
+                        <PatternPalettePicker
+                          categorical
+                          config={resolvedPatternConfig}
+                          onchange={handlePatternConfigChange}
+                        />
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+              </section>
+            {/if}
+
+            <section class="aspect-section">
+              <div class="section-heading">
+                <span class="section-heading-text">
+                  {m.palette_categories_custom_section()}
+                </span>
+                <div class="section-heading-line"></div>
+              </div>
+
+              <div class="field-stack">
+                <span class="field-label">{m.palette_categories_sort()}</span>
+                <Dropdown
+                  translateWithId={translateCarbonId}
+                  translateWithIdSelection={translateCarbonId}
+                  size="sm"
+                  items={sortItems}
+                  selectedId={sortMode}
+                  on:select={(e) => handleSortSelect(e.detail.selectedId)}
+                  type="default"
+                />
+              </div>
+
+              <div class="field-stack">
+                <p class="list-label">{m.palette_categories_list_label()}</p>
+                <ul
+                  class="category-list"
+                  use:dragHandleZone={{
+                    items: visibleDraftCategories,
+                    flipDurationMs: FLIP_DURATION_MS,
+                    dropTargetStyle: {},
+                    useCursorForDetection: true
+                  }}
+                  onconsider={handleCategoryListReorder}
+                  onfinalize={handleCategoryListReorder}
+                >
+                  {#each visibleDraftCategories as category, index (category.id)}
+                    <li
+                      class="category-item"
+                      class:category-item--disabled={!category.enabled}
+                    >
+                      <div class="category-header">
+                        <div
+                          class="drag-handle"
+                          use:dragHandle
+                          aria-label={`${m.palette_categories_sort_manual()} ${category.label}`}
+                        >
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </div>
+
+                        <div
+                          class="category-marker"
+                          data-kind={primitiveKind}
+                          data-shape={categoryShape(category)}
+                          class:is-ranked={isSymbolsDifferentRank}
+                          style={categoryPreviewStyle(category, index)}
+                        >
+                          {#if primitiveKind === 'texts'}
+                            T
+                          {/if}
+                        </div>
+
+                        <div class="category-label-input">
+                          <TextInput
+                            hideLabel
+                            labelText={m.palette_categories_list_label()}
+                            size="sm"
+                            value={category.label}
+                            on:focus={() => selectCategory(category.id)}
+                            on:input={(event) =>
+                              handleCategoryLabelInput(
+                                category.id,
+                                category.label,
+                                event
+                              )}
                           />
                         </div>
 
-                        {#if showCategoryPattern && categoryPatterns}
-                          <div class="field-stack">
-                            <span class="field-label">{m.pattern_shape()}</span>
-                            <ShapeChipRow
-                              value={categoryPatterns[index]?.type as
-                                PatternShape | undefined}
-                              onselect={(shape) =>
-                                handleCategoryPatternShape(category.id, shape)}
-                            />
-                          </div>
-                        {/if}
-
-                        {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
-                          <div class="field-stack">
-                            <span class="field-label"
-                              >{m.per_category_size()}</span
-                            >
-                            <CompactNumberInput
-                              value={category.customSize ??
-                                draftCommonAspect.size}
-                              min={1}
-                              max={100}
-                              width="100%"
-                              showSteppers={false}
-                              ariaLabel={m.per_category_size()}
-                              onchange={(value) =>
-                                handleCategorySize(category.id, value)}
-                            />
-                          </div>
-                        {/if}
-
-                        {#if showPerCategoryStrokeColor}
-                          <div class="field-stack">
-                            <span class="field-label"
-                              >{m.per_category_stroke_color()}</span
-                            >
-                            <SingleColorPreview
-                              color={category.strokeColor ?? '#000000'}
-                              onchange={(hex) =>
-                                handleCategoryStrokeColor(category.id, hex)}
-                            />
-                          </div>
-                        {/if}
-
-                        {#if showPerCategoryStrokeWidth}
-                          <div class="field-stack">
-                            <span class="field-label"
-                              >{m.per_category_stroke_width()}</span
-                            >
-                            <CompactNumberInput
-                              value={category.customStrokeWidth ??
-                                draftCommonAspect.strokeSize}
-                              min={1}
-                              max={20}
-                              width="100%"
-                              showSteppers={false}
-                              ariaLabel={m.per_category_stroke_width()}
-                              onchange={(value) =>
-                                handleCategoryStrokeWidth(category.id, value)}
-                            />
-                          </div>
-                        {/if}
+                        <div class="toggle-only-control">
+                          <Switch
+                            toggled={category.enabled}
+                            hideLabel
+                            labelText={category.label}
+                            onchange={(value) =>
+                              handleCategoryToggle(category.id, value)}
+                          />
+                        </div>
                       </div>
-                    {/if}
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-            {#if hiddenCategoryCount > 0}
-              <p class="hidden-count-note">
-                {(isSingularCount(hiddenCategoryCount)
-                  ? m.categories_hidden_count_one
-                  : m.categories_hidden_count)({
-                  count: formatValue(hiddenCategoryCount)
-                })}
-              </p>
-            {/if}
-          </div>
-        </section>
-      </div>
 
-      <div class="popover-footer-wrap">
-        <div class="popover-divider"></div>
-        <footer class="popover-footer">
-          <Button kind="tertiary" size="small" on:click={handleCancel}>
-            {m.button_cancel()}
-          </Button>
-          <Button
-            kind="primary"
-            size="small"
-            icon={ArrowRight}
-            on:click={handleValidate}
-          >
-            {m.button_validate()}
-          </Button>
-        </footer>
+                      {#if showPerCategoryAspect}
+                        <button
+                          type="button"
+                          class="category-expand-button"
+                          onclick={() => handleCategoryExpand(category.id)}
+                          aria-expanded={expandedCategoryId === category.id}
+                        >
+                          <ChevronDown
+                            size={16}
+                            class={expandedCategoryId === category.id
+                              ? 'rotated'
+                              : undefined}
+                          />
+                          <span>{m.per_category_aspect()}</span>
+                        </button>
+
+                        {#if expandedCategoryId === category.id}
+                          <div class="category-aspect-body">
+                            {#if showCategoryShapePicker}
+                              <div class="field-stack">
+                                <span class="field-label"
+                                  >{m.per_category_shape()}</span
+                                >
+                                <select
+                                  class="common-select"
+                                  aria-label={m.per_category_shape()}
+                                  value={category.shape ?? ShapeType.CIRCLE}
+                                  onchange={(e: Event) =>
+                                    handleCategoryShape(
+                                      category.id,
+                                      (e.currentTarget as HTMLSelectElement)
+                                        .value
+                                    )}
+                                >
+                                  {#each shapeChoices as shapeChoice (shapeChoice.id)}
+                                    <option value={shapeChoice.id}>
+                                      {shapeChoice.label}
+                                    </option>
+                                  {/each}
+                                </select>
+                              </div>
+                            {/if}
+
+                            <div class="field-stack">
+                              <span class="field-label"
+                                >{m.per_category_color()}</span
+                              >
+                              <SingleColorPreview
+                                color={category.color}
+                                onchange={(hex) =>
+                                  handleCategoryColor(category.id, hex)}
+                              />
+                            </div>
+
+                            {#if showCategoryPattern && categoryPatterns}
+                              <div class="field-stack">
+                                <span class="field-label"
+                                  >{m.pattern_shape()}</span
+                                >
+                                <ShapeChipRow
+                                  value={categoryPatterns[index]?.type as
+                                    PatternShape | undefined}
+                                  onselect={(shape) =>
+                                    handleCategoryPatternShape(
+                                      category.id,
+                                      shape
+                                    )}
+                                />
+                              </div>
+                            {/if}
+
+                            {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
+                              <div class="field-stack">
+                                <span class="field-label"
+                                  >{m.per_category_size()}</span
+                                >
+                                <CompactNumberInput
+                                  value={category.customSize ??
+                                    draftCommonAspect.size}
+                                  min={1}
+                                  max={100}
+                                  width="100%"
+                                  showSteppers={false}
+                                  ariaLabel={m.per_category_size()}
+                                  onchange={(value) =>
+                                    handleCategorySize(category.id, value)}
+                                />
+                              </div>
+                            {/if}
+
+                            {#if showPerCategoryStrokeColor}
+                              <div class="field-stack">
+                                <span class="field-label"
+                                  >{m.per_category_stroke_color()}</span
+                                >
+                                <SingleColorPreview
+                                  color={category.strokeColor ?? '#000000'}
+                                  onchange={(hex) =>
+                                    handleCategoryStrokeColor(category.id, hex)}
+                                />
+                              </div>
+                            {/if}
+
+                            {#if showPerCategoryStrokeWidth}
+                              <div class="field-stack">
+                                <span class="field-label"
+                                  >{m.per_category_stroke_width()}</span
+                                >
+                                <CompactNumberInput
+                                  value={category.customStrokeWidth ??
+                                    draftCommonAspect.strokeSize}
+                                  min={1}
+                                  max={20}
+                                  width="100%"
+                                  showSteppers={false}
+                                  ariaLabel={m.per_category_stroke_width()}
+                                  onchange={(value) =>
+                                    handleCategoryStrokeWidth(
+                                      category.id,
+                                      value
+                                    )}
+                                />
+                              </div>
+                            {/if}
+                          </div>
+                        {/if}
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+                {#if hiddenCategoryCount > 0}
+                  <p class="hidden-count-note">
+                    {(isSingularCount(hiddenCategoryCount)
+                      ? m.categories_hidden_count_one
+                      : m.categories_hidden_count)({
+                      count: formatValue(hiddenCategoryCount)
+                    })}
+                  </p>
+                {/if}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="popover-footer-wrap">
+          <div class="popover-divider"></div>
+          <footer class="popover-footer">
+            <Button kind="tertiary" size="small" on:click={handleCancel}>
+              {m.button_cancel()}
+            </Button>
+            <Button
+              kind="primary"
+              size="small"
+              icon={ArrowRight}
+              on:click={handleValidate}
+            >
+              {m.button_validate()}
+            </Button>
+          </footer>
+        </div>
       </div>
+      {#if covered}
+        <!-- Escape closes the stacked panel too; the veil only helps the pointer. -->
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div
+          class="kh-floating-panel-veil"
+          transition:floatingPanelVeil
+          onclick={() => closeFloatingPanelsAbove(handleClose)}
+        ></div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1082,10 +1137,10 @@
   :global(.categories-aspect-popover) {
     position: fixed;
     right: 50vw;
-    top: 50%;
+    top: var(--kh-floating-window-center);
     transform: translateY(-50%);
     width: 320px;
-    max-height: calc(100vh - 32px);
+    max-height: var(--kh-floating-window-max-height);
     display: flex;
     flex-direction: column;
     background: var(--cds-background, #ffffff);
@@ -1117,34 +1172,13 @@
     }
   }
 
-  .popover-header {
-    display: flex;
-    align-items: center;
-    gap: var(--kh-gap-label);
-    padding: 0 var(--kh-gap-label) var(--kh-gap-inline) var(--kh-pad-panel);
-    flex-shrink: 0;
-
-    h3 {
-      flex: 1;
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: var(--kh-font-primitive);
-      font-weight: 600;
-      line-height: var(--kh-line-primitive);
-      color: var(--cds-text-primary, #161616);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
   .popover-content {
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-section);
     flex: 1;
     overflow-y: auto;
-    padding: 0 var(--kh-pad-panel) var(--kh-gap-inline);
+    padding: var(--kh-pad-panel) var(--kh-pad-panel) var(--kh-gap-inline);
   }
 
   .aspect-section {
@@ -1247,12 +1281,6 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .common-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--kh-gap-group);
-  }
-
   .common-grid-row {
     display: flex;
     flex-direction: column;
@@ -1262,6 +1290,12 @@
 
   .common-grid-row--full {
     grid-column: 1 / -1;
+  }
+
+  .common-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-group);
   }
 
   .toggle-control,

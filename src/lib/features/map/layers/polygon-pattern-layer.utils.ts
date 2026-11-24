@@ -1,8 +1,8 @@
 import type { Layer } from '@deck.gl/core';
 import { SolidPolygonLayer } from '@deck.gl/layers';
 import {
-  createPolygonFillColorAttribute,
-  type BinaryPolygonData
+  type BinaryPolygonData,
+  createPolygonFillColorAttribute
 } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -11,19 +11,24 @@ import {
   type PatternParams
 } from '$lib/features/commons/constants/pattern.constants';
 import {
+  type ClassPattern,
   patternPaletteFromLegacy,
   resolveClassificationPatternConfig,
-  resolveClassPatterns,
-  type ClassPattern
+  resolveClassPatterns
 } from '$lib/features/commons/services/pattern-palette.service';
-import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
-  getPrimitiveClassification,
-  PrimitiveFilterType
-} from '$lib/features/commons/stores/visualization.store.svelte';
+  computeDivergingSplit,
+  isDivergingBreakpoint
+} from '$lib/features/commons/services/classification.service';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import type {
   ClassificationConfig,
   getPolygonPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  getPrimitiveClassification,
+  PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
@@ -32,11 +37,12 @@ import {
   getPatternAtlasForPattern,
   getPatternPaletteAtlas,
   isValidPatternId,
-  resolvePatternTilePx,
   PATTERN_TYPE_MAP,
-  type PatternName
+  type PatternName,
+  resolvePatternTilePx
 } from './pattern-texture';
 import { RotatableFillStyleExtension } from './rotatable-fill-style-extension';
+import { resolvePageDisplayScale } from './layer-style.utils';
 
 export const POLYGON_PATTERN_FILL_COLOR: [number, number, number, number] = [
   0, 0, 0, 255
@@ -181,17 +187,26 @@ export function resolveClassPatternPalette(
   if (fillMode === FillMode.CLASSES) {
     const count = classification?.colors?.length ?? 0;
     if (count === 0) return null;
+    const breakpointValue = classification?.breakpointValue;
     return resolveClassPatterns(
       count,
       pattern,
       'sequential',
       pattern.contrast,
-      classification?.inverted ?? false
+      classification?.inverted ?? false,
+      isDivergingBreakpoint(breakpointValue)
+        ? computeDivergingSplit(
+            count,
+            classification?.breaks ?? [],
+            breakpointValue
+          )
+        : undefined
     );
   }
 
   if (fillMode === FillMode.CATEGORIES) {
-    const count = classification?.labels?.length ?? 0;
+    const count =
+      (classification?.categoryValues ?? classification?.labels)?.length ?? 0;
     // Beyond ~24 categories no motif set stays perceptually distinct, and the
     // shared atlas canvas would exceed browser canvas size limits.
     if (count === 0 || count > MAX_CATEGORICAL_PATTERN_COUNT) return null;
@@ -254,7 +269,8 @@ export function resolveMissingDataClassPattern(
     missingData.patternConfig ??
     patternPaletteFromLegacy(
       resolveMissingDataPatternId(missingData),
-      missingData.patternParams
+      missingData.patternParams,
+      missingData.color ?? NEUTRAL_CARTOGRAPHY_COLORS.missingData
     );
   if (!config) {
     return null;
@@ -302,11 +318,14 @@ export function createBinaryPolygonPatternOverlayLayer(
   polygonPatternId: string | undefined,
   polyData: BinaryPolygonData,
   patternProps: PolygonPatternProps,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId' | 'pageDisplayScale'>,
   getFillColor: (featureId: number) => [number, number, number, number],
   idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
   opacity: number = PATTERN_OVERLAY_OPACITY
 ): Layer<DeckDataRow> | null {
+  // The tile is sized in page pixels, like the legend drawn on the same page.
+  const fillPatternScale =
+    patternProps.getFillPatternScale * resolvePageDisplayScale(ctx);
   const fillColorAttribute = createVisiblePolygonFillColorAttribute(
     polyData,
     getFillColor
@@ -335,7 +354,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     fillPatternMapping: patternProps.fillPatternMapping,
     fillPatternMask: true,
     getFillPattern: patternProps.getFillPattern,
-    getFillPatternScale: patternProps.getFillPatternScale,
+    getFillPatternScale: fillPatternScale,
     getFillPatternRotation: patternProps.getFillPatternRotation,
     ...({
       khartisPatternId: patternProps.khartisPatternId,
@@ -349,7 +368,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     updateTriggers: {
       getFillColor: [idSuffix],
       getFillPattern: [polygonPatternId],
-      getFillPatternScale: [patternProps.getFillPatternScale],
+      getFillPatternScale: [fillPatternScale],
       getFillPatternRotation: [patternProps.getFillPatternRotation]
     },
     dataComparator: (newData, oldData) => newData === oldData

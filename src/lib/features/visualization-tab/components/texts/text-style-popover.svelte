@@ -1,15 +1,21 @@
 <script lang="ts">
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Close } from 'carbon-icons-svelte';
   import TextStyleSection, {
     type TextStyleSectionHandlers
   } from './text-style-section.svelte';
@@ -57,61 +63,21 @@
     }))
   );
 
-  const DEFAULT_POPOVER_WIDTH = 320;
-  const VIEWPORT_GUTTER = 16;
-  const TRIGGER_GAP = 12;
-  const ESTIMATED_POPOVER_HEIGHT = 380;
-
   let popoverRef = $state<HTMLDivElement>();
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('text-style-popover');
 
-  const popoverPosition = $derived.by(() => {
-    if (typeof window === 'undefined' || !triggerElement) {
-      return {
-        width: `${DEFAULT_POPOVER_WIDTH}px`,
-        right: resolveToolbarWidth(globalState.toolbarState),
-        top: '50%',
-        left: undefined,
-        transform: 'translateY(-50%)'
-      };
-    }
-
-    const rect = triggerElement.getBoundingClientRect();
-    const width = Math.min(
-      DEFAULT_POPOVER_WIDTH,
-      window.innerWidth - VIEWPORT_GUTTER * 2
-    );
-    let left = rect.left - width - TRIGGER_GAP;
-    if (left < VIEWPORT_GUTTER) {
-      left = Math.min(
-        window.innerWidth - width - VIEWPORT_GUTTER,
-        rect.right + TRIGGER_GAP
-      );
-    }
-
-    let top = rect.top - 56;
-    const maxTop =
-      window.innerHeight - ESTIMATED_POPOVER_HEIGHT - VIEWPORT_GUTTER;
-    if (top > maxTop) {
-      top = maxTop;
-    }
-    if (top < VIEWPORT_GUTTER) {
-      top = VIEWPORT_GUTTER;
-    }
-
-    return {
-      width: `${width}px`,
-      left: `${Math.max(VIEWPORT_GUTTER, left)}px`,
-      top: `${top}px`,
-      right: undefined,
-      transform: 'none'
-    };
-  });
+  // Anchored like the other panels of the side toolbar, not to its button.
+  const popoverRight = $derived(resolveToolbarWidth(globalState.toolbarState));
 
   const showPrimarySection = $derived(visibleSection !== 'secondary');
   const showSecondarySection = $derived(visibleSection !== 'primary');
   const popoverTitle = $derived(m.text_style_popover_title());
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
 
   function handleClose() {
     open = false;
@@ -187,53 +153,47 @@
   <div use:portal class="text-style-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="text-style-popover"
-      style:width={popoverPosition.width}
-      style:left={popoverPosition.left}
-      style:right={popoverPosition.right}
-      style:top={popoverPosition.top}
-      style:transform={popoverPosition.transform}
+      style:right={popoverRight}
       role="dialog"
       aria-label={popoverTitle}
     >
-      <header class="popover-header">
-        <h3>{popoverTitle}</h3>
-        <button
-          type="button"
-          class="popover-close-button"
-          aria-label={m.close()}
-          onclick={handleClose}
-        >
-          <Close size={16} />
-        </button>
-      </header>
+      <PanelHeader
+        title={popoverTitle}
+        closeLabel={m.close()}
+        onclose={handleClose}
+      />
 
-      <div class="popover-content">
-        {#if showPrimarySection}
-          <TextStyleSection
-            title={m.text_style_primary_title()}
-            section={primary}
-          />
-        {/if}
-
-        {#if showSecondarySection}
-          <TextStyleSection
-            title={m.text_style_secondary_title()}
-            section={secondary}
-          />
-        {/if}
-
-        {#if secondary}
-          <div class="text-hierarchy-field">
-            <SimpleRadioGroup
-              name="text-hierarchy"
-              legendText={m.text_hierarchy_title()}
-              items={hierarchyItems}
-              selected={hierarchy}
-              onchange={(value) => onHierarchyChange?.(value)}
+      <div class="kh-scroll-area">
+        <div class="popover-content" use:scrollShadows>
+          {#if showPrimarySection}
+            <TextStyleSection
+              title={m.text_style_primary_title()}
+              section={primary}
             />
-          </div>
-        {/if}
+          {/if}
+
+          {#if showSecondarySection}
+            <TextStyleSection
+              title={m.text_style_secondary_title()}
+              section={secondary}
+            />
+          {/if}
+
+          {#if secondary}
+            <div class="text-hierarchy-field">
+              <SimpleRadioGroup
+                name="text-hierarchy"
+                legendText={m.text_hierarchy_title()}
+                items={hierarchyItems}
+                selected={hierarchy}
+                onchange={(value) => onHierarchyChange?.(value)}
+              />
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
   </div>
@@ -254,12 +214,12 @@
 
   :global(.text-style-popover) {
     position: fixed;
+    top: var(--kh-floating-window-center);
+    transform: translateY(-50%);
     width: 320px;
-    max-height: min(80vh, calc(100dvh - 32px));
+    max-height: min(80vh, var(--kh-floating-window-max-height));
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-inline);
-    padding: 0 0 var(--cds-spacing-05, 16px);
     background: var(--cds-background, #ffffff);
     border: none;
     box-shadow:
@@ -270,70 +230,41 @@
   }
 
   .text-hierarchy-field {
+    margin-top: var(--kh-gap-inline);
     padding: 0 var(--cds-spacing-05, 16px);
-  }
-
-  .popover-header {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02, 4px);
-    padding: 0 var(--cds-spacing-02, 4px) var(--cds-spacing-03, 8px)
-      var(--cds-spacing-05, 16px);
-    flex-shrink: 0;
-    background: var(--cds-background, #ffffff);
-
-    h3 {
-      flex: 1 1 auto;
-      min-width: 0;
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      line-height: 1.5;
-      color: var(--cds-text-primary, #161616);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .popover-close-button {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--cds-icon-primary, #161616);
-    cursor: pointer;
-
-    &:hover {
-      background: var(--cds-layer-hover-01, #e8e8e8);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: -2px;
-    }
   }
 
   .popover-content {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-group);
-    padding: 0 var(--cds-spacing-05, 16px);
+    gap: var(--kh-gap-inline);
+    padding: var(--cds-spacing-05, 16px);
     overflow-y: auto;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 1023px) {
     :global(.text-style-popover) {
-      width: calc(100vw - 24px);
+      right: 0 !important;
+      left: 0;
+      top: auto;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      );
+      transform: none;
+      width: 100vw;
+      max-height: calc(
+        100dvh - var(--cds-header-height, 48px) -
+          60px - env(safe-area-inset-bottom, 0px) - var(--cds-spacing-03) -
+          48px - var(--cds-spacing-03) - var(--cds-spacing-05)
+      );
+      border-radius: 8px 8px 0 0;
     }
+  }
 
+  @media (max-width: 640px) {
     .popover-content {
-      padding: 0 var(--cds-spacing-03, 8px);
+      padding-inline: var(--cds-spacing-03, 8px);
     }
   }
 </style>

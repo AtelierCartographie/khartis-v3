@@ -1,14 +1,25 @@
+<script lang="ts" module>
+  export interface TooltipLine {
+    text: string;
+    shortcut?: string;
+  }
+</script>
+
 <script lang="ts">
   import { tick } from 'svelte';
+  import { splitShortcutKeys } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { portal } from '$lib/features/commons/utils/portal';
   import {
-    resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
-    type CarbonTooltipDirection
+    type CarbonTooltipDirection,
+    resolveCarbonTooltipPosition
   } from '$lib/features/commons/utils/carbon-tooltip-position';
 
   interface Props {
     text: string;
+    shortcut?: string;
+    /** Several commands, one per line, each with its shortcut; replaces text. */
+    lines?: TooltipLine[];
     trigger: HTMLElement | null;
     direction?: CarbonTooltipDirection;
     align?: CarbonTooltipAlignment;
@@ -16,6 +27,8 @@
 
   const {
     text,
+    shortcut,
+    lines,
     trigger,
     direction = 'bottom',
     align = 'center'
@@ -63,6 +76,8 @@
   $effect(() => {
     void trigger;
     void text;
+    void shortcut;
+    void lines;
     void direction;
     void align;
     void reposition();
@@ -95,7 +110,19 @@
     style={bubbleStyle}
     role="tooltip"
   >
-    {text}
+    {#each lines ?? [{ text, shortcut }] as line, index (index)}
+      {#if line.shortcut}
+        <span class="khartis-tooltip-line"
+          ><span>{line.text}</span><span class="khartis-tooltip-keys"
+            >{#each splitShortcutKeys(line.shortcut) as key (key)}<kbd
+                >{key}</kbd
+              >{/each}</span
+          ></span
+        >
+      {:else}
+        <span class="khartis-tooltip-line">{line.text}</span>
+      {/if}
+    {/each}
   </div>
 </div>
 
@@ -127,6 +154,36 @@
     word-break: break-word;
     /* Measured before it is placed; revealing it early flashes it at the origin. */
     visibility: hidden;
+  }
+
+  /* Keys sit centred beside their text and inside the line height, so they
+     never reach into the tooltip padding. */
+  :global(.khartis-tooltip-line) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  :global(.khartis-tooltip-keys) {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.125rem;
+  }
+
+  :global(.khartis-tooltip-keys kbd) {
+    box-sizing: border-box;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding: 0 0.25rem;
+    border: 1px solid currentColor;
+    border-radius: 0.1875rem;
+    font-family: inherit;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    text-align: center;
+    opacity: 0.85;
   }
 
   :global(.khartis-carbon-tooltip--placed) {

@@ -1,8 +1,8 @@
 import * as m from '$lib/paraglide/messages';
 import {
-  STORAGE_LIMITS,
   getMaxFileSizeForType,
-  getWarningFileSizeForType
+  getWarningFileSizeForType,
+  STORAGE_LIMITS
 } from '../constants/validation.config';
 import { detectFileType } from './file-import.utils';
 
@@ -84,33 +84,6 @@ export const ProjectValidator = {
     if (invalidChars.test(name)) {
       result.isValid = false;
       result.errors.push(m.validation_project_name_invalid_chars());
-    }
-
-    return result;
-  },
-
-  validateStorageCapacity(currentProjectCount: number): ValidationResult {
-    const result: ValidationResult = {
-      isValid: true,
-      errors: [],
-      warnings: []
-    };
-
-    if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount) {
-      result.isValid = false;
-      result.errors.push(
-        m.validation_project_count_limit({
-          limit: String(STORAGE_LIMITS.maxProjectCount)
-        })
-      );
-    }
-
-    if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount * 0.8) {
-      result.warnings.push(
-        m.validation_project_count_approaching({
-          limit: String(STORAGE_LIMITS.maxProjectCount)
-        })
-      );
     }
 
     return result;

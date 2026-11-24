@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -7,29 +8,29 @@
   import { ChartBubble, CircleFilled, Table, Tag } from 'carbon-icons-svelte';
   import {
     FillMode,
+    ProportionalType,
     SymbolMode
   } from '$lib/features/commons/constants/visualization.constants';
+  import type {
+    ClassificationConfig,
+    MissingDataConfig,
+    SymbolPrimitiveConfig,
+    VisualizationConfig,
+    VisualizationModes,
+    VizDataFilter
+  } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
     getSymbolPrimitive,
     PrimitiveFilterType
   } from '$lib/features/commons/stores/visualization.store.svelte';
-  import { ProportionalType } from '$lib/features/commons/constants/visualization.constants';
-  import type {
-    MissingDataConfig,
-    SymbolPrimitiveConfig,
-    VisualizationConfig,
-    VisualizationModes,
-    ClassificationConfig
-  } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import { SectionHeading, VizFilterButton, VizFilterPanel } from '../shared';
-  import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import {
-    SymbolModeUnique,
+    SymbolModeCategories,
     SymbolModeProportional,
-    SymbolModeCategories
+    SymbolModeUnique
   } from '.';
 
   interface Props {
@@ -302,66 +303,68 @@
       />
     </div>
 
-    {#if symbolMode === SymbolMode.UNIQUE}
-      <SymbolModeUnique
-        dataFields={dataFields}
-        visualization={visualization}
-        fillVisualization={fillVisualization}
-        onStyleChange={onStyleChange}
-        onModesChange={onModesChange}
-        onSymbolsChange={onSymbolsChange}
-        onMappingChange={onMappingChange}
-        onFillMappingChange={onFillMappingChange}
-        onMissingDataChange={onMissingDataChange}
-        onClassificationChange={onClassificationChange}
-        onFillClassificationChange={onFillClassificationChange}
-        onStrokeClassificationChange={onStrokeClassificationChange}
-        onInvertPalette={onInvertPalette}
-        onFillInvertPalette={onFillInvertPalette}
-        onStrokeInvertPalette={onStrokeInvertPalette}
-        onStrokeMappingChange={onStrokeMappingChange}
-        onOpenFillDiscretization={handleOpenFillDiscretization}
-      />
-    {:else if symbolMode === SymbolMode.PROPORTIONAL || symbolMode === SymbolMode.CLASSES}
-      <SymbolModeProportional
-        dataFields={dataFields}
-        visualization={visualization}
-        fillVisualization={fillVisualization}
-        symbolMode={symbolMode}
-        onSymbolsChange={onSymbolsChange}
-        onSymbolPrimitiveChange={onSymbolPrimitiveChange}
-        onMappingChange={onMappingChange}
-        onFillMappingChange={onFillMappingChange}
-        onModesChange={onModesChange}
-        onStyleChange={onStyleChange}
-        onMissingDataChange={onMissingDataChange}
-        onClassificationChange={onClassificationChange}
-        onFillClassificationChange={onFillClassificationChange}
-        onStrokeClassificationChange={onStrokeClassificationChange}
-        onInvertPalette={onInvertPalette}
-        onFillInvertPalette={onFillInvertPalette}
-        onStrokeInvertPalette={onStrokeInvertPalette}
-        onStrokeMappingChange={onStrokeMappingChange}
-        onOpenSizeDiscretization={handleOpenDiscretization}
-        onOpenFillDiscretization={handleOpenFillDiscretization}
-      />
-    {:else if symbolMode === SymbolMode.CATEGORIES}
-      <SymbolModeCategories
-        dataFields={dataFields}
-        visualization={visualization}
-        onStyleChange={onStyleChange}
-        onSymbolsChange={onSymbolsChange}
-        onSymbolPrimitiveChange={onSymbolPrimitiveChange}
-        onMappingChange={onMappingChange}
-        onStrokeMappingChange={onStrokeMappingChange}
-        onModesChange={onModesChange}
-        onMissingDataChange={onMissingDataChange}
-        onClassificationChange={onClassificationChange}
-        onStrokeClassificationChange={onStrokeClassificationChange}
-        onInvertPalette={onInvertPalette}
-        onStrokeInvertPalette={onStrokeInvertPalette}
-      />
-    {/if}
+    <SwitchedContent value={symbolMode}>
+      {#if symbolMode === SymbolMode.UNIQUE}
+        <SymbolModeUnique
+          dataFields={dataFields}
+          visualization={visualization}
+          fillVisualization={fillVisualization}
+          onStyleChange={onStyleChange}
+          onModesChange={onModesChange}
+          onSymbolsChange={onSymbolsChange}
+          onMappingChange={onMappingChange}
+          onFillMappingChange={onFillMappingChange}
+          onMissingDataChange={onMissingDataChange}
+          onClassificationChange={onClassificationChange}
+          onFillClassificationChange={onFillClassificationChange}
+          onStrokeClassificationChange={onStrokeClassificationChange}
+          onInvertPalette={onInvertPalette}
+          onFillInvertPalette={onFillInvertPalette}
+          onStrokeInvertPalette={onStrokeInvertPalette}
+          onStrokeMappingChange={onStrokeMappingChange}
+          onOpenFillDiscretization={handleOpenFillDiscretization}
+        />
+      {:else if symbolMode === SymbolMode.PROPORTIONAL || symbolMode === SymbolMode.CLASSES}
+        <SymbolModeProportional
+          dataFields={dataFields}
+          visualization={visualization}
+          fillVisualization={fillVisualization}
+          symbolMode={symbolMode}
+          onSymbolsChange={onSymbolsChange}
+          onSymbolPrimitiveChange={onSymbolPrimitiveChange}
+          onMappingChange={onMappingChange}
+          onFillMappingChange={onFillMappingChange}
+          onModesChange={onModesChange}
+          onStyleChange={onStyleChange}
+          onMissingDataChange={onMissingDataChange}
+          onClassificationChange={onClassificationChange}
+          onFillClassificationChange={onFillClassificationChange}
+          onStrokeClassificationChange={onStrokeClassificationChange}
+          onInvertPalette={onInvertPalette}
+          onFillInvertPalette={onFillInvertPalette}
+          onStrokeInvertPalette={onStrokeInvertPalette}
+          onStrokeMappingChange={onStrokeMappingChange}
+          onOpenSizeDiscretization={handleOpenDiscretization}
+          onOpenFillDiscretization={handleOpenFillDiscretization}
+        />
+      {:else if symbolMode === SymbolMode.CATEGORIES}
+        <SymbolModeCategories
+          dataFields={dataFields}
+          visualization={visualization}
+          onStyleChange={onStyleChange}
+          onSymbolsChange={onSymbolsChange}
+          onSymbolPrimitiveChange={onSymbolPrimitiveChange}
+          onMappingChange={onMappingChange}
+          onStrokeMappingChange={onStrokeMappingChange}
+          onModesChange={onModesChange}
+          onMissingDataChange={onMissingDataChange}
+          onClassificationChange={onClassificationChange}
+          onStrokeClassificationChange={onStrokeClassificationChange}
+          onInvertPalette={onInvertPalette}
+          onStrokeInvertPalette={onStrokeInvertPalette}
+        />
+      {/if}
+    </SwitchedContent>
   </div>
 </ExpandableSection>
 

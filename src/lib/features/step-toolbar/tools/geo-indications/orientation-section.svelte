@@ -6,7 +6,12 @@
   import { OrientationIndicatorStyle } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import {
+    geoIndicationsActions,
+    geoIndicationsState
+  } from './geo-indications.store.svelte';
+  import type { ColorPickerValidateEvent } from './geo-indications.utils';
 
   const orientationStyleOptions = $derived.by(() => [
     {
@@ -18,11 +23,13 @@
       labelText: m.geo_orientation_compass()
     }
   ]);
-  import {
-    geoIndicationsActions,
-    geoIndicationsState
-  } from './geo-indications.store.svelte';
-  import type { ColorPickerValidateEvent } from './geo-indications.utils';
+
+  interface Props {
+    open: boolean;
+    onToggle: (expanded: boolean) => void;
+  }
+
+  const { open, onToggle }: Props = $props();
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -38,10 +45,12 @@
 
 <ExpandableSection
   title={m.geo_orientation()}
-  defaultOpen={false}
+  open={open}
+  onToggle={onToggle}
   showToggle={true}
   toggleChecked={geoState.orientation.enabled}
   onToggleChange={() => store.toggleOrientation()}
+  scrollIntoViewOnOpen
 >
   <div class="section-content">
     <p class="orientation-center-note">
@@ -51,13 +60,27 @@
     <Grid noGutter>
       <Row>
         <Column>
-          <SimpleRadioGroup
-            name="orientation-style"
-            legendText={m.geo_orientation_style()}
-            items={orientationStyleOptions}
-            selected={geoState.orientation.style}
-            onchange={(value) => store.setOrientationStyle(value)}
-          />
+          <div
+            class="orientation-style-field"
+            role="group"
+            aria-labelledby="orientation-style-label"
+          >
+            <span id="orientation-style-label" class="bx--label">
+              {m.geo_orientation_style()}
+            </span>
+            <ToggleTabs
+              size="sm"
+              items={orientationStyleOptions.map((option) => ({
+                label: option.labelText
+              }))}
+              activeIndex={orientationStyleOptions.findIndex(
+                (option) => option.value === geoState.orientation.style
+              )}
+              onchange={(index) =>
+                store.setOrientationStyle(orientationStyleOptions[index].value)}
+              hideInactiveLabel={false}
+            />
+          </div>
         </Column>
       </Row>
 
@@ -89,6 +112,20 @@
             }: ColorPickerValidateEvent) => {
               store.setOrientationColor({ hue, saturation, lightness });
             }}
+          />
+        </Column>
+      </Row>
+      <Row>
+        <Column>
+          <SliderWithInput
+            label={m.legend_opacity()}
+            value={geoState.orientation.opacity}
+            min={0}
+            max={100}
+            step={1}
+            inputWidth="72px"
+            showSteppers={false}
+            onchange={store.setOrientationOpacity}
           />
         </Column>
       </Row>

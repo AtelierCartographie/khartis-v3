@@ -6,9 +6,9 @@
   import {
     countFacet,
     countYears,
+    type FacetOption,
     getBasemapAreaLabel,
-    getBasemapLevelLabel,
-    type FacetOption
+    getBasemapLevelLabel
   } from '$lib/features/map/utils/basemap-catalog-facets.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
@@ -32,8 +32,8 @@
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
-    readCarbonStringValue,
-    type CarbonValueEvent
+    type CarbonValueEvent,
+    readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface SuggestedBasemap {
@@ -57,6 +57,8 @@
     catalogOpen?: boolean;
     onSuggestionsToggle?: (expanded: boolean) => void;
     onCatalogToggle?: (expanded: boolean) => void;
+    /** The suggestions follow the extent of a geographic file, not its values. */
+    rankedByExtent?: boolean;
   }
 
   let {
@@ -67,7 +69,8 @@
     suggestionsOpen,
     catalogOpen,
     onSuggestionsToggle,
-    onCatalogToggle
+    onCatalogToggle,
+    rankedByExtent = false
   }: Props = $props();
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
@@ -264,12 +267,64 @@
     return results;
   });
 
+  // Safari recomputes style and layout for every mounted card on each DOM
+  // change: with the whole catalog (~770 cards, ~15k nodes) mounted, every
+  // update cost ~1.2 s and stalled imports for a minute. Cards are mounted in
+  // batches as the slider scrolls toward its end.
+  const CATALOG_BATCH_SIZE = 24;
+  let catalogBatchCount = $state(1);
+  let catalogSlider = $state<HTMLDivElement | null>(null);
+  let catalogueSection = $state<HTMLDivElement | null>(null);
+  let catalogSentinel = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    void filteredBasemaps;
+    catalogBatchCount = 1;
+  });
+
+  const renderedBasemaps = $derived(
+    filteredBasemaps.slice(0, catalogBatchCount * CATALOG_BATCH_SIZE)
+  );
+
+  const hasMoreBasemaps = $derived(
+    renderedBasemaps.length < filteredBasemaps.length
+  );
+
+  $effect(() => {
+    if (!catalogSlider || !catalogSentinel || !hasMoreBasemaps) return;
+    // Observing again after each batch reports a sentinel still in range.
+    void renderedBasemaps.length;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          catalogBatchCount += 1;
+        }
+      },
+      { root: catalogSlider, rootMargin: '0px 600px 0px 0px' }
+    );
+    observer.observe(catalogSentinel);
+    return () => observer.disconnect();
+  });
+
   const suggestionsPanelOpen = $derived(
     suggestionsOpen ?? suggestedBasemaps.length > 0
   );
   const catalogPanelOpen = $derived(
     catalogOpen ?? suggestedBasemaps.length === 0
   );
+
+  // Working in the catalogue means the suggestions were not enough: they
+  // fold away. Listening to click, not pointerdown, lets the catalogue
+  // header toggle before the suggestions above it collapse.
+  $effect(() => {
+    const section = catalogueSection;
+    if (!section) return;
+    const collapseSuggestions = () => {
+      if (suggestionsPanelOpen) onSuggestionsToggle?.(false);
+    };
+    section.addEventListener('click', collapseSuggestions);
+    return () => section.removeEventListener('click', collapseSuggestions);
+  });
 
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
     const lang = getLocale();
@@ -342,16 +397,18 @@
       title={m.section_suggestions()}
       open={suggestionsPanelOpen}
       onToggle={onSuggestionsToggle}
-      titleClass="suggestions-title"
+      titleClass="suggestions-title kh-thinking-text"
     >
       {#snippet icon()}
-        <span class="suggestions-title-icon">
+        <span class="suggestions-title-icon kh-thinking-icon">
           <MagicWandFilled size={20} />
         </span>
       {/snippet}
       {#if suggestedBasemaps.length > 0}
         <p class="section-subtitle">
-          {m.basemap_suggestions_desc()}
+          {rankedByExtent
+            ? m.basemap_suggestions_extent_desc()
+            : m.basemap_suggestions_desc()}
         </p>
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
@@ -380,7 +437,7 @@
     </ExpandableSection>
   </div>
 
-  <div class="catalogue-section">
+  <div class="catalogue-section" bind:this={catalogueSection}>
     <ExpandableSection
       title={m.basemap_catalog_all()}
       open={catalogPanelOpen}
@@ -493,9 +550,10 @@
         <div
           class="basemap-slider basemap-slider-catalog"
           class:compact-slider={isCompact}
+          bind:this={catalogSlider}
         >
           <div class="basemap-slider-track">
-            {#each filteredBasemaps as basemap (basemap.file)}
+            {#each renderedBasemaps as basemap (basemap.file)}
               <BasemapCardVertical
                 basemap={basemap}
                 selected={basemap.file === basemapSelected}
@@ -504,6 +562,13 @@
                 variant="gray"
               />
             {/each}
+            {#if hasMoreBasemaps}
+              <div
+                class="catalog-sentinel"
+                aria-hidden="true"
+                bind:this={catalogSentinel}
+              ></div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -590,6 +655,10 @@
     --basemap-card-width: var(--kh-card-w);
     --basemap-card-preview-min-height: 5.5rem;
     --basemap-card-padding-bottom: 0.75rem;
+  }
+
+  .catalog-sentinel {
+    flex: 0 0 1px;
   }
 
   .basemap-slider-catalog {

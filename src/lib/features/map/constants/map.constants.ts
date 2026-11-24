@@ -55,6 +55,7 @@ export enum DeckLayerId {
   BASEMAP_FRONTIERES = 'basemap-frontieres',
   BASEMAP_VILLES = 'basemap-villes',
   BASEMAP_VILLES_LABELS = 'basemap-villes-labels',
+  BASEMAP_VUES_LABELS = 'basemap-vues-labels',
   BASEMAP_META_LAND = 'basemap-meta-land',
   BASEMAP_META_LIMIT = 'basemap-meta-limit',
   BASEMAP_META_GRATICULE = 'basemap-meta-graticule',

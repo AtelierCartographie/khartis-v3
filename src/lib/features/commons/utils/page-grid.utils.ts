@@ -4,7 +4,9 @@
  * indications) are multiples of it too, so their edges and contents can share
  * the same alignments.
  */
+
 export const LAYOUT_UNIT_PX = 4;
+/** @alias */
 export const PAGE_SNAP_STEP_PX = LAYOUT_UNIT_PX;
 export const PAGE_GRID_SIZE_PX = LAYOUT_UNIT_PX * 3;
 
@@ -30,6 +32,35 @@ export interface PageGridBounds {
 export interface PageGridSize {
   width: number;
   height: number;
+}
+
+const NO_GRID_ORIGIN: PageGridPoint = { x: 0, y: 0 };
+
+function getCenteredGridOffset(extent: number): number {
+  const rest =
+    ((extent % PAGE_GRID_SIZE_PX) + PAGE_GRID_SIZE_PX) % PAGE_GRID_SIZE_PX;
+  return Math.floor(rest / 2);
+}
+
+/**
+ * The grid is centred on the page: the space left between its outer points
+ * and the edges is the same on both sides of each axis (to the pixel, so that
+ * snapped positions stay whole). Snapping in page coordinates starts there.
+ */
+export function getPageGridOrigin(page: PageGridSize): PageGridPoint {
+  return {
+    x: getCenteredGridOffset(page.width),
+    y: getCenteredGridOffset(page.height)
+  };
+}
+
+/** The page grid origin in an area placed at `areaOffset` on the page. */
+export function getAreaGridOrigin(
+  page: PageGridSize,
+  areaOffset: PageGridPoint
+): PageGridPoint {
+  const origin = getPageGridOrigin(page);
+  return { x: origin.x - areaOffset.x, y: origin.y - areaOffset.y };
 }
 
 // An item keeps its distance to the edge it is closest to on each axis, so
@@ -71,30 +102,42 @@ export function clampToRange(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function snapToPageGrid(value: number, enabled = true): number {
+/** A size snaps with the default origin; a position on the page passes the grid origin of its axis. */
+export function snapToPageGrid(
+  value: number,
+  enabled = true,
+  origin = 0
+): number {
   if (!enabled) {
     return value;
   }
 
-  return Math.round(value / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
+  return (
+    origin +
+    Math.round((value - origin) / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX
+  );
 }
 
 export function snapPointToPageGrid(
   point: PageGridPoint,
-  enabled = true
+  enabled = true,
+  origin: PageGridPoint = NO_GRID_ORIGIN
 ): PageGridPoint {
   return {
-    x: snapToPageGrid(point.x, enabled),
-    y: snapToPageGrid(point.y, enabled)
+    x: snapToPageGrid(point.x, enabled, origin.x),
+    y: snapToPageGrid(point.y, enabled, origin.y)
   };
 }
 
 export function getGridAlignedRange(
   min: number,
-  max: number
+  max: number,
+  origin = 0
 ): { min: number; max: number } | null {
-  const alignedMin = Math.ceil(min / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
-  const alignedMax = Math.floor(max / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
+  const alignedMin =
+    origin + Math.ceil((min - origin) / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
+  const alignedMax =
+    origin + Math.floor((max - origin) / PAGE_SNAP_STEP_PX) * PAGE_SNAP_STEP_PX;
 
   if (alignedMin > alignedMax) {
     return null;
@@ -116,26 +159,27 @@ export function clampPointToBounds(
 export function snapPointWithinBounds(
   point: PageGridPoint,
   bounds: PageGridBounds,
-  snapEnabled = true
+  snapEnabled = true,
+  origin: PageGridPoint = NO_GRID_ORIGIN
 ): PageGridPoint {
   if (!snapEnabled) {
     return clampPointToBounds(point, bounds);
   }
 
-  const xGridBounds = getGridAlignedRange(bounds.minX, bounds.maxX);
-  const yGridBounds = getGridAlignedRange(bounds.minY, bounds.maxY);
+  const xGridBounds = getGridAlignedRange(bounds.minX, bounds.maxX, origin.x);
+  const yGridBounds = getGridAlignedRange(bounds.minY, bounds.maxY, origin.y);
 
   return {
     x: xGridBounds
       ? clampToRange(
-          snapToPageGrid(point.x, true),
+          snapToPageGrid(point.x, true, origin.x),
           xGridBounds.min,
           xGridBounds.max
         )
       : clampToRange(point.x, bounds.minX, bounds.maxX),
     y: yGridBounds
       ? clampToRange(
-          snapToPageGrid(point.y, true),
+          snapToPageGrid(point.y, true, origin.y),
           yGridBounds.min,
           yGridBounds.max
         )
@@ -170,7 +214,8 @@ export function snapAreaPointWithinPage(
   const pagePoint = snapPointWithinBounds(
     { x: point.x + areaOffset.x, y: point.y + areaOffset.y },
     getDragBounds(page, item),
-    snapEnabled
+    snapEnabled,
+    getPageGridOrigin(page)
   );
   return { x: pagePoint.x - areaOffset.x, y: pagePoint.y - areaOffset.y };
 }

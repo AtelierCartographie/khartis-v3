@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  type AssetRef,
   DataSourceType,
-  FileType,
-  type AssetRef
+  FileType
 } from '$lib/features/commons/types/create-project.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import {
   DataValidationError,
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
+import {
+  computeProjectAssetUsage,
+  selectStorageGarbage
+} from '../core/asset-usage';
 
 const mocks = vi.hoisted(() => ({
   getProjectDatabase: vi.fn<() => Promise<IDBDatabase>>()
@@ -19,10 +23,10 @@ vi.mock('./database-access.service', () => ({
 }));
 
 const {
+  createAssetRefFromFile,
   createFileFromAssetRef,
   ensureUploadedFileAssets,
   persistAssetBlob,
-  persistAssetContent,
   readAssetBytes
 } = await import('./asset-store.service');
 
@@ -345,14 +349,13 @@ describe('asset store errors', () => {
       database as unknown as IDBDatabase
     );
     setStorageEstimate(100 * 1024 * 1024, 0);
-    const legacyAssetRef = await persistAssetContent(
-      '{"type":"FeatureCollection","features":[]}',
-      {
-        originalName: 'cities-points.geojson',
-        mimeType: 'application/geo+json',
-        size: 42,
-        kind: 'primary'
-      }
+    const legacyAssetRef = await createAssetRefFromFile(
+      new File(
+        ['{"type":"FeatureCollection","features":[]}'],
+        'cities-points.geojson',
+        { type: 'application/geo+json' }
+      ),
+      'primary'
     );
 
     const preparedFile = await ensureUploadedFileAssets({
@@ -369,5 +372,83 @@ describe('asset store errors', () => {
     });
 
     expect(preparedFile.assetRef).toEqual(legacyAssetRef);
+  });
+});
+
+describe('project file usage', () => {
+  it('should count a shared file in each project but free it from none when deleted', () => {
+    const usage = computeProjectAssetUsage(
+      [
+        { assetId: 'communes', size: 100 },
+        { assetId: 'census', size: 30 },
+        { assetId: 'notes', size: 5 }
+      ],
+      [
+        { projectId: 'original', assetId: 'communes' },
+        { projectId: 'original', assetId: 'census' },
+        { projectId: 'copy', assetId: 'communes' },
+        { projectId: 'copy', assetId: 'notes' }
+      ]
+    );
+
+    expect(usage.get('original')).toEqual({
+      assetBytes: 130,
+      exclusiveAssetBytes: 30
+    });
+    expect(usage.get('copy')).toEqual({
+      assetBytes: 105,
+      exclusiveAssetBytes: 5
+    });
+  });
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const NOW = Date.parse('2026-11-16T12:00:00Z');
+  const daysAgo = (days: number) => new Date(NOW - days * DAY_MS).toISOString();
+
+  it('should keep an unreferenced file while it may belong to an unsaved project', () => {
+    const garbage = selectStorageGarbage({
+      projectIds: new Set(['saved']),
+      refs: [
+        { projectId: 'saved', assetId: 'old-kept' },
+        { projectId: 'deleted', assetId: 'interrupted-delete' }
+      ],
+      assets: [
+        { assetId: 'old-kept', size: 1, createdAt: daysAgo(30) },
+        { assetId: 'unsaved-import', size: 1, createdAt: daysAgo(0.5) },
+        { assetId: 'abandoned-import', size: 1, createdAt: daysAgo(2) },
+        { assetId: 'interrupted-delete', size: 1, createdAt: daysAgo(10) }
+      ],
+      chunkAssetIds: new Set(),
+      now: NOW,
+      graceMs: DAY_MS,
+      noWriteInProgress: true
+    });
+
+    expect(garbage.staleRefs).toEqual([
+      { projectId: 'deleted', assetId: 'interrupted-delete' }
+    ]);
+    expect(garbage.orphanAssetIds).toEqual([
+      'abandoned-import',
+      'interrupted-delete'
+    ]);
+  });
+
+  it('should drop chunks without metadata only when no write is in progress', () => {
+    const input = {
+      projectIds: new Set<string>(),
+      refs: [],
+      assets: [],
+      chunkAssetIds: new Set(['cut-short']),
+      now: NOW,
+      graceMs: DAY_MS
+    };
+
+    expect(
+      selectStorageGarbage({ ...input, noWriteInProgress: false })
+        .orphanAssetIds
+    ).toEqual([]);
+    expect(
+      selectStorageGarbage({ ...input, noWriteInProgress: true }).orphanAssetIds
+    ).toEqual(['cut-short']);
   });
 });

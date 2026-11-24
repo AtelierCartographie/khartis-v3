@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
@@ -59,26 +60,30 @@
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
+      hideInactiveLabel={false}
     />
   </div>
 
-  <div class="basemap-tab-body">
-    {#if activeTabIndex === 0}
-      {@render catalogContent()}
-    {:else if activeTabIndex === 1}
-      {@render importContent()}
-    {:else}
-      {@render osmContent()}
-    {/if}
-  </div>
-
-  {#if activeBasemapBanner || (showJoinSection && joinSection)}
-    <hr class="join-separator" />
-  {/if}
   {#if activeBasemapBanner}
     <div class="active-basemap-slot">
       {@render activeBasemapBanner()}
     </div>
+  {/if}
+
+  <div class="basemap-tab-body">
+    <SwitchedContent value={activeTabIndex}>
+      {#if activeTabIndex === 0}
+        {@render catalogContent()}
+      {:else if activeTabIndex === 1}
+        {@render importContent()}
+      {:else}
+        {@render osmContent()}
+      {/if}
+    </SwitchedContent>
+  </div>
+
+  {#if showJoinSection && joinSection}
+    <hr class="join-separator" />
   {/if}
   {#if showJoinSection && joinSection}
     {@render joinSection()}
@@ -111,7 +116,7 @@
   }
 
   .active-basemap-slot {
-    padding-top: var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-05);
   }
 
   .join-separator {

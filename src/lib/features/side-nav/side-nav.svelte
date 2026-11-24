@@ -8,7 +8,7 @@
   } from '$lib/features/commons/stores/ui-density.store.svelte';
   import {
     detectApplePlatform,
-    getSideNavShortcutLabels
+    getPrimaryShortcutLabel
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages';
   import {
@@ -34,11 +34,11 @@
   } from 'carbon-components-svelte';
   import {
     CopyFile,
-    Download,
     DocumentAdd,
-    Education,
+    Download,
     FolderOpen,
     Information,
+    Keyboard,
     Launch,
     Save,
     TrashCan
@@ -57,7 +57,11 @@
     /^v/i,
     ''
   );
-  let shortcutLabels = $state(getSideNavShortcutLabels(false));
+  let shortcutLabels = $state({
+    newProject: getPrimaryShortcutLabel('newProject', false),
+    openProject: getPrimaryShortcutLabel('openProject', false),
+    saveProject: getPrimaryShortcutLabel('saveProject', false)
+  });
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);
   let isInstalledAsApp = $state(false);
@@ -245,6 +249,11 @@
     );
   }
 
+  function openShortcutsSheet() {
+    globalState.isSideNavOpen = false;
+    globalState.isShortcutsSheetOpen = true;
+  }
+
   async function handleInstallApp() {
     sideNav.closeSideNav();
 
@@ -273,7 +282,12 @@
   }
 
   onMount(() => {
-    shortcutLabels = getSideNavShortcutLabels(detectApplePlatform());
+    const isApplePlatform = detectApplePlatform();
+    shortcutLabels = {
+      newProject: getPrimaryShortcutLabel('newProject', isApplePlatform),
+      openProject: getPrimaryShortcutLabel('openProject', isApplePlatform),
+      saveProject: getPrimaryShortcutLabel('saveProject', isApplePlatform)
+    };
 
     currentBrowser = detectBrowserFamily(window.navigator.userAgent);
     isInstalledAsApp = detectInstalledDisplayMode();
@@ -418,9 +432,6 @@
               on:click={openDuplicateModal}
             >
               {m.sidenav_duplicate_project()}
-              <span class="shortcut-icon"
-                >{shortcutLabels.duplicateProject}</span
-              >
             </Button>
 
             <Button
@@ -433,7 +444,6 @@
               on:click={openDeleteModal}
             >
               {m.sidenav_delete_project()}
-              <span class="shortcut-icon">{shortcutLabels.deleteProject}</span>
             </Button>
           </Column>
         </Row>
@@ -465,6 +475,18 @@
             </Button>
 
             <ClearCacheButton />
+
+            <Button
+              size="small"
+              kind="ghost"
+              icon={Keyboard}
+              class="menu-bar-item"
+              data-testid="sidenav-keyboard-shortcuts"
+              on:click={openShortcutsSheet}
+            >
+              {m.sidenav_keyboard_shortcuts()}
+              <span class="shortcut-icon">?</span>
+            </Button>
           </Column>
         </Row>
       </Grid>
@@ -501,7 +523,7 @@
             <Button
               size="small"
               kind="ghost"
-              icon={Education}
+              icon={Launch}
               class="menu-bar-item"
               disabled
             >
@@ -564,57 +586,49 @@
           </Column>
         </Row>
       </Grid>
-
-      <Separator class="slide-nav-separator" orientation="horizontal" />
     </SideNavItems>
 
     <aside>
-      <Grid class="menu-bar-item sidenav-bottom-padding" fullWidth noGutter>
-        <Row padding>
+      <Grid class="menu-bar-item" fullWidth noGutter>
+        <Row>
           <Column>
-            <Select
-              light
-              size="sm"
-              labelText={m.sidenav_language_label()}
-              hideLabel
-              selected={sideNav.currentLocale}
-              on:change={sideNav.handleLanguageChange}
-            >
-              <SelectItem value="fr" text={m.sidenav_language_french()} />
-              <SelectItem value="en" text={m.sidenav_language_english()} />
-            </Select>
-          </Column>
-        </Row>
+            <h6>{m.sidenav_display()}</h6>
+            <div class="display-settings">
+              <Select
+                light
+                inline
+                size="sm"
+                labelText={m.sidenav_language_label()}
+                selected={sideNav.currentLocale}
+                on:change={sideNav.handleLanguageChange}
+              >
+                <SelectItem value="fr" text={m.sidenav_language_french()} />
+                <SelectItem value="en" text={m.sidenav_language_english()} />
+              </Select>
 
-        <Row class="mr-5 ml-5 mb-5 flex flex-col gap-3">
-          <Theme bind:theme={currentTheme} persist>
-            <div class="appearance-toggle">
-              <Switch
-                size="sm"
-                labelText={m.theme_dark_mode()}
-                labelA={m.theme_light_mode()}
-                labelB={m.theme_dark_mode()}
-                hideLabel
-                showStateLabel
-                toggled={isDarkTheme}
-                onchange={handleThemeToggle}
-              />
+              <Theme bind:theme={currentTheme} persist>
+                <div class="display-toggle">
+                  <Switch
+                    size="sm"
+                    labelText={m.sidenav_dark_theme()}
+                    toggled={isDarkTheme}
+                    onchange={handleThemeToggle}
+                  />
+                </div>
+              </Theme>
+
+              {#if !globalState.isMobileView}
+                <div class="display-toggle">
+                  <Switch
+                    size="sm"
+                    labelText={m.sidenav_compact_density()}
+                    toggled={uiDensityStore.isCompact}
+                    onchange={handleDensityToggle}
+                  />
+                </div>
+              {/if}
             </div>
-          </Theme>
-          {#if !globalState.isMobileView}
-            <div class="appearance-toggle">
-              <Switch
-                size="sm"
-                labelText={m.ui_density_compact_mode()}
-                labelA={m.ui_density_comfortable_mode()}
-                labelB={m.ui_density_compact_mode()}
-                hideLabel
-                showStateLabel
-                toggled={uiDensityStore.isCompact}
-                onchange={handleDensityToggle}
-              />
-            </div>
-          {/if}
+          </Column>
         </Row>
       </Grid>
 
@@ -701,10 +715,6 @@
     --khartis-side-nav-top: var(--cds-spacing-09, 3rem);
   }
 
-  #khartis-side-nav :global(.sidenav-bottom-padding) {
-    padding-bottom: var(--cds-spacing-04);
-  }
-
   #khartis-side-nav :global(.menu-bar-item) {
     width: 100%;
   }
@@ -713,6 +723,19 @@
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
     padding-left: var(--safe-area-left);
+    /* Carbon hides the closed menu with a transform it does not animate. */
+    transition: transform 240ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  #khartis-side-nav :global(.bx--side-nav--collapsed) {
+    transition: transform 180ms cubic-bezier(0.2, 0, 1, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #khartis-side-nav :global(.bx--side-nav),
+    #khartis-side-nav :global(.bx--side-nav--collapsed) {
+      transition: none;
+    }
   }
 
   #khartis-side-nav :global(.bx--side-nav__overlay) {
@@ -809,6 +832,8 @@
     align-items: center;
     gap: 0.3rem;
     margin-bottom: var(--cds-spacing-03);
+    padding-top: var(--cds-spacing-04);
+    border-top: 1px solid var(--cds-ui-03);
     font-size: 0.7rem;
     width: 100%;
   }
@@ -825,8 +850,26 @@
     margin-left: auto;
   }
 
-  .appearance-toggle {
+  .display-settings {
     display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+  }
+
+  .display-settings :global(.bx--select--inline) {
+    justify-content: space-between;
+  }
+
+  .display-settings :global(.bx--select--inline .bx--label) {
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: normal;
+    color: var(--cds-text-primary);
+  }
+
+  .display-toggle :global(.kh-switch-native) {
+    justify-content: space-between;
     width: 100%;
   }
 

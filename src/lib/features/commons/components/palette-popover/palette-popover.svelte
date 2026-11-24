@@ -1,12 +1,26 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    closeFloatingPanelsAbove,
+    enterFloatingPanelScope,
+    floatingPanelIn,
+    floatingPanelOut,
+    floatingPanelVeil,
+    getFloatingPanelHostElement,
+    isFloatingPanelCovered,
+    isTopmostFloatingPanel,
+    type NestedPanelPlacement,
+    resolveNestedPanelPlacement
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import * as m from '$lib/paraglide/messages';
   import { untrack } from 'svelte';
-  import { ArrowRight, Close } from 'carbon-icons-svelte';
-  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { ArrowRight } from 'carbon-icons-svelte';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import {
     createExclusiveContextualSurfaceId,
@@ -18,18 +32,18 @@
   import PaletteComparison from './palette-comparison.svelte';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
-    PALETTE_TYPE,
+    DEFAULT_QUALITATIVE_PRESET,
     type DivergingPaletteSplit,
-    type PaletteType,
+    findPaletteById,
+    generateCategoricalColorsFromSeed,
+    generatePaletteColors,
+    getPatternPalettes,
     type Palette,
+    PALETTE_TYPE,
+    type PaletteType,
     type PatternId,
     type PatternParams,
-    type QualitativePreset,
-    DEFAULT_QUALITATIVE_PRESET,
-    generatePaletteColors,
-    generateCategoricalColorsFromSeed,
-    findPaletteById,
-    getPatternPalettes
+    type QualitativePreset
   } from './palette.constants';
 
   interface Props {
@@ -123,6 +137,44 @@
       DEFAULT_QUALITATIVE_PRESET;
   }
 
+  const nestedInFloatingPanel = enterFloatingPanelScope();
+  let nestedPlacement = $state<NestedPanelPlacement | null>(null);
+  const covered = $derived(open && isFloatingPanelCovered(handleClose));
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose, {
+      nested: nestedInFloatingPanel,
+      getElement: () => popoverRef
+    });
+  });
+
+  // Stacked over its host, the panel takes the focus and sits beside the
+  // host, or cascaded over it when the viewport is too narrow.
+  $effect(() => {
+    const panel = popoverRef;
+    if (!open || !nestedInFloatingPanel || !panel) return;
+
+    const place = () => {
+      const host = getFloatingPanelHostElement(handleClose);
+      nestedPlacement = host
+        ? resolveNestedPanelPlacement(
+            host.getBoundingClientRect(),
+            panel.offsetWidth,
+            window.innerWidth
+          )
+        : null;
+    };
+
+    place();
+    panel.focus({ preventScroll: true });
+    window.addEventListener(EVENT.RESIZE, place);
+    return () => {
+      window.removeEventListener(EVENT.RESIZE, place);
+      nestedPlacement = null;
+    };
+  });
+
   function handleClose() {
     open = false;
     onclose?.();
@@ -153,19 +205,21 @@
     handleClose();
   }
 
+  // Inverting is a choice about the order of the classes, not about one
+  // palette: it carries over to the next palette picked.
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
-    draftInverted = false;
     draftPatternPaletteConfig = undefined;
     draftQualitativePreset =
       palette.qualitativePreset ?? draftQualitativePreset;
-    draftColors = generatePaletteColors(
+    const colors = generatePaletteColors(
       palette,
       numClasses,
       undefined,
       undefined,
       divergingSplit
     );
+    draftColors = draftInverted ? [...colors].reverse() : colors;
   }
 
   function handleCustomColorsChange(colors: string[]) {
@@ -248,6 +302,7 @@
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
+        if (!isTopmostFloatingPanel(handleClose)) return;
         handleClose();
       }
     }
@@ -264,9 +319,14 @@
   <div use:portal class="palette-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="palette-popover"
-      style:right={popoverRight}
+      class:kh-floating-panel-stacked={nestedPlacement !== null}
+      class:kh-floating-panel-cascaded={nestedPlacement?.cascaded}
+      style:right={nestedPlacement?.right ?? popoverRight}
       role="dialog"
+      tabindex="-1"
       aria-label={popoverTitle}
       use:clickOutside={{
         enabled: open,
@@ -277,75 +337,86 @@
       }}
       onoutsideclick={handlePopoverOutsideClick}
     >
-      <header class="popover-header">
-        <h3>{popoverTitle}</h3>
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Close}
-          iconDescription={m.button_cancel()}
-          on:click={handleClose}
-        />
-      </header>
-
-      <div class="popover-content">
-        <PaletteSuggestions
-          paletteType={draftType}
-          selectedPaletteId={draftPaletteId}
-          selectedColor={draftColors[0]}
-          numClasses={numClasses}
-          divergingSplit={divergingSplit}
-          onSelect={handlePaletteSelect}
-          onColorSelect={handleQualitativeColorSelect}
-          onPaletteSelect={handleQualitativePaletteSelect}
-          onIntensitySelect={handleQualitativeColorSelect}
-          onQualitativePresetChange={handleQualitativePresetChange}
+      <div class="kh-floating-panel-body" inert={covered}>
+        <PanelHeader
+          title={popoverTitle}
+          closeLabel={m.button_cancel()}
+          onclose={handleClose}
         />
 
-        <PaletteCustom
-          paletteType={draftType}
-          numClasses={numClasses}
-          currentColors={draftColors}
-          divergingSplit={divergingSplit}
-          allowPattern={allowPattern}
-          inverted={draftInverted}
-          patternPaletteConfig={draftPatternPaletteConfig}
-          onColorsChange={handleCustomColorsChange}
-          onPatternPaletteChange={handlePatternPaletteChange}
-          onInvertToggle={handleInvertToggle}
-        />
-      </div>
+        <div class="kh-scroll-area">
+          <div class="popover-content" use:scrollShadows>
+            <PaletteSuggestions
+              paletteType={draftType}
+              selectedPaletteId={draftPaletteId}
+              selectedColor={draftColors[0]}
+              numClasses={numClasses}
+              divergingSplit={divergingSplit}
+              onSelect={handlePaletteSelect}
+              onColorSelect={handleQualitativeColorSelect}
+              onPaletteSelect={handleQualitativePaletteSelect}
+              onIntensitySelect={handleQualitativeColorSelect}
+              onQualitativePresetChange={handleQualitativePresetChange}
+            />
 
-      <div class="popover-preview-wrap">
-        <div class="popover-divider"></div>
-        <div class="popover-preview">
-          <PaletteComparison
-            currentColors={currentColors}
-            newColors={draftColors}
-            paletteType={draftType}
-            currentPatternId={toValidPatternId(currentPatternId)}
-            currentPatternParams={currentPatternParams}
-            newPatternId={findPaletteById(draftPaletteId)?.patternId}
-            currentPatternPaletteConfig={currentPatternPaletteConfig}
-            newPatternPaletteConfig={draftPatternPaletteConfig}
-            currentInverted={currentInverted}
-            newInverted={draftInverted}
-          />
+            <PaletteCustom
+              paletteType={draftType}
+              numClasses={numClasses}
+              currentColors={draftColors}
+              divergingSplit={divergingSplit}
+              allowPattern={allowPattern}
+              inverted={draftInverted}
+              patternPaletteConfig={draftPatternPaletteConfig}
+              onColorsChange={handleCustomColorsChange}
+              onPatternPaletteChange={handlePatternPaletteChange}
+              onInvertToggle={handleInvertToggle}
+            />
+          </div>
         </div>
-        <footer class="popover-footer">
-          <Button kind="tertiary" size="small" on:click={handleCancel}>
-            {m.button_cancel()}
-          </Button>
-          <Button
-            kind="primary"
-            size="small"
-            icon={ArrowRight}
-            on:click={handleValidate}
-          >
-            {m.button_validate()}
-          </Button>
-        </footer>
+
+        <div class="popover-preview-wrap">
+          <div class="popover-divider"></div>
+          <div class="popover-preview">
+            <PaletteComparison
+              currentColors={currentColors}
+              newColors={draftColors}
+              paletteType={draftType}
+              currentPatternId={toValidPatternId(currentPatternId)}
+              currentPatternParams={currentPatternParams}
+              newPatternId={findPaletteById(draftPaletteId)?.patternId}
+              currentPatternPaletteConfig={currentPatternPaletteConfig}
+              newPatternPaletteConfig={draftPatternPaletteConfig}
+              currentInverted={currentInverted}
+              newInverted={draftInverted}
+              divergingSplit={draftType === PALETTE_TYPE.DIVERGING
+                ? divergingSplit
+                : undefined}
+            />
+          </div>
+          <footer class="popover-footer">
+            <Button kind="tertiary" size="small" on:click={handleCancel}>
+              {m.button_cancel()}
+            </Button>
+            <Button
+              kind="primary"
+              size="small"
+              icon={ArrowRight}
+              on:click={handleValidate}
+            >
+              {m.button_validate()}
+            </Button>
+          </footer>
+        </div>
       </div>
+      {#if covered}
+        <!-- Escape closes the stacked panel too; the veil only helps the pointer. -->
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+        <div
+          class="kh-floating-panel-veil"
+          transition:floatingPanelVeil
+          onclick={() => closeFloatingPanelsAbove(handleClose)}
+        ></div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -366,10 +437,10 @@
   :global(.palette-popover) {
     position: fixed;
     right: 50vw;
-    top: 50%;
+    top: var(--kh-floating-window-center);
     transform: translateY(-50%);
     width: 320px;
-    max-height: calc(100vh - 32px);
+    max-height: var(--kh-floating-window-max-height);
     display: flex;
     flex-direction: column;
     background: var(--cds-background, #ffffff);
@@ -379,6 +450,12 @@
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
     overflow: hidden;
+  }
+
+  :global(.palette-popover.kh-floating-panel-stacked) {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.24),
+      0 0 1px rgba(0, 0, 0, 0.24);
   }
 
   @media (max-width: 1023px) {
@@ -402,32 +479,10 @@
     }
   }
 
-  .popover-header {
-    display: flex;
-    align-items: center;
-    gap: var(--kh-gap-label);
-    padding: 0 var(--kh-gap-label) var(--kh-gap-inline) var(--kh-pad-panel);
-    flex-shrink: 0;
-    background: var(--cds-background, #ffffff);
-
-    h3 {
-      flex: 1;
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      font-size: var(--kh-font-primitive);
-      font-weight: 600;
-      line-height: var(--kh-line-primitive);
-      color: var(--cds-text-primary, #161616);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
   .popover-content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 var(--kh-pad-panel) var(--kh-gap-inline) var(--kh-pad-panel);
+    padding: var(--kh-pad-panel) var(--kh-pad-panel) var(--kh-gap-inline);
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-section);

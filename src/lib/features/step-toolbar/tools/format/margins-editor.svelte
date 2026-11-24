@@ -1,9 +1,15 @@
+<script module lang="ts">
+  // Kept for the session only: closing the tool does not reset it.
+  let equalMargins = $state(false);
+</script>
+
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { Position } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import { formatActions, getFormatState } from './format.store.svelte';
-  import { MIN_MAP_FRAME_SIZE } from './page-margins.utils';
+  import { MIN_PAGE_AREA_SIZE } from './page-insets.utils';
 
   const formatState = $derived(getFormatState());
 
@@ -13,10 +19,15 @@
   let right = $state(0);
 
   const availableHeight = $derived(
-    Math.max(0, formatState.height - MIN_MAP_FRAME_SIZE)
+    Math.max(0, formatState.height - MIN_PAGE_AREA_SIZE)
   );
   const availableWidth = $derived(
-    Math.max(0, formatState.width - MIN_MAP_FRAME_SIZE)
+    Math.max(0, formatState.width - MIN_PAGE_AREA_SIZE)
+  );
+
+  // One value applied to all four sides must leave room on both axes.
+  const equalMarginMax = $derived(
+    Math.floor(Math.min(availableHeight, availableWidth) / 2)
   );
 
   $effect(() => {
@@ -27,6 +38,16 @@
   });
 
   function updateMargin(type: Position, value: number) {
+    if (equalMargins) {
+      formatActions.setMargins({
+        top: value,
+        bottom: value,
+        left: value,
+        right: value
+      });
+      return;
+    }
+
     const newMargins = { top, bottom, left, right };
 
     if (type === Position.Top) {
@@ -44,6 +65,15 @@
 </script>
 
 <div id="khartis-margins-editor-tool">
+  <Switch
+    size="sm"
+    labelText={m.format_equal_margins()}
+    labelA={m.projection_settings_no()}
+    labelB={m.projection_settings_yes()}
+    showStateLabel
+    toggled={equalMargins}
+    onchange={(checked: boolean) => (equalMargins = checked)}
+  />
   <div class="margins-grid">
     <div class="margin-input">
       <label class="bx--label" for="margin-top">
@@ -53,7 +83,9 @@
         id="margin-top"
         bind:value={top}
         min={0}
-        max={Math.max(0, availableHeight - formatState.margins.bottom)}
+        max={equalMargins
+          ? equalMarginMax
+          : Math.max(0, availableHeight - formatState.margins.bottom)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Top, value)}
@@ -68,7 +100,9 @@
         id="margin-bottom"
         bind:value={bottom}
         min={0}
-        max={Math.max(0, availableHeight - formatState.margins.top)}
+        max={equalMargins
+          ? equalMarginMax
+          : Math.max(0, availableHeight - formatState.margins.top)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Bottom, value)}
@@ -83,7 +117,9 @@
         id="margin-left"
         bind:value={left}
         min={0}
-        max={Math.max(0, availableWidth - formatState.margins.right)}
+        max={equalMargins
+          ? equalMarginMax
+          : Math.max(0, availableWidth - formatState.margins.right)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Left, value)}
@@ -98,7 +134,9 @@
         id="margin-right"
         bind:value={right}
         min={0}
-        max={Math.max(0, availableWidth - formatState.margins.left)}
+        max={equalMargins
+          ? equalMarginMax
+          : Math.max(0, availableWidth - formatState.margins.left)}
         width="100%"
         stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Right, value)}
@@ -108,6 +146,12 @@
 </div>
 
 <style>
+  #khartis-margins-editor-tool {
+    display: flex;
+    flex-direction: column;
+    gap: var(--kh-gap-param);
+  }
+
   .margins-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -125,7 +169,6 @@
   .margin-input {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-label);
     min-width: 0;
   }
 

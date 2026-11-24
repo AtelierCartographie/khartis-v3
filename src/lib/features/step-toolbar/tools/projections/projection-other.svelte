@@ -1,14 +1,13 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
     basemapService,
-    osmBasemapStore,
-    projectionStore as mapRenderProjectionStore
+    hasPendingWorkerParse,
+    mapLoadingStore
   } from '$lib/features/map';
   import {
     getAvailableProjectionIds,
-    resolveProjectionAvailabilityContext,
     supportsCustomProjectionCode
   } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
@@ -16,21 +15,40 @@
   import {
     Button,
     ComboBox,
+    InlineLoading,
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
-  import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import {
-    PROJECTIONS as PROJECTION_CATALOG,
-    type ProjectionInfo
+    CheckmarkOutline,
+    Code,
+    List as ListIcon
+  } from 'carbon-icons-svelte';
+  import {
+    getProjectionById,
+    type ProjectionInfo,
+    PROJECTIONS as PROJECTION_CATALOG
   } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {
+    getProjectionAvailabilityContext,
+    getProjectionCodeCoverageBbox,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
   import {
+    diagnoseProjectionCode,
+    type ProjectionCodeDiagnosis
+  } from './projection-code.utils';
+  import {
+    getCrsCatalogVersion,
+    isCoordinateSystemLookupFailed,
+    resolveCoordinateSystem
+  } from './crs-catalog.store.svelte';
+  import {
+    formatProjectionCodeCrs,
     getPresetOfficialProjectionName,
+    getProjectionCodeDisplayName,
     getProjectionShapeFilterId,
     type ProjectionShapeFilterId
   } from './projection-label.utils';
@@ -44,7 +62,7 @@
   };
 
   type Props = {
-    onapply?: (payload: { code: string }) => void;
+    onapply?: (diagnosis: ProjectionCodeDiagnosis) => void;
     onreset?: () => void;
   };
 
@@ -55,28 +73,79 @@
 
   const projectionState = $derived(getProjectionState());
   const crsCode = $derived(crsCodeDraft ?? projectionState.customCode ?? '');
-  const projectionContext = $derived(
-    resolveProjectionAvailabilityContext({
-      requiresMapLibre: basemapStyleStore.requiresMapLibre,
-      hasOSMBasemap: osmBasemapStore.isActive,
-      currentStyle: basemapStyleStore.selectedStyle,
-      preferredStyle: basemapStyleStore.preferredTiledStyle,
-      referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
-        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
-        : null,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
-      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
-        ? null
-        : mapRenderProjectionStore.referenceBbox,
-      projectionPresets: basemapService.projectionPresets
-    })
-  );
+  const projectionContext = $derived(getProjectionAvailabilityContext());
   const customCodeEnabled = $derived(
     supportsCustomProjectionCode(projectionContext)
   );
-  const activeTabIndex = $derived(customCodeEnabled ? requestedTabIndex : 0);
-  const isCodeView = $derived(customCodeEnabled && activeTabIndex === 1);
+  const isCodeView = $derived(requestedTabIndex === 1);
+  const diagnosis = $derived.by((): ProjectionCodeDiagnosis => {
+    // Re-derive when a lookup in the PROJ database lands.
+    void getCrsCatalogVersion();
+    return isCodeView && customCodeEnabled
+      ? diagnoseProjectionCode(crsCode, getProjectionCodeCoverageBbox())
+      : { status: 'empty' };
+  });
+  const lookupFailed = $derived(
+    diagnosis.status === 'unresolved-authority-code' &&
+      isCoordinateSystemLookupFailed(diagnosis.code)
+  );
+
+  $effect(() => {
+    if (diagnosis.status === 'unresolved-authority-code') {
+      void resolveCoordinateSystem(diagnosis.code);
+    }
+  });
+
+  const canApply = $derived(
+    diagnosis.status === 'catalogue-equivalent' ||
+      (diagnosis.status === 'valid' && diagnosis.coverage !== 'none')
+  );
+  const isDiagnosisApplied = $derived.by(() => {
+    if (diagnosis.status === 'valid') {
+      return projectionState.customCode === diagnosis.normalizedCode;
+    }
+    if (diagnosis.status === 'catalogue-equivalent') {
+      return (
+        projectionState.overrideActive === true &&
+        !projectionState.customCode &&
+        !projectionState.suggestionD3Config &&
+        projectionState.selected === diagnosis.catalogueId
+      );
+    }
+    return false;
+  });
+  const isMapReprojecting = $derived(
+    mapLoadingStore.isPreparingLayers || hasPendingWorkerParse()
+  );
+  const diagnosisError = $derived.by((): string | undefined => {
+    switch (diagnosis.status) {
+      case 'unrecognized':
+        return m.projection_code_unrecognized();
+      case 'unresolved-authority-code':
+        return lookupFailed
+          ? m.projection_code_lookup_failed({ code: diagnosis.code })
+          : undefined;
+      case 'unknown-authority-code':
+        return m.projection_code_unknown_authority({ code: diagnosis.code });
+      case 'unrenderable-crs':
+        return m.projection_code_unrenderable({
+          code: diagnosis.code,
+          name: diagnosis.name
+        });
+      case 'unsupported-method':
+        return m.projection_code_unsupported_method({
+          method: diagnosis.method ?? '?'
+        });
+      case 'invalid':
+        return m.projection_code_invalid();
+      case 'valid':
+        return diagnosis.coverage === 'none'
+          ? m.projection_code_coverage_none()
+          : undefined;
+      default:
+        return undefined;
+    }
+  });
   const compositeItems = $derived([
     {
       id: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
@@ -178,28 +247,13 @@
     isCatalogueProjectionActive() && activeCatalogueSelectionId === undefined
   );
 
-  const viewTabs = $derived.by(() => {
-    const tabs = [
-      {
-        icon: ListIcon,
-        label: catalogueLabel,
-        iconSize: 16
-      }
-    ];
-
-    if (customCodeEnabled) {
-      tabs.push({
-        icon: Code,
-        label: viewCodeLabel,
-        iconSize: 16
-      });
-    }
-
-    return tabs;
-  });
+  const viewTabs = $derived([
+    { icon: ListIcon, label: catalogueLabel, iconSize: 16 },
+    { icon: Code, label: viewCodeLabel, iconSize: 16 }
+  ]);
 
   function handleViewChange(index: number): void {
-    requestedTabIndex = customCodeEnabled ? index : 0;
+    requestedTabIndex = index;
   }
 
   const isEmpty = () => crsCode.trim().length === 0;
@@ -211,8 +265,8 @@
   }
 
   function onApply() {
-    if (isEmpty()) return;
-    onapply?.({ code: crsCode.trim() });
+    if (!canApply) return;
+    onapply?.(diagnosis);
   }
 
   function handleCrsCodeInput(event: CustomEvent<string> | Event): void {
@@ -281,84 +335,166 @@
   <div class="other-proj">
     <ToggleTabs
       items={viewTabs}
-      activeIndex={activeTabIndex}
+      activeIndex={requestedTabIndex}
       onchange={handleViewChange}
       className="projection-view-tabs"
       hideInactiveLabel={true}
     />
 
-    {#if !isCodeView}
-      <div class="projection-content">
-        {#if selectedCatalogueUnavailable}
-          <InlineNotification
-            kind="warning"
-            lowContrast
-            hideCloseButton
-            title={m.projection_catalog_unavailable_title()}
-            subtitle={m.projection_catalog_unavailable_subtitle()}
-          />
-        {/if}
-
-        <div class="projection-header">
-          <p class="projection-helper">{description}</p>
-        </div>
-
-        {#if items.length > 0}
-          {#key catalogueItemsSignature}
-            <ComboBox
-              translateWithId={translateCarbonId}
-              translateWithIdSelection={translateCarbonId}
-              size="sm"
-              items={catalogueComboItems}
-              selectedId={activeCatalogueSelectionId}
-              placeholder={m.projection_catalog_search_placeholder()}
-              shouldFilterItem={(comboItem, value) =>
-                !value ||
-                comboItem.text.toLowerCase().includes(value.toLowerCase())}
-              on:select={handleCatalogueSelect}
+    <SwitchedContent value={isCodeView}>
+      {#if !isCodeView}
+        <div class="projection-content">
+          {#if selectedCatalogueUnavailable}
+            <InlineNotification
+              kind="warning"
+              lowContrast
+              hideCloseButton
+              title={m.projection_catalog_unavailable_title()}
+              subtitle={m.projection_catalog_unavailable_subtitle()}
             />
-          {/key}
-        {:else}
-          <div class="projection-empty-state">
-            <p class="projection-empty-title">
-              {m.projection_catalog_unavailable_title()}
-            </p>
-            <p class="projection-empty-subtitle">
-              {m.projection_catalog_unavailable_subtitle()}
-            </p>
+          {/if}
+
+          <div class="projection-header">
+            <p class="projection-helper">{description}</p>
           </div>
-        {/if}
-      </div>
-    {:else}
-      <div class="code-view">
-        <p class="intro">{codeIntro}</p>
-        <div class="code-form">
-          <TextArea
-            value={crsCode}
-            labelText={codeLabel}
-            placeholder={codePlaceholder}
-            helperText={codeHelper}
-            rows={8}
-            light={true}
-            on:input={handleCrsCodeInput}
-          />
-          <div class="actions">
-            <Button
-              kind="tertiary"
-              size="small"
-              disabled={isEmpty()}
-              on:click={onReset}>{resetLabel}</Button
-            >
-            <Button
-              kind="primary"
-              size="small"
-              disabled={isEmpty()}
-              on:click={onApply}>{submitLabel}</Button
-            >
+
+          {#if items.length > 0}
+            {#key catalogueItemsSignature}
+              <ComboBox
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
+                size="sm"
+                items={catalogueComboItems}
+                selectedId={activeCatalogueSelectionId}
+                labelText={catalogueLabel}
+                hideLabel
+                placeholder={m.projection_catalog_search_placeholder()}
+                shouldFilterItem={(comboItem, value) =>
+                  !value ||
+                  comboItem.text.toLowerCase().includes(value.toLowerCase())}
+                on:select={handleCatalogueSelect}
+              />
+            {/key}
+          {:else}
+            <div class="projection-empty-state">
+              <p class="projection-empty-title">
+                {m.projection_catalog_unavailable_title()}
+              </p>
+              <p class="projection-empty-subtitle">
+                {m.projection_catalog_unavailable_subtitle()}
+              </p>
+            </div>
+          {/if}
+        </div>
+      {:else if !customCodeEnabled}
+        <InlineNotification
+          kind="info"
+          lowContrast
+          hideCloseButton
+          title=""
+          subtitle={m.projection_code_unavailable_tiled()}
+        />
+      {:else}
+        <div class="code-view">
+          <p class="intro">{codeIntro}</p>
+          <div class="code-form">
+            <TextArea
+              value={crsCode}
+              labelText={codeLabel}
+              placeholder={codePlaceholder}
+              helperText={codeHelper}
+              rows={8}
+              light={true}
+              on:input={handleCrsCodeInput}
+            />
+            <div class="code-status" role="status" aria-live="polite">
+              {#if diagnosis.status === 'valid'}
+                {#if isDiagnosisApplied}
+                  <InlineLoading
+                    status={isMapReprojecting ? 'active' : 'finished'}
+                    description={isMapReprojecting
+                      ? m.projection_code_status_computing()
+                      : m.projection_code_status_applied()}
+                  />
+                {:else if diagnosis.coverage !== 'none'}
+                  <p class="code-status-recognized">
+                    <CheckmarkOutline size={16} />
+                    {m.projection_code_status_recognized()}
+                  </p>
+                {/if}
+                <p class="code-crs-name">
+                  {getProjectionCodeDisplayName(crsCode, diagnosis.crs)}
+                </p>
+                <p class="code-crs-details">
+                  {formatProjectionCodeCrs(diagnosis.crs)}
+                </p>
+                {#if diagnosis.coverage === 'partial'}
+                  <InlineNotification
+                    kind="warning"
+                    lowContrast
+                    hideCloseButton
+                    title=""
+                    subtitle={m.projection_code_coverage_partial()}
+                  />
+                {/if}
+              {:else if diagnosis.status === 'catalogue-equivalent'}
+                {#if isDiagnosisApplied}
+                  <InlineLoading
+                    status={isMapReprojecting ? 'active' : 'finished'}
+                    description={isMapReprojecting
+                      ? m.projection_code_status_computing()
+                      : m.projection_code_status_applied()}
+                  />
+                {/if}
+                <InlineNotification
+                  kind="info"
+                  lowContrast
+                  hideCloseButton
+                  title=""
+                  subtitle={m.projection_code_catalogue_equivalent({
+                    method: diagnosis.method,
+                    name:
+                      getProjectionById(diagnosis.catalogueId)?.name ??
+                      diagnosis.catalogueId
+                  })}
+                />
+              {/if}
+              {#if diagnosis.status === 'unresolved-authority-code' && !lookupFailed}
+                <InlineLoading
+                  status="active"
+                  description={m.projection_code_lookup_pending({
+                    code: diagnosis.code
+                  })}
+                />
+              {/if}
+              {#if diagnosisError}
+                <InlineNotification
+                  kind="error"
+                  lowContrast
+                  hideCloseButton
+                  title=""
+                  subtitle={diagnosisError}
+                />
+              {/if}
+            </div>
+            <div class="actions">
+              <Button
+                kind="tertiary"
+                size="small"
+                disabled={isEmpty()}
+                on:click={onReset}>{resetLabel}</Button
+              >
+              <Button
+                kind="primary"
+                size="small"
+                disabled={!canApply || isDiagnosisApplied}
+                on:click={onApply}>{submitLabel}</Button
+              >
+            </div>
           </div>
         </div>
-      </div>
-    {/if}
+      {/if}
+    </SwitchedContent>
   </div>
 </div>
 
@@ -392,6 +528,43 @@
       gap: var(--cds-spacing-05);
     }
 
+    .code-status {
+      display: flex;
+      flex-direction: column;
+      gap: var(--cds-spacing-02);
+      min-width: 0;
+
+      p {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      :global(.bx--inline-notification) {
+        margin: 0;
+        max-width: 100%;
+      }
+    }
+
+    .code-status-recognized {
+      display: flex;
+      align-items: center;
+      gap: var(--cds-spacing-02);
+      color: var(--cds-support-success, #24a148);
+      font-size: 0.75rem;
+    }
+
+    .code-crs-name {
+      color: var(--cds-text-primary, #161616);
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .code-crs-details {
+      color: var(--cds-text-secondary, #525252);
+      font-size: 0.75rem;
+      line-height: 1rem;
+    }
+
     .actions {
       display: flex;
       gap: var(--kh-gap-inline);
@@ -413,7 +586,7 @@
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
-    padding: 6px 12px;
+    padding-block: 6px;
     min-height: var(--kh-size-sm);
   }
 

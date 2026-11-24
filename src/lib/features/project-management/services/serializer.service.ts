@@ -16,8 +16,8 @@ import type {
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
 import {
-  serializeUploadedFile,
-  deserializeUploadedFile
+  deserializeUploadedFile,
+  serializeUploadedFile
 } from '../core/file-serializer';
 import { persistenceRegistry } from '../core/persistence-registry';
 import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
@@ -171,6 +171,7 @@ function mapRegistryToSerializedFormat(
       groupVisibility: (
         stores.basemapStyle as { groupVisibility?: Record<string, boolean> }
       )?.groupVisibility,
+      opacity: (stores.basemapStyle as { opacity?: number })?.opacity,
       mapProjection: stores.mapProjection,
       mapViewState: stores.mapViewState,
       osmBasemap: stores.osmBasemap
@@ -207,7 +208,8 @@ function mapSerializedFormatToRegistry(
       lastSelectedTiledStyle: data.basemapSettings.lastSelectedTiledStyle,
       referenceBasemapId: data.basemapSettings.referenceBasemapId,
       showLabels: data.basemapSettings.showLabels,
-      groupVisibility: data.basemapSettings.groupVisibility
+      groupVisibility: data.basemapSettings.groupVisibility,
+      opacity: data.basemapSettings.opacity
     };
     stores.mapProjection = data.basemapSettings.mapProjection;
     if (data.basemapSettings.mapViewState) {

@@ -1,7 +1,10 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { describe, expect, it, vi } from 'vitest';
-import { executeQueryStreaming } from '$lib/features/duckdb/core/query';
+import {
+  executeQuery,
+  executeQueryStreaming
+} from '$lib/features/duckdb/core/query';
 import type { DuckDBStreamingBindings } from '$lib/features/duckdb/types';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
@@ -99,6 +102,41 @@ describe('executeQueryStreaming', () => {
     expect(bindings.pollPendingQuery).toHaveBeenCalledWith('connection-id');
     expect(bindings.fetchQueryResults).toHaveBeenCalledTimes(3);
     expect(bindings.runQuery).not.toHaveBeenCalled();
+  });
+
+  it('should hold back a concurrent query when a stream is still fetching batches', async () => {
+    const streamedBuffer = toIpcBuffer(tableFromArrays({ value: [1, 2, 3] }));
+    const splitIndex = Math.floor(streamedBuffer.byteLength / 2);
+    const events: string[] = [];
+    const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const batches = [streamedBuffer.slice(splitIndex), new Uint8Array()];
+
+    const bindings: DuckDBStreamingBindings = {
+      runQuery: vi.fn().mockImplementation(async () => {
+        events.push('run');
+        return toIpcBuffer(tableFromArrays({ count: [3] }));
+      }),
+      startPendingQuery: vi
+        .fn()
+        .mockResolvedValueOnce(streamedBuffer.slice(0, splitIndex)),
+      pollPendingQuery: vi.fn(),
+      fetchQueryResults: vi.fn().mockImplementation(async () => {
+        await nextTick();
+        const batch = batches.shift() ?? new Uint8Array();
+        events.push(batch.byteLength === 0 ? 'end' : 'batch');
+        return batch;
+      }),
+      cancelPendingQuery: vi.fn().mockResolvedValue(false),
+      isDetached: vi.fn().mockReturnValue(false)
+    };
+    const connection = createConnection(bindings);
+
+    const stream = executeQueryStreaming(connection, 'SELECT * FROM dataset');
+    const concurrent = executeQuery(connection, 'SELECT count(*) FROM dataset');
+    const [streamed] = await Promise.all([stream, concurrent]);
+
+    expect(events).toEqual(['batch', 'end', 'run']);
+    expect([...streamed]).toEqual([...streamedBuffer]);
   });
 
   it('returns the schema-only stream without re-running the query when the result is empty', async () => {

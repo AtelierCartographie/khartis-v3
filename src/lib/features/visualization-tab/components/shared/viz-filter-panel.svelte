@@ -1,7 +1,13 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
+  import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import {
     isSingularCount,
     resolveLocale
@@ -21,14 +27,14 @@
   import { facetsStore } from '../../adapters/facets-adapter';
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
-  import { Add, Close, Launch } from 'carbon-icons-svelte';
+  import { Add, Launch } from 'carbon-icons-svelte';
   import { untrack } from 'svelte';
   import FilterCard from './filter-card.svelte';
   import {
     DEFAULT_FILTER_LIMIT,
+    defaultOperatorForType,
     getFilterColumnType,
-    getOperatorDef,
-    defaultOperatorForType
+    getOperatorDef
   } from './filter-operators.utils';
 
   interface DataFieldOption {
@@ -100,8 +106,12 @@
     };
 
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
+    const releaseFloatingPanel = claimFloatingPanel(() =>
+      untrack(() => onClose)()
+    );
 
     return () => {
+      releaseFloatingPanel();
       resizeObserver?.disconnect();
       window.removeEventListener(EVENT.RESIZE, updatePanelPosition);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
@@ -168,87 +178,92 @@
 
 <aside
   use:portal
+  in:floatingPanelIn|global
+  out:floatingPanelOut|global
   class="viz-filter-panel"
   style:right={panelRight}
   aria-label={title ?? m.filter_panel_title()}
 >
-  <header class="panel-header">
-    <h3>{m.filter_panel_title()}</h3>
-    <IconButton
-      kind="ghost"
-      size="small"
-      icon={Close}
-      iconDescription={m.data_tool_close()}
-      on:click={onClose}
-    />
-  </header>
+  <PanelHeader
+    title={m.filter_panel_title()}
+    closeLabel={m.data_tool_close()}
+    onclose={onClose}
+  />
 
-  <div class="panel-content">
-    {#if hasFilters && stats && stats.total > 0}
-      <div class="stats-block">
-        <span class="stats-primary">
-          {(isSingularCount(stats.filtered)
-            ? m.filter_stats_filtered_one
-            : m.filter_stats_filtered)({
-            count: formatFilteredCount(stats.filtered)
-          })}
-        </span>
-        <div
-          class="stats-progress"
-          role="progressbar"
-          aria-valuenow={stats.filtered}
-          aria-valuemin={0}
-          aria-valuemax={stats.total}
-        >
-          <span class="stats-progress-fill" style:width="{progressRatio * 100}%"
-          ></span>
+  <div class="kh-scroll-area">
+    <div class="panel-content" use:scrollShadows>
+      {#if hasFilters && stats && stats.total > 0}
+        <div class="stats-block">
+          <span class="stats-primary">
+            {(isSingularCount(stats.filtered)
+              ? m.filter_stats_filtered_one
+              : m.filter_stats_filtered)({
+              count: formatFilteredCount(stats.filtered)
+            })}
+          </span>
+          <div
+            class="stats-progress"
+            role="progressbar"
+            aria-valuenow={stats.filtered}
+            aria-valuemin={0}
+            aria-valuemax={stats.total}
+          >
+            <span
+              class="stats-progress-fill"
+              style:width="{progressRatio * 100}%"
+            ></span>
+          </div>
+          <span class="stats-secondary">
+            {m.filter_stats_total({
+              total: formatFilteredCount(stats.total),
+              percent: formatFilteredPercent(percent)
+            })}
+          </span>
         </div>
-        <span class="stats-secondary">
-          {m.filter_stats_total({
-            total: formatFilteredCount(stats.total),
-            percent: formatFilteredPercent(percent)
-          })}
-        </span>
-      </div>
-    {/if}
+      {/if}
 
-    <button
-      type="button"
-      class="add-button"
-      onclick={handleAddFilterClick}
-      disabled={dataFields.length === 0}
-    >
-      <span>{m.filter_add_filter()}</span>
-      <Add size={16} />
-    </button>
-
-    {#if hasFilters && onClearFilters}
-      <button type="button" class="clear-button" onclick={onClearFilters}>
-        {m.filter_clear_all()}
+      <button
+        type="button"
+        class="add-button"
+        onclick={handleAddFilterClick}
+        disabled={dataFields.length === 0}
+      >
+        <span
+          >{hasFilters
+            ? m.filter_add_new_filter()
+            : m.filter_add_filter()}</span
+        >
+        <Add size={16} />
       </button>
-    {/if}
 
-    <a
-      class="learn-more-link"
-      href={DOC_LINK.PRIMITIVE_FILTERS}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {m.filter_learn_more()}
-      <Launch size={16} />
-    </a>
+      {#if hasFilters && onClearFilters}
+        <button type="button" class="clear-button" onclick={onClearFilters}>
+          {m.filter_clear_all()}
+        </button>
+      {/if}
 
-    {#each filters as filter, index (filter.id)}
-      <FilterCard
-        filter={filter}
-        index={index}
-        dataFields={dataFields}
-        dataFieldsDropdownItems={dataFieldsDropdownItems}
-        collectionVariable={collectionVariable}
-        onRemoveFilter={onRemoveFilter}
-        onUpdateFilter={onUpdateFilter}
-      />
-    {/each}
+      <a
+        class="learn-more-link"
+        href={DOC_LINK.PRIMITIVE_FILTERS}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {m.filter_learn_more()}
+        <Launch size={16} />
+      </a>
+
+      {#each filters as filter, index (filter.id)}
+        <FilterCard
+          filter={filter}
+          index={index}
+          dataFields={dataFields}
+          dataFieldsDropdownItems={dataFieldsDropdownItems}
+          collectionVariable={collectionVariable}
+          onRemoveFilter={onRemoveFilter}
+          onUpdateFilter={onUpdateFilter}
+        />
+      {/each}
+    </div>
   </div>
 </aside>
 
@@ -259,14 +274,23 @@
     top: 50%;
     transform: translateY(-50%);
     width: 300px;
-    min-height: 300px;
+    /* Tall enough for an open filter list to show all its options. */
+    min-height: 680px;
     max-height: min(80vh, calc(100dvh - 120px));
-    overflow-y: auto;
+    overflow: hidden;
     background: var(--cds-ui-02, #ffffff);
-    border: 1px solid var(--cds-border-subtle, #e0e0e0);
-    z-index: var(--z-dropdown);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      0 0 1px rgba(0, 0, 0, 0.15);
+    z-index: var(--z-overlay);
     display: flex;
     flex-direction: column;
+  }
+
+  /* Every operator fits in an open list without scrolling. */
+  .viz-filter-panel
+    :global(.bx--list-box--expanded.bx--list-box--sm .bx--list-box__menu) {
+    max-height: 18rem;
   }
 
   @media (max-width: 1023px) {
@@ -291,27 +315,10 @@
     }
   }
 
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--cds-spacing-04);
-    border-bottom: 1px solid var(--cds-border-subtle);
-    position: sticky;
-    top: 0;
-    background: var(--cds-ui-02);
-    z-index: 1;
-  }
-
-  .panel-header h3 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--cds-text-01);
-  }
-
   .panel-content {
-    padding: var(--cds-spacing-04);
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--cds-spacing-05);
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-param);

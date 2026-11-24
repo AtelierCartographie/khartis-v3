@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
+  import ShortcutsSheet from '$lib/features/commons/components/shortcuts-sheet.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import CookiebotConsent from '$lib/features/commons/components/cookiebot-consent.svelte';
   import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
@@ -13,7 +14,10 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
-  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    StylingTools,
+    ToolbarStep
+  } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
@@ -25,24 +29,24 @@
   import { persistenceRegistry } from '$lib/features/project-management/core';
   import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
   import {
-    REMOTE_FILE_FETCH_TIMEOUT_MS,
-    fetchWithTimeout
+    fetchWithTimeout,
+    REMOTE_FILE_FETCH_TIMEOUT_MS
   } from '$lib/features/commons/utils/fetch-with-timeout';
 
   import '$lib/features/commons/stores/locale.store.svelte';
-  import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
+  import { cookieName, locales, setLocale } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import { MainToolbar, MobileToolbar } from '$lib/features/main-toolbar';
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
+  import JoinControlStepFade from '$lib/features/map/components/join-control-step-fade.svelte';
   import Sidenav from '$lib/features/side-nav/side-nav.svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import {
-    colorBlindnessActions,
     getColorBlindnessState,
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
@@ -81,6 +85,14 @@
   let { children } = $props();
   let isLoading = $state(true);
   let pendingKhImport = $state<PendingKhImport | null>(null);
+  // The room the side panel takes once its change has settled; the
+  // workspace leaves it at once (see the main rule below).
+  const sidePanelSpace = $derived(
+    globalState.isMobileView || globalState.selectedStep === ToolbarStep.Styling
+      ? 'none'
+      : globalState.toolbarState
+  );
+
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
 
@@ -360,8 +372,12 @@
       !globalState.selectedTool &&
       !mobileColorBlindnessNotificationDismissed
   );
-  function handleDeactivateColorBlindness() {
-    colorBlindnessActions.reset();
+  function openColorBlindnessTool(): void {
+    if (globalState.selectedStep !== ToolbarStep.Styling) {
+      globalActions.setNavigationState(ToolbarStep.Styling);
+    }
+    globalActions.openMobileToolbar();
+    globalActions.setSelectedTool(StylingTools.ColorBlindness);
   }
 
   $effect(() => {
@@ -427,8 +443,12 @@
   <Sidenav />
 
   <KeyboardShortcuts />
+  <ShortcutsSheet />
 
-  <main class:mobile-view={globalState.isMobileView}>
+  <main
+    class:mobile-view={globalState.isMobileView}
+    data-side-panel={sidePanelSpace}
+  >
     <h1 class="visually-hidden">{m.app_name()}</h1>
 
     {#if globalState.isCreateProjectModalOpen}
@@ -461,6 +481,8 @@
       {#snippet workspaceOverlays()}
         <ZoomToolbar />
 
+        <JoinControlStepFade />
+
         <MobileOpenPanelButton />
 
         <GlobalLoadingIndicator />
@@ -468,7 +490,7 @@
         {#if showMobileColorBlindnessNotification}
           <div class="colorblind-notification">
             <ColorBlindnessNotification
-              ondeactivate={handleDeactivateColorBlindness}
+              onopentool={openColorBlindnessTool}
               onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
             />
           </div>
@@ -500,7 +522,29 @@
     display: flex;
     height: calc(100dvh - var(--cds-header-height));
     overflow: visible;
+    /* The side panel slides in from past the right edge: clipped there, it
+       gives the body nothing to scroll to when its content takes focus. */
+    overflow-x: clip;
     background-color: var(--cds-ui-01);
+  }
+
+  /* The side panel floats over the right edge and slides; the workspace
+     takes its final size at once, so the map is resized once per change
+     instead of on every frame of the panel's motion. */
+  main[data-side-panel='full'] {
+    --kh-side-panel-space: var(--kh-side-panel-full-width);
+  }
+
+  main[data-side-panel='compact'] {
+    --kh-side-panel-space: var(--kh-panel-w);
+  }
+
+  main[data-side-panel='collapsed'] {
+    --kh-side-panel-space: var(--kh-side-panel-collapsed-width);
+  }
+
+  main :global(> .main-content) {
+    margin-right: var(--kh-side-panel-space, 0px);
   }
 
   .visually-hidden {

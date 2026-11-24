@@ -1,15 +1,9 @@
 <script lang="ts">
+  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    Column,
-    FileUploader,
-    Grid,
-    Row,
-    Slider
-  } from 'carbon-components-svelte';
-  import { TrashCan, Upload } from 'carbon-icons-svelte';
+  import { FileUploader } from 'carbon-components-svelte';
+  import { Upload } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -21,20 +15,36 @@
     MAX_ANNOTATION_IMAGE_SIZE_BYTES,
     SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS
   } from './image-file-validation';
+  import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
+  import { getOrdinalAnnotationName } from './_shared/annotation-name';
+  import AnnotationToolPanel from './_shared/annotation-tool-panel.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
-  const selectedImageAnnotation = $derived.by(() => {
-    const selId = annotationsState.selectedId;
-    if (!selId) return null;
-    const item = annotationsState.items.find((i) => i.id === selId);
-    return item && item.type === AnnotationKind.IMAGE ? item : null;
-  });
+  const selectedAnnotation = useSelectedAnnotationByType(AnnotationKind.IMAGE);
+  const selectedImageAnnotation = $derived(selectedAnnotation.selected);
 
   const effectiveStyle = $derived(
     selectedImageAnnotation?.style ?? defaultStyle
   );
+
+  const selectedImageName = $derived(
+    selectedImageAnnotation
+      ? getOrdinalAnnotationName(
+          annotationsState.items,
+          selectedImageAnnotation,
+          m.annotations_image(),
+          (candidate) => candidate.type === AnnotationKind.IMAGE
+        )
+      : undefined
+  );
+
+  function deleteSelectedImage(): void {
+    if (selectedImageAnnotation) {
+      annotationsActions.removeAnnotation(selectedImageAnnotation.id);
+    }
+  }
 
   let hiddenUploader: HTMLDivElement | null = null;
   let imageImportError = $state<string | null>(null);
@@ -83,15 +93,6 @@
     }
   }
 
-  function handleSizeChange(e: CustomEvent<number>) {
-    if ((effectiveStyle.size || 200) === e.detail) return;
-    annotationsActions.applyStyle({ size: e.detail });
-  }
-  function handleOpacityChange(e: CustomEvent<number>) {
-    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
-    annotationsActions.applyStyle({ opacity: e.detail });
-  }
-
   function toOpacityPercent(value: number | undefined): number {
     if (value === undefined) {
       return 100;
@@ -100,120 +101,61 @@
   }
 </script>
 
-<Grid noGutter fullWidth>
-  <Row>
-    <Column>
-      <div class="section">
-        <Button
-          size="field"
-          kind="primary"
-          icon={Upload}
-          onclick={triggerFileDialog}
-        >
-          {m.annotations_import_image()}
-        </Button>
-        <p class="helper">{m.annotations_import_image_description()}</p>
-      </div>
-      <div class="visually-hidden" bind:this={hiddenUploader}>
-        <FileUploader
-          iconDescription={m.remove_file_action()}
-          labelTitle=""
-          buttonLabel=""
-          status="edit"
-          accept={Array.from(SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS)}
-          multiple={false}
-          on:change={handleFileUpload}
-        />
-      </div>
-      {#if imageImportError}
-        <p class="helper helper--error" role="alert">{imageImportError}</p>
-      {/if}
-    </Column>
-  </Row>
+<div class="visually-hidden" bind:this={hiddenUploader}>
+  <FileUploader
+    iconDescription={m.remove_file_action()}
+    labelTitle=""
+    buttonLabel=""
+    status="edit"
+    accept={Array.from(SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS)}
+    multiple={false}
+    on:change={handleFileUpload}
+  />
+</div>
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.annotations_size()}
-          value={effectiveStyle.size || 200}
-          min={10}
-          max={1000}
-          step={1}
-          stepMultiplier={5}
-          on:input={handleSizeChange}
-          on:change={handleSizeChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
+<AnnotationToolPanel
+  help={m.annotations_image_help()}
+  actionLabel={m.annotations_import_image()}
+  actionIcon={Upload}
+  onaction={triggerFileDialog}
+  error={imageImportError}
+  selectionLabel={m.annotations_selected_image()}
+  selectedName={selectedImageName}
+  deleteLabel={m.annotations_delete_image()}
+  ondelete={deleteSelectedImage}
+>
+  {#snippet properties()}
+    <SliderWithInput
+      label={m.annotations_size()}
+      value={effectiveStyle.size || 200}
+      min={10}
+      max={1000}
+      step={1}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(size) => {
+        if ((effectiveStyle.size || 200) === size) return;
+        annotationsActions.applyStyle({ size });
+      }}
+    />
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.annotations_opacity()}
-          value={toOpacityPercent(effectiveStyle.opacity)}
-          min={0}
-          max={100}
-          step={5}
-          stepMultiplier={5}
-          on:input={handleOpacityChange}
-          on:change={handleOpacityChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
-        {#if annotationsState.selectedId}
-          {@const selected = annotationsState.items.find(
-            (i) => i.id === annotationsState.selectedId
-          )}
-          <Button
-            size="field"
-            kind="danger-tertiary"
-            icon={TrashCan}
-            disabled={!selected || selected.type !== AnnotationKind.IMAGE}
-            onclick={() =>
-              selected &&
-              selected.type === AnnotationKind.IMAGE &&
-              annotationsActions.removeAnnotation(selected.id)}
-          >
-            {m.annotations_delete_image()}
-          </Button>
-        {:else}
-          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled>
-            {m.annotations_delete_image()}
-          </Button>
-        {/if}
-      </div>
-    </Column>
-  </Row>
-</Grid>
+    <SliderWithInput
+      label={m.annotations_opacity()}
+      value={toOpacityPercent(effectiveStyle.opacity)}
+      min={0}
+      max={100}
+      step={5}
+      inputWidth="72px"
+      showSteppers={false}
+      onchange={(opacity) => {
+        if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
+        annotationsActions.applyStyle({ opacity });
+      }}
+    />
+  {/snippet}
+</AnnotationToolPanel>
 
 <style>
-  .section {
-    margin-top: var(--cds-spacing-05);
-  }
-
-  .helper {
-    margin: var(--cds-spacing-03) 0 0 0;
-    color: var(--cds-text-secondary);
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
-  .helper--error {
-    color: var(--cds-text-error);
-  }
-
   .visually-hidden {
     position: absolute;
     width: 1px;

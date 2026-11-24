@@ -11,10 +11,13 @@
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { scrollShadows } from '$lib/features/commons/utils/scroll-shadows';
   import { Tag } from 'carbon-components-svelte';
+  import TooltipGlyph from './tooltip-glyph.svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
   const PREVIEW_MAX_ENTRIES_COUNT = 5;
+  const PREVIEW_MAX_OTHER_VARIABLES_COUNT = 3;
   const DESKTOP_INSPECTOR_TARGET_HEIGHT = 352;
   const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
@@ -31,31 +34,87 @@
     globalState.selectedStep === ToolbarStep.Styling
   );
   const isInteractive = $derived(isMobileLayout || tooltipState.pinned);
+  const titleEntry = $derived(
+    tooltipState.entries.find((entry) => entry.role === 'title') ?? null
+  );
+  const bodyEntries = $derived(
+    tooltipState.entries.filter((entry) => entry.role !== 'title')
+  );
+  // A visualization's data reads in three tiers: the entity, the variables
+  // the map draws, then the others, quieter.
+  const isVariableLayout = $derived(
+    titleEntry !== null || bodyEntries.some((entry) => entry.isVizColumn)
+  );
   const headlineEntry = $derived.by(() =>
-    isInteractive ? resolveHeadlineEntry(tooltipState.entries) : null
+    isInteractive && !titleEntry
+      ? resolveHeadlineEntry(tooltipState.entries)
+      : null
   );
   const badgeEntries = $derived.by(() =>
     isInteractive
-      ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
+      ? resolveBadgeEntries(bodyEntries, headlineEntry?.key ?? null)
       : []
+  );
+  // A heading or a title stays on one line: the tooltip widens to hold it.
+  const hasHeading = $derived(
+    tooltipState.entries.some(
+      (entry) => entry.role === 'heading' || entry.role === 'title'
+    )
+  );
+  const previewEntries = $derived(
+    bodyEntries.filter((entry) => !entry.pinnedOnly)
+  );
+  const previewOtherCount = $derived(
+    previewEntries.filter((entry) => !entry.isVizColumn && !entry.role).length
   );
   const visibleEntries = $derived.by(() => {
     if (!isInteractive) {
-      return tooltipState.entries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
+      return isVariableLayout
+        ? layoutVariables(previewEntries, PREVIEW_MAX_OTHER_VARIABLES_COUNT)
+        : previewEntries.slice(0, PREVIEW_MAX_ENTRIES_COUNT);
     }
 
     const skippedKeys = new Set<string>([
       ...(headlineEntry ? [headlineEntry.key] : []),
       ...badgeEntries.map((entry) => entry.key)
     ]);
-
-    return tooltipState.entries.filter((entry) => !skippedKeys.has(entry.key));
+    const entries = bodyEntries.filter((entry) => !skippedKeys.has(entry.key));
+    return isVariableLayout ? layoutVariables(entries, null) : entries;
   });
+  // The pinned inspector shows what the preview leaves out.
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
-      : Math.max(0, tooltipState.entries.length - PREVIEW_MAX_ENTRIES_COUNT)
+      : (isVariableLayout
+          ? Math.max(0, previewOtherCount - PREVIEW_MAX_OTHER_VARIABLES_COUNT)
+          : Math.max(0, previewEntries.length - PREVIEW_MAX_ENTRIES_COUNT)) +
+          tooltipState.entries.filter(
+            (entry) => entry.pinnedOnly && !entry.role
+          ).length
   );
+
+  function layoutVariables(
+    entries: typeof tooltipState.entries,
+    maxOthers: number | null
+  ): typeof tooltipState.entries {
+    const variables = entries.filter((entry) => entry.isVizColumn);
+    const others = entries.filter((entry) => !entry.isVizColumn);
+    const shownOthers =
+      maxOthers === null ? others : others.slice(0, maxOthers);
+    const divider = {
+      key: 'variables-divider',
+      value: '',
+      role: 'divider' as const
+    };
+    return [
+      ...(titleEntry && !isInteractive && variables.length + shownOthers.length
+        ? [{ ...divider, key: 'title-divider' }]
+        : []),
+      ...variables,
+      ...(variables.length > 0 && shownOthers.length > 0 ? [divider] : []),
+      ...shownOthers
+    ];
+  }
 
   function getTooltipViewerRect(): {
     left: number;
@@ -182,7 +241,7 @@
     }
 
     void tooltipState.entries.length;
-    void globalState.zoom.pageZoomLevel;
+    void globalState.zoom.pageZoomScale;
     void globalState.zoom.pagePanOffset.x;
     void globalState.zoom.pagePanOffset.y;
     void mapInstanceStore.map;
@@ -270,6 +329,7 @@
     bind:this={tooltipElement}
     class="map-tooltip"
     class:hover-preview={!isInteractive}
+    class:fit-heading={hasHeading}
     class:interactive={isInteractive}
     class:pinned={tooltipState.pinned}
     class:mobile-sheet={isMobileLayout}
@@ -295,7 +355,14 @@
           />
         </div>
 
-        {#if headlineEntry}
+        {#if titleEntry}
+          <div class="tooltip-title">
+            <span class="tooltip-title-text">{titleEntry.key}</span>
+            {#if titleEntry.value}
+              <span class="tooltip-title-subtitle">{titleEntry.value}</span>
+            {/if}
+          </div>
+        {:else if headlineEntry}
           <div class="tooltip-title">{headlineEntry.value}</div>
         {/if}
 
@@ -311,23 +378,68 @@
       </div>
     {/if}
 
-    <div class="tooltip-shell-body">
-      <div class="tooltip-entries">
-        {#each visibleEntries as entry (entry.key)}
-          <div class="tooltip-row">
-            <span class="tooltip-key" class:viz-column={entry.isVizColumn}
-              >{entry.key}</span
-            >
-            <span class="tooltip-value">{entry.value}</span>
-          </div>
-        {/each}
-      </div>
-
-      {#if previewOverflowCount > 0}
-        <div class="tooltip-preview-more" aria-hidden="true">
-          +{previewOverflowCount}
+    <div class="kh-scroll-area">
+      <div class="tooltip-shell-body" use:scrollShadows>
+        <div class="tooltip-entries">
+          {#if titleEntry && !isInteractive}
+            <div class="tooltip-preview-title">
+              <span class="tooltip-title-text">{titleEntry.key}</span>
+              {#if titleEntry.value}
+                <span class="tooltip-title-subtitle">{titleEntry.value}</span>
+              {/if}
+            </div>
+          {/if}
+          {#each visibleEntries as entry, index (`${index}:${entry.key}`)}
+            {#if entry.role === 'divider'}
+              <hr class="tooltip-divider" />
+            {:else if entry.role === 'subtitle'}
+              <div class="tooltip-subtitle">{entry.key}</div>
+            {:else if entry.role === 'heading'}
+              <div class="tooltip-heading">
+                <span class="tooltip-heading-key">{entry.key}</span>
+                <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
+                  >{entry.value}</span
+                >
+              </div>
+            {:else if entry.role === 'columns'}
+              <div class="tooltip-columns">
+                {#each entry.columns ?? [] as column, columnIndex (columnIndex)}
+                  <div class="tooltip-column">
+                    <span class="tooltip-key">{column.label}</span>
+                    <span class="tooltip-column-value">{column.value}</span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div
+                class="tooltip-row"
+                class:inline={entry.pinnedOnly}
+                class:variable={isVariableLayout && entry.isVizColumn}
+                class:other={isVariableLayout && !entry.isVizColumn}
+              >
+                <span class="tooltip-key" class:viz-column={entry.isVizColumn}>
+                  {#if entry.glyphs?.length}
+                    <span class="tooltip-glyphs">
+                      {#each entry.glyphs as glyph, glyphIndex (glyphIndex)}
+                        <TooltipGlyph glyph={glyph} />
+                      {/each}
+                    </span>
+                  {/if}{entry.key}</span
+                >
+                <span class="tooltip-value">{entry.value}</span>
+              </div>
+            {/if}
+          {/each}
         </div>
-      {/if}
+
+        {#if previewOverflowCount > 0}
+          <div class="tooltip-preview-more">
+            {previewOverflowCount === 1
+              ? m.map_tooltip_more_variables_one()
+              : m.map_tooltip_more_variables({ count: previewOverflowCount })}
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 {/if}
@@ -359,10 +471,16 @@
     );
     width: min(13rem, calc(100vw - 16px));
     max-width: min(13rem, calc(100vw - 16px));
-    max-height: min(8.5rem, calc(100dvh - 16px));
+    max-height: min(11rem, calc(100dvh - 16px));
     overflow: hidden;
     pointer-events: none;
     user-select: none;
+  }
+
+  .map-tooltip.hover-preview.fit-heading {
+    width: max-content;
+    min-width: min(13rem, calc(100vw - 16px));
+    max-width: min(22rem, calc(100vw - 16px));
   }
 
   .map-tooltip.interactive {
@@ -412,9 +530,31 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
   }
 
+  .tooltip-title-text {
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+  .tooltip-title-subtitle {
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .tooltip-title .tooltip-title-subtitle {
+    display: block;
+    font-size: 0.75rem;
+  }
+  .tooltip-preview-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tooltip-preview-title .tooltip-title-subtitle {
+    font-size: 11px;
+  }
   .tooltip-badges {
     display: flex;
     flex-wrap: wrap;
@@ -503,17 +643,36 @@
   }
 
   .tooltip-key {
-    color: #525252;
+    color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 82px;
+    max-width: 104px;
     flex-shrink: 1;
   }
 
   .tooltip-key.viz-column {
     font-weight: 600;
     color: var(--cds-text-primary, #161616);
+  }
+  /* The variables the map draws are never cut short: a long name wraps. */
+  .tooltip-row.variable {
+    grid-template-columns: minmax(0, max-content) minmax(3rem, 1fr);
+  }
+  .tooltip-row.variable .tooltip-key {
+    max-width: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .tooltip-row.other .tooltip-value {
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .tooltip-glyphs {
+    display: inline-flex;
+    gap: 2px;
+    margin-right: 5px;
+    vertical-align: -1px;
   }
 
   .tooltip-value {
@@ -523,9 +682,85 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 114px;
-    flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
     justify-self: end;
+  }
+
+  .tooltip-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .tooltip-heading-key {
+    font-weight: 600;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  /* Drawn like the counts of the join summary and panel. */
+  .tooltip-chip {
+    --chip-color: var(--cds-border-strong-01, #8d8d8d);
+    --chip-background: var(--cds-layer-01, #f4f4f4);
+    padding: 0 4px 1px;
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+    background-color: var(--chip-background);
+    border-bottom: 1px solid var(--chip-color);
+  }
+
+  .tooltip-chip.tone-success {
+    --chip-color: var(--khartis-additions-join-success, #24a148);
+    --chip-background: var(--khartis-additions-join-success-bg, #defbe6);
+  }
+
+  .tooltip-chip.tone-warning {
+    --chip-color: var(--khartis-additions-join-warning, #f1c21b);
+    --chip-background: var(--khartis-additions-join-warning-bg, #fcf4d6);
+  }
+
+  .tooltip-chip.tone-error {
+    --chip-color: var(--khartis-additions-join-error, #da1e28);
+    --chip-background: var(--khartis-additions-join-error-bg, #fff1f1);
+  }
+
+  /* Two fields side by side, like a row of the join tables. */
+  .tooltip-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+
+  .tooltip-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  /* Read whole, on two lines when needed. */
+  .tooltip-column .tooltip-key {
+    white-space: normal;
+    overflow: visible;
+    max-width: none;
+  }
+
+  .tooltip-column-value {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-subtitle {
+    font-size: 10px;
+    color: var(--cds-text-secondary, #525252);
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-divider {
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
 
   .interactive .tooltip-key,
@@ -546,16 +781,25 @@
     padding: 5px 0;
   }
 
+  /* The pinned row's other variables: name and value on one line. */
+  .interactive .tooltip-row.inline {
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: baseline;
+  }
+
+  .interactive .tooltip-row.inline .tooltip-value {
+    justify-self: end;
+    text-align: right;
+  }
+
   .interactive .tooltip-row + .tooltip-row {
     border-top: 1px solid rgba(22, 22, 22, 0.08);
   }
 
   .interactive .tooltip-key {
-    font-size: 10px;
     line-height: 1.3;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: #6f6f6f;
+    color: var(--cds-text-helper, #6f6f6f);
   }
 
   .interactive .tooltip-key.viz-column {
@@ -581,17 +825,6 @@
   }
 
   .tooltip-preview-more {
-    align-self: flex-end;
-    min-width: 24px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 0;
-    background: rgba(22, 22, 22, 0.06);
-    color: #525252;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
+    color: var(--cds-text-secondary, #525252);
   }
 </style>

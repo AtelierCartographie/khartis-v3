@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import {
@@ -28,8 +29,8 @@
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
-    filterFieldsByKind,
-    type FieldSelectionWithHandler
+    type FieldSelectionWithHandler,
+    filterFieldsByKind
   } from '../../hooks/use-field-selection.svelte';
   import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {
@@ -185,132 +186,135 @@
   />
 </div>
 
-{#if colorMode === ColorMode.UNIQUE}
-  <SingleColorPreview
-    exclusive
-    label={m.color()}
-    color={color}
-    onchange={onColorChange}
-  />
-  {@render dashedControl()}
-{:else if colorMode === ColorMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={colorPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableValueDataFields}
-      selectedFieldId={valueFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.LINE_VALUE
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.LINE_VALUE
-      )}
-      onSelect={valueFieldSelection.handleSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          valueColumnName,
-          FACET_SLOT.LINE_VALUE,
-          ids
-        )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(FACET_SLOT.LINE_VALUE, en)}
+<SwitchedContent value={colorMode}>
+  {#if colorMode === ColorMode.UNIQUE}
+    <SingleColorPreview
+      exclusive
+      label={m.color()}
+      color={color}
+      onchange={onColorChange}
     />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={colorDiscretizationLabel}
-    onsettings={onOpenColorDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={palette}
-    selectedPaletteId={classification?.paletteId}
-    inverted={classification?.inverted ?? false}
-    paletteType={resolvePaletteTypeForBreakpoint(classification)}
-    classification={classification}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  {@render dashedControl()}
-  <MissingDataSection
-    show={showMissingData}
-    onshowchange={onMissingDataShowChange}
-    color={missingDataColor}
-    oncolorchange={onMissingDataColorChange}
-    size={missingDataSize}
-    sizeLabel={m.thickness()}
-    onsizechange={onMissingDataSizeChange}
-    showShapeSelector={false}
-    showDashedToggle={true}
-    dashed={missingDataDashed}
-    dashedPattern={missingDataDashedPattern}
-    ondashedchange={onMissingDataDashedChange}
-    ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{:else if colorMode === ColorMode.CATEGORIES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={categoryPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableCategoryDataFields}
-      selectedFieldId={categoryFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.LINE_CATEGORY
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.LINE_CATEGORY
-      )}
-      onSelect={categoryFieldSelection.handleSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          categoryColumnName,
-          FACET_SLOT.LINE_CATEGORY,
-          ids
+    {@render dashedControl()}
+  {:else if colorMode === ColorMode.CLASSES}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={colorPickerOpen}
+        titleText={m.color_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableValueDataFields}
+        selectedFieldId={valueFieldSelection.selectedFieldId}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          FACET_SLOT.LINE_VALUE
         )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(FACET_SLOT.LINE_CATEGORY, en)}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          FACET_SLOT.LINE_VALUE
+        )}
+        onSelect={valueFieldSelection.handleSelect}
+        onCollectionChange={(ids) =>
+          facetsSelection.updateVariables(
+            valueColumnName,
+            FACET_SLOT.LINE_VALUE,
+            ids
+          )}
+        onToggleCollection={(en) =>
+          facetsSelection.toggle(FACET_SLOT.LINE_VALUE, en)}
+      />
+    </div>
+    <DiscretizationRow
+      label={m.discretization()}
+      value={colorDiscretizationLabel}
+      onsettings={onOpenColorDiscretization}
     />
-  </div>
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={(isSingularCount(categoryCount)
-      ? m.categories_count_one
-      : m.categories_count)({ count: formatValue(categoryCount) })}
-    settingsIconDescription={m.palette_categories_aspect_title()}
-    onsettings={() => {
-      categoriesPopoverOpen = true;
-    }}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={categoriesPalette}
-    selectedPaletteId={classification?.paletteId}
-    inverted={classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.QUALITATIVE}
-    categoriesMode={true}
-    categoriesVariant="lines"
-    categoryLabels={categoryLabels}
-    bind:categoriesPopoverOpen={categoriesPopoverOpen}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  {@render dashedControl()}
-  <MissingDataSection
-    show={showMissingData}
-    onshowchange={onMissingDataShowChange}
-    color={missingDataColor}
-    oncolorchange={onMissingDataColorChange}
-    size={missingDataSize}
-    sizeLabel={m.thickness()}
-    onsizechange={onMissingDataSizeChange}
-    showShapeSelector={false}
-    showDashedToggle={true}
-    dashed={missingDataDashed}
-    dashedPattern={missingDataDashedPattern}
-    ondashedchange={onMissingDataDashedChange}
-    ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{/if}
+    <PalettePreview
+      label={m.color_palette()}
+      colors={palette}
+      selectedPaletteId={classification?.paletteId}
+      inverted={classification?.inverted ?? false}
+      paletteType={resolvePaletteTypeForBreakpoint(classification)}
+      classification={classification}
+      oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
+    />
+    {@render dashedControl()}
+    <MissingDataSection
+      show={showMissingData}
+      onshowchange={onMissingDataShowChange}
+      color={missingDataColor}
+      oncolorchange={onMissingDataColorChange}
+      size={missingDataSize}
+      sizeLabel={m.thickness()}
+      onsizechange={onMissingDataSizeChange}
+      showShapeSelector={false}
+      showDashedToggle={true}
+      dashed={missingDataDashed}
+      dashedPattern={missingDataDashedPattern}
+      ondashedchange={onMissingDataDashedChange}
+      ondashedpatternchange={onMissingDataDashedPatternChange}
+    />
+  {:else if colorMode === ColorMode.CATEGORIES}
+    <div class="field-group">
+      <FacetsVariablePicker
+        bind:open={categoryPickerOpen}
+        titleText={m.color_according()}
+        dataFields={dataFields}
+        singleSelectItems={selectableCategoryDataFields}
+        selectedFieldId={categoryFieldSelection.selectedFieldId}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          FACET_SLOT.LINE_CATEGORY
+        )}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          FACET_SLOT.LINE_CATEGORY
+        )}
+        onSelect={categoryFieldSelection.handleSelect}
+        onCollectionChange={(ids) =>
+          facetsSelection.updateVariables(
+            categoryColumnName,
+            FACET_SLOT.LINE_CATEGORY,
+            ids
+          )}
+        onToggleCollection={(en) =>
+          facetsSelection.toggle(FACET_SLOT.LINE_CATEGORY, en)}
+      />
+    </div>
+    <DiscretizationRow
+      label={m.category_aspect()}
+      value={(isSingularCount(categoryCount)
+        ? m.categories_count_one
+        : m.categories_count)({ count: formatValue(categoryCount) })}
+      settingsIconDescription={m.palette_categories_aspect_title()}
+      onsettings={() => {
+        categoriesPopoverOpen = true;
+      }}
+    />
+    <PalettePreview
+      label={m.color_palette()}
+      colors={categoriesPalette}
+      selectedPaletteId={classification?.paletteId}
+      inverted={classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.QUALITATIVE}
+      categoriesMode={true}
+      categoriesVariant="lines"
+      categoryLabels={categoryLabels}
+      classification={classification}
+      bind:categoriesPopoverOpen={categoriesPopoverOpen}
+      oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
+    />
+    {@render dashedControl()}
+    <MissingDataSection
+      show={showMissingData}
+      onshowchange={onMissingDataShowChange}
+      color={missingDataColor}
+      oncolorchange={onMissingDataColorChange}
+      size={missingDataSize}
+      sizeLabel={m.thickness()}
+      onsizechange={onMissingDataSizeChange}
+      showShapeSelector={false}
+      showDashedToggle={true}
+      dashed={missingDataDashed}
+      dashedPattern={missingDataDashedPattern}
+      ondashedchange={onMissingDataDashedChange}
+      ondashedpatternchange={onMissingDataDashedPatternChange}
+    />
+  {/if}
+</SwitchedContent>

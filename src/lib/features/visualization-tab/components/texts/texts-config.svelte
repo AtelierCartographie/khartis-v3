@@ -1,8 +1,14 @@
 <script lang="ts">
+  import { InlineNotification } from 'carbon-components-svelte';
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import {
+    SectionHeading,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import { VizFilterButton, VizFilterPanel } from '../shared';
+  import HiddenLabelsSummary from './hidden-labels-summary.svelte';
   import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
@@ -25,6 +31,7 @@
     SizeMode,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
+  import { isVizFilterComplete } from '$lib/features/commons/utils/viz-filter.utils';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
     DEFAULT_SEQUENTIAL_PREVIEW
@@ -50,14 +57,17 @@
     NONE_FIELD_ID,
     useFieldSelection
   } from '../../hooks/use-field-selection.svelte';
+  import type { LabelFieldItem } from '../../hooks/use-dataset-analysis.svelte';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import { facetsStore } from '../../adapters/facets-adapter';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
     open?: boolean;
     onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
+    basemapLabelFields?: LabelFieldItem[];
     visualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -85,6 +95,7 @@
 
   let {
     dataFields = [],
+    basemapLabelFields = [],
     visualization,
     disabled = false,
     onStyleChange,
@@ -112,23 +123,39 @@
   );
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  // Labels may also read the basemap names; the picker shows their label while
+  // the mapping stores the column.
+  const labelFields = $derived<LabelFieldItem[]>([
+    ...dataFields,
+    ...basemapLabelFields
+  ]);
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const secondaryFieldItems = $derived([noneOption, ...dataFields]);
+  const labelFieldOptions = $derived([
+    noneOption,
+    ...labelFields.map((field) => ({
+      id: field.id,
+      text: field.label ?? field.text
+    }))
+  ]);
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'size' | 'color'>('size');
   let filterSectionVisible = $state(false);
 
-  const labelFieldSelection = useFieldSelection(() => dataFields);
+  const labelFieldSelection = useFieldSelection(() => labelFields);
   // Labels carry one value column: the size classes and the colour classes read
   // the same variable and share a single classification.
   const valueFieldSelection = useFieldSelection(() => dataFields);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
-  const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryLabelFieldSelection = useFieldSelection(() => labelFields);
   const textFacetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
   });
+  // Label placement is not computed per map of a collection yet.
+  const isPositionLocked = $derived(
+    facetsStore.enabled && facetsStore.facetVisualizations.length > 0
+  );
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -140,6 +167,9 @@
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
+  let automaticPlacement = $state<boolean>(false);
+  let labelColumns = $state<boolean>(false);
+  let filteredLabelsOptional = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
   let haloOpacity = $state<number>(VISUALIZATION_DEFAULTS.haloOpacity);
@@ -178,6 +208,7 @@
   let categoryPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
 
+  const hasTextFilter = $derived(filters.some(isVizFilterComplete));
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(
     labelFieldSelection.selectedFieldId !== NONE_FIELD_ID
@@ -269,6 +300,10 @@
       colorMode = visualization.modes?.color ?? ColorMode.UNIQUE;
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
+      automaticPlacement = visualization.style.textAutomaticPlacement ?? false;
+      labelColumns = visualization.style.textLabelColumns ?? false;
+      filteredLabelsOptional =
+        visualization.style.textFilteredLabelsOptional ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
@@ -311,7 +346,7 @@
       return;
     }
 
-    const field = dataFields.find((item) => item.id === fieldId);
+    const field = labelFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ labelColumn: field.text });
     }
@@ -327,7 +362,7 @@
       return;
     }
 
-    const field = secondaryFieldItems.find((item) => item.id === fieldId);
+    const field = labelFields.find((item) => item.id === fieldId);
     if (!field) {
       return;
     }
@@ -404,6 +439,21 @@
     textOpacity = value;
     onStyleChange?.({ textOpacity: value / 100 });
     onSecondaryLabelsChange?.({ opacity: value / 100 });
+  }
+
+  function handleAutomaticPlacementToggle(value: boolean) {
+    automaticPlacement = value;
+    onStyleChange?.({ textAutomaticPlacement: value });
+  }
+
+  function handleLabelColumnsToggle(value: boolean) {
+    labelColumns = value;
+    onStyleChange?.({ textLabelColumns: value });
+  }
+
+  function handleFilteredLabelsOptionalToggle(value: boolean) {
+    filteredLabelsOptional = value;
+    onStyleChange?.({ textFilteredLabelsOptional: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -600,8 +650,8 @@
 
     <div class="texts-config">
       <TextLabelSection
-        selectableDataFields={selectableDataFields}
-        secondaryFieldItems={secondaryFieldItems}
+        selectableDataFields={labelFieldOptions}
+        secondaryFieldItems={labelFieldOptions}
         primarySelectedId={labelFieldSelection.selectedFieldId}
         secondarySelectedId={secondaryLabelFieldSelection.selectedFieldId}
         hasPrimaryField={hasPrimaryField}
@@ -629,6 +679,46 @@
           onLabelChange={handleMissingDataLabelChange}
           onColorChange={handleMissingDataColorChange}
         />
+
+        <SectionHeading title={m.text_position_title()} />
+        {#if isPositionLocked}
+          <div class="kh-notification-stack texts-config__notice">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              subtitle={m.text_position_facets_unavailable()}
+            />
+          </div>
+        {:else}
+          <p class="texts-config__helper">{m.text_position_helper()}</p>
+        {/if}
+        <ToggleWithLabel
+          label={m.text_automatic_placement()}
+          toggled={automaticPlacement}
+          disabled={isPositionLocked}
+          infoText={m.text_automatic_placement_info()}
+          ontoggle={handleAutomaticPlacementToggle}
+        />
+        <ToggleWithLabel
+          label={m.text_label_columns()}
+          toggled={automaticPlacement && labelColumns}
+          disabled={isPositionLocked || !automaticPlacement}
+          infoText={m.text_label_columns_info()}
+          ontoggle={handleLabelColumnsToggle}
+        />
+        {#if automaticPlacement && hasTextFilter}
+          <ToggleWithLabel
+            label={m.text_filtered_labels_optional()}
+            toggled={filteredLabelsOptional}
+            disabled={isPositionLocked}
+            infoText={m.text_filtered_labels_optional_info()}
+            ontoggle={handleFilteredLabelsOptionalToggle}
+          />
+        {/if}
+        {#if automaticPlacement && visualization && !isPositionLocked}
+          <HiddenLabelsSummary vizId={visualization.id} />
+        {/if}
 
         <TextSizeSection
           sizeMode={sizeMode}
@@ -756,6 +846,15 @@
 
   .texts-config__dependent--disabled {
     opacity: 0.4;
+  }
+
+  .texts-config__notice :global(.bx--inline-notification) {
+    max-width: none;
+  }
+
+  .texts-config__helper {
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    color: var(--cds-text-helper);
   }
 
   :global(.text-input-field .bx--text-input) {

@@ -44,6 +44,11 @@ export interface IgnoredEntity {
   lines?: number[];
 }
 
+export interface EntityValidation {
+  dataValue: string;
+  basemapValue: string;
+}
+
 export interface JoinMapping {
   dataValue: string;
   basemapOptions: string[];
@@ -117,3 +122,7 @@ export interface SerializedDataTabState extends Omit<
 > {
   basemapJoin: SerializedBasemapJoinState;
 }
+
+/** Color of a join category, shared by the join panel and the map. */
+export type JoinCategoryTone =
+  'success' | 'warning' | 'error' | 'ignored' | 'missing';
