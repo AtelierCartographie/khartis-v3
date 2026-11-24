@@ -1,6 +1,5 @@
 import { paraglideMiddleware } from '$lib/paraglide/server';
-import type { Handle } from '@sveltejs/kit';
-import { sequence } from '@sveltejs/kit/hooks';
+import { sequence, type Handle } from '@sveltejs/kit/hooks';
 import * as m from '$lib/paraglide/messages';
 
 function withCrossOriginIsolationHeaders(response: Response): Response {
@@ -29,23 +28,17 @@ const handleDevTools: Handle = ({ event, resolve }) => {
   return resolve(event);
 };
 
+// Paraglide hands over a rewritten request only under its url strategy, which
+// Khartis does not use, and SvelteKit 3 makes event.request read-only.
 const handleParaglide: Handle = ({ event, resolve }) =>
-  paraglideMiddleware(event.request, ({ request, locale }) => {
-    event.request = request;
-
-    const response = resolve(event, {
+  paraglideMiddleware(event.request, ({ locale }) =>
+    resolve(event, {
       transformPageChunk: ({ html }) =>
         html
           .replace('%paraglide.lang%', locale)
           .replace(/%app\.name%/g, m.app_name())
           .replace(/%app\.description%/g, m.app_description())
-    });
-
-    if (response instanceof Promise) {
-      return response.then(withCrossOriginIsolationHeaders);
-    }
-
-    return withCrossOriginIsolationHeaders(response);
-  });
+    }).then(withCrossOriginIsolationHeaders)
+  );
 
 export const handle: Handle = sequence(handleDevTools, handleParaglide);

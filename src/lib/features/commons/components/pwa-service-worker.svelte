@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dev } from '$app/environment';
+  import { dev } from '$app/env';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     isPwaCacheForScope,
