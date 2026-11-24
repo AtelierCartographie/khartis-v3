@@ -134,7 +134,9 @@ les deux workflows. Elle lance six contrôles en parallèle :
 
 - `pr-validation.yml` l'appelle sur les pull requests non brouillons vers
   `staging` et `main`, et sur les files de fusion. Son job `Quality Checks` est
-  le contrôle exigé par les règles de branche : ne pas le renommer.
+  le contrôle exigé par les règles de branche : ne pas le renommer. Son job
+  `Commit Messages` repasse commitlint sur chaque commit de la pull request,
+  brouillon compris, car le hook `commit-msg` peut être contourné.
 - `release.yml` l'appelle à chaque push sur `staging` ou `main`, puis lance
   `semantic-release` : prérelease `vX.Y.Z-pprd.N` depuis `staging`, release
   stable `vX.Y.Z` depuis `main`.
@@ -167,6 +169,8 @@ Husky installe deux hooks :
   de feature, config Vite, Svelte, TypeScript, Prettier ou ESLint) commité sans
   mise à jour de `AGENTS.md`, `docs/` ou `.claude/rules/`. Simple
   avertissement, bloquant avec `DOC_SYNC_STRICT=1`.
-- **commit-msg** : commitlint vérifie le format Conventional Commits.
+- **commit-msg** : commitlint vérifie le format Conventional Commits et refuse
+  une ligne qui crédite un assistant IA (co-auteur ou lien de session). Le
+  réglage `attribution` de `.claude/settings.json` empêche l'agent de l'ajouter.
 
 Ces hooks ne remplacent pas la matrice de validation.
