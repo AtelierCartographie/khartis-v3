@@ -12,6 +12,10 @@ interface UseLabelEditingOptions {
   getContainer: () => HTMLElement | null | undefined;
   /** Labels can be moved and edited only while this holds. */
   isEnabled: () => boolean;
+  /**
+   * Synchronous on purpose: MapboxOverlay forwards only Deck.pickObject, which
+   * deck.gl 9.4 deprecates in favor of pickObjectAsync.
+   */
   pick: (x: number, y: number, radius: number) => PickingInfo | null;
   /** While editing is off, a double-click on a label calls onLockedLabel. */
   isHintEnabled?: () => boolean;
