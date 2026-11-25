@@ -56,6 +56,7 @@
 </script>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.reset_data_modal_title()}
@@ -80,11 +81,11 @@
     >
       {m.reset_data_modal_warning()}
     </p>
-    <p style="margin-top: 0.5rem; color: var(--cds-text-02);">
+    <p style="margin-top: 0.5rem; color: var(--cds-text-secondary);">
       {m.reset_data_modal_irreversible()}
     </p>
   {:else}
-    <p style="margin-top: 1rem; color: var(--cds-text-02);">
+    <p style="margin-top: 1rem; color: var(--cds-text-secondary);">
       {m.reset_data_modal_no_modifications()}
     </p>
   {/if}

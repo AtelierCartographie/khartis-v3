@@ -55,8 +55,10 @@
     size="small"
     icon={open ? ChevronUp : ChevronDown}
     aria-expanded={open}
-    on:click={() => (open = !open)}>{m.projection_definition_toggle()}</Button
+    on:click={() => (open = !open)}
   >
+    {m.projection_definition_toggle()}
+  </Button>
   {#if definition}
     <div
       class="projection-definition-body"
@@ -66,9 +68,9 @@
         <p class="projection-definition-epsg">EPSG:{definition.epsg}</p>
       {/if}
       {#if definition.proj4}
-        <span class="projection-definition-label"
-          >{m.projection_definition_proj4_label()}</span
-        >
+        <span class="projection-definition-label">
+          {m.projection_definition_proj4_label()}
+        </span>
         <CodeSnippet
           type="multi"
           wrapText
@@ -80,9 +82,9 @@
         />
       {/if}
       {#if definition.wkt}
-        <span class="projection-definition-label"
-          >{m.projection_definition_wkt_label()}</span
-        >
+        <span class="projection-definition-label">
+          {m.projection_definition_wkt_label()}
+        </span>
         <CodeSnippet
           type="multi"
           wrapText

@@ -183,9 +183,9 @@
               role="group"
               aria-labelledby="scale-form-label"
             >
-              <span id="scale-form-label" class="bx--label"
-                >{m.geo_style()}</span
-              >
+              <span id="scale-form-label" class="bx--label">
+                {m.geo_style()}
+              </span>
               <ToggleTabs
                 size="sm"
                 items={formOptions.map((option) => ({ label: option.text }))}

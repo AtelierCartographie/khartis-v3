@@ -112,13 +112,13 @@
   >
     {#each lines ?? [{ text, shortcut }] as line, index (index)}
       {#if line.shortcut}
-        <span class="khartis-tooltip-line"
-          ><span>{line.text}</span><span class="khartis-tooltip-keys"
-            >{#each splitShortcutKeys(line.shortcut) as key (key)}<kbd
-                >{key}</kbd
-              >{/each}</span
-          ></span
-        >
+        <span class="khartis-tooltip-line">
+          <span>{line.text}</span><span class="khartis-tooltip-keys">
+            {#each splitShortcutKeys(line.shortcut) as key (key)}<kbd>
+                {key}
+              </kbd>{/each}
+          </span>
+        </span>
       {:else}
         <span class="khartis-tooltip-line">{line.text}</span>
       {/if}
@@ -142,14 +142,14 @@
     min-width: 1.5rem;
     max-width: 13rem;
     padding: 0.1875rem 1rem;
-    background-color: var(--cds-inverse-02, #393939);
+    background-color: var(--cds-background-inverse, #393939);
     border-radius: 0.125rem;
-    color: var(--cds-inverse-01, #ffffff);
+    color: var(--cds-text-inverse, #ffffff);
     box-shadow: 0 2px 6px var(--cds-shadow, rgba(0, 0, 0, 0.3));
-    font-size: var(--cds-body-short-01-font-size, 0.875rem);
-    font-weight: var(--cds-body-short-01-font-weight, 400);
-    line-height: var(--cds-body-short-01-line-height, 1.28572);
-    letter-spacing: var(--cds-body-short-01-letter-spacing, 0.16px);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    font-weight: var(--cds-body-compact-01-font-weight, 400);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
+    letter-spacing: var(--cds-body-compact-01-letter-spacing, 0.16px);
     text-align: left;
     word-break: break-word;
     /* Measured before it is placed; revealing it early flashes it at the origin. */
@@ -203,7 +203,7 @@
     left: var(--khartis-tooltip-caret-left);
     transform: translateX(-50%);
     border-width: 0.25rem 0.3125rem 0;
-    border-color: var(--cds-inverse-02, #393939) transparent transparent;
+    border-color: var(--cds-background-inverse, #393939) transparent transparent;
   }
 
   :global(.khartis-carbon-tooltip--bottom::before) {
@@ -211,7 +211,7 @@
     left: var(--khartis-tooltip-caret-left);
     transform: translateX(-50%);
     border-width: 0 0.3125rem 0.25rem;
-    border-color: transparent transparent var(--cds-inverse-02, #393939);
+    border-color: transparent transparent var(--cds-background-inverse, #393939);
   }
 
   :global(.khartis-carbon-tooltip--left::before) {
@@ -220,7 +220,7 @@
     transform: translateY(-50%);
     border-width: 0.3125rem 0 0.3125rem 0.25rem;
     border-color: transparent transparent transparent
-      var(--cds-inverse-02, #393939);
+      var(--cds-background-inverse, #393939);
   }
 
   :global(.khartis-carbon-tooltip--right::before) {
@@ -228,7 +228,7 @@
     left: -0.3125rem;
     transform: translateY(-50%);
     border-width: 0.3125rem 0.25rem 0.3125rem 0;
-    border-color: transparent var(--cds-inverse-02, #393939) transparent
+    border-color: transparent var(--cds-background-inverse, #393939) transparent
       transparent;
   }
 </style>

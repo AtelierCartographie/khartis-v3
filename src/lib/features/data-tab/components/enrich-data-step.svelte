@@ -557,6 +557,7 @@
           <InlineNotification
             closeButtonDescription={m.a11y_close_notification()}
             kind="error"
+            role="alert"
             title={m.error_title()}
             subtitle={fileHook.uploadError}
             hideCloseButton={false}
@@ -616,7 +617,7 @@
   }
 
   .kh-help {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.8125rem;
     line-height: 1.25rem;
     margin-bottom: var(--cds-spacing-02);

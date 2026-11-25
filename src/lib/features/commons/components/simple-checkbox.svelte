@@ -66,9 +66,9 @@
   .kh-checkbox-native {
     --_kh-checkbox-size: 18px;
     --_kh-checkbox-mark-size: 10px;
-    --_kh-checkbox-border: var(--cds-ui-04, #8d8d8d);
+    --_kh-checkbox-border: var(--cds-border-strong-01, #8d8d8d);
     --_kh-checkbox-border-hover: var(--cds-blue, #0072c3);
-    --_kh-checkbox-bg: var(--cds-layer-01, #ffffff);
+    --_kh-checkbox-bg: var(--khartis-control-surface-background, #ffffff);
     --_kh-checkbox-bg-checked: var(--cds-blue, #0072c3);
     --_kh-checkbox-mark-color: var(--cds-icon-on-color, #ffffff);
     --_kh-checkbox-label-size: 0.875rem;
@@ -103,7 +103,7 @@
       --khartis-additions-text-secondary-suggestions,
       #00539a
     );
-    --_kh-checkbox-focus-ring: 0 0 0 2px var(--cds-interactive-03, #726e6e);
+    --_kh-checkbox-focus-ring: 0 0 0 2px var(--cds-button-tertiary, #726e6e);
     --_kh-checkbox-disabled-opacity: 1;
   }
 

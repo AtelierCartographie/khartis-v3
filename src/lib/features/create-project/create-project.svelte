@@ -461,8 +461,8 @@
   }
 
   #khartis-create-project :global(.tab-title) {
-    font-size: var(--cds-body-short-01-font-size, 0.875rem);
-    line-height: var(--cds-body-short-01-line-height, 1.28572);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
   }
 
   @media (max-width: 768px) {

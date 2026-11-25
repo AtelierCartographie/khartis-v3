@@ -126,9 +126,9 @@
   <div class="file-imported">
     <span class="file-label">{m.enrich_file_imported()}</span>
     <div class="file-row">
-      <span class="file-name"
-        >{enrichmentSourceName || m.dataset_pasted_name()}</span
-      >
+      <span class="file-name">
+        {enrichmentSourceName || m.dataset_pasted_name()}
+      </span>
       <Button
         class="file-remove"
         kind="ghost"
@@ -158,6 +158,7 @@
       title={m.enrich_coordinates_only_title()}
       subtitle={m.enrich_coordinates_only_subtitle()}
       kind="error"
+      role="alert"
       lowContrast
       hideCloseButton={false}
     />
@@ -276,13 +277,13 @@
   .section-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     margin-top: var(--cds-spacing-03);
   }
 
   .section-description {
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     line-height: 1.4;
   }
 
@@ -294,7 +295,7 @@
 
   .file-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .file-row {
@@ -308,7 +309,7 @@
 
   .file-name {
     font-size: 0.875rem;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .table-preview {
@@ -319,7 +320,7 @@
 
   .preview-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .preview-container {
@@ -340,7 +341,7 @@
   .subsection-title {
     font-size: 0.8125rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     margin-bottom: var(--cds-spacing-02);
   }
 
@@ -353,7 +354,7 @@
   .computing-join {
     padding: var(--cds-spacing-05);
     text-align: center;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-style: italic;
   }
 
@@ -362,13 +363,13 @@
     text-align: center;
     color: var(--cds-support-success);
     font-weight: 500;
-    background-color: var(--cds-layer-01);
+    background-color: var(--khartis-control-surface-background);
     margin-top: var(--cds-spacing-04);
   }
 
   .placeholder-text {
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     padding: var(--cds-spacing-04);
     background-color: var(--cds-layer-02);
     text-align: center;

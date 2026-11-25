@@ -124,9 +124,9 @@
       {#if layout === 'paired' && paired}
         <div class="paired-fields">
           {@render comboField(primary)}
-          <span class="paired-separator" aria-hidden="true"
-            >{m.separator_double_arrow()}</span
-          >
+          <span class="paired-separator" aria-hidden="true">
+            {m.separator_double_arrow()}
+          </span>
           {@render comboField(paired)}
         </div>
       {:else}

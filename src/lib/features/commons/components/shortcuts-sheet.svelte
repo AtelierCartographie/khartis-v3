@@ -152,7 +152,7 @@
 <style>
   .shortcuts-hint {
     margin-block-end: var(--cds-spacing-05);
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .shortcuts-section {
@@ -161,7 +161,7 @@
 
   h3 {
     margin-block-end: var(--cds-spacing-03);
-    font-size: var(--cds-productive-heading-02-font-size, 1rem);
+    font-size: var(--cds-heading-compact-02-font-size, 1rem);
     font-weight: 600;
   }
 
@@ -171,7 +171,7 @@
     justify-content: space-between;
     gap: var(--cds-spacing-05);
     padding-block: var(--cds-spacing-02);
-    border-block-end: 1px solid var(--cds-ui-03);
+    border-block-end: 1px solid var(--cds-border-subtle-00);
   }
 
   dd {
@@ -180,9 +180,9 @@
 
   kbd {
     padding: 0 var(--cds-spacing-03);
-    border: 1px solid var(--cds-ui-04);
+    border: 1px solid var(--cds-border-strong-01);
     border-radius: 3px;
-    background: var(--cds-ui-01);
+    background: var(--cds-layer-01);
     font-family: inherit;
     font-size: 0.875rem;
     white-space: nowrap;

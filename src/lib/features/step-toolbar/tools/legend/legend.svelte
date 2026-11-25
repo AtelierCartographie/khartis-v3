@@ -447,14 +447,17 @@
                         showTypeIcon={false}
                       />
                     {:else}
-                      <span class="legend-item-heading__name"
-                        >{header.fallback}</span
-                      >
+                      <span class="legend-item-heading__name">
+                        {header.fallback}
+                      </span>
                     {/each}
                     {#each header.path as step (step)}
-                      <span class="legend-item-heading__step" aria-hidden="true"
-                        >&gt;</span
+                      <span
+                        class="legend-item-heading__step"
+                        aria-hidden="true"
                       >
+                        &gt;
+                      </span>
                       <span>{step}</span>
                     {/each}
                   </span>
@@ -477,9 +480,9 @@
 
                 <div class="legend-layout-group">
                   <div class="legend-switch-row">
-                    <span class="legend-field-label"
-                      >{m.legend_title_side()}</span
-                    >
+                    <span class="legend-field-label">
+                      {m.legend_title_side()}
+                    </span>
                     <Switch
                       labelText={m.legend_title_side()}
                       hideLabel
@@ -579,9 +582,9 @@
                       />
                     {/if}
                     <div class="legend-switch-row">
-                      <span class="legend-field-label"
-                        >{m.legend_proportional_classes()}</span
-                      >
+                      <span class="legend-field-label">
+                        {m.legend_proportional_classes()}
+                      </span>
                       <Switch
                         labelText={m.legend_proportional_classes()}
                         hideLabel

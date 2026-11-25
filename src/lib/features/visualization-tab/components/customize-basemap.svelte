@@ -405,6 +405,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    background-color: var(--cds-layer-01);
+    background-color: var(--khartis-control-surface-background);
   }
 </style>

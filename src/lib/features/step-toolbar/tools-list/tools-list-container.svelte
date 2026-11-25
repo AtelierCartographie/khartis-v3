@@ -30,7 +30,7 @@
 
   .tools-section {
     position: relative;
-    border-top: 1px solid var(--cds-ui-01);
+    border-top: 1px solid var(--cds-layer-01);
     padding-top: var(--cds-spacing-03);
     padding-bottom: var(--cds-spacing-03);
     display: flex;

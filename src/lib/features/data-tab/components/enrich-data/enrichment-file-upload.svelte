@@ -81,9 +81,9 @@
           on:click={() => onSelectProjectTable(table.id)}
         >
           {table.name}
-          <span class="project-table-rows"
-            >{formatRowCount(table.rowCount)}</span
-          >
+          <span class="project-table-rows">
+            {formatRowCount(table.rowCount)}
+          </span>
         </Button>
       {/each}
     </div>
@@ -159,14 +159,14 @@
   .section-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     margin-top: var(--cds-spacing-03);
   }
 
   .section-help {
     margin: 0;
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .project-tables {
@@ -182,7 +182,7 @@
 
   .project-table-rows {
     margin-left: var(--cds-spacing-03);
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-weight: 400;
   }
 
@@ -210,7 +210,7 @@
 
   .url-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .url-input-row {

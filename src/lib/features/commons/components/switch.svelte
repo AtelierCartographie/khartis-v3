@@ -69,9 +69,9 @@
     --_kh-switch-knob-size: 14px;
     --_kh-switch-knob-offset: 3px;
     --_kh-switch-knob-translate: 16px;
-    --_kh-switch-track-off: var(--cds-ui-04, #8d8d8d);
+    --_kh-switch-track-off: var(--cds-toggle-off, #8d8d8d);
     --_kh-switch-track-on: var(--cds-blue, #0072c3);
-    --_kh-switch-knob-bg: var(--cds-icon-03, #ffffff);
+    --_kh-switch-knob-bg: var(--cds-icon-on-color, #ffffff);
     --_kh-switch-label-size: 0.875rem;
     --_kh-switch-label-line-height: 1.125rem;
     --_kh-switch-label-letter-spacing: normal;
@@ -127,7 +127,7 @@
       --khartis-additions-text-primary-suggestions,
       #003a6d
     );
-    --_kh-switch-focus-ring: 0 0 0 2px var(--cds-interactive-03, #726e6e);
+    --_kh-switch-focus-ring: 0 0 0 2px var(--cds-button-tertiary, #726e6e);
     --_kh-switch-disabled-opacity: 1;
     --_kh-switch-disabled-track: var(--cds-button-disabled, #c6c6c6);
     --_kh-switch-disabled-knob: var(--cds-text-on-color-disabled, #8d8d8d);

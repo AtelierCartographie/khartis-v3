@@ -537,7 +537,7 @@
     left: 0;
     background: linear-gradient(
       to right,
-      var(--cds-ui-01) 0%,
+      var(--cds-layer-01) 0%,
       rgba(244, 244, 244, 0) 100%
     );
   }
@@ -546,7 +546,7 @@
     right: 0;
     background: linear-gradient(
       to left,
-      var(--cds-ui-01) 0%,
+      var(--cds-layer-01) 0%,
       rgba(244, 244, 244, 0) 100%
     );
   }

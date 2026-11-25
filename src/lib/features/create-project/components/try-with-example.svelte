@@ -142,6 +142,7 @@
       closeButtonDescription={m.a11y_close_notification()}
       lowContrast
       kind="error"
+      role="alert"
       title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
@@ -186,9 +187,9 @@
             onclick={() => handleExampleClick(example.id)}
           >
             {#snippet footer()}
-              <span class="example-tags text-xs text-grey"
-                >{getExampleCategoriesLabel(example)}</span
-              >
+              <span class="example-tags text-xs text-grey">
+                {getExampleCategoriesLabel(example)}
+              </span>
             {/snippet}
           </ProjectCard>
         </div>

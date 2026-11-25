@@ -53,8 +53,8 @@ if (typeof Element !== 'undefined' && !Element.prototype.animate) {
   };
 }
 
-vi.mock('$env/dynamic/public', () => ({
-  env: {}
+vi.mock('$app/env/public', () => ({
+  PUBLIC_GTM_CONTAINER_ID: ''
 }));
 
 vi.mock('$lib/features/duckdb', async () => ({

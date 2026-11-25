@@ -211,17 +211,19 @@
               size="small"
               class="pick-button"
               icon={Eyedropper}
-              onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
+              onclick={pickScreenColor}
             >
+              {m.color_pick_from_screen()}
+            </Button>
           </Column>
         </Row>
       {/if}
     {/snippet}
 
     {#snippet hexField()}
-      <label class="form-label mb-2" for="{idPrefix}-hex"
-        >{m.color_hex_code()}</label
-      >
+      <label class="form-label mb-2" for="{idPrefix}-hex">
+        {m.color_hex_code()}
+      </label>
       <input
         id="{idPrefix}-hex"
         class="hex"
@@ -269,11 +271,11 @@
   }
 
   .slider :global(.bx--slider__track) {
-    background: var(--cds-ui-03);
+    background: var(--cds-layer-accent-01);
   }
 
   .slider :global(.bx--slider__filled-track) {
-    background: var(--cds-text-01);
+    background: var(--cds-text-primary);
   }
 
   .slider.rainbow :global(.bx--slider__track) {
@@ -311,7 +313,7 @@
     height: var(--cds-spacing-05);
     background: var(--cds-field-01);
     box-shadow:
-      0 0 0 2px var(--cds-text-01),
+      0 0 0 2px var(--cds-text-primary),
       0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
@@ -374,7 +376,7 @@
   .preview {
     width: 100%;
     height: var(--kh-size-md);
-    border: 1px solid var(--cds-ui-04);
+    border: 1px solid var(--cds-border-strong-01);
     box-sizing: border-box;
   }
 

@@ -161,8 +161,10 @@
           size="small"
           disabled={!isDirty || !canApplyProjectionSettings}
           icon={Renew}
-          on:click={resetAll}>{m.projection_settings_reset()}</Button
+          on:click={resetAll}
         >
+          {m.projection_settings_reset()}
+        </Button>
       {/if}
       <ProjectionDefinition />
     </div>

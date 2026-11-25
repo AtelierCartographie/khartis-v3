@@ -59,9 +59,9 @@
 <div class="projection-current">
   <span class="projection-current-label">{m.projection_current_label()}</span>
   <div class="projection-current-row">
-    <span class="projection-current-name" title={display.name}
-      >{display.name}</span
-    >
+    <span class="projection-current-name" title={display.name}>
+      {display.name}
+    </span>
     {#if display.description}
       <InfoPopover text={display.description} />
     {/if}
@@ -95,7 +95,7 @@
     gap: 2px;
     margin-inline: calc(-1 * var(--kh-pad-panel));
     padding: var(--kh-gap-param) var(--kh-pad-panel);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
   }
 
   .projection-current-row {
