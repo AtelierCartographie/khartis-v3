@@ -188,20 +188,23 @@ Une fois le run `release.yml` de `main` réussi et la release stable publiée :
 git fetch origin --tags
 TAG=$(git describe --tags --abbrev=0 --exclude '*-*' origin/main)
 git switch -c "chore/return-$TAG" origin/main
+git merge --no-edit origin/staging
 git push -u origin HEAD
 gh pr create --base staging --title "chore: ramener $TAG dans staging" \
   --body "Retour de main dans staging après la release $TAG, pour que le tag stable soit atteignable depuis staging."
 ```
 
+La fusion de `origin/staging` met la branche à jour : le ruleset de `staging`
+refuse une branche en retard, et une branche créée depuis `main` l'est toujours.
+Un conflit se résout à cette étape. Si `staging` avance avant la fusion,
+refusionner `origin/staging` dans la branche et pousser.
+
 Fusionner cette pull request **avec un commit de fusion**. Un squash ou un
 rebase recopierait les changements sans rendre le tag atteignable, et la
-préprod resterait bloquée. Ses commits sont les commits de fusion de `main`,
-que commitlint ignore. La branche est supprimée à la fusion. Le push de la
-fusion ne publie une prérelease que si `staging` a reçu un commit publiable
-depuis la promotion.
-
-En cas de conflit, fusionner `origin/staging` dans la branche de retour,
-résoudre, pousser, puis fusionner la pull request de la même façon.
+préprod resterait bloquée. Ses commits sont des commits de fusion, que
+commitlint ignore. La branche est supprimée à la fusion. Le push de la fusion
+ne publie une prérelease que si `staging` a reçu un commit publiable depuis la
+promotion.
 
 ### Alignement sur Khartis V3 (une seule fois)
 
