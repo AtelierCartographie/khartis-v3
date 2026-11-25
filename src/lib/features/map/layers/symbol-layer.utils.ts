@@ -21,15 +21,31 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
-import type { LayerContext, RGBColor } from '../types';
+import type { DeckDataRow, LayerContext, RGBColor } from '../types';
 import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
-import { isMissingThematicValue } from './layer-highlight.utils';
+import { withOpacity, withOpacityPreservingAlpha } from './layer-helpers';
+import {
+  isMissingThematicValue,
+  resolveHighlightedOpacityForRow,
+  toMutableRgba
+} from './layer-highlight.utils';
 import {
   resolveSymbolDashSpec,
   type SymbolDashSpec
 } from './layer-style.utils';
 
 type ArrowColumn = NonNullable<ReturnType<ArrowTable['getChild']>>;
+
+type Rgba = [number, number, number, number];
+
+type SymbolColor = RGBColor | ((row: DeckDataRow) => Rgba);
+
+export type SymbolRowRule = {
+  isDisabled: (row: DeckDataRow) => boolean;
+  missingColumn: string | null | undefined;
+  missing: Pick<SymbolMissingDataStyle, 'show' | 'color' | 'radius'>;
+  highlightedRowIds: Set<number> | undefined;
+};
 
 type SymbolStrokeStyle = {
   color: RGBColor;
@@ -129,6 +145,88 @@ export function resolveSymbolMissingDataStyle(
     ),
     radius: Math.max(1, pointConfig?.missingData?.size ?? fallbackRadius),
     shape: resolveMissingPointShape(pointConfig?.missingData?.shape)
+  };
+}
+
+function isMissingSymbolRow(rule: SymbolRowRule, row: DeckDataRow): boolean {
+  return (
+    !!rule.missingColumn && isMissingThematicValue(row[rule.missingColumn])
+  );
+}
+
+// A colour accessor returns an alpha of 0 for a hidden class or category and
+// 255 otherwise: the row opacity scales that alpha.
+function resolveSymbolColor(
+  color: SymbolColor,
+  row: DeckDataRow,
+  opacity: number
+): Rgba {
+  return toMutableRgba(
+    typeof color === 'function'
+      ? withOpacityPreservingAlpha(color(row), opacity)
+      : withOpacity(color, opacity)
+  );
+}
+
+export function createSymbolFillResolver(
+  rule: SymbolRowRule,
+  color: SymbolColor,
+  opacity: number
+): (row: DeckDataRow) => Rgba {
+  return (row) => {
+    if (rule.isDisabled(row)) {
+      return [0, 0, 0, 0];
+    }
+    const rowOpacity = resolveHighlightedOpacityForRow(
+      row,
+      opacity,
+      rule.highlightedRowIds
+    );
+    if (isMissingSymbolRow(rule, row)) {
+      return rule.missing.show
+        ? toMutableRgba(withOpacity(rule.missing.color, rowOpacity))
+        : [0, 0, 0, 0];
+    }
+    return resolveSymbolColor(color, row, rowOpacity);
+  };
+}
+
+export function createSymbolStrokeResolver(
+  rule: SymbolRowRule,
+  stroke: { show: boolean; color: SymbolColor; opacity: number }
+): (row: DeckDataRow) => Rgba {
+  return (row) => {
+    if (
+      rule.isDisabled(row) ||
+      (isMissingSymbolRow(rule, row) && !rule.missing.show) ||
+      !stroke.show
+    ) {
+      return [0, 0, 0, 0];
+    }
+    return resolveSymbolColor(
+      stroke.color,
+      row,
+      resolveHighlightedOpacityForRow(
+        row,
+        stroke.opacity,
+        rule.highlightedRowIds
+      )
+    );
+  };
+}
+
+export function createSymbolRadiusResolver(
+  rule: SymbolRowRule,
+  radius: number | ((row: DeckDataRow) => number)
+): (row: DeckDataRow) => number {
+  return (row) => {
+    if (rule.isDisabled(row)) {
+      return 0;
+    }
+    if (isMissingSymbolRow(rule, row)) {
+      return rule.missing.show ? rule.missing.radius : 0;
+    }
+    return typeof radius === 'function' ? radius(row) : radius;
   };
 }
 

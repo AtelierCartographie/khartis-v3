@@ -20,7 +20,9 @@ pnpm deploy:prod:dry-run
 pnpm deploy:prod
 ```
 
-`--tag <tag>` déploie une release précise. Le script accepte aussi les alias
+`--tag <tag>` déploie une release précise. `--asset-wait <durée>` (par exemple
+`--asset-wait 20m`) règle l'attente des nouveaux assets avant la bascule :
+10 min par défaut, 60 min au plus. Le script accepte aussi les alias
 `staging` et `production`. Un `dry-run` vérifie la release, la CI et le build
 sans connexion SFTP ; il a besoin de l'URL publique de la cible, qui détermine
 le `BASE_PATH` du build.
@@ -81,9 +83,17 @@ sur la cible, puis enchaîne :
    l'ancienne arborescence par lots en parallèle.
 
 Si le serveur refuse les liens, le script renvoie tout et publie les nouveaux
-assets avec la bascule, comme avant : c'est plus long, jamais bloquant. Si un
-backend ne sert toujours pas les nouveaux assets après environ 2 min 30, le
-déploiement s'arrête avant la bascule et la version en ligne reste intacte.
+assets avec la bascule, comme avant : c'est plus long, jamais bloquant.
+
+L'attente de l'étape 3 vérifie un échantillon des nouveaux assets à intervalles
+croissants (5 s, 10 s, 15 s, 30 s, puis chaque minute). Chaque vérification
+utilise une nouvelle requête, pour qu'aucun cache ne resserve le 404 d'une
+vérification précédente, et s'affiche avec le temps écoulé et, pour chaque
+backend, le nombre d'assets servis et les statuts reçus. Si un backend ne sert
+toujours pas les nouveaux assets au bout de l'attente (10 min par défaut,
+`--asset-wait`), le déploiement s'arrête avant la bascule et la version en
+ligne reste intacte. Un Ctrl-C pendant l'attente arrête aussi le déploiement
+avant la bascule, à la vérification suivante.
 
 Ordre de grandeur mesuré sur la PPRD avant ce mécanisme : 1 h 28, dont 34 min
 de transfert pour 442 Mo, 39 min de recopie des anciens assets et 15 min de
