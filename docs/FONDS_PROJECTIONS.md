@@ -326,7 +326,7 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
 - La page Khartis compte en points (A4 = 842 × 595) : tailles en millimètres
   = unités × 25,4/72, textes en points = unités.
 - Le projet contient une mise en page QGIS « Khartis » au format de la page.
-  `measureMapPage` (`map-export.utils.ts`) mesure la page telle qu'elle
+  `measureMapPage` (`map/export/measure-page.ts`) mesure la page telle qu'elle
   s'exporte : cadre de la carte, textes avec leur style calculé, cadres de
   légende (`data-legend-item-id`), échelle, nord, titres des cartes d'une
   collection. Le cadre de la carte prend l'emprise exacte de
