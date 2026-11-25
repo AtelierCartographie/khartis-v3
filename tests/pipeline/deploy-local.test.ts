@@ -12,12 +12,14 @@ const {
   assertBuildMatchesDeployment,
   assertReleaseCommitBelongsToBranch,
   assertTagCommitMatchesRemote,
+  buildAssetPropagationDelays,
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
   findUnchangedLiveFiles,
   findUnchangedReleaseFiles,
   findUnchangedStaticFiles,
+  parseAssetWait,
   parseGitStaticTree,
   parseReleaseFileManifest,
   parseRemoteBranchHead,
@@ -1940,9 +1942,34 @@ describe('local deployment new asset publication before the swap', () => {
       `${liveDir}/_app/immutable/entry/start.N1.js.br`
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(String(fetchImpl.mock.calls[1][0])).toMatch(
+    const [firstUrl, secondUrl] = fetchImpl.mock.calls.map(([url]) =>
+      String(url)
+    );
+    expect(secondUrl).toMatch(
       /^https:\/\/example\.org\/cartographie\/khartis\/_app\/immutable\/entry\/start\.N1\.js\?khartis-deploy-check=/
     );
+    // A cache that kept the first 404 must not answer the next check.
+    expect(new URL(secondUrl).search).not.toBe(new URL(firstUrl).search);
+  });
+
+  it('should spread the asset wait over growing delays capped at one minute', () => {
+    expect(buildAssetPropagationDelays(150_000)).toEqual([
+      5_000, 10_000, 15_000, 30_000, 60_000, 30_000
+    ]);
+    const delays: number[] = buildAssetPropagationDelays(10 * 60_000);
+    expect(delays.slice(0, 4)).toEqual([5_000, 10_000, 15_000, 30_000]);
+    expect(Math.max(...delays)).toBe(60_000);
+    expect(delays.reduce((sum, delayMs) => sum + delayMs, 0)).toBe(600_000);
+    expect(buildAssetPropagationDelays(0)).toEqual([]);
+  });
+
+  it('should read --asset-wait in seconds or minutes and refuse anything else', () => {
+    expect(parseAssetWait('90s')).toBe(90_000);
+    expect(parseAssetWait(' 20m ')).toBe(1_200_000);
+    for (const value of ['20', '1h', 'm', '-5m', '', undefined]) {
+      expect(() => parseAssetWait(value)).toThrow('--asset-wait expects');
+    }
+    expect(() => parseAssetWait('61m')).toThrow('cannot exceed 1h00m');
   });
 
   it('should refuse to go on when a backend never serves the new assets', async () => {
