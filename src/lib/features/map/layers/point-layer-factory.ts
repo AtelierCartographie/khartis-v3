@@ -69,7 +69,6 @@ import {
   createClassedSizeAccessor,
   createProportionalSymbolSizeAccessor,
   createStrokeClassificationAccessor,
-  HIGHLIGHT_FILL_COLOR,
   withOpacity
 } from './layer-helpers';
 import { resolvePointParser } from './layer-geometry-parsers';
@@ -356,19 +355,10 @@ function createDoubleProportionalPointLayers(
     showMissing: showMissingPoints,
     hexToRgb
   });
-  // Unlike the other symbols, the double proportional stroke ignores the
-  // colour alpha: a disabled stroke category or a hidden missing stroke value
-  // still draws.
-  const lineColor = strokeClassificationAccessor
-    ? (row: DeckDataRow): [number, number, number, number] => {
-        const [r, g, b] = strokeClassificationAccessor(row);
-        return [r, g, b, 255];
-      }
-    : pointStrokeColor;
   const createLineResolver = (columnName: string) =>
     createSymbolStrokeResolver(rowRule(columnName), {
       show: showPointStroke,
-      color: lineColor,
+      color: strokeClassificationAccessor ?? pointStrokeColor,
       opacity: pointStrokeOpacity
     });
 
@@ -920,10 +910,13 @@ export function createRepresentativePointSymbolLayers(
   const disabledPointCategoryLabels = new Set(
     (pointColorClassification?.disabledLabels ?? []).map(String)
   );
+  const usesPointCategories =
+    pointConfig.mode === SymbolMode.CATEGORIES ||
+    (!signFillAccessor && pointConfig.fillMode === FillMode.CATEGORIES);
   const isDisabledPointCategoryRow = (row: DeckDataRow): boolean =>
-    pointConfig.mode === SymbolMode.CATEGORIES &&
-    pointCategoryColumn !== undefined &&
-    disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
+    usesPointCategories &&
+    pointColorCategoryColumn !== undefined &&
+    disabledPointCategoryLabels.has(String(row[pointColorCategoryColumn]));
 
   const rowRule: SymbolRowRule = {
     isDisabled: isDisabledPointCategoryRow,
@@ -1333,14 +1326,16 @@ export function createPointLayerStack(
       ? createChoroplethColorAccessor(
           (pointFillValueColumn ?? pointValueColumn)!,
           (pointFillClassification ?? pointClassification)!.breaks!,
-          (pointFillClassification ?? pointClassification)!.colors!
+          (pointFillClassification ?? pointClassification)!.colors!,
+          missingPointColor,
+          showMissingPoints
         )
       : useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             pointCategoryColumn!,
             effectiveCategoryColorMap,
-            HIGHLIGHT_FILL_COLOR,
-            true,
+            missingPointColor,
+            showMissingPoints,
             (pointConfig?.fillMode === FillMode.CATEGORIES
               ? (pointFillClassification ?? pointClassification)
               : pointClassification
@@ -1395,17 +1390,18 @@ export function createPointLayerStack(
     highlightedRowIds
   };
 
+  // The fill opacity lives in the colour alpha, as for representative points:
+  // the layer opacity stays 1, so the stroke keeps its own opacity.
   const fillColorAccessor =
-    pointMissingColumn || hasHighlights
+    pointMissingColumn || hasHighlights || baseFillAccessor
       ? createSymbolFillResolver(
           rowRule,
           baseFillAccessor ?? fillColor,
           pointFillOpacity
         )
-      : (baseFillAccessor ??
-        (isRowScoped
-          ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
-          : null));
+      : isRowScoped
+        ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
+        : null;
 
   const fillColorBinAttr = fillColorAccessor
     ? pointColorAttr(
@@ -1609,7 +1605,7 @@ export function createPointLayerStack(
         ? withOpacity(pointStrokeColor, pointStrokeOpacity)
         : ([0, 0, 0, 0] as [number, number, number, number])
     }),
-    opacity: hasHighlights ? 1 : pointFillOpacity,
+    opacity: 1,
     ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
     ...(!scatterBinaryData.attributes.getShape && { getShape: shapeOrdinal }),
     radiusScale: pageDisplayScale,
@@ -1631,6 +1627,7 @@ export function createPointLayerStack(
         pointClassification?.colors,
         pointFillClassification?.breaks,
         pointFillClassification?.colors,
+        pointFillOpacity,
         useCategoricalColor,
         pointCategoryColumn,
         pointCategoryColorMap,
