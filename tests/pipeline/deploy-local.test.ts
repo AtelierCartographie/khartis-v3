@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -34,10 +35,12 @@ const {
   selectPropagationSample,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
+  trapUncaughtErrors,
   verifyPublicInfrastructure,
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
+  withSftpCleanupClient,
   writeReleaseAssetManifest,
   writeReleaseFileManifest
 } = await import(deployScriptUrl);
@@ -1361,6 +1364,65 @@ describe('local deployment remote lock', () => {
     ).resolves.toBeUndefined();
     expect(client.rmdir).toHaveBeenCalledTimes(1);
     expect(isLocked()).toBe(true);
+  });
+});
+
+describe('local deployment lost SFTP connection', () => {
+  const lockDir = '/srv/html/prod.deploy-lock';
+
+  it('should reject the remote work when the SFTP client throws a lost connection from a timer', async () => {
+    const target = new EventEmitter();
+    const trap = trapUncaughtErrors(target);
+    const lost = new Error('uploadFiles: Keepalive timeout');
+
+    const remoteWork = trap.race(new Promise(() => undefined));
+    target.emit('uncaughtException', lost);
+
+    await expect(remoteWork).rejects.toBe(lost);
+    expect(trap.error).toBe(lost);
+    trap.dispose();
+    expect(target.listenerCount('uncaughtException')).toBe(0);
+  });
+
+  it('should release the lock through a new SFTP connection when the first one is lost', async () => {
+    const config = { host: 'sftp.example.test' };
+    const lostClient = { rmdir: vi.fn() };
+    const freshClient = {
+      connect: vi.fn(async () => undefined),
+      end: vi.fn(async () => undefined),
+      rmdir: vi.fn(async () => undefined)
+    };
+
+    await withSftpCleanupClient(
+      config,
+      lostClient,
+      true,
+      (client: typeof freshClient) =>
+        releaseRemoteDeploymentLock(client, lockDir),
+      () => freshClient
+    );
+
+    expect(freshClient.connect).toHaveBeenCalledWith(config);
+    expect(freshClient.rmdir).toHaveBeenCalledWith(lockDir, false);
+    expect(freshClient.end).toHaveBeenCalledTimes(1);
+    expect(lostClient.rmdir).not.toHaveBeenCalled();
+  });
+
+  it('should release the lock through the current SFTP connection when it is still alive', async () => {
+    const liveClient = { rmdir: vi.fn(async () => undefined) };
+    const createClient = vi.fn();
+
+    await withSftpCleanupClient(
+      { host: 'sftp.example.test' },
+      liveClient,
+      false,
+      (client: typeof liveClient) =>
+        releaseRemoteDeploymentLock(client, lockDir),
+      createClient
+    );
+
+    expect(liveClient.rmdir).toHaveBeenCalledWith(lockDir, false);
+    expect(createClient).not.toHaveBeenCalled();
   });
 });
 

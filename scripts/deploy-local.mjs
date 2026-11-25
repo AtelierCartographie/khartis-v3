@@ -28,7 +28,7 @@ const PUBLIC_URL_VALIDATION_ATTEMPTS = 5;
 const PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
 const SFTP_READY_TIMEOUT_MS = 20_000;
 const SFTP_KEEPALIVE_INTERVAL_MS = 10_000;
-const SFTP_KEEPALIVE_COUNT_MAX = 3;
+const SFTP_KEEPALIVE_COUNT_MAX = 9;
 const REMOTE_SIBLING_KIND_UPLOAD = 'upload';
 const REMOTE_SIBLING_KIND_OLD = 'old';
 const REMOTE_DEPLOYMENT_LOCK_SUFFIX = 'deploy-lock';
@@ -1019,6 +1019,51 @@ function promptVisible(question) {
   });
 }
 
+// ssh2-sftp-client throws a lost connection from a timer when the running
+// operation passed it no reject callback, as uploadDir and rcopy do. Left
+// uncaught, the exception would end the process before the deployment lock,
+// the temporary upload and the build copy are cleaned up.
+function trapUncaughtErrors(target = process) {
+  let rejectFailure;
+  const failure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  failure.catch(() => undefined);
+  const trap = {
+    error: null,
+    race: (promise) => Promise.race([promise, failure]),
+    dispose: () => target.off('uncaughtException', onUncaughtError)
+  };
+
+  function onUncaughtError(error) {
+    trap.error ??= error;
+    rejectFailure(error);
+  }
+
+  target.on('uncaughtException', onUncaughtError);
+  return trap;
+}
+
+async function withSftpCleanupClient(
+  config,
+  client,
+  connectionLost,
+  cleanup,
+  createClient = () => new SftpClient('khartis-local-deploy-cleanup')
+) {
+  if (!connectionLost) {
+    return cleanup(client);
+  }
+
+  const cleanupClient = createClient();
+  try {
+    await cleanupClient.connect(config);
+    return await cleanup(cleanupClient);
+  } finally {
+    await closeSftpClient(cleanupClient, 'cleanup').catch(() => undefined);
+  }
+}
+
 async function uploadBuild(
   config,
   buildDir,
@@ -1055,13 +1100,14 @@ async function uploadBuild(
   );
 
   const client = new SftpClient('khartis-local-deploy');
+  const uncaughtErrors = trapUncaughtErrors();
   let swapped = false;
   let preserveTempDir = false;
   let tempRemoteDirCreated = false;
   let deploymentLockAcquired = false;
   let uploadProgress = null;
 
-  try {
+  const runRemoteDeployment = async () => {
     const connectSpinner = startSpinner('Connecting to SFTP');
     await client.connect(config);
     connectSpinner.done('Connected to SFTP');
@@ -1152,6 +1198,9 @@ async function uploadBuild(
       });
     }
     throwIfTerminationRequested('before the public swap');
+    if (uncaughtErrors.error) {
+      throw uncaughtErrors.error;
+    }
 
     const previousRemoteDir = remoteType
       ? createRemoteSiblingDir(
@@ -1169,6 +1218,9 @@ async function uploadBuild(
         );
         if (previousRemoteDir) {
           await client.rename(safeRemoteDir, previousRemoteDir);
+          // A connection lost before the second rename leaves the public
+          // directory renamed away: the new upload is then kept.
+          preserveTempDir = true;
         }
         try {
           await client.rename(tempRemoteDir, safeRemoteDir);
@@ -1177,6 +1229,7 @@ async function uploadBuild(
           if (previousRemoteDir) {
             try {
               await client.rename(previousRemoteDir, safeRemoteDir);
+              preserveTempDir = false;
               warn('Swap failed; the previous remote version was restored.');
             } catch {
               preserveTempDir = true;
@@ -1209,26 +1262,64 @@ async function uploadBuild(
         }
       }
     );
+  };
+
+  try {
+    const remoteDeployment = runRemoteDeployment();
+    remoteDeployment.catch(() => undefined);
+    await uncaughtErrors.race(remoteDeployment);
   } finally {
+    uncaughtErrors.dispose();
     uploadProgress?.finish();
-    if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
-      await removeRemoteDirRecursive(
-        client,
-        tempRemoteDir,
-        'Removing incomplete temporary remote upload'
-      ).catch(() => undefined);
-    }
-    if (deploymentLockAcquired) {
-      await releaseRemoteDeploymentLock(client, deploymentLockDir).catch(
-        (error) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          warn(
-            `Could not release deployment lock ${deploymentLockDir}: ${message}. Remove it manually after confirming no deployment is active.`
-          );
-        }
+    const connectionLost = uncaughtErrors.error !== null;
+    if (connectionLost) {
+      const reason =
+        uncaughtErrors.error instanceof Error
+          ? uncaughtErrors.error.message
+          : String(uncaughtErrors.error);
+      warn(
+        `SFTP connection lost (${reason}); cleaning up through a new connection.`
       );
+      if (preserveTempDir && !swapped) {
+        warn(
+          `The connection was lost during the swap: the new upload ${tempRemoteDir} is kept, and the next deployment restores the public directory from its backup. Check the public route now.`
+        );
+      }
     }
+    await withSftpCleanupClient(
+      config,
+      client,
+      connectionLost,
+      async (cleanupClient) => {
+        if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
+          await removeRemoteDirRecursive(
+            cleanupClient,
+            tempRemoteDir,
+            'Removing incomplete temporary remote upload'
+          ).catch(() => undefined);
+        }
+        if (deploymentLockAcquired) {
+          await releaseRemoteDeploymentLock(
+            cleanupClient,
+            deploymentLockDir
+          ).catch((error) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            warn(
+              `Could not release deployment lock ${deploymentLockDir}: ${message}. Remove it manually after confirming no deployment is active.`
+            );
+          });
+        }
+      }
+    ).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const lockHint = deploymentLockAcquired
+        ? ` Remove ${deploymentLockDir} after confirming no deployment is active, or rerun with --recover-stale-lock.`
+        : '';
+      warn(
+        `Could not reconnect to clean up after the lost connection: ${message}.${lockHint}`
+      );
+    });
     await closeSftpClient(client, 'deployment').catch(() => undefined);
     terminationCoordinator.endRemoteDeployment();
   }
@@ -3531,11 +3622,13 @@ export {
   sanitizedChildEnv,
   startProgress,
   startSpinner,
+  trapUncaughtErrors,
   truncateToWidth,
   verifyPublicInfrastructure,
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
+  withSftpCleanupClient,
   writeReleaseAssetManifest,
   writeReleaseFileManifest
 };
