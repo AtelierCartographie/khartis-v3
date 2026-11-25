@@ -287,9 +287,9 @@
 
 <div class="palette-custom">
   <div class="section-heading">
-    <span class="section-heading-text"
-      >{isQualitative ? m.palette_custom_color() : m.palette_custom()}</span
-    >
+    <span class="section-heading-text">
+      {isQualitative ? m.palette_custom_color() : m.palette_custom()}
+    </span>
     <div class="section-heading-line"></div>
   </div>
 

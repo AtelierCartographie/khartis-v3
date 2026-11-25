@@ -35,10 +35,11 @@
         <p class="helper-text">{m.format_grid_description()}</p>
         <p class="helper-text shortcut-hint">
           {m.format_grid_shortcut()}
-          <span class="shortcut-keys"
-            >{#each splitShortcutKeys(gridShortcut) as key (key)}<kbd>{key}</kbd
-              >{/each}</span
-          >
+          <span class="shortcut-keys">
+            {#each splitShortcutKeys(gridShortcut) as key (key)}<kbd>
+                {key}
+              </kbd>{/each}
+          </span>
         </p>
       </Column>
     </Row>
