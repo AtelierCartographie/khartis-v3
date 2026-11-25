@@ -178,7 +178,10 @@ Sans retour de `main` dans `staging`, la préprod reste bloquée sur l'ancienne
 base : c'est ce qui l'a laissée en `1.16.0-pprd.N` alors que la prod était en
 `1.32.0`. Ce retour se fait par une pull request, juste après chaque release
 stable : `staging` exige une pull request, ce qui exclut une fusion poussée
-directement, à la main comme par un workflow.
+directement, à la main comme par un workflow. Tant que ce retour manque,
+`release.yml` refuse de publier depuis `staging` : son run échoue en nommant le
+tag stable qui n'y est pas atteignable, sans produire de prérelease mal
+numérotée.
 
 ### Retour de `main` dans `staging` (après chaque release stable)
 
