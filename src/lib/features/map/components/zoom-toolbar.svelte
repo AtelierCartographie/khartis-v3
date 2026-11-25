@@ -635,7 +635,7 @@
     --toggle-tab-size: var(--_zoom-cell);
     --toggle-tab-height: var(--kh-size-md);
     --toggle-tab-expanded-padding: 12px;
-    border-color: var(--cds-ui-03, #c6c6c6);
+    border-color: var(--cds-border-subtle-00, #c6c6c6);
     border-radius: 0;
   }
 
@@ -671,7 +671,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--cds-text-primary, var(--cds-text-01, #161616));
+    color: var(--cds-text-primary, var(--cds-text-primary, #161616));
     font: inherit;
     font-size: 0.875rem;
     font-weight: 400;
@@ -719,7 +719,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--cds-text-primary, var(--cds-text-01, #161616));
+    color: var(--cds-text-primary, var(--cds-text-primary, #161616));
     display: flex;
     align-items: center;
     justify-content: center;

@@ -2445,7 +2445,7 @@
                 r={drawingCloseToStart ? 15 : 11}
                 fill="none"
                 stroke={drawingCloseToStart
-                  ? 'var(--cds-interactive-01, #0f62fe)'
+                  ? 'var(--cds-background-brand, #0f62fe)'
                   : 'rgba(82, 82, 82, 0.85)'}
                 stroke-width="2"
                 stroke-dasharray="6,4"
@@ -2604,7 +2604,7 @@
                   cy={point.y}
                   r="5"
                   fill="white"
-                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke="var(--cds-background-brand, #0f62fe)"
                   stroke-width="2"
                   onpointerdown={(event: PointerEvent) =>
                     handleAnchorPointerDown(event, item, pointIndex)}
@@ -2810,7 +2810,7 @@
                   cy={point.y}
                   r="5"
                   fill="white"
-                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke="var(--cds-background-brand, #0f62fe)"
                   stroke-width="2"
                   onpointerdown={(event: PointerEvent) =>
                     handleAnchorPointerDown(event, item, pointIndex)}
@@ -2943,18 +2943,18 @@
   }
 
   .annotation-item:focus-visible:not(:has(.shape-frame)) {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
     border-radius: 0;
   }
 
   .annotation-item:focus-visible .shape-frame {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
   }
 
   .annotation-item.selected {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
     box-shadow: none;
     border-radius: 0;
@@ -3065,7 +3065,7 @@
       [data-annotation-role='note']
     ):is(:focus-visible, .selected)
     .annotation-text-box {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
   }
 
   .annotation-text {
@@ -3123,7 +3123,7 @@
     height: 8px;
     box-sizing: border-box;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     content: '';
     transform: translate(-50%, -50%);
@@ -3140,7 +3140,7 @@
   }
 
   .annotation-drawing .drawing-anchor:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
     stroke: var(--cds-background, #ffffff);
   }
 
@@ -3161,19 +3161,19 @@
   }
 
   .annotation-vector .drawing-anchor:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
     stroke: var(--cds-background, #ffffff);
   }
 
   .annotation-vector .tension-handle {
     fill: var(--cds-background, #ffffff);
-    stroke: var(--cds-interactive-01, #0f62fe);
+    stroke: var(--cds-background-brand, #0f62fe);
     stroke-width: 2;
     stroke-dasharray: 2 2;
   }
 
   .annotation-vector .tension-handle:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
   }
 
   .annotation-vector .drawing-hit-path {
@@ -3207,7 +3207,7 @@
   }
 
   .shape-frame.shape-selected {
-    outline: 1px dashed var(--cds-interactive-01, #0072c3);
+    outline: 1px dashed var(--cds-background-brand, #0072c3);
     outline-offset: 2px;
   }
 
@@ -3236,7 +3236,7 @@
     width: 8px;
     height: 8px;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     pointer-events: auto;
     transform: translate(-50%, -50%);
@@ -3295,7 +3295,7 @@
     width: 10px;
     height: 10px;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 50%;
     pointer-events: auto;
     transform: translate(-50%, 0);

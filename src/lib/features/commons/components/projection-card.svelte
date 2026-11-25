@@ -186,9 +186,12 @@
   }
 
   .projection-card.projection-card--default {
-    --projection-card-background: var(--cds-layer-01, #f4f4f4);
+    --projection-card-background: var(
+      --khartis-control-surface-background,
+      #f4f4f4
+    );
     --projection-card-border-color: var(--cds-border-subtle-01, #c6c6c6);
-    --projection-card-focus-color: var(--cds-interactive-03, #726e6e);
+    --projection-card-focus-color: var(--cds-button-tertiary, #726e6e);
     --kh-card-radio-color: #161616;
     --kh-card-radio-disabled-color: var(
       --cds-icon-disabled,
@@ -259,7 +262,7 @@
     box-sizing: border-box;
     background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
-    --tile-preview-color: var(--cds-interactive-03, #726e6e);
+    --tile-preview-color: var(--cds-button-tertiary, #726e6e);
   }
 
   .projection-card--vertical .preview-section {

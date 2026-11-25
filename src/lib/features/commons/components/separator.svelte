@@ -17,7 +17,7 @@
 
 <style>
   .kh-separator {
-    background-color: var(--cds-ui-03);
+    background-color: var(--cds-layer-accent-01);
   }
 
   .kh-separator.horizontal {

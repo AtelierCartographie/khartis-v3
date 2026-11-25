@@ -186,10 +186,13 @@
 
 <style>
   .basemap-card {
-    --basemap-card-background: var(--cds-layer-01, #f4f4f4);
+    --basemap-card-background: var(
+      --khartis-control-surface-background,
+      #f4f4f4
+    );
     --basemap-card-border-color: var(--cds-border-subtle-01, #c6c6c6);
     --basemap-card-border-width: 1px;
-    --basemap-card-focus-color: var(--cds-interactive-03, #726e6e);
+    --basemap-card-focus-color: var(--cds-button-tertiary, #726e6e);
     --kh-card-radio-color: #161616;
     --kh-card-radio-disabled-color: var(
       --cds-icon-disabled,
@@ -296,7 +299,7 @@
     box-sizing: border-box;
     background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
-    --tile-preview-color: var(--cds-interactive-03, #726e6e);
+    --tile-preview-color: var(--cds-button-tertiary, #726e6e);
   }
 
   .basemap-card--suggestion .preview-section {
@@ -468,7 +471,7 @@
 
   .progress-fill {
     height: 100%;
-    background: var(--cds-interactive-03, #726e6e);
+    background: var(--cds-button-tertiary, #726e6e);
   }
 
   .basemap-card--suggestion .progress-bar {

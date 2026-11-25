@@ -158,6 +158,7 @@
     <InlineNotification
       closeButtonDescription={m.a11y_close_notification()}
       kind="error"
+      role="alert"
       title={m.basemap_custom_error()}
       subtitle={importError}
       hideCloseButton={false}
@@ -190,11 +191,11 @@
     margin: 0;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .kh-help {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.8125rem;
     line-height: 1.25rem;
     margin: 0;
@@ -208,20 +209,20 @@
     padding: var(--cds-spacing-05);
     border: 2px dashed var(--cds-border-subtle);
     border-radius: var(--cds-spacing-02);
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
     cursor: pointer;
     transition: all 0.2s ease-out;
   }
 
   .dropzone:hover,
   .dropzone-active {
-    border-color: var(--cds-interactive-01);
+    border-color: var(--cds-background-brand);
     background-color: var(--cds-highlight);
   }
 
   .dropzone-text {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     text-align: center;
   }
 
@@ -234,7 +235,7 @@
   .section-label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .url-import-row {
@@ -271,7 +272,7 @@
   }
 
   .learn-more-link :global(.bx--btn--ghost:hover) {
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
   }
 
   .learn-more-link :global(.bx--btn--ghost svg) {

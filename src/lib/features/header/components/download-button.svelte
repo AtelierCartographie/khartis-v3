@@ -277,6 +277,7 @@
 </div>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   primaryButtonDisabled={modal.isExporting}
   secondaryButtonDisabled={modal.isExporting}
@@ -307,7 +308,6 @@
             <div class="project-name-field">
               <TextInput
                 size="sm"
-                light
                 labelText={m.download_project_name()}
                 value={modal.fileName}
                 placeholder={m.project_placeholder()}
@@ -466,14 +466,14 @@
   :global(html[theme='g100'] #khartis-download-button .bx--btn--primary) {
     background-color: var(--khartis-control-surface-background) !important;
     border-color: var(--cds-border-subtle-01) !important;
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
   }
 
   :global(html[theme='g100'] #khartis-download-button .bx--btn--primary:hover) {
     background-color: var(
       --khartis-control-surface-hover-background
     ) !important;
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
   }
 
   :global(html[theme='g100'] #khartis-download-button .bx--btn--primary:focus) {
@@ -486,8 +486,8 @@
   :global(
     html[theme='g100'] #khartis-download-button .bx--btn--primary:active
   ) {
-    background-color: var(--cds-hover-ui) !important;
-    color: var(--cds-text-01) !important;
+    background-color: var(--cds-layer-hover-01) !important;
+    color: var(--cds-text-primary) !important;
   }
 
   :global(
@@ -671,7 +671,7 @@
     gap: var(--cds-spacing-03);
     padding: var(--cds-spacing-04);
     border-left: 3px solid var(--cds-border-strong-01, #8d8d8d);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
   }
 
   .summary-heading {

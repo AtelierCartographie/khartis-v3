@@ -24,7 +24,6 @@
   const {
     open = false,
     viewMode = 'list' as ProjectionViewMode,
-    light = true,
     align = 'right-top' as
       | 'top'
       | 'top-left'
@@ -313,7 +312,6 @@
   <Popover
     open={open}
     align={align}
-    light={light}
     class={CSS_CLASSES.TOOL_POPOVER}
     style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${topOffset}px;--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};${geometryStyle}`}
   >

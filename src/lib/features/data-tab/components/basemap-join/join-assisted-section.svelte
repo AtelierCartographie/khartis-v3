@@ -1071,16 +1071,17 @@
     <span class="combo-item">
       <span class="combo-item-text">
         {#each display.textSegments as segment, i (i)}
-          {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
-            >{:else}{segment.text}{/if}
+          {#if segment.match}<mark class="combo-item-match">
+              {segment.text}
+            </mark>{:else}{segment.text}{/if}
         {/each}
       </span>
       {#if display.aliasSegments}
         <span class="combo-item-alias">
           ≈&nbsp;{#each display.aliasSegments as segment, i (i)}
-            {#if segment.match}<mark class="combo-item-match"
-                >{segment.text}</mark
-              >{:else}{segment.text}{/if}
+            {#if segment.match}<mark class="combo-item-match">
+                {segment.text}
+              </mark>{:else}{segment.text}{/if}
           {/each}
         </span>
       {/if}
@@ -1109,8 +1110,10 @@
       <span
         class="table-cell cell-equals header-relation"
         class:cell-equals-approx={relation === '≈'}
-        aria-hidden="true">{relation}</span
+        aria-hidden="true"
       >
+        {relation}
+      </span>
     {/if}
     <span class="table-header-label table-header-value">{valueLabel}</span>
     {#if slots}
@@ -1162,9 +1165,9 @@
     {ariaLiveMessage}
   </div>
   <div class="section-header">
-    <span class="section-title kh-thinking-text"
-      >{m.section_join_assisted()}</span
-    >
+    <span class="section-title kh-thinking-text">
+      {m.section_join_assisted()}
+    </span>
     <span class="section-header-icon kh-thinking-icon">
       <MagicWandFilled size={20} />
     </span>
@@ -1806,6 +1809,7 @@
       {#if hasClearedJoins}
         <InlineNotification
           kind="error"
+          role="alert"
           lowContrast
           hideCloseButton
           title={m.join_cleared_title()}
@@ -1816,9 +1820,9 @@
           <span class="notification-success-icon">
             <CheckmarkFilled size={20} />
           </span>
-          <span class="notification-success-text"
-            >{m.join_finalized_message()}</span
-          >
+          <span class="notification-success-text">
+            {m.join_finalized_message()}
+          </span>
         </div>
       {:else if displayedNotificationState.showValidationNotification}
         <div class="notification-validation">
@@ -1828,9 +1832,9 @@
               ? m.join_validation_desc_partial()
               : m.join_validation_desc()}
           </p>
-          <Button kind="primary" size="small" on:click={onFinalizeJoin}
-            >{m.join_validation_button()}</Button
-          >
+          <Button kind="primary" size="small" on:click={onFinalizeJoin}>
+            {m.join_validation_button()}
+          </Button>
         </div>
       {/if}
       {#if showUnresolvedNotice}
@@ -2049,7 +2053,7 @@
   }
 
   .join-table .table-row:hover {
-    background-color: var(--cds-hover-ui, #e5e5e5);
+    background-color: var(--cds-layer-hover-01, #e5e5e5);
   }
 
   /* Header and rows share one column grid, so every header label sits above

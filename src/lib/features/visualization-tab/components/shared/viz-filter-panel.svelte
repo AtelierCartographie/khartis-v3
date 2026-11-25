@@ -228,11 +228,9 @@
         onclick={handleAddFilterClick}
         disabled={dataFields.length === 0}
       >
-        <span
-          >{hasFilters
-            ? m.filter_add_new_filter()
-            : m.filter_add_filter()}</span
-        >
+        <span>
+          {hasFilters ? m.filter_add_new_filter() : m.filter_add_filter()}
+        </span>
         <Add size={16} />
       </button>
 
@@ -278,7 +276,7 @@
     min-height: 680px;
     max-height: min(80vh, calc(100dvh - 120px));
     overflow: hidden;
-    background: var(--cds-ui-02, #ffffff);
+    background: var(--cds-layer-02, #ffffff);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
@@ -346,7 +344,7 @@
   .stats-progress-fill {
     display: block;
     height: 100%;
-    background: var(--cds-interactive-01, #161616);
+    background: var(--cds-background-brand, #161616);
     transition: width 0.15s ease-out;
   }
 
@@ -392,7 +390,7 @@
     align-self: flex-start;
     background: transparent;
     border: none;
-    color: var(--cds-link-01, #0f62fe);
+    color: var(--cds-link-primary, #0f62fe);
     cursor: pointer;
     font-size: 0.75rem;
     padding: 0;
@@ -412,7 +410,7 @@
     align-items: center;
     gap: var(--cds-spacing-02);
     font-size: 0.75rem;
-    color: var(--cds-link-01, #0f62fe);
+    color: var(--cds-link-primary, #0f62fe);
     text-decoration: none;
 
     &:hover {

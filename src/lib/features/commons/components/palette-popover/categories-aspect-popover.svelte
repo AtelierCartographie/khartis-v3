@@ -588,9 +588,9 @@
             {#if showCommonAspectSection}
               <section class="aspect-section">
                 <div class="section-heading">
-                  <span class="section-heading-text"
-                    >{m.aspect_common_section()}</span
-                  >
+                  <span class="section-heading-text">
+                    {m.aspect_common_section()}
+                  </span>
                   <div class="section-heading-line"></div>
                 </div>
 
@@ -610,9 +610,9 @@
                           )}
                       >
                         {#each shapeChoices as shapeChoice (shapeChoice.id)}
-                          <option value={shapeChoice.id}
-                            >{shapeChoice.label}</option
-                          >
+                          <option value={shapeChoice.id}>
+                            {shapeChoice.label}
+                          </option>
                         {/each}
                       </select>
                     </div>
@@ -644,9 +644,9 @@
                       class="common-paired-row common-paired-row--with-input"
                     >
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_size_unique()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_size_unique()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -682,9 +682,9 @@
 
                     <div class="common-paired-row">
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_stroke_yesno()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_stroke_yesno()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -702,9 +702,9 @@
                       </div>
 
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_auto_color()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_auto_color()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -727,9 +727,9 @@
                       class="common-paired-row common-paired-row--with-input"
                     >
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_stroke_unique()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_stroke_unique()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -770,9 +770,9 @@
                     <div
                       class="common-field common-field--toggle common-field--full"
                     >
-                      <span class="field-label"
-                        >{m.aspect_common_pattern()}</span
-                      >
+                      <span class="field-label">
+                        {m.aspect_common_pattern()}
+                      </span>
                       <div class="common-toggle-value">
                         <div class="toggle-control">
                           <Switch
@@ -807,9 +807,9 @@
                 {:else if primitiveKind === 'polygons'}
                   <div class="common-stack">
                     <div class="common-grid-row common-grid-row--full">
-                      <span class="field-label"
-                        >{m.aspect_common_pattern()}</span
-                      >
+                      <span class="field-label">
+                        {m.aspect_common_pattern()}
+                      </span>
                       <div class="toggle-control">
                         <Switch
                           toggled={showCategoryPattern}
@@ -967,9 +967,9 @@
                           <div class="category-aspect-body">
                             {#if showCategoryShapePicker}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_shape()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_shape()}
+                                </span>
                                 <select
                                   class="common-select"
                                   aria-label={m.per_category_shape()}
@@ -991,9 +991,9 @@
                             {/if}
 
                             <div class="field-stack">
-                              <span class="field-label"
-                                >{m.per_category_color()}</span
-                              >
+                              <span class="field-label">
+                                {m.per_category_color()}
+                              </span>
                               <SingleColorPreview
                                 color={category.color}
                                 onchange={(hex) =>
@@ -1003,9 +1003,9 @@
 
                             {#if showCategoryPattern && categoryPatterns}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.pattern_shape()}</span
-                                >
+                                <span class="field-label">
+                                  {m.pattern_shape()}
+                                </span>
                                 <ShapeChipRow
                                   value={categoryPatterns[index]?.type as
                                     PatternShape | undefined}
@@ -1020,9 +1020,9 @@
 
                             {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_size()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_size()}
+                                </span>
                                 <CompactNumberInput
                                   value={category.customSize ??
                                     draftCommonAspect.size}
@@ -1039,9 +1039,9 @@
 
                             {#if showPerCategoryStrokeColor}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_stroke_color()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_stroke_color()}
+                                </span>
                                 <SingleColorPreview
                                   color={category.strokeColor ?? '#000000'}
                                   onchange={(hex) =>
@@ -1052,9 +1052,9 @@
 
                             {#if showPerCategoryStrokeWidth}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_stroke_width()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_stroke_width()}
+                                </span>
                                 <CompactNumberInput
                                   value={category.customStrokeWidth ??
                                     draftCommonAspect.strokeSize}
@@ -1358,7 +1358,7 @@
   .hidden-count-note {
     margin: var(--kh-gap-inline) 0 0;
     padding: var(--kh-gap-inline) var(--kh-gap-param);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     border: 1px dashed var(--cds-border-subtle-01, #c6c6c6);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: var(--kh-font-label);
@@ -1372,7 +1372,7 @@
     flex-direction: column;
     gap: var(--kh-gap-label);
     padding: var(--kh-gap-inline);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 

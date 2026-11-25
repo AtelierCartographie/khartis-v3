@@ -117,13 +117,13 @@
     {#if showResults}
       <div class="results-navigation">
         {#if searchState.isSearching}
-          <span class="results-text results-text--disabled"
-            >{m.search_loading()}</span
-          >
+          <span class="results-text results-text--disabled">
+            {m.search_loading()}
+          </span>
         {:else if noResults}
-          <span class="results-text results-text--disabled"
-            >{m.search_no_results()}</span
-          >
+          <span class="results-text results-text--disabled">
+            {m.search_no_results()}
+          </span>
         {:else}
           <span class="results-text">
             {m.search_results_count({
@@ -281,7 +281,7 @@
     gap: var(--cds-spacing-01);
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
     cursor: pointer;
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
 
     &:hover {
       background: var(--cds-layer-hover-01, #e8e8e8);

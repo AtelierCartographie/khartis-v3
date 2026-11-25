@@ -1278,7 +1278,7 @@
     box-sizing: border-box;
     background: white;
     border: calc(2px / var(--legend-page-scale)) solid
-      var(--cds-interactive-01, #0072c3);
+      var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     content: '';
     transform: translate(-50%, -50%);

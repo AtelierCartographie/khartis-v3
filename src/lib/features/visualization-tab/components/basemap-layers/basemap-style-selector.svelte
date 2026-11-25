@@ -442,7 +442,7 @@
 
   .reference-link :global(.bx--link) {
     width: fit-content;
-    color: var(--cds-interactive-03, #726e6e);
+    color: var(--cds-button-tertiary, #726e6e);
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;

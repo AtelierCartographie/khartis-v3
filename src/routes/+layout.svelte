@@ -456,6 +456,7 @@
     {/if}
 
     <Modal
+      preventCloseOnClickOutside={false}
       iconDescription={m.a11y_close_dialog()}
       open={pendingKhImport !== null}
       modalHeading={m.project_import_url_confirm_title()}
@@ -525,7 +526,7 @@
     /* The side panel slides in from past the right edge: clipped there, it
        gives the body nothing to scroll to when its content takes focus. */
     overflow-x: clip;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
   }
 
   /* The side panel floats over the right edge and slides; the workspace

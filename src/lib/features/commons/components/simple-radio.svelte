@@ -81,9 +81,9 @@
   .kh-radio-native {
     --_kh-radio-size: 18px;
     --_kh-radio-dot-size: 9px;
-    --_kh-radio-border: var(--cds-ui-04, #8d8d8d);
+    --_kh-radio-border: var(--cds-border-strong-01, #8d8d8d);
     --_kh-radio-border-hover: var(--cds-blue, #0072c3);
-    --_kh-radio-bg: var(--cds-layer-01, #ffffff);
+    --_kh-radio-bg: var(--khartis-control-surface-background, #ffffff);
     --_kh-radio-border-checked: var(--cds-blue, #0072c3);
     --_kh-radio-dot-color: var(--cds-blue, #0072c3);
     --_kh-radio-label-size: 0.875rem;
@@ -120,7 +120,7 @@
       --khartis-additions-text-secondary-suggestions,
       #00539a
     );
-    --_kh-radio-focus-ring: 0 0 0 2px var(--cds-interactive-03, #726e6e);
+    --_kh-radio-focus-ring: 0 0 0 2px var(--cds-button-tertiary, #726e6e);
     --_kh-radio-disabled-opacity: 0.25;
   }
 

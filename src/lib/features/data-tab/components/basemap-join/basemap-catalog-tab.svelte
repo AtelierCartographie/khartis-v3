@@ -684,14 +684,14 @@
   }
 
   .funnel-facet.active :global(.bx--list-box__label) {
-    color: var(--cds-link-01);
+    color: var(--cds-link-primary);
     font-weight: 600;
   }
 
   .no-results {
     margin: 2rem 0;
     text-align: center;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.875rem;
   }
 

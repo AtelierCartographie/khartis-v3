@@ -13,6 +13,7 @@
 </script>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   danger
   bind:open={open}

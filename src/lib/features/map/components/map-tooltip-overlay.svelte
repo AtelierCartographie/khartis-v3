@@ -397,9 +397,9 @@
             {:else if entry.role === 'heading'}
               <div class="tooltip-heading">
                 <span class="tooltip-heading-key">{entry.key}</span>
-                <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}"
-                  >{entry.value}</span
-                >
+                <span class="tooltip-chip tone-{entry.tone ?? 'ignored'}">
+                  {entry.value}
+                </span>
               </div>
             {:else if entry.role === 'columns'}
               <div class="tooltip-columns">
@@ -424,8 +424,8 @@
                         <TooltipGlyph glyph={glyph} />
                       {/each}
                     </span>
-                  {/if}{entry.key}</span
-                >
+                  {/if}{entry.key}
+                </span>
                 <span class="tooltip-value">{entry.value}</span>
               </div>
             {/if}
@@ -450,7 +450,7 @@
     z-index: var(--z-map-overlay, 1);
     display: flex;
     flex-direction: column;
-    background: var(--cds-layer-01, #ffffff);
+    background: var(--khartis-control-surface-background, #ffffff);
     color: var(--cds-text-primary, #161616);
     border: none;
     border-radius: 0;
@@ -466,7 +466,7 @@
   .map-tooltip.hover-preview {
     background: color-mix(
       in srgb,
-      var(--cds-layer-01, #ffffff) 82%,
+      var(--khartis-control-surface-background, #ffffff) 82%,
       transparent
     );
     width: min(13rem, calc(100vw - 16px));
@@ -702,7 +702,7 @@
   /* Drawn like the counts of the join summary and panel. */
   .tooltip-chip {
     --chip-color: var(--cds-border-strong-01, #8d8d8d);
-    --chip-background: var(--cds-layer-01, #f4f4f4);
+    --chip-background: var(--khartis-control-surface-background, #f4f4f4);
     padding: 0 4px 1px;
     font-weight: 600;
     color: var(--cds-text-primary, #161616);

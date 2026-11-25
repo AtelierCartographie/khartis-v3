@@ -230,6 +230,7 @@
   <div class="pwa-update-toast">
     <ToastNotification
       kind={updateNotificationKind}
+      role={updateNotificationKind === 'error' ? 'alert' : 'status'}
       lowContrast
       title={updateNotificationTitle}
       subtitle={updateNotificationSubtitle}

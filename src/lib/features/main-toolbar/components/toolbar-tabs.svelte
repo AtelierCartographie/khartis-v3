@@ -1017,6 +1017,7 @@
   <AddDataModal bind:open={isAddDataModalOpen} />
 
   <Modal
+    preventCloseOnClickOutside={false}
     iconDescription={m.a11y_close_dialog()}
     danger
     open={isVizDeleteConfirmOpen}
@@ -1034,6 +1035,7 @@
   </Modal>
 
   <Modal
+    preventCloseOnClickOutside={false}
     iconDescription={m.a11y_close_dialog()}
     danger
     open={isDeleteConfirmOpen}
@@ -1051,6 +1053,7 @@
   </Modal>
 
   <Modal
+    preventCloseOnClickOutside={false}
     iconDescription={m.a11y_close_dialog()}
     danger
     open={isDeleteDatasetConfirmOpen}
@@ -1096,14 +1099,14 @@
   .add-btn-wrapper :global(.bx--btn--ghost) {
     height: var(--kh-size-md);
     min-height: 0;
-    background-color: var(--cds-ui-02);
+    background-color: var(--cds-layer-02);
     border: 1px solid var(--cds-border-subtle-01);
     border-bottom: none;
     color: var(--cds-text-secondary);
   }
 
   .add-btn-wrapper :global(.bx--btn--ghost:hover) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
     color: var(--cds-text-primary);
   }
 
@@ -1117,7 +1120,7 @@
   }
 
   .no-files-text {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.875rem;
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
     white-space: nowrap;
@@ -1135,7 +1138,7 @@
     align-self: flex-end;
     height: var(--kh-size-md);
     margin-bottom: 1px;
-    background-color: var(--cds-ui-02);
+    background-color: var(--cds-layer-02);
     border: 1px solid var(--cds-border-subtle-01);
     border-bottom: none;
 
@@ -1150,7 +1153,7 @@
     z-index: var(--z-base);
     height: calc(var(--kh-size-md) + 1px);
     margin-bottom: 0;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
   }
 
   .tab-button-wrapper :global(.tab-button.bx--btn--ghost) {
@@ -1164,7 +1167,7 @@
   }
 
   .tab-button-wrapper :global(.tab-button.bx--btn--ghost:hover) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
     color: var(--cds-text-primary);
   }
 
@@ -1214,7 +1217,7 @@
   }
 
   .tab-button-wrapper.selected .tab-label:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .tab-name-input {
@@ -1261,7 +1264,7 @@
   }
 
   .tab-menu-button:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .tab-menu-button:focus-visible,
@@ -1271,22 +1274,22 @@
   }
 
   .tab-menu-button :global(svg) {
-    fill: var(--cds-text-02);
+    fill: var(--cds-text-secondary);
   }
 
   .tab-menu-button:hover :global(svg) {
-    fill: var(--cds-text-01);
+    fill: var(--cds-text-primary);
   }
 
   .tab-button-wrapper.selected .tab-menu-button :global(svg) {
-    fill: var(--cds-text-01);
+    fill: var(--cds-text-primary);
   }
 
   .tab-context-menu {
     position: fixed;
     min-width: 160px;
-    background-color: var(--cds-ui-01);
-    border: 1px solid var(--cds-ui-03);
+    background-color: var(--cds-layer-01);
+    border: 1px solid var(--cds-border-subtle-00);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     z-index: var(--z-notification);
     border-radius: 2px;
@@ -1300,48 +1303,48 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-04);
     border: none;
     background: transparent;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     font-size: 0.875rem;
     text-align: left;
     cursor: pointer;
   }
 
   .tab-menu-item:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .tab-menu-item:focus-visible {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .tab-menu-item :global(svg) {
-    fill: var(--cds-text-02);
+    fill: var(--cds-text-secondary);
     flex-shrink: 0;
   }
 
   .tab-menu-item-danger {
-    color: var(--cds-support-01);
+    color: var(--cds-support-error);
   }
 
   .tab-menu-item-danger:hover {
-    background-color: var(--cds-support-01);
-    color: var(--cds-text-04);
+    background-color: var(--cds-support-error);
+    color: var(--cds-text-on-color);
   }
 
   .tab-menu-item-danger:hover :global(svg) {
-    fill: var(--cds-text-04);
+    fill: var(--cds-text-on-color);
   }
 
   .tab-menu-divider {
     height: 1px;
-    background-color: var(--cds-ui-03);
+    background-color: var(--cds-layer-accent-01);
     margin: var(--cds-spacing-02) 0;
   }
 
   .tab-menu-section-label {
     padding: var(--cds-spacing-02) var(--cds-spacing-04);
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.32px;
@@ -1361,7 +1364,7 @@
   }
 
   .dataset-check-icon :global(svg) {
-    fill: var(--cds-interactive-01);
+    fill: var(--cds-background-brand);
   }
 
   .dataset-name {
@@ -1372,11 +1375,11 @@
   }
 
   .tab-menu-item-selected {
-    background-color: var(--cds-selected-ui);
+    background-color: var(--cds-layer-selected-01);
   }
 
   .tab-menu-item-selected:hover {
-    background-color: var(--cds-hover-selected-ui);
+    background-color: var(--cds-layer-selected-hover-01);
   }
 
   :global(.dataset-count-tag) {

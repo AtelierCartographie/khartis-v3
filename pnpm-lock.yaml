@@ -7,11 +7,11 @@ settings:
 overrides:
   '@huggingface/transformers>sharp': 0.35.4
   '@vite-pwa/assets-generator>sharp': 0.35.4
-  onnxruntime-node>adm-zip: 0.6.0
-  sharp-ico>sharp: 0.35.4
   fast-xml-parser: '>=4.5.4'
+  onnxruntime-node>adm-zip: 0.6.0
   rollup: 4.60.0
   serialize-javascript: '>=7.0.3'
+  sharp-ico>sharp: 0.35.4
   tar: '>=7.5.11'
 
 patchedDependencies:
@@ -19,7 +19,7 @@ patchedDependencies:
     hash: 70565bf3318d3023334aac1992711c1b346be9adf685f5c8edb4209d45abf388
     path: patches/@deck.gl__mapbox@9.4.2.patch
   carbon-components-svelte:
-    hash: 99b1c506c1636603dcc125d60606f010120f2a680e9115baf28dae5ec321907f
+    hash: 1d95185b3f94ecd76f77c9bd4262b123b1768969ec4e40697669b5a8a39d3ad7
     path: patches/carbon-components-svelte.patch
   vite-plugin-pwa@2.0.0:
     hash: 80aac6addfd1e6b7c7587cb531e6abca9c90ff789c4cfa31b06086a1368eedeb
@@ -153,8 +153,8 @@ importers:
         specifier: ^21.2.0
         version: 21.2.0
       carbon-components-svelte:
-        specifier: ^0.113.2
-        version: 0.113.2(patch_hash=99b1c506c1636603dcc125d60606f010120f2a680e9115baf28dae5ec321907f)
+        specifier: ^0.114.7
+        version: 0.114.7(patch_hash=1d95185b3f94ecd76f77c9bd4262b123b1768969ec4e40697669b5a8a39d3ad7)
       carbon-icons-svelte:
         specifier: ^13.18.2
         version: 13.18.2
@@ -256,8 +256,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@26.6.7)
       carbon-preprocess-svelte:
-        specifier: ^0.11.63
-        version: 0.11.63
+        specifier: ^0.13.0
+        version: 0.13.0
       eslint:
         specifier: ^10.15.0
         version: 10.15.0(jiti@2.7.0)
@@ -3108,14 +3108,14 @@ packages:
   caniuse-lite@1.0.30001828:
     resolution: {integrity: sha512-7MWeT+3DlrpuDybTWHl4Zb1Z80Z1fLLnOXuBjDXebzDVcqnEWUlV8JcbASg8B8BhcW8QT2UiR1KAtzYFIZHZYA==}
 
-  carbon-components-svelte@0.113.2:
-    resolution: {integrity: sha512-83o+6HOMRXTsDqoYe3O0rSihBGM6dy3uyeDsKwDmZPJTpEgvvGQVMDu2JeguqYpf0STzu9QbPBUUVjzJsxr3rg==}
+  carbon-components-svelte@0.114.7:
+    resolution: {integrity: sha512-T0oTeaHgd763wrf13iEKwO7bIQ7LXwvriJvV9TyAZxZEM5ypEPbxGRv47ZeEYoStmKiOoPrFzhAbIIK0GL7blQ==}
 
   carbon-icons-svelte@13.18.2:
     resolution: {integrity: sha512-PrCD7TzKZNzGVBmUIy7tex/42tJ4mTRvqUpE5vpv3S1KL463dwiE6E3BnaBZVKaDMNLIp/NT4dIdAfnY7vTEGA==}
 
-  carbon-preprocess-svelte@0.11.63:
-    resolution: {integrity: sha512-RIAakwDzmBFAM8aea/pZWESVfMeVl9RtYBvTqb09a8OYrifm8OWhUn5zbaw7nUgF2EslUODBnn9tudmxOUEe5w==}
+  carbon-preprocess-svelte@0.13.0:
+    resolution: {integrity: sha512-AglpHoMmN202p64ESJnw6R6FSBYSFgLh6rvTLjTOTRzxT8Cpe9i/7lMp6Ctit3LamRuNJQ7jZaQRSxvTAk0Qyg==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -3828,9 +3828,6 @@ packages:
 
   flatbuffers@25.9.23:
     resolution: {integrity: sha512-MI1qs7Lo4Syw0EOzUl0xjs2lsoeqFku44KpngfIduHBYvzm8h2+7K8YMQh1JtVVVrUvhLpNwqVi4DERegUJhPQ==}
-
-  flatpickr@4.6.13:
-    resolution: {integrity: sha512-97PMG/aywoYpB4IvbvUJi0RQi8vearvU0oov1WW3k0WZPBMrTQVqekSX5CjSG/M4Q3i6A/0FKXC7RyAoAUUSPw==}
 
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
@@ -9320,14 +9317,13 @@ snapshots:
 
   caniuse-lite@1.0.30001828: {}
 
-  carbon-components-svelte@0.113.2(patch_hash=99b1c506c1636603dcc125d60606f010120f2a680e9115baf28dae5ec321907f):
+  carbon-components-svelte@0.114.7(patch_hash=1d95185b3f94ecd76f77c9bd4262b123b1768969ec4e40697669b5a8a39d3ad7):
     dependencies:
       '@ibm/telemetry-js': 1.12.0
-      flatpickr: 4.6.13
 
   carbon-icons-svelte@13.18.2: {}
 
-  carbon-preprocess-svelte@0.11.63: {}
+  carbon-preprocess-svelte@0.13.0: {}
 
   chai@6.3.0: {}
 
@@ -10128,8 +10124,6 @@ snapshots:
   flatbuffers@24.12.23: {}
 
   flatbuffers@25.9.23: {}
-
-  flatpickr@4.6.13: {}
 
   flatted@3.4.4: {}
 

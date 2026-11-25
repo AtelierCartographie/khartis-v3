@@ -54,7 +54,7 @@
     background-color: color-mix(
       in srgb,
       var(--cds-support-info, #0043ce) 8%,
-      var(--cds-ui-01, #ffffff)
+      var(--cds-layer-01, #ffffff)
     );
     border-left: 3px solid var(--cds-support-info, #0043ce);
   }
@@ -72,7 +72,7 @@
     margin: 0;
     font-size: 0.875rem;
     line-height: 1.25rem;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     white-space: nowrap;
   }
 
@@ -90,6 +90,6 @@
 
   .active-basemap-origin {
     flex-shrink: 0;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 </style>

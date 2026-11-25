@@ -288,7 +288,13 @@ export default defineConfig(({ mode }) => {
         }),
       serveTestDatasets(basePath),
       sveltekit({
-        preprocess: [vitePreprocess(), optimizeImports(), optimizeCss()],
+        preprocess: [
+          vitePreprocess(),
+          optimizeImports(),
+          // button-native and icon-button-native build these classes from
+          // their props at runtime, where prop-aware pruning cannot read them.
+          optimizeCss({ safelist: [/^\.bx--btn--/] })
+        ],
         // SvelteKit 3 no longer generates $lib. The rewrite to the #lib subpath
         // import touches every feature, so it waits for the open branches.
         alias: { $lib: 'src/lib' },
