@@ -13,8 +13,11 @@ import {
 import { LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendClassBarOrientation,
-  LegendItem
+  LegendItem,
+  LegendTitleAlign
 } from '../../types/legend.types';
+
+const TITLE_ALIGNS: readonly LegendTitleAlign[] = ['start', 'center', 'end'];
 
 /** One legend a visualization owns: a primitive, or one channel of it. */
 export interface LegendItemSlot {
@@ -68,6 +71,8 @@ export interface ResolvedLegendItemLayout {
   entrySpacing: number;
   /** Width the frame was dragged to, in legend units, or null for its own. */
   width: number | null;
+  titleSide: boolean;
+  titleAlign: LegendTitleAlign;
 }
 
 // A saved project is untrusted JSON: anything unexpected falls back to the
@@ -78,6 +83,7 @@ export function resolveLegendItemLayout(
   const layout = item.layout;
   const spacing = layout?.entrySpacing;
   const width = layout?.width;
+  const titleAlign = layout?.titleAlign;
 
   return {
     proportionalClasses: layout?.proportionalClasses === true,
@@ -91,7 +97,10 @@ export function resolveLegendItemLayout(
     width:
       typeof width === 'number' && Number.isFinite(width) && width > 0
         ? width
-        : null
+        : null,
+    titleSide: layout?.titleSide === true,
+    titleAlign:
+      titleAlign && TITLE_ALIGNS.includes(titleAlign) ? titleAlign : 'start'
   };
 }
 
