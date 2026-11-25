@@ -440,6 +440,40 @@ describe('annotations store', () => {
     expect(595 - ((position?.x ?? 0) + 595 / 2)).toBe(271);
   });
 
+  it('should keep the text edge of a restored caption when an older project saved it in a 216 px box', () => {
+    // A right-aligned credit saved before the half-page box: its text ended
+    // at 581.6 + 216 = 797.6 px, which the 421 px box would push off the page.
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'credit',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.CREDIT,
+          content: 'Paul Nord, 2026. Réalisé avec Khartis',
+          position: { x: 581.6, y: 528 },
+          positionMode: 'manual',
+          style: { textAlign: TextAlign.Right }
+        },
+        {
+          id: 'source',
+          type: AnnotationKind.TEXT,
+          role: ANNOTATION_ROLE.SOURCE,
+          content: 'Source : Eurostat, 2025.',
+          position: { x: 421, y: 500 },
+          positionMode: 'manual',
+          style: { textAlign: TextAlign.Right }
+        }
+      ]
+    });
+
+    const byId = new Map(getAnnotationsState().items.map((i) => [i.id, i]));
+    const credit = byId.get('credit')?.position;
+    expect(credit?.x).toBeCloseTo(376.6);
+    expect(credit?.y).toBe(528);
+    expect((credit?.x ?? 0) + 842 / 2).toBeCloseTo(797.6);
+    expect(byId.get('source')?.position).toEqual({ x: 421, y: 500 });
+  });
+
   it('uses the custom page sizing profile when page elements are initialized', () => {
     formatActions.setModel(PageModel.SCREEN_LANDSCAPE);
     formatActions.setMode(FormatMode.CUSTOM);
