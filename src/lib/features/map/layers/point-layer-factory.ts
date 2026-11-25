@@ -59,7 +59,6 @@ import { createDotDensityLayers } from './density-layer-factory';
 import { resolveEffectiveCategoryColorMap } from './layer-color.utils';
 import {
   isMissingThematicValue,
-  resolveHighlightedOpacityForRow,
   resolvePointMissingColumn,
   toMutableRgba
 } from './layer-highlight.utils';
@@ -89,10 +88,14 @@ import {
 } from './split-rendering-accessors';
 import {
   buildShapeAttribute,
+  createSymbolFillResolver,
+  createSymbolRadiusResolver,
+  createSymbolStrokeResolver,
   resolveCategoryShapeMaps,
   resolveProportionalSymbolScale,
   resolveSymbolMissingDataStyle,
   resolveSymbolStrokeStyle,
+  type SymbolRowRule,
   usesDoubleProportionalSymbols
 } from './symbol-layer.utils';
 import { MultiShapeLayer } from './multi-shape-layer';
@@ -269,20 +272,24 @@ function createDoubleProportionalPointLayers(
     proportionalSymbolScale
   );
 
-  const createRadiusAccessor =
-    (columnName: string, accessor: (row: DeckDataRow) => number) =>
-    (row: DeckDataRow): number => {
-      if (isDisabledFillCategory(row)) {
-        return 0;
-      }
-      if (isMissingThematicValue(row[columnName])) {
-        return showMissingPoints ? missingPointRadius : 0;
-      }
+  const rowRule = (missingColumn: string | undefined): SymbolRowRule => ({
+    isDisabled: isDisabledFillCategory,
+    missingColumn,
+    missing: {
+      show: showMissingPoints,
+      color: missingPointColor,
+      radius: missingPointRadius
+    },
+    highlightedRowIds
+  });
+  const fillMissingColumn = (columnName: string): string | undefined =>
+    useFillChoropleth
+      ? pointFillValueColumn
+      : useFillCategorical
+        ? pointFillCategoryColumn
+        : columnName;
 
-      return accessor(row);
-    };
-
-  const createFillAccessor =
+  const createFillColorAccessor =
     (
       columnName: string,
       baseColor: RGBColor,
@@ -290,27 +297,6 @@ function createDoubleProportionalPointLayers(
       breakValue: number | null
     ) =>
     (row: DeckDataRow): [number, number, number, number] => {
-      const rowOpacity = resolveHighlightedOpacityForRow(
-        row,
-        pointFillOpacity,
-        highlightedRowIds
-      );
-
-      const missingColorColumn =
-        useFillChoropleth || useFillCategorical
-          ? useFillChoropleth
-            ? pointFillValueColumn
-            : pointFillCategoryColumn
-          : columnName;
-      if (
-        missingColorColumn &&
-        isMissingThematicValue(row[missingColorColumn])
-      ) {
-        return showMissingPoints
-          ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
-          : [0, 0, 0, 0];
-      }
-
       if (
         useFillChoropleth &&
         pointFillValueColumn &&
@@ -323,36 +309,23 @@ function createDoubleProportionalPointLayers(
             ? rawFillValue
             : Number(rawFillValue);
         if (!Number.isFinite(numericFillValue)) {
-          return showMissingPoints
-            ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
-            : [0, 0, 0, 0];
+          const [r, g, b] = missingPointColor;
+          return showMissingPoints ? [r, g, b, 255] : [0, 0, 0, 0];
         }
         const [r, g, b] = getColorForValue(
           numericFillValue,
           pointFillClassification.breaks,
           pointFillClassification.colors
         );
-        return [
-          r,
-          g,
-          b,
-          Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255)
-        ];
+        return [r, g, b, 255];
       }
 
       if (useFillCategorical && pointFillCategoryColumn) {
-        const categoryLabel = String(row[pointFillCategoryColumn]);
-        if (disabledFillLabels.has(categoryLabel)) {
-          return [0, 0, 0, 0];
-        }
-        const mapped = effectiveCategoryColorMap?.get(categoryLabel);
+        const mapped = effectiveCategoryColorMap?.get(
+          String(row[pointFillCategoryColumn])
+        );
         if (mapped) {
-          return [
-            mapped[0],
-            mapped[1],
-            mapped[2],
-            Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255)
-          ];
+          return [mapped[0], mapped[1], mapped[2], 255];
         }
       }
 
@@ -363,14 +336,13 @@ function createDoubleProportionalPointLayers(
           : typeof rawValue === 'string'
             ? Number(rawValue)
             : Number.NaN;
-      const color =
+      const [r, g, b] =
         breakValue !== null &&
         Number.isFinite(numericValue) &&
         numericValue < breakValue
           ? alternateColor
           : baseColor;
-
-      return toMutableRgba(withOpacity(color, rowOpacity));
+      return [r, g, b, 255];
     };
 
   const strokeClassificationAccessor = createStrokeClassificationAccessor({
@@ -384,95 +356,77 @@ function createDoubleProportionalPointLayers(
     showMissing: showMissingPoints,
     hexToRgb
   });
-
-  const createLineAccessor =
-    (columnName: string) =>
-    (row: DeckDataRow): [number, number, number, number] => {
-      if (isDisabledFillCategory(row)) {
-        return [0, 0, 0, 0];
-      }
-      if (isMissingThematicValue(row[columnName]) && !showMissingPoints) {
-        return [0, 0, 0, 0];
-      }
-
-      if (!showPointStroke) {
-        return [0, 0, 0, 0];
-      }
-
-      if (strokeClassificationAccessor) {
+  // Unlike the other symbols, the double proportional stroke ignores the
+  // colour alpha: a disabled stroke category or a hidden missing stroke value
+  // still draws.
+  const lineColor = strokeClassificationAccessor
+    ? (row: DeckDataRow): [number, number, number, number] => {
         const [r, g, b] = strokeClassificationAccessor(row);
-        const alpha = Math.round(
-          Math.min(
-            Math.max(
-              resolveHighlightedOpacityForRow(
-                row,
-                pointStrokeOpacity,
-                highlightedRowIds
-              ),
-              0
-            ),
-            1
-          ) * 255
-        );
-        return [r, g, b, alpha];
+        return [r, g, b, 255];
       }
-
-      return toMutableRgba(
-        withOpacity(
-          pointStrokeColor,
-          resolveHighlightedOpacityForRow(
-            row,
-            pointStrokeOpacity,
-            highlightedRowIds
-          )
-        )
-      );
-    };
+    : pointStrokeColor;
+  const createLineResolver = (columnName: string) =>
+    createSymbolStrokeResolver(rowRule(columnName), {
+      show: showPointStroke,
+      color: lineColor,
+      opacity: pointStrokeOpacity
+    });
 
   const primaryFillByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createFillAccessor(
-      pointSizeColumn,
-      fillColor,
-      secondaryFillColor,
-      breakValueA
+    createSymbolFillResolver(
+      rowRule(fillMissingColumn(pointSizeColumn)),
+      createFillColorAccessor(
+        pointSizeColumn,
+        fillColor,
+        secondaryFillColor,
+        breakValueA
+      ),
+      pointFillOpacity
     ),
     OUT_OF_SCOPE_COLOR
   );
   const secondaryFillByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createFillAccessor(
-      pointValueColumn,
-      secondaryFillColor,
-      fillColor,
-      breakValueB
+    createSymbolFillResolver(
+      rowRule(fillMissingColumn(pointValueColumn)),
+      createFillColorAccessor(
+        pointValueColumn,
+        secondaryFillColor,
+        fillColor,
+        breakValueB
+      ),
+      pointFillOpacity
     ),
     OUT_OF_SCOPE_COLOR
   );
   const primaryLineByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createLineAccessor(pointSizeColumn),
+    createLineResolver(pointSizeColumn),
     OUT_OF_SCOPE_COLOR
   );
   const secondaryLineByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createLineAccessor(pointValueColumn),
+    createLineResolver(pointValueColumn),
     OUT_OF_SCOPE_COLOR
   );
   const primaryRadiusByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor),
+    createSymbolRadiusResolver(rowRule(pointSizeColumn), primaryRadiusAccessor),
     OUT_OF_SCOPE_SIZE
   );
   const secondaryRadiusByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor),
+    createSymbolRadiusResolver(
+      rowRule(pointValueColumn),
+      secondaryRadiusAccessor
+    ),
     OUT_OF_SCOPE_SIZE
   );
 
@@ -971,88 +925,30 @@ export function createRepresentativePointSymbolLayers(
     pointCategoryColumn !== undefined &&
     disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
 
-  const resolveFillColorForRow = (
-    row: DeckDataRow
-  ): [number, number, number, number] => {
-    if (isDisabledPointCategoryRow(row)) {
-      return [0, 0, 0, 0];
-    }
-    const rowOpacity = resolveHighlightedOpacityForRow(
-      row,
-      pointFillOpacity,
-      highlightedRowIds
-    );
-
-    if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
-      return showMissingPoints
-        ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
-        : [0, 0, 0, 0];
-    }
-
-    if (baseFillAccessor) {
-      const [r, g, b, sourceAlpha] = baseFillAccessor(row);
-      if (sourceAlpha === 0) {
-        return [r, g, b, 0];
-      }
-      const alpha = Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255);
-      return [r, g, b, alpha];
-    }
-
-    return toMutableRgba(withOpacity(fillColor, rowOpacity));
+  const rowRule: SymbolRowRule = {
+    isDisabled: isDisabledPointCategoryRow,
+    missingColumn: pointMissingColumn,
+    missing: {
+      show: showMissingPoints,
+      color: missingPointColor,
+      radius: missingPointRadius
+    },
+    highlightedRowIds
   };
-
-  const resolveLineColorForRow = (
-    row: DeckDataRow
-  ): [number, number, number, number] => {
-    if (isDisabledPointCategoryRow(row)) {
-      return [0, 0, 0, 0];
-    }
-    if (
-      pointMissingColumn &&
-      isMissingThematicValue(row[pointMissingColumn]) &&
-      !showMissingPoints
-    ) {
-      return [0, 0, 0, 0];
-    }
-
-    const rowStrokeOpacity = resolveHighlightedOpacityForRow(
-      row,
-      pointStrokeOpacity,
-      highlightedRowIds
-    );
-
-    if (!showPointStroke) {
-      return [0, 0, 0, 0];
-    }
-
-    if (strokeClassificationAccessor) {
-      const [r, g, b, sourceAlpha] = strokeClassificationAccessor(row);
-      if (sourceAlpha === 0) {
-        return [r, g, b, 0];
-      }
-      const alpha = Math.round(
-        Math.min(Math.max(rowStrokeOpacity, 0), 1) * 255
-      );
-      return [r, g, b, alpha];
-    }
-
-    return toMutableRgba(withOpacity(pointStrokeColor, rowStrokeOpacity));
-  };
-
-  const resolveRadiusForRow = (row: DeckDataRow): number => {
-    if (isDisabledPointCategoryRow(row)) {
-      return 0;
-    }
-    if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
-      return showMissingPoints ? missingPointRadius : 0;
-    }
-
-    if (baseRadiusAccessor) {
-      return baseRadiusAccessor(row);
-    }
-
-    return uniquePointRadius;
-  };
+  const resolveFillColorForRow = createSymbolFillResolver(
+    rowRule,
+    baseFillAccessor ?? fillColor,
+    pointFillOpacity
+  );
+  const resolveLineColorForRow = createSymbolStrokeResolver(rowRule, {
+    show: showPointStroke,
+    color: strokeClassificationAccessor ?? pointStrokeColor,
+    opacity: pointStrokeOpacity
+  });
+  const resolveRadiusForRow = createSymbolRadiusResolver(
+    rowRule,
+    baseRadiusAccessor ?? uniquePointRadius
+  );
 
   const fillColorByFeatureId = ctxRowAccessor(
     ctx,
@@ -1167,25 +1063,14 @@ export function createRepresentativePointSymbolLayers(
     const categoryRankRadiusByFeatureId = ctxRowAccessor(
       ctx,
       symbolRowTable,
-      (row) => {
-        if (isDisabledPointCategoryRow(row)) {
-          return 0;
-        }
-        if (
-          pointMissingColumn &&
-          isMissingThematicValue(row[pointMissingColumn])
-        ) {
-          return showMissingPoints ? missingPointRadius : 0;
-        }
+      createSymbolRadiusResolver(rowRule, (row) => {
         const raw = row[pointCategoryColumn];
-        if (raw !== null && raw !== undefined) {
-          const mapped = categoryRankRadiusMap.get(String(raw));
-          if (mapped !== undefined) {
-            return mapped;
-          }
-        }
-        return uniquePointRadius;
-      },
+        const mapped =
+          raw === null || raw === undefined
+            ? undefined
+            : categoryRankRadiusMap.get(String(raw));
+        return mapped ?? uniquePointRadius;
+      }),
       OUT_OF_SCOPE_SIZE,
       representativePointSource.table
     );
@@ -1499,39 +1384,24 @@ export function createPointLayerStack(
   // needs them even when the style itself is uniform.
   const isRowScoped = resolveScopedRowIds(ctx) !== undefined;
 
+  const rowRule: SymbolRowRule = {
+    isDisabled: isDisabledPointCategoryRow,
+    missingColumn: pointMissingColumn,
+    missing: {
+      show: showMissingPoints,
+      color: missingPointColor,
+      radius: missingPointRadius
+    },
+    highlightedRowIds
+  };
+
   const fillColorAccessor =
     pointMissingColumn || hasHighlights
-      ? (row: DeckDataRow): [number, number, number, number] => {
-          if (isDisabledPointCategoryRow(row)) {
-            return [0, 0, 0, 0];
-          }
-          const rowOpacity = resolveHighlightedOpacityForRow(
-            row,
-            pointFillOpacity,
-            highlightedRowIds
-          );
-          if (
-            pointMissingColumn &&
-            isMissingThematicValue(row[pointMissingColumn])
-          ) {
-            return showMissingPoints
-              ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
-              : [0, 0, 0, 0];
-          }
-
-          if (baseFillAccessor) {
-            const [r, g, b, sourceAlpha] = baseFillAccessor(row);
-            if (sourceAlpha === 0) {
-              return [r, g, b, 0];
-            }
-            const alpha = Math.round(
-              Math.min(Math.max(rowOpacity, 0), 1) * 255
-            );
-            return [r, g, b, alpha];
-          }
-
-          return toMutableRgba(withOpacity(fillColor, rowOpacity));
-        }
+      ? createSymbolFillResolver(
+          rowRule,
+          baseFillAccessor ?? fillColor,
+          pointFillOpacity
+        )
       : (baseFillAccessor ??
         (isRowScoped
           ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
@@ -1561,54 +1431,11 @@ export function createPointLayerStack(
     pointMissingColumn ||
     hasHighlights ||
     hasDisabledPointCategories
-      ? (row: DeckDataRow): [number, number, number, number] => {
-          if (isDisabledPointCategoryRow(row)) {
-            return [0, 0, 0, 0];
-          }
-          if (
-            pointMissingColumn &&
-            isMissingThematicValue(row[pointMissingColumn]) &&
-            !showMissingPoints
-          ) {
-            return [0, 0, 0, 0];
-          }
-
-          if (!showPointStroke) {
-            return [0, 0, 0, 0];
-          }
-
-          if (strokeClassificationAccessor) {
-            const [r, g, b, sourceAlpha] = strokeClassificationAccessor(row);
-            if (sourceAlpha === 0) {
-              return [r, g, b, 0];
-            }
-            const alpha = Math.round(
-              Math.min(
-                Math.max(
-                  resolveHighlightedOpacityForRow(
-                    row,
-                    pointStrokeOpacity,
-                    highlightedRowIds
-                  ),
-                  0
-                ),
-                1
-              ) * 255
-            );
-            return [r, g, b, alpha];
-          }
-
-          return toMutableRgba(
-            withOpacity(
-              pointStrokeColor,
-              resolveHighlightedOpacityForRow(
-                row,
-                pointStrokeOpacity,
-                highlightedRowIds
-              )
-            )
-          );
-        }
+      ? createSymbolStrokeResolver(rowRule, {
+          show: showPointStroke,
+          color: strokeClassificationAccessor ?? pointStrokeColor,
+          opacity: pointStrokeOpacity
+        })
       : isRowScoped
         ? (): [number, number, number, number] =>
             showPointStroke
@@ -1646,23 +1473,10 @@ export function createPointLayerStack(
     baseRadiusAccessor ||
     hasDisabledPointCategories ||
     isRowScoped
-      ? (row: DeckDataRow): number => {
-          if (isDisabledPointCategoryRow(row)) {
-            return 0;
-          }
-          if (
-            pointMissingColumn &&
-            isMissingThematicValue(row[pointMissingColumn])
-          ) {
-            return showMissingPoints ? missingPointRadius : 0;
-          }
-
-          if (baseRadiusAccessor) {
-            return baseRadiusAccessor(row);
-          }
-
-          return uniquePointRadius;
-        }
+      ? createSymbolRadiusResolver(
+          rowRule,
+          baseRadiusAccessor ?? uniquePointRadius
+        )
       : null;
 
   const radiusBinAttr = radiusAccessor
