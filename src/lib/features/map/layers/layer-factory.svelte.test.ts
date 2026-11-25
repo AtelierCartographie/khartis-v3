@@ -2360,6 +2360,61 @@ describe('createPointLayers', () => {
     expect(pointLayer.props.dashed).toBe(true);
     expect(pointLayer.props.dotLength).toBeGreaterThan(0);
   });
+
+  it.each([
+    ['a unique colour', { fillMode: FillMode.UNIQUE }],
+    [
+      'categories',
+      {
+        fillMode: FillMode.CATEGORIES,
+        fillCategoryColumn: 'category',
+        fillClassification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 1,
+          labels: ['public'],
+          categoryValues: ['public'],
+          colors: ['#00ad92']
+        }
+      }
+    ]
+  ])(
+    'should apply the symbol opacity once on native points when the fill uses %s',
+    (_, fillConfig) => {
+      parsePointDataWithProjectionMock.mockReturnValue({
+        length: 1,
+        featureIds: new Uint32Array([0])
+      });
+      createScatterplotLayerPropsMock.mockReturnValue({
+        data: { attributes: {}, featureIds: new Uint32Array([0]) }
+      });
+
+      const visualization = createSymbolVisualization();
+      visualization.symbol = {
+        ...visualization.symbol!,
+        opacity: 0.5,
+        ...fillConfig
+      };
+
+      const [pointLayer] = createPointLayers(
+        createTableWithRows([{ category: 'public' }], ['category']),
+        createPointGeometryInfo(),
+        createContext(visualization)
+      );
+      const fillAttribute = (
+        pointLayer.props.data as {
+          attributes: { getFillColor?: { value: Uint8Array } };
+        }
+      ).attributes.getFillColor;
+      const fill = fillAttribute
+        ? Array.from(fillAttribute.value)
+        : (pointLayer.props.getFillColor as number[]);
+
+      // deck.gl gamma-corrects the layer opacity: it would apply the opacity a
+      // second time, and to the stroke as well.
+      expect(pointLayer.props.opacity).toBe(1);
+      expect(fill[3]).toBe(128);
+    }
+  );
 });
 
 describe('createLineLayers', () => {

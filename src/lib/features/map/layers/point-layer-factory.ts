@@ -1395,17 +1395,18 @@ export function createPointLayerStack(
     highlightedRowIds
   };
 
+  // The fill opacity lives in the colour alpha, as for representative points:
+  // the layer opacity stays 1, so the stroke keeps its own opacity.
   const fillColorAccessor =
-    pointMissingColumn || hasHighlights
+    pointMissingColumn || hasHighlights || baseFillAccessor
       ? createSymbolFillResolver(
           rowRule,
           baseFillAccessor ?? fillColor,
           pointFillOpacity
         )
-      : (baseFillAccessor ??
-        (isRowScoped
-          ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
-          : null));
+      : isRowScoped
+        ? () => toMutableRgba(withOpacity(fillColor, pointFillOpacity))
+        : null;
 
   const fillColorBinAttr = fillColorAccessor
     ? pointColorAttr(
@@ -1609,7 +1610,7 @@ export function createPointLayerStack(
         ? withOpacity(pointStrokeColor, pointStrokeOpacity)
         : ([0, 0, 0, 0] as [number, number, number, number])
     }),
-    opacity: hasHighlights ? 1 : pointFillOpacity,
+    opacity: 1,
     ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
     ...(!scatterBinaryData.attributes.getShape && { getShape: shapeOrdinal }),
     radiusScale: pageDisplayScale,
@@ -1631,6 +1632,7 @@ export function createPointLayerStack(
         pointClassification?.colors,
         pointFillClassification?.breaks,
         pointFillClassification?.colors,
+        pointFillOpacity,
         useCategoricalColor,
         pointCategoryColumn,
         pointCategoryColorMap,
