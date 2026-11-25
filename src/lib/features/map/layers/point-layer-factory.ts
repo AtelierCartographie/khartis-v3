@@ -69,7 +69,6 @@ import {
   createClassedSizeAccessor,
   createProportionalSymbolSizeAccessor,
   createStrokeClassificationAccessor,
-  HIGHLIGHT_FILL_COLOR,
   withOpacity
 } from './layer-helpers';
 import { resolvePointParser } from './layer-geometry-parsers';
@@ -1333,14 +1332,16 @@ export function createPointLayerStack(
       ? createChoroplethColorAccessor(
           (pointFillValueColumn ?? pointValueColumn)!,
           (pointFillClassification ?? pointClassification)!.breaks!,
-          (pointFillClassification ?? pointClassification)!.colors!
+          (pointFillClassification ?? pointClassification)!.colors!,
+          missingPointColor,
+          showMissingPoints
         )
       : useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             pointCategoryColumn!,
             effectiveCategoryColorMap,
-            HIGHLIGHT_FILL_COLOR,
-            true,
+            missingPointColor,
+            showMissingPoints,
             (pointConfig?.fillMode === FillMode.CATEGORIES
               ? (pointFillClassification ?? pointClassification)
               : pointClassification

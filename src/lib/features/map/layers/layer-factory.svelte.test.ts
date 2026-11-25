@@ -2415,6 +2415,66 @@ describe('createPointLayers', () => {
       expect(fill[3]).toBe(128);
     }
   );
+
+  it('should give a native point the missing-data colour when its fill category is missing', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: { value: new Float32Array([0, 0, 10, 10]), size: 2 }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population',
+      fillMode: FillMode.CATEGORIES,
+      fillCategoryColumn: 'category',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['public'],
+        categoryValues: ['public'],
+        colors: ['#00ad92']
+      },
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#123456',
+        label: 'N/A'
+      }
+    };
+
+    const [pointLayer] = createPointLayers(
+      createTableWithRows(
+        [
+          { population: 10, category: 'public' },
+          { population: 20, category: null }
+        ],
+        ['population', 'category']
+      ),
+      createPointGeometryInfo(),
+      { ...createContext(visualization), statistics: { min: 10, max: 20 } }
+    );
+    const data = pointLayer.props.data as {
+      featureIds: Uint32Array;
+      attributes: { getFillColor: { value: Uint8Array } };
+    };
+    const offset = Array.from(data.featureIds).indexOf(1) * 4;
+
+    expect(
+      Array.from(data.attributes.getFillColor.value.slice(offset, offset + 3))
+    ).toEqual([18, 52, 86]);
+  });
 });
 
 describe('createLineLayers', () => {
