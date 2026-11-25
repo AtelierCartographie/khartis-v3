@@ -2187,6 +2187,74 @@ describe('createPointLayers', () => {
     ]);
   });
 
+  it('should hide a double proportional stroke when its value is missing and missing data is hidden', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: { value: new Float32Array([0, 0, 10, 10]), size: 2 }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.DOUBLE,
+      sizeColumn: 'population',
+      valueColumn: 'income',
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'density',
+      strokeClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        breaks: [0, 5, 10],
+        colors: ['#101010', '#202020']
+      },
+      missingData: {
+        show: false,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#123456',
+        label: 'N/A'
+      }
+    };
+
+    const [overlayLayer] = createPointLayers(
+      createTableWithRows(
+        [
+          { population: 25, income: 100, density: 3 },
+          { population: 100, income: 25, density: null }
+        ],
+        ['population', 'income', 'density']
+      ),
+      createPointGeometryInfo(),
+      {
+        ...createContext(visualization),
+        statistics: { min: 25, max: 100 },
+        secondaryStatistics: { min: 25, max: 100 }
+      }
+    );
+    const data = overlayLayer.props.data as {
+      featureIds: Uint32Array;
+      attributes: { getLineColor: { value: Uint8Array } };
+    };
+    const strokeAlphas = Array.from(data.featureIds).flatMap(
+      (featureId, index) =>
+        featureId === 1
+          ? [data.attributes.getLineColor.value[index * 4 + 3]]
+          : []
+    );
+
+    expect(strokeAlphas).toEqual([0, 0]);
+  });
+
   it('separates double proportional symbols in juxtaposition without overlap', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,

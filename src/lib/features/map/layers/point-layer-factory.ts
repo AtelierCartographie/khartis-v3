@@ -355,19 +355,10 @@ function createDoubleProportionalPointLayers(
     showMissing: showMissingPoints,
     hexToRgb
   });
-  // Unlike the other symbols, the double proportional stroke ignores the
-  // colour alpha: a disabled stroke category or a hidden missing stroke value
-  // still draws.
-  const lineColor = strokeClassificationAccessor
-    ? (row: DeckDataRow): [number, number, number, number] => {
-        const [r, g, b] = strokeClassificationAccessor(row);
-        return [r, g, b, 255];
-      }
-    : pointStrokeColor;
   const createLineResolver = (columnName: string) =>
     createSymbolStrokeResolver(rowRule(columnName), {
       show: showPointStroke,
-      color: lineColor,
+      color: strokeClassificationAccessor ?? pointStrokeColor,
       opacity: pointStrokeOpacity
     });
 
