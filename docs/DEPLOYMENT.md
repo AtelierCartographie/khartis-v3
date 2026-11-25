@@ -162,6 +162,14 @@ se contourne pas.
   release sans manifeste `.khartis-release-assets.json`.
 - `--recover-stale-lock` : uniquement après avoir vérifié qu'aucun autre
   déploiement n'est en cours.
+- **Connexion SFTP perdue** : une session qui reste 90 s sans réponse du serveur
+  est considérée comme perdue (« Keepalive timeout »). Le script s'arrête alors
+  avant la bascule, ouvre une nouvelle connexion pour supprimer l'envoi
+  temporaire et libérer le verrou, puis supprime sa copie de build. Si cette
+  reconnexion échoue aussi, le verrou reste : relancer plus tard avec
+  `--recover-stale-lock`. Une coupure pendant la bascule garde l'envoi
+  temporaire, et le déploiement suivant rétablit le répertoire public depuis sa
+  sauvegarde.
 
 Le script ne fait pas de rollback. En cas d'échec après transfert ou d'état
 distant inattendu, conserver la sortie, cesser les tentatives et suivre la
