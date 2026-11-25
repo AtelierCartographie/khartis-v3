@@ -314,6 +314,9 @@ export default defineConfig(({ mode }) => {
       paraglideVitePlugin({
         project: './project.inlang',
         outdir: './src/lib/paraglide',
+        // `pnpm check` compiles the same outdir through the CLI, whose
+        // default layout is message-modules: the plugin writes the same files.
+        outputStructure: 'message-modules',
         emitTsDeclarations: true
       }),
       crossOriginIsolationAssets(),
