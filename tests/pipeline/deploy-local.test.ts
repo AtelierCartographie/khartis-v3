@@ -1956,7 +1956,7 @@ describe('local deployment new asset publication before the swap', () => {
     expect(buildAssetPropagationDelays(150_000)).toEqual([
       5_000, 10_000, 15_000, 30_000, 60_000, 30_000
     ]);
-    const delays = buildAssetPropagationDelays(10 * 60_000);
+    const delays: number[] = buildAssetPropagationDelays(10 * 60_000);
     expect(delays.slice(0, 4)).toEqual([5_000, 10_000, 15_000, 30_000]);
     expect(Math.max(...delays)).toBe(60_000);
     expect(delays.reduce((sum, delayMs) => sum + delayMs, 0)).toBe(600_000);
