@@ -919,10 +919,13 @@ export function createRepresentativePointSymbolLayers(
   const disabledPointCategoryLabels = new Set(
     (pointColorClassification?.disabledLabels ?? []).map(String)
   );
+  const usesPointCategories =
+    pointConfig.mode === SymbolMode.CATEGORIES ||
+    (!signFillAccessor && pointConfig.fillMode === FillMode.CATEGORIES);
   const isDisabledPointCategoryRow = (row: DeckDataRow): boolean =>
-    pointConfig.mode === SymbolMode.CATEGORIES &&
-    pointCategoryColumn !== undefined &&
-    disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
+    usesPointCategories &&
+    pointColorCategoryColumn !== undefined &&
+    disabledPointCategoryLabels.has(String(row[pointColorCategoryColumn]));
 
   const rowRule: SymbolRowRule = {
     isDisabled: isDisabledPointCategoryRow,

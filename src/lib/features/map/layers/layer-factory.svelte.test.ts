@@ -1157,6 +1157,73 @@ describe('createPolygonLayers', () => {
     );
   });
 
+  it('should hide the whole representative symbol when its fill category is disabled', () => {
+    const pointData = {
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    };
+    parsePointDataMock.mockReturnValue(pointData);
+    parsePointDataWithProjectionMock.mockReturnValue(pointData);
+    createScatterplotLayerPropsMock.mockImplementation((data) => ({
+      data: {
+        length: data.length,
+        featureIds: data.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      fillMode: FillMode.CATEGORIES,
+      fillCategoryColumn: 'kind',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['urban', 'rural'],
+        categoryValues: ['urban', 'rural'],
+        colors: ['#3366cc', '#dc3912'],
+        disabledLabels: ['rural']
+      },
+      strokeMode: StrokeMode.UNIQUE,
+      strokeWidth: 3
+    };
+    const table = createTableWithRows(
+      [
+        { kind: 'urban', geometry: null },
+        { kind: 'rural', geometry: null }
+      ],
+      ['kind', 'geometry']
+    );
+
+    const layers = createPolygonLayers(table, createGeometryInfo(), {
+      ...createContext(visualization),
+      representativePointTable: table,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      }
+    });
+    const { attributes } = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    )?.props.data as {
+      attributes: Record<
+        'getFillColor' | 'getLineColor' | 'getRadius',
+        { value: ArrayLike<number> }
+      >;
+    };
+
+    // The rural symbol keeps neither its fill, nor its ring, nor its size.
+    expect(Array.from(attributes.getFillColor.value).slice(4)).toEqual([
+      0, 0, 0, 0
+    ]);
+    expect(Array.from(attributes.getLineColor.value).slice(4)).toEqual([
+      0, 0, 0, 0
+    ]);
+    expect(attributes.getRadius.value[1]).toBe(0);
+  });
+
   it('omits the binary polygon stroke layer when contour mode is none', () => {
     const visualization = createVisualization(FillMode.UNIQUE);
     visualization.polygon = {
