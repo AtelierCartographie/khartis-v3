@@ -1076,16 +1076,26 @@ function filterDraftsByComponent(
   });
 }
 
+const SIDE_TITLE_WIDTH_SHARE = 0.4;
+const SIDE_TITLE_MIN_WIDTH_PX = 60;
+
 /** The title and subtitle of a legend whose title sits at the left of its entries. */
 export function getLegendSideHeader(
   item: LegendItem,
   legendTextStyle: LegendTextStyle
 ): LegendSvgDefinition | null {
+  // A frame dragged wider or narrower gives the side title its share of the
+  // width, so the title, subtitle and note reflow with the handle.
+  const { width } = resolveLegendItemLayout(item);
   return draw_legend_side_header({
     title: item.title,
     subtitle: item.subtitle,
     fontSize: legendTextStyle.fontSize,
-    fontFamily: legendTextStyle.fontFamily
+    fontFamily: legendTextStyle.fontFamily,
+    maxWidth:
+      width !== null
+        ? Math.max(SIDE_TITLE_MIN_WIDTH_PX, width * SIDE_TITLE_WIDTH_SHARE)
+        : undefined
   });
 }
 
