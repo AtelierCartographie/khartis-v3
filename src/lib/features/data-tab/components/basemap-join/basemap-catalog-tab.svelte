@@ -13,7 +13,10 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import {
+    type RelevantBasemapSuggestion,
+    sortCatalogBasemapsForDisplay
+  } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import type {
     BasemapExtent,
     BasemapMetadata,
@@ -36,12 +39,6 @@
     readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
-  interface SuggestedBasemap {
-    basemap: BasemapMetadata;
-    score: number;
-    matchesData: boolean;
-  }
-
   interface SearchComboBoxItem {
     id: string;
     text: string;
@@ -49,7 +46,7 @@
   }
 
   interface Props {
-    suggestedBasemaps: SuggestedBasemap[];
+    suggestedBasemaps: RelevantBasemapSuggestion[];
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
@@ -306,6 +303,30 @@
     return () => observer.disconnect();
   });
 
+  // GPS points or an extent cannot tell vintages apart: their card stacks
+  // them, and the user picks one once the card is selected.
+  const selectedVintageStack = $derived(
+    suggestedBasemaps.find(
+      ({ vintages }) =>
+        vintages.length > 1 &&
+        vintages.some((vintage) => vintage.file === basemapSelected)
+    )
+  );
+  const vintageItems = $derived(
+    selectedVintageStack?.vintages.map((vintage) => ({
+      id: vintage.file,
+      text: formatBasemapValidity(vintage)
+    })) ?? []
+  );
+
+  function handleVintageSelect(file: string): void {
+    if (file === basemapSelected) return;
+    const vintage = selectedVintageStack?.vintages.find(
+      (candidate) => candidate.file === file
+    );
+    if (vintage) onSelectBasemap(vintage);
+  }
+
   const suggestionsPanelOpen = $derived(
     suggestionsOpen ?? suggestedBasemaps.length > 0
   );
@@ -412,17 +433,37 @@
         </p>
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
-            {#each suggestedBasemaps as { basemap, score, matchesData } (basemap.file)}
+            {#each suggestedBasemaps as { basemap, vintages, score, matchesData } (basemap.file)}
+              {@const shown =
+                vintages.find((vintage) => vintage.file === basemapSelected) ??
+                basemap}
               <BasemapCardVertical
-                basemap={basemap}
+                basemap={shown}
+                vintageCount={vintages.length}
                 matchScore={score}
                 showMatchScore={matchesData}
-                selected={basemap.file === basemapSelected}
-                onclick={() => onSelectBasemap(basemap)}
+                selected={shown.file === basemapSelected}
+                onclick={() => onSelectBasemap(shown)}
               />
             {/each}
           </div>
         </div>
+        {#if selectedVintageStack}
+          <div class="vintage-band">
+            <p class="vintage-band-text">{m.basemap_vintage_picker_desc()}</p>
+            <div class="vintage-band-picker">
+              <Dropdown
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
+                size="sm"
+                labelText={m.basemap_vintage_picker_label()}
+                items={vintageItems}
+                selectedId={basemapSelected}
+                on:select={(e) => handleVintageSelect(e.detail.selectedId)}
+              />
+            </div>
+          </div>
+        {/if}
       {:else}
         <div class="suggestions-notification">
           <InlineNotification
@@ -645,6 +686,32 @@
     gap: var(--cds-spacing-03);
     width: max-content;
     padding-bottom: var(--cds-spacing-03);
+    /* Room for the layers drawn behind the last card of a vintage stack. */
+    padding-inline-end: var(--cds-spacing-02);
+  }
+
+  .vintage-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--cds-spacing-03) var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+    border-left: 3px solid
+      var(--khartis-additions-border-strong-01-suggestions, #1192e8);
+  }
+
+  .vintage-band-text {
+    flex: 1 1 14rem;
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  .vintage-band-picker {
+    flex: 0 0 9rem;
   }
 
   .basemap-slider-track :global(.basemap-card) {

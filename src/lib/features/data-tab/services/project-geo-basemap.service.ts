@@ -129,8 +129,7 @@ export interface ScoredBasemap {
  */
 export function mergeProjectGeoSuggestions(
   catalogSuggestions: readonly ScoredBasemap[],
-  projectSuggestions: readonly ScoredBasemap[],
-  limit: number
+  projectSuggestions: readonly ScoredBasemap[]
 ): ScoredBasemap[] {
   const ranked = [
     ...projectSuggestions
@@ -149,6 +148,5 @@ export function mergeProjectGeoSuggestions(
         right.suggestion.score - left.suggestion.score ||
         Number(right.isProject) - Number(left.isProject)
     )
-    .slice(0, limit)
     .map(({ suggestion }) => suggestion);
 }
