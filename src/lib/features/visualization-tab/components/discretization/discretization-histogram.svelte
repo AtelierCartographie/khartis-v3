@@ -103,7 +103,7 @@
         <div class="histogram-bar-wrapper">
           <div
             class="histogram-bar"
-            style="width: {widthPercent}%; background-color: {histogramColor}"
+            style="width: {widthPercent}%; background: {histogramColor}"
             title="{displayBound(breakItem.min, 'start')} - {displayBound(
               breakItem.max,
               'end'

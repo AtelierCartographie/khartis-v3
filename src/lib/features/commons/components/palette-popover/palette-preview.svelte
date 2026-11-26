@@ -134,6 +134,10 @@
       ? resolvePaletteForType(palette, paletteType).id
       : (normalizePaletteId(selectedPaletteId) ?? selectedPaletteId);
   });
+  // Patterns replace the palette: no palette of the list is applied.
+  const dropdownSelectedPaletteId = $derived(
+    classification?.pattern ? '__custom__' : normalizedSelectedPaletteId
+  );
   const resolvedClassCount = $derived(
     classification?.numClasses ??
       classification?.classes ??
@@ -418,7 +422,7 @@
 <PaletteDropdown
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
-  selectedPaletteId={normalizedSelectedPaletteId}
+  selectedPaletteId={dropdownSelectedPaletteId}
   paletteType={paletteType}
   numClasses={resolvedClassCount}
   previewCount={dropdownPreviewCount}

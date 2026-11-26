@@ -134,17 +134,11 @@
     return geoDatasets[0]?.id;
   });
 
-  const geoDatasetLabel = $derived.by(() => {
-    const selected = datasetsStore.selectedDataset;
-    if (selected?.geometry && !selected.joinedBasemap) return selected.name;
-    return geoDatasets[0]?.name ?? m.simplification_source_geodata();
-  });
-
   const sources = $derived([
     { icon: Earth, label: m.simplification_source_basemap(), iconSize: 16 },
     {
       icon: LicenseGlobal,
-      label: geoDatasetLabel,
+      label: m.simplification_source_geodata(),
       iconSize: 16,
       disabled: !hasGeoDatasets
     }

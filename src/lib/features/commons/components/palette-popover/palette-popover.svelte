@@ -230,6 +230,7 @@
   }
 
   function handlePatternPaletteChange(config: PatternPaletteConfig) {
+    draftPaletteId = '__custom__';
     draftPatternPaletteConfig = config;
   }
 

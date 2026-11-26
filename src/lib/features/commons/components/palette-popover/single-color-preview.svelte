@@ -139,7 +139,7 @@
   paletteType={PALETTE_TYPE.QUALITATIVE}
   numClasses={1}
   exclusive={exclusive}
-  allowPattern={allowPattern}
+  allowPattern={allowPattern && onpatternchange !== undefined}
   currentPatternPaletteConfig={patternPaletteConfig}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}

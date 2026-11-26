@@ -492,6 +492,14 @@
     }
   }
 
+  // Hovering or focusing any other item of the menu closes the open submenu.
+  function closeSubmenuOutside(target: EventTarget | null) {
+    if (!activeSubmenu || !(target instanceof Element)) return;
+    const item = target.closest('.menu-item');
+    if (!item || item === getSubmenuTrigger(activeSubmenu)) return;
+    activeSubmenu = null;
+  }
+
   function fitSubmenuInViewport(
     trigger: HTMLElement | null,
     submenuElement: HTMLElement | null
@@ -749,6 +757,10 @@
                 }}
                 onoutsideclick={handleMenuOutsideClick}
                 onkeydown={handleMenuKeydown}
+                onmouseover={(event: MouseEvent) =>
+                  closeSubmenuOutside(event.target)}
+                onfocusin={(event: FocusEvent) =>
+                  closeSubmenuOutside(event.target)}
               >
                 {#if onChangeType}
                   <button
@@ -769,8 +781,6 @@
                         typeSubmenuTriggerRef
                       )}
                     onmouseenter={() =>
-                      void openSubmenu('type', typeSubmenuTriggerRef)}
-                    onfocus={() =>
                       void openSubmenu('type', typeSubmenuTriggerRef)}
                   >
                     {m.column_type_change()}
@@ -797,8 +807,6 @@
                         refineSubmenuTriggerRef
                       )}
                     onmouseenter={() =>
-                      void openSubmenu('refine', refineSubmenuTriggerRef)}
-                    onfocus={() =>
                       void openSubmenu('refine', refineSubmenuTriggerRef)}
                   >
                     {m.column_refine_label()}

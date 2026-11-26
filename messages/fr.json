@@ -694,7 +694,7 @@
   "projection_settings_crs_helper": "Sur un SCR, la longitude déplace le méridien central (lon_0) et le SCR reste standard. La latitude incline la projection : sa définition devient une transformation oblique PROJ (ob_tran), que QGIS lit mais qui n'a pas de code EPSG. La rotation fait pivoter la carte dans la page.",
   "simplification_description": "Réduire les détails de la carte pour faciliter sa lecture à une plus petite échelle ou pour obtenir un design recherché.",
   "simplification_source_basemap": "Fond de carte",
-  "simplification_source_geodata": "Données géographiques",
+  "simplification_source_geodata": "Fichier(s) géographique(s)",
   "simplification_warning_title": "Attention",
   "simplification_warning_subtitle": "La simplification peut entraîner la suppression de certaines entités (polygones).",
   "simplification_rate_label": "Taux de simplification",

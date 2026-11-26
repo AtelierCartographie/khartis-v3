@@ -2714,7 +2714,8 @@
     line-height: 1rem;
   }
 
-  /* The credit stays readable on demand but recedes: it is not exported. */
+  /* The credit stays readable on demand but recedes; exportFilter leaves it
+     out of the exports. */
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
     background: color-mix(
       in srgb,

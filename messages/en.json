@@ -694,7 +694,7 @@
   "projection_settings_crs_helper": "On a CRS, the longitude moves the central meridian (lon_0) and the CRS stays standard. The latitude tilts the projection: its definition becomes a PROJ oblique transformation (ob_tran), which QGIS reads but which has no EPSG code. The rotation turns the map on the page.",
   "simplification_description": "Reduce map detail to make it easier to read at a smaller scale or to achieve a particular look.",
   "simplification_source_basemap": "Basemap",
-  "simplification_source_geodata": "Geo data",
+  "simplification_source_geodata": "Geographic file(s)",
   "simplification_warning_title": "Warning",
   "simplification_warning_subtitle": "Simplification may remove some features (polygons).",
   "simplification_rate_label": "Simplification rate",

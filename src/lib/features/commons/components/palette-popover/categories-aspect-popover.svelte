@@ -764,45 +764,6 @@
                         />
                       </div>
                     </div>
-
-                    <div class="common-divider"></div>
-
-                    <div
-                      class="common-field common-field--toggle common-field--full"
-                    >
-                      <span class="field-label">
-                        {m.aspect_common_pattern()}
-                      </span>
-                      <div class="common-toggle-value">
-                        <div class="toggle-control">
-                          <Switch
-                            toggled={draftCommonAspect.pattern}
-                            hideLabel
-                            labelText={m.aspect_common_pattern()}
-                            onchange={(value) =>
-                              handleCommonAspectChange('pattern', value)}
-                          />
-                          <span class="toggle-state">
-                            {draftCommonAspect.pattern ? m.yes() : m.no()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {#if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
-                      <div class="common-field--full">
-                        <PatternPalettePicker
-                          config={resolvedPatternConfig}
-                          onchange={handlePatternConfigChange}
-                        />
-                      </div>
-                    {/if}
                   </div>
                 {:else if primitiveKind === 'polygons'}
                   <div class="common-stack">

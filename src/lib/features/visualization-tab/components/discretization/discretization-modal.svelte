@@ -22,7 +22,16 @@
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveValueScopeClause } from '$lib/features/commons/services/row-scope.service';
-  import { isDateDataMethod } from '$lib/features/commons/services/classification.service';
+  import {
+    computeDivergingSplit,
+    isDateDataMethod,
+    isDivergingBreakpoint
+  } from '$lib/features/commons/services/classification.service';
+  import {
+    resolveClassificationPatternConfig,
+    resolveClassPatterns
+  } from '$lib/features/commons/services/pattern-palette.service';
+  import { buildClassPatternSvgBackground } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     DEFAULT_CLASSIFICATION_CLASS_COUNT,
     type ShapeType,
@@ -286,6 +295,26 @@
   const divergingPreview = $derived(
     resolveDivergingPreviewColors(currentNumClasses)
   );
+
+  // Patterns replace the class colors on the map: the strip and the
+  // histogram show them too.
+  const patternBackgrounds = $derived.by(() => {
+    if (role !== 'fill') return undefined;
+    const config = resolveClassificationPatternConfig(activeClassification);
+    const count = currentBreaks.length;
+    if (!config || count === 0) return undefined;
+    const split = isDivergingBreakpoint(currentBreakpoint)
+      ? computeDivergingSplit(count, getCurrentBreakValues(), currentBreakpoint)
+      : undefined;
+    return resolveClassPatterns(
+      count,
+      config,
+      'sequential',
+      config.contrast,
+      activeClassification?.inverted ?? false,
+      split
+    ).map((pattern) => buildClassPatternSvgBackground(pattern));
+  });
 
   function toClassBreaks(
     min: number,
@@ -861,6 +890,7 @@
             divergingPreviewColors={divergingPreview}
             sizePreview={role === 'size' ? sizePreview : undefined}
             binFillStrategy={binFillStrategy}
+            patternBackgrounds={patternBackgrounds}
             calendarStepOptions={calendarStepOptions}
             calendarStepId={calendarStepId}
             oncalendarstepchange={handleCalendarStepChange}
