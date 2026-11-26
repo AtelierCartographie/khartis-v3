@@ -699,6 +699,7 @@
   "simplification_warning_subtitle": "La simplification peut entraîner la suppression de certaines entités (polygones).",
   "simplification_rate_label": "Taux de simplification",
   "simplification_level_label": "Niveau prédéfini",
+  "simplification_single_level": "Ce fond de carte n’existe qu’à un seul niveau de simplification : {level}.",
   "simplification_level_low": "Faible",
   "simplification_level_medium": "Moyen",
   "simplification_level_high": "Élevé",

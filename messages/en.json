@@ -699,6 +699,7 @@
   "simplification_warning_subtitle": "Simplification may remove some features (polygons).",
   "simplification_rate_label": "Simplification rate",
   "simplification_level_label": "Predefined level",
+  "simplification_single_level": "This basemap comes at a single simplification level: {level}.",
   "simplification_level_low": "Low",
   "simplification_level_medium": "Medium",
   "simplification_level_high": "High",

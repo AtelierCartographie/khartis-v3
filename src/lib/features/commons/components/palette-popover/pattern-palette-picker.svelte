@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SteppedSlider from '$lib/features/commons/components/stepped-slider.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     ColorSelector,
@@ -83,7 +84,15 @@
     onchange({ ...config, shape: nextShape });
   }
 
-  // The number field accepts any value: it snaps to the nearest direction.
+  const ANGLE_STEPS = Array.from(
+    { length: Math.floor((ANGLE_MAX - ANGLE_MIN) / ANGLE_STEP) + 1 },
+    (_, index) => {
+      const value = ANGLE_MIN + index * ANGLE_STEP;
+      return { value, label: `${value}°` };
+    }
+  );
+
+  // A stored angle off the steps snaps to the nearest direction.
   function handleAngleChange(value: number) {
     const snapped = Math.min(
       ANGLE_MAX,
@@ -133,11 +142,9 @@
       />
     </div>
 
-    <SliderWithInput
+    <SteppedSlider
       label={m.pattern_angle_degrees()}
-      min={ANGLE_MIN}
-      max={ANGLE_MAX}
-      step={ANGLE_STEP}
+      steps={ANGLE_STEPS}
       value={angle}
       onchange={handleAngleChange}
     />

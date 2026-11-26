@@ -2,7 +2,7 @@
   import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import SteppedSlider from '$lib/features/commons/components/stepped-slider.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPalettePicker from './pattern-palette-picker.svelte';
@@ -364,15 +364,14 @@
     </div>
 
     <div class="contrast-section">
-      <span class="field-label">{m.contrast_label()}</span>
-      <SimpleRadioGroup
-        name="palette-contrast"
-        items={[
-          { value: 'low', labelText: m.contrast_low() },
-          { value: 'normal', labelText: m.contrast_normal() },
-          { value: 'high', labelText: m.contrast_high() }
+      <SteppedSlider
+        label={m.contrast_label()}
+        steps={[
+          { value: 'low', label: m.contrast_low() },
+          { value: 'normal', label: m.contrast_normal() },
+          { value: 'high', label: m.contrast_high() }
         ]}
-        selected={contrastMode}
+        value={contrastMode}
         onchange={(value) => handleContrastChange(value)}
       />
     </div>
