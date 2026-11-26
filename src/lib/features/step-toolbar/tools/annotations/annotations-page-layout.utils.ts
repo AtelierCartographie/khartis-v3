@@ -245,6 +245,45 @@ export function remapPageElementPosition(
   return { x: textEdge.x - alignFactor * toBox, y: textEdge.y };
 }
 
+// Projects saved before the half-page caption box kept the left edge of a
+// fixed 216 px box.
+const LEGACY_CAPTION_BOX_WIDTH = 216;
+
+/**
+ * Puts a restored page element back on the page. A caption box that crosses
+ * the page edge can only come from an older project: the text keeps the edge
+ * its alignment anchored in the narrower box, then the box is clamped.
+ */
+export function fitRestoredPageElementPosition(
+  position: { x: number; y: number },
+  role: PageElementRole,
+  layout: PageLayout,
+  style?: AnnotationStyle
+): { x: number; y: number } {
+  const boxWidth = getPageElementBoxWidth(role, layout, style);
+  if (
+    style?.rotation ||
+    boxWidth === undefined ||
+    position.x + boxWidth <= layout.width + 1
+  ) {
+    return position;
+  }
+
+  const alignFactor = style?.shapeWidth
+    ? 0
+    : TEXT_ALIGN_FACTOR[style?.textAlign ?? TextAlign.Left];
+  return clampPageElementPosition(
+    {
+      x: position.x + alignFactor * (LEGACY_CAPTION_BOX_WIDTH - boxWidth),
+      y: position.y
+    },
+    role,
+    layout,
+    false,
+    style
+  );
+}
+
 export function resolvePageLayout(overrides?: {
   width?: number;
   height?: number;
