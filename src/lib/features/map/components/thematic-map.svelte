@@ -2714,8 +2714,7 @@
     line-height: 1rem;
   }
 
-  /* The credit stays readable on demand but recedes; exportFilter leaves it
-     out of the exports. */
+  /* The credit stays readable on demand but recedes. */
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
     background: color-mix(
       in srgb,
@@ -2726,6 +2725,12 @@
     opacity: 0.6;
     filter: grayscale(1);
     transition: opacity 150ms ease;
+  }
+
+  /* Hidden from the exports but kept in the layout: the scale stacked with
+     it in the same corner stays where the map shows it. */
+  :global(.is-exporting-map .maplibregl-ctrl-attrib) {
+    visibility: hidden;
   }
 
   :global(.maplibregl-ctrl-attrib.maplibregl-compact:hover),

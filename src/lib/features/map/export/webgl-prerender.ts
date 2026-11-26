@@ -33,9 +33,6 @@ export function getExportPixelRatioForSize(
 export function exportFilter(domNode: HTMLElement): boolean {
   if (domNode.classList?.contains('page-grid')) return false;
   if (domNode.classList?.contains('view-mode-loader')) return false;
-  // The tile credit button; MapLibre's scale, the map scale under that
-  // engine, stays.
-  if (domNode.classList?.contains('maplibregl-ctrl-attrib')) return false;
   return true;
 }
 
