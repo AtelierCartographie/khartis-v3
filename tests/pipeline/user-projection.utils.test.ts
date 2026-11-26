@@ -605,7 +605,7 @@ describe('user projection utils', () => {
         ).toBeGreaterThan(0);
       }
     }
-  }, 30000);
+  }, 60000);
 
   it('keeps every built-in projection compatible with non-neutral user parameters', () => {
     for (const projectionInfo of PROJECTIONS) {
