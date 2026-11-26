@@ -1541,7 +1541,11 @@
     const dy = (event.clientY - resizeState.startPointerY) / scale;
 
     if (item.type === AnnotationKind.TEXT) {
-      resizeTextAnnotation(item, resizeState, dx);
+      if (item.style?.rotation) {
+        resizeRotatedTextAnnotation(item, resizeState, dx, dy);
+      } else {
+        resizeTextAnnotation(item, resizeState, dx);
+      }
       return;
     }
 
@@ -1646,6 +1650,46 @@
       style: {
         ...(item.style ?? {}),
         shapeWidth: Math.round(right - left)
+      }
+    });
+  }
+
+  // A rotated text turns around its centre. The pointer moves along the
+  // rotated axis, and the point its alignment anchors (left edge, right edge
+  // or centre) stays where it is on the page.
+  function resizeRotatedTextAnnotation(
+    item: Annotation,
+    state: NonNullable<typeof resizeState>,
+    dx: number,
+    dy: number
+  ): void {
+    const angle = ((item.style?.rotation ?? 0) * Math.PI) / 180;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const along = dx * ux + dy * uy;
+    const align = item.style?.textAlign ?? 'left';
+    const centred = align === 'center';
+    const growth = (state.handle === 'w' ? -along : along) * (centred ? 2 : 1);
+    const width = Math.round(
+      clamp(
+        state.startW + growth,
+        TEXT_MIN_WIDTH_PX,
+        Math.max(TEXT_MIN_WIDTH_PX, formatState.width)
+      )
+    );
+    const height = measuredItemHeights[item.id] ?? 0;
+    const anchorOffset = (w: number) =>
+      align === 'right' ? w / 2 : centred ? 0 : -w / 2;
+    const shift = anchorOffset(state.startW) - anchorOffset(width);
+    const centreX = state.startAnnotationX + state.startW / 2 + shift * ux;
+    const centreY = state.startAnnotationY + height / 2 + shift * uy;
+
+    annotationsActions.updateAnnotation(item.id, {
+      position: { x: centreX - width / 2, y: centreY - height / 2 },
+      positionMode: 'manual',
+      style: {
+        ...(item.style ?? {}),
+        shapeWidth: width
       }
     });
   }
@@ -2958,6 +3002,28 @@
     outline-offset: 0;
     box-shadow: none;
     border-radius: 0;
+  }
+
+  /* A rotated text: the dashed frame turns with the text box, which carries
+     the rotation, rather than staying on the axis-aligned item. */
+  .annotation-item:has(.annotation-text-box[data-rotation]).selected,
+  .annotation-item:has(.annotation-text-box[data-rotation]):hover,
+  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible {
+    outline: none;
+  }
+
+  .annotation-item:has(.annotation-text-box[data-rotation]).selected
+    .annotation-text-box,
+  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
+  }
+
+  .annotation-item:has(.annotation-text-box[data-rotation]).editable:hover:not(
+      .selected
+    )
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
   .annotation-item.dragging {
