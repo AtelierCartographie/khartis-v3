@@ -848,10 +848,6 @@
     opacity: 0.4;
   }
 
-  .texts-config__notice :global(.bx--inline-notification) {
-    max-width: none;
-  }
-
   .texts-config__helper {
     font-size: var(--cds-helper-text-01-font-size, 0.75rem);
     color: var(--cds-text-helper);

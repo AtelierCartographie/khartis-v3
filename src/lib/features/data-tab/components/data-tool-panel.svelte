@@ -148,8 +148,6 @@
      fixed 280px panel, so they overflow the right edge. Constrain every tool
      panel's notifications to the available content width. */
   .panel-content :global(.bx--inline-notification) {
-    min-width: 0;
-    max-width: 100%;
     margin-top: 0;
     margin-bottom: 0;
   }

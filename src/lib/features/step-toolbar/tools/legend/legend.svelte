@@ -740,10 +740,6 @@
     margin-inline: var(--cds-spacing-02);
   }
 
-  .legend-empty-notice :global(.bx--inline-notification) {
-    max-width: none;
-  }
-
   .legend-tool {
     display: flex;
     flex-direction: column;

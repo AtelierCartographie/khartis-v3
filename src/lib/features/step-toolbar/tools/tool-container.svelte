@@ -136,13 +136,6 @@
     padding: var(--cds-spacing-05);
   }
 
-  /* Carbon gives inline notifications an 18rem minimum width, wider than a
-     panel section once its padding is taken off. */
-  .tool-body :global(.bx--inline-notification) {
-    min-width: 0;
-    max-width: 100%;
-  }
-
   .tool-body :global(.expandable-stack) {
     margin: 0 calc(-1 * var(--cds-spacing-05));
     border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);

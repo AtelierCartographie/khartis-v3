@@ -328,10 +328,6 @@
 </ExpandableSection>
 
 <style>
-  .section-content :global(.bx--inline-notification) {
-    max-width: none;
-  }
-
   /* A gap rather than sibling margins: the line thickness row sits in a
      display: contents wrapper, which breaks .bx--row + .bx--row. */
   .section-content :global(.bx--grid) {
