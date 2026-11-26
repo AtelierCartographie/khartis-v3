@@ -60,6 +60,7 @@
   } from '../utils/annotation-vector.utils';
   import {
     getGuideVectorStyle,
+    getTextRotationOriginX,
     getTextStyleFromStyle,
     getVectorStyle,
     toOpacityUnit
@@ -1281,8 +1282,8 @@
   }
 
   // The covered box of a rotated text is its text block's bounding box,
-  // relative to the upright item: the block turns about its own centre,
-  // which is not the item's when it is narrower and aligned inside it.
+  // relative to the upright item: the block turns about the point its
+  // alignment anchors, not about the item's centre.
   function getTextCoveredBox(
     item: Annotation,
     itemElement: HTMLElement | null
@@ -1654,9 +1655,9 @@
     });
   }
 
-  // A rotated text turns around its centre. The pointer moves along the
-  // rotated axis, and the point its alignment anchors (left edge, right edge
-  // or centre) stays where it is on the page.
+  // A rotated text turns about the point its alignment anchors, which stays
+  // put: the pointer moves along the rotated axis, and only the width and the
+  // side opposite the anchor change.
   function resizeRotatedTextAnnotation(
     item: Annotation,
     state: NonNullable<typeof resizeState>,
@@ -1664,11 +1665,9 @@
     dy: number
   ): void {
     const angle = ((item.style?.rotation ?? 0) * Math.PI) / 180;
-    const ux = Math.cos(angle);
-    const uy = Math.sin(angle);
-    const along = dx * ux + dy * uy;
-    const align = item.style?.textAlign ?? 'left';
-    const centred = align === 'center';
+    const along = dx * Math.cos(angle) + dy * Math.sin(angle);
+    const originX = getTextRotationOriginX(item.style?.textAlign);
+    const centred = originX === 0.5;
     const growth = (state.handle === 'w' ? -along : along) * (centred ? 2 : 1);
     const width = Math.round(
       clamp(
@@ -1677,15 +1676,12 @@
         Math.max(TEXT_MIN_WIDTH_PX, formatState.width)
       )
     );
-    const height = measuredItemHeights[item.id] ?? 0;
-    const anchorOffset = (w: number) =>
-      align === 'right' ? w / 2 : centred ? 0 : -w / 2;
-    const shift = anchorOffset(state.startW) - anchorOffset(width);
-    const centreX = state.startAnnotationX + state.startW / 2 + shift * ux;
-    const centreY = state.startAnnotationY + height / 2 + shift * uy;
 
     annotationsActions.updateAnnotation(item.id, {
-      position: { x: centreX - width / 2, y: centreY - height / 2 },
+      position: {
+        x: state.startAnnotationX + (state.startW - width) * originX,
+        y: state.startAnnotationY
+      },
       positionMode: 'manual',
       style: {
         ...(item.style ?? {}),
@@ -2540,6 +2536,9 @@
           data-rotation={textRotation || undefined}
           style:transform={textRotation
             ? `rotate(${textRotation}deg)`
+            : undefined}
+          style:transform-origin={textRotation
+            ? `${getTextRotationOriginX(item.style?.textAlign) * 100}% 50%`
             : undefined}
         >
           <div class="annotation-text" style={getTextStyle(item)}>

@@ -37,6 +37,18 @@ const GUIDE_STROKE_DASHARRAY = '6,4';
 const DASHED_STROKE_DASHARRAY = '5,5';
 const DOTTED_STROKE_DASHARRAY = '2,2';
 
+/**
+ * Where a rotated text turns, as a fraction of its width: its alignment
+ * anchors it, so a left-aligned text turns about its left edge, a centred one
+ * about its centre, a right-aligned one about its right edge. It turns about
+ * its vertical middle.
+ */
+export function getTextRotationOriginX(textAlign: string | undefined): number {
+  if (textAlign === 'right') return 1;
+  if (textAlign === 'center') return 0.5;
+  return 0;
+}
+
 export function getColorValue(
   color: string | HslColor | undefined,
   fallback: string
