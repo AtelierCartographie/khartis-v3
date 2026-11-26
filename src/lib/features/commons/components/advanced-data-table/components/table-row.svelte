@@ -112,9 +112,9 @@
       data-column={col.name}
     >
       {#if isNull}
-        <span class="null-value" title={m.cell_null_value_tooltip()}
-          >{m.cell_null_value_symbol()}</span
-        >
+        <span class="null-value" title={m.cell_null_value_tooltip()}>
+          {m.cell_null_value_symbol()}
+        </span>
       {:else}
         {formatCellValue(displayValue, col)}
       {/if}
@@ -127,16 +127,16 @@
     height: var(--kh-row-h);
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     transition: background-color 0.15s;
-    background-color: var(--cds-ui-01, #ffffff);
+    background-color: var(--cds-layer-01, #ffffff);
   }
 
   /* By data index, so that the alternation holds while rows are virtualised. */
   tr.alternate {
-    background-color: var(--cds-ui-02, #ffffff);
+    background-color: var(--cds-layer-02, #ffffff);
   }
 
   tr:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   tr.highlight-current {
@@ -156,7 +156,7 @@
   }
 
   tr.highlight-exact td {
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   tr.highlight-partial {
@@ -164,15 +164,18 @@
   }
 
   tr.highlight-partial td {
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   tr.selected {
-    background-color: var(--cds-selected-ui);
+    background-color: var(--cds-layer-selected-01);
   }
 
   tr.selected:hover {
-    background-color: var(--cds-selected-ui-hover, var(--cds-selected-ui));
+    background-color: var(
+      --cds-selected-ui-hover,
+      var(--cds-layer-selected-01)
+    );
   }
 
   tr .checkbox-cell {
@@ -201,7 +204,7 @@
     font-weight: 400;
     line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
-    color: var(--cds-text-03, #a8a8a8);
+    color: var(--cds-text-placeholder, #a8a8a8);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -210,7 +213,7 @@
 
   td {
     padding: 0 var(--kh-gap-inline);
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -235,7 +238,7 @@
   }
 
   .null-value {
-    color: var(--cds-text-03, #a8a8a8);
+    color: var(--cds-text-placeholder, #a8a8a8);
     font-style: italic;
   }
 
@@ -251,16 +254,16 @@
 
   td.cell-highlight-exact {
     background-color: #c8a8ff !important;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   td.cell-highlight-contains {
     background-color: #d4b9ff !important;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   td.cell-highlight-partial {
     background-color: #e8d9ff !important;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 </style>

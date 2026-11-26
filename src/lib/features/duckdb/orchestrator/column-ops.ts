@@ -507,9 +507,17 @@ function assertAllowedNode(value: unknown): void {
 }
 
 /**
+ * The fragment the calculator validates and runs. The line breaks end a
+ * trailing `--` comment before the closing parenthesis.
+ */
+function calculatedExpressionSql(expression: string): string {
+  return `(\n${expression}\n)`;
+}
+
+/**
  * Accepts a single scalar expression over the row's columns: DuckDB parses
- * `SELECT (<expression>)` and the tree must hold one select item, no FROM, no
- * clause, and only allowed nodes and functions.
+ * `SELECT` followed by the fragment the calculator runs, and the tree must hold
+ * one select item, no FROM, no clause, and only allowed nodes and functions.
  */
 export async function validateExpression(
   expression: string,
@@ -521,7 +529,7 @@ export async function validateExpression(
 
   await Duck.loadExtension('json');
   const rows = (await Duck.query(
-    `SELECT json_serialize_sql(${sqlString(`SELECT (${expression})`)}) AS ast`,
+    `SELECT json_serialize_sql(${sqlString(`SELECT ${calculatedExpressionSql(expression)}`)}) AS ast`,
     { format: 'array' }
   )) as Array<{ ast: string }>;
   const serialized = JSON.parse(String(rows[0]?.ast)) as SerializedSql;
@@ -580,7 +588,7 @@ export async function addCalculatedColumn(
 
   await Duck.mutate(
     tableName,
-    `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT *, (${expression}) AS ${sqlIdentifier(trimmedName)} FROM ${sqlIdentifier(tableName)}`
+    `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT *, ${calculatedExpressionSql(expression)} AS ${sqlIdentifier(trimmedName)} FROM ${sqlIdentifier(tableName)}`
   );
 
   const updatedColumns = options?.skipAnalysis
@@ -598,7 +606,7 @@ export async function testExpression(
   await validateExpression(expression, Duck);
 
   const result = (await Duck.query(
-    `SELECT (${expression}) as result FROM ${sqlIdentifier(tableName)} LIMIT 1`
+    `SELECT ${calculatedExpressionSql(expression)} as result FROM ${sqlIdentifier(tableName)} LIMIT 1`
   )) as ArrowTableLike;
 
   if (result.numRows === 0) {

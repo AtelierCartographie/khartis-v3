@@ -6,7 +6,9 @@ import { matchesDuckDBError } from '$lib/features/duckdb/utils/duckdb-error.util
 import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
-  rankBasemapsByJoinSynthesis
+  rankBasemapsByJoinSynthesis,
+  type RelevantBasemapSuggestion,
+  selectRelevantBasemapSuggestions
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import {
@@ -49,11 +51,11 @@ import {
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 
-export interface BasemapSuggestionItem {
-  basemap: BasemapMetadata;
-  score: number;
-  matchesData: boolean;
-}
+export type BasemapSuggestionItem = RelevantBasemapSuggestion;
+
+const BASEMAP_SUGGESTION_LIMIT = 3;
+// The rankers return every candidate: relevance and the limit come after.
+const RANK_ALL = Number.POSITIVE_INFINITY;
 
 export function pickAutoLinkedGeoColumn(
   dataset: DatasetResult
@@ -440,7 +442,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
               maxLon: extent[2],
               maxLat: extent[3]
             },
-            3
+            RANK_ALL
           )
         : [];
     } catch (error) {
@@ -520,7 +522,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
           joinSuggestions = rankBasemapsByJoinSynthesis(
             basemapCatalogService.basemaps,
             synthesis,
-            3
+            RANK_ALL
           );
         } catch (error) {
           if (!cancelled && !matchesDuckDBError(error, 'missing-table')) {
@@ -540,19 +542,25 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       if (suggestions.length === 0 && !hasOwnGeometry) {
         suggestions = basemapCatalogService.getSuggestions(
           processedDataset,
-          3,
+          RANK_ALL,
           geoColumnName
         );
       }
 
       if (cancelled) return;
 
-      const mappedSuggestions = suggestions.map((suggestion) => ({
-        basemap:
-          basemapCatalogService.getBasemapById(suggestion.file) ?? suggestion,
-        score: suggestion.matchScore,
-        matchesData: !hasOwnGeometry && suggestion.matchesData
-      }));
+      const mappedSuggestions = selectRelevantBasemapSuggestions(
+        suggestions.map((suggestion) => ({
+          basemap:
+            basemapCatalogService.getBasemapById(suggestion.file) ?? suggestion,
+          score: suggestion.matchScore,
+          matchesData: !hasOwnGeometry && suggestion.matchesData
+        })),
+        {
+          limit: BASEMAP_SUGGESTION_LIMIT,
+          rankedBy: hasOwnGeometry ? 'extent' : 'values'
+        }
+      );
 
       suggestedBasemaps = mappedSuggestions;
 

@@ -157,3 +157,53 @@ export function computeFlippedScrollablePosition({
     openUpward: flip.openUpward
   };
 }
+
+function getContentBox(element: Element): { left: number; width: number } {
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const startInset =
+    parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+  const endInset =
+    parseFloat(style.borderRightWidth) + parseFloat(style.paddingRight);
+
+  return {
+    left: rect.left + startInset,
+    width: Math.max(rect.width - startInset - endInset, 0)
+  };
+}
+
+function hasHorizontalPadding(element: Element): boolean {
+  const style = getComputedStyle(element);
+  return (
+    parseFloat(style.paddingLeft) > 0 || parseFloat(style.paddingRight) > 0
+  );
+}
+
+/**
+ * Anchors a dropdown on the row that holds its trigger: a field set in a
+ * column beside others opens over the full width of the panel, as a field
+ * spanning that width would. The search stops at the first padded container,
+ * the edge of the field or of the panel, so a full-width field keeps its rect.
+ */
+export function resolveRowAnchorRect(trigger: Element): DropdownAnchorRect {
+  const triggerRect = trigger.getBoundingClientRect();
+  let element = trigger.parentElement;
+
+  while (element && element !== document.body) {
+    const contentBox = getContentBox(element);
+    if (contentBox.width > triggerRect.width + 1) {
+      return {
+        top: triggerRect.top,
+        bottom: triggerRect.bottom,
+        left: contentBox.left,
+        width: contentBox.width
+      };
+    }
+    if (hasHorizontalPadding(element)) {
+      break;
+    }
+    element = element.parentElement;
+  }
+
+  return triggerRect;
+}

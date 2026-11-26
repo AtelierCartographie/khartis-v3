@@ -2585,7 +2585,7 @@
 {:else}
   <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
-      <PageGridOverlay displayScale={pageDisplayScale} />
+      <PageGridOverlay page={pageSize} displayScale={pageDisplayScale} />
     {/if}
     {#if !isFacetCell}
       <PageGuidesOverlay displayScale={pageDisplayScale} />
@@ -2718,7 +2718,7 @@
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
     background: color-mix(
       in srgb,
-      var(--cds-layer-01, #ffffff) 70%,
+      var(--khartis-control-surface-background, #ffffff) 70%,
       transparent
     );
     color: var(--cds-text-secondary);

@@ -213,7 +213,7 @@ const { state, actions, getState } = createToolStore<
       }
     };
   },
-  { key: 'format' }
+  { key: 'format', sessionKeys: ['gridEnabled'] }
 );
 
 export const formatState = createReadonlyStateFacade(state);

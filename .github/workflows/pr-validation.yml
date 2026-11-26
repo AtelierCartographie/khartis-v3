@@ -41,3 +41,28 @@ jobs:
         env:
           VALIDATION_RESULT: ${{ needs.validate.result }}
         run: test "${VALIDATION_RESULT}" = "success"
+
+  # The commit-msg hook can be skipped, so every pull request commit is linted again here.
+  commit-messages:
+    name: Commit Messages
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Commitlint reads the commits, not the data files.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          sparse-checkout: |
+            /*
+            !/static/basemaps/**/*.parquet
+            !/tests-datasets/
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Lint the pull request commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm exec commitlint --from "${BASE_SHA}" --to "${HEAD_SHA}" --verbose

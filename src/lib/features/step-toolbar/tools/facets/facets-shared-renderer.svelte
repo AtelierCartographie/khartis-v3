@@ -570,6 +570,10 @@
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
+    // Cells are drawn at the rendered page size: symbols, line widths and
+    // labels, set in page units, follow the page zoom as the legend and the
+    // annotations do.
+    getPageDisplayScale: () => Math.max(globalState.zoom.pageZoomScale, 0.1),
     getShouldRenderDatasetFallbacks: () => false,
     onBasemapLayersLoaded: () =>
       mapLayers.updateLayers(tables, splitData, densityTables),
@@ -974,8 +978,9 @@
                 onclick={() => handleFacetTitleClick(descriptor.title)}
                 onkeydown={(event: KeyboardEvent) =>
                   handleFacetTitleKeydown(descriptor.title, event)}
-                >{resolveFacetTitle(descriptor.title)}</span
               >
+                {resolveFacetTitle(descriptor.title)}
+              </span>
             {:else}
               {resolveFacetTitle(descriptor.title)}
             {/if}

@@ -110,7 +110,7 @@
     transform: translateY(-50%);
     width: 280px;
     max-height: var(--kh-floating-window-max-height);
-    background: var(--cds-ui-02);
+    background: var(--cds-layer-02);
     border: 1px solid var(--cds-border-subtle);
     z-index: var(--z-dropdown);
     display: flex;

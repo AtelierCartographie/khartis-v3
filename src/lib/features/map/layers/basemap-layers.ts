@@ -1,4 +1,4 @@
-import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import type { Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import {
   GeoJsonLayer,
@@ -108,7 +108,7 @@ import {
 
 const DASH_EXTENSION = new PathStyleExtension({
   dash: true,
-  highPrecisionDash: true
+  dashMode: 'path'
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
@@ -377,7 +377,7 @@ export function createMersLayer(
         return new SolidPolygonLayer({
           id: `${baseLayerId}-sphere`,
           ...polygonProps,
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateSystem: 'cartesian',
           getFillColor: withOpacity(fillColor, opacity),
           parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
           ...getBaseLayerProps(ctx),
@@ -405,7 +405,7 @@ export function createMersLayer(
         data: projectedCompositeOceanData,
         filled: true,
         stroked: false,
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        coordinateSystem: 'cartesian',
         getFillColor: withOpacity(fillColor, opacity),
         parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
         ...getBaseLayerProps(ctx),

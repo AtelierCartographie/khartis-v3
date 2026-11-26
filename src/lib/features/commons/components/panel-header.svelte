@@ -49,7 +49,7 @@
     font-weight: var(--kh-weight-primitive);
     line-height: var(--kh-line-primitive);
     letter-spacing: 0;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

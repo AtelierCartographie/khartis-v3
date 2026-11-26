@@ -16,6 +16,8 @@
     count?: number;
     children?: Snippet;
     icon?: Snippet;
+    /** Replaces the visible title text; `title` still labels the controls. */
+    titleContent?: Snippet;
     showToggle?: boolean;
     toggleChecked?: boolean;
     toggleDisabled?: boolean;
@@ -37,6 +39,7 @@
     count,
     children,
     icon,
+    titleContent,
     showToggle = false,
     toggleChecked = false,
     toggleDisabled = false,
@@ -229,7 +232,11 @@
     >
       <div class="section-title-group">
         <span class="section-title {titleClass}">
-          {title}{count !== undefined ? ` (${count})` : ''}
+          {#if titleContent}
+            {@render titleContent()}
+          {:else}
+            {title}{count !== undefined ? ` (${count})` : ''}
+          {/if}
 
           {#if icon && !actionsEnd}
             <span
@@ -292,7 +299,7 @@
     align-items: center;
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
     position: sticky;
     top: 0;
@@ -302,7 +309,7 @@
   .section-header.collapsed {
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
   }
 
@@ -401,7 +408,7 @@
   .section-body {
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
     padding: var(
       --khartis-expandable-section-body-padding,

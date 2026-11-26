@@ -5,7 +5,10 @@
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { portal } from '$lib/features/commons/utils/portal';
-  import { computeFlippedPosition } from '$lib/features/commons/utils/dropdown-position.utils';
+  import {
+    computeFlippedPosition,
+    resolveRowAnchorRect
+  } from '$lib/features/commons/utils/dropdown-position.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -42,11 +45,10 @@
 
   function updatePosition() {
     if (!triggerElement) return;
-    const rect = triggerElement.getBoundingClientRect();
     const estimatedDropdownHeight = 260;
 
     dropdownPos = computeFlippedPosition({
-      triggerRect: rect,
+      triggerRect: resolveRowAnchorRect(triggerElement),
       dropdownHeight: estimatedDropdownHeight,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight

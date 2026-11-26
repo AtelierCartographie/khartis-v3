@@ -254,7 +254,7 @@
     border: 1px solid var(--cds-border-strong);
     border-radius: 4px;
     background-color: var(--cds-field);
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     resize: vertical;
   }
 
@@ -272,7 +272,7 @@
     z-index: var(--z-notification);
     max-height: 200px;
     overflow-y: auto;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
     border: 1px solid var(--cds-border-subtle);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -289,12 +289,12 @@
     text-align: left;
     cursor: pointer;
     font-size: 0.875rem;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .suggestion-item:hover,
   .suggestion-item.selected {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .suggestion-type {
@@ -303,17 +303,17 @@
     text-transform: uppercase;
     padding: 2px 4px;
     border-radius: 2px;
-    background-color: var(--cds-ui-03);
-    color: var(--cds-text-02);
+    background-color: var(--cds-layer-accent-01);
+    color: var(--cds-text-secondary);
   }
 
   .suggestion-type.variable {
-    background-color: var(--cds-support-02);
+    background-color: var(--cds-support-success);
     color: white;
   }
 
   .suggestion-type.function {
-    background-color: var(--cds-support-04);
+    background-color: var(--cds-support-info);
     color: white;
   }
 
@@ -324,6 +324,6 @@
 
   .suggestion-desc {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 </style>

@@ -6,7 +6,8 @@ const TEST_KEYS = [
   'testToolStore',
   'testToolStoreWithCustomSetState',
   'testToolStoreInvalidPayload',
-  'testToolStoreProxyPayload'
+  'testToolStoreProxyPayload',
+  'testToolStoreSessionKeys'
 ];
 
 afterEach(() => {
@@ -115,5 +116,28 @@ describe('createToolStore persistence', () => {
     });
 
     expect(store.state.items).toEqual([{ id: 'restored' }]);
+  });
+
+  it('neither saves nor restores the session keys', () => {
+    const store = createToolStore(
+      { width: 100, gridEnabled: true },
+      (state) => ({
+        toggleGrid: () => {
+          state.gridEnabled = !state.gridEnabled;
+        }
+      }),
+      { key: 'testToolStoreSessionKeys', sessionKeys: ['gridEnabled'] }
+    );
+
+    store.actions.toggleGrid();
+    expect(persistenceRegistry.serializeAll().testToolStoreSessionKeys).toEqual(
+      { width: 100 }
+    );
+
+    // A project saved before the grid became a session preference.
+    persistenceRegistry.deserializeAll({
+      testToolStoreSessionKeys: { width: 200, gridEnabled: false }
+    });
+    expect(store.getState()).toEqual({ width: 200, gridEnabled: true });
   });
 });

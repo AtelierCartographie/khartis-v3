@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import type { RelevantBasemapSuggestion } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import BasemapCatalogTab from '../basemap-join/basemap-catalog-tab.svelte';
   import BasemapPanelContent from '../basemap-join/basemap-panel-content.svelte';
   import ActiveBasemapBanner from '../basemap-join/active-basemap-banner.svelte';
@@ -8,17 +9,11 @@
   import { basemapCatalogService } from '$lib/features/map';
   import { BasemapImportDropzone, OSMBasemapSelector } from '../index';
 
-  interface BasemapSuggestionItem {
-    basemap: BasemapMetadata;
-    score: number;
-    matchesData: boolean;
-  }
-
   interface Props {
     basemapTabIndex: number;
     selectedBasemapId: string | undefined;
     basemaps: BasemapMetadata[];
-    suggestedBasemaps: BasemapSuggestionItem[];
+    suggestedBasemaps: RelevantBasemapSuggestion[];
     basemapImportUploading: boolean;
     basemapImportError: string | null;
     importedCustomBasemap: BasemapMetadata | null;

@@ -27,6 +27,7 @@
   import {
     PAGE_GRID_SIZE_PX,
     PAGE_SNAP_STEP_PX,
+    getPageGridOrigin,
     snapToPageGrid
   } from '../commons/utils/page-grid.utils';
   import MapSkeleton from './components/map-skeleton.svelte';
@@ -458,13 +459,16 @@
 
     // The frame edges snap in page coordinates, where layout objects snap too.
     const snap = formatState.gridEnabled && !proportional;
-    if (!snappedEdges.includes('n')) top = snapToPageGrid(top, snap);
-    if (!snappedEdges.includes('w')) left = snapToPageGrid(left, snap);
+    const origin = getPageGridOrigin({ width, height });
+    if (!snappedEdges.includes('n')) top = snapToPageGrid(top, snap, origin.y);
+    if (!snappedEdges.includes('w')) {
+      left = snapToPageGrid(left, snap, origin.x);
+    }
     if (!snappedEdges.includes('e')) {
-      right = width - snapToPageGrid(width - right, snap);
+      right = width - snapToPageGrid(width - right, snap, origin.x);
     }
     if (!snappedEdges.includes('s')) {
-      bottom = height - snapToPageGrid(height - bottom, snap);
+      bottom = height - snapToPageGrid(height - bottom, snap, origin.y);
     }
 
     formatActions.setMapFrame({
@@ -645,6 +649,7 @@
     const frameWidth = width - startFrame.left - startFrame.right;
     const frameHeight = height - startFrame.top - startFrame.bottom;
     const snap = formatState.gridEnabled;
+    const gridOrigin = getPageGridOrigin({ width, height });
     // A centre line or a margin close by wins over the grid.
     const start = { x: startFrame.left, y: startFrame.top };
     const pointer = {
@@ -668,12 +673,12 @@
       ? start.x
       : aligned.guides.vertical.length > 0
         ? aligned.x
-        : snapToPageGrid(aligned.x, snap);
+        : snapToPageGrid(aligned.x, snap, gridOrigin.x);
     const alignedY = lockedY
       ? start.y
       : aligned.guides.horizontal.length > 0
         ? aligned.y
-        : snapToPageGrid(aligned.y, snap);
+        : snapToPageGrid(aligned.y, snap, gridOrigin.y);
     const left = Math.min(Math.max(alignedX, 0), width - frameWidth);
     const top = Math.min(Math.max(alignedY, 0), height - frameHeight);
     formatActions.setMapFrame({
@@ -793,6 +798,7 @@
       </div>
       <InlineNotification
         kind="error"
+        role="alert"
         title={m.error_loading_title()}
         subtitle={errorMessage ?? m.error_loading_subtitle()}
         hideCloseButton
@@ -934,7 +940,10 @@
     align-items: center;
     gap: var(--cds-spacing-03);
     padding: var(--cds-spacing-02) var(--cds-spacing-04);
-    background: var(--cds-layer-01, rgba(255, 255, 255, 0.95));
+    background: var(
+      --khartis-control-surface-background,
+      rgba(255, 255, 255, 0.95)
+    );
     border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
     border-radius: 999px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
@@ -949,7 +958,7 @@
     width: 12px;
     height: 12px;
     border: 1.5px solid var(--cds-border-subtle-02, #c6c6c6);
-    border-top-color: var(--cds-interactive-01, #0f62fe);
+    border-top-color: var(--cds-background-brand, #0f62fe);
     border-radius: 50%;
     animation: map-status-loader-spin 0.75s linear infinite;
   }
@@ -1025,7 +1034,7 @@
     justify-content: center;
     gap: 16px;
     padding: 2rem;
-    background: var(--cds-ui-01, #f4f4f4);
+    background: var(--cds-layer-01, #f4f4f4);
   }
 
   .error-icon {
@@ -1089,8 +1098,8 @@
     line-height: var(--kh-line-label);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    color: var(--cds-inverse-01, #ffffff);
-    background: var(--cds-inverse-02, #393939);
+    color: var(--cds-text-inverse, #ffffff);
+    background: var(--cds-background-inverse, #393939);
     border-radius: 2px;
     pointer-events: none;
     transform: translate(12px, 12px);

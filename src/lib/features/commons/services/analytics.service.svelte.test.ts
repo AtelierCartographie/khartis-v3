@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => ({
   loggerWarnMock: vi.fn()
 }));
 
-vi.mock('$env/dynamic/public', () => ({
-  env: mocks.publicEnv
+vi.mock('$app/env/public', () => ({
+  get PUBLIC_GTM_CONTAINER_ID() {
+    return mocks.publicEnv.PUBLIC_GTM_CONTAINER_ID;
+  }
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({

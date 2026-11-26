@@ -3,7 +3,7 @@
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
   import { m } from '$lib/paraglide/messages';
-  import { TextInput } from 'carbon-components-svelte';
+  import { Layer, TextInput } from 'carbon-components-svelte';
   import { Save } from 'carbon-icons-svelte';
   import { KEY } from '../../commons/constants/dom.constants';
   import {
@@ -67,18 +67,19 @@
   title={inputValue || m.project_placeholder()}
 >
   <div class="project-title-field">
-    <TextInput
-      light
-      size="sm"
-      labelText={m.project_title_label()}
-      hideLabel
-      value={inputValue}
-      placeholder={m.project_placeholder()}
-      on:input={handleTitleInput}
-      on:blur={handleBlur}
-      on:keydown={handleKeydown}
-      disabled={!projectStore.currentProject}
-    />
+    <Layer>
+      <TextInput
+        size="sm"
+        labelText={m.project_title_label()}
+        hideLabel
+        value={inputValue}
+        placeholder={m.project_placeholder()}
+        on:input={handleTitleInput}
+        on:blur={handleBlur}
+        on:keydown={handleKeydown}
+        disabled={!projectStore.currentProject}
+      />
+    </Layer>
 
     <div class="project-title-save">
       <IconButton

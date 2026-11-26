@@ -43,12 +43,17 @@
     createDraggablePageItemController
   } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
+  import { alignSideTitle } from '../utils/side-title-align';
   import {
+    clearLegendItemCentering,
     getLegendState,
+    getPendingLegendItemCentering,
     legendActions,
     requestLegendItemFocus,
+    resolveLegendItemLayout,
     selectRenderedLegendItems,
-    setRenderedLegendSegments
+    setRenderedLegendSegments,
+    setSelectedLegendItem
   } from '$lib/features/step-toolbar/tools/legend';
   import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
@@ -66,9 +71,12 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLegendSegments,
+    getLegendSideHeader,
+    getLegendSideNote,
     isMapSizeLegendSegment,
     type LegendSegment
   } from '../utils/legend-segments.utils';
+  import type { LegendSvgDefinition } from '$lib/features/commons/components/legend';
 
   // `scopeVizId`, `inline`, and `sizeScale` make legends facet-cell scoped.
   let {
@@ -155,6 +163,56 @@
     }
     return segments;
   });
+
+  interface LegendSideBlocks {
+    header: LegendSvgDefinition | null;
+    note: LegendSvgDefinition | null;
+    align: 'start' | 'center' | 'end';
+  }
+
+  // A legend with its title at the left draws the title and the note apart
+  // from its entries; the note spans the title and the entries.
+  const sideBlocksByItemId = $derived.by(() => {
+    void getLocale();
+    const blocks: Record<string, LegendSideBlocks> = {};
+    for (const item of candidateItems) {
+      const layout = resolveLegendItemLayout(item);
+      if (!layout.titleSide) continue;
+      const header = getLegendSideHeader(item, legendState.style);
+      const bodyWidth = Math.max(
+        0,
+        ...(segmentsByItemId[item.id] ?? []).map((segment) => segment.svg.width)
+      );
+      blocks[item.id] = {
+        header,
+        note: getLegendSideNote(
+          item,
+          legendState.style,
+          (header?.width ?? 0) + bodyWidth
+        ),
+        align: layout.titleAlign
+      };
+    }
+    return blocks;
+  });
+
+  function getSideTitleAlignKey(
+    item: LegendItem,
+    segments: LegendSegment[],
+    blocks: LegendSideBlocks | undefined
+  ): string {
+    if (!blocks) return '';
+    return [
+      getItemScale(item),
+      blocks.align,
+      blocks.header
+        ? `${blocks.header.markup.length}:${blocks.header.width}x${blocks.header.height}`
+        : '',
+      ...segments.map(
+        (segment) => `${segment.key}:${segment.svg.width}x${segment.svg.height}`
+      )
+    ].join('|');
+  }
 
   // A primitive legend that draws nothing (an outline repeating its fill)
   // gets no frame.
@@ -948,6 +1006,17 @@
       return;
     }
 
+    // Delete hides the legend, as its switch in the legend tool does.
+    if (event.key === KEY.DELETE || event.key === KEY.BACKSPACE) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (centeredItemId === item.id) {
+        resetFrameCentering();
+      }
+      legendActions.updateLegendItem(item.id, { visible: false });
+      return;
+    }
+
     if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
@@ -975,9 +1044,31 @@
     }
   });
 
+  $effect(() => {
+    if (inline) return;
+    setSelectedLegendItem(centeredItemId);
+  });
+
+  // Opening a legend in the tool centres the page on its frame.
+  $effect(() => {
+    const itemId = getPendingLegendItemCentering();
+    if (inline || !itemId) return;
+
+    untrack(() => {
+      clearLegendItemCentering();
+      const frame = frameElements[itemId];
+      if (!frame || hidden) return;
+      centeredItemId = itemId;
+      void tick().then(() => {
+        centerFrameInViewport(frame);
+      });
+    });
+  });
+
   onDestroy(() => {
     if (!inline) {
       pageItemObstaclesStore.setBoxes('legend', []);
+      setSelectedLegendItem(null);
     }
     centeredItemId = null;
     clearSuppressedLegendClick();
@@ -994,6 +1085,7 @@
   >
     {#each visibleItems as item (item.id)}
       {@const legendSegments = segmentsByItemId[item.id] ?? []}
+      {@const sideBlocks = sideBlocksByItemId[item.id]}
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
@@ -1011,20 +1103,51 @@
         onpointerdown={(event: PointerEvent) =>
           handleFramePointerDown(event, item)}
       >
-        <div class="legend-item">
+        <div
+          class="legend-item"
+          class:legend-item--side={sideBlocks !== undefined}
+          use:alignSideTitle={{
+            align: sideBlocks?.align ?? 'start',
+            key: getSideTitleAlignKey(item, legendSegments, sideBlocks)
+          }}
+        >
           {#if legendSegments.length > 0}
             <!-- Chrome keeps SVG text metrics from the last painted ancestor scale; a fresh SVG root re-measures its labels. -->
             {#key getItemScale(item)}
-              {#each legendSegments as segment (segment.key)}
-                <LegendSvg
-                  activeEntry={getActiveEntry(item, segment)}
-                  markup={segment.svg.markup}
-                  width={segment.svg.width}
-                  height={segment.svg.height}
-                  class={segment.className}
-                  textColor={textHex}
-                />
-              {/each}
+              {#if sideBlocks?.header}
+                <div class="legend-side-head">
+                  <LegendSvg
+                    markup={sideBlocks.header.markup}
+                    width={sideBlocks.header.width}
+                    height={sideBlocks.header.height}
+                    class="legend-svg--side-title"
+                    textColor={textHex}
+                  />
+                </div>
+              {/if}
+              <div class="legend-entries">
+                {#each legendSegments as segment (segment.key)}
+                  <LegendSvg
+                    activeEntry={getActiveEntry(item, segment)}
+                    markup={segment.svg.markup}
+                    width={segment.svg.width}
+                    height={segment.svg.height}
+                    class={segment.className}
+                    textColor={textHex}
+                  />
+                {/each}
+              </div>
+              {#if sideBlocks?.note}
+                <div class="legend-side-note">
+                  <LegendSvg
+                    markup={sideBlocks.note.markup}
+                    width={sideBlocks.note.width}
+                    height={sideBlocks.note.height}
+                    class="legend-svg--side-note"
+                    textColor={textHex}
+                  />
+                </div>
+              {/if}
             {/key}
           {:else}
             {#if item.title}
@@ -1155,7 +1278,7 @@
     box-sizing: border-box;
     background: white;
     border: calc(2px / var(--legend-page-scale)) solid
-      var(--cds-interactive-01, #0072c3);
+      var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     content: '';
     transform: translate(-50%, -50%);
@@ -1198,6 +1321,28 @@
 
   .legend-item {
     min-width: 0;
+  }
+
+  .legend-item--side {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+
+  .legend-side-head {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  .legend-item--side .legend-entries {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .legend-side-note {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .legend-title {

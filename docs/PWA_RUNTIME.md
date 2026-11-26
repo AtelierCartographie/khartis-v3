@@ -7,7 +7,13 @@ avec la persistance ([Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)).
 
 ## Construction et enregistrement
 
-- VitePWA construit `src/sw.ts` en stratégie `injectManifest`.
+- VitePWA construit `src/sw.ts` en stratégie `injectManifest`, dans la sortie
+  client de SvelteKit (`.svelte-kit/output/client`, option `outDir`), que
+  l'adaptateur recopie dans `build/`. Sans cette option, SvelteKit 3 le ferait
+  écrire dans `dist/`, hors du site publié et sans les fichiers
+  `_app/immutable` dans le précache. Le plugin `verify-sw-precache` de
+  `vite.config.ts` fait échouer le build si `build/sw.js` manque ou si son
+  précache oublie ces fichiers ou les entrées obligatoires.
 - `registerType: 'prompt'`, `injectRegister: false` : l'enregistrement est fait
   par `pwa-service-worker.svelte` (`useRegisterSW`), qui vérifie les mises à
   jour toutes les heures. Une nouvelle version n'est jamais activée sans

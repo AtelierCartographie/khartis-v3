@@ -19,7 +19,9 @@ d'analytics : Cookiebot est la seule source de décision.
 
 ## Initialisation
 
-Sans `PUBLIC_GTM_CONTAINER_ID`, rien n'est chargé. Avec un identifiant, le
+`PUBLIC_GTM_CONTAINER_ID` est déclarée dans `src/env.ts`, publique et statique :
+sa valeur est figée dans le bundle au build, que `deploy-local.mjs` lance avec
+l'identifiant de la cible. Sans identifiant, rien n'est chargé. Avec un identifiant, le
 service pousse dans `dataLayer` les informations de page (`page_location`,
 `page_path`, `page_referrer`, `page_title`), puis charge le script GTM. Les
 événements Khartis restent en attente jusqu'au consentement statistique, puis

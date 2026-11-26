@@ -39,7 +39,7 @@
 <style>
   .join-category-header {
     --category-color: var(--cds-text-secondary, #525252);
-    --category-background: var(--cds-layer-01, #f4f4f4);
+    --category-background: var(--khartis-control-surface-background, #f4f4f4);
     display: flex;
     align-items: center;
     gap: var(--kh-gap-inline);

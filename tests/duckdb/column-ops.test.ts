@@ -337,3 +337,57 @@ describe('refineColumn', () => {
     ]);
   });
 });
+
+describe('addCalculatedColumn', () => {
+  async function createSourceTable(table: string): Promise<void> {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE "${table}" AS FROM (VALUES (1), (3)) v(a)`
+    );
+  }
+
+  async function columnNames(table: string): Promise<string[]> {
+    const rows = await query(
+      db,
+      `SELECT column_name FROM duckdb_columns()
+       WHERE table_name = '${table}'
+       ORDER BY column_index`
+    );
+    return rows.map((row) => String(row.column_name));
+  }
+
+  it('should add the column when the expression ends with a comment', async () => {
+    await createSourceTable('calc_valid');
+
+    await addCalculatedColumn(
+      'calc_valid',
+      'twice',
+      '"a" * 2 -- double',
+      duckClient()
+    );
+
+    const rows = await query(
+      db,
+      'SELECT a, twice FROM "calc_valid" ORDER BY a'
+    );
+    expect(rows).toEqual([
+      { a: 1, twice: 2 },
+      { a: 3, twice: 6 }
+    ]);
+  });
+
+  it('should leave the table untouched when a comment would swallow the closing parenthesis', async () => {
+    await createSourceTable('calc_comment');
+
+    await expect(
+      addCalculatedColumn(
+        'calc_comment',
+        'x\nAS y FROM calc_comment --',
+        '1) --',
+        duckClient()
+      )
+    ).rejects.toThrow(DuckDBError);
+
+    expect(await columnNames('calc_comment')).toEqual(['a']);
+  });
+});

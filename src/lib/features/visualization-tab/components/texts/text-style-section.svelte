@@ -102,7 +102,7 @@
     flex-direction: column;
     gap: var(--kh-gap-param);
     padding: var(--cds-spacing-05, 16px);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
   }
 
   .text-style-section--disabled {

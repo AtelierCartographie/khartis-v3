@@ -1,5 +1,5 @@
-import { browser } from '$app/environment';
-import { env } from '$env/dynamic/public';
+import { browser } from '$app/env';
+import { PUBLIC_GTM_CONTAINER_ID } from '$app/env/public';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 type GtagParams = Record<string, string | number | boolean | undefined>;
@@ -115,7 +115,7 @@ const ANALYTICS_EVENT_PARAMETERS = {
 } as const satisfies Record<AnalyticsEventName, readonly string[]>;
 
 function getGtmContainerId(): string {
-  return env.PUBLIC_GTM_CONTAINER_ID?.trim() ?? '';
+  return PUBLIC_GTM_CONTAINER_ID.trim();
 }
 
 function getDataLayer(): DataLayerEntry[] {
