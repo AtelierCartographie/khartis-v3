@@ -120,7 +120,6 @@
     step={BASEMAP_LAYER_CONFIG.cityCount.step}
     value={count}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleCountChange}
   />
 
@@ -150,7 +149,6 @@
     step={BASEMAP_LAYER_CONFIG.size.step}
     value={size}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleSizeChange}
   />
 
@@ -161,7 +159,6 @@
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleOpacityChange}
   />
 

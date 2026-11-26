@@ -209,7 +209,6 @@
       max={10}
       step={1}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(strokeWidth) => {
         if (effectiveStyle.strokeWidth === strokeWidth) return;
         annotationsActions.applyStyle({ strokeWidth });
@@ -256,7 +255,6 @@
       max={100}
       step={5}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(opacity) => {
         if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
         annotationsActions.applyStyle({ opacity });
@@ -298,7 +296,6 @@
         max={359}
         step={1}
         inputWidth="72px"
-        showSteppers={false}
         onchange={(rotation) => {
           if ((effectiveStyle.rotation ?? 0) === rotation) return;
           annotationsActions.applyStyle({ rotation });

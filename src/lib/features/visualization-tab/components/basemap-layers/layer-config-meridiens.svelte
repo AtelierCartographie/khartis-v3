@@ -177,7 +177,6 @@
     step={BASEMAP_LAYER_CONFIG.thickness.step}
     value={thickness}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleThicknessChange}
   />
 
@@ -188,7 +187,6 @@
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleOpacityChange}
   />
 </div>

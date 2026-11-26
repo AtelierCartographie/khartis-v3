@@ -318,7 +318,6 @@
               max={100}
               step={1}
               inputWidth="72px"
-              showSteppers={false}
               onchange={store.setScaleOpacity}
             />
           </Column>

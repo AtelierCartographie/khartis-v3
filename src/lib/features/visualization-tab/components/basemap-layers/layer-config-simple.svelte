@@ -101,7 +101,6 @@
       step={thicknessStep}
       value={thickness}
       inputWidth="64px"
-      showSteppers={false}
       onchange={handleThicknessChange}
     />
   {/if}
@@ -113,7 +112,6 @@
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleOpacityChange}
   />
 </div>

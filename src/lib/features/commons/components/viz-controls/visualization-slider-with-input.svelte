@@ -12,7 +12,6 @@
     inputWidth?: string;
     disabled?: boolean;
     id?: string;
-    showSteppers?: boolean;
     debounceMs?: number;
     onchange?: (value: number) => void;
   }
@@ -27,7 +26,6 @@
     inputWidth = '128px',
     disabled = false,
     id,
-    showSteppers = true,
     debounceMs,
     onchange
   }: Props = $props();
@@ -52,7 +50,6 @@
     inputWidth={inputWidth}
     disabled={disabled}
     id={id}
-    showSteppers={showSteppers}
     showLabel={false}
     debounceMs={debounceMs}
     onchange={onchange}

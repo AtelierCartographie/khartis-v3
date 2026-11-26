@@ -610,7 +610,6 @@
                     max={100}
                     step={5}
                     inputWidth="72px"
-                    showSteppers={false}
                     onchange={(value) =>
                       updateItemLayout(item, { entrySpacing: value })}
                   />

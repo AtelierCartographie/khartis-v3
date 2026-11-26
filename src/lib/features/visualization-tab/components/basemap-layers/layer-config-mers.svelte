@@ -94,7 +94,6 @@
             step={BASEMAP_LAYER_CONFIG.thickness.step}
             value={outlineThickness}
             inputWidth="64px"
-            showSteppers={false}
             onchange={(value) => onoutlinechange?.({ thickness: value })}
           />
 
@@ -105,7 +104,6 @@
             step={BASEMAP_LAYER_CONFIG.opacity.step}
             value={outlineOpacity}
             inputWidth="64px"
-            showSteppers={false}
             onchange={(value) => onoutlinechange?.({ opacity: value })}
           />
         {/if}
