@@ -66,7 +66,7 @@
             size="sm"
             hideLabel
             labelText={m.filters_value_min()}
-            readonly={!canEditBreakRow(index)}
+            disabled={!canEditBreakRow(index)}
             value={displayBound(breakItem.min, 'start')}
             on:input={(e) => {
               const value = parseBound
@@ -120,7 +120,7 @@
           size="sm"
           hideLabel
           labelText={m.filters_value_max()}
-          readonly
+          disabled
           value={breaks.length
             ? displayBound(breaks[breaks.length - 1].max, 'end')
             : ''}
@@ -215,12 +215,13 @@
     padding-right: var(--cds-spacing-02);
   }
 
-  /* Carbon's read-only field: no fill, a subtle rule. */
-  .histogram-input-wrapper :global(.bx--text-input[readonly]) {
-    background-color: transparent;
-    border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
-    color: var(--cds-text-secondary, #525252);
-    cursor: default;
+  /* The data bounds: Carbon's disabled field, greyed out. */
+  .histogram-input-wrapper :global(.bx--text-input:disabled) {
+    background-color: var(--cds-field);
+    border-bottom-color: transparent;
+    color: var(--cds-text-disabled);
+    -webkit-text-fill-color: var(--cds-text-disabled);
+    cursor: not-allowed;
   }
 
   .histogram-caret {

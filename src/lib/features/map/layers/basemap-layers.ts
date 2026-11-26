@@ -112,16 +112,6 @@ const DASH_EXTENSION = new PathStyleExtension({
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
-const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [
-  ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.shadow
-];
-// Centred on the coast and drawn under the land, a stroke shows only its
-// outer half: a dense core and a wide faint halo read as a soft shadow, and
-// export to SVG as two plain strokes.
-const BASEMAP_TERRE_SHADOW_RINGS = [
-  { suffix: 'shadow-halo', opacity: 0.22, width: 18, min: 10, max: 24 },
-  { suffix: 'shadow', opacity: 0.55, width: 8, min: 5, max: 12 }
-] as const;
 
 export const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
 
@@ -284,29 +274,11 @@ export function createTerreLayers(
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
-    const outlineData =
-      config.fillShadow || shouldRenderStroke
-        ? ctx.projection
-          ? parsePathsWithProjection(worldBaseTable, ctx.projection)
-          : parsePaths(worldBaseTable)
-        : null;
-
-    if (config.fillShadow && outlineData) {
-      for (const ring of BASEMAP_TERRE_SHADOW_RINGS) {
-        layers.push(
-          new PathLayer({
-            id: `${layerId}-${ring.suffix}`,
-            ...createPathLayerProps(outlineData),
-            getColor: withOpacity(BASEMAP_TERRE_SHADOW_COLOR, ring.opacity),
-            widthUnits: 'pixels',
-            getWidth: ring.width,
-            widthMinPixels: ring.min,
-            widthMaxPixels: ring.max,
-            ...baseProps
-          })
-        );
-      }
-    }
+    const outlineData = shouldRenderStroke
+      ? ctx.projection
+        ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+        : parsePaths(worldBaseTable)
+      : null;
 
     layers.push(
       new SolidPolygonLayer({
