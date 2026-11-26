@@ -220,7 +220,8 @@
       inverted,
       patternId: palette.patternId ?? undefined,
       patternParams: undefined,
-      pattern: undefined
+      pattern: undefined,
+      contrast: undefined
     });
     dropdownOpen = false;
   }
@@ -357,7 +358,8 @@
     palette: Palette | undefined,
     newColors: string[],
     nextInverted: boolean,
-    patternPaletteConfig?: PatternPaletteConfig
+    patternPaletteConfig?: PatternPaletteConfig,
+    contrast?: 'low' | 'high'
   ) {
     if (palette) {
       onselect?.(palette);
@@ -368,7 +370,8 @@
       paletteId: palette?.id ?? '__custom__',
       patternId: undefined,
       patternParams: undefined,
-      pattern: patternPaletteConfig
+      pattern: patternPaletteConfig,
+      contrast
     };
     onClassificationChange?.(changes);
     popoverOpen = false;
@@ -446,6 +449,7 @@
   currentPatternId={classification?.patternId}
   currentPatternParams={classification?.patternParams}
   currentPatternPaletteConfig={classification?.pattern}
+  currentContrast={classification?.contrast}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

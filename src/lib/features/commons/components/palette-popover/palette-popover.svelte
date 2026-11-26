@@ -60,12 +60,14 @@
     currentPatternId?: string;
     currentPatternParams?: PatternParams;
     currentPatternPaletteConfig?: PatternPaletteConfig;
+    currentContrast?: 'low' | 'high';
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
       colors: string[],
       inverted: boolean,
-      patternPaletteConfig?: PatternPaletteConfig
+      patternPaletteConfig?: PatternPaletteConfig,
+      contrast?: 'low' | 'high'
     ) => void;
   }
 
@@ -83,6 +85,7 @@
     currentPatternId,
     currentPatternParams,
     currentPatternPaletteConfig,
+    currentContrast,
     onclose,
     onvalidate
   }: Props = $props();
@@ -95,6 +98,7 @@
   let popoverRight = $state(resolveToolbarWidth(globalState.toolbarState));
 
   let draftPaletteId = $state('blues');
+  let draftContrast = $state<'low' | 'high' | undefined>(undefined);
   let draftColors = $state<string[]>([]);
   let draftInverted = $state(false);
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
@@ -132,6 +136,7 @@
     draftInverted = currentInverted;
     draftType = paletteType;
     draftPatternPaletteConfig = currentPatternPaletteConfig;
+    draftContrast = currentContrast;
     draftQualitativePreset =
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
@@ -190,7 +195,8 @@
       palette,
       draftColors,
       draftInverted,
-      draftPatternPaletteConfig
+      draftPatternPaletteConfig,
+      draftContrast
     );
     open = false;
   }
@@ -368,7 +374,9 @@
               allowPattern={allowPattern}
               inverted={draftInverted}
               patternPaletteConfig={draftPatternPaletteConfig}
+              contrast={draftContrast}
               onColorsChange={handleCustomColorsChange}
+              onContrastChange={(value) => (draftContrast = value)}
               onPatternPaletteChange={handlePatternPaletteChange}
               onInvertToggle={handleInvertToggle}
             />

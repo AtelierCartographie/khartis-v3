@@ -78,6 +78,8 @@ export interface ClassificationConfig {
   colors?: string[];
   paletteId?: string;
   inverted?: boolean;
+  /** Contrast the colours were generated with; absent means normal. */
+  contrast?: 'low' | 'high';
   labels?: string[];
   categoryValues?: string[];
   disabledLabels?: string[];

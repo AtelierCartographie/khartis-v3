@@ -28,7 +28,10 @@
     inverted?: boolean;
     allowPattern?: boolean;
     patternPaletteConfig?: PatternPaletteConfig;
+    /** Contrast stored with the colours; absent means normal. */
+    contrast?: 'low' | 'high';
     onColorsChange?: (colors: string[]) => void;
+    onContrastChange?: (contrast: 'low' | 'high' | undefined) => void;
     onPatternPaletteChange?: (config: PatternPaletteConfig) => void;
     onInvertToggle?: (value: boolean) => void;
   }
@@ -41,7 +44,9 @@
     inverted = false,
     allowPattern = true,
     patternPaletteConfig,
+    contrast,
     onColorsChange,
+    onContrastChange,
     onPatternPaletteChange,
     onInvertToggle
   }: Props = $props();
@@ -62,7 +67,9 @@
   let singleColor = $state(FALLBACK_END_COLOR);
   let startColor = $state(FALLBACK_START_COLOR);
   let endColor = $state(FALLBACK_END_COLOR);
-  let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
+  let contrastMode = $state<'low' | 'normal' | 'high'>(
+    untrack(() => contrast) ?? 'normal'
+  );
   let motifEnabled = $state(false);
   let emittedColors: string[] = [];
 
@@ -220,6 +227,7 @@
     const next = value as 'low' | 'normal' | 'high';
     if (next === contrastMode) return;
     contrastMode = next;
+    onContrastChange?.(next === 'normal' ? undefined : next);
 
     if (activeTab === 0) {
       emitColors(buildColors([singleColor]));
