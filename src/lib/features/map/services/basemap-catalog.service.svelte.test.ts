@@ -7,6 +7,7 @@ import type { BasemapMetadata } from '../types/basemap.types';
 import {
   rankBasemapsByGPSBbox,
   rankBasemapsByJoinSynthesis,
+  selectRelevantBasemapSuggestions,
   shouldPreferTextBasemapRefinementForGPS,
   sortCatalogBasemapsForDisplay
 } from './basemap-catalog.service.svelte';
@@ -358,5 +359,185 @@ describe('sortCatalogBasemapsForDisplay', () => {
       'france-region-2025-high',
       'france-commune-2025-high'
     ]);
+  });
+});
+
+describe('selectRelevantBasemapSuggestions', () => {
+  const idfBbox: [number, number, number, number] = [1.24, 48.01, 3.77, 49.35];
+  const franceBbox: [number, number, number, number] = [
+    -5.14, 41.33, 9.56, 51.09
+  ];
+
+  function ranked(
+    file: string,
+    score: number,
+    options: {
+      bbox?: [number, number, number, number];
+      matchesData?: boolean;
+    } = {}
+  ) {
+    return {
+      basemap: createBasemap({
+        file,
+        title_fr: file,
+        title_en: file,
+        date: file.match(/(\d{4})/)?.[1] ?? '',
+        bbox: options.bbox ?? franceBbox
+      }),
+      score,
+      matchesData: options.matchesData ?? true
+    };
+  }
+
+  function summary(
+    suggestions: ReturnType<typeof selectRelevantBasemapSuggestions>
+  ) {
+    return suggestions.map((suggestion) => [
+      suggestion.basemap.file,
+      suggestion.vintages.map((vintage) => vintage.file)
+    ]);
+  }
+
+  it('should keep only the top suggestion when the next ones fall far behind it', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-departement-2025-medium', 95),
+        ranked('europe-nuts3-2024-medium', 10),
+        ranked('france-region-2025-medium', 4)
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(summary(suggestions)).toEqual([
+      ['france-departement-2025-medium', ['france-departement-2025-medium']]
+    ]);
+  });
+
+  it('should keep close alternatives and drop those under the floor when the top is strong', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-commune-2026-medium', 99),
+        ranked('france-commune-2023-medium', 82),
+        ranked('france-canton-2025-medium', 60)
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.basemap.file)).toEqual([
+      'france-commune-2026-medium',
+      'france-commune-2023-medium'
+    ]);
+  });
+
+  it('should offer no alternative when even the top suggestion matches poorly', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [ranked('monde-pays-2024-medium', 40), ranked('europe-pays-2024', 38)],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.basemap.file)).toEqual([
+      'monde-pays-2024-medium'
+    ]);
+  });
+
+  it('should drop a metadata-only alternative behind a suggestion resting on the data', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-region-2025-medium', 90),
+        ranked('france-departement-2025-medium', 90, { matchesData: false })
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(suggestions).toHaveLength(1);
+  });
+
+  it('should stack the vintages of one basemap when the score cannot tell them apart', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-commune-reg11-2026-medium', 100, { bbox: idfBbox }),
+        ranked('france-commune-reg11-2025-medium', 100, { bbox: idfBbox }),
+        ranked('france-commune-reg11-2024-medium', 100, { bbox: idfBbox }),
+        ranked('france-commune-reg11-2023-medium', 100, { bbox: idfBbox }),
+        ranked('france-commune-arrondissement-epci200054781-2026', 100, {
+          bbox: [1.6, 48.3, 3.1, 49.1]
+        })
+      ],
+      { limit: 3, rankedBy: 'extent' }
+    );
+
+    expect(summary(suggestions)).toEqual([
+      [
+        'france-commune-reg11-2026-medium',
+        [
+          'france-commune-reg11-2026-medium',
+          'france-commune-reg11-2025-medium',
+          'france-commune-reg11-2024-medium',
+          'france-commune-reg11-2023-medium'
+        ]
+      ],
+      [
+        'france-commune-arrondissement-epci200054781-2026',
+        ['france-commune-arrondissement-epci200054781-2026']
+      ]
+    ]);
+  });
+
+  it('should keep vintages apart when the data tells them apart', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-commune-2026-medium', 100),
+        ranked('france-commune-2024-medium', 97),
+        ranked('france-commune-2025-medium', 97)
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(summary(suggestions)).toEqual([
+      ['france-commune-2026-medium', ['france-commune-2026-medium']],
+      [
+        'france-commune-2025-medium',
+        ['france-commune-2025-medium', 'france-commune-2024-medium']
+      ]
+    ]);
+  });
+
+  it('should drop an extent alternative far larger than the data it covers', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-commune-reg11-2026-medium', 100, { bbox: idfBbox }),
+        ranked('france-commune-reg24-2026-medium', 100, {
+          bbox: [-0.25, 46.09, 3.44, 49.2]
+        }),
+        ranked('france-region-2025-medium', 100, { bbox: franceBbox }),
+        ranked('monde-pays-2024-medium', 100, { bbox: [-180, -90, 180, 90] })
+      ],
+      { limit: 3, rankedBy: 'extent' }
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.basemap.file)).toEqual([
+      'france-commune-reg11-2026-medium'
+    ]);
+  });
+
+  it('should not let stacked vintages use up the limit', () => {
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('france-commune-2026-medium', 100),
+        ranked('france-commune-2025-medium', 100),
+        ranked('france-commune-2024-medium', 100),
+        ranked('france-canton-2025-medium', 99),
+        ranked('france-iris-2026-medium', 98),
+        ranked('france-epci-2026-medium', 98)
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.basemap.file)).toEqual([
+      'france-commune-2026-medium',
+      'france-canton-2025-medium',
+      'france-iris-2026-medium'
+    ]);
+    expect(suggestions[0]?.vintages).toHaveLength(3);
   });
 });
