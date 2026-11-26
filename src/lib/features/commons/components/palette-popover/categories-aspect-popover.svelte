@@ -173,7 +173,11 @@
               (category) => category.patternShape
             )
           },
-          'categorical'
+          'categorical',
+          undefined,
+          false,
+          undefined,
+          draftCategories.map((category) => category.color)
         )
       : null
   );

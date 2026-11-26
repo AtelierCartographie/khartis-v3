@@ -86,3 +86,33 @@ describe('resolveClassPatterns — diverging', () => {
     expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
   });
 });
+
+describe('resolveClassPatterns — categorical', () => {
+  const categoryColors = ['#e41a1c', '#377eb8', '#4daf4a'];
+
+  it('should paint colored patterns with the colour of their category', () => {
+    const fills = resolveClassPatterns(
+      3,
+      { shape: 'line', colorize: true },
+      'categorical',
+      undefined,
+      false,
+      undefined,
+      categoryColors
+    ).map((pattern) => pattern.fill);
+    expect(fills).toEqual(categoryColors);
+  });
+
+  it('should keep the pattern colour when patterns are not colored', () => {
+    const fills = resolveClassPatterns(
+      3,
+      { shape: 'line', color: '#222222' },
+      'categorical',
+      undefined,
+      false,
+      undefined,
+      categoryColors
+    ).map((pattern) => pattern.fill);
+    expect(new Set(fills)).toEqual(new Set(['#222222']));
+  });
+});
