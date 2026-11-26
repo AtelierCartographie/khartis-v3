@@ -35,8 +35,7 @@ describe('mergeProjectGeoSuggestions', () => {
   it('should rank a project file first when it ties with a catalog basemap', () => {
     const merged = mergeProjectGeoSuggestions(
       [scored('world', 100), scored('europe', 40)],
-      [scored('project', 100)],
-      3
+      [scored('project', 100)]
     );
 
     expect(files(merged)).toEqual(['project', 'world', 'europe']);
@@ -45,18 +44,16 @@ describe('mergeProjectGeoSuggestions', () => {
   it('should rank a data match above a higher score from metadata alone', () => {
     const merged = mergeProjectGeoSuggestions(
       [scored('world', 30, false)],
-      [scored('project', 20)],
-      3
+      [scored('project', 20)]
     );
 
     expect(files(merged)).toEqual(['project', 'world']);
   });
 
-  it('should drop a project file that matches nothing and keep the limit', () => {
+  it('should drop a project file that matches nothing', () => {
     const merged = mergeProjectGeoSuggestions(
-      [scored('a', 30), scored('b', 20), scored('c', 10)],
-      [scored('unmatched', 0), scored('project', 25)],
-      3
+      [scored('a', 30), scored('b', 20)],
+      [scored('unmatched', 0), scored('project', 25)]
     );
 
     expect(files(merged)).toEqual(['a', 'project', 'b']);

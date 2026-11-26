@@ -5,9 +5,6 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import { VisualizationTools } from '$lib/features/commons/types/global';
-  import { selectTool } from '$lib/features/step-toolbar/tools-list/tool-list.utils.svelte';
   import { InfoPopover } from './shared';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import BasemapStyleSelector from './basemap-layers/basemap-style-selector.svelte';
@@ -30,6 +27,7 @@
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
+  import { presetHasInsetNames } from '$lib/features/map/utils/projection-preset-names.utils';
   import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 
@@ -124,6 +122,23 @@
     style: null
   });
 
+  // Composite presets name their inset views; other basemaps have none.
+  const viewNamesSyntheticLayer = $derived<BasemapLayer | null>(
+    currentMetadata?.proj_to?.type === 'composite' &&
+      presetHasInsetNames(
+        basemapService.projectionPresets,
+        currentMetadata.proj_to.preset
+      )
+      ? {
+          title_fr: m.basemap_layer_vues({}, { locale: 'fr' }),
+          title_en: m.basemap_layer_vues({}, { locale: 'en' }),
+          type: BasemapLayerType.POLYGON,
+          file: SYNTHETIC_AUX_LAYER_KEY.VUES,
+          style: null
+        }
+      : null
+  );
+
   interface LayerEntry {
     layer: BasemapLayer;
     sharedLegacyId: BasemapLayerId | null;
@@ -149,6 +164,13 @@
       }
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
+    if (viewNamesSyntheticLayer) {
+      entries.push({
+        layer: viewNamesSyntheticLayer,
+        sharedLegacyId: 'vues',
+        instanceIndex: 0
+      });
+    }
     for (const layer of metadata.layers) {
       if (!isSection3RenderableType(layer.type)) continue;
       const count = typeCounters.get(layer.type) ?? 0;
@@ -301,14 +323,6 @@
   <div class="reference-basemap-tool">
     <p class="kh-help">{m.basemap_tiled_helper()}</p>
     <BasemapStyleSelector />
-    <Button
-      kind="ghost"
-      size="small"
-      class="projection-shortcut-btn"
-      on:click={() => selectTool(VisualizationTools.Projection)}
-    >
-      {m.basemap_projection_shortcut()}
-    </Button>
   </div>
 {/snippet}
 
@@ -391,11 +405,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    background-color: var(--cds-layer-01);
-  }
-
-  .layers-list :global(.projection-shortcut-btn) {
-    align-self: flex-start;
-    padding-left: 0;
+    background-color: var(--khartis-control-surface-background);
   }
 </style>

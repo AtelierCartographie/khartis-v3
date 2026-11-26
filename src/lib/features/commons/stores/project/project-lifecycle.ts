@@ -1,7 +1,11 @@
 import type {
   KhartisProject,
-  SavedProjectMetadata
+  ListedProjectMetadata
 } from '$lib/features/project-management';
+import {
+  APP_LOADING_PHASE,
+  appLoadingStore
+} from '../app-loading.store.svelte';
 import {
   duplicateProject as duplicateProjectEntity,
   PROJECT_CONST,
@@ -217,21 +221,6 @@ export async function duplicateProject(
       );
     }
 
-    const projects = await listProjects();
-    const capacityCheck = ProjectValidator.validateStorageCapacity(
-      projects.length
-    );
-    if (!capacityCheck.isValid) {
-      throw new DataValidationError(
-        capacityCheck.errors.join(', '),
-        'projectCapacity',
-        {
-          errors: capacityCheck.errors,
-          projectCount: projects.length
-        }
-      );
-    }
-
     const duplicationSuffix = m.project_duplicate_suffix();
     const duplicatedName =
       newName || `${originalProject.manifest.name} ${duplicationSuffix}`;
@@ -260,7 +249,7 @@ export async function duplicateProject(
   }
 }
 
-export async function listProjects(): Promise<SavedProjectMetadata[]> {
+export async function listProjects(): Promise<ListedProjectMetadata[]> {
   const projects = await projectRepository.listMetadata();
 
   return projects;
@@ -292,6 +281,7 @@ export async function loadLastProject(
   const controller = new AbortController();
   let lastProjectId: string | undefined;
   const restoreOperation = (async () => {
+    appLoadingStore.setPhase(APP_LOADING_PHASE.PROJECT);
     lastProjectId =
       (await projectStorage.load<string>(ProjectStorageKey.CURRENT)) ??
       undefined;

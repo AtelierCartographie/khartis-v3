@@ -15,7 +15,7 @@ import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
-import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
+import { fileContainsPattern } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -41,6 +41,7 @@ export type {
 } from '../types/file-processing.service.types';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
+const KML_EXTENDED_DATA_PATTERN = /<(?:ExtendedData|SchemaData)\b/;
 
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
@@ -170,7 +171,7 @@ async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
   dataset: DatasetResult,
-  fileContent: UploadedFile['content']
+  file: File
 ): Promise<void> {
   const { tableName, columns, rowCount, geometry } = dataset;
 
@@ -182,7 +183,6 @@ async function updateFileFromDuckDBDataset(
     rowCount,
     columnCount: countUserColumns(columns, geometry),
     statistics,
-    content: fileContent,
     duckdbTableName: tableName,
     ...(geometry ? { geometry } : {})
   });
@@ -190,43 +190,22 @@ async function updateFileFromDuckDBDataset(
   callbacks.onProgress(uploadedFile.id, 100);
   callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
 
-  warnIfKmlExtendedDataDropped(uploadedFile, fileContent);
+  await warnIfKmlExtendedDataDropped(uploadedFile, file);
 }
 
 // The DuckDB spatial GDAL build ships the basic KML driver (no LIBKML), so a KML
 // <ExtendedData>/<SchemaData> attribute set is silently dropped to Name/Description.
 // Warn the user when the source actually carried extended attributes.
-function warnIfKmlExtendedDataDropped(
+async function warnIfKmlExtendedDataDropped(
   uploadedFile: UploadedFile,
-  fileContent: UploadedFile['content']
-): void {
+  file: File
+): Promise<void> {
   if (uploadedFile.fileType !== FileType.KML) return;
-  if (typeof fileContent !== 'string') return;
-  if (!/<(?:ExtendedData|SchemaData)\b/.test(fileContent)) return;
+  if (!(await fileContainsPattern(file, KML_EXTENDED_DATA_PATTERN))) return;
   showWarning(
     m.warning_kml_extended_data_title(),
     m.warning_kml_extended_data_message()
   );
-}
-
-async function readDuckDBGeofileContent(
-  callbacks: ProcessingCallbacks,
-  uploadedFile: UploadedFile,
-  file: File
-): Promise<UploadedFile['content']> {
-  callbacks.onProgress(uploadedFile.id, 20);
-
-  const shouldReadAsText =
-    uploadedFile.fileType === FileType.GEOJSON ||
-    uploadedFile.fileType === FileType.KML ||
-    uploadedFile.fileType === FileType.GPX;
-
-  const content = shouldReadAsText
-    ? await file.text()
-    : await file.arrayBuffer();
-  callbacks.onProgress(uploadedFile.id, 40);
-
-  return content;
 }
 
 async function validateAsync(
@@ -261,9 +240,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     perfMark(PERF_PHASE.FILE_IMPORT);
 
-    const originalContent = await readFileContent(file, (progress) => {
-      callbacks.onProgress(uploadedFile.id, progress);
-    });
+    callbacks.onProgress(uploadedFile.id, 20);
 
     const dataset = (await dataPipeline.processFile(file, {
       sourceFileId: uploadedFile.id
@@ -283,7 +260,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     const statistics = buildStatisticsFromColumns(columns);
 
     callbacks.onDataUpdate(uploadedFile.id, {
-      content: originalContent,
       duckdbTableName: tableName,
       rowCount,
       columnCount: countUserColumns(columns),
@@ -306,11 +282,7 @@ function createDuckDBGeofileProcessor(
   ): Promise<void> {
     if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
-    const content = await readDuckDBGeofileContent(
-      callbacks,
-      uploadedFile,
-      file
-    );
+    callbacks.onProgress(uploadedFile.id, 20);
 
     const result = await dataPipeline.processUploadedFile(uploadedFile, file);
 
@@ -318,7 +290,7 @@ function createDuckDBGeofileProcessor(
       callbacks,
       uploadedFile,
       result as DatasetResult,
-      content
+      file
     );
   }
 
@@ -334,11 +306,7 @@ function createGeoPackageProcessor(
   ): Promise<void> {
     if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
-    const content = await readDuckDBGeofileContent(
-      callbacks,
-      uploadedFile,
-      file
-    );
+    callbacks.onProgress(uploadedFile.id, 20);
 
     const result = await dataPipeline.processGeoPackageFile(uploadedFile, file);
 
@@ -355,7 +323,7 @@ function createGeoPackageProcessor(
       return;
     }
 
-    await updateFileFromDuckDBDataset(callbacks, uploadedFile, result, content);
+    await updateFileFromDuckDBDataset(callbacks, uploadedFile, result, file);
   }
 
   return { process };
@@ -431,7 +399,6 @@ async function processMultipleDatasets(
         rowCount,
         columnCount: countUserColumns(columns, geometry),
         statistics,
-        content: undefined,
         sourceArchive: result.sourceZipName,
         duckdbTableName: tableName,
         ...geometryUpdates
@@ -470,8 +437,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     callbacks.onProgress(uploadedFile.id, 10);
 
-    const fileContent = await file.arrayBuffer();
-
     const result = await dataPipeline.processFile(file);
 
     if (isZipDatasetResult(result)) {
@@ -479,30 +444,16 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       return;
     }
 
-    await updateFileFromDuckDBDataset(
-      callbacks,
-      uploadedFile,
-      result,
-      fileContent
-    );
+    await updateFileFromDuckDBDataset(callbacks, uploadedFile, result, file);
   }
 
   return { process };
 }
 
 function createGenericProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  async function process(
-    uploadedFile: UploadedFile,
-    file: File
-  ): Promise<void> {
-    const content = await readFileContent(file, (progress) => {
-      callbacks.onProgress(uploadedFile.id, progress);
-    });
-
-    callbacks.onDataUpdate(uploadedFile.id, {
-      content,
-      status: FileStatus.COMPLETE
-    });
+  async function process(uploadedFile: UploadedFile): Promise<void> {
+    callbacks.onProgress(uploadedFile.id, 100);
+    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
 
   return { process };

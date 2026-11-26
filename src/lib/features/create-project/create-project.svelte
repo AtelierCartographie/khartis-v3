@@ -5,8 +5,13 @@
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { fade, fly, type TransitionConfig } from 'svelte/transition';
   import {
     ComposedModal,
+    Link,
+    Loading,
     ModalBody,
     ModalHeader
   } from 'carbon-components-svelte';
@@ -14,7 +19,7 @@
     Categories,
     CopyFile,
     FetchUpload,
-    Information
+    Launch
   } from 'carbon-icons-svelte';
   import CreateNewProject from './components/create-new-project.svelte';
   import OpenProject from './components/open-project.svelte';
@@ -22,6 +27,9 @@
   import ProjectTab from './components/project-tab.svelte';
   import TryWithExample from './components/try-with-example.svelte';
   import { KEY } from '../commons/constants/dom.constants';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { buildLastProjectRestoreFallbackUrl } from '$lib/features/commons/utils/pwa-reset';
 
   function linkDialogToTitle(node: HTMLElement) {
     const dialog = node.querySelector<HTMLElement>('[role="dialog"]');
@@ -48,7 +56,10 @@
     3: 'create-project-tab-example'
   } as const;
 
+  const PANE_SHIFT = 24;
+
   let tabRefs = $state<HTMLElement[]>([]);
+  let paneShift = $state(PANE_SHIFT);
   let resetToken = $state(0);
   let wasOpen = $state(false);
   const activeProjectTabId = $derived(
@@ -67,7 +78,43 @@
     onClose?.();
   }
 
+  // While a project opens, the modal stays: the user can only stop it.
+  function handleModalClose(event: CustomEvent): void {
+    if (createProjectState.isOpeningProject) {
+      event.preventDefault();
+      return;
+    }
+    handleClose();
+  }
+
+  const STOP_OPENING_DELAY_MS = 8_000;
+  let canStopOpening = $state(false);
+
+  $effect(() => {
+    if (!createProjectState.isOpeningProject) {
+      canStopOpening = false;
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      canStopOpening = true;
+    }, STOP_OPENING_DELAY_MS);
+    return () => clearTimeout(timeoutId);
+  });
+
+  // Opening may hang in the data engine, so stopping reloads Khartis without
+  // restoring that project, back on this modal.
+  function stopOpeningProject(): void {
+    window.location.replace(
+      buildLastProjectRestoreFallbackUrl(
+        window.location.href,
+        projectStore.currentProject?.id
+      )
+    );
+  }
+
   function selectTile(index: number) {
+    paneShift =
+      index < createProjectState.selectedTab ? -PANE_SHIFT : PANE_SHIFT;
     createProjectActions.selectTab(index as 1 | 2 | 3);
   }
 
@@ -94,31 +141,41 @@
       (tabElement as HTMLElement)?.focus();
     }
   }
+
+  // The modal mounts and unmounts already open, so Carbon's own transition
+  // never runs: the whole dialog fades and its panel rises with it.
+  function revealModal(node: HTMLElement): TransitionConfig {
+    const container = node.querySelector<HTMLElement>('.bx--modal-container');
+    return {
+      duration: motionDuration(240),
+      easing: cubicOut,
+      css: (t) => `opacity: ${t};`,
+      tick: (t) => {
+        container?.style.setProperty('translate', `0 ${(1 - t) * 16}px`);
+      }
+    };
+  }
 </script>
 
 <div
+  transition:revealModal|global
   id="khartis-create-project"
   data-testid="create-project-modal"
   use:linkDialogToTitle
 >
-  <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
+  <ComposedModal
+    preventCloseOnClickOutside
+    open={open}
+    on:close={handleModalClose}
+  >
     <ModalHeader title={m.create_project_welcome()} iconDescription={m.close()}>
       <div class="mb-3"></div>
-      <div class="welcome-description">
-        <span class="text-grey">
-          {m.create_project_welcome_description()}
-        </span>
-        <a
-          href={DOC_LINK.KHARTIS_HOME}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="info-icon-link"
-          aria-label={m.create_project_welcome_info()}
-          title={m.create_project_welcome_info()}
-        >
-          <Information size={16} />
-        </a>
-      </div>
+      <p class="text-grey">
+        {m.create_project_welcome_description()}
+        <Link href={DOC_LINK.KHARTIS_HOME} target="_blank" icon={Launch}>
+          {m.create_project_welcome_learn_more()}
+        </Link>
+      </p>
     </ModalHeader>
 
     <ModalBody class="fixed-modal-body">
@@ -187,17 +244,60 @@
           role="tabpanel"
           aria-labelledby={activeProjectTabId}
         >
-          {#if createProjectState.selectedTab === 1}
-            <CreateNewProject isModal showTitle resetToken={resetToken} />
-          {:else if createProjectState.selectedTab === 2}
-            <OpenProject onClose={handleClose} />
-          {:else if createProjectState.selectedTab === 3}
-            <TryWithExample onClose={handleClose} />
-          {/if}
+          {#key createProjectState.selectedTab}
+            <div
+              class="tab-pane"
+              in:fly={{
+                x: paneShift,
+                duration: motionDuration(220),
+                delay: motionDuration(90),
+                easing: cubicOut
+              }}
+              out:fly={{
+                x: -paneShift,
+                duration: motionDuration(90),
+                easing: cubicIn
+              }}
+            >
+              {#if createProjectState.selectedTab === 1}
+                <CreateNewProject isModal showTitle resetToken={resetToken} />
+              {:else if createProjectState.selectedTab === 2}
+                <OpenProject onClose={handleClose} />
+              {:else if createProjectState.selectedTab === 3}
+                <TryWithExample onClose={handleClose} />
+              {/if}
+            </div>
+          {/key}
         </div>
 
+        {#if createProjectState.isOpeningProject}
+          <div class="opening-overlay" role="status">
+            <div class="opening-status">
+              <Loading withOverlay={false} small />
+              <span>{m.create_project_opening_project()}</span>
+            </div>
+            {#if canStopOpening}
+              <Button
+                kind="tertiary"
+                size="small"
+                on:click={stopOpeningProject}
+              >
+                {m.create_project_stop_opening()}
+              </Button>
+            {/if}
+          </div>
+        {/if}
+
         {#if createProjectState.selectedTab === 1}
-          <ProjectName onClose={handleClose} />
+          <div
+            in:fade={{
+              duration: motionDuration(220),
+              delay: motionDuration(90)
+            }}
+            out:fade={{ duration: motionDuration(90) }}
+          >
+            <ProjectName onClose={handleClose} />
+          </div>
         {/if}
       </article>
     </ModalBody>
@@ -205,22 +305,32 @@
 </div>
 
 <style lang="scss">
-  .welcome-description {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--cds-spacing-03);
+  #khartis-create-project :global(.bx--modal-header .bx--link) {
+    font-size: 0.875rem;
+    line-height: inherit;
+    color: inherit;
   }
 
-  .info-icon-link {
-    flex-shrink: 0;
-    color: var(--cds-icon-secondary);
-    display: flex;
-    align-items: center;
-    padding-top: 2px;
+  /* Fading lowers the wrapper's opacity, which makes it a stacking context:
+     it must sit above the app itself, or the dialog fades behind the header
+     and the panels and only shows once opaque. */
+  #khartis-create-project {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+  }
 
-    &:hover {
-      color: var(--cds-icon-primary);
-    }
+  /* Closing removes Carbon's is-visible class, which hides the dialog at
+     once; the wrapper's fade carries the exit instead. */
+  #khartis-create-project :global(.bx--modal) {
+    opacity: 1;
+    visibility: inherit;
+    transition: none;
+  }
+
+  #khartis-create-project :global(.bx--modal-container) {
+    transform: none;
+    transition: none;
   }
 
   @media (min-width: 1024px) {
@@ -232,8 +342,13 @@
       background: var(--cds-background);
     }
 
+    /* The body keeps the height « Ouvrir un projet » needs, whatever card
+       is selected, within the space the header leaves; the selected card
+       scrolls inside it. */
     #khartis-create-project :global(.fixed-modal-body) {
-      height: auto;
+      display: flex;
+      flex-direction: column;
+      height: min(40rem, calc(90vh - 7.5rem));
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
@@ -256,7 +371,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .project-type-selector {
@@ -272,7 +388,10 @@
     flex: 1;
   }
 
+  /* The leaving and arriving panes share one cell while they swap. */
   .tab-content {
+    display: grid;
+    grid-auto-rows: auto;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -299,13 +418,51 @@
     }
   }
 
+  .tab-pane {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+
+  /* Delayed so that a small project opens without a flash. */
+  .opening-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--cds-spacing-05);
+    background: color-mix(in srgb, var(--cds-background) 85%, transparent);
+    color: var(--cds-text-primary);
+    animation: opening-fade-in 200ms 150ms both;
+  }
+
+  .opening-status {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  @keyframes opening-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .opening-overlay {
+      animation-duration: 0ms;
+    }
+  }
+
   #khartis-create-project :global(.bx--tile) {
     flex: 1;
   }
 
   #khartis-create-project :global(.tab-title) {
-    font-size: var(--cds-body-short-01-font-size, 0.875rem);
-    line-height: var(--cds-body-short-01-line-height, 1.28572);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
   }
 
   @media (max-width: 768px) {

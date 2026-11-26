@@ -127,9 +127,14 @@ données modifiées.
 
 Pendant le glisser, l'étiquette est retirée des couches thématiques et un aperçu
 est posé au-dessus de la pile, comme le surlignage au survol : suivre le
-pointeur ne reconstruit pas les couches.
+pointeur ne reconstruit pas les couches. Au survol, le bloc de l'étiquette est
+cerné d'un cadre tireté (`components/label-hover-frame.svelte`), le même que
+celui de la légende et des annotations, à l'emprise stricte du texte, sans la
+marge de sécurité du placement : un élément DOM posé sur le canevas, calculé
+depuis l'ancrage projeté et le bloc en pixels de page.
 
-Le filet (`computeLabelLeader`) part d'une zone tampon autour du symbole et ne
+Le filet (`computeLabelLeader`, qui délègue à `leaderGeometry` du paquet
+`@ateliercartographie/label-placer`) part d'une zone tampon autour du symbole et ne
 suit que trois directions : une branche à 45° qui quitte le symbole, puis une
 branche horizontale vers le milieu du côté de l'étiquette qui lui fait face, ou
 verticale vers son bord haut ou bas quand l'étiquette est surtout au-dessus ou
@@ -146,6 +151,87 @@ réelle, lignes renvoyées comprises, avec un interligne fixe.
 `LabelLeaderLayer` ancre ses deux
 extrémités sur l'entité et les décale en pixels dans le shader, comme le
 `getPixelOffset` du `TextLayer` : le filet garde sa longueur à chaque zoom.
+
+### Placement automatique des étiquettes
+
+L'option « Placement automatique » du panneau Textes (`automaticPlacement`,
+champ optionnel du primitif texte, désactivé par défaut) confie le placement
+au paquet `@ateliercartographie/label-placer`
+(`utils/label-auto-placement.utils.ts`). Elle n'emprunte pas
+`collisionDetection`, un champ resté sans effet que les projets enregistrent
+à `true` : l'option s'y serait activée à l'ouverture. La fabrique projette chaque ancrage en
+pixels de page à travers le viewport deck courant, depuis le centre du canevas
+et dans la taille nominale de la zone carte : le canevas est arrondi au pixel
+près, sa taille en pixels de page varie d'une fraction de pixel avec le zoom de
+page, et sans ce recentrage le placement changeait entre les étapes
+Visualisations et Habillage. Elle mesure ensuite le bloc d'étiquettes et
+le rayon du symbole, puis le moteur choisit pour chaque bloc une position autour
+du symbole (pratique de l'Atelier), dans le symbole s'il y tient, ou plus loin avec un
+filet. Le résultat est le même centre de bloc qu'un déplacement manuel : ferrage,
+empilement, filets et export SVG suivent sans chemin propre.
+
+- Les étiquettes retenues par un filtre Textes sont requises : jamais masquées,
+  en chevauchement en dernier recours. L'option « Masquer des étiquettes
+  filtrées faute de place » (`filteredLabelsOptional`) les rend facultatives
+  comme sans filtre. Celles qui ne trouvent pas de place sont masquées, des
+  moins importantes aux plus importantes (rang d'un filtre « Top » s'il y en
+  a un, puis rayon du symbole, taille du texte et valeur). Le filtre se lit
+  dans ses identifiants de lignes : en rendu scindé, la table d'attributs est
+  toujours restreinte, filtre ou non.
+- Les étiquettes facultatives gardent entre elles un espace libre d'une
+  demi-hauteur d'étiquette médiane (`LABEL_SPACING_RATIO`, `spacing` du
+  moteur), filets compris : les zones denses s'éclaircissent d'abord. Cet
+  espace n'est pas réglable. Des étiquettes requises n'en gardent aucun.
+- Seul le premier quart des étiquettes de symboles, par importance, peut
+  prendre un filet (300 au plus) : avec des filets pour toutes, la plupart des
+  noms d'une carte dense en portaient un.
+- Sans symbole, l'étiquette d'un polygone passe au moteur avec le contour de
+  son entité, projeté en pixels de page et allégé comme les contours du fond :
+  elle se place entièrement dedans ou entièrement dehors, jamais à cheval sur
+  le contour, et hors des autres polygones. Points représentatifs et polygones
+  sont appariés par identifiant d'entité en rendu scindé, par ligne sinon.
+  Toutes peuvent prendre un filet, sans le plafond d'un quart des symboles : un
+  nom posé à côté de sa surface y entre par un filet court, sans lequel il se
+  lit comme celui du voisin. Le filet entre dans la surface jusqu'à son point
+  représentatif, au lieu de s'arrêter sur un contour que le voisin partage. Une étiquette de polygone ne garde
+  qu'un pixel de marge autour du texte au lieu du fond de sécurité, sauf masque
+  visible.
+- Un texte d'une ligne qui peut se couper en deux lignes équilibrées
+  (`wrapLabelTextInTwoLines`) est proposé au moteur sous cette seconde forme,
+  à un léger surcoût ; le texte est dessiné dans la forme retenue.
+- Une étiquette déplacée à la main est épinglée : un obstacle fixe pour les
+  autres.
+- Les étiquettes masquées restent accessibles (`hidden-labels.store`). La
+  section Position du panneau Textes les compte. À l'étape Habillage, survoler
+  une zone, un symbole ou la place d'une étiquette masquée dessine son fantôme
+  en transparence, par-dessus les calques comme l'aperçu de glisser. Glisser
+  un fantôme l'épingle ; « Afficher l'étiquette » de son éditeur l'épingle là
+  où le moteur la poserait si elle était requise (`findRequiredSpot`). Une
+  position manuelle étant déjà enregistrée, rien ne change dans le format du
+  projet.
+- Les symboles que le filtre Textes laisse sans étiquette restent dessinés : ils
+  passent au moteur comme symboles seuls, des obstacles pour les étiquettes. En
+  rendu scindé (jeu joint à un fond), leurs attributs ne sont lus que dans le
+  périmètre des Textes, et ils ne sont pas transmis.
+- Les bornes sont le cadre du fond de carte quand la projection en a un, sinon
+  le canvas. Les éléments de page (légende, indications géographiques,
+  annotations) sont des obstacles (`pageItemObstaclesStore`).
+- Le contour des couches « Territoire » visibles (`ctx.labelOutlineTables`,
+  orthographique seulement) est un obstacle souple : une étiquette évite de
+  chevaucher une côte ou une frontière extérieure quand une autre position la
+  vaut. Ces couches sont fusionnées en une géométrie, donc sans limites internes.
+- Ces mêmes couches, remplies, sont un polygone souple (coût 2,5 pour une
+  étiquette entièrement sur la terre) : le nom d'un lieu côtier passe du côté
+  de la mer quand cette position vaut presque l'autre. Pas pour les étiquettes
+  de polygones, qui sont sur la terre dans leur contour : elles iraient en mer.
+- L'option « Aligner en colonnes » (`labelColumns`, champ optionnel du primitif
+  texte) range les étiquettes des groupes serrés en colonne à côté du groupe.
+- Le placement est recalculé une fois la vue stabilisée
+  (`labelPlacementViewStore`, 250 ms après un zoom, un déplacement ou un
+  redimensionnement du canvas) et réutilise le résultat précédent pour que les
+  étiquettes restent en place. Il est mis en cache par visualisation.
+- Il ne s'applique pas aux collections de cartes, dont les cellules ont leur
+  propre vue.
 
 Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
 placent derrière ou devant les couches thématiques ; l'ordre affiché dans le
@@ -275,12 +361,94 @@ légendes d'une visualisation tirée du même jeu de données lisent la même li
 ce qui marque le lieu dans chaque carte d'une collection. Les exports ne portent
 jamais cette marque.
 
+## Étape Données : contrôle de la jointure
+
+À l'étape Données, un jeu joint au fond de référence n'est pas dessiné : c'est le
+fond qui porte ses territoires. Chacun prend la couleur de son statut de
+jointure, celle des catégories du panneau : joint, à vérifier (`check` et
+`ambiguous`), répété (plusieurs lignes pour un territoire), sans donnée (aucune ligne, en gris clair hachuré, plus discret), y compris le
+territoire qu'une valeur ignorée désignait. Les valeurs
+non reconnues n'ont pas de géométrie et restent dans le panneau.
+
+- L'étape Données se suit dans l'ordre : la jointure apparaît sur la carte
+  quand le panneau défile jusqu'à « Jointure assistée par
+  Khartis ». Le fondu suit le défilement (`setRevealProgress`, qui ne recule
+  jamais) et s'achève seul si le panneau ne peut plus défiler ; la jointure
+  reste ensuite affichée pour la session.
+- La carte ne montre que la jointure par entités : quand les coordonnées
+  géographiques sont la référence choisie, il n'y a pas de jointure assistée
+  et rien n'est dessiné.
+- Le statut de chaque territoire est calculé en SQL
+  (`getJoinTerritoryStatuses`, `join-ops.ts`) et rechargé quand la table
+  finalisée change (`join-control.store.svelte.ts`). Rien n'est enregistré dans
+  le projet.
+- `layers/join-control-layers.ts` dessine le statut sur la géométrie binaire du
+  fond, entre son sol et ses limites. Les répétés portent une trame de croix,
+  car rouge et vert se confondent pour un daltonien. Motifs, contours et repères suivent le
+  zoom de la page (`pageDisplayScale`), comme les autres marques.
+- Un territoire à vérifier ou répété trop petit à la vue ajustée reçoit un
+  repère ponctuel.
+- Le panneau ouvre un seul accordéon de catégorie à la fois ; ouvrir une
+  catégorie ne filtre pas la carte.
+- La carte suit aussi ce que le panneau tient sans l'avoir encore appliqué
+  (`buildPendingJoinMappings`) : une suggestion « à vérifier » remplacée par une
+  autre entité, ou une association effacée parmi les entités jointes, qui laisse
+  la valeur sans territoire. Tant qu'une association reste effacée, sa liste est
+  en erreur, une notification d'erreur remplace la validation et le bouton
+  Visualiser est désactivé.
+- Survoler une valeur du panneau ou une ligne du tableau cerne son territoire :
+  le contour est ajouté par `setLayers` au-dessus de la pile, comme le survol de
+  la carte, sans reconstruire les couches.
+- L'infobulle donne le statut, puis, côte à côte comme une ligne des tableaux
+  de jointure, la valeur des données tabulaires (ou du fichier importé) et le
+  nom sur le fond ; épinglée, elle ajoute les autres données jointes, une
+  variable par ligne, et ombre ses bords quand elle défile.
+- La carte suit la variable liée du panneau : tant que la jointure finalisée
+  porte sur une autre variable, aucun territoire n'est joint. C'est le cas d'une
+  variable qui ne joint rien, pour laquelle la jointure n'est pas refinalisée.
+- En entrant dans l'étape Données ou en la quittant, la dernière image de la
+  carte s'efface en fondu au-dessus de la nouvelle
+  (`join-control-step-fade.svelte`), sauf mouvement réduit.
+- Rien de cela n'entre dans un export.
+
 ## Habillage et facettes
 
 Légendes, annotations, échelle, orientation, indications géographiques et
 éléments de page sont des overlays DOM ou SVG, pas des couches Deck.gl. Ils
 sont persistés et exportés sans toucher la géométrie ni le moteur. L'export
 passe par `globalState.isMapExporting`, jamais par un changement d'étape.
+
+La page porte deux zones distinctes, enregistrées dans l'état du Format en
+unités de page. Les marges (`margins`) délimitent la zone de mise en page :
+textes de page, légendes et indications géographiques s'y placent. Le
+cadre de la carte (`mapFrame`) délimite le canevas de la carte et de la
+collection de cartes, et c'est lui que l'export rend. Changer les marges ne
+déplace pas la carte. Les bords gris de l'étape Habillage modifient le cadre :
+tirer un bord recadre la carte sans la redessiner (vue manuelle). Les bords de
+la page, juste à l'extérieur, la redimensionnent de la même manière ; la page
+reste centrée et grandit des deux côtés.
+
+La grille de l'étape Habillage couvre toute la page, un point tous les 12 px,
+et se centre sur elle : l'écart entre les points extrêmes et les bords est le
+même des deux côtés, au pixel près (`getPageGridOrigin`). Le magnétisme, au pas
+de 4 px, part de la même origine, y compris dans le cadre de la carte
+(`getAreaGridOrigin`), pour que les éléments s'aimantent sur les points
+visibles. Les points gardent une taille fixe à l'écran et une couleur tirée du
+fond de page, à contraste constant (`getPageGridPointColor`). L'affichage de la
+grille est une préférence de la session : il n'est pas enregistré, et la grille
+réapparaît à chaque ouverture de projet.
+
+Tant que la vue est automatique, un réajustement (données, fond, projection,
+format de page) colle le cadre à la carte dessinée, sans espace, dans la zone
+des marges. Après chaque mise à jour des calques, `measureDrawnExtent` mesure
+les positions binaires des calques Deck.gl ; `resolveFittedMapFrame` garde la
+partie de cette emprise que l'ajustement automatique montre, l'agrandit
+jusqu'aux marges et en déduit le cadre et la vue de base : un zoom au-delà de
+l'ajustement de la référence et un centre, affichés à 100 % et rétablis par la
+réinitialisation du zoom. La vue enregistrée garde cette vue de base et le fait
+qu'elle est automatique ; un projet antérieur, sans ces champs, rouvre en vue
+manuelle comme avant. Avec MapLibre, la carte remplit tout cadre et le cadre
+automatique est la zone des marges.
 
 Les facettes (collection de cartes) partagent une instance Deck.gl, avec une
 `OrthographicView` par facette. Elles sont toujours rendues en mode

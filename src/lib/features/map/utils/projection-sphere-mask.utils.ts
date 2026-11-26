@@ -1,4 +1,4 @@
-import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import {
   type BinaryPathData,
@@ -147,7 +147,7 @@ export function createProjectionSphereMaskLayer({
       data: frameData,
       filled: true,
       stroked: false,
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      coordinateSystem: 'cartesian',
       getFillColor: fillColor,
       pickable: false,
       parameters: SPHERE_BACKGROUND_PARAMETERS,
@@ -162,7 +162,7 @@ export function createProjectionSphereMaskLayer({
     return new SolidPolygonLayer({
       id: PROJECTION_SPHERE_MASK_LAYER_ID,
       ...createCompatibleSolidPolygonLayerProps(sphereData),
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      coordinateSystem: 'cartesian',
       getFillColor: fillColor,
       pickable: false,
       parameters: SPHERE_BACKGROUND_PARAMETERS,
@@ -215,7 +215,7 @@ function createFrameOutlineLayer(
     data: frameData,
     filled: false,
     stroked: true,
-    coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+    coordinateSystem: 'cartesian',
     getLineColor: color,
     getLineWidth: width,
     lineWidthUnits: 'pixels',
@@ -266,7 +266,7 @@ export function createProjectionSphereOutlineLayer({
     return new PathLayer({
       id: PROJECTION_SPHERE_OUTLINE_LAYER_ID,
       ...createPathLayerProps(pathData),
-      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      coordinateSystem: 'cartesian',
       getColor: color,
       getWidth: width,
       widthUnits: 'pixels',

@@ -12,9 +12,12 @@
   import { m } from '$lib/paraglide/messages';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
-  import { InlineNotification, Tag } from 'carbon-components-svelte';
+  import { InlineNotification, Link, Tag } from 'carbon-components-svelte';
+  import { Launch } from 'carbon-icons-svelte';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectRepository } from '$lib/features/project-management';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
 
@@ -90,6 +93,7 @@
 
     selectedExample = exampleId;
     isLoading = true;
+    createProjectActions.setOpeningProject(true);
     error = '';
 
     try {
@@ -117,6 +121,7 @@
         err instanceof Error ? err.message : m.error_example_load_failed();
     } finally {
       isLoading = false;
+      createProjectActions.setOpeningProject(false);
     }
   }
 </script>
@@ -137,6 +142,7 @@
       closeButtonDescription={m.a11y_close_notification()}
       lowContrast
       kind="error"
+      role="alert"
       title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
@@ -181,18 +187,46 @@
             onclick={() => handleExampleClick(example.id)}
           >
             {#snippet footer()}
-              <span class="example-tags text-xs text-grey"
-                >{getExampleCategoriesLabel(example)}</span
-              >
+              <span class="example-tags text-xs text-grey">
+                {getExampleCategoriesLabel(example)}
+              </span>
             {/snippet}
           </ProjectCard>
         </div>
       {/each}
     {/if}
   </div>
+
+  <div>
+    <h6 class="mb-3">{m.try_example_getting_started()}</h6>
+
+    <ul class="getting-started-links text-grey">
+      <li>
+        <Link href={DOC_LINK.FIRST_MAP} target="_blank" icon={Launch}>
+          {m.try_example_first_map()}
+        </Link>
+      </li>
+      <li>
+        <Link href={DOC_LINK.TUTORIALS} target="_blank" icon={Launch}>
+          {m.try_example_tutorials()}
+        </Link>
+      </li>
+    </ul>
+  </div>
 </section>
 
 <style>
+  .getting-started-links {
+    list-style: disc;
+    padding-left: var(--cds-spacing-06);
+  }
+
+  .getting-started-links :global(.bx--link) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+  }
+
   #khartis-try-with-example :global(.bx--file-browse-btn) {
     min-width: 100%;
   }

@@ -38,15 +38,32 @@ if (typeof window !== 'undefined') {
   });
 }
 
-vi.mock('$env/dynamic/public', () => ({
-  env: {}
+// jsdom has no Web Animations API; Svelte transitions run on it. The stub
+// finishes each animation at once.
+if (typeof Element !== 'undefined' && !Element.prototype.animate) {
+  Element.prototype.animate = function animate() {
+    const animation = {
+      onfinish: null as (() => void) | null,
+      finished: Promise.resolve(),
+      cancel: () => {},
+      finish: () => animation.onfinish?.()
+    };
+    queueMicrotask(() => animation.onfinish?.());
+    return animation as unknown as Animation;
+  };
+}
+
+vi.mock('$app/env/public', () => ({
+  PUBLIC_GTM_CONTAINER_ID: ''
 }));
 
-vi.mock('$lib/features/duckdb', () => ({
+vi.mock('$lib/features/duckdb', async () => ({
+  ...(await import('$lib/features/duckdb/utils/duckdb-error.utils')),
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),
-    getConnection: vi.fn().mockResolvedValue(null)
+    getConnection: vi.fn().mockResolvedValue(null),
+    findDatasetByIdOrSourceFile: vi.fn().mockReturnValue(undefined)
   },
   Duck: {},
   validateGPSColumns: vi.fn().mockResolvedValue({ isValid: true }),

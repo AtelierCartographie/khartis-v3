@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
@@ -11,6 +12,12 @@
     align?: 'top' | 'bottom';
     tags?: string[];
     disabled?: boolean;
+    /** Replaces the (i) icon; give `label` with it. */
+    icon?: Component<{ size?: number }>;
+    /** Accessible name of the button; defaults to « Plus d'informations ». */
+    label?: string;
+    /** Class for the button, to colour a status icon. */
+    buttonClass?: string;
   }
 
   let {
@@ -18,7 +25,10 @@
     title,
     align = 'bottom',
     tags = [],
-    disabled = false
+    disabled = false,
+    icon: Icon = Information,
+    label,
+    buttonClass
   }: Props = $props();
 
   let open = $state(false);
@@ -135,10 +145,10 @@
 <span class="info-popover-wrapper">
   <button
     type="button"
-    class="info-btn"
+    class="info-btn {buttonClass ?? ''}"
     class:info-btn-disabled={disabled}
     bind:this={btnRef}
-    aria-label={m.more_info()}
+    aria-label={label ?? m.more_info()}
     aria-disabled={disabled ? 'true' : undefined}
     disabled={disabled}
     onclick={toggle}
@@ -147,7 +157,7 @@
     onfocus={show}
     onblur={hide}
   >
-    <Information size={16} />
+    <Icon size={16} />
   </button>
 </span>
 
@@ -202,11 +212,11 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--cds-icon-secondary, var(--cds-text-02));
+    color: var(--cds-icon-secondary, var(--cds-text-secondary));
     flex-shrink: 0;
 
     &:hover {
-      color: var(--cds-icon-primary, var(--cds-text-01));
+      color: var(--cds-icon-primary, var(--cds-text-primary));
     }
 
     &:focus {
@@ -236,8 +246,8 @@
   :global(.info-tooltip) {
     position: fixed;
     transform: translateX(-50%);
-    background-color: var(--cds-inverse-01, #393939);
-    color: var(--cds-inverse-02, #fff);
+    background-color: var(--cds-background, #393939);
+    color: var(--cds-background-inverse, #fff);
     padding: var(--cds-spacing-03) var(--cds-spacing-04);
     border-radius: 4px;
     max-width: 240px;
@@ -261,7 +271,7 @@
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-bottom: 6px solid var(--cds-inverse-01, #393939);
+    border-bottom: 6px solid var(--cds-background, #393939);
   }
 
   :global(.info-tooltip--top .info-tooltip-arrow) {
@@ -273,7 +283,7 @@
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-top: 6px solid var(--cds-inverse-01, #393939);
+    border-top: 6px solid var(--cds-background, #393939);
   }
 
   :global(.info-tooltip-title) {
@@ -309,7 +319,7 @@
     padding: 2px 8px;
     border-radius: 12px;
     background-color: rgba(255, 255, 255, 0.16);
-    color: var(--cds-inverse-02, #fff);
+    color: var(--cds-background-inverse, #fff);
     font-size: 0.6875rem;
     line-height: 1rem;
     font-weight: 500;

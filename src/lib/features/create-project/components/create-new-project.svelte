@@ -418,38 +418,44 @@
     </div>
 
     <div class="paste-container" bind:this={pasteContainer}>
-      <TextArea
-        labelText={m.create_project_paste_data()}
-        hideLabel
-        value={pastedDataValue}
-        placeholder={hasPastedFile
-          ? m.create_project_paste_another()
-          : m.create_project_paste_data()}
-        rows={4}
-        on:input={handlePastedDataInput}
-        on:blur={handlePastedDataBlur}
-        invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
-        invalidText={pastedDataValidation?.errors[0] || ''}
-        warn={!isImportingPaste &&
-          !!pastedDataValidation &&
-          pastedDataValidation.warnings.length > 0}
-        warnText={pastedDataValidation?.warnings[0] || ''}
-      />
-      {#if pastedFile}
-        <div class="paste-feedback" role="status" data-testid="paste-feedback">
-          <CheckmarkFilled size={20} class="paste-feedback-icon" />
-          <span class="paste-feedback-title">
-            {m.create_project_paste_added()}
-          </span>
-          <span class="paste-feedback-metrics">
-            {formatValue(pastedFile.rowCount ?? 0)}
-            {rowsLabel(pastedFile.rowCount ?? 0)}
-            {m.separator_middle_dot_space()}
-            {formatValue(pastedFile.columnCount ?? 0)}
-            {columnsLabel(pastedFile.columnCount ?? 0)}
-          </span>
-        </div>
-      {/if}
+      <div class="paste-field">
+        <TextArea
+          labelText={m.create_project_paste_data()}
+          hideLabel
+          value={pastedDataValue}
+          placeholder={hasPastedFile
+            ? m.create_project_paste_another()
+            : m.create_project_paste_data()}
+          rows={4}
+          on:input={handlePastedDataInput}
+          on:blur={handlePastedDataBlur}
+          invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+          invalidText={pastedDataValidation?.errors[0] || ''}
+          warn={!isImportingPaste &&
+            !!pastedDataValidation &&
+            pastedDataValidation.warnings.length > 0}
+          warnText={pastedDataValidation?.warnings[0] || ''}
+        />
+        {#if pastedFile}
+          <div
+            class="paste-feedback"
+            role="status"
+            data-testid="paste-feedback"
+          >
+            <CheckmarkFilled size={20} class="paste-feedback-icon" />
+            <span class="paste-feedback-title">
+              {m.create_project_paste_added()}
+            </span>
+            <span class="paste-feedback-metrics">
+              {formatValue(pastedFile.rowCount ?? 0)}
+              {rowsLabel(pastedFile.rowCount ?? 0)}
+              {m.separator_middle_dot_space()}
+              {formatValue(pastedFile.columnCount ?? 0)}
+              {columnsLabel(pastedFile.columnCount ?? 0)}
+            </span>
+          </div>
+        {/if}
+      </div>
       {#if pastedDataValue.trim() && !isImportingPaste}
         <div class="paste-actions">
           <Button
@@ -491,32 +497,6 @@
           status="active"
           description={m.create_project_loading_status()}
         />
-      {:else}
-        <div class="learn-more">
-          <span>{m.create_project_learn_more_title()}</span>
-          <ul>
-            <li>
-              <Link
-                href={DOC_LINK.IMPORT_DATA}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_data()}
-              </Link>
-            </li>
-            <li>
-              <Link
-                href={DOC_LINK.JOIN_BASEMAP}
-                target="_blank"
-                size="sm"
-                icon={Launch}
-              >
-                {m.create_project_learn_more_basemaps()}
-              </Link>
-            </li>
-          </ul>
-        </div>
       {/if}
     </div>
 
@@ -525,6 +505,7 @@
         closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="error"
+        role="alert"
         title={m.create_project_error_label()}
         subtitle={createProjectState.newProject.error}
         on:close={() => createProjectActions.setNewProjectError()}
@@ -554,6 +535,7 @@
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
+          role="alert"
           title={m.create_project_validation_errors()}
           subtitle={globalValidationErrors.join(m.separator_comma_space())}
           lowContrast
@@ -708,20 +690,20 @@
                       <Tag size="sm" type={fileTag.color}>
                         {fileTag.label}
                       </Tag>
-                      <span class="file-name" title={file.name}
-                        >{file.name}</span
-                      >
+                      <span class="file-name" title={file.name}>
+                        {file.name}
+                      </span>
                     </div>
                     {#if rowCount > 0}
                       <div class="file-metrics">
-                        <span data-testid="file-row-count"
-                          >{formatValue(rowCount)}</span
-                        >
+                        <span data-testid="file-row-count">
+                          {formatValue(rowCount)}
+                        </span>
                         {rowsLabel(rowCount)}
                         {m.separator_middle_dot_space()}
-                        <span data-testid="file-column-count"
-                          >{formatValue(columnCount)}</span
-                        >
+                        <span data-testid="file-column-count">
+                          {formatValue(columnCount)}
+                        </span>
                         {columnsLabel(columnCount)}
                       </div>
                     {/if}
@@ -752,6 +734,7 @@
                   <InlineNotification
                     lowContrast
                     kind="error"
+                    role="alert"
                     title={m.create_project_error_status()}
                     subtitle={file.validation.errors.join(
                       m.separator_comma_space()
@@ -778,6 +761,22 @@
       {/each}
     </div>
   </div>
+
+  <div class="learn-more">
+    <span>{m.create_project_learn_more_title()}</span>
+    <ul>
+      <li>
+        <Link href={DOC_LINK.IMPORT_DATA} target="_blank" icon={Launch}>
+          {m.create_project_learn_more_data()}
+        </Link>
+      </li>
+      <li>
+        <Link href={DOC_LINK.JOIN_BASEMAP} target="_blank" icon={Launch}>
+          {m.create_project_learn_more_basemaps()}
+        </Link>
+      </li>
+    </ul>
+  </div>
 </section>
 
 {#snippet shapefileComponents(relatedFiles?: readonly string[])}
@@ -801,6 +800,8 @@
 
   .is-modal-create-project {
     margin-bottom: 0 !important;
+    min-height: 100%;
+    grid-template-rows: auto auto auto 1fr;
   }
 
   #khartis-create-new-project :global(.bx--file__selected-file) {
@@ -811,7 +812,8 @@
     background-color: var(--cds-field-01);
   }
 
-  .paste-container {
+  /* The feedback covers the field alone, not the actions under it. */
+  .paste-field {
     position: relative;
   }
 
@@ -822,9 +824,14 @@
   }
 
   .learn-more {
-    font-size: var(--kh-font-label);
-    line-height: var(--kh-line-label);
-    color: var(--cds-text-secondary);
+    align-self: end;
+    color: var(--cds-text-helper);
+  }
+
+  .learn-more :global(.bx--link) {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
   }
 
   .paste-feedback {
@@ -836,7 +843,7 @@
     justify-content: center;
     gap: var(--kh-gap-label);
     padding: var(--cds-spacing-04);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
     border: 2px solid var(--cds-support-success);
     pointer-events: none;
     text-align: center;
@@ -902,10 +909,6 @@
     justify-content: flex-end;
   }
 
-  .is-modal-create-project .files-section {
-    min-height: 7.125rem;
-  }
-
   .files-section {
     display: flex;
     flex-direction: column;
@@ -936,13 +939,13 @@
   .file-complete-tile :global(.bx--tile) {
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-border-subtle);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
   }
 
   .file-incomplete-tile :global(.bx--tile) {
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-support-warning);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
   }
 
   .file-header {
@@ -1044,6 +1047,19 @@
     gap: var(--cds-spacing-05);
   }
 
+  /* The drop zone takes the paste area's height and first line. */
+  .import-grid :global(.bx--file__drop-container),
+  .import-grid :global(.bx--text-area) {
+    height: 6.5rem;
+  }
+
+  .import-grid :global(.bx--file__drop-container) {
+    align-items: flex-start;
+    padding: 0.6875rem var(--cds-spacing-05);
+    line-height: 1.25rem;
+    color: var(--cds-text-helper);
+  }
+
   @media (max-width: 672px) {
     .import-grid {
       grid-template-columns: 1fr;
@@ -1067,7 +1083,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--cds-spacing-04);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
     border: 1px solid var(--cds-border-subtle);
     border-radius: var(--cds-spacing-02);
   }

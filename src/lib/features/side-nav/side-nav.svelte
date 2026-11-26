@@ -8,7 +8,7 @@
   } from '$lib/features/commons/stores/ui-density.store.svelte';
   import {
     detectApplePlatform,
-    getSideNavShortcutLabels
+    getPrimaryShortcutLabel
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages';
   import {
@@ -22,6 +22,7 @@
     Column,
     ComposedModal,
     Grid,
+    Layer,
     ModalBody,
     ModalFooter,
     ModalHeader,
@@ -36,9 +37,9 @@
     CopyFile,
     DocumentAdd,
     Download,
-    Education,
     FolderOpen,
     Information,
+    Keyboard,
     Launch,
     Save,
     TrashCan
@@ -57,7 +58,11 @@
     /^v/i,
     ''
   );
-  let shortcutLabels = $state(getSideNavShortcutLabels(false));
+  let shortcutLabels = $state({
+    newProject: getPrimaryShortcutLabel('newProject', false),
+    openProject: getPrimaryShortcutLabel('openProject', false),
+    saveProject: getPrimaryShortcutLabel('saveProject', false)
+  });
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);
   let isInstalledAsApp = $state(false);
@@ -245,6 +250,11 @@
     );
   }
 
+  function openShortcutsSheet() {
+    globalState.isSideNavOpen = false;
+    globalState.isShortcutsSheetOpen = true;
+  }
+
   async function handleInstallApp() {
     sideNav.closeSideNav();
 
@@ -273,7 +283,12 @@
   }
 
   onMount(() => {
-    shortcutLabels = getSideNavShortcutLabels(detectApplePlatform());
+    const isApplePlatform = detectApplePlatform();
+    shortcutLabels = {
+      newProject: getPrimaryShortcutLabel('newProject', isApplePlatform),
+      openProject: getPrimaryShortcutLabel('openProject', isApplePlatform),
+      saveProject: getPrimaryShortcutLabel('saveProject', isApplePlatform)
+    };
 
     currentBrowser = detectBrowserFamily(window.navigator.userAgent);
     isInstalledAsApp = detectInstalledDisplayMode();
@@ -418,9 +433,6 @@
               on:click={openDuplicateModal}
             >
               {m.sidenav_duplicate_project()}
-              <span class="shortcut-icon"
-                >{shortcutLabels.duplicateProject}</span
-              >
             </Button>
 
             <Button
@@ -433,7 +445,6 @@
               on:click={openDeleteModal}
             >
               {m.sidenav_delete_project()}
-              <span class="shortcut-icon">{shortcutLabels.deleteProject}</span>
             </Button>
           </Column>
         </Row>
@@ -465,6 +476,18 @@
             </Button>
 
             <ClearCacheButton />
+
+            <Button
+              size="small"
+              kind="ghost"
+              icon={Keyboard}
+              class="menu-bar-item"
+              data-testid="sidenav-keyboard-shortcuts"
+              on:click={openShortcutsSheet}
+            >
+              {m.sidenav_keyboard_shortcuts()}
+              <span class="shortcut-icon">?</span>
+            </Button>
           </Column>
         </Row>
       </Grid>
@@ -487,8 +510,10 @@
               class="menu-bar-item"
               href={DOC_LINK.GETTING_STARTED}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_getting_started()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_getting_started()}
+            </Button>
             <Button
               size="small"
               kind="ghost"
@@ -496,12 +521,14 @@
               class="menu-bar-item"
               href={DOC_LINK.USER_GUIDE}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_user_guide()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_user_guide()}
+            </Button>
             <Button
               size="small"
               kind="ghost"
-              icon={Education}
+              icon={Launch}
               class="menu-bar-item"
               disabled
             >
@@ -515,8 +542,10 @@
               class="menu-bar-item"
               href={FEEDBACK_FORM_URL}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_feedback()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_feedback()}
+            </Button>
           </Column>
         </Row>
       </Grid>
@@ -539,8 +568,10 @@
               class="menu-bar-item"
               href={DOC_LINK.KHARTIS_HOME}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_presentation_page()}
+            </Button>
             <LegalNoticeModal />
             <DataPrivacyModal />
             <Button
@@ -550,8 +581,10 @@
               class="menu-bar-item"
               href="https://github.com/AtelierCartographie/khartis-v3/"
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_github()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_github()}
+            </Button>
             <Button
               size="small"
               kind="ghost"
@@ -559,8 +592,10 @@
               class="menu-bar-item"
               href={DOC_LINK.LEGACY_V2}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_khartis_v2()}</Button
+              rel="noopener noreferrer"
             >
+              {m.sidenav_khartis_v2()}
+            </Button>
           </Column>
         </Row>
       </Grid>
@@ -572,17 +607,18 @@
           <Column>
             <h6>{m.sidenav_display()}</h6>
             <div class="display-settings">
-              <Select
-                light
-                inline
-                size="sm"
-                labelText={m.sidenav_language_label()}
-                selected={sideNav.currentLocale}
-                on:change={sideNav.handleLanguageChange}
-              >
-                <SelectItem value="fr" text={m.sidenav_language_french()} />
-                <SelectItem value="en" text={m.sidenav_language_english()} />
-              </Select>
+              <Layer>
+                <Select
+                  inline
+                  size="sm"
+                  labelText={m.sidenav_language_label()}
+                  selected={sideNav.currentLocale}
+                  on:change={sideNav.handleLanguageChange}
+                >
+                  <SelectItem value="fr" text={m.sidenav_language_french()} />
+                  <SelectItem value="en" text={m.sidenav_language_english()} />
+                </Select>
+              </Layer>
 
               <Theme bind:theme={currentTheme} persist>
                 <div class="display-toggle">
@@ -633,6 +669,7 @@
 
 <div id="khartis-install-dialog">
   <ComposedModal
+    preventCloseOnClickOutside={false}
     open={isInstallDialogOpen}
     size="sm"
     containerClass="install-help-modal"
@@ -701,6 +738,19 @@
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
     padding-left: var(--safe-area-left);
+    /* Carbon hides the closed menu with a transform it does not animate. */
+    transition: transform 240ms cubic-bezier(0, 0, 0.38, 0.9);
+  }
+
+  #khartis-side-nav :global(.bx--side-nav--collapsed) {
+    transition: transform 180ms cubic-bezier(0.2, 0, 1, 0.9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #khartis-side-nav :global(.bx--side-nav),
+    #khartis-side-nav :global(.bx--side-nav--collapsed) {
+      transition: none;
+    }
   }
 
   #khartis-side-nav :global(.bx--side-nav__overlay) {
@@ -728,7 +778,7 @@
   }
 
   :global(html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost) {
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
     background-color: transparent !important;
     border-color: transparent !important;
   }
@@ -736,14 +786,14 @@
   :global(
     html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:hover
   ) {
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
     background-color: var(--khartis-control-surface-background) !important;
   }
 
   :global(
     html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:focus
   ) {
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
     border-color: var(--cds-focus) !important;
     box-shadow:
       inset 0 0 0 1px var(--cds-focus),
@@ -753,7 +803,7 @@
   :global(
     html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:active
   ) {
-    color: var(--cds-text-01) !important;
+    color: var(--cds-text-primary) !important;
     background-color: var(
       --khartis-control-surface-hover-background
     ) !important;
@@ -782,7 +832,7 @@
   h6 {
     padding: 0.25rem 0 0.5rem 1rem;
     font-size: 0.8rem;
-    color: var(--cds-text-03);
+    color: var(--cds-text-placeholder);
   }
 
   #khartis-side-nav :global(.slide-nav-separator) {
@@ -790,7 +840,7 @@
   }
 
   aside {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -798,20 +848,20 @@
     gap: 0.3rem;
     margin-bottom: var(--cds-spacing-03);
     padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-ui-03);
+    border-top: 1px solid var(--cds-border-subtle-00);
     font-size: 0.7rem;
     width: 100%;
   }
 
   .shortcut-icon {
     font-size: 0.65rem;
-    color: var(--cds-text-03);
+    color: var(--cds-text-placeholder);
     margin-left: auto;
   }
 
   .coming-soon {
     font-size: 0.65rem;
-    color: var(--cds-text-03);
+    color: var(--cds-text-placeholder);
     margin-left: auto;
   }
 
@@ -863,7 +913,7 @@
     margin: var(--cds-spacing-05) 0;
     padding: var(--cds-spacing-05) var(--cds-spacing-05) var(--cds-spacing-05)
       var(--cds-spacing-04);
-    color: var(--cds-text-primary, var(--cds-text-01));
+    color: var(--cds-text-primary, var(--cds-text-primary));
     background-color: var(--cds-notification-background-info);
     border-left: 3px solid var(--cds-support-info);
   }
@@ -911,7 +961,7 @@
 
   .install-help-note {
     margin-top: var(--cds-spacing-03);
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     line-height: 1.5;
   }
 </style>

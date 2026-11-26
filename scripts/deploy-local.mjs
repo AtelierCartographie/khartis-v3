@@ -28,7 +28,7 @@ const PUBLIC_URL_VALIDATION_ATTEMPTS = 5;
 const PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
 const SFTP_READY_TIMEOUT_MS = 20_000;
 const SFTP_KEEPALIVE_INTERVAL_MS = 10_000;
-const SFTP_KEEPALIVE_COUNT_MAX = 3;
+const SFTP_KEEPALIVE_COUNT_MAX = 9;
 const REMOTE_SIBLING_KIND_UPLOAD = 'upload';
 const REMOTE_SIBLING_KIND_OLD = 'old';
 const REMOTE_DEPLOYMENT_LOCK_SUFFIX = 'deploy-lock';
@@ -43,9 +43,16 @@ const RELEASE_FILE_MANIFEST_FILENAME = '.khartis-release-files.json';
 const RELEASE_FILE_MANIFEST_VERSION = 1;
 // ssh2-sftp-client attaches listeners per pending call: stay under Node's limit of 10.
 const REMOTE_OPERATION_CONCURRENCY = 8;
-const ASSET_PROPAGATION_RETRY_DELAYS_MS = [
-  5_000, 10_000, 15_000, 30_000, 30_000, 60_000
+// The new immutable assets must reach every backend before the swap. The wait
+// grows from 5 s to one minute between checks until its budget is spent.
+const ASSET_PROPAGATION_RETRY_STEPS_MS = [
+  5_000, 10_000, 15_000, 30_000, 60_000
 ];
+const ASSET_PROPAGATION_DEFAULT_BUDGET_MS = 10 * 60_000;
+const ASSET_PROPAGATION_MAX_BUDGET_MS = 60 * 60_000;
+const ASSET_PROPAGATION_DEFAULT_DELAYS_MS = buildAssetPropagationDelays(
+  ASSET_PROPAGATION_DEFAULT_BUDGET_MS
+);
 const ASSET_PROPAGATION_SAMPLE_SIZE = 4;
 const LEGACY_ASSET_SCAN_MAX_FILES = 2_000;
 const LEGACY_ASSET_SCAN_MAX_BYTES = 512 * 1024 * 1024;
@@ -103,6 +110,7 @@ const usage = `Usage:
   pnpm deploy:prod -- --migrate-legacy-assets
   pnpm deploy:pprd -- --recover-stale-lock
   pnpm deploy:prod -- --recover-stale-lock
+  pnpm deploy:pprd -- --asset-wait 20m
 
 Required local environment (shared):
   KHARTIS_SFTP_HOST
@@ -144,6 +152,9 @@ Local env files:
   Use --migrate-legacy-assets only for the first deployment from a release
   without a valid .khartis-release-assets.json manifest.
   Use --recover-stale-lock only after confirming no other deployment is active.
+  Use --asset-wait to change how long every routing backend may take to serve
+  the new immutable assets before the swap (default 10m, at most 60m). The
+  deployment never swaps before they are served.
   Use --tag to deploy a specific release. prod asks you to type the tag to confirm.
   Do not commit real SFTP values. Keep secrets in ignored local env files or your shell.`;
 
@@ -270,6 +281,9 @@ async function main() {
       releaseAssetPaths,
       {
         allowLegacyAssetScan: options.migrateLegacyAssets,
+        assetPropagationDelaysMs: buildAssetPropagationDelays(
+          options.assetWaitMs
+        ),
         backendRouting,
         expectedVersion: tag,
         recoverStaleLock: options.recoverStaleLock,
@@ -305,7 +319,8 @@ function parseArgs(args) {
     yes: false,
     dryRun: false,
     migrateLegacyAssets: false,
-    recoverStaleLock: false
+    recoverStaleLock: false,
+    assetWaitMs: ASSET_PROPAGATION_DEFAULT_BUDGET_MS
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -331,6 +346,15 @@ function parseArgs(args) {
     }
     if (arg === '--recover-stale-lock') {
       options.recoverStaleLock = true;
+      continue;
+    }
+    if (arg === '--asset-wait' || arg.startsWith('--asset-wait=')) {
+      const inline = arg !== '--asset-wait';
+      const value = inline
+        ? arg.slice('--asset-wait='.length)
+        : args[index + 1];
+      options.assetWaitMs = parseAssetWait(value);
+      if (!inline) index += 1;
       continue;
     }
     if (arg === '--tag') {
@@ -1007,6 +1031,51 @@ function promptVisible(question) {
   });
 }
 
+// ssh2-sftp-client throws a lost connection from a timer when the running
+// operation passed it no reject callback, as uploadDir and rcopy do. Left
+// uncaught, the exception would end the process before the deployment lock,
+// the temporary upload and the build copy are cleaned up.
+function trapUncaughtErrors(target = process) {
+  let rejectFailure;
+  const failure = new Promise((_, reject) => {
+    rejectFailure = reject;
+  });
+  failure.catch(() => undefined);
+  const trap = {
+    error: null,
+    race: (promise) => Promise.race([promise, failure]),
+    dispose: () => target.off('uncaughtException', onUncaughtError)
+  };
+
+  function onUncaughtError(error) {
+    trap.error ??= error;
+    rejectFailure(error);
+  }
+
+  target.on('uncaughtException', onUncaughtError);
+  return trap;
+}
+
+async function withSftpCleanupClient(
+  config,
+  client,
+  connectionLost,
+  cleanup,
+  createClient = () => new SftpClient('khartis-local-deploy-cleanup')
+) {
+  if (!connectionLost) {
+    return cleanup(client);
+  }
+
+  const cleanupClient = createClient();
+  try {
+    await cleanupClient.connect(config);
+    return await cleanup(cleanupClient);
+  } finally {
+    await closeSftpClient(cleanupClient, 'cleanup').catch(() => undefined);
+  }
+}
+
 async function uploadBuild(
   config,
   buildDir,
@@ -1016,6 +1085,7 @@ async function uploadBuild(
   releaseAssetPaths,
   {
     allowLegacyAssetScan,
+    assetPropagationDelaysMs,
     backendRouting,
     expectedVersion,
     recoverStaleLock,
@@ -1042,13 +1112,14 @@ async function uploadBuild(
   );
 
   const client = new SftpClient('khartis-local-deploy');
+  const uncaughtErrors = trapUncaughtErrors();
   let swapped = false;
   let preserveTempDir = false;
   let tempRemoteDirCreated = false;
   let deploymentLockAcquired = false;
   let uploadProgress = null;
 
-  try {
+  const runRemoteDeployment = async () => {
     const connectSpinner = startSpinner('Connecting to SFTP');
     await client.connect(config);
     connectSpinner.done('Connected to SFTP');
@@ -1131,6 +1202,7 @@ async function uploadBuild(
       throwIfTerminationRequested('before publishing the new assets');
       await publishNewAssetsBeforeSwap(client, {
         backendRouting,
+        delaysMs: assetPropagationDelaysMs,
         deployment,
         liveDir: safeRemoteDir,
         releaseAssetPaths,
@@ -1138,6 +1210,9 @@ async function uploadBuild(
       });
     }
     throwIfTerminationRequested('before the public swap');
+    if (uncaughtErrors.error) {
+      throw uncaughtErrors.error;
+    }
 
     const previousRemoteDir = remoteType
       ? createRemoteSiblingDir(
@@ -1155,6 +1230,9 @@ async function uploadBuild(
         );
         if (previousRemoteDir) {
           await client.rename(safeRemoteDir, previousRemoteDir);
+          // A connection lost before the second rename leaves the public
+          // directory renamed away: the new upload is then kept.
+          preserveTempDir = true;
         }
         try {
           await client.rename(tempRemoteDir, safeRemoteDir);
@@ -1163,6 +1241,7 @@ async function uploadBuild(
           if (previousRemoteDir) {
             try {
               await client.rename(previousRemoteDir, safeRemoteDir);
+              preserveTempDir = false;
               warn('Swap failed; the previous remote version was restored.');
             } catch {
               preserveTempDir = true;
@@ -1195,26 +1274,64 @@ async function uploadBuild(
         }
       }
     );
+  };
+
+  try {
+    const remoteDeployment = runRemoteDeployment();
+    remoteDeployment.catch(() => undefined);
+    await uncaughtErrors.race(remoteDeployment);
   } finally {
+    uncaughtErrors.dispose();
     uploadProgress?.finish();
-    if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
-      await removeRemoteDirRecursive(
-        client,
-        tempRemoteDir,
-        'Removing incomplete temporary remote upload'
-      ).catch(() => undefined);
-    }
-    if (deploymentLockAcquired) {
-      await releaseRemoteDeploymentLock(client, deploymentLockDir).catch(
-        (error) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          warn(
-            `Could not release deployment lock ${deploymentLockDir}: ${message}. Remove it manually after confirming no deployment is active.`
-          );
-        }
+    const connectionLost = uncaughtErrors.error !== null;
+    if (connectionLost) {
+      const reason =
+        uncaughtErrors.error instanceof Error
+          ? uncaughtErrors.error.message
+          : String(uncaughtErrors.error);
+      warn(
+        `SFTP connection lost (${reason}); cleaning up through a new connection.`
       );
+      if (preserveTempDir && !swapped) {
+        warn(
+          `The connection was lost during the swap: the new upload ${tempRemoteDir} is kept, and the next deployment restores the public directory from its backup. Check the public route now.`
+        );
+      }
     }
+    await withSftpCleanupClient(
+      config,
+      client,
+      connectionLost,
+      async (cleanupClient) => {
+        if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
+          await removeRemoteDirRecursive(
+            cleanupClient,
+            tempRemoteDir,
+            'Removing incomplete temporary remote upload'
+          ).catch(() => undefined);
+        }
+        if (deploymentLockAcquired) {
+          await releaseRemoteDeploymentLock(
+            cleanupClient,
+            deploymentLockDir
+          ).catch((error) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            warn(
+              `Could not release deployment lock ${deploymentLockDir}: ${message}. Remove it manually after confirming no deployment is active.`
+            );
+          });
+        }
+      }
+    ).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const lockHint = deploymentLockAcquired
+        ? ` Remove ${deploymentLockDir} after confirming no deployment is active, or rerun with --recover-stale-lock.`
+        : '';
+      warn(
+        `Could not reconnect to clean up after the lost connection: ${message}.${lockHint}`
+      );
+    });
     await closeSftpClient(client, 'deployment').catch(() => undefined);
     terminationCoordinator.endRemoteDeployment();
   }
@@ -1666,7 +1783,7 @@ async function publishNewAssetsBeforeSwap(
   {
     backendRouting,
     deployment,
-    delaysMs = ASSET_PROPAGATION_RETRY_DELAYS_MS,
+    delaysMs = ASSET_PROPAGATION_DEFAULT_DELAYS_MS,
     fetchImpl,
     liveDir,
     releaseAssetPaths,
@@ -1745,23 +1862,62 @@ function selectPropagationSample(assetPaths) {
   );
 }
 
+function buildAssetPropagationDelays(budgetMs) {
+  const delays = [];
+  let total = 0;
+  while (total < budgetMs) {
+    const step =
+      ASSET_PROPAGATION_RETRY_STEPS_MS[
+        Math.min(delays.length, ASSET_PROPAGATION_RETRY_STEPS_MS.length - 1)
+      ];
+    const delayMs = Math.min(step, budgetMs - total);
+    delays.push(delayMs);
+    total += delayMs;
+  }
+  return delays;
+}
+
+function parseAssetWait(value) {
+  const match = /^(\d+)(s|m)$/.exec(String(value ?? '').trim());
+  if (!match) {
+    throw new Error(
+      `--asset-wait expects a duration in seconds or minutes, such as 90s or 20m (got "${value ?? ''}").`
+    );
+  }
+  const budgetMs = Number(match[1]) * (match[2] === 'm' ? 60_000 : 1_000);
+  if (budgetMs > ASSET_PROPAGATION_MAX_BUDGET_MS) {
+    throw new Error(
+      `--asset-wait cannot exceed ${formatDuration(ASSET_PROPAGATION_MAX_BUDGET_MS)}.`
+    );
+  }
+  return budgetMs;
+}
+
 async function waitForPublicAssets(
   deployment,
   assetPaths,
-  { backendRouting, delaysMs = ASSET_PROPAGATION_RETRY_DELAYS_MS, fetchImpl }
+  { backendRouting, delaysMs = ASSET_PROPAGATION_DEFAULT_DELAYS_MS, fetchImpl }
 ) {
   const routes = buildBackendValidationRoutes(backendRouting);
-  // A query string the web tier ignores keeps any cache from answering for it.
-  const checkQuery = `khartis-deploy-check=${randomUUID()}`;
+  const budgetMs = delaysMs.reduce((sum, delayMs) => sum + delayMs, 0);
+  const checks = delaysMs.length + 1;
+  const startedAt = Date.now();
+  log(
+    `Waiting up to ${formatDuration(budgetMs)} for ${routes.length === 1 ? 'the public route' : `${routes.length} backends`} to serve ${assetPaths.length} new assets.`
+  );
 
   for (let attempt = 0; ; attempt += 1) {
+    // A new query string at each check, which the web tier ignores, keeps any
+    // cache from answering with the 404 of an earlier check.
+    const checkQuery = `khartis-deploy-check=${randomUUID()}`;
     const missing = [];
+    const backendReports = [];
     for (const route of routes) {
+      const backendLabel = route ? `backend ${route.index}/${route.total}` : '';
+      const failures = [];
       for (const assetPath of assetPaths) {
         const url = `${resolvePublicAssetUrl(deployment, assetPath)}?${checkQuery}`;
-        const backendLabel = route
-          ? `, backend ${route.index}/${route.total}`
-          : '';
+        let failure = null;
         try {
           const response = await fetchPublicUrl(
             url,
@@ -1771,35 +1927,41 @@ async function waitForPublicAssets(
             )
           );
           try {
-            if (response.status !== 200) {
-              missing.push(`${assetPath} (${response.status}${backendLabel})`);
-            }
+            if (response.status !== 200) failure = String(response.status);
           } finally {
             await cancelPublicResponse(response);
           }
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          missing.push(`${assetPath} (${message}${backendLabel})`);
+          failure = error instanceof Error ? error.message : String(error);
+        }
+        if (failure !== null) {
+          failures.push(failure);
+          missing.push(
+            `${assetPath} (${failure}${backendLabel ? `, ${backendLabel}` : ''})`
+          );
         }
       }
+      backendReports.push(
+        `${backendLabel || 'public route'} ${assetPaths.length - failures.length}/${assetPaths.length}${failures.length ? ` (${[...new Set(failures)].join(', ')})` : ''}`
+      );
     }
 
+    const elapsed = formatDuration(Date.now() - startedAt);
+    const report = `Asset check ${attempt + 1}/${checks} at ${elapsed}: ${backendReports.join('; ')}`;
     if (missing.length === 0) {
-      log(
-        `New assets served by ${routes.length === 1 ? 'the public route' : `all ${routes.length} backends`}.`
-      );
+      log(`${report}. New assets served.`);
       return;
     }
     if (attempt >= delaysMs.length) {
+      warn(report);
       throw new Error(
-        `New immutable assets are still not served after ${formatDuration(delaysMs.reduce((sum, delayMs) => sum + delayMs, 0))}: ${missing.join(', ')}. The live release was not swapped.`
+        `New immutable assets are still not served after ${formatDuration(budgetMs)}: ${missing.join(', ')}. The live release was not swapped. Re-run with --asset-wait <duration> to wait longer.`
       );
     }
-    warn(
-      `${missing.length} new asset checks failed (${missing[0]}); retrying in ${formatDuration(delaysMs[attempt])} while the web tier syncs.`
-    );
+    warn(`${report}; retrying in ${formatDuration(delaysMs[attempt])}.`);
     await new Promise((resolve) => setTimeout(resolve, delaysMs[attempt]));
+    // The live release is untouched while waiting, so a deferred Ctrl-C stops here.
+    throwIfTerminationRequested('while waiting for the new assets');
   }
 }
 
@@ -3447,6 +3609,7 @@ export {
   assertHtmlBaseHref,
   assertReleaseCommitBelongsToBranch,
   assertTagCommitMatchesRemote,
+  buildAssetPropagationDelays,
   buildBackendValidationRoutes,
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
@@ -3454,6 +3617,7 @@ export {
   findUnchangedLiveFiles,
   findUnchangedReleaseFiles,
   findUnchangedStaticFiles,
+  parseAssetWait,
   parseGitStaticTree,
   parseReleaseFileManifest,
   parseRemoteBranchHead,
@@ -3471,11 +3635,13 @@ export {
   sanitizedChildEnv,
   startProgress,
   startSpinner,
+  trapUncaughtErrors,
   truncateToWidth,
   verifyPublicInfrastructure,
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
+  withSftpCleanupClient,
   writeReleaseAssetManifest,
   writeReleaseFileManifest
 };

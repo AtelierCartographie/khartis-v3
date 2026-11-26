@@ -185,13 +185,16 @@ export function draw_symbols_legend(
       measureLegendLongestToken(subtitle, subtitle_font),
       measureLegendLongestToken(note, note_font)
     );
-  const width = Math.max(
+  const content_width = Math.max(
     main_body_width,
     nodata_body_width,
     sign_legend_body_width,
     text_body_width
   );
-  const label_anchor_x = width - margin;
+  const width = Math.max(options.minWidth ?? 0, content_width);
+  // A widened block only gives the text room: the value labels and their
+  // links keep the place they have at the natural width.
+  const label_anchor_x = content_width - margin;
   const max_text_width = width - margin * 2;
   const header = renderLegendHeader({
     title,

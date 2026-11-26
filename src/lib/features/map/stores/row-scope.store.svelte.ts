@@ -126,6 +126,17 @@ function createRowScopeStore() {
     );
   }
 
+  /** Whether the primitive has missing data, or null before it is known. */
+  function missingDataState(
+    visualizationId: string,
+    primitive: PrimitiveFilter
+  ): boolean | null {
+    return (
+      missingData.get(buildScopeKey(visualizationId, primitive))
+        ?.hasMissingData ?? null
+    );
+  }
+
   function collectMissingDataQueries(
     targets: RowScopeTarget[]
   ): PendingMissingDataQuery[] {
@@ -317,6 +328,7 @@ function createRowScopeStore() {
     getScopedRowIds,
     getScopedDomain,
     hasMissingData,
+    missingDataState,
     sync,
     clear
   };

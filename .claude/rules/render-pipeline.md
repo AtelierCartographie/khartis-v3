@@ -41,8 +41,13 @@ Labels are a primitive (see `cartography.md`), and the glyph atlas is the main t
 
 - A visualization is a layer group: one sub-layer per active primitive plus shared basemap sub-layers. Respect the render order (basemap back, thematic, basemap front) and the show, hide and move contract.
 - Deck.gl props are immutable. Produce new layer instances (`.clone({...})`) instead of mutating props by reference.
+- Deck.gl 9.4 deprecates the `COORDINATE_SYSTEM` constants and `highPrecisionDash`: write the string coordinate system (`'cartesian'`) and `dashMode: 'path'`. Label picking stays on the deprecated synchronous `pickObject`, the only picking call `MapboxOverlay` forwards.
 - The hover tooltip follows the cursor within the map viewer, and the pinned inspector and the touch sheet keep a fixed position; the visualization's variables come first. The hover outline is appended by `setLayers` on top of the applied stack, never rebuilt into the thematic layers. Keep them on this shared path.
 - Neutral map, basemap and blank-visualization defaults use `NEUTRAL_CARTOGRAPHY_COLORS` or `NEUTRAL_CARTOGRAPHY_RGBA_COLORS` (`commons/constants/colors.constants.ts`), not grayscale literals.
+
+## The automatic map frame follows the drawn map
+
+An automatic fit closes the map frame on the extent the layers draw (`measureDrawnMapExtent` in `thematic-map.svelte`), and the frame size refits the projection. The measure is skipped while a worker parse is pending (its layer is an empty placeholder) and when the reference changed after the layers were built: either one frames the map on a stale extent, the refit redraws, and the frame and the zoom oscillate without end.
 
 ## Simplification and export
 

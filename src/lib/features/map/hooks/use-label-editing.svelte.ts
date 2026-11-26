@@ -1,15 +1,25 @@
 import type { PickingInfo } from '@deck.gl/core';
 
+import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import {
   attachLabelDragController,
-  type LabelEditRequest
+  pickLabelInContainer,
+  type LabelEditRequest,
+  type LabelHoverBox
 } from '../interactions/label-drag.controller';
 
 interface UseLabelEditingOptions {
   getContainer: () => HTMLElement | null | undefined;
   /** Labels can be moved and edited only while this holds. */
   isEnabled: () => boolean;
+  /**
+   * Synchronous on purpose: MapboxOverlay forwards only Deck.pickObject, which
+   * deck.gl 9.4 deprecates in favor of pickObjectAsync.
+   */
   pick: (x: number, y: number, radius: number) => PickingInfo | null;
+  /** While editing is off, a double-click on a label calls onLockedLabel. */
+  isHintEnabled?: () => boolean;
+  onLockedLabel?: () => void;
 }
 
 /**
@@ -19,9 +29,11 @@ interface UseLabelEditingOptions {
 export function useLabelEditing({
   getContainer,
   isEnabled,
-  pick
+  pick,
+  isHintEnabled,
+  onLockedLabel
 }: UseLabelEditingOptions) {
-  let isOverLabel = $state(false);
+  let hoverBox = $state.raw<LabelHoverBox | null>(null);
   let editRequest = $state.raw<LabelEditRequest | null>(null);
 
   $effect(() => {
@@ -33,8 +45,8 @@ export function useLabelEditing({
     const detach = attachLabelDragController({
       container,
       pick,
-      onHoverChange: (value) => {
-        isOverLabel = value;
+      onHoverChange: (box) => {
+        hoverBox = box;
       },
       onEditLabel: (request) => {
         editRequest = request;
@@ -43,14 +55,32 @@ export function useLabelEditing({
 
     return () => {
       detach();
-      isOverLabel = false;
+      hoverBox = null;
       editRequest = null;
     };
   });
 
+  $effect(() => {
+    const container = getContainer();
+    if (!container || !onLockedLabel || isEnabled() || !isHintEnabled?.()) {
+      return;
+    }
+
+    const handleDoubleClick = (event: MouseEvent) => {
+      if (pickLabelInContainer(container, pick, event)) onLockedLabel();
+    };
+    container.addEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
+    return () =>
+      container.removeEventListener(EVENT.DBLCLICK, handleDoubleClick, true);
+  });
+
   return {
     get isOverLabel(): boolean {
-      return isOverLabel;
+      return hoverBox !== null;
+    },
+    /** The hovered label block, in pixels of the map container. */
+    get hoverBox(): LabelHoverBox | null {
+      return hoverBox;
     },
     get editRequest(): LabelEditRequest | null {
       return editRequest;

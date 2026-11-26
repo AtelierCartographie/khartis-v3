@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
+  import { getShortcut } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     Compass,
@@ -29,7 +31,10 @@
   );
 
   const legendState = $derived(getLegendState());
-  const showLegendBadge = $derived(!legendState.hasBeenOpened);
+  // No visualization, no legend to discover: the badge waits for one.
+  const showLegendBadge = $derived(
+    !legendState.hasBeenOpened && visualizationStore.visualizations.length > 0
+  );
 
   function handleLegendClick() {
     legendActions.markAsOpened();
@@ -57,6 +62,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_format()}
+        shortcut={getShortcut('toolFormat')}
         icon={Crop}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.Format}
@@ -72,6 +78,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_legend()}
+          shortcut={getShortcut('toolLegend')}
           icon={Legend}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Legend}
@@ -79,10 +86,9 @@
           aria-describedby={showLegendBadge ? 'legend-tool-badge' : undefined}
         />
         {#if showLegendBadge}
-          <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-            ></span
-          >
+          <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}>
+            <span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span>
+          </span>
         {/if}
       </div>
     </Column>
@@ -94,6 +100,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_geo_indications()}
+        shortcut={getShortcut('toolGeoIndications')}
         icon={Compass}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.GeoIndications}
@@ -108,6 +115,7 @@
         tooltipPosition="right"
         kind="ghost"
         iconDescription={m.tool_annotations()}
+        shortcut={getShortcut('toolAnnotations')}
         icon={WatsonHealthTextAnnotationToggle}
         size="small"
         isSelected={globalState.selectedTool === StylingTools.Annotations}
@@ -123,9 +131,11 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_color_blindness()}
+          shortcut={getShortcut('toolColorBlindness')}
           icon={SettingsView}
           size="small"
-          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
+          isSelected={globalState.selectedTool ===
+            StylingTools.ColorBlindness || showColorBlindnessBadge}
           onclick={() => selectTool(StylingTools.ColorBlindness)}
           aria-describedby={showColorBlindnessBadge
             ? 'color-blindness-tool-badge'
@@ -135,10 +145,11 @@
           <span
             id="color-blindness-tool-badge"
             class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden"
-              >{m.a11y_tool_badge_active()}</span
-            ></span
           >
+            <span class="bx--visually-hidden">
+              {m.a11y_tool_badge_active()}
+            </span>
+          </span>
         {/if}
       </div>
     </Column>

@@ -1,9 +1,9 @@
 .bg-white {
-  background-color: var(--cds-ui-background);
+  background-color: var(--cds-background);
 }
 
 .bg-black {
-  background-color: var(--cds-interactive-01);
+  background-color: var(--cds-background-brand);
 }
 
 .bg-blue {
@@ -34,7 +34,7 @@
 }
 
 .bg-interactive-01 {
-  background-color: var(--cds-interactive-01);
+  background-color: var(--cds-background-brand);
 }
 
 .bg-layer-01-suggestions {
@@ -44,13 +44,13 @@
 .border {
   border-style: solid;
   border-width: 1px;
-  border-color: var(--cds-interactive-01);
+  border-color: var(--cds-background-brand);
 }
 
 .border-2 {
   border-style: solid;
   border-width: 2px;
-  border-color: var(--cds-interactive-01);
+  border-color: var(--cds-background-brand);
 }
 
 .border-blue {
@@ -86,7 +86,7 @@
 }
 
 .border-interactive-01 {
-  border-color: var(--cds-interactive-01);
+  border-color: var(--cds-background-brand);
 }
 
 .border-transparent {
@@ -134,13 +134,13 @@
 }
 
 .color-text-01 {
-  color: var(--cds-text-01);
-  fill: var(--cds-text-01);
+  color: var(--cds-text-primary);
+  fill: var(--cds-text-primary);
 }
 
 .color-interactive-01 {
-  color: var(--cds-interactive-01);
-  fill: var(--cds-interactive-01);
+  color: var(--cds-background-brand);
+  fill: var(--cds-background-brand);
 }
 
 .opacity-0 {

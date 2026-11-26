@@ -203,11 +203,11 @@
   }
 
   .data-tools-bar :global(.bx--btn.active) {
-    background-color: var(--cds-selected-ui);
+    background-color: var(--cds-layer-selected-01);
   }
 
   .data-tools-bar :global(.bx--btn.active svg) {
-    fill: var(--cds-interactive-01);
+    fill: var(--cds-background-brand);
   }
 
   .filter-button-wrapper {
@@ -223,15 +223,15 @@
     height: 8px;
     border-radius: 50%;
     background-color: var(--cds-support-error, #da1e28);
-    border: 1.5px solid var(--cds-layer-01, #f4f4f4);
+    border: 1.5px solid var(--khartis-control-surface-background, #f4f4f4);
     box-sizing: border-box;
   }
 
   .selection-count {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     padding: 0 var(--cds-spacing-03);
-    background-color: var(--cds-ui-03);
+    background-color: var(--cds-layer-accent-01);
     border-radius: 12px;
     line-height: 24px;
     white-space: nowrap;

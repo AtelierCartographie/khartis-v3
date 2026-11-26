@@ -1,7 +1,10 @@
 <script lang="ts">
   import { type AnalysisResult, RefineOperation } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
+  import {
+    VARIABLE_BADGE_STYLES,
+    type VariableBadgeType
+  } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
   import {
     formatValue,
@@ -13,6 +16,7 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import DataTable from 'carbon-icons-svelte/lib/DataTable.svelte';
+  import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import { isYearColumn } from '$lib/features/commons/utils/semio-detector.utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -69,6 +73,9 @@
     { value: 'number', label: m.column_type_number() },
     { value: 'date', label: m.column_type_date() }
   ]);
+
+  // The refine operations rewrite text: they mean nothing on numbers or dates.
+  const canRefine = $derived(isTextLikeColumnType(column.type));
 
   const refineOptions: { value: RefineOperation; label: string }[] = $derived([
     {
@@ -220,6 +227,25 @@
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
+
+  // The header tooltip names the column in full and sums its type up.
+  const valueType = $derived.by((): VariableBadgeType => {
+    const typeSimple = analysis?.type_simple;
+    if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'date') return 'date';
+    if (typeSimple === 'boolean') return 'boolean';
+    return 'string';
+  });
+  const valueTypeLabel = $derived(
+    valueType === 'numeric'
+      ? m.column_type_number()
+      : valueType === 'date'
+        ? m.column_type_date()
+        : valueType === 'boolean'
+          ? m.column_type_boolean()
+          : m.column_type_text()
+  );
+  const valueTypeStyle = $derived(VARIABLE_BADGE_STYLES[valueType]);
 
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
@@ -623,7 +649,17 @@
             role="tooltip"
           >
             <div class="simple-tooltip-arrow"></div>
-            {typeTooltipMessage}
+            <span class="tooltip-column-name">
+              {displayName ?? column.name}
+            </span>
+            <span
+              class="tooltip-column-type"
+              style:color={valueTypeStyle.color}
+              style:background-color={valueTypeStyle.bgColor}
+              style:border-color={valueTypeStyle.borderColor}
+            >
+              {valueTypeLabel}
+            </span>
           </div>
         </Portal>
       {/if}
@@ -742,31 +778,33 @@
                   </button>
                 {/if}
 
-                <button
-                  type="button"
-                  class="menu-item submenu-trigger"
-                  role="menuitem"
-                  aria-haspopup="menu"
-                  aria-expanded={activeSubmenu === 'refine'}
-                  bind:this={refineSubmenuTriggerRef}
-                  onclick={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef, {
-                      focusFirst: true
-                    })}
-                  onkeydown={(event: KeyboardEvent) =>
-                    handleSubmenuTriggerKeydown(
-                      event,
-                      'refine',
-                      refineSubmenuTriggerRef
-                    )}
-                  onmouseenter={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                  onfocus={() =>
-                    void openSubmenu('refine', refineSubmenuTriggerRef)}
-                >
-                  {m.column_refine_label()}
-                  <span class="submenu-arrow">&#9654;</span>
-                </button>
+                {#if canRefine}
+                  <button
+                    type="button"
+                    class="menu-item submenu-trigger"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={activeSubmenu === 'refine'}
+                    bind:this={refineSubmenuTriggerRef}
+                    onclick={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef, {
+                        focusFirst: true
+                      })}
+                    onkeydown={(event: KeyboardEvent) =>
+                      handleSubmenuTriggerKeydown(
+                        event,
+                        'refine',
+                        refineSubmenuTriggerRef
+                      )}
+                    onmouseenter={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                    onfocus={() =>
+                      void openSubmenu('refine', refineSubmenuTriggerRef)}
+                  >
+                    {m.column_refine_label()}
+                    <span class="submenu-arrow">&#9654;</span>
+                  </button>
+                {/if}
 
                 <div class="menu-divider"></div>
 
@@ -839,7 +877,7 @@
               </div>
             </Portal>
           {/if}
-          {#if activeSubmenu === 'refine'}
+          {#if activeSubmenu === 'refine' && canRefine}
             <Portal>
               <div
                 class="dropdown-menu submenu-portal"
@@ -902,27 +940,27 @@
               <div class="hist-warnings">
                 {#if histogramData.nulls > 0}
                   <div class="hist-warning-line">
-                    <span class="hist-warning-icon"
-                      ><WarningAlt size={16} /></span
-                    >
-                    <span
-                      >{(isSingularCount(histogramData.nulls)
+                    <span class="hist-warning-icon">
+                      <WarningAlt size={16} />
+                    </span>
+                    <span>
+                      {(isSingularCount(histogramData.nulls)
                         ? m.column_warning_nulls_one
                         : m.column_warning_nulls)({
                         count: formatValue(histogramData.nulls)
-                      })}</span
-                    >
+                      })}
+                    </span>
                   </div>
                 {/if}
                 {#if histogramData.duplicates > 0}
                   <div class="hist-warning-line hist-warning-line-plain">
-                    <span
-                      >{(isSingularCount(histogramData.duplicates)
+                    <span>
+                      {(isSingularCount(histogramData.duplicates)
                         ? m.column_warning_duplicates_one
                         : m.column_warning_duplicates)({
                         count: formatValue(histogramData.duplicates)
-                      })}</span
-                    >
+                      })}
+                    </span>
                   </div>
                 {/if}
               </div>
@@ -940,8 +978,9 @@
             <div class="hist-warnings">
               {#each columnWarnings as warning, index (warning.message + index)}
                 <div class="hist-warning-line">
-                  <span class="hist-warning-icon"><WarningAlt size={16} /></span
-                  >
+                  <span class="hist-warning-icon">
+                    <WarningAlt size={16} />
+                  </span>
                   <span>{warning.message}</span>
                 </div>
               {/each}
@@ -1084,11 +1123,14 @@
     gap: 0;
   }
 
+  /* As tall as the column menu, so a column without one (the joined entity)
+     keeps its badge on the same line as the others. */
   .col-title-row {
     display: flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
+    min-height: var(--kh-size-xs);
   }
 
   .col-title-row :global(.variable-badge) {
@@ -1120,14 +1162,14 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     cursor: pointer;
     border-radius: 2px;
   }
 
   .menu-trigger:hover {
-    background-color: var(--cds-hover-ui);
-    color: var(--cds-text-01, #161616);
+    background-color: var(--cds-layer-hover-01);
+    color: var(--cds-text-primary, #161616);
   }
 
   .menu-trigger:focus-visible,
@@ -1140,8 +1182,8 @@
     position: fixed;
     transform: translateX(-100%);
     min-width: 180px;
-    background-color: var(--cds-ui-01, #f4f4f4);
-    border: 1px solid var(--cds-ui-03, #e0e0e0);
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     z-index: var(--z-notification);
     max-height: 400px;
@@ -1154,18 +1196,18 @@
     padding: 8px 16px;
     border: none;
     background: transparent;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
     font-size: 14px;
     text-align: left;
     cursor: pointer;
   }
 
   :global(.dropdown-menu .menu-item:hover) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   :global(.dropdown-menu .menu-item:focus-visible) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   :global(.dropdown-menu .menu-item-indent) {
@@ -1173,17 +1215,17 @@
   }
 
   :global(.dropdown-menu .menu-item-danger) {
-    color: var(--cds-support-01);
+    color: var(--cds-support-error);
   }
 
   :global(.dropdown-menu .menu-item-danger:hover) {
-    background-color: var(--cds-support-01);
-    color: var(--cds-text-04, #fff);
+    background-color: var(--cds-support-error);
+    color: var(--cds-text-on-color, #fff);
   }
 
   :global(.dropdown-menu .menu-divider) {
     height: 1px;
-    background-color: var(--cds-ui-03, #e0e0e0);
+    background-color: var(--cds-layer-accent-01, #e0e0e0);
     margin: 4px 0;
   }
 
@@ -1191,7 +1233,7 @@
     display: block;
     padding: 8px 16px 4px;
     font-size: 12px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     font-weight: 600;
   }
 
@@ -1209,7 +1251,7 @@
   :global(.dropdown-menu .submenu-arrow) {
     margin-left: auto;
     font-size: 10px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
   }
 
   :global(.submenu-portal) {
@@ -1231,7 +1273,7 @@
     background: none;
     padding: 4px;
     margin: 0;
-    color: var(--cds-text-03, #8d8d8d);
+    color: var(--cds-text-placeholder, #8d8d8d);
     cursor: pointer;
     line-height: 0;
     opacity: 0.35;
@@ -1245,12 +1287,12 @@
 
   .sort-btn:hover {
     opacity: 0.8;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   .sort-btn.active {
     color: var(--cds-text-inverse, #ffffff);
-    background-color: var(--cds-interactive-01, #0f62fe);
+    background-color: var(--cds-background-brand, #0f62fe);
     border-radius: 999px;
     box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.85);
     opacity: 1;
@@ -1258,7 +1300,7 @@
 
   .sort-btn.active:hover {
     color: var(--cds-text-inverse, #ffffff);
-    background-color: var(--cds-hover-primary, #0353e9);
+    background-color: var(--cds-button-primary-hover, #0353e9);
   }
 
   .summary-plot-wrapper {
@@ -1357,7 +1399,7 @@
   .hist-footer {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 11px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     line-height: 14px;
     letter-spacing: 0.32px;
     flex-shrink: 0;
@@ -1421,7 +1463,7 @@
     font-variant-numeric: tabular-nums;
     line-height: 14px;
     letter-spacing: 0.32px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1484,14 +1526,14 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     line-height: 16px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
   }
 
   .origin-badge {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--cds-icon-02, #525252);
+    color: var(--cds-icon-secondary, #525252);
     cursor: pointer;
     flex-shrink: 0;
     background: none;
@@ -1502,8 +1544,8 @@
 
   .origin-badge:hover,
   .origin-badge:focus-visible {
-    color: var(--cds-icon-01, #161616);
-    background-color: var(--cds-hover-ui);
+    color: var(--cds-icon-primary, #161616);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .warning-badge {
@@ -1521,16 +1563,16 @@
 
   .warning-badge:hover,
   .warning-badge:focus {
-    color: var(--cds-support-01);
-    background-color: var(--cds-hover-ui);
+    color: var(--cds-support-error);
+    background-color: var(--cds-layer-hover-01);
     outline: none;
   }
 
   :global(.warning-tooltip) {
     position: fixed;
     transform: translateX(-50%);
-    background-color: var(--cds-inverse-01, #393939);
-    color: var(--cds-inverse-02, #fff);
+    background-color: var(--cds-background, #393939);
+    color: var(--cds-background-inverse, #fff);
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 12px;
@@ -1548,7 +1590,7 @@
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-bottom: 6px solid var(--cds-inverse-01, #393939);
+    border-bottom: 6px solid var(--cds-background, #393939);
   }
 
   :global(.warning-tooltip-item) {
@@ -1560,7 +1602,7 @@
   }
 
   :global(.warning-tooltip-item span) {
-    color: var(--cds-inverse-02, #fff);
+    color: var(--cds-background-inverse, #fff);
     line-height: 1.4;
   }
 
@@ -1572,8 +1614,8 @@
   :global(.simple-tooltip) {
     position: fixed;
     transform: translateX(-50%);
-    background-color: var(--cds-inverse-01, #393939);
-    color: var(--cds-inverse-02, #fff);
+    background-color: var(--cds-background, #393939);
+    color: var(--cds-background-inverse, #fff);
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 11px;
@@ -1592,7 +1634,7 @@
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-bottom: 5px solid var(--cds-inverse-01, #393939);
+    border-bottom: 5px solid var(--cds-background, #393939);
   }
 
   /* Category names can be long, so this tooltip wraps. */
@@ -1600,5 +1642,20 @@
     white-space: normal;
     max-width: 240px;
     text-align: left;
+  }
+
+  .tooltip-column-name {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .tooltip-column-type {
+    display: inline-block;
+    margin-top: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-02);
+    border: 1px solid;
+    border-radius: 2px;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 </style>

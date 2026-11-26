@@ -34,6 +34,7 @@ import { normalizeGeometryColumnName } from '../operations/geometry-column';
 import {
   assertImportRowCountWithinLimit,
   readParquetRowCount,
+  warnOnDenseGeometry,
   warnOnLargeImport
 } from '../operations/import-volume';
 
@@ -44,6 +45,8 @@ export interface ProcessFileOptions {
   /** Layer of a multi-layer source; the preferred spatial layer otherwise. */
   layer?: string;
   csvOptions?: CsvImportOptions;
+  /** A first import by the user, as opposed to a replay of a known file. */
+  reportSkippedLines?: boolean;
 }
 
 export interface ReadFileIntoTableOptions {
@@ -52,6 +55,7 @@ export interface ReadFileIntoTableOptions {
   companionFiles?: File[];
   layer?: string;
   csvOptions?: CsvImportOptions;
+  reportSkippedLines?: boolean;
 }
 
 export interface FileTableRead {
@@ -143,7 +147,8 @@ export async function readFileIntoTable(
     file,
     tableName,
     fileInfo.name,
-    options.csvOptions
+    options.csvOptions,
+    options.reportSkippedLines ?? false
   );
   if (geoParquetMetadata) {
     await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
@@ -171,10 +176,11 @@ export async function processFileInternal(
     originalName: options.originalName,
     companionFiles: options.companionFiles,
     layer: options.layer,
-    csvOptions: options.csvOptions
+    csvOptions: options.csvOptions,
+    reportSkippedLines: options.reportSkippedLines
   });
 
-  const dataset = await buildDatasetFromDuckTable({
+  const { dataset, vertexCount } = await buildDatasetFromDuckTable({
     file: read.fileInfo,
     tableName: read.tableName,
     isGeoFile: read.isGeoFile,
@@ -183,6 +189,7 @@ export async function processFileInternal(
 
   assertImportRowCountWithinLimit(dataset.rowCount, read.fileInfo.name);
   warnOnLargeImport(dataset.rowCount);
+  warnOnDenseGeometry(vertexCount);
 
   if (read.csvOptions) {
     dataset.metadata.csvOptions = read.csvOptions;
@@ -257,7 +264,8 @@ async function readTabularFile(
   file: File,
   tableName: string,
   fileName: string,
-  chosenOptions?: CsvImportOptions
+  chosenOptions: CsvImportOptions | undefined,
+  reportSkippedLines: boolean
 ): Promise<CsvImportOptions | undefined> {
   if (isParquetFileName(fileName)) {
     await Duck.read_tabular(file, {
@@ -273,7 +281,8 @@ async function readTabularFile(
       header: chosenOptions.header,
       decimal_separator: chosenOptions.decimalSeparator,
       thousands_separator: chosenOptions.thousandsSeparator,
-      delimiter: chosenOptions.delimiter
+      delimiter: chosenOptions.delimiter,
+      report_skipped_lines: reportSkippedLines
     });
     return chosenOptions;
   }
@@ -290,7 +299,8 @@ async function readTabularFile(
     header: headerDetection.hasHeader,
     decimal_separator: detection.separator,
     delimiter: detection.delimiter,
-    thousands_separator: detection.thousandsSeparator
+    thousands_separator: detection.thousandsSeparator,
+    report_skipped_lines: reportSkippedLines
   });
 
   await normalizeFormattedNumericColumns(tableName, Duck);
@@ -323,53 +333,23 @@ export async function createFileFromUpload(
     return createFileFromAssetRef(uploadedFile.assetRef);
   }
 
-  if (!uploadedFile.content) {
-    logger.error('Uploaded file is missing inline content', LogCategory.DATA, {
+  logger.error('Uploaded file has no persisted source', LogCategory.DATA, {
+    fileId: uploadedFile.id,
+    fileName: uploadedFile.name
+  });
+  throw new ParseError(
+    m.pipeline_error_no_content(),
+    uploadedFile.fileType ?? FileType.UNKNOWN,
+    {
       fileId: uploadedFile.id,
       fileName: uploadedFile.name
-    });
-    throw new ParseError(
-      m.pipeline_error_no_content(),
-      uploadedFile.fileType ?? FileType.UNKNOWN,
-      {
-        fileId: uploadedFile.id,
-        fileName: uploadedFile.name
-      }
-    );
-  }
-  return createFileFromUploadContent(
-    uploadedFile.content,
-    uploadedFile.name,
-    uploadedFile.type
+    }
   );
 }
 
-export function createCompanionFilesFromUpload(
+export async function createCompanionFilesFromUpload(
   uploadedFile: UploadedFilePayload
-): File[] | undefined | Promise<File[] | undefined> {
-  if (uploadedFile.companionAssetRefs?.length) {
-    return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
-  }
-
-  if (!uploadedFile.relatedFilesData) {
-    return undefined;
-  }
-
-  const mainFileName = uploadedFile.name.toLowerCase();
-  const companionFiles: File[] = [];
-
-  for (const [fileName, data] of Object.entries(
-    uploadedFile.relatedFilesData
-  )) {
-    if (fileName.toLowerCase() === mainFileName) continue;
-
-    const buffer =
-      data instanceof ArrayBuffer
-        ? data
-        : new Uint8Array(data as number[]).buffer;
-    const blob = new Blob([buffer], { type: MIME.BINARY });
-    companionFiles.push(new File([blob], fileName));
-  }
-
-  return companionFiles.length > 0 ? companionFiles : undefined;
+): Promise<File[] | undefined> {
+  if (!uploadedFile.companionAssetRefs?.length) return undefined;
+  return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
 }

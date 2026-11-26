@@ -1,4 +1,10 @@
 <script lang="ts">
+  import {
+    clampFontSize,
+    DEFAULT_FONT_SIZE,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/fonts.constants';
+  import { measureTextWidth } from '$lib/features/commons/utils/text-measure.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     isShapeAspectRatioLocked,
@@ -23,6 +29,8 @@
   } from '$lib/features/step-toolbar/tools/annotations';
   import {
     annotationsActions,
+    drawingSmoothing,
+    getAnnotationGridOrigin,
     getAnnotationsState,
     isPageElementPlaceholder,
     resolveAnnotationCoordinateSpace,
@@ -36,6 +44,8 @@
   } from '../utils/focus-viewport.utils';
   import {
     computeDrawingBounds,
+    getDrawingAnchorPoints,
+    simplifyDrawingStroke,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
   import {
@@ -64,6 +74,7 @@
   import { createDraggablePageItemController } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { pageItemObstaclesStore } from '../stores/page-item-obstacles.store.svelte';
   import {
     buildAnchorFromScreenPx,
     canAnchorToMap,
@@ -84,6 +95,8 @@
 
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
+  // How far a simplified freehand stroke may stray from the hand's path.
+  const DRAWING_SIMPLIFY_TOLERANCE_PX = 2.5;
   const SHAPE_PLACEMENT_DRAG_THRESHOLD_PX = 4;
   const FOCUS_RESET_DEBOUNCE_MS = 200;
   const ANNOTATION_DRAG_THRESHOLD_PX = 3;
@@ -92,8 +105,13 @@
   const KEYBOARD_FAST_MOVE_GRID_MULTIPLIER = 5;
   const KEYBOARD_FAST_MOVE_STEP_PX = 10;
   const DEFAULT_TEXT_PLACEMENT_SIZE = { width: 220, height: 64 } as const;
+  // Mirrors .annotation-text: max-width and line-height.
+  const TEXT_MAX_WIDTH_PX = 300;
+  const TEXT_LINE_HEIGHT = 1.2;
   const TEXT_MIN_WIDTH_PX = PAGE_GRID_SIZE_PX * 2;
   const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
+  // An image keeps its proportions: it is resized from its corners only.
+  const IMAGE_RESIZE_HANDLES = ['nw', 'ne', 'se', 'sw'] as const;
   const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
   const DEFAULT_DRAWING_PLACEMENT_SIZE = { width: 132, height: 80 } as const;
 
@@ -138,6 +156,8 @@
     width: number;
     height: number;
     role?: PageElementRole;
+    /** The box a rotated text covers, from its upright position. */
+    covered?: { x: number; y: number; width: number; height: number };
   };
 
   let overlayElement = $state<HTMLDivElement | null>(null);
@@ -151,6 +171,7 @@
     startClientY: number;
     didDrag: boolean;
     role?: PageElementRole;
+    covered?: AnnotationPositionBoundsContext['covered'];
   } | null>(null);
   let resizeState = $state<{
     id: string;
@@ -204,20 +225,20 @@
   const formatState = $derived(getFormatState());
   const pageMargins = $derived(formatState.margins);
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
+  // Map-anchored annotations are projected in the map canvas, which fills
+  // the map frame: the frame, not the page margins, is their origin.
+  const mapArea = $derived(formatState.mapFrame);
   const mapLayerStyle = $derived.by(() => {
     const scale = pageScale;
-    const width = Math.max(
-      1,
-      formatState.width - pageMargins.left - pageMargins.right
-    );
+    const width = Math.max(1, formatState.width - mapArea.left - mapArea.right);
     const height = Math.max(
       1,
-      formatState.height - pageMargins.top - pageMargins.bottom
+      formatState.height - mapArea.top - mapArea.bottom
     );
 
     return [
-      `left: ${pageMargins.left * scale}px`,
-      `top: ${pageMargins.top * scale}px`,
+      `left: ${mapArea.left * scale}px`,
+      `top: ${mapArea.top * scale}px`,
       `width: ${width * scale}px`,
       `height: ${height * scale}px`
     ].join('; ');
@@ -269,6 +290,7 @@
   );
   const selectedId = $derived(annotationsState.selectedId);
   let measuredItemHeights = $state<Record<string, number>>({});
+  let measuredItemWidths = $state<Record<string, number>>({});
   const stackedPageElementY = $derived(
     stackBottomRightPageElements(
       visibleItems.map((item) => ({
@@ -382,13 +404,36 @@
       : KEYBOARD_FAST_MOVE_STEP_PX;
   }
 
+  // The text is centred on the pointer by its own size, not by a box wider
+  // than the words, which left it far from where the user clicked.
+  function measurePlacedTextSize(
+    content: unknown,
+    style: AnnotationStyle | undefined
+  ): { width: number; height: number } {
+    const text = typeof content === 'string' ? content : '';
+    if (!text.trim()) return DEFAULT_TEXT_PLACEMENT_SIZE;
+    const fontSize = clampFontSize(style?.fontSize ?? DEFAULT_FONT_SIZE, 8);
+    const fontFamily = resolveFontFamilyStack(style?.font);
+    const fontWeight = style?.bold ? 'bold' : 'normal';
+    const lines = text.split('\n');
+    const widest = Math.max(
+      ...lines.map((line) =>
+        measureTextWidth(line, fontSize, fontFamily, fontWeight)
+      )
+    );
+    return {
+      width: Math.ceil(Math.min(TEXT_MAX_WIDTH_PX, widest)),
+      height: Math.ceil(lines.length * fontSize * TEXT_LINE_HEIGHT)
+    };
+  }
+
   function getDefaultPlacementSize(
     type: AnnotationKind,
     content: unknown,
     style: AnnotationStyle | undefined
   ): { width: number; height: number } {
     if (type === AnnotationKind.TEXT) {
-      return DEFAULT_TEXT_PLACEMENT_SIZE;
+      return measurePlacedTextSize(content, style);
     }
 
     if (type === AnnotationKind.IMAGE) {
@@ -574,8 +619,8 @@
     const localPosition = getLocalRenderedPosition(item);
 
     return {
-      x: localPosition.x + pageMargins.left,
-      y: localPosition.y + pageMargins.top
+      x: localPosition.x + mapArea.left,
+      y: localPosition.y + mapArea.top
     };
   }
 
@@ -701,8 +746,8 @@
     annotationsActions.updateAnnotation(item.id, {
       coordinateSpace: 'page',
       position: {
-        x: item.position.x + pageMargins.left,
-        y: item.position.y + pageMargins.top
+        x: item.position.x + mapArea.left,
+        y: item.position.y + mapArea.top
       }
     });
   }
@@ -1049,16 +1094,29 @@
     const rect = layer.getBoundingClientRect();
 
     const isPageElement = context.scope === 'page' && context.role;
-    const maxX = isPageElement
-      ? Math.max(0, formatState.width - context.width)
-      : Math.max(0, rect.width / scale - context.width);
-    const maxY = isPageElement
-      ? Math.max(0, formatState.height - context.height)
-      : Math.max(0, rect.height / scale - context.height);
+    // A rotated text is kept on the page by the box it covers.
+    const covered = context.covered ?? {
+      x: 0,
+      y: 0,
+      width: context.width,
+      height: context.height
+    };
+    const areaWidth = isPageElement ? formatState.width : rect.width / scale;
+    const areaHeight = isPageElement ? formatState.height : rect.height / scale;
+    const minX = -covered.x;
+    const minY = -covered.y;
 
     return {
-      x: clamp(position.x, 0, maxX),
-      y: clamp(position.y, 0, maxY)
+      x: clamp(
+        position.x,
+        minX,
+        Math.max(minX, areaWidth - covered.width - covered.x)
+      ),
+      y: clamp(
+        position.y,
+        minY,
+        Math.max(minY, areaHeight - covered.height - covered.y)
+      )
     };
   }
 
@@ -1087,6 +1145,14 @@
   }
 
   const annotationDragController = createDraggablePageItemController({
+    getPageFrame: () =>
+      dragState?.scope === 'page'
+        ? {
+            width: formatState.width,
+            height: formatState.height,
+            margins: formatState.margins
+          }
+        : null,
     getOverlayElement: () =>
       dragState ? getInteractionLayer(dragState.scope) : null,
     getPageScale,
@@ -1094,6 +1160,7 @@
       const draggedItem = getDraggedAnnotation();
       return draggedItem ? getLocalRenderedPosition(draggedItem) : null;
     },
+    getCoveredBox: () => dragState?.covered ?? null,
     normalizePosition: normalizeAnnotationDragPosition,
     setPosition: setAnnotationDragPosition,
     onDraggingChange: (active) => {
@@ -1140,7 +1207,8 @@
       startClientX: event.clientX,
       startClientY: event.clientY,
       didDrag: false,
-      role: item.role
+      role: item.role,
+      covered: getTextCoveredBox(item, currentTarget)
     };
 
     const started = annotationDragController.start({
@@ -1192,7 +1260,7 @@
       return;
     }
 
-    globalActions.panPageBy(delta.x, delta.y);
+    globalActions.centerPageBy(delta.x, delta.y);
   }
 
   function getAnnotationKeyboardBounds(
@@ -1207,7 +1275,37 @@
       scope: getAnnotationScope(item),
       width: rect ? rect.width / scale : 0,
       height: rect ? rect.height / scale : 0,
-      role: item.role
+      role: item.role,
+      covered: getTextCoveredBox(item, targetElement)
+    };
+  }
+
+  // The covered box of a rotated text is its text block's bounding box,
+  // relative to the upright item: the block turns about its own centre,
+  // which is not the item's when it is narrower and aligned inside it.
+  function getTextCoveredBox(
+    item: Annotation,
+    itemElement: HTMLElement | null
+  ): AnnotationPositionBoundsContext['covered'] {
+    const textBox = itemElement?.querySelector<HTMLElement>(
+      '.annotation-text-box'
+    );
+    if (
+      item.type !== AnnotationKind.TEXT ||
+      !item.style?.rotation ||
+      !itemElement ||
+      !textBox
+    ) {
+      return undefined;
+    }
+    const scale = getPageScale();
+    const itemRect = itemElement.getBoundingClientRect();
+    const boxRect = textBox.getBoundingClientRect();
+    return {
+      x: (boxRect.left - itemRect.left) / scale,
+      y: (boxRect.top - itemRect.top) / scale,
+      width: boxRect.width / scale,
+      height: boxRect.height / scale
     };
   }
 
@@ -1305,7 +1403,7 @@
     }
 
     centeredAnnotationId = null;
-    globalActions.resetPagePan();
+    globalActions.restorePagePan();
   }
 
   function cancelFocusedAnnotationReset(): void {
@@ -1328,6 +1426,12 @@
 
       if (dragState || resizeState || rotateState) {
         scheduleCenteredAnnotationReset(itemId);
+        return;
+      }
+
+      // Focus moving into the tool panel keeps the selection, and the page
+      // centred on it; deselecting resets the pan.
+      if (isAnnotationEditing && selectedId === itemId) {
         return;
       }
 
@@ -1382,6 +1486,29 @@
       return;
     }
 
+    if (item.type === AnnotationKind.IMAGE) {
+      const image =
+        event.currentTarget instanceof HTMLElement
+          ? event.currentTarget
+              .closest<HTMLElement>('.image-frame')
+              ?.querySelector<HTMLImageElement>('img')
+          : null;
+      const width = image?.offsetWidth ?? item.style?.size ?? 200;
+      resizeState = {
+        id: item.id,
+        handle,
+        startAnnotationX: item.position.x,
+        startAnnotationY: item.position.y,
+        startW: width,
+        startH: image?.offsetHeight ?? width,
+        startPointerX: event.clientX,
+        startPointerY: event.clientY
+      };
+      window.addEventListener(EVENT.POINTERMOVE, handleResizePointerMove);
+      window.addEventListener(EVENT.POINTERUP, handleResizePointerUp);
+      return;
+    }
+
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     resizeState = {
@@ -1418,6 +1545,11 @@
       return;
     }
 
+    if (item.type === AnnotationKind.IMAGE) {
+      resizeImageAnnotation(item, resizeState, dx, dy);
+      return;
+    }
+
     const resizedBounds = resolveResizedShapeBounds(
       item,
       resizeState.handle,
@@ -1428,7 +1560,8 @@
         y: resizeState.startAnnotationY,
         width: resizeState.startW,
         height: resizeState.startH
-      }
+      },
+      event.shiftKey
     );
 
     annotationsActions.updateAnnotation(resizeState.id, {
@@ -1446,6 +1579,42 @@
     });
   }
 
+  // The dragged corner sets the width, the height follows the image ratio,
+  // and the opposite corner stays in place.
+  function resizeImageAnnotation(
+    item: Annotation,
+    state: NonNullable<typeof resizeState>,
+    dx: number,
+    dy: number
+  ): void {
+    const ratio = state.startH > 0 ? state.startW / state.startH : 1;
+    const growsRight = state.handle.includes('e');
+    const growsDown = state.handle.includes('s');
+    const widthFromX = state.startW + (growsRight ? dx : -dx);
+    const widthFromY = (state.startH + (growsDown ? dy : -dy)) * ratio;
+    const width = Math.max(
+      MIN_IMAGE_PLACEMENT_SIZE_PX,
+      Math.abs(widthFromX - state.startW) >= Math.abs(widthFromY - state.startW)
+        ? widthFromX
+        : widthFromY
+    );
+    const height = width / ratio;
+    const position = {
+      x: growsRight
+        ? state.startAnnotationX
+        : state.startAnnotationX + state.startW - width,
+      y: growsDown
+        ? state.startAnnotationY
+        : state.startAnnotationY + state.startH - height
+    };
+
+    annotationsActions.updateAnnotation(item.id, {
+      position,
+      style: { ...(item.style ?? {}), size: Math.round(width) }
+    });
+    refreshMapAnchorIfPresent(item, position);
+  }
+
   // Only the width is resizable: the height follows the wrapped text. Resizing
   // pins an auto-placed page element where it is rendered.
   function resizeTextAnnotation(
@@ -1453,8 +1622,11 @@
     state: NonNullable<typeof resizeState>,
     dx: number
   ): void {
+    const gridOrigin = getAnnotationGridOrigin(
+      resolveAnnotationCoordinateSpace(item)
+    );
     const snapEdge = (value: number) =>
-      snapToPageGrid(value, formatState.gridEnabled);
+      snapToPageGrid(value, formatState.gridEnabled, gridOrigin.x);
     let left = state.startAnnotationX;
     let right = state.startAnnotationX + state.startW;
 
@@ -1502,8 +1674,8 @@
       scope === 'page'
         ? renderedPosition
         : {
-            x: renderedPosition.x - pageMargins.left,
-            y: renderedPosition.y - pageMargins.top
+            x: renderedPosition.x - mapArea.left,
+            y: renderedPosition.y - mapArea.top
           };
     const mapFactor = getMapScaleFactor(item);
     const centerX =
@@ -1785,6 +1957,26 @@
     return points.slice(0, endIndex);
   }
 
+  let drawingStrokeStartIndex: number | null = null;
+
+  // A click-click line adds one or two samples per press and is kept as is;
+  // a stroke drawn with the button held is reduced to the anchors its shape
+  // needs.
+  function simplifyFreehandStroke(
+    points: { x: number; y: number }[]
+  ): { x: number; y: number }[] {
+    const start = drawingStrokeStartIndex ?? points.length;
+    const stroke = points.slice(start);
+    if (stroke.length < 3) return points;
+    return [
+      ...points.slice(0, start),
+      ...simplifyDrawingStroke(
+        stroke,
+        DRAWING_SIMPLIFY_TOLERANCE_PX / getPageScale()
+      )
+    ];
+  }
+
   function handleDrawingPointerDown(event: PointerEvent): void {
     if (!isDrawingMode) {
       return;
@@ -1798,6 +1990,7 @@
     event.preventDefault();
     event.stopPropagation();
 
+    drawingStrokeStartIndex = drawingPoints.length;
     const nextPoints = appendDrawingSample(drawingPoints, point);
     annotationsActions.updateDrawing(nextPoints);
     drawingCloseToStart = isNearDrawingStart(point);
@@ -1834,7 +2027,8 @@
     }
 
     const point = getPageCapturePoint(event);
-    const nextPoints = getReleasedDrawingPoints(point);
+    const nextPoints = simplifyFreehandStroke(getReleasedDrawingPoints(point));
+    drawingStrokeStartIndex = null;
     const minimumPointCount = getMinimumDrawingPoints(
       annotationsState.drawingModeType
     );
@@ -1926,7 +2120,34 @@
     }
   });
 
+  // Labels placed automatically keep clear of the page elements (title,
+  // sources…). Marks anchored on the map are part of it and stay out.
+  $effect(() => {
+    const boxes = visibleItems.flatMap((item) => {
+      const width = measuredItemWidths[item.id] ?? 0;
+      const height = measuredItemHeights[item.id] ?? 0;
+      if (
+        getAnnotationScope(item) !== 'page' ||
+        isPageElementPlaceholder(item) ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        return [];
+      }
+
+      const position = getRenderedPosition(item);
+      const origin = getVectorShapeBoundsOrigin(item);
+      const x = position.x + origin.x - pageMargins.left;
+      const y = position.y + origin.y - pageMargins.top;
+      return [
+        [x, y, x + width, y + height] as [number, number, number, number]
+      ];
+    });
+    pageItemObstaclesStore.setBoxes('annotations', boxes);
+  });
+
   onDestroy(() => {
+    pageItemObstaclesStore.setBoxes('annotations', []);
     centeredAnnotationId = null;
     cancelFocusedAnnotationReset();
     clearSuppressedAnnotationClick();
@@ -2224,7 +2445,7 @@
                 r={drawingCloseToStart ? 15 : 11}
                 fill="none"
                 stroke={drawingCloseToStart
-                  ? 'var(--cds-interactive-01, #0f62fe)'
+                  ? 'var(--cds-background-brand, #0f62fe)'
                   : 'rgba(82, 82, 82, 0.85)'}
                 stroke-width="2"
                 stroke-dasharray="6,4"
@@ -2266,9 +2487,17 @@
       onkeydown={(event: KeyboardEvent) =>
         handleAnnotationKeyDown(event, item.id)}
       bind:offsetHeight={measuredItemHeights[item.id]}
+      bind:offsetWidth={measuredItemWidths[item.id]}
     >
       {#if item.type === AnnotationKind.TEXT}
-        <div class="annotation-text-box">
+        {@const textRotation = item.style?.rotation ?? 0}
+        <div
+          class="annotation-text-box"
+          data-rotation={textRotation || undefined}
+          style:transform={textRotation
+            ? `rotate(${textRotation}deg)`
+            : undefined}
+        >
           <div class="annotation-text" style={getTextStyle(item)}>
             {item.content || ''}
           </div>
@@ -2375,7 +2604,7 @@
                   cy={point.y}
                   r="5"
                   fill="white"
-                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke="var(--cds-background-brand, #0f62fe)"
                   stroke-width="2"
                   onpointerdown={(event: PointerEvent) =>
                     handleAnchorPointerDown(event, item, pointIndex)}
@@ -2571,7 +2800,7 @@
                 ondblclick={(event: MouseEvent) =>
                   handleDrawingPathDoubleClick(event, item)}
               />
-              {#each points as point, pointIndex (pointIndex)}
+              {#each drawingSmoothing.adjusting ? [] : getDrawingAnchorPoints(points, smoothness, isClosed) as point, pointIndex (pointIndex)}
                 <circle
                   class="drawing-anchor"
                   role="button"
@@ -2581,7 +2810,7 @@
                   cy={point.y}
                   r="5"
                   fill="white"
-                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke="var(--cds-background-brand, #0f62fe)"
                   stroke-width="2"
                   onpointerdown={(event: PointerEvent) =>
                     handleAnchorPointerDown(event, item, pointIndex)}
@@ -2596,13 +2825,30 @@
         {@const imgSrc = String(item.content ?? '')}
         {@const size = item.style?.size ?? 200}
         {@const opacity = toOpacityUnit(item.style?.opacity)}
+        {@const isImageSelected = isAnnotationEditing && selectedId === item.id}
         {#if imgSrc}
-          <img
-            src={imgSrc}
-            alt={m.annotationImageAlt()}
-            class="annotation-image"
-            style="width: {size}px; height: auto; opacity: {opacity};"
-          />
+          <div class="image-frame">
+            <img
+              src={imgSrc}
+              alt={m.annotationImageAlt()}
+              class="annotation-image"
+              style="width: {size}px; height: auto; opacity: {opacity};"
+            />
+            {#if isImageSelected}
+              <div class="shape-handles" role="presentation">
+                {#each IMAGE_RESIZE_HANDLES as handle (handle)}
+                  <div
+                    class="resize-handle resize-{handle}"
+                    role="button"
+                    tabindex="-1"
+                    aria-label={m.annotations_image_resize_handle()}
+                    onpointerdown={(e: PointerEvent) =>
+                      handleResizePointerDown(e, item, handle)}
+                  ></div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         {/if}
       {/if}
     </div>
@@ -2697,18 +2943,18 @@
   }
 
   .annotation-item:focus-visible:not(:has(.shape-frame)) {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
     border-radius: 0;
   }
 
   .annotation-item:focus-visible .shape-frame {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
   }
 
   .annotation-item.selected {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
     outline-offset: 0;
     box-shadow: none;
     border-radius: 0;
@@ -2819,7 +3065,7 @@
       [data-annotation-role='note']
     ):is(:focus-visible, .selected)
     .annotation-text-box {
-    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
   }
 
   .annotation-text {
@@ -2834,6 +3080,12 @@
      carries its own colour and opacity inline. */
   .annotation-item[data-khartis-export-placeholder='true'] .annotation-text {
     filter: grayscale(1) opacity(0.45);
+  }
+
+  /* Outside Habillage, page texts not written yet are left out, as in exports. */
+  .annotation-overlay.non-interactive
+    .annotation-item[data-khartis-export-placeholder='true'] {
+    visibility: hidden;
   }
 
   .annotation-item.has-text-width .annotation-text {
@@ -2871,15 +3123,10 @@
     height: 8px;
     box-sizing: border-box;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     content: '';
     transform: translate(-50%, -50%);
-  }
-
-  .annotation-shape,
-  .annotation-drawing {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
   }
 
   .annotation-drawing--editable {
@@ -2893,7 +3140,7 @@
   }
 
   .annotation-drawing .drawing-anchor:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
     stroke: var(--cds-background, #ffffff);
   }
 
@@ -2914,19 +3161,19 @@
   }
 
   .annotation-vector .drawing-anchor:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
     stroke: var(--cds-background, #ffffff);
   }
 
   .annotation-vector .tension-handle {
     fill: var(--cds-background, #ffffff);
-    stroke: var(--cds-interactive-01, #0f62fe);
+    stroke: var(--cds-background-brand, #0f62fe);
     stroke-width: 2;
     stroke-dasharray: 2 2;
   }
 
   .annotation-vector .tension-handle:hover {
-    fill: var(--cds-interactive-01, #0f62fe);
+    fill: var(--cds-background-brand, #0f62fe);
   }
 
   .annotation-vector .drawing-hit-path {
@@ -2936,7 +3183,6 @@
 
   .annotation-image {
     border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     object-fit: contain;
   }
 
@@ -2961,7 +3207,7 @@
   }
 
   .shape-frame.shape-selected {
-    outline: 1px dashed var(--cds-interactive-01, #0072c3);
+    outline: 1px dashed var(--cds-background-brand, #0072c3);
     outline-offset: 2px;
   }
 
@@ -2980,12 +3226,17 @@
     pointer-events: none;
   }
 
+  .image-frame {
+    position: relative;
+    display: inline-block;
+  }
+
   .resize-handle {
     position: absolute;
     width: 8px;
     height: 8px;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     pointer-events: auto;
     transform: translate(-50%, -50%);
@@ -3044,7 +3295,7 @@
     width: 10px;
     height: 10px;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 50%;
     pointer-events: auto;
     transform: translate(-50%, 0);

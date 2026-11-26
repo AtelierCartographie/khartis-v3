@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
+  import ShortcutsSheet from '$lib/features/commons/components/shortcuts-sheet.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import CookiebotConsent from '$lib/features/commons/components/cookiebot-consent.svelte';
   import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
@@ -13,7 +14,10 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
-  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    StylingTools,
+    ToolbarStep
+  } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
@@ -36,13 +40,13 @@
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
+  import JoinControlStepFade from '$lib/features/map/components/join-control-step-fade.svelte';
   import Sidenav from '$lib/features/side-nav/side-nav.svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import {
-    colorBlindnessActions,
     getColorBlindnessState,
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
@@ -384,8 +388,12 @@
       !globalState.selectedTool &&
       !mobileColorBlindnessNotificationDismissed
   );
-  function handleDeactivateColorBlindness() {
-    colorBlindnessActions.reset();
+  function openColorBlindnessTool(): void {
+    if (globalState.selectedStep !== ToolbarStep.Styling) {
+      globalActions.setNavigationState(ToolbarStep.Styling);
+    }
+    globalActions.openMobileToolbar();
+    globalActions.setSelectedTool(StylingTools.ColorBlindness);
   }
 
   $effect(() => {
@@ -451,6 +459,7 @@
   <Sidenav />
 
   <KeyboardShortcuts />
+  <ShortcutsSheet />
 
   <main
     class:mobile-view={globalState.isMobileView}
@@ -463,6 +472,7 @@
     {/if}
 
     <Modal
+      preventCloseOnClickOutside={false}
       iconDescription={m.a11y_close_dialog()}
       open={pendingKhImport !== null}
       modalHeading={m.project_import_url_confirm_title()}
@@ -488,6 +498,8 @@
       {#snippet workspaceOverlays()}
         <ZoomToolbar />
 
+        <JoinControlStepFade />
+
         <MobileOpenPanelButton />
 
         <GlobalLoadingIndicator />
@@ -495,7 +507,7 @@
         {#if showMobileColorBlindnessNotification}
           <div class="colorblind-notification">
             <ColorBlindnessNotification
-              ondeactivate={handleDeactivateColorBlindness}
+              onopentool={openColorBlindnessTool}
               onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
             />
           </div>
@@ -530,7 +542,7 @@
     /* The side panel slides in from past the right edge: clipped there, it
        gives the body nothing to scroll to when its content takes focus. */
     overflow-x: clip;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
   }
 
   /* The side panel floats over the right edge and slides; the workspace

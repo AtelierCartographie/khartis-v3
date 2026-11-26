@@ -1,21 +1,19 @@
 <script lang="ts">
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import type { RelevantBasemapSuggestion } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import BasemapCatalogTab from '../basemap-join/basemap-catalog-tab.svelte';
   import BasemapPanelContent from '../basemap-join/basemap-panel-content.svelte';
+  import ActiveBasemapBanner from '../basemap-join/active-basemap-banner.svelte';
+  import { resolveActiveBasemapOrigin } from '../../utils/active-basemap.utils';
+  import { basemapCatalogService } from '$lib/features/map';
   import { BasemapImportDropzone, OSMBasemapSelector } from '../index';
-
-  interface BasemapSuggestionItem {
-    basemap: BasemapMetadata;
-    score: number;
-    matchesData: boolean;
-  }
 
   interface Props {
     basemapTabIndex: number;
     selectedBasemapId: string | undefined;
     basemaps: BasemapMetadata[];
-    suggestedBasemaps: BasemapSuggestionItem[];
+    suggestedBasemaps: RelevantBasemapSuggestion[];
     basemapImportUploading: boolean;
     basemapImportError: string | null;
     importedCustomBasemap: BasemapMetadata | null;
@@ -63,6 +61,25 @@
     TAB_INDEX_TO_SOURCE[basemapTabIndex] ?? BasemapSource.CATALOG
   );
 
+  const activeBasemap = $derived(
+    selectedBasemapId
+      ? (basemapCatalogService.basemaps.find(
+          (basemap) => basemap.file === selectedBasemapId
+        ) ?? null)
+      : null
+  );
+  const activeBasemapOrigin = $derived(
+    activeBasemap ? resolveActiveBasemapOrigin(activeBasemap) : null
+  );
+  // The Import tab already shows the imported basemap's card.
+  const showActiveBasemapBanner = $derived(
+    activeBasemap !== null &&
+      !(
+        activeBasemapOrigin === 'import' &&
+        selectedSource === BasemapSource.IMPORT
+      )
+  );
+
   function handleSourceChange(source: BasemapSource): void {
     const nextIndex = TAB_INDEX_TO_SOURCE.indexOf(source);
     if (nextIndex < 0 || nextIndex === basemapTabIndex) return;
@@ -103,11 +120,20 @@
   />
 {/snippet}
 
+{#snippet activeBasemapBanner()}
+  {#if activeBasemap && activeBasemapOrigin}
+    <ActiveBasemapBanner basemap={activeBasemap} origin={activeBasemapOrigin} />
+  {/if}
+{/snippet}
+
 <BasemapPanelContent
   selectedSource={selectedSource}
   onSourceChange={handleSourceChange}
   catalogContent={catalogContent}
   importContent={importContent}
   osmContent={osmContent}
+  activeBasemapBanner={showActiveBasemapBanner
+    ? activeBasemapBanner
+    : undefined}
   showJoinSection={false}
 />

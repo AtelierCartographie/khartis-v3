@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import type { Layer } from '@deck.gl/core';
 import {
   GeoJsonLayer,
   PathLayer,
@@ -418,7 +418,7 @@ describe('basemap projection fallbacks', () => {
     ) as SolidPolygonLayer | null;
 
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
-    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.coordinateSystem).toBe('cartesian');
     expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
     expect(layer?.props.parameters).toMatchObject({
       depthCompare: 'always',
@@ -458,7 +458,7 @@ describe('basemap projection fallbacks', () => {
     ) as SolidPolygonLayer | null;
 
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
-    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.coordinateSystem).toBe('cartesian');
     expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
   });
 
@@ -520,7 +520,7 @@ describe('basemap projection fallbacks', () => {
       data?.features[1]?.geometry.coordinates[0] ?? [];
 
     expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.coordinateSystem).toBe('cartesian');
     expect(layer?.props.parameters).toMatchObject({
       depthCompare: 'always',
       depthWriteEnabled: false
@@ -1269,7 +1269,11 @@ describe('basemap projection fallbacks', () => {
     expect(
       basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.visible
     ).toBe(true);
-    expect(basemapLayersStore.layers).toHaveLength(10);
+    expect(basemapLayersStore.layers).toHaveLength(11);
+    // A project saved before the view-names layer existed keeps its map.
+    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.VUES)?.visible).toBe(
+      false
+    );
   });
 
   it('falls back to the default meridiens mode when serialized mode is invalid', () => {

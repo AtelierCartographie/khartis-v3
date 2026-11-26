@@ -205,6 +205,65 @@ export function getPageElementPlaceholder(
   );
 }
 
+function leadWord(lead: string): string {
+  return lead.split(':')[0].trim();
+}
+
+const CREDIT_LEAD = /^\s*(réalisation|réalisé|realisation|made by|created by)/i;
+
+export type FreePageText = {
+  content: string;
+  fontSize: number;
+  pageY: number;
+};
+
+/**
+ * Projects made before texts had a page role wrote their title, source and
+ * credit as free texts: the placeholders of those roles would sit under them.
+ */
+export function getPageElementRolesWrittenAsFreeText(
+  texts: FreePageText[],
+  titleArea: { maxY: number; minFontSize: number }
+): Set<PageElementRole> {
+  const sourceLeads = getBundles().map(
+    (bundle) =>
+      new RegExp(
+        `^\\s*${leadWord(bundle.annotations_source_prefix())}s?\\s*:`,
+        'i'
+      )
+  );
+  const basemapLeads = getBundles().map(
+    (bundle) =>
+      new RegExp(
+        `${leadWord(bundle.annotations_basemap_source_text(''))}\\s*:`,
+        'i'
+      )
+  );
+  const roles = new Set<PageElementRole>();
+
+  for (const { content, fontSize, pageY } of texts) {
+    if (sourceLeads.some((lead) => lead.test(content))) {
+      roles.add(ANNOTATION_ROLE.SOURCE);
+    }
+    if (basemapLeads.some((lead) => lead.test(content))) {
+      roles.add(ANNOTATION_ROLE.BASEMAP_SOURCE);
+    }
+    if (CREDIT_LEAD.test(content) || /khartis/i.test(content)) {
+      roles.add(ANNOTATION_ROLE.CREDIT);
+    }
+    if (
+      content.trim() &&
+      fontSize >= titleArea.minFontSize &&
+      pageY <= titleArea.maxY
+    ) {
+      roles.add(ANNOTATION_ROLE.TITLE);
+      roles.add(ANNOTATION_ROLE.SUBTITLE);
+    }
+  }
+
+  return roles;
+}
+
 /**
  * Page texts from projects made before the credit asked for its author and
  * the note was dropped: « Réalisé avec Khartis », an untouched note.

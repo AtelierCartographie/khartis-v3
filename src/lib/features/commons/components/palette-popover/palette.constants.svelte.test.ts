@@ -22,18 +22,8 @@ import {
 import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 vi.mock('@ateliercartographie/ok-palette', async () => {
-  const divergentSequential = vi.fn(
-    ({
-      steps,
-      hasCenterClass
-    }: {
-      steps: [number, number];
-      hasCenterClass: boolean;
-    }) =>
-      Array.from(
-        { length: steps[0] + steps[1] + (hasCenterClass ? 1 : 0) },
-        (_, i) => `#mock-${i}`
-      )
+  const divergentSequential = vi.fn(({ steps }: { steps: [number, number] }) =>
+    Array.from({ length: steps[0] + steps[1] }, (_, i) => `#mock-${i}`)
   );
   const actual = await vi.importActual<
     typeof import('@ateliercartographie/ok-palette')
@@ -76,16 +66,15 @@ describe('palette.constants — palette collections', () => {
 describe('palette.constants — generatePaletteColors', () => {
   it('should forward an asymmetric diverging split to ok-palette for custom diverging palettes', () => {
     const p = divergingPalettes[0];
-    generatePaletteColors(p, 5, undefined, undefined, {
+    generatePaletteColors(p, 4, undefined, undefined, {
       lowerCount: 1,
-      upperCount: 3,
-      hasCenterClass: true
+      upperCount: 3
     });
 
     expect(vi.mocked(divergentSequential)).toHaveBeenLastCalledWith(
       expect.objectContaining({
         steps: [1, 3],
-        hasCenterClass: true
+        hasCenterClass: false
       })
     );
   });

@@ -20,7 +20,10 @@
     fullWidthClass?: string;
     hideInactiveLabel?: boolean;
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
+    tabShortcut?: (index: number) => string | undefined;
     tooltipPosition?: CarbonTooltipDirection;
+    /** One tooltip for the whole group, pointing at its centre. */
+    groupTooltip?: boolean;
     size?: 'sm' | 'md';
   }
 
@@ -34,7 +37,9 @@
     fullWidthClass = 'full-width',
     hideInactiveLabel = true,
     tabTitle,
+    tabShortcut,
     tooltipPosition = 'bottom',
+    groupTooltip = false,
     size = 'sm'
   }: Props = $props();
 
@@ -45,6 +50,7 @@
   const HOVER_INTENT_DELAY = 120;
   const LEAVE_GRACE_DELAY = 160;
 
+  let groupElement = $state<HTMLDivElement | null>(null);
   let tabElements = $state<Array<HTMLButtonElement | null>>([]);
   let labelElements = $state<Array<HTMLSpanElement | null>>([]);
   let hoveredIndex = $state<number | null>(null);
@@ -53,7 +59,11 @@
   let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const tooltipTrigger = $derived(
-    hoveredIndex === null ? null : (tabElements[hoveredIndex] ?? null)
+    hoveredIndex === null
+      ? null
+      : groupTooltip
+        ? groupElement
+        : (tabElements[hoveredIndex] ?? null)
   );
   // A tab unfolds on hover and shows its label: only an extra hint from
   // tabTitle is worth a tooltip.
@@ -139,7 +149,9 @@
 <div
   class="khartis-toggle-tabs toggle-tabs {className}"
   class:size-md={size === 'md'}
+  class:all-labels={!hideInactiveLabel}
   role="group"
+  bind:this={groupElement}
   onpointerleave={handleGroupPointerLeave}
 >
   {#each items as item, index (index)}
@@ -182,6 +194,7 @@
 {#if tooltipTrigger && tooltipText}
   <TooltipBubble
     text={tooltipText}
+    shortcut={hoveredIndex === null ? undefined : tabShortcut?.(hoveredIndex)}
     trigger={tooltipTrigger}
     direction={tooltipPosition}
   />
@@ -257,6 +270,13 @@
      that unfolds next to it: the bar keeps its width. */
   .toggle-tab.full-width {
     flex: 1 1 0;
+  }
+
+  /* With every label shown, the tabs share the width evenly and each label
+     is cut with an ellipsis rather than squeezing the active tab. */
+  .toggle-tabs.all-labels .toggle-tab {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .toggle-label {

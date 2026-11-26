@@ -1,5 +1,5 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "extends": "$app/tsconfig",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
@@ -10,6 +10,8 @@
     "sourceMap": true,
     "strict": true,
     "moduleResolution": "bundler",
-    "types": ["node", "vite/client"]
-  }
+    "types": ["$app/types", "node", "vite/client"]
+  },
+  "include": ["src", "tests", "vite.config.ts"],
+  "exclude": ["node_modules"]
 }

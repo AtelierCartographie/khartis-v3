@@ -48,6 +48,7 @@ import {
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
+  DENSITY_DEFAULTS,
   DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   FillMode,
   ShapeType,
@@ -73,6 +74,8 @@ import {
   type CommonLegendTextOptions,
   createLegendSvg,
   draw_categorical_legend,
+  draw_legend_side_header,
+  draw_legend_side_note,
   draw_khartis_density_legend,
   draw_khartis_line_width_legend,
   draw_khartis_proportional_line_legend,
@@ -170,7 +173,8 @@ function getClassPatternLegendFill(pattern: ClassPattern): LegendPatternFill {
   });
   const fill: LegendPatternFill = {
     defs: stripSvgDefsWrapper(result.defs.outerHTML),
-    fillUrl: result.url
+    fillUrl: result.url,
+    ...(pattern.background ? { background: pattern.background } : {})
   };
   legendPatternFillCache[cacheKey] = fill;
   return fill;
@@ -984,12 +988,31 @@ export function getLegendSegments(
     : -1;
   const layout = resolveLegendItemLayout(item);
   const entryLabel = resolveLegendEntryLabel(item);
+  // A side title is drawn apart; the entries then fill the rest of the width
+  // the frame was dragged to.
+  const sideHeaderWidth = layout.titleSide
+    ? (getLegendSideHeader(item, legendTextStyle)?.width ?? 0)
+    : 0;
+  const minWidth =
+    layout.width !== null
+      ? Math.max(0, layout.width - sideHeaderWidth) || undefined
+      : undefined;
 
   return drafts
     .map((draft, index): LegendSegment | null => {
+      const textOptions = getLegendTextOptions(
+        item,
+        index,
+        drafts.length,
+        legendTextStyle
+      );
       const svg = draft.create(
         {
-          ...getLegendTextOptions(item, index, drafts.length, legendTextStyle),
+          ...textOptions,
+          ...(layout.titleSide
+            ? { title: null, subtitle: null, note: null }
+            : {}),
+          minWidth,
           entrySpacing: layout.entrySpacing
         },
         {
@@ -1050,6 +1073,33 @@ function filterDraftsByComponent(
   return drafts.filter((draft) => {
     const component = getDraftComponent(draft);
     return component === null ? isFirstComponent : component === item.component;
+  });
+}
+
+/** The title and subtitle of a legend whose title sits at the left of its entries. */
+export function getLegendSideHeader(
+  item: LegendItem,
+  legendTextStyle: LegendTextStyle
+): LegendSvgDefinition | null {
+  return draw_legend_side_header({
+    title: item.title,
+    subtitle: item.subtitle,
+    fontSize: legendTextStyle.fontSize,
+    fontFamily: legendTextStyle.fontFamily
+  });
+}
+
+/** The note of a legend whose title sits at the left, across the whole frame. */
+export function getLegendSideNote(
+  item: LegendItem,
+  legendTextStyle: LegendTextStyle,
+  width: number
+): LegendSvgDefinition | null {
+  return draw_legend_side_note({
+    note: item.note,
+    width,
+    fontSize: legendTextStyle.fontSize,
+    fontFamily: legendTextStyle.fontFamily
   });
 }
 
@@ -1876,7 +1926,7 @@ function getCategoricalLegendDraft(
       const patternFills = getClassPatternLegendFills(classPatternPalette);
       const categories: CategoryItem[] = entries.map((entry) => ({
         label: entry.label,
-        fill: '#ffffff',
+        fill: classPatternPalette[0]?.background ?? 'none',
         patternFill: patternFills[entry.originalIndex] ?? null,
         patternOpacity: 1,
         entryKey: categoryLegendEntry(entry.value)
@@ -2267,7 +2317,11 @@ function getUniquePolygonLegendDraft(
 
   const item: KhartisLegendSwatchItem = {
     label: m.polygons_title(),
-    fill: fillNone ? 'none' : classPatternPalette ? '#ffffff' : fill,
+    fill: fillNone
+      ? 'none'
+      : classPatternPalette
+        ? (classPatternPalette[0]?.background ?? 'none')
+        : fill,
     stroke: strokeNone
       ? 'none'
       : resolveLegendColor(polygon.strokeColor, DEFAULT_COLORS.stroke),
@@ -2774,7 +2828,9 @@ function getMissingDataLegendSwatch(
 
   return {
     label: m.missing_data_text(),
-    fill: color,
+    fill: missingDataPattern
+      ? (missingDataPattern.background ?? 'none')
+      : color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
     patternFill: missingDataPattern
@@ -2996,4 +3052,270 @@ function buildQuantiColorThresholds(options: {
   }
 
   return null;
+}
+
+/** A primitive's fill, its stroke, or the second value of double symbols. */
+export type LegendRowChannel = 'fill' | 'stroke' | 'secondary';
+
+export interface LegendRowStyle {
+  /** The color the row is drawn in, absent when the primitive draws none. */
+  color?: string;
+  /** A symbol's shape for the row. */
+  shape?: ShapeType;
+}
+
+function firstColor(color: string | string[] | undefined): string | undefined {
+  return Array.isArray(color) ? color[0] : color;
+}
+
+function readClassedColor(
+  classification: ClassificationConfig | undefined,
+  value: unknown
+): string | undefined {
+  const colors = classification?.colors ?? [];
+  if (!classification || colors.length === 0 || isMissingThematicValue(value)) {
+    return undefined;
+  }
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return undefined;
+  if (getSingleClassValue(classification) !== null) return colors[0];
+  const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+  const classColors = getEffectiveClassedColors(colors, breaks);
+  const classIndex = getClassIndexForValue(numericValue, breaks, colors.length);
+  return classIndex === null
+    ? undefined
+    : classColors[Math.min(classIndex, classColors.length - 1)];
+}
+
+function readCategoryIndex(
+  classification: ClassificationConfig | undefined,
+  value: unknown
+): number | null {
+  if (!classification || isMissingThematicValue(value)) return null;
+  const key = String(value);
+  const labels = classification.labels ?? [];
+  const values = getCategoryValues(classification);
+  const disabled = new Set((classification.disabledLabels ?? []).map(String));
+  const count = classification.colors?.length ?? 0;
+  for (let index = 0; index < count; index += 1) {
+    const label = labels[index];
+    if ((values[index] ?? label) !== key) continue;
+    return label !== undefined && disabled.has(label) ? null : index;
+  }
+  return null;
+}
+
+function readCategoryColor(
+  classification: ClassificationConfig | undefined,
+  value: unknown
+): string | undefined {
+  const index = readCategoryIndex(classification, value);
+  return index === null ? undefined : classification?.colors?.[index];
+}
+
+function readStrokeColor(
+  config: {
+    strokeMode: StrokeMode;
+    strokeColor?: string | string[];
+    strokeClassification?: ClassificationConfig;
+    strokeValueColumn?: string;
+    strokeCategoryColumn?: string;
+  },
+  readValue: (column: string) => unknown
+): string | undefined {
+  switch (config.strokeMode) {
+    case StrokeMode.CLASSES:
+      return config.strokeValueColumn
+        ? readClassedColor(
+            config.strokeClassification,
+            readValue(config.strokeValueColumn)
+          )
+        : undefined;
+    case StrokeMode.CATEGORIES:
+      return config.strokeCategoryColumn
+        ? readCategoryColor(
+            config.strokeClassification,
+            readValue(config.strokeCategoryColumn)
+          )
+        : undefined;
+    case StrokeMode.UNIQUE:
+      return firstColor(config.strokeColor);
+    default:
+      return undefined;
+  }
+}
+
+// The layers' own fallback for the second value of double symbols.
+const DOUBLE_SYMBOL_SECONDARY_FILL = '#ff832b';
+
+function readSymbolRowStyle(
+  viz: VisualizationConfig,
+  channel: LegendRowChannel,
+  readValue: (column: string) => unknown
+): LegendRowStyle {
+  const symbol = getSymbolPrimitive(viz);
+  if (!symbol) return {};
+  const categoryColumn = getPrimitiveCategoryColumn(
+    viz,
+    PrimitiveFilterType.POINT
+  );
+  const categoryIndex =
+    symbol.mode === SymbolMode.CATEGORIES && categoryColumn
+      ? readCategoryIndex(
+          getPrimitiveClassification(viz, PrimitiveFilterType.POINT),
+          readValue(categoryColumn)
+        )
+      : null;
+  const shape =
+    categoryIndex === null
+      ? (symbol.shape ?? ShapeType.CIRCLE)
+      : getLegendPointCategoryShape(viz, categoryIndex);
+  if (channel === 'stroke') {
+    return { shape, color: readStrokeColor(symbol, readValue) };
+  }
+  if (channel === 'secondary') {
+    return {
+      shape,
+      color: symbol.fillColorB ?? DOUBLE_SYMBOL_SECONDARY_FILL
+    };
+  }
+
+  let color: string | undefined;
+  if (symbol.fillMode === FillMode.NONE) {
+    color = undefined;
+  } else if (symbol.mode === SymbolMode.CATEGORIES && categoryColumn) {
+    color =
+      categoryIndex === null
+        ? undefined
+        : getPrimitiveClassification(viz, PrimitiveFilterType.POINT)?.colors?.[
+            categoryIndex
+          ];
+  } else if (
+    symbol.fillMode === FillMode.CATEGORIES &&
+    getSymbolFillCategoryColumn(viz)
+  ) {
+    color = readCategoryColor(
+      getSymbolFillClassification(viz),
+      readValue(getSymbolFillCategoryColumn(viz) as string)
+    );
+  } else if (
+    symbol.fillMode === FillMode.CLASSES &&
+    getSymbolFillValueColumn(viz)
+  ) {
+    color = readClassedColor(
+      getSymbolFillClassification(viz),
+      readValue(getSymbolFillValueColumn(viz) as string)
+    );
+  } else {
+    color = firstColor(symbol.fillColor);
+  }
+  return { shape, color };
+}
+
+function readPolygonRowStyle(
+  viz: VisualizationConfig,
+  channel: LegendRowChannel,
+  readValue: (column: string) => unknown
+): LegendRowStyle {
+  const polygon = getPolygonPrimitive(viz);
+  if (!polygon) return {};
+  if (channel === 'stroke') {
+    return { color: readStrokeColor(polygon, readValue) };
+  }
+  const classification =
+    getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+    viz.classification;
+  switch (polygon.fillMode) {
+    case FillMode.CLASSES:
+      return {
+        color: polygon.valueColumn
+          ? readClassedColor(classification, readValue(polygon.valueColumn))
+          : undefined
+      };
+    case FillMode.CATEGORIES:
+      return {
+        color: polygon.categoryColumn
+          ? readCategoryColor(classification, readValue(polygon.categoryColumn))
+          : undefined
+      };
+    case FillMode.UNIQUE:
+      return { color: firstColor(polygon.fillColor) };
+    case FillMode.DENSITY:
+      return { color: viz.density?.color ?? DENSITY_DEFAULTS.color };
+    default:
+      return {};
+  }
+}
+
+function readColorModeRowStyle(
+  colorMode: ColorMode,
+  color: string | string[] | undefined,
+  classification: ClassificationConfig | undefined,
+  valueColumn: string | undefined,
+  categoryColumn: string | undefined,
+  readValue: (column: string) => unknown
+): LegendRowStyle {
+  switch (colorMode) {
+    case ColorMode.CLASSES:
+      return {
+        color: valueColumn
+          ? readClassedColor(classification, readValue(valueColumn))
+          : undefined
+      };
+    case ColorMode.CATEGORIES:
+      return {
+        color: categoryColumn
+          ? readCategoryColor(classification, readValue(categoryColumn))
+          : undefined
+      };
+    case ColorMode.UNIQUE:
+      return { color: firstColor(color) };
+    default:
+      return {};
+  }
+}
+
+/**
+ * The color, and a symbol's shape, one row is drawn in by a primitive of a
+ * visualization, read like the legend reads it: from the classes, the
+ * categories or the single color the primitive uses.
+ */
+export function resolveLegendRowStyle(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilter,
+  channel: LegendRowChannel,
+  readValue: (column: string) => unknown
+): LegendRowStyle {
+  switch (primitive) {
+    case PrimitiveFilterType.POINT:
+      return readSymbolRowStyle(viz, channel, readValue);
+    case PrimitiveFilterType.POLYGON:
+      return readPolygonRowStyle(viz, channel, readValue);
+    case PrimitiveFilterType.LINE: {
+      const line = getLinePrimitive(viz);
+      return line
+        ? readColorModeRowStyle(
+            line.colorMode,
+            line.color,
+            getPrimitiveClassification(viz, PrimitiveFilterType.LINE),
+            line.valueColumn,
+            line.categoryColumn,
+            readValue
+          )
+        : {};
+    }
+    case PrimitiveFilterType.TEXT: {
+      const text = getTextPrimitive(viz);
+      return text
+        ? readColorModeRowStyle(
+            text.colorMode,
+            text.color,
+            getPrimitiveClassification(viz, PrimitiveFilterType.TEXT),
+            text.valueColumn,
+            text.categoryColumn,
+            readValue
+          )
+        : {};
+    }
+  }
 }

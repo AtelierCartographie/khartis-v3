@@ -46,17 +46,22 @@ série : `head_tail` à partir de 3, `quantiles` à partir de 1,5 en valeur
 absolue, sinon la méthode courante. Le nombre de classes est plafonné à
 max(2, lignes / 3). L'utilisateur reste libre de ce choix.
 
-## Dates : pas calendaire ou bornes manuelles
+## Dates : pas calendaire, k-means, quantiles ou bornes manuelles
 
-Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire
-ou par bornes manuelles, jamais par une méthode numérique ; une colonne
-numérique ne se classe jamais par pas calendaire. `computeClassificationBreaks()`
-lit le type DuckDB de la colonne (`isTemporalColumn()`) et impose la méthode,
-quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
+Une colonne `DATE`, `TIMESTAMP` ou `TIMESTAMPTZ` se classe par pas calendaire,
+par k-means, par quantiles ou par bornes manuelles ; une colonne numérique ne se classe jamais
+par pas calendaire. `computeClassificationBreaks()` lit le type DuckDB de la
+colonne (`isTemporalColumn()`) et impose la méthode, quel que soit l'appelant
+(panneau, suggestion, rafraîchissement, exemple). K-means est aussi la méthode
+par défaut de tous les préréglages : sur une date, il n'est retenu que si la
+classification porte déjà un résultat daté (`calendarStep`), sinon la date
+part en pas calendaire.
 
 - **Calcul.** `calculateCalendarBreaks()` lit `epoch_ms(colonne)` dans DuckDB
-  (min, max, effectifs). Le choix et l'alignement du pas sont des fonctions
-  pures de `commons/utils/calendar-breaks.utils.ts`, en UTC : jour, semaine
+  (min, max, précision, effectifs). Le choix et l'alignement du pas sont des
+  fonctions pures de `commons/utils/calendar-breaks.utils.ts`, en UTC (ce
+  n'est que de l'arithmétique sur deux nombres, la lecture des données reste
+  dans DuckDB) : jour, semaine
   ISO (lundi), mois, 2 mois, trimestre, semestre, puis 1, 2, 5, 10, 20, 25,
   50, 100… ans. Les seuils tombent sur le premier jour d'une période (années
   multiples du pas, trimestres en janvier, avril, juillet et octobre).
@@ -74,6 +79,33 @@ quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
   année, tous au 1er du mois → mois, sinon jour) devient `calendarStep` : elle
   fixe les bornes extérieures et les libellés. `parseCalendarBoundary()` relit
   les saisies (« 1975 », « 04/1975 », « 12/04/1975 », « avr. 1975 »…).
+- **Précision.** La même requête lit l'unité la plus grossière commune à
+  toutes les dates (`calendarPrecision`) : toutes au 1er janvier → année,
+  toutes au 1er du mois → mois (une colonne année-mois importée), sinon jour.
+  Aucun pas, aucun accrochage plus fin que cette précision n'est proposé : des
+  semaines sur des mois couperaient des classes vides. Elle n'est pas
+  persistée, elle se relit à chaque calcul.
+- **K-means et quantiles.** `calculateDateDataBreaks()` lance la macro sur
+  `epoch_ms(colonne)::DOUBLE`, puis `snapBreaksToCalendar()` ramène chaque
+  seuil au repère calendaire le plus proche. L'accrochage part deux crans sous
+  le pas qu'aurait le pas calendaire pour ce nombre de classes (une série sur
+  70 ans accroche aux 10 ans, une série sur un an aux 2 mois) et descend
+  jusqu'au premier pas qui garde tous les seuils distincts : une classe ne se
+  perd que si deux seuils tombent le même jour, et la note de fusion l'annonce.
+  `calendarStep` reçoit la granularité des seuils, comme en manuel. Après
+  accrochage, les quantiles ne sont plus tout à fait égaux en effectifs.
+- **Date pivot.** `breakpointValue` porte une date (epoch ms) et rend la palette
+  divergente, avec un sens propre à chaque méthode :
+  - pas calendaire : les périodes sont comptées depuis la pivot
+    (`buildCalendarBreaks(…, anchor)`), qui est donc toujours un seuil ; un mois
+    compté depuis le 31 garde le dernier jour des mois courts. Le pas fixe le
+    nombre de classes de chaque côté, le curseur de position est inactif ;
+  - k-means et quantiles : chaque côté est classé à part, comme pour un
+    nombre, avec le nombre de classes du curseur ;
+  - manuel : la pivot ne fait que répartir les couleurs, comme pour un nombre
+    (une classe qui la contient passe du côté supérieur).
+    Les seuils sont libellés à leur propre précision : dans une série en années,
+    une pivot au 10 mai s'affiche « 10 mai 1981 » et les classes voisines au jour.
 - **Unités.** Bornes, `min` et `max` sont en millisecondes epoch : c'est
   l'unité que reçoit le rendu, qui décode la date Arrow sans `useDate`.
 - **Légende.** La même que pour les nombres (barre horizontale ou verticale,
@@ -81,8 +113,13 @@ quel que soit l'appelant (panneau, suggestion, rafraîchissement, exemple).
   (`formatCalendarBoundary()`) : « 1950 », « avr. 2020 », « 12 avr. 2020 ».
   Les listes de pastilles libellent chaque classe par sa période, fin incluse
   (`formatCalendarClassLabel()`) : « 1950–1969 », « janv.–mars 2021 ».
-- **Hors périmètre.** Pas de point de rupture ni de taille proportionnelle sur
-  une date.
+- **Suggestions.** Une date a un score sémiologique fixe et passe toujours
+  derrière les taux. Quand le jeu contient une date assez étalée pour être
+  classée, `suggestVisualizations()` lui réserve une suggestion (une place
+  libre, sinon la dernière, jamais la première). Elle est classée en couleur
+  (aplats, symboles, lignes, textes), jamais en taille.
+- **Hors périmètre.** Pas de taille proportionnelle sur une date : il faudrait
+  d'abord une durée (ancienneté), qui est une variable de rapport.
 
 La reconnaissance des dates à l'import est décrite dans
 [Import DuckDB](IMPORT_DUCKDB.md).
@@ -149,9 +186,12 @@ classes sous le pivot, pour que légende et palette se répartissent comme la
 carte.
 
 `computeDivergingSplit()` répartit la palette selon la position réelle des
-bornes. Si une classe chevauche le pivot, elle reçoit la couleur centrale ;
-sinon, les classes se partagent entre les deux côtés, éventuellement de façon
-asymétrique. La couleur neutre tombe ainsi sur le pivot réel.
+bornes : les classes dont la borne haute est inférieure ou égale au pivot sont
+du côté inférieur, les autres du côté supérieur, éventuellement de façon
+asymétrique. Une palette divergente n'a pas de classe centrale : le pivot est
+une borne, et la transition entre les deux teintes tombe sur lui. Seul un pivot
+fini rend la palette divergente (`isDivergingBreakpoint()`) ; sinon elle reste
+séquentielle.
 
 ## Palettes
 
@@ -159,6 +199,13 @@ Les couleurs sont produites par `@ateliercartographie/ok-palette`, en OKLCH,
 pour des paliers perceptuellement réguliers. `generateColorsForBreaks()`
 appelle `sequential()` ou `divergentSequential()`, puis `resolvePalette()` pour
 la sortie WebGL.
+
+Chaque couleur est contrainte au gamut sRGB (option `gamut` d'ok-palette, `srgb`
+par défaut) : la chroma est plafonnée classe par classe au maximum affichable
+pour sa clarté et sa teinte, qui restent inchangées. Le navigateur n'a donc
+plus rien à écrêter, et l'écart perceptuel entre classes survit à l'affichage.
+Les gamuts CMJN (`cmyk-coated`, `cmyk-uncoated`) existent dans la bibliothèque
+mais ne sont pas exposés dans Khartis.
 
 Quatre types (`PALETTE_TYPE`) : `sequential`, `diverging`, `qualitative` et
 `pattern`. Le type suit la nature de la variable : une palette qualitative sur
@@ -182,6 +229,30 @@ Les trames viennent de `@ateliercartographie/motif.js`. Elles forment un type
 de palette (`pattern`) et marquent aussi l'absence de données. Sur la carte,
 elles passent par une texture (`map/layers/pattern-texture.ts`) ; dans les
 aperçus et la légende, par des `defs` SVG.
+
+La taille d'un motif est la part de la tuile qu'il couvre : c'est elle qui
+ordonne une palette de motifs (`sequentialPatterns`), comme la clarté ordonne
+une palette de couleurs.
+
+Avec un pivot, `resolveClassPatterns()` reçoit la répartition et produit une
+rampe par côté, qui grandit en s'éloignant du pivot. La taille porte l'ordre,
+la couleur porte seulement le côté : chaque côté prend une teinte fixe
+(`PatternPaletteConfig.divergingColors`, sinon `DEFAULT_DIVERGING_COLORS`),
+que le contraste ne change pas. Quatre formes sont proposées, et l'angle choisi
+par l'utilisateur reste réglable, le côté inférieur gardant l'écart qui oppose
+les deux côtés :
+
+| Forme       | Sous le pivot              | Au-dessus    |
+| ----------- | -------------------------- | ------------ |
+| Ligne       | ligne à α + 90°            | ligne à α    |
+| Quadrillage | quadrillage à α            | ligne à α    |
+| Triangle    | triangle à α + 180°        | triangle à α |
+| Plus        | plus à α + 45° (une croix) | plus à α     |
+
+Une croix est un plus tourné de 45° ; les autres formes retombent sur la ligne.
+La taille plafonne à 43 % pour le triangle et le plus
+(`DIVERGING_PATTERN_MAX_SIZE`) : au-delà, la forme touche ses voisines, la part
+peinte ne vaut plus la taille et la rampe perd son ordre.
 
 ## Simulation des troubles de la vision
 

@@ -33,10 +33,25 @@ export function getTextAnnotationName(item: Annotation): string {
     return m.annotations_text();
   }
 
-  return m.annotations_text_excerpt({
-    text:
-      text.length > EXCERPT_LENGTH
-        ? `${text.slice(0, EXCERPT_LENGTH - 1)}…`
-        : text
+  return text.length > EXCERPT_LENGTH
+    ? `${text.slice(0, EXCERPT_LENGTH - 1)}…`
+    : text;
+}
+
+/**
+ * Names an item « Flèche 2 », « Dessin 1 »… after its rank among the items
+ * the predicate groups with it, in creation order.
+ */
+export function getOrdinalAnnotationName(
+  items: readonly Annotation[],
+  item: Annotation,
+  name: string,
+  sameGroup: (candidate: Annotation) => boolean
+): string {
+  const siblings = items.filter(sameGroup);
+  const rank = siblings.findIndex((candidate) => candidate.id === item.id);
+  return m.annotations_item_ordinal({
+    name,
+    index: String(rank < 0 ? siblings.length + 1 : rank + 1)
   });
 }

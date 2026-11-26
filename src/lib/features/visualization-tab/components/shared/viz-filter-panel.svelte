@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import PanelHeader from '$lib/features/commons/components/panel-header.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
@@ -101,8 +106,12 @@
     };
 
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
+    const releaseFloatingPanel = claimFloatingPanel(() =>
+      untrack(() => onClose)()
+    );
 
     return () => {
+      releaseFloatingPanel();
       resizeObserver?.disconnect();
       window.removeEventListener(EVENT.RESIZE, updatePanelPosition);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
@@ -169,6 +178,8 @@
 
 <aside
   use:portal
+  in:floatingPanelIn|global
+  out:floatingPanelOut|global
   class="viz-filter-panel"
   style:right={panelRight}
   aria-label={title ?? m.filter_panel_title()}
@@ -217,7 +228,9 @@
         onclick={handleAddFilterClick}
         disabled={dataFields.length === 0}
       >
-        <span>{m.filter_add_filter()}</span>
+        <span>
+          {hasFilters ? m.filter_add_new_filter() : m.filter_add_filter()}
+        </span>
         <Add size={16} />
       </button>
 
@@ -259,16 +272,23 @@
     top: 50%;
     transform: translateY(-50%);
     width: 300px;
-    min-height: 300px;
+    /* Tall enough for an open filter list to show all its options. */
+    min-height: 680px;
     max-height: min(80vh, calc(100dvh - 120px));
     overflow: hidden;
-    background: var(--cds-ui-02, #ffffff);
+    background: var(--cds-layer-02, #ffffff);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-overlay);
     display: flex;
     flex-direction: column;
+  }
+
+  /* Every operator fits in an open list without scrolling. */
+  .viz-filter-panel
+    :global(.bx--list-box--expanded.bx--list-box--sm .bx--list-box__menu) {
+    max-height: 18rem;
   }
 
   @media (max-width: 1023px) {
@@ -294,6 +314,7 @@
   }
 
   .panel-content {
+    flex: 1;
     overflow-y: auto;
     padding: var(--cds-spacing-05);
     display: flex;
@@ -323,7 +344,7 @@
   .stats-progress-fill {
     display: block;
     height: 100%;
-    background: var(--cds-interactive-01, #161616);
+    background: var(--cds-background-brand, #161616);
     transition: width 0.15s ease-out;
   }
 
@@ -369,7 +390,7 @@
     align-self: flex-start;
     background: transparent;
     border: none;
-    color: var(--cds-link-01, #0f62fe);
+    color: var(--cds-link-primary, #0f62fe);
     cursor: pointer;
     font-size: 0.75rem;
     padding: 0;
@@ -389,7 +410,7 @@
     align-items: center;
     gap: var(--cds-spacing-02);
     font-size: 0.75rem;
-    color: var(--cds-link-01, #0f62fe);
+    color: var(--cds-link-primary, #0f62fe);
     text-decoration: none;
 
     &:hover {

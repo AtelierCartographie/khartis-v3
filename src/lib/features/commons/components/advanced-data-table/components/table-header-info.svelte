@@ -42,13 +42,13 @@
     gap: 8px;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
   }
 
   .filter-count {
     font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.32px;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
   }
 </style>

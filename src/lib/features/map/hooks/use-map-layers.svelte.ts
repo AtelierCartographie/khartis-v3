@@ -31,6 +31,7 @@ import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapHoverHighlightStore } from '../stores/map-hover-highlight.store.svelte';
+import { hiddenLabelsStore } from '../stores/hidden-labels.store.svelte';
 import { labelLayoutStore } from '../stores/label-layout.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
@@ -58,7 +59,10 @@ import type {
   SplitRenderingTable
 } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
-import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import {
+  BasemapLayerType,
+  GeoreferenceType
+} from '$lib/features/commons/constants/ui.constants';
 import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   selectRowsByIndices,
@@ -105,11 +109,29 @@ import {
   createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
 import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
+import { resolveViewLabels } from '../utils/projection-preset-names.utils';
+import { getLocale } from '$lib/paraglide/runtime';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
 import { getBasemapCentroidsTableName } from '../services/basemap-import.service';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { joinControlStore } from '../stores/join-control.store.svelte';
+import {
+  createJoinControlHoverLayers,
+  createJoinControlLayers,
+  toUnjoinedRows,
+  type JoinControlHoverSource,
+  type JoinControlLayers
+} from '../layers/join-control-layers';
+import { buildPendingJoinMappings } from '../utils/join-control.utils';
+import { createReferenceEntityProbeLayer } from '../layers/reference-entity-probe-layer';
+import { ToolbarStep } from '$lib/features/commons/types/global';
+
+const JOIN_CONTROL_LAYER_PREFIX = 'join-control-';
+const REFERENCE_ENTITY_PROBE_LAYER_PREFIX = 'reference-entity-probe-';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -131,6 +153,7 @@ const ORTHOGRAPHIC_BASEMAP_LAYER_PREFIXES = [
   DeckLayerId.BASEMAP_FRONTIERES,
   DeckLayerId.BASEMAP_VILLES,
   DeckLayerId.BASEMAP_VILLES_LABELS,
+  DeckLayerId.BASEMAP_VUES_LABELS,
   DeckLayerId.BASEMAP_META_LAND,
   DeckLayerId.BASEMAP_META_LIMIT,
   DeckLayerId.BASEMAP_META_GRATICULE,
@@ -267,6 +290,82 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     };
   }
 
+  // At the Data step the dataset joined to the reference basemap is drawn by
+  // the basemap: its territories take the color of their join status.
+  function createDatasetJoinControlLayers(
+    datasetId: string,
+    joinedBasemapFile: string | null,
+    split: SplitRenderingTable | undefined,
+    ctx: LayerContext,
+    showsBasemapLayers: boolean
+  ): JoinControlLayers | null {
+    const metadata = basemapService.currentMetadata;
+    if (
+      !split ||
+      !joinedBasemapFile ||
+      metadata?.file !== joinedBasemapFile ||
+      datasetId !== datasetsStore.selectedDatasetId ||
+      dataTabState.geolocation.geoReference !== GeoreferenceType.ENTITIES ||
+      untrack(() => globalState.isMapExporting) ||
+      !split.dataset.schema.fields.some(
+        (field) => field.name === JOINED_BASEMAP_COLUMN.ID
+      )
+    ) {
+      return null;
+    }
+
+    const datasetEntry = datasetsStore.datasets.find(
+      (dataset) => dataset.id === datasetId
+    );
+    const orchestratorDatasetId = datasetEntry?.sourceFileId || datasetId;
+    const geoColumn =
+      duckDBOrchestrator.findDatasetByIdOrSourceFile(orchestratorDatasetId)
+        ?.geoColumn ?? datasetEntry?.geoColumn;
+    if (!geoColumn) {
+      return null;
+    }
+
+    const statuses = joinControlStore.request({
+      datasetId,
+      orchestratorDatasetId,
+      datasetTable: split.dataset,
+      basemap: metadata,
+      geoColumn,
+      excludedValues: dataTabState.basemapJoin.ignoredEntities.map(
+        (entity) => entity.dataValue
+      ),
+      pendingMappings: buildPendingJoinMappings(
+        dataTabState.basemapJoin.joinMappings,
+        joinControlStore.getClearedValues(datasetId)
+      )
+    });
+    if (!statuses || joinControlStore.getRevealProgress(datasetId) === 0) {
+      return null;
+    }
+    // The finalized join belongs to the variable it was built on. Once the
+    // panel links another one, nothing is joined until it is finalized again,
+    // which never happens for a variable that matches nothing.
+    const isCurrentJoin =
+      statuses.geoColumn === geoColumn &&
+      dataTabState.geolocation.linkedVariableName === geoColumn;
+
+    return createJoinControlLayers({
+      layerId: `${JOIN_CONTROL_LAYER_PREFIX}${datasetId}${
+        ctx.projectionSuffix ? `-${ctx.projectionSuffix}` : ''
+      }`,
+      geometry: split.geometry,
+      featureIdColumn: split.featureIdColumn,
+      dataset: split.dataset,
+      geoColumn,
+      sourceIsFile: Boolean(datasetEntry?.geometry),
+      rows: isCurrentJoin ? statuses.rows : toUnjoinedRows(statuses.rows),
+      outlineTerritories:
+        !showsBasemapLayers ||
+        !metadata.layers.some((layer) => layer.type === BasemapLayerType.LIMIT),
+      ctx
+    });
+  }
+
   function findFirstSymbolLayerId(map: MapLibreMap): string | undefined {
     const style = map.getStyle();
     if (!style?.layers) return undefined;
@@ -353,9 +452,62 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...layers, ...(preview as Layer<DeckDataRow>[])];
   }
 
+  // Ghosts of the labels the placement hid, in the Styling step: drawn on top
+  // like the drag preview, so a hover never rebuilds the thematic layers.
+  function withHiddenLabelGhosts(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const ghosts = untrack(() => hiddenLabelsStore.ghostLayers);
+    return ghosts.length > 0
+      ? [...layers, ...(ghosts as Layer<DeckDataRow>[])]
+      : layers;
+  }
+
+  let joinControlHoverSource: JoinControlHoverSource | null = null;
+
+  // Hovering a value in the join panel or a row of the table outlines its
+  // territory over the applied stack, like the map hover.
+  function withJoinControlHover(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const target = untrack(() => joinControlStore.hoverTarget);
+    const source = joinControlHoverSource;
+    if (
+      !target ||
+      !source ||
+      untrack(() => globalState.isMapExporting) ||
+      !layers.some((layer) => layer.id === source.fillLayerId)
+    ) {
+      return layers;
+    }
+    return [...layers, ...createJoinControlHoverLayers(source, target)];
+  }
+
+  // The join fades in over the applied stack the first time it is drawn.
+  function withJoinControlReveal(
+    layers: Layer<DeckDataRow>[]
+  ): Layer<DeckDataRow>[] {
+    const progress = untrack(() =>
+      joinControlStore.getRevealProgress(datasetsStore.selectedDatasetId ?? '')
+    );
+    if (progress >= 1) return layers;
+    return layers.map((layer) =>
+      layer.id.startsWith(JOIN_CONTROL_LAYER_PREFIX)
+        ? (layer.clone({
+            opacity: (layer.props.opacity ?? 1) * progress
+          }) as Layer<DeckDataRow>)
+        : layer
+    );
+  }
+
   $effect(() => {
     void mapHoverHighlightStore.overlay;
     void labelLayoutStore.dragPreview;
+    void hiddenLabelsStore.ghostLayers;
+    void joinControlStore.hoverTarget;
+    void joinControlStore.getRevealProgress(
+      datasetsStore.selectedDatasetId ?? ''
+    );
     untrack(() => {
       if (lastAppliedLayers.length > 0) {
         setLayers(lastAppliedLayers);
@@ -364,7 +516,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   });
 
   function setLayers(stack: Layer<DeckDataRow>[]): boolean {
-    const layers = withLabelDragPreview(withHoverHighlight(stack));
+    const layers = withLabelDragPreview(
+      withHiddenLabelGhosts(
+        withHoverHighlight(withJoinControlReveal(withJoinControlHover(stack)))
+      )
+    );
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
 
@@ -1028,12 +1184,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
       // Page zoom scales pixel-sized marks (radius, line width, label size) so
-      // they track the canvas and SVG legend. Only orthographic mode applies the
-      // render modelMatrix that scales geometry positions, so gate the mark scale
-      // to that mode too; interleaved (MapLibre) keeps it at 1 to stay in sync.
-      const pageDisplayScaleToApply = isOrthographicMode
-        ? (getPageDisplayScale?.() ?? 1)
-        : 1;
+      // they track the geometry and the SVG legend. Geometry follows through the
+      // render modelMatrix in orthographic mode and through the map zoom
+      // (`rescaleMapLibreView`) in interleaved mode.
+      const pageDisplayScaleToApply = getPageDisplayScale?.() ?? 1;
 
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
@@ -1156,6 +1310,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
       let hasPendingBasemapLayerSource = false;
+      let labelOutlineTables: ArrowTable[] = [];
       let isBuildingBasemapLayer = false;
       isWaitingForRepresentativePoints = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
@@ -1180,7 +1335,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               ? (projectionFitBbox ?? currentMetadata?.bbox ?? null)
               : projectionFitBbox,
             graticuleClipExtent,
-            unprojectedFrame
+            unprojectedFrame,
+            pageDisplayScale: pageDisplayScaleToApply
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
@@ -1286,6 +1442,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
           }
 
+          labelOutlineTables = metadataLayers
+            .filter((layer) => layer.type === BasemapLayerType.LAND)
+            .map((layer) => layer.table);
+
           const additionalData = {
             frontieresTable: shouldShowBasemapLayers
               ? (basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
@@ -1305,15 +1465,39 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             metadataLayers,
             stylePresets: shouldShowBasemapLayers
               ? basemapService.stylePresets
-              : null
+              : null,
+            viewLabels:
+              shouldShowBasemapLayers &&
+              currentMetadata &&
+              basemapAuxLayersStore.isVisible(
+                currentMetadata.file,
+                SYNTHETIC_AUX_LAYER_KEY.VUES,
+                true
+              )
+                ? resolveViewLabels(
+                    basemapService.projectionPresets,
+                    currentMetadata.proj_to?.preset,
+                    getLocale()
+                  )
+                : undefined
           };
           const basemapGroups = createBasemapLayers(
             shouldShowBasemapLayers ? worldBaseTable : null,
             basemapCtx,
             additionalData
           );
+          // A basemap can hide its sea on its own (composite basemaps start
+          // that way), on top of the shared Mers/Océans row.
+          const isSeaShownForBasemap = currentMetadata
+            ? basemapAuxLayersStore.isVisible(
+                currentMetadata.file,
+                SYNTHETIC_AUX_LAYER_KEY.MERS,
+                true
+              )
+            : true;
           basemapBackgroundLayers =
-            shouldShowBasemapLayers || shouldShowGeneratedOceanLayer
+            (shouldShowBasemapLayers || shouldShowGeneratedOceanLayer) &&
+            isSeaShownForBasemap
               ? basemapGroups.background
               : basemapGroups.background.filter(
                   (layer) => !isGeneratedOceanLayer(layer)
@@ -1376,6 +1560,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       };
 
       const renderedDatasetIds = new Set<string>();
+      // At the Visualizations step every entity of the reference basemap can
+      // be hovered for its name, joined to the data or not.
+      const referenceProbeLayers: Layer<DeckDataRow>[] = [];
+      const probedDatasetIds = new Set<string>();
+      const shouldProbeReferenceEntities = untrack(
+        () =>
+          globalState.selectedStep === ToolbarStep.Visualizations &&
+          !globalState.isMapExporting
+      );
       for (const viz of visualizationsToRender) {
         const vizLayerStart = layers.length;
         try {
@@ -1423,6 +1616,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             projectionState.overrideSource,
             allowProjectionOverride
           );
+          ctx.labelOutlineTables = labelOutlineTables;
 
           if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
@@ -1488,6 +1682,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);
+            if (
+              split &&
+              shouldProbeReferenceEntities &&
+              currentMetadata &&
+              joinedBasemapId === currentMetadata.file &&
+              isPolygonGeometryType(geoInfo?.type) &&
+              !probedDatasetIds.has(datasetId)
+            ) {
+              probedDatasetIds.add(datasetId);
+              const probe = createReferenceEntityProbeLayer({
+                layerId: `${REFERENCE_ENTITY_PROBE_LAYER_PREFIX}${datasetId}${
+                  projectionSuffix ? `-${projectionSuffix}` : ''
+                }`,
+                geometry: split.geometry,
+                dataset: split.dataset,
+                featureIdColumn: split.featureIdColumn,
+                basemap: currentMetadata,
+                ctx
+              });
+              if (probe) referenceProbeLayers.push(probe);
+            }
             if (arrowLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
@@ -1526,6 +1741,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
         }
       }
+
+      const joinControlTerritoryLayers: Layer<DeckDataRow>[] = [];
+      joinControlHoverSource = null;
 
       if (shouldRenderDatasetFallbacks) {
         const fallbackDatasetIds = new Set<string>(tables.keys());
@@ -1616,6 +1834,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             ...fallbackCtx,
             highlightedRowIds: undefined
           };
+          const joinControl = isDrawnByReferenceBasemap
+            ? createDatasetJoinControlLayers(
+                datasetId,
+                datasetJoinedBasemap,
+                splitData?.get(datasetId),
+                fallbackCtx,
+                shouldShowBasemapLayers
+              )
+            : null;
+          if (joinControl) {
+            joinControlTerritoryLayers.push(...joinControl.territoryLayers);
+            layers.push(...joinControl.markerLayers);
+            joinControlHoverSource = joinControl.hoverSource;
+          }
           if (
             !isDrawnByReferenceBasemap &&
             table?.schema.metadata?.get('geo')
@@ -1759,13 +1991,30 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         layerOrderStore.order,
         activeVisualizations.map((viz) => viz.id)
       );
+      // The join overlay colours the territories, so it sits right above the
+      // front-most background row. Inheriting the rank of the row emitted
+      // just before it put it under a second land layer (NUTS basemaps).
+      const joinAnchorRowId =
+        basemapBackgroundLayers
+          .map((layer) => basemapRowIdByLayerId.get(String(layer.id)))
+          .filter(
+            (id): id is string =>
+              id !== undefined && panelLayerOrder.includes(id)
+          )
+          .sort(
+            (left, right) =>
+              panelLayerOrder.indexOf(left) - panelLayerOrder.indexOf(right)
+          )[0] ?? null;
       const rowIdForLayer = (layer: Layer): string | null =>
-        thematicRowIdByLayerId.get(String(layer.id)) ??
-        basemapRowIdByLayerId.get(String(layer.id)) ??
-        null;
+        String(layer.id).startsWith(JOIN_CONTROL_LAYER_PREFIX)
+          ? joinAnchorRowId
+          : (thematicRowIdByLayerId.get(String(layer.id)) ??
+            basemapRowIdByLayerId.get(String(layer.id)) ??
+            null);
       const orderedLayers = applyPanelRenderOrder(
         [
           ...basemapBackgroundLayers,
+          ...joinControlTerritoryLayers,
           ...basemapForegroundBelowThematicLayers,
           ...basemapForegroundLayers,
           ...layers
@@ -1778,14 +2027,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionSphereMaskLayer
       );
       layers.length = 0;
-      layers.push(...maskedOrderedLayers);
+      // Under everything pickable, so the visualizations answer first.
+      layers.push(...referenceProbeLayers, ...maskedOrderedLayers);
 
       const hasExpectedActiveViz = activeVisualizations.some(
         visualizationHasEnabledPrimitive
       );
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && tables.size > 0;
-      // The layer store always holds its ten rows, so "one of them is visible"
+      // The layer store always holds its eleven rows, so "one of them is visible"
       // says nothing about a basemap that draws none of them: it kept the
       // previous stack on screen after the user hid every row. What justifies
       // holding it is a visible layer whose table has not loaded yet.

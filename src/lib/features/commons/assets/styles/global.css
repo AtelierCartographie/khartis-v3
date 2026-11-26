@@ -10,14 +10,17 @@
   --kh-side-panel-full-width: clamp(400px, 50%, 800px);
   --kh-side-panel-collapsed-width: 50px;
   --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
-  --khartis-data-table-header-background: var(--cds-ui-03);
+  --khartis-data-table-header-background: var(--cds-layer-accent-01);
   --khartis-data-table-header-hover-background: var(
     --cds-layer-accent-hover-01
   );
-  --khartis-control-surface-background: var(--cds-ui-02, #ffffff);
-  --khartis-control-surface-hover-background: var(--cds-hover-ui, #e8e8e8);
-  --khartis-main-toolbar-background: var(--cds-ui-01, #f4f4f4);
-  --khartis-main-toolbar-surface-background: var(--cds-ui-02, #ffffff);
+  --khartis-control-surface-background: var(--cds-layer-02, #ffffff);
+  --khartis-control-surface-hover-background: var(
+    --cds-layer-hover-02,
+    #e8e8e8
+  );
+  --khartis-main-toolbar-background: var(--cds-layer-01, #f4f4f4);
+  --khartis-main-toolbar-surface-background: var(--cds-layer-02, #ffffff);
   --khartis-palette-swatch-border-color: var(--cds-icon-on-color, #ffffff);
 
   /* Z-index layering system */
@@ -36,17 +39,20 @@
   --z-overlay: 9999;
   --z-notification: 10000;
   --z-popover: 10001;
-  --cds-interactive-04: #3c3838;
-  --cds-active-primary: rgb(46, 44, 44);
-  --cds-hover-primary: #3c3838;
-  --cds-link-01: var(--cds-text-01);
-  --cds-link-02: var(--cds-text-01);
-  --cds-hover-primary-text: #515151;
-  --cds-inverse-focus-ui: #ffffff;
+  --cds-interactive: #3c3838;
+  --cds-border-interactive: #3c3838;
+  --cds-button-primary-active: rgb(46, 44, 44);
+  /* Carbon's hover step of the primary colour: lighter for a dark grey, as
+     Carbon does for gray-80 (#393939 → #474747). */
+  --cds-button-primary-hover: #4a4646;
+  --cds-link-primary: var(--cds-text-primary);
+  --cds-link-secondary: var(--cds-text-primary);
+  --cds-link-primary-hover: #515151;
+  --cds-focus-inverse: #ffffff;
   --cds-focus: black;
-  --cds-interactive-01: #3c3838;
-  --cds-interactive-02: #6f6f6f;
-  --cds-interactive-03: #726e6e;
+  --cds-background-brand: #3c3838;
+  --cds-button-secondary: #6f6f6f;
+  --cds-button-tertiary: #726e6e;
   --cds-blue: #0072c3;
   --cds-pale-blue: #cceeff;
   --cds-medium-blue: #a8e2ff;
@@ -57,27 +63,20 @@
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #525252;
   --cds-border-subtle-01: #cac5c4;
-  --cds-border-subtle-00: var(--cds-ui-03);
   --cds-border-subtle-02: var(--cds-border-subtle-01);
-  --cds-border-strong-01: var(--cds-ui-04);
-  --cds-border-strong-02: var(--cds-text-05);
+  --cds-border-strong-02: var(--cds-text-helper);
   --cds-border-tile-01: var(--cds-border-subtle-01);
-  --cds-field-hover-01: var(--cds-hover-ui);
-  --cds-layer-01: var(--khartis-control-surface-background);
-  --cds-layer-02: var(--cds-ui-02);
-  --cds-layer-accent-01: var(--cds-ui-03);
-  --cds-layer-accent-hover-01: var(--cds-hover-ui);
-  --cds-layer-active-01: var(--cds-active-ui);
+  --cds-layer-accent-hover-01: var(--cds-layer-hover-02);
   --cds-layer-hover-01: var(--khartis-control-surface-hover-background);
-  --cds-layer-hover-02: var(--cds-hover-ui);
-  --cds-layer-inverse: var(--cds-inverse-02);
-  --cds-layer-inverse-active: var(--cds-active-ui);
-  --cds-layer-inverse-hover: var(--cds-inverse-hover-ui);
-  --cds-layer-selected-01: var(--cds-selected-ui);
-  --cds-layer-selected-02: var(--cds-selected-ui);
-  --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
-  --cds-selected-ui-hover: var(--cds-hover-selected-ui);
-  --cds-hover-tertiary: #1a1a1a;
+  --cds-layer-inverse: var(--cds-background-inverse);
+  --cds-layer-inverse-active: var(--cds-layer-active-01);
+  --cds-layer-inverse-hover: var(--cds-background-inverse-hover);
+  --cds-layer-selected-02: var(--cds-layer-selected-01);
+  --cds-selected-ui-hover: var(--cds-layer-selected-hover-01);
+  /* The tertiary outline (button-tertiary) filled one Carbon hover step darker,
+     as gray-60 → #5e5e5e, then pressed in the primary colour. */
+  --cds-button-tertiary-hover: #615d5d;
+  --cds-button-tertiary-active: #3c3838;
   --cds-button-primary: #3c3838;
 
   /* Khartis additions - Suggestions theming */
@@ -99,6 +98,16 @@
   --khartis-additions-layer-hover-02-suggestions: #cceeff;
   --khartis-additions-text-disabled-suggestions: #003a6d40;
   --khartis-additions-icon-disabled-suggestions: #003a6d40;
+
+  /* Khartis additions - Join categories, shared by the join panel and the map */
+  --khartis-additions-join-label: #00539a;
+  --khartis-additions-join-row-hover: #f4f4f4;
+  --khartis-additions-join-success: #24a148;
+  --khartis-additions-join-success-bg: #defbe6;
+  --khartis-additions-join-warning: #f1c21b;
+  --khartis-additions-join-warning-bg: #fcf4d6;
+  --khartis-additions-join-error: #da1e28;
+  --khartis-additions-join-error-bg: #fff1f1;
 
   /* Tag colors - Purple */
   --tag-purple-tag-background: #e8daff;
@@ -128,18 +137,18 @@
     --khartis-control-surface-background
   );
   --khartis-palette-swatch-border-color: var(--cds-border-subtle-01, #525252);
-  --cds-interactive-01: #393939;
-  --cds-interactive-04: #393939;
-  --cds-hover-primary: #464646;
-  --cds-active-primary: rgb(34, 33, 33);
-  --cds-link-01: var(--cds-text-01);
-  --cds-link-02: var(--cds-text-01);
-  --cds-hover-primary-text: #a4a4a4;
-  --cds-inverse-focus-ui: #ffffff;
+  --cds-background-brand: #393939;
+  --cds-button-primary-hover: #464646;
+  --cds-button-primary-active: rgb(34, 33, 33);
+  --cds-link-primary: var(--cds-text-primary);
+  --cds-link-secondary: var(--cds-text-primary);
+  --cds-link-primary-hover: #a4a4a4;
+  --cds-focus-inverse: #ffffff;
   --cds-focus: rgb(255, 255, 255);
-  --cds-interactive-02: #393939;
-  --cds-interactive-03: #ffffff;
-  --cds-interactive-04: #ffffff;
+  --cds-button-secondary: #393939;
+  --cds-button-tertiary: #ffffff;
+  --cds-interactive: #ffffff;
+  --cds-border-interactive: #ffffff;
   --cds-blue: #0072c3;
   --cds-pale-blue: #cceeff;
   --cds-medium-blue: #a8e2ff;
@@ -149,30 +158,21 @@
   --cds-medium-gray: #e0e0e0;
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #a3a3a3;
-  --cds-text-01: #f4f4f4;
+  --cds-text-primary: #f4f4f4;
   --cds-border-subtle-01: #525252;
-  --cds-border-subtle-00: var(--cds-ui-03);
   --cds-border-subtle-02: var(--cds-border-subtle-01);
-  --cds-border-strong-01: var(--cds-ui-04);
-  --cds-border-strong-02: var(--cds-text-05);
+  --cds-border-strong-02: var(--cds-text-helper);
   --cds-border-tile-01: var(--cds-border-subtle-01);
-  --cds-field-hover-01: var(--cds-hover-ui);
-  --cds-layer-01: var(--khartis-control-surface-background);
-  --cds-layer-02: var(--cds-ui-02);
-  --cds-layer-accent-01: var(--cds-ui-03);
-  --cds-layer-accent-hover-01: var(--cds-hover-ui);
-  --cds-layer-active-01: var(--cds-active-ui);
+  --cds-layer-accent-hover-01: var(--cds-layer-hover-02);
   --cds-layer-hover-01: var(--khartis-control-surface-hover-background);
-  --cds-layer-hover-02: var(--cds-hover-ui);
-  --cds-layer-inverse: var(--cds-inverse-02);
-  --cds-layer-inverse-active: var(--cds-active-ui);
-  --cds-layer-inverse-hover: var(--cds-inverse-hover-ui);
-  --cds-layer-selected-01: var(--cds-selected-ui);
-  --cds-layer-selected-02: var(--cds-selected-ui);
-  --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
-  --cds-selected-ui-hover: var(--cds-hover-selected-ui);
-  --cds-hover-tertiary: #e5e5e5;
-  --cds-button-primary: white;
+  --cds-layer-inverse: var(--cds-background-inverse);
+  --cds-layer-inverse-active: var(--cds-layer-active-01);
+  --cds-layer-inverse-hover: var(--cds-background-inverse-hover);
+  --cds-layer-selected-02: var(--cds-layer-selected-01);
+  --cds-selected-ui-hover: var(--cds-layer-selected-hover-01);
+  --cds-button-tertiary-hover: #e5e5e5;
+  --cds-button-tertiary-active: #c6c6c6;
+  --cds-button-primary: #393939;
 
   /* Khartis additions - Suggestions theming (dark theme) */
   --khartis-additions-text-primary-suggestions: #82cfff;
@@ -194,6 +194,15 @@
   --khartis-additions-text-disabled-suggestions: #82cfff66;
   --khartis-additions-icon-disabled-suggestions: #82cfff66;
 
+  /* Khartis additions - Join categories (dark theme) */
+  --khartis-additions-join-label: #78a9ff;
+  --khartis-additions-join-row-hover: #262626;
+  --khartis-additions-join-success: #42be65;
+  --khartis-additions-join-success-bg: #022d0d;
+  --khartis-additions-join-warning-bg: #302400;
+  --khartis-additions-join-error: #fa4d56;
+  --khartis-additions-join-error-bg: #2d0709;
+
   /* Tag colors - Purple (dark theme) */
   --tag-purple-tag-background: #3e1d66;
   --tag-purple-tag-border-operational: #6929c4;
@@ -212,6 +221,12 @@
 /* Carbon v10 sets list chevrons 1rem from the field edge. They sit 0.5rem
    away here, with the clear button against them and a divider in between,
    which leaves more room for the value. */
+/* A truncated tag (`maxWidth`) wraps its label in a tooltip trigger, a button
+   whose own colour hid the label on a dark tag: it keeps the tag's. */
+.bx--tag--truncate .bx--tooltip__trigger {
+  color: inherit;
+}
+
 .bx--list-box__menu-icon {
   right: 0.5rem;
 }
@@ -277,6 +292,25 @@ html[theme='g100'] .app-shadow {
   );
 }
 
+/* A floating panel another one is stacked over steps back: a veil dims it
+   and its content is inert until the panel above closes (floating-panel.svelte.ts). */
+.kh-floating-panel-body {
+  display: contents;
+}
+
+.kh-floating-panel-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--cds-overlay, rgba(22, 22, 22, 0.5));
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.kh-floating-panel-cascaded {
+  margin-top: var(--cds-spacing-06);
+}
+
 /* A wrapper around one scroller, sized like it (see scroll-shadows.ts): a
    thin scrollbar, and a shade on each edge where content is hidden. */
 .kh-scroll-area {
@@ -291,7 +325,7 @@ html[theme='g100'] .app-shadow {
 
 html[theme='g100'] .kh-scroll-area {
   --_scroll-shade: rgba(0, 0, 0, 0.9);
-  --_scroll-shade-size: var(--cds-spacing-07);
+  --_scroll-shade-size: var(--cds-spacing-06);
 }
 
 .kh-scroll-area > * {
@@ -335,7 +369,7 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  color: var(--cds-text-01);
+  color: var(--cds-text-primary);
 }
 
 i,
@@ -345,7 +379,7 @@ label {
 }
 
 .text-grey {
-  color: var(--cds-text-05);
+  color: var(--cds-text-helper);
 }
 
 .centered-flex-row {
@@ -471,30 +505,35 @@ label {
   flex-shrink: 0;
 }
 
+/* Sliders show their value, never their bounds. */
+.bx--slider__range-label {
+  display: none;
+}
+
 /* Carbon hard-codes kind="secondary" on the Modal cancel button; the design
    pairs a primary main action with a tertiary secondary one. */
 .bx--modal-footer .bx--btn--secondary {
-  border-color: var(--cds-interactive-03, #0f62fe);
+  border-color: var(--cds-button-tertiary, #0f62fe);
   background-color: transparent;
-  color: var(--cds-interactive-03, #0f62fe);
+  color: var(--cds-button-tertiary, #0f62fe);
 }
 
 .bx--modal-footer .bx--btn--secondary:hover:not(:disabled) {
-  background-color: var(--cds-hover-tertiary, #0353e9);
-  border-color: var(--cds-hover-tertiary, #0353e9);
-  color: var(--cds-inverse-01, #ffffff);
+  background-color: var(--cds-button-tertiary-hover, #0353e9);
+  border-color: var(--cds-button-tertiary-hover, #0353e9);
+  color: var(--cds-text-inverse, #ffffff);
 }
 
 .bx--modal-footer .bx--btn--secondary:active:not(:disabled) {
-  background-color: var(--cds-active-tertiary, #002d9c);
-  border-color: var(--cds-active-tertiary, #002d9c);
-  color: var(--cds-inverse-01, #ffffff);
+  background-color: var(--cds-button-tertiary-active, #002d9c);
+  border-color: var(--cds-button-tertiary-active, #002d9c);
+  color: var(--cds-text-inverse, #ffffff);
 }
 
 .bx--modal-footer .bx--btn--secondary:disabled {
-  border-color: var(--cds-disabled-03, #8d8d8d);
+  border-color: var(--cds-text-on-color-disabled, #8d8d8d);
   background-color: transparent;
-  color: var(--cds-disabled-03, #8d8d8d);
+  color: var(--cds-text-on-color-disabled, #8d8d8d);
 }
 
 /* Fullscreen Carbon modals on mobile — reproduces Carbon vanilla behavior
@@ -514,4 +553,79 @@ label {
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
   }
+}
+
+/* Headings of what Khartis suggests: a light sweeps across the text, then
+   the icon, as on the Khartis presentation page. */
+.kh-thinking-text {
+  background-image: linear-gradient(
+    100deg,
+    currentColor 40%,
+    color-mix(in srgb, currentColor 35%, transparent) 50%,
+    currentColor 60%
+  );
+  background-position: 100% 0;
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: kh-thinking 3s ease-in-out infinite;
+}
+
+.kh-thinking-icon {
+  animation: kh-thinking-icon 3s ease-in-out 0.9s infinite;
+}
+
+@keyframes kh-thinking {
+  0% {
+    background-position: 100% 0;
+  }
+
+  60%,
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@keyframes kh-thinking-icon {
+  0%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+
+  30% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kh-thinking-text,
+  .kh-thinking-icon {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .kh-thinking-text {
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* Notification actions follow Carbon's tertiary (outline) button; the
+   notification prefix outranks Carbon's ghost and low-contrast rules. */
+.bx--inline-notification .bx--inline-notification__action-button.bx--btn--ghost,
+.bx--toast-notification .bx--toast-notification__action-button.bx--btn--ghost {
+  border: 1px solid var(--cds-text-primary);
+  background-color: transparent;
+  color: var(--cds-text-primary);
+}
+
+.bx--inline-notification
+  .bx--inline-notification__action-button.bx--btn--ghost:hover,
+.bx--toast-notification
+  .bx--toast-notification__action-button.bx--btn--ghost:hover {
+  border-color: var(--cds-button-tertiary-hover);
+  background-color: var(--cds-button-tertiary-hover);
+  color: var(--cds-text-inverse);
 }

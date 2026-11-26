@@ -1,3 +1,4 @@
+import * as crsOps from './crs-ops';
 import {
   DataValidationError,
   DuckDBError
@@ -311,6 +312,16 @@ function restorePersistedTableFilters(data: unknown): void {
     };
 }
 
+function resolveColumnTypeName(
+  dataset: { columns?: { name: string; type?: unknown }[] },
+  columnName: string
+): string | null {
+  const type = dataset.columns?.find(
+    (column) => column.name === columnName
+  )?.type;
+  return typeof type === 'string' ? type : null;
+}
+
 function applyPersistedTableFilters(): void {
   if (!pendingPersistedTableFilters) {
     return;
@@ -330,6 +341,8 @@ function applyPersistedTableFilters(): void {
         dataset.tableName,
         {
           column: filter.column,
+          // Without its type, a code column such as 2A compares as a number.
+          columnType: resolveColumnTypeName(dataset, filter.column),
           operator: filter.operator,
           value: filter.value,
           secondaryValue: filter.secondaryValue,
@@ -508,6 +521,15 @@ export const duckDBOrchestrator = {
     return joinOps.getBasemapAttributeValues(basemap, Duck);
   },
 
+  async getBasemapDisplayNames(
+    basemap: BasemapMetadata
+  ): Promise<Map<string, string>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return joinOps.getBasemapDisplayNames(basemap, Duck);
+  },
+
   async getBasemapAttributeAliasesByValue(
     basemap: BasemapMetadata
   ): Promise<Record<string, joinOps.BasemapAlias[]>> {
@@ -580,6 +602,31 @@ export const duckDBOrchestrator = {
     }
 
     return joinOps.getJoinedBasemapValues(
+      dataset,
+      basemap,
+      geoColumn,
+      Duck,
+      options
+    );
+  },
+
+  async getJoinTerritoryStatuses(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string,
+    options?: joinOps.JoinTerritoryStatusOptions
+  ): Promise<joinOps.JoinTerritoryStatusRow[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.getJoinTerritoryStatuses(
       dataset,
       basemap,
       geoColumn,
@@ -773,11 +820,7 @@ export const duckDBOrchestrator = {
       });
     }
 
-    await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
-
-    invalidateDatasetCache(dataset.tableName);
-    const columns = await Duck.analyse(dataset.tableName);
-    datasetOps.updateDatasetColumns(dataset.id, columns);
+    joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
   },
 
   async finalizeJoin(
@@ -1035,6 +1078,33 @@ export const duckDBOrchestrator = {
 
     return gpsOps.getGPSArrowTable(dataset, Duck, (tn) =>
       duckDBOrchestrator.getArrowTableDirect(tn)
+    );
+  },
+
+  /** Name and PROJJSON of a CRS code from the bundled PROJ database. */
+  async lookupCoordinateSystem(
+    code: string
+  ): Promise<crsOps.CoordinateSystemEntry | null> {
+    await ensureInitialized();
+    if (!Duck?.db) throw new DuckDBError(m.error_duckdb_not_initialized());
+    const duck = Duck;
+    const db = Duck.db;
+    return crsOps.lookupCoordinateSystem(
+      {
+        run: (sql) =>
+          duck.query(sql, { format: 'array' }) as Promise<
+            Array<Record<string, unknown>>
+          >,
+        exec: async (sql) => {
+          await duck.query(sql, { format: 'arrow-ipc' });
+        },
+        scratchFile: (crs) =>
+          `khartis-crs-${crs.replace(/[^A-Za-z0-9]/g, '-')}.parquet`,
+        removeFile: async (path) => {
+          await db.dropFile(path);
+        }
+      },
+      code
     );
   },
 
@@ -1528,6 +1598,8 @@ export const duckDBOrchestrator = {
   async getArrowTable(tableName: string): Promise<Table> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+    // A table streamed for the dataset is the one every caller should share.
+    await state.getMetadataPrefetches().get(tableName);
 
     try {
       return await arrowOps.getArrowTableWithCache(

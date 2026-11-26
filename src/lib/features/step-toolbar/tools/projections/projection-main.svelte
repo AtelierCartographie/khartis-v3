@@ -10,7 +10,6 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
-  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import { getStyleConfig } from '$lib/features/map/constants/carte-facile-layer-groups';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
@@ -72,6 +71,30 @@
       explicit: true
     });
   }
+
+  // The two projections a reference basemap can be drawn in, as thumbnails
+  // built like the other suggestions.
+  const WEB_MERCATOR_THUMBNAIL: ProjectionSuggestion = {
+    id: 'web-mercator',
+    name: 'Web Mercator',
+    type: 'generic',
+    proj4String: null,
+    d3Config: { projection: 'geoMercator' },
+    bbox: [-180, -80, 180, 84]
+  };
+  const FRANCE_MERCATOR_THUMBNAIL: ProjectionSuggestion = {
+    ...WEB_MERCATOR_THUMBNAIL,
+    id: 'web-mercator-france',
+    bbox: [-5.5, 41, 10, 51.5]
+  };
+  const GLOBE_THUMBNAIL: ProjectionSuggestion = {
+    id: 'globe',
+    name: 'Globe',
+    type: 'generic',
+    proj4String: null,
+    d3Config: { projection: 'geoOrthographic', rotate: [-10, -30, 0] },
+    bbox: [-180, -90, 180, 90]
+  };
 
   let thumbnailGeometry = $state(getWorldLandGeometrySync());
 
@@ -352,14 +375,35 @@
   class:projection-content--grid={viewMode === ViewMode.GRID}
 >
   {#if isTiledBasemapEnabled}
-    <div class="tiled-projection-section">
-      <span class="tiled-projection-label">{m.map_projection_label()}</span>
-      <p class="projection-helper">{m.projection_tiled_helper()}</p>
+    <div class="projection-header">
+      <p class="projection-helper">{description}</p>
+    </div>
+    <div class="projection-cards">
+      <ProjectionCard
+        title={m.projection_web_mercator_title()}
+        subtitle=""
+        previewLabel={m.projection_preview_label()}
+        paths={getThumbnailPaths(
+          tiledZone === 'monde'
+            ? WEB_MERCATOR_THUMBNAIL
+            : FRANCE_MERCATOR_THUMBNAIL,
+          thumbnailGeometry
+        )}
+        selected={!isGlobeProjectionEnabled}
+        variant="blue"
+        description={m.projection_web_mercator_description()}
+        onclick={() => handleGlobeProjectionToggle(false)}
+      />
       {#if tiledZone === 'monde'}
-        <SimpleCheckbox
-          labelText={m.map_projection_globe()}
-          checked={isGlobeProjectionEnabled}
-          onchange={handleGlobeProjectionToggle}
+        <ProjectionCard
+          title={m.map_projection_globe()}
+          subtitle=""
+          previewLabel={m.projection_preview_label()}
+          paths={getThumbnailPaths(GLOBE_THUMBNAIL, thumbnailGeometry)}
+          selected={isGlobeProjectionEnabled}
+          variant="blue"
+          description={m.projection_globe_description()}
+          onclick={() => handleGlobeProjectionToggle(true)}
         />
       {/if}
     </div>
@@ -403,8 +447,10 @@
             type="button"
             class="projection-tag"
             class:projection-tag--selected={activeFilter === opt.id}
-            onclick={() => setFilter(opt.id)}>{opt.label}</button
+            onclick={() => setFilter(opt.id)}
           >
+            {opt.label}
+          </button>
         {/each}
       </div>
 
@@ -439,8 +485,10 @@
           icon={MagicWandFilled}
           class="show-more-btn"
           disabled={!suggestionCardsEnabled}
-          on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+          on:click={showMoreSuggestions}
         >
+          {m.show_other_suggestions()}
+        </Button>
       {/if}
     {:else if hasSuggestionItems}
       {#if unclassifiedGridSuggestions.length > 0}
@@ -517,23 +565,6 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--cds-spacing-03);
-  }
-
-  .tiled-projection-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .tiled-projection-label {
-    color: var(--cds-text-secondary, #525252);
-    font-size: var(--cds-label-01-font-size, 0.75rem);
-    line-height: var(--cds-label-01-line-height, 1rem);
-    letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
-  }
-
-  .tiled-projection-section :global(.kh-checkbox-native) {
-    width: fit-content;
   }
 
   .projection-helper {

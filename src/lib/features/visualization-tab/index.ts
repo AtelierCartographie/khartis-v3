@@ -23,3 +23,4 @@ export {
   computeColumnSemioTypes,
   computeVisualizationSuggestions
 } from './utils/compute-suggestions.utils';
+export { resolveDiscretizationLabel } from './components/discretization/discretization.utils';

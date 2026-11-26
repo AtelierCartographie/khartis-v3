@@ -35,6 +35,8 @@ type MultiShapeModuleProps = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
+  knockoutPass?: number;
+  instanceCount?: number;
 };
 
 function getMultiShapeUniforms(
@@ -43,9 +45,7 @@ function getMultiShapeUniforms(
   return opts ?? {};
 }
 
-const multiShapeModule = {
-  name: 'multiShape',
-  fs: `
+const multiShapeUniformBlock = `
     uniform multiShapeUniforms {
       float barWidth;
       float offsetX;
@@ -57,8 +57,55 @@ const multiShapeModule = {
       float gapLength;
       float dotLength;
       float dotGap;
+      float knockoutPass;
+      float instanceCount;
     } multiShape;
-  `,
+  `;
+
+// Knockout group (Illustrator "groupe défonce"): a symbol replaces the
+// symbols below it instead of blending with them, so a transparent fill hides
+// the strokes underneath while the map stays visible. The depth buffer is
+// cleared, then pass 1 writes depth only, the topmost instance nearest, and
+// pass 2 paints with less-equal so only the topmost symbol reaches each pixel.
+// luma.gl turns depthCompare 'always' into a disabled depth test, which also
+// stops depth writes, hence the clears instead of an 'always' pass.
+const KNOCKOUT_PASS = { OFF: 0, DEPTH: 1, COLOR: 2 } as const;
+
+// The depth pass must leave the color target untouched. The picking pass
+// replaces the layer blending with its own (source copied as is), so the
+// pass's transparent fragments would overwrite the picking colors of the
+// layers beneath and make the inside of hollow symbols pick nothing. luma.gl
+// re-applies the render pass color mask on every draw, so blending is the
+// only lever.
+const KEEP_COLOR_BLENDING = {
+  blend: true,
+  blendColorOperation: 'add',
+  blendColorSrcFactor: 'zero',
+  blendColorDstFactor: 'one',
+  blendAlphaOperation: 'add',
+  blendAlphaSrcFactor: 'zero',
+  blendAlphaDstFactor: 'one'
+} as const;
+
+const KNOCKOUT_PASSES = [
+  {
+    pass: KNOCKOUT_PASS.DEPTH,
+    parameters: {
+      depthCompare: 'less',
+      depthWriteEnabled: true,
+      ...KEEP_COLOR_BLENDING
+    }
+  },
+  {
+    pass: KNOCKOUT_PASS.COLOR,
+    parameters: { depthCompare: 'less-equal', depthWriteEnabled: false }
+  }
+] as const;
+
+const multiShapeModule = {
+  name: 'multiShape',
+  vs: multiShapeUniformBlock,
+  fs: multiShapeUniformBlock,
   getUniforms: getMultiShapeUniforms,
   uniformTypes: {
     barWidth: 'f32',
@@ -70,7 +117,9 @@ const multiShapeModule = {
     dashLength: 'f32',
     gapLength: 'f32',
     dotLength: 'f32',
-    dotGap: 'f32'
+    dotGap: 'f32',
+    knockoutPass: 'f32',
+    instanceCount: 'f32'
   }
 } as const;
 
@@ -78,15 +127,17 @@ const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
   (ordinal) => `shapeOrdinal == ${ordinal}`
 ).join(' || ');
 
-// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.4.x), with two
-// additions. (1) Linear shapes (BAR/SPIKE) encode the value as a height, so
-// their quad is lifted by half its height along its local +y axis (the SPIKE
-// apex direction in the fragment SDF) to anchor the shape's base on the data
-// point; area shapes keep the default centered anchoring. (2) The quad of 2D
-// shapes is scaled by 1/SYMBOL_SDF_EXTENT so their visual weight matches the
-// stock ScatterplotLayer circle. A shader-hook injection cannot do either:
-// luma.gl emits hook functions before the main shader source, where
-// outerRadiusPixels is not yet declared.
+// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.4.x), with
+// three additions. (1) Linear shapes (BAR/SPIKE) encode the value as a height,
+// so their quad is lifted by half the shape height along its local +y axis
+// (the SPIKE apex direction in the fragment SDF) to anchor the shape's base
+// on the data point; area shapes keep the default centered anchoring. (2) The
+// shape of 2D symbols is scaled by 1/SYMBOL_SDF_EXTENT so their visual weight
+// matches the stock ScatterplotLayer circle. (3) The stroke is drawn outside
+// the shape, like an outline: the shape keeps the size that encodes the value
+// whatever the stroke width, and the quad grows by the stroke width. A
+// shader-hook injection cannot do any of this: luma.gl emits hook functions
+// before the main shader source, where outerRadiusPixels is not yet declared.
 const vertexShader = `#version 300 es
 #define SHADER_NAME multi-shape-layer-vertex-shader
 
@@ -106,10 +157,11 @@ in float instanceShapes;
 out vec4 vFillColor;
 out vec4 vLineColor;
 out vec2 unitPosition;
-out float innerUnitRadius;
 out float outerRadiusPixels;
+out float shapeRadiusPixels;
+out float shapeExtentPixels;
+out float strokeWidthPixels;
 out float vShape;
-out float vRadius;
 
 bool isBottomAnchoredShape(float shape) {
   int shapeOrdinal = int(shape + 0.5);
@@ -119,24 +171,34 @@ bool isBottomAnchoredShape(float shape) {
 void main(void) {
   geometry.worldPosition = instancePositions;
 
-  outerRadiusPixels = clamp(
+  shapeRadiusPixels = clamp(
     project_size_to_pixel(scatterplot.radiusScale * instanceRadius, scatterplot.radiusUnits),
     scatterplot.radiusMinPixels, scatterplot.radiusMaxPixels
   );
 
-  // 2D SDF shapes occupy SYMBOL_SDF_EXTENT of the quad: grow the quad by the
-  // inverse so the SDF circle matches the stock ScatterplotLayer circle and
-  // the legend radius. Linear shapes already span the full quad height.
-  if (!isBottomAnchoredShape(instanceShapes)) {
-    outerRadiusPixels /= ${SYMBOL_SDF_EXTENT};
+  bool linearShape = isBottomAnchoredShape(instanceShapes);
+
+  // 2D SDF shapes are authored within SYMBOL_SDF_EXTENT of their radius:
+  // scale by the inverse so the SDF circle matches the stock
+  // ScatterplotLayer circle and the legend radius.
+  if (!linearShape) {
+    shapeRadiusPixels /= ${SYMBOL_SDF_EXTENT};
   }
 
-  float lineWidthPixels = clamp(
+  strokeWidthPixels = scatterplot.stroked * clamp(
     project_size_to_pixel(scatterplot.lineWidthScale * instanceLineWidths, scatterplot.lineWidthUnits),
     scatterplot.lineWidthMinPixels, scatterplot.lineWidthMaxPixels
   );
 
-  outerRadiusPixels += scatterplot.stroked * lineWidthPixels / 2.0;
+  // A short bar or spike is wider than tall: the square quad must still
+  // hold its width (the spike is 1.5 bar widths wide). The juxtaposition
+  // offset is measured in shape extents, so the stroke does not move it.
+  shapeExtentPixels = linearShape
+    ? max(shapeRadiusPixels, multiShape.barWidth * 0.75)
+    : shapeRadiusPixels;
+  float offsetReach = max(abs(multiShape.offsetX), abs(multiShape.offsetY));
+  outerRadiusPixels = (offsetReach + multiShape.shapeScale) * shapeExtentPixels
+    + strokeWidthPixels;
 
   float edgePadding = scatterplot.antialiasing
     ? (outerRadiusPixels + SMOOTH_EDGE_RADIUS) / outerRadiusPixels
@@ -150,14 +212,9 @@ void main(void) {
   geometry.pickingColor = picking_getPickingColorFromInstanceID();
 #endif
 
-  innerUnitRadius = 1.0 - scatterplot.stroked * lineWidthPixels / outerRadiusPixels;
-
   vShape = instanceShapes;
-  vRadius = instanceRadius;
 
-  float anchorShiftPixels = isBottomAnchoredShape(instanceShapes)
-    ? outerRadiusPixels
-    : 0.0;
+  float anchorShiftPixels = linearShape ? shapeRadiusPixels : 0.0;
 
   if (scatterplot.billboard) {
     gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, vec3(0.0), geometry.position);
@@ -180,6 +237,12 @@ void main(void) {
   DECKGL_FILTER_COLOR(vFillColor, geometry);
   vLineColor = vec4(instanceLineColors.rgb, instanceLineColors.a * layer.opacity);
   DECKGL_FILTER_COLOR(vLineColor, geometry);
+
+  // The last (topmost) instance is the nearest.
+  if (multiShape.knockoutPass > 0.5) {
+    float order = (float(gl_InstanceID) + 1.0) / (multiShape.instanceCount + 1.0);
+    gl_Position.z = (0.9 - 1.8 * order) * gl_Position.w;
+  }
 }
 `;
 
@@ -189,12 +252,13 @@ const fragmentShader = `#version 300 es
 precision highp float;
 
 in float vShape;
-in float vRadius;
 in vec4 vFillColor;
 in vec4 vLineColor;
 in vec2 unitPosition;
-in float innerUnitRadius;
 in float outerRadiusPixels;
+in float shapeRadiusPixels;
+in float shapeExtentPixels;
+in float strokeWidthPixels;
 
 out vec4 fragColor;
 
@@ -211,36 +275,30 @@ vec2 rotate(in vec2 v, in float angle) {
     return rotate2d(angle) * v;
 }
 
-float sdCross(in vec2 p, in vec2 b, float r) {
-    p = abs(p);
-    p = (p.y > p.x) ? p.yx : p.xy;
-    vec2  q = p - b;
-    float k = max(q.y, q.x);
-    vec2  w = (k > 0.0) ? q : vec2(b.y - p.x, -k);
-    return sign(k) * length(max(w, 0.0)) + r;
+// Signed distances in pixels, negative inside. Polygons with straight
+// corners use the distance to their edge lines rather than the euclidean one,
+// so the outline grown from them keeps sharp (mitered) corners, as the SVG
+// export draws them. The spike keeps the euclidean distance: its acute apex
+// would grow a mitre far longer than the stroke, so its outline is rounded.
+float sdMiterBox(in vec2 p, in vec2 b) {
+    vec2 d = abs(p) - b;
+    return max(d.x, d.y);
 }
 
-float sdEquilateralTriangle(in vec2 p, in float r) {
-    const float k = sqrt(3.0);
-    p.x = abs(p.x) - r;
-    p.y = p.y + r/k;
-    if(p.x + k*p.y > 0.0) p = vec2(p.x - k*p.y, -k*p.x - p.y) / 2.0;
-    p.x -= clamp(p.x, -2.0*r, 0.0);
-    return -length(p) * sign(p.y);
+float sdMiterEquilateralTriangle(in vec2 p, in float r) {
+    const float halfSqrt3 = 0.86602540378;
+    float edges = max(-p.y, max(dot(vec2(halfSqrt3, 0.5), p), dot(vec2(-halfSqrt3, 0.5), p)));
+    return edges - r / sqrt(3.0);
 }
 
+// Five-branch star whose value grows linearly with the distance to the
+// center along each branch edge normal.
 float sdStar5(in vec2 st, in int branches, in float s) {
-    st *= 3.2;
     float a = atan(st.y, st.x) / TAU;
     float seg = a * float(branches);
     a = ((floor(seg) + 0.5) / float(branches) +
         mix(s, -s, step(0.5, fract(seg)))) * TAU;
     return abs(dot(vec2(cos(a), sin(a)), st));
-}
-
-float sdBox(in vec2 p, in vec2 b) {
-    vec2 d = abs(p) - b;
-    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
 }
 
 float sdIsoscelesTriangle(in vec2 p, in vec2 q) {
@@ -253,62 +311,37 @@ float sdIsoscelesTriangle(in vec2 p, in vec2 q) {
     return sqrt(d) * sign(s);
 }
 
-float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
+// pos is in pixels from the shape center, radius is the shape radius in
+// pixels (before SYMBOL_SDF_EXTENT for 2D shapes, half the height for linear
+// shapes).
+float getShapeDistance(vec2 pos, float radius, int shapeType) {
     switch (shapeType) {
         case ${ShapeTypeOrdinal.SQUARE}: // SQUARE
-            {
-                vec2 pos = uv * outerRadiusPixels;
-                return sdBox(pos, vec2(0.6 * outerRadiusPixels)) + outerRadiusPixels;
-            }
+            return sdMiterBox(pos, vec2(0.6 * radius));
         case ${ShapeTypeOrdinal.BAR}: // BAR
-            {
-                float w = multiShape.barWidth;
-                vec2 pos = uv * outerRadiusPixels;
-                return sdBox(pos, vec2(w / 2.0, outerRadiusPixels)) + outerRadiusPixels;
-            }
+            return sdMiterBox(pos, vec2(multiShape.barWidth / 2.0, radius));
         case ${ShapeTypeOrdinal.SPIKE}: // SPIKE
             {
                 float w = multiShape.barWidth * 1.5;
-                vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;
-                pos.y += outerRadiusPixels;
-                return sdIsoscelesTriangle(pos, vec2(w / 2.0, 2.0 * outerRadiusPixels)) + outerRadiusPixels;
+                vec2 p = vec2(pos.x, radius - pos.y);
+                return sdIsoscelesTriangle(p, vec2(w / 2.0, 2.0 * radius));
             }
         case ${ShapeTypeOrdinal.CROSS}: // CROSS
             {
-                vec2 pos = uv * outerRadiusPixels;
-                float r = 0.7 * outerRadiusPixels;
-                float thick = r / 3.0;
-                return sdCross(pos, vec2(r, thick), 0.0) + outerRadiusPixels;
+                float arm = 0.7 * radius;
+                float thick = arm / 3.0;
+                return min(sdMiterBox(pos, vec2(arm, thick)), sdMiterBox(pos, vec2(thick, arm)));
             }
         case ${ShapeTypeOrdinal.DIAMOND}: // DIAMOND
-            {
-                 vec2 pos = uv * outerRadiusPixels;
-                 float d = abs(pos.x) + abs(pos.y);
-                 return d - (0.7 * outerRadiusPixels) + outerRadiusPixels;
-            }
+            return (abs(pos.x) + abs(pos.y) - 0.7 * radius) * 0.70710678118;
         case ${ShapeTypeOrdinal.TRIANGLE}: // TRIANGLE
-            {
-                vec2 pos = uv * outerRadiusPixels;
-                float r = 0.7 * outerRadiusPixels;
-                return sdEquilateralTriangle(pos, r) + outerRadiusPixels;
-            }
+            return sdMiterEquilateralTriangle(pos, 0.7 * radius);
         case ${ShapeTypeOrdinal.STAR}: // STAR
-            {
-                vec2 rUV = rotate(uv, 0.31);
-                return sdStar5(rUV, 5, 0.1) * radiusPixels / 0.8;
-            }
+            return sdStar5(rotate(pos, 0.31), 5, 0.1) - 0.25 * radius;
         case ${ShapeTypeOrdinal.RECTANGLE}: // RECTANGLE
-            {
-                vec2 pos = uv * outerRadiusPixels;
-                vec2 size = vec2(outerRadiusPixels * 0.9, 0.27 * outerRadiusPixels);
-                return sdBox(pos, size) + outerRadiusPixels;
-            }
+            return sdMiterBox(pos, vec2(0.9 * radius, 0.27 * radius));
         default: // CIRCLE (0)
-            {
-                // True euclidean distance (not a scaled one) so stroke width
-                // and antialiasing stay in real pixels, like the other SDFs.
-                return (length(uv) - ${SYMBOL_SDF_EXTENT}) * radiusPixels + radiusPixels;
-            }
+            return length(pos) - ${SYMBOL_SDF_EXTENT} * radius;
     }
 }
 
@@ -340,42 +373,55 @@ float getDashMask(vec2 uv, float strokePx, float midRadiusPx, float radialOffset
 
 void main(void) {
     geometry.uv = unitPosition;
-    vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
-    vec2 scaledUv = uv / max(multiShape.shapeScale, 0.0001);
+    vec2 pixelPos = unitPosition * outerRadiusPixels
+        - vec2(multiShape.offsetX, multiShape.offsetY) * shapeExtentPixels;
 
-    if (multiShape.halfMask > 0.5 && multiShape.halfMask < 1.5 && uv.y < 0.0) discard;
-    if (multiShape.halfMask > 1.5 && uv.y > 0.0) discard;
+    if (multiShape.halfMask > 0.5 && multiShape.halfMask < 1.5 && pixelPos.y < 0.0) discard;
+    if (multiShape.halfMask > 1.5 && pixelPos.y > 0.0) discard;
 
-    float distToCenter = getDistance(scaledUv, outerRadiusPixels, int(vShape), vRadius);
+    float shapeScale = max(multiShape.shapeScale, 0.0001);
+    vec2 shapePos = pixelPos / shapeScale;
+    int shapeType = int(vShape + 0.5);
+    float sd = getShapeDistance(shapePos, shapeRadiusPixels, shapeType) * shapeScale;
 
-    float inShape = scatterplot.antialiasing
-        ? smoothedge(distToCenter, outerRadiusPixels)
-        : step(distToCenter, outerRadiusPixels);
+    float outlineCoverage = scatterplot.antialiasing
+        ? smoothedge(sd, strokeWidthPixels)
+        : step(sd, strokeWidthPixels);
 
-    if (inShape == 0.0) discard;
+    if (outlineCoverage == 0.0) discard;
 
-    if (scatterplot.stroked > 0.5) {
-        float innerEdge = innerUnitRadius * outerRadiusPixels;
-        float strokePx = max(outerRadiusPixels - innerEdge, 1.0);
-        float midRadiusPx = (innerEdge + outerRadiusPixels) * 0.5;
-        float lineMask = scatterplot.antialiasing
-            ? smoothedge(innerEdge, distToCenter)
-            : step(innerEdge, distToCenter);
-        lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx, distToCenter - midRadiusPx);
-
-        if (scatterplot.filled > 0.5) {
-            fragColor = mix(vFillColor, vLineColor, lineMask);
-        } else {
-            if (lineMask == 0.0) discard;
-            fragColor = vec4(vLineColor.rgb, vLineColor.a * lineMask);
-        }
-    } else if (scatterplot.filled < 0.5) {
-        discard;
-    } else {
-        fragColor = vFillColor;
+    // The depth pass covers the whole symbol, filled or not, and keeps only
+    // the inner half of the antialiased edge, so the fringe of an upper
+    // symbol still blends over the symbol below in the color pass. A symbol
+    // with nothing visible knocks nothing out.
+    if (multiShape.knockoutPass > 0.5 && multiShape.knockoutPass < 1.5) {
+        if (outlineCoverage < 0.5) discard;
+        if (vFillColor.a == 0.0 && (scatterplot.stroked < 0.5 || vLineColor.a == 0.0)) discard;
+        fragColor = vec4(0.0);
+        return;
     }
 
-    fragColor.a *= inShape;
+    float fillCoverage = scatterplot.antialiasing
+        ? smoothedge(sd, 0.0)
+        : step(sd, 0.0);
+    float strokeCoverage = 0.0;
+    if (scatterplot.stroked > 0.5 && strokeWidthPixels > 0.0) {
+        // Dash phase follows the angle around the outline's middle.
+        bool linearShape = shapeType == ${ShapeTypeOrdinal.BAR} || shapeType == ${ShapeTypeOrdinal.SPIKE};
+        float shapeEdgePx = linearShape ? shapeRadiusPixels : ${SYMBOL_SDF_EXTENT} * shapeRadiusPixels;
+        float midRadiusPx = shapeEdgePx * shapeScale + strokeWidthPixels * 0.5;
+        strokeCoverage = max(outlineCoverage - fillCoverage, 0.0)
+            * getDashMask(shapePos, strokeWidthPixels, midRadiusPx, sd - strokeWidthPixels * 0.5);
+    }
+    if (scatterplot.filled < 0.5) {
+        fillCoverage = 0.0;
+    }
+
+    float coverage = fillCoverage + strokeCoverage;
+    if (coverage <= 0.0) discard;
+
+    fragColor = mix(vFillColor, vLineColor, strokeCoverage / coverage);
+    fragColor.a *= min(coverage, 1.0);
     DECKGL_FILTER_COLOR(fragColor, geometry);
 }
 `;
@@ -394,6 +440,7 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
+  knockout?: boolean;
 };
 
 const defaultProps = {
@@ -408,11 +455,14 @@ const defaultProps = {
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 },
   dotLength: { type: 'number', value: 0 },
-  dotGap: { type: 'number', value: 0 }
+  dotGap: { type: 'number', value: 0 },
+  knockout: { type: 'boolean', value: false }
 };
 
 interface MultiShapeLayerState {
   model?: {
+    parameters: Record<string, unknown>;
+    setParameters: (parameters: Record<string, unknown>) => void;
     shaderInputs?: {
       setProps: (props: Record<string, unknown>) => void;
     };
@@ -468,12 +518,14 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
       dashLength,
       gapLength,
       dotLength,
-      dotGap
+      dotGap,
+      knockout
     } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
-    const shaderInputs = state.model?.shaderInputs;
-    if (shaderInputs) {
-      shaderInputs.setProps({
+    const model = state.model;
+    const shaderInputs = model?.shaderInputs;
+    const setMultiShapeProps = (knockoutPass: number) =>
+      shaderInputs?.setProps({
         multiShape: {
           barWidth,
           offsetX: offsetX ?? 0,
@@ -484,10 +536,35 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2,
           dotLength: dotLength ?? 0,
-          dotGap: dotGap ?? 0
+          dotGap: dotGap ?? 0,
+          knockoutPass,
+          instanceCount: this.getNumInstances()
         }
       });
+
+    if (!knockout || !model) {
+      setMultiShapeProps(KNOCKOUT_PASS.OFF);
+      super.draw(opts);
+      return;
     }
-    super.draw(opts);
+
+    const baseParameters = model.parameters;
+    this.clearDepth();
+    for (const { pass, parameters } of KNOCKOUT_PASSES) {
+      setMultiShapeProps(pass);
+      model.setParameters({ ...baseParameters, ...parameters });
+      super.draw(opts);
+    }
+    model.setParameters(baseParameters);
+    this.clearDepth();
+  }
+
+  private clearDepth(): void {
+    const gl = (
+      this.context.device as unknown as { gl?: WebGL2RenderingContext }
+    ).gl;
+    if (!gl) return;
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
   }
 }

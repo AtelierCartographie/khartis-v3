@@ -1,15 +1,14 @@
 <script lang="ts">
+  import FontFamilySelect from '$lib/features/step-toolbar/font-family-select.svelte';
   import * as m from '$lib/paraglide/messages';
   import { translateCarbonId } from '$lib/features/commons/utils/carbon-a11y.utils';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import { SectionHeading, SliderWithInput } from '../shared';
   import {
-    AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
-    FONT_SIZE_OPTIONS,
-    normalizeFontFamily
+    FONT_SIZE_OPTIONS
   } from '$lib/features/step-toolbar/fonts.constants';
   import {
     BASEMAP_LAYER_CONFIG,
@@ -58,13 +57,6 @@
     ];
   }
 
-  function getFontOptions(): SelectOption[] {
-    return AVAILABLE_FONTS.map((fontFamily) => ({
-      id: fontFamily,
-      text: fontFamily
-    }));
-  }
-
   function getFontSizeOptions(): SelectOption[] {
     return FONT_SIZE_OPTIONS.map((fontSize) => ({
       id: fontSize,
@@ -107,12 +99,8 @@
     getOnChange,
     'opacity'
   );
-  const handleLabelFontFamilyChange =
-    createLayerConfigSelectedIdHandler<string>(
-      getOnChange,
-      'labelFontFamily',
-      (selectedId) => selectedId
-    );
+  const handleLabelFontFamilyChange = (font: string) =>
+    getOnChange()?.({ labelFontFamily: font });
   const handleLabelSizeChange = createLayerConfigSelectedIdHandler<number>(
     getOnChange,
     'labelSize',
@@ -131,7 +119,6 @@
     max={BASEMAP_LAYER_CONFIG.cityCount.max}
     step={BASEMAP_LAYER_CONFIG.cityCount.step}
     value={count}
-    showMinMax
     inputWidth="64px"
     showSteppers={false}
     onchange={handleCountChange}
@@ -162,7 +149,6 @@
     max={BASEMAP_LAYER_CONFIG.size.max}
     step={BASEMAP_LAYER_CONFIG.size.step}
     value={size}
-    showMinMax
     inputWidth="64px"
     showSteppers={false}
     onchange={handleSizeChange}
@@ -174,7 +160,6 @@
     max={BASEMAP_LAYER_CONFIG.opacity.max}
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
-    showMinMax
     inputWidth="64px"
     showSteppers={false}
     onchange={handleOpacityChange}
@@ -184,15 +169,11 @@
 
   <div class="label-style-row">
     <div class="label-font-control">
-      <Dropdown
-        translateWithId={translateCarbonId}
-        translateWithIdSelection={translateCarbonId}
-        size="sm"
-        titleText={m.basemap_config_label_font()}
-        selectedId={normalizeFontFamily(labelFontFamily) ??
-          CARTOGRAPHIC_FONT_FAMILY}
-        items={getFontOptions()}
-        on:select={handleLabelFontFamilyChange}
+      <FontFamilySelect
+        labelText={m.basemap_config_label_font()}
+        value={labelFontFamily}
+        fallback={CARTOGRAPHIC_FONT_FAMILY}
+        onchange={handleLabelFontFamilyChange}
       />
     </div>
 

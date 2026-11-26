@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    claimFloatingPanel,
+    floatingPanelIn,
+    floatingPanelOut
+  } from '$lib/features/commons/utils/floating-panel.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
@@ -58,64 +63,21 @@
     }))
   );
 
-  const DEFAULT_POPOVER_WIDTH = 320;
-  const VIEWPORT_GUTTER = 16;
-  const TRIGGER_GAP = 12;
-  const ESTIMATED_POPOVER_HEIGHT = 380;
-
   let popoverRef = $state<HTMLDivElement>();
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('text-style-popover');
 
-  const popoverPosition = $derived.by(() => {
-    if (typeof window === 'undefined' || !triggerElement) {
-      return {
-        width: `${DEFAULT_POPOVER_WIDTH}px`,
-        right: resolveToolbarWidth(globalState.toolbarState),
-        top: 'var(--kh-floating-window-center)',
-        left: undefined,
-        transform: 'translateY(-50%)'
-      };
-    }
-
-    const rect = triggerElement.getBoundingClientRect();
-    const width = Math.min(
-      DEFAULT_POPOVER_WIDTH,
-      window.innerWidth - VIEWPORT_GUTTER * 2
-    );
-    let left = rect.left - width - TRIGGER_GAP;
-    if (left < VIEWPORT_GUTTER) {
-      left = Math.min(
-        window.innerWidth - width - VIEWPORT_GUTTER,
-        rect.right + TRIGGER_GAP
-      );
-    }
-
-    let top = rect.top - 56;
-    const maxTop =
-      window.innerHeight - ESTIMATED_POPOVER_HEIGHT - VIEWPORT_GUTTER;
-    if (top > maxTop) {
-      top = maxTop;
-    }
-    const minTop =
-      (document.querySelector('.bx--header')?.getBoundingClientRect().bottom ??
-        0) + VIEWPORT_GUTTER;
-    if (top < minTop) {
-      top = minTop;
-    }
-
-    return {
-      width: `${width}px`,
-      left: `${Math.max(VIEWPORT_GUTTER, left)}px`,
-      top: `${top}px`,
-      right: undefined,
-      transform: 'none'
-    };
-  });
+  // Anchored like the other panels of the side toolbar, not to its button.
+  const popoverRight = $derived(resolveToolbarWidth(globalState.toolbarState));
 
   const showPrimarySection = $derived(visibleSection !== 'secondary');
   const showSecondarySection = $derived(visibleSection !== 'primary');
   const popoverTitle = $derived(m.text_style_popover_title());
+
+  $effect(() => {
+    if (!open) return;
+    return claimFloatingPanel(handleClose);
+  });
 
   function handleClose() {
     open = false;
@@ -191,12 +153,10 @@
   <div use:portal class="text-style-popover-portal">
     <div
       bind:this={popoverRef}
+      in:floatingPanelIn
+      out:floatingPanelOut
       class="text-style-popover"
-      style:width={popoverPosition.width}
-      style:left={popoverPosition.left}
-      style:right={popoverPosition.right}
-      style:top={popoverPosition.top}
-      style:transform={popoverPosition.transform}
+      style:right={popoverRight}
       role="dialog"
       aria-label={popoverTitle}
     >
@@ -254,6 +214,8 @@
 
   :global(.text-style-popover) {
     position: fixed;
+    top: var(--kh-floating-window-center);
+    transform: translateY(-50%);
     width: 320px;
     max-height: min(80vh, var(--kh-floating-window-max-height));
     display: flex;
@@ -268,22 +230,39 @@
   }
 
   .text-hierarchy-field {
+    margin-top: var(--kh-gap-inline);
     padding: 0 var(--cds-spacing-05, 16px);
   }
 
   .popover-content {
     display: flex;
     flex-direction: column;
-    gap: var(--kh-gap-group);
+    gap: var(--kh-gap-inline);
     padding: var(--cds-spacing-05, 16px);
     overflow-y: auto;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 1023px) {
     :global(.text-style-popover) {
-      width: calc(100vw - 24px);
+      right: 0 !important;
+      left: 0;
+      top: auto;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      );
+      transform: none;
+      width: 100vw;
+      max-height: calc(
+        100dvh - var(--cds-header-height, 48px) -
+          60px - env(safe-area-inset-bottom, 0px) - var(--cds-spacing-03) -
+          48px - var(--cds-spacing-03) - var(--cds-spacing-05)
+      );
+      border-radius: 8px 8px 0 0;
     }
+  }
 
+  @media (max-width: 640px) {
     .popover-content {
       padding-inline: var(--cds-spacing-03, 8px);
     }

@@ -7,9 +7,12 @@ import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import {
   clampToRange,
+  getAreaGridOrigin,
+  getPageGridOrigin,
   PAGE_GRID_SIZE_PX,
   remapPointToResizedArea,
-  snapPointWithinBounds
+  snapPointWithinBounds,
+  type PageGridPoint
 } from '$lib/features/commons/utils/page-grid.utils';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
@@ -108,6 +111,22 @@ export function isGridEnabled(): boolean {
   return getFormatState().gridEnabled;
 }
 
+/**
+ * Where the page grid starts in an annotation's coordinates: the page, or the
+ * map frame for an annotation placed on the map, so both snap on the visible
+ * grid points.
+ */
+export function getAnnotationGridOrigin(
+  coordinateSpace: AnnotationCoordinateSpace,
+  page: Pick<PageLayout, 'width' | 'height'> = getFormatState()
+): PageGridPoint {
+  if (coordinateSpace === 'page') {
+    return getPageGridOrigin(page);
+  }
+  const { mapFrame } = getFormatState();
+  return getAreaGridOrigin(page, { x: mapFrame.left, y: mapFrame.top });
+}
+
 function resolveMapFrame(layout: PageLayout): PageFrame {
   const left = layout.margins.left;
   const top = layout.margins.top;
@@ -125,43 +144,143 @@ function resolveMapFrame(layout: PageLayout): PageFrame {
 }
 
 // Page elements may sit anywhere on the page, margins included: shrinking the
-// map frame is how room is made for a title outside the map. The rendered size
-// varies with the sizing profile, so only a grip has to stay on the page; the
-// overlay clamps drags against the measured size.
+// map frame is how room is made for a title outside the map. A title's box
+// follows its text, which varies with the sizing profile, so only a grip has to
+// stay on the page; the overlay clamps drags against the measured size.
 const PAGE_ELEMENT_MIN_VISIBLE_PX = PAGE_GRID_SIZE_PX * 2;
+
+/**
+ * The box a page element is rendered in, when the layout sets it: a text
+ * width chosen by the user, or half the page for the captions. A title
+ * without a chosen width follows its text, which only the overlay measures.
+ */
+function getPageElementBoxWidth(
+  role: PageElementRole,
+  layout: Pick<PageLayout, 'width'>,
+  style?: AnnotationStyle
+): number | undefined {
+  if (style?.shapeWidth) {
+    return style.shapeWidth;
+  }
+  return isTopLeftPageElementRole(role)
+    ? undefined
+    : getPageElementWidth(role, layout);
+}
 
 export function clampPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   layout: PageLayout,
-  snapToGridEnabled = true
+  snapToGridEnabled = true,
+  style?: AnnotationStyle
 ): { x: number; y: number } {
+  const boxWidth = getPageElementBoxWidth(role, layout, style);
+  if (style?.rotation) {
+    // A rotated text turns about the centre of its text block, known only on
+    // screen: the drag keeps it on the page and aligns its covered box with
+    // the margins, which a grid on its upright corner would undo.
+    return snapPointWithinBounds(
+      position,
+      {
+        minX: -layout.width,
+        maxX: layout.width,
+        minY: -layout.height,
+        maxY: layout.height
+      },
+      false
+    );
+  }
   return snapPointWithinBounds(
     position,
     {
       minX: 0,
-      maxX: Math.max(0, layout.width - PAGE_ELEMENT_MIN_VISIBLE_PX),
+      maxX: Math.max(
+        0,
+        layout.width - (boxWidth ?? PAGE_ELEMENT_MIN_VISIBLE_PX)
+      ),
       minY: 0,
       maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
-    isGridEnabled() && snapToGridEnabled
+    isGridEnabled() && snapToGridEnabled,
+    getPageGridOrigin(layout)
   );
 }
+
+const TEXT_ALIGN_FACTOR: Record<TextAlign, number> = {
+  [TextAlign.Left]: 0,
+  [TextAlign.Center]: 0.5,
+  [TextAlign.Right]: 1
+};
 
 export function remapPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   from: Pick<PageLayout, 'width' | 'height'>,
-  to: Pick<PageLayout, 'width' | 'height'>
+  to: Pick<PageLayout, 'width' | 'height'>,
+  style?: AnnotationStyle
 ): { x: number; y: number } {
-  return remapPointToResizedArea(
-    position,
-    {
-      width: getPageElementWidth(role, from),
-      height: PAGE_ELEMENT_HEIGHTS[role]
-    },
+  const height = PAGE_ELEMENT_HEIGHTS[role];
+  const fromBox = getPageElementBoxWidth(role, from, style);
+  const toBox = getPageElementBoxWidth(role, to, style);
+
+  if (fromBox === undefined || toBox === undefined || fromBox === toBox) {
+    return remapPointToResizedArea(
+      position,
+      { width: fromBox ?? getPageElementWidth(role, from), height },
+      from,
+      to
+    );
+  }
+
+  // A caption box spans half the page and resizes with it. The text sits on
+  // the side its alignment picks, so that edge of the box, not the box, keeps
+  // its distance to the nearest page edge.
+  const alignFactor = TEXT_ALIGN_FACTOR[style?.textAlign ?? TextAlign.Left];
+  const textEdge = remapPointToResizedArea(
+    { x: position.x + alignFactor * fromBox, y: position.y },
+    { width: 0, height },
     from,
     to
+  );
+  return { x: textEdge.x - alignFactor * toBox, y: textEdge.y };
+}
+
+// Projects saved before the half-page caption box kept the left edge of a
+// fixed 216 px box.
+const LEGACY_CAPTION_BOX_WIDTH = 216;
+
+/**
+ * Puts a restored page element back on the page. A caption box that crosses
+ * the page edge can only come from an older project: the text keeps the edge
+ * its alignment anchored in the narrower box, then the box is clamped.
+ */
+export function fitRestoredPageElementPosition(
+  position: { x: number; y: number },
+  role: PageElementRole,
+  layout: PageLayout,
+  style?: AnnotationStyle
+): { x: number; y: number } {
+  const boxWidth = getPageElementBoxWidth(role, layout, style);
+  if (
+    style?.rotation ||
+    boxWidth === undefined ||
+    position.x + boxWidth <= layout.width + 1
+  ) {
+    return position;
+  }
+
+  const alignFactor = style?.shapeWidth
+    ? 0
+    : TEXT_ALIGN_FACTOR[style?.textAlign ?? TextAlign.Left];
+  return clampPageElementPosition(
+    {
+      x: position.x + alignFactor * (LEGACY_CAPTION_BOX_WIDTH - boxWidth),
+      y: position.y
+    },
+    role,
+    layout,
+    false,
+    style
   );
 }
 
@@ -259,7 +378,8 @@ export function clampAnnotationPosition(
       minY,
       maxY
     },
-    isGridEnabled()
+    isGridEnabled(),
+    getAnnotationGridOrigin(coordinateSpace, layout)
   );
 }
 

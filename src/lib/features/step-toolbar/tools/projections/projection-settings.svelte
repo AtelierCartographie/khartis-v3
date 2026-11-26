@@ -5,14 +5,24 @@
   import { supportsCustomProjectionCode } from '$lib/features/map/utils/projection-availability.utils';
   import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
   import { resolveProjectionDefaultOrientation } from '$lib/features/commons/utils/projection.utils';
+  import { getProjectionCodeCentralMeridian } from '$lib/features/commons/utils/proj4-crs.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {
+    getOrientableCrsCode,
     getProjectionAvailabilityContext,
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
+  import { wrapLongitude } from './projection-code.utils';
+  import ProjectionDefinition from './projection-definition.svelte';
 
-  const PROJECTION_ANGLE_STEP = 0.01;
+  interface Props {
+    definitionOnly?: boolean;
+  }
+
+  let { definitionOnly = false }: Props = $props();
+
+  const PROJECTION_ANGLE_STEP = 1;
 
   const projectionState = $derived(getProjectionState());
 
@@ -40,16 +50,39 @@
       suggestionD3Config: projectionState.suggestionD3Config
     })
   );
+  // On a CRS the longitude is an offset from its own lon_0 (0 keeps the CRS
+  // as defined); the slider shows the resulting central meridian.
+  const crsCode = $derived(getOrientableCrsCode());
+  const crsCentralMeridian = $derived(
+    // Read back from radians: -120.5 comes out as -120.50000000000001.
+    crsCode ? Number(getProjectionCodeCentralMeridian(crsCode).toFixed(9)) : 0
+  );
+  // The offset moves by whole degrees; a fractional meridian (Washington
+  // South, -120.5) needs a finer step to stay a valid input value.
+  const longitudeStep = $derived(
+    Number.isInteger(crsCentralMeridian)
+      ? PROJECTION_ANGLE_STEP
+      : Number.isInteger(crsCentralMeridian * 2)
+        ? 0.5
+        : 0.01
+  );
+  const displayedLongitude = $derived(
+    crsCode
+      ? wrapLongitude(projectionState.longitude + crsCentralMeridian)
+      : projectionState.longitude
+  );
   const isDirty = $derived(
     projectionState.longitude !== defaultOrientation[0] ||
       projectionState.latitude !== defaultOrientation[1] ||
       projectionState.rotation !== 0
   );
-  const deg = (n: number) => `${n}°`;
 
   function handleLongitudeChange(value: number): void {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setCenter(value, projectionState.latitude);
+    const longitude = crsCode
+      ? wrapLongitude(value - crsCentralMeridian)
+      : value;
+    projectionActions.setCenter(longitude, projectionState.latitude);
   }
 
   function handleLatitudeChange(value: number): void {
@@ -71,7 +104,9 @@
 <div id="khartis-projection-settings-tool">
   <div class="projection-settings">
     <div class="controls">
-      {#if !canApplyProjectionSettings}
+      {#if definitionOnly}
+        <!-- A reference basemap takes no setting: only its definition. -->
+      {:else if !canApplyProjectionSettings}
         <InlineNotification
           kind="warning"
           lowContrast
@@ -82,13 +117,10 @@
       {:else}
         <SliderWithInput
           label={m.projection_settings_longitude()}
-          value={projectionState.longitude}
+          value={displayedLongitude}
           min={-180}
           max={180}
-          step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-180)}
-          maxLabel={deg(180)}
+          step={longitudeStep}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
@@ -101,9 +133,6 @@
           min={-90}
           max={90}
           step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-90)}
-          maxLabel={deg(90)}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
@@ -116,14 +145,15 @@
           min={-180}
           max={180}
           step={PROJECTION_ANGLE_STEP}
-          showMinMax
-          minLabel={deg(-180)}
-          maxLabel={deg(180)}
           inputWidth="3.5rem"
           showSteppers={false}
           debounceMs={0}
           onchange={handleRotationChange}
         />
+
+        {#if crsCode}
+          <p class="crs-helper">{m.projection_settings_crs_helper()}</p>
+        {/if}
 
         <Button
           class="reset"
@@ -131,9 +161,12 @@
           size="small"
           disabled={!isDirty || !canApplyProjectionSettings}
           icon={Renew}
-          on:click={resetAll}>{m.projection_settings_reset()}</Button
+          on:click={resetAll}
         >
+          {m.projection_settings_reset()}
+        </Button>
       {/if}
+      <ProjectionDefinition />
     </div>
   </div>
 </div>
@@ -147,10 +180,11 @@
     box-sizing: border-box;
   }
 
+  /* The same rhythm as the visualization settings. */
   .controls {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-06);
+    gap: var(--kh-gap-param);
   }
 
   #khartis-projection-settings-tool :global(.controls .bx--slider-container) {
@@ -171,10 +205,11 @@
     text-align: center;
   }
 
-  #khartis-projection-settings-tool
-    :global(.controls .bx--slider__range-label) {
-    min-width: 2rem;
+  .crs-helper {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
     font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   #khartis-projection-settings-tool :global(.reset) {

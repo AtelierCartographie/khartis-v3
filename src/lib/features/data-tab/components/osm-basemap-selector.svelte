@@ -21,7 +21,7 @@
 </script>
 
 <div class="osm-basemap-selector">
-  <p class="osm-description">{m.osm_description()}</p>
+  <p class="kh-help">{m.osm_description()}</p>
 
   {#if !hasGPSCoordinates}
     <InlineNotification
@@ -61,15 +61,15 @@
     gap: var(--cds-spacing-04);
   }
 
-  .osm-description {
-    color: var(--cds-text-02, #525252);
-    font-size: 0.875rem;
-    line-height: 1.375rem;
-    margin: 0;
+  /* Same help text as the Importer tab. */
+  .kh-help {
+    color: var(--cds-text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
   }
 
   .osm-note {
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     font-size: 0.875rem;
     line-height: 1.375rem;
     margin: 0;

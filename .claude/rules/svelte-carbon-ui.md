@@ -22,6 +22,13 @@ Carbon (`carbon-components-svelte`) ships as Svelte 4 source, so some events and
 - Button colors come from the Carbon tokens overridden in `commons/assets/styles/global.css`, including the modal cancel button. A dialog does not restyle its own buttons.
 - `patches/carbon-components-svelte.patch` is applied. Understand why before bumping Carbon, and re-check these traps after an upgrade.
 
+## Carbon v11 tokens and surfaces
+
+- Carbon 0.114 follows Carbon v11. Read v11 token names (`--cds-text-primary`, `--cds-layer-01`, `--cds-border-subtle-00`…). The v10 names (`--cds-ui-01`, `--cds-text-02`, `--cds-interactive-01`…) are no longer declared and resolve to nothing, without an error.
+- `global.css` overrides the brand tokens in both themes (`--cds-button-*`, `--cds-background-brand`, `--cds-interactive`, `--cds-link-*`, `--cds-focus*`). Carbon components read `--cds-layer-01` themselves: Khartis's white control surface is `--khartis-control-surface-background`, not an override of `--cds-layer-01`.
+- `light` no longer exists: a field that sits on another surface goes in a `<Layer>`. Fields in a modal already sit on a layer.
+- A transactional modal stays open on an outside click unless it sets `preventCloseOnClickOutside={false}`, as Khartis's modals do. Notifications default to `role="status"`; errors pass `role="alert"`.
+
 ## Snippets, portals, click-outside
 
 - Use `Snippet` with `{@render}` instead of `<slot>`. Overlays and portals render at the component root, never inside a snippet.

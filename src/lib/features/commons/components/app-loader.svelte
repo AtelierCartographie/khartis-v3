@@ -4,8 +4,25 @@
   import { buildLastProjectRestoreFallbackUrl } from '$lib/features/commons/utils/pwa-reset';
   import * as m from '$lib/paraglide/messages';
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
+  import {
+    APP_LOADING_PHASE,
+    type AppLoadingPhase,
+    appLoadingStore
+  } from '$lib/features/commons/stores/app-loading.store.svelte';
+  import { motionDuration } from '$lib/features/commons/utils/step-transition.svelte';
 
   const SLOW_LOADING_THRESHOLD_MS = 15_000;
+
+  const PHASE_LABELS: Record<AppLoadingPhase, () => string> = {
+    [APP_LOADING_PHASE.INTERFACE]: m.app_loader_phase_interface,
+    [APP_LOADING_PHASE.PROJECT]: m.app_loader_phase_project,
+    [APP_LOADING_PHASE.ENGINE]: m.app_loader_phase_engine,
+    [APP_LOADING_PHASE.BASEMAPS]: m.app_loader_phase_basemaps,
+    [APP_LOADING_PHASE.DATA]: m.app_loader_phase_data,
+    [APP_LOADING_PHASE.VISUALIZATIONS]: m.app_loader_phase_visualizations,
+    [APP_LOADING_PHASE.JOINS]: m.app_loader_phase_joins
+  };
 
   interface Props {
     replacePage?: (url: string) => void;
@@ -38,7 +55,11 @@
     <Logo />
     <div class="loading-spinner" aria-hidden="true"></div>
     <p class="loading-label" aria-live="polite">
-      {m.app_loader_initializing()}
+      {#key appLoadingStore.phase}
+        <span in:fade={{ duration: motionDuration(200) }}>
+          {PHASE_LABELS[appLoadingStore.phase]()}
+        </span>
+      {/key}
     </p>
 
     {#if showRestoreFallback}
@@ -63,7 +84,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--cds-ui-background);
+    background-color: var(--cds-background);
     z-index: var(--z-overlay);
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
@@ -88,7 +109,7 @@
     width: 40px;
     height: 40px;
     border: 3px solid var(--cds-border-subtle);
-    border-top-color: var(--cds-interactive-01);
+    border-top-color: var(--cds-background-brand);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
@@ -116,7 +137,7 @@
     min-height: var(--kh-size-md);
     padding: 0 var(--cds-spacing-05);
     border: 1px solid var(--cds-border-strong-01, #8d8d8d);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     color: var(--cds-text-primary, #161616);
     cursor: pointer;
     font: inherit;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import {
     MisuseOutline,
@@ -61,7 +62,7 @@
     coerceDashedPattern
   } from './dashed-pattern.utils';
   import MissingDataSection from './missing-data-section.svelte';
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -69,6 +70,8 @@
     fillColor?: string | string[];
     infoText?: string;
     showDashed?: boolean;
+    /** Controls rendered between the dash options and the opacity slider. */
+    beforeOpacity?: Snippet;
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -90,7 +93,6 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     showMissingDataSection?: boolean;
-    showSliderBounds?: boolean;
     sliderInputWidth?: string;
     maxStrokeWidth?: number;
     facetsValueSlotPath?: FacetSlotPath;
@@ -105,6 +107,7 @@
     fillColor,
     infoText,
     showDashed = true,
+    beforeOpacity,
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -120,7 +123,6 @@
     showMissingData,
     missingDataColor,
     showMissingDataSection = true,
-    showSliderBounds = true,
     sliderInputWidth = '128px',
     maxStrokeWidth = SLIDER_LIMITS.strokeWidth.max,
     facetsValueSlotPath,
@@ -378,134 +380,134 @@
 </div>
 
 {#if strokeMode !== StrokeMode.NONE}
-  {#if strokeMode === StrokeMode.UNIQUE}
-    <SingleColorPreview
-      exclusive
-      allowPattern={false}
-      label={m.color()}
-      color={strokeColor}
-      presets={strokeColorPresets}
-      onchange={handleStrokeColorChange}
-    />
-    <SliderWithInput
-      label={m.thickness()}
-      bind:value={strokeWidth}
-      min={MIN_VISIBLE_STROKE_WIDTH}
-      max={strokeWidthMax}
-      step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
-      inputWidth={sliderInputWidth}
-      onchange={handleStrokeWidthChange}
-    />
-  {:else if strokeMode === StrokeMode.CLASSES}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={facetsPickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableValueDataFields}
-        selectedFieldId={colorFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          facetsValueSlotPath
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          facetsValueSlotPath
-        )}
-        onSelect={colorFieldSelection.handleSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            valueColumnName,
-            facetsValueSlotPath,
-            ids
-          )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(facetsValueSlotPath, enabled)}
+  <SwitchedContent value={strokeMode}>
+    {#if strokeMode === StrokeMode.UNIQUE}
+      <SingleColorPreview
+        exclusive
+        allowPattern={false}
+        label={m.color()}
+        color={strokeColor}
+        presets={strokeColorPresets}
+        onchange={handleStrokeColorChange}
       />
-    </div>
-    <DiscretizationRow
-      label={m.discretization()}
-      value={discretizationLabel ?? ''}
-      onsettings={onOpenDiscretization}
-    />
-    <PalettePreview
-      label={m.color_palette()}
-      colors={resolvedClassesPalette}
-      selectedPaletteId={strokeClassification?.paletteId}
-      inverted={strokeClassification?.inverted ?? false}
-      paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}
-      classification={strokeClassification}
-      oninvert={onInvertPalette}
-      onClassificationChange={onStrokeClassificationChange}
-    />
-    <SliderWithInput
-      label={m.thickness()}
-      bind:value={strokeWidth}
-      min={MIN_VISIBLE_STROKE_WIDTH}
-      max={strokeWidthMax}
-      step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
-      inputWidth={sliderInputWidth}
-      onchange={handleStrokeWidthChange}
-    />
-  {:else if strokeMode === StrokeMode.CATEGORIES}
-    <div class="field-group">
-      <FacetsVariablePicker
-        bind:open={facetsPickerOpen}
-        titleText={m.color_according()}
-        dataFields={dataFields}
-        singleSelectItems={selectableCategoryDataFields}
-        selectedFieldId={colorFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          facetsCategorySlotPath
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          facetsCategorySlotPath
-        )}
-        onSelect={colorFieldSelection.handleSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            categoryColumnName,
-            facetsCategorySlotPath,
-            ids
-          )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(facetsCategorySlotPath, enabled)}
+      <SliderWithInput
+        label={m.thickness()}
+        bind:value={strokeWidth}
+        min={MIN_VISIBLE_STROKE_WIDTH}
+        max={strokeWidthMax}
+        step={SLIDER_LIMITS.strokeWidth.step}
+        inputWidth={sliderInputWidth}
+        onchange={handleStrokeWidthChange}
       />
-    </div>
-    <DiscretizationRow
-      label={m.category_aspect()}
-      value={(isSingularCount(resolvedCategoryCount)
-        ? m.categories_count_one
-        : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
-      settingsIconDescription={m.palette_categories_aspect_title()}
-      onsettings={() => {
-        categoriesPopoverOpen = true;
-      }}
-    />
-    <PalettePreview
-      label={m.color_palette()}
-      colors={resolvedCategoriesPalette}
-      selectedPaletteId={strokeClassification?.paletteId}
-      inverted={strokeClassification?.inverted ?? false}
-      paletteType={PALETTE_TYPE.QUALITATIVE}
-      categoriesMode={true}
-      categoriesVariant="lines"
-      categoryLabels={categoryLabels.labels}
-      bind:categoriesPopoverOpen={categoriesPopoverOpen}
-      oninvert={onInvertPalette}
-      onClassificationChange={onStrokeClassificationChange}
-    />
-    <SliderWithInput
-      label={m.thickness()}
-      bind:value={strokeWidth}
-      min={MIN_VISIBLE_STROKE_WIDTH}
-      max={strokeWidthMax}
-      step={SLIDER_LIMITS.strokeWidth.step}
-      showMinMax={showSliderBounds}
-      inputWidth={sliderInputWidth}
-      onchange={handleStrokeWidthChange}
-    />
-  {/if}
+    {:else if strokeMode === StrokeMode.CLASSES}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={facetsPickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableValueDataFields}
+          selectedFieldId={colorFieldSelection.selectedFieldId}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            facetsValueSlotPath
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            facetsValueSlotPath
+          )}
+          onSelect={colorFieldSelection.handleSelect}
+          onCollectionChange={(ids) =>
+            facetsSelection.updateVariables(
+              valueColumnName,
+              facetsValueSlotPath,
+              ids
+            )}
+          onToggleCollection={(enabled) =>
+            facetsSelection.toggle(facetsValueSlotPath, enabled)}
+        />
+      </div>
+      <DiscretizationRow
+        label={m.discretization()}
+        value={discretizationLabel ?? ''}
+        onsettings={onOpenDiscretization}
+      />
+      <PalettePreview
+        label={m.color_palette()}
+        colors={resolvedClassesPalette}
+        selectedPaletteId={strokeClassification?.paletteId}
+        inverted={strokeClassification?.inverted ?? false}
+        paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}
+        classification={strokeClassification}
+        oninvert={onInvertPalette}
+        onClassificationChange={onStrokeClassificationChange}
+      />
+      <SliderWithInput
+        label={m.thickness()}
+        bind:value={strokeWidth}
+        min={MIN_VISIBLE_STROKE_WIDTH}
+        max={strokeWidthMax}
+        step={SLIDER_LIMITS.strokeWidth.step}
+        inputWidth={sliderInputWidth}
+        onchange={handleStrokeWidthChange}
+      />
+    {:else if strokeMode === StrokeMode.CATEGORIES}
+      <div class="field-group">
+        <FacetsVariablePicker
+          bind:open={facetsPickerOpen}
+          titleText={m.color_according()}
+          dataFields={dataFields}
+          singleSelectItems={selectableCategoryDataFields}
+          selectedFieldId={colorFieldSelection.selectedFieldId}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            facetsCategorySlotPath
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            facetsCategorySlotPath
+          )}
+          onSelect={colorFieldSelection.handleSelect}
+          onCollectionChange={(ids) =>
+            facetsSelection.updateVariables(
+              categoryColumnName,
+              facetsCategorySlotPath,
+              ids
+            )}
+          onToggleCollection={(enabled) =>
+            facetsSelection.toggle(facetsCategorySlotPath, enabled)}
+        />
+      </div>
+      <DiscretizationRow
+        label={m.category_aspect()}
+        value={(isSingularCount(resolvedCategoryCount)
+          ? m.categories_count_one
+          : m.categories_count)({ count: formatValue(resolvedCategoryCount) })}
+        settingsIconDescription={m.palette_categories_aspect_title()}
+        onsettings={() => {
+          categoriesPopoverOpen = true;
+        }}
+      />
+      <PalettePreview
+        label={m.color_palette()}
+        colors={resolvedCategoriesPalette}
+        selectedPaletteId={strokeClassification?.paletteId}
+        inverted={strokeClassification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.QUALITATIVE}
+        categoriesMode={true}
+        categoriesVariant="lines"
+        categoryLabels={categoryLabels.labels}
+        classification={strokeClassification}
+        bind:categoriesPopoverOpen={categoriesPopoverOpen}
+        oninvert={onInvertPalette}
+        onClassificationChange={onStrokeClassificationChange}
+      />
+      <SliderWithInput
+        label={m.thickness()}
+        bind:value={strokeWidth}
+        min={MIN_VISIBLE_STROKE_WIDTH}
+        max={strokeWidthMax}
+        step={SLIDER_LIMITS.strokeWidth.step}
+        inputWidth={sliderInputWidth}
+        onchange={handleStrokeWidthChange}
+      />
+    {/if}
+  </SwitchedContent>
 
   {#if showMissingDataSection && (strokeMode === StrokeMode.CLASSES || strokeMode === StrokeMode.CATEGORIES)}
     <MissingDataSection
@@ -538,13 +540,14 @@
     {/if}
   {/if}
 
+  {@render beforeOpacity?.()}
+
   <SliderWithInput
     label={m.opacity()}
     bind:value={strokeOpacity}
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
     step={SLIDER_LIMITS.opacity.step}
-    showMinMax={showSliderBounds}
     inputWidth={sliderInputWidth}
     onchange={handleStrokeOpacityChange}
   />

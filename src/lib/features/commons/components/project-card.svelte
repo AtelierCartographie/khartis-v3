@@ -73,7 +73,7 @@
   );
 
   const bottomSectionClasses = $derived(
-    clsx('pb-5 pl-5 pt-5 pr-2 bottom-section', {
+    clsx('p-5 bottom-section', {
       'variant-gray': isGrayVariant,
       'bg-light-gray color-text-01': disabled || isGrayVariant,
       'bg-pale-blue color-dark-blue':
@@ -89,7 +89,7 @@
     blue: 'var(--cds-blue)',
     textGray: 'var(--cds-text-gray)',
     darkBlue: 'var(--cds-dark-blue)',
-    text01: 'var(--cds-text-01)',
+    text01: 'var(--cds-text-primary)',
     white: 'white'
   } as const;
 
@@ -194,8 +194,8 @@
 
   .top-section.variant-gray:not(.has-thumbnail),
   .bottom-section.variant-gray {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    color: var(--cds-text-primary, var(--cds-text-01, #161616));
+    background-color: var(--khartis-control-surface-background, #f4f4f4);
+    color: var(--cds-text-primary, var(--cds-text-primary, #161616));
   }
 
   .bottom-section.variant-gray :global(.text-grey) {
@@ -221,7 +221,9 @@
     opacity: 1;
   }
 
+  /* Two lines kept even for a short title, so that cards share a height. */
   .title-text {
+    min-height: 2lh;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;

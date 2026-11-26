@@ -30,7 +30,7 @@
     padding: var(--kh-pad-panel);
     background-color: var(
       --khartis-main-toolbar-background,
-      var(--cds-ui-01, #f4f4f4)
+      var(--cds-layer-01, #f4f4f4)
     );
     min-height: 100%;
   }
@@ -39,7 +39,7 @@
   .toolbar-tab > :global(div) > :global(section) {
     background-color: var(
       --khartis-main-toolbar-surface-background,
-      var(--cds-ui-02, #ffffff)
+      var(--cds-layer-02, #ffffff)
     );
     padding: var(--kh-pad-panel);
   }

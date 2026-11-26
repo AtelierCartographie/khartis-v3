@@ -47,7 +47,8 @@ const DEFAULT_STATE: LegendState = {
     background: {
       enabled: true,
       color: { hue: 0, saturation: 0, lightness: 100 },
-      opacity: LEGEND_DEFAULTS.OPACITY
+      opacity: LEGEND_DEFAULTS.OPACITY,
+      shadow: true
     }
   },
   activeTab: LegendTab.CONTENT,
@@ -152,7 +153,13 @@ function getDefaultLegendTitle(
   return truncateAutoTitle(variables || visualization.name);
 }
 
-function getComponentLabel(
+export function getLegendPrimitiveLabel(
+  primitive: LegendSubtitlePrimitive
+): string {
+  return PRIMITIVE_LABELS[primitive]();
+}
+
+export function getComponentLabel(
   primitive: LegendSubtitlePrimitive,
   component: LegendComponent
 ): string {

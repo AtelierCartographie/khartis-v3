@@ -19,6 +19,8 @@
     icon?: typeof Information;
     iconDescription?: string;
     triggerText?: string;
+    /** `compact` sets a short note in the label size, closer to its text. */
+    size?: 'default' | 'compact';
   }
 
   const {
@@ -27,7 +29,8 @@
     direction = 'bottom',
     icon: Icon = Information,
     iconDescription = m.more_info(),
-    triggerText = ''
+    triggerText = '',
+    size = 'default'
   }: Props = $props();
 
   let open = $state(false);
@@ -195,6 +198,7 @@
     <div
       bind:this={tooltipElement}
       class="khartis-carbon-rich-tooltip khartis-carbon-rich-tooltip--{direction}"
+      class:khartis-carbon-rich-tooltip--compact={size === 'compact'}
       style={tooltipStyle}
       role="tooltip"
       onmouseenter={handleTooltipMouseEnter}
@@ -214,12 +218,12 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--cds-icon-secondary, var(--cds-text-02));
+    color: var(--cds-icon-secondary, var(--cds-text-secondary));
     cursor: pointer;
   }
 
   .khartis-carbon-rich-tooltip-trigger:hover {
-    color: var(--cds-icon-primary, var(--cds-text-01));
+    color: var(--cds-icon-primary, var(--cds-text-primary));
   }
 
   .khartis-carbon-rich-tooltip-trigger:focus {
@@ -245,15 +249,32 @@
     min-width: 13rem;
     max-width: 18rem;
     padding: 1rem;
-    background-color: var(--cds-inverse-02, #393939);
+    background-color: var(--cds-background-inverse, #393939);
     border-radius: 0.125rem;
-    color: var(--cds-inverse-01, #ffffff);
+    color: var(--cds-text-inverse, #ffffff);
     box-shadow: 0 2px 6px var(--cds-shadow, rgba(0, 0, 0, 0.3));
-    font-size: var(--cds-body-short-01-font-size, 0.875rem);
-    font-weight: var(--cds-body-short-01-font-weight, 400);
-    line-height: var(--cds-body-short-01-line-height, 1.28572);
-    letter-spacing: var(--cds-body-short-01-letter-spacing, 0.16px);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    font-weight: var(--cds-body-compact-01-font-weight, 400);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
+    letter-spacing: var(--cds-body-compact-01-letter-spacing, 0.16px);
     word-wrap: break-word;
+  }
+
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact) {
+    min-width: 0;
+    max-width: 16rem;
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    font-size: var(--cds-helper-text-01-font-size, 0.75rem);
+    line-height: var(--cds-helper-text-01-line-height, 1.33333);
+    letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
+  }
+
+  /* A paragraph inside keeps the compact size, not the one of its dialog. */
+  :global(.khartis-carbon-rich-tooltip.khartis-carbon-rich-tooltip--compact p) {
+    margin: 0;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
   }
 
   :global(.khartis-carbon-rich-tooltip::before) {
@@ -269,7 +290,7 @@
     left: var(--khartis-tooltip-caret-left);
     transform: translateX(-50%);
     border-width: 0.375rem 0.5rem 0;
-    border-color: var(--cds-inverse-02, #393939) transparent transparent;
+    border-color: var(--cds-background-inverse, #393939) transparent transparent;
   }
 
   :global(.khartis-carbon-rich-tooltip--bottom::before) {
@@ -277,7 +298,7 @@
     left: var(--khartis-tooltip-caret-left);
     transform: translateX(-50%);
     border-width: 0 0.5rem 0.375rem;
-    border-color: transparent transparent var(--cds-inverse-02, #393939);
+    border-color: transparent transparent var(--cds-background-inverse, #393939);
   }
 
   :global(.khartis-carbon-rich-tooltip--left::before) {
@@ -286,7 +307,7 @@
     transform: translateY(-50%);
     border-width: 0.5rem 0 0.5rem 0.375rem;
     border-color: transparent transparent transparent
-      var(--cds-inverse-02, #393939);
+      var(--cds-background-inverse, #393939);
   }
 
   :global(.khartis-carbon-rich-tooltip--right::before) {
@@ -294,7 +315,7 @@
     left: -0.5rem;
     transform: translateY(-50%);
     border-width: 0.5rem 0.375rem 0.5rem 0;
-    border-color: transparent var(--cds-inverse-02, #393939) transparent
+    border-color: transparent var(--cds-background-inverse, #393939) transparent
       transparent;
   }
 
