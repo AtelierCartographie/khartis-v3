@@ -429,6 +429,114 @@ export function validateExpression(expression: string): void {
   }
 }
 
+const BLOCKED_FUNCTION_NAMES = new Set(
+  BLOCKED_FUNCTIONS.map((name) => name.toLowerCase())
+);
+
+/**
+ * The fragment the calculator validates and runs. The line breaks end a
+ * trailing `--` comment before the closing parenthesis.
+ */
+function calculatedExpressionSql(expression: string): string {
+  return `(\n${expression}\n)`;
+}
+
+type SerializedSqlNode = Record<string, unknown>;
+
+function isSerializedSqlNode(value: unknown): value is SerializedSqlNode {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isEmptyList(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function isSingleExpressionSelect(node: SerializedSqlNode): boolean {
+  return (
+    node.type === 'SELECT_NODE' &&
+    Array.isArray(node.select_list) &&
+    node.select_list.length === 1 &&
+    isSerializedSqlNode(node.from_table) &&
+    node.from_table.type === 'EMPTY' &&
+    node.where_clause === null &&
+    node.having === null &&
+    node.qualify === null &&
+    node.sample === null &&
+    isEmptyList(node.modifiers) &&
+    isEmptyList(node.group_expressions) &&
+    isEmptyList(node.group_sets) &&
+    isSerializedSqlNode(node.cte_map) &&
+    isEmptyList(node.cte_map.map)
+  );
+}
+
+function findForbiddenSqlNode(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const keyword = findForbiddenSqlNode(item);
+      if (keyword) return keyword;
+    }
+    return null;
+  }
+  if (!isSerializedSqlNode(value)) return null;
+  if (value.class === 'SUBQUERY') return 'SUBQUERY';
+  if (
+    value.class === 'FUNCTION' &&
+    typeof value.function_name === 'string' &&
+    BLOCKED_FUNCTION_NAMES.has(value.function_name.toLowerCase())
+  ) {
+    return value.function_name.toUpperCase();
+  }
+  return findForbiddenSqlNode(Object.values(value));
+}
+
+function parseSerializedSql(raw: unknown): unknown {
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The keyword check reads strings and comments its own way. DuckDB parses
+ * the fragment as it will run: one expression, without table, subquery or
+ * blocked function.
+ */
+async function assertCalculatedExpression(
+  expressionSql: string,
+  Duck: DuckDBClient
+): Promise<void> {
+  const rows = (await Duck.query(
+    `SELECT json_serialize_sql('${escapeSqlString(`SELECT ${expressionSql}`)}') AS ast`,
+    { format: 'array' }
+  )) as Array<{ ast?: unknown }> | undefined;
+  const parsed = parseSerializedSql(rows?.[0]?.ast);
+
+  if (isSerializedSqlNode(parsed) && parsed.error === true) {
+    throw new DuckDBError(
+      typeof parsed.error_message === 'string'
+        ? parsed.error_message
+        : m.error_calc_expression_invalid()
+    );
+  }
+
+  const statements = isSerializedSqlNode(parsed) ? parsed.statements : null;
+  const statement =
+    Array.isArray(statements) && statements.length === 1 ? statements[0] : null;
+  const node = isSerializedSqlNode(statement) ? statement.node : null;
+  if (!isSerializedSqlNode(node) || !isSingleExpressionSelect(node)) {
+    throw new DuckDBError(m.error_calc_expression_invalid());
+  }
+
+  const keyword = findForbiddenSqlNode(node.select_list);
+  if (keyword) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({ keyword })
+    );
+  }
+}
+
 export async function addCalculatedColumn(
   tableName: string,
   columnName: string,
@@ -442,6 +550,8 @@ export async function addCalculatedColumn(
   }
 
   validateExpression(expression);
+  const expressionSql = calculatedExpressionSql(expression);
+  await assertCalculatedExpression(expressionSql, Duck);
 
   const columns = await Duck.analyse(tableName);
   if (columns.some((col: AnalysisResult) => col.name === trimmedName)) {
@@ -456,7 +566,7 @@ export async function addCalculatedColumn(
   const escapedColumn = escapeIdentifier(trimmedName);
 
   await Duck.query(
-    `CREATE OR REPLACE TABLE "${escapedTable}" AS SELECT *, (${expression}) AS "${escapedColumn}" FROM "${escapedTable}"`
+    `CREATE OR REPLACE TABLE "${escapedTable}" AS SELECT *, ${expressionSql} AS "${escapedColumn}" FROM "${escapedTable}"`
   );
 
   const updatedColumns = options?.skipAnalysis
@@ -472,10 +582,12 @@ export async function testExpression(
   Duck: DuckDBClient
 ): Promise<unknown> {
   validateExpression(expression);
+  const expressionSql = calculatedExpressionSql(expression);
+  await assertCalculatedExpression(expressionSql, Duck);
 
   const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
-    `SELECT (${expression}) as result FROM "${escapedTable}" LIMIT 1`
+    `SELECT ${expressionSql} as result FROM "${escapedTable}" LIMIT 1`
   )) as ArrowTableLike;
 
   if (result.numRows === 0) {
