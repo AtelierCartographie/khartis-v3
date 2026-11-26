@@ -1729,7 +1729,7 @@
   "pattern_shape_diamond": "Diamonds",
   "pattern_shape_plus": "Plus",
   "pattern_shape_cross": "Crosshatch",
-  "pattern_colorize": "Colored patterns",
+  "pattern_colorize": "Colored pattern",
   "pattern_color": "Pattern color",
   "pattern_color_below_breakpoint": "Color below the breakpoint",
   "pattern_color_above_breakpoint": "Color above the breakpoint",

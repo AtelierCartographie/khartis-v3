@@ -43,10 +43,7 @@
     type CarbonValueEvent,
     readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
-  import {
-    SliderWithInput,
-    ToggleWithLabel
-  } from '$lib/features/commons/components/viz-controls';
+  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -796,12 +793,21 @@
                         })}
                       />
                     {:else if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
+                      <div class="common-grid-row common-grid-row--full">
+                        <span class="field-label">
+                          {m.pattern_colorize()}
+                        </span>
+                        <div class="toggle-control">
+                          <Switch
+                            toggled={resolvedPatternConfig.colorize ?? false}
+                            hideLabel
+                            labelText={m.pattern_colorize()}
+                            onchange={handlePatternColorizeChange}
+                          />
+                          <span class="toggle-state">
+                            {resolvedPatternConfig.colorize ? m.yes() : m.no()}
+                          </span>
+                        </div>
                       </div>
                       <div class="common-field--full">
                         <PatternPalettePicker

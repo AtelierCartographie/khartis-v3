@@ -163,7 +163,7 @@
       value={divergingColors[1]}
       onchange={(value) => handleDivergingColorChange(1, value)}
     />
-  {:else}
+  {:else if !(categorical && config.colorize)}
     <ColorSelector
       label={m.pattern_color()}
       value={color}

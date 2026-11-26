@@ -1729,7 +1729,7 @@
   "pattern_shape_diamond": "Losanges",
   "pattern_shape_plus": "Croix",
   "pattern_shape_cross": "Croisillons",
-  "pattern_colorize": "Motifs colorés",
+  "pattern_colorize": "Motif coloré",
   "pattern_color": "Couleur du motif",
   "pattern_color_below_breakpoint": "Couleur sous la rupture",
   "pattern_color_above_breakpoint": "Couleur au-dessus de la rupture",
