@@ -50,13 +50,21 @@
     display: flex;
     align-items: center;
     gap: var(--kh-gap-inline);
+    position: relative;
     padding: var(--kh-pad-panel);
-    background-color: color-mix(
-      in srgb,
-      var(--cds-support-info, #0043ce) 8%,
-      var(--cds-layer-01, #ffffff)
-    );
-    border-left: 3px solid var(--cds-support-info, #0043ce);
+    background-color: var(--cds-notification-background-info);
+    border-left: 3px solid var(--cds-support-info);
+  }
+
+  /* The faint outline of Carbon's low-contrast info notification. */
+  .active-basemap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--cds-support-info);
+    border-left-width: 0;
+    filter: opacity(0.4);
+    pointer-events: none;
   }
 
   .active-basemap :global(.active-basemap-icon) {

@@ -457,6 +457,7 @@
   }
 
   .basemap-style-selector :global(.projection-shortcut-btn) {
-    align-self: flex-start;
+    width: 100%;
+    max-width: none;
   }
 </style>

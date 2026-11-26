@@ -338,17 +338,17 @@
       width: 90vw;
       max-width: 700px;
       height: auto;
-      max-height: 90vh;
+      max-height: calc(100dvh - 2rem);
       background: var(--cds-background);
     }
 
-    /* The body keeps the height « Ouvrir un projet » needs, whatever card
-       is selected, within the space the header leaves; the selected card
-       scrolls inside it. */
+    /* The body keeps the height « Ouvrir un projet » needs with several
+       saved projects, whatever card is selected, within the space the
+       header leaves; the selected card scrolls inside it. */
     #khartis-create-project :global(.fixed-modal-body) {
       display: flex;
       flex-direction: column;
-      height: min(40rem, calc(90vh - 7.5rem));
+      height: min(46rem, calc(100dvh - 9rem));
       min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);

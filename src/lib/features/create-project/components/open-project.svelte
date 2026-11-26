@@ -273,7 +273,7 @@
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
-  <header class="mb-4">
+  <header>
     <h6 class="mb-3">{m.open_project_select_backup()}</h6>
 
     <span class="text-grey">
@@ -459,7 +459,7 @@
     </div>
   {/if}
 
-  <div class="mt-5">
+  <div class="mt-3">
     <header>
       <h6 class="mb-3">{m.open_project_import_project()}</h6>
 
@@ -468,7 +468,7 @@
       </span>
     </header>
 
-    <div class="flex items-end gap-3 mt-5 mb-3">
+    <div class="flex items-end gap-3 mt-3">
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
         accept={KHARTIS_FILE_EXTENSIONS}

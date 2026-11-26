@@ -333,8 +333,12 @@
     max-width: none;
   }
 
-  .section-content :global(.bx--row + .bx--row) {
-    margin-top: var(--cds-spacing-05);
+  /* A gap rather than sibling margins: the line thickness row sits in a
+     display: contents wrapper, which breaks .bx--row + .bx--row. */
+  .section-content :global(.bx--grid) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
   }
 
   .scale-center-note {

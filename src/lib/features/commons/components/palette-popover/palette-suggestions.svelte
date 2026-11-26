@@ -393,7 +393,7 @@
 
   .intensity-row {
     display: flex;
-    height: var(--kh-size-sm);
+    height: var(--kh-size-xs);
     overflow: hidden;
   }
 

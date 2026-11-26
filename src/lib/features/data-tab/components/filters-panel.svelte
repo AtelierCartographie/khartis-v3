@@ -508,6 +508,11 @@
     padding-top: var(--cds-spacing-02);
   }
 
+  .form-actions :global(.bx--btn) {
+    width: 100%;
+    max-width: none;
+  }
+
   .active-filters {
     border-top: 1px solid var(--cds-border-subtle);
     padding-top: var(--cds-spacing-04);
