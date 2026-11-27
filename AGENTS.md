@@ -93,6 +93,7 @@ Each file in `.claude/rules/` holds the traps and contracts of one area. Claude 
 ## Git and delivery
 
 - Pull requests target `staging`. Commits follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `build:`, `ci:`, `chore:`), checked by commitlint. Maintainers merge with a merge commit, never a squash.
+- A branch pushed for a pull request is named `<type>/<scope>-<subject>` in kebab-case, with a Conventional Commits type (`feat/legend-date-classes`, `fix/join-fuzzy-cap`, `build/duckdb-2.0.1`). Local work branches, such as `claude/<name>` session worktrees, are renamed before their first push. Renaming the head branch of an open pull request on GitHub closes that pull request, so pick the name before opening it.
 - semantic-release publishes prereleases from `staging` and stable releases from `main`, so commit types drive version numbers.
 - A maintainer runs the deployments (`pnpm deploy:pprd`, `pnpm deploy:prod`). The `:dry-run` variants check the release, the CI gate and the build without opening an SFTP session.
 - Environment files, credentials, SFTP hosts and remote paths stay out of the repository and out of the conversation. `.env.example` holds placeholders only.
