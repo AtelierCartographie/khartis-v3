@@ -2004,6 +2004,8 @@
   }
 
   .join-table {
+    --cds-field: var(--cds-field-02);
+    --cds-field-hover: var(--cds-field-hover-02);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2270,7 +2272,7 @@
       calc(var(--join-combo-icon-right) + var(--join-combo-icon-width) + 4px) 0
       0.75rem;
     font-size: var(--join-font);
-    background-color: var(--cds-field-02, #ffffff);
+    background-color: var(--cds-field);
     text-overflow: ellipsis;
   }
 
@@ -2283,7 +2285,7 @@
   .cell-select :global(.bx--list-box) {
     height: var(--join-control-height);
     max-height: none;
-    background-color: var(--cds-field-02, #ffffff);
+    background-color: var(--cds-field);
   }
 
   .cell-select :global(.bx--combo-box .bx--text-input) {
@@ -2322,7 +2324,7 @@
     height: var(--join-control-height);
     padding: 0 2rem 0 0.75rem;
     font-size: var(--join-font);
-    background-color: var(--cds-field-02, #ffffff);
+    background-color: var(--cds-field);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     display: flex;
     align-items: center;

@@ -338,15 +338,14 @@
     margin-inline: 0;
   }
 
-  /* The text field of the app (compact-number-input.svelte): grey on a white
-     panel, white on the grey menu of a colour field. */
+  /* The text field of the app (compact-number-input.svelte). */
   .hex {
     width: 100%;
     height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-05, 16px);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     color: var(--cds-text-primary, #161616);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem;
@@ -363,11 +362,6 @@
 
   .color-fields:not(.on-menu) .hex {
     padding: 0 var(--cds-spacing-04, 12px);
-  }
-
-  .on-menu .hex,
-  .on-menu :global(.compact-number-input) {
-    background-color: var(--cds-field-02, #ffffff);
   }
 
   .color-fields :global(.bx--row.hex-row) {

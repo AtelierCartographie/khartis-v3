@@ -1271,7 +1271,7 @@
     width: 100%;
     min-height: var(--kh-size-sm);
     padding: 0 var(--kh-pad-panel);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     font-family: 'IBM Plex Sans', sans-serif;
@@ -1456,7 +1456,7 @@
     padding: 0 var(--kh-pad-panel);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
-    background: var(--cds-field-02, #ffffff);
+    background: var(--cds-field);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: var(--kh-font-body);
     line-height: var(--kh-line-body);

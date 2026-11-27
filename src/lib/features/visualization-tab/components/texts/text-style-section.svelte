@@ -177,7 +177,7 @@
     height: var(--kh-size-sm);
     display: flex;
     align-items: center;
-    background: var(--cds-field-02, #ffffff);
+    background: var(--cds-field);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 

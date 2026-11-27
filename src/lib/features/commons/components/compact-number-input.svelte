@@ -150,7 +150,7 @@
     height: var(--compact-number-input-height, var(--kh-size-sm));
     display: flex;
     align-items: stretch;
-    background-color: var(--cds-field-01, #f4f4f4);
+    background-color: var(--cds-field);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     box-sizing: border-box;
     position: relative;

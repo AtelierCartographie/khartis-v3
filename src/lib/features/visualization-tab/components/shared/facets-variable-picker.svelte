@@ -251,14 +251,14 @@
     width: 100%;
     height: 32px;
     padding: 7px var(--cds-spacing-05);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
     text-align: left;
 
     &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
+      background: var(--cds-field-hover);
     }
 
     &:focus-visible {

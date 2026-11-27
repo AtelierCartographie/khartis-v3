@@ -809,7 +809,7 @@
   }
 
   #khartis-create-new-project :global(.bx--text-area) {
-    background-color: var(--cds-field-01);
+    background-color: var(--cds-field);
   }
 
   /* The feedback covers the field alone, not the actions under it. */

@@ -341,7 +341,7 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    background: var(--cds-field-01);
+    background: var(--cds-field);
     border: 0;
     border-bottom: 1px solid var(--cds-border-strong-01);
     padding: 0 var(--cds-spacing-05) 0 var(--cds-spacing-03);
@@ -386,7 +386,9 @@
   .color-dropdown {
     position: fixed;
     z-index: var(--z-overlay);
-    background: var(--cds-field-01);
+    --cds-field: var(--cds-field-02);
+    --cds-field-hover: var(--cds-field-hover-02);
+    background: var(--cds-layer-01);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--cds-border-strong-01);
     box-sizing: border-box;
