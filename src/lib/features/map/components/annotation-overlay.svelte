@@ -60,6 +60,7 @@
   } from '../utils/annotation-vector.utils';
   import {
     getGuideVectorStyle,
+    getTextRotationOriginX,
     getTextStyleFromStyle,
     getVectorStyle,
     toOpacityUnit
@@ -1281,8 +1282,8 @@
   }
 
   // The covered box of a rotated text is its text block's bounding box,
-  // relative to the upright item: the block turns about its own centre,
-  // which is not the item's when it is narrower and aligned inside it.
+  // relative to the upright item: the block turns about the point its
+  // alignment anchors, not about the item's centre.
   function getTextCoveredBox(
     item: Annotation,
     itemElement: HTMLElement | null
@@ -1541,7 +1542,11 @@
     const dy = (event.clientY - resizeState.startPointerY) / scale;
 
     if (item.type === AnnotationKind.TEXT) {
-      resizeTextAnnotation(item, resizeState, dx);
+      if (item.style?.rotation) {
+        resizeRotatedTextAnnotation(item, resizeState, dx, dy);
+      } else {
+        resizeTextAnnotation(item, resizeState, dx);
+      }
       return;
     }
 
@@ -1646,6 +1651,41 @@
       style: {
         ...(item.style ?? {}),
         shapeWidth: Math.round(right - left)
+      }
+    });
+  }
+
+  // A rotated text turns about the point its alignment anchors, which stays
+  // put: the pointer moves along the rotated axis, and only the width and the
+  // side opposite the anchor change.
+  function resizeRotatedTextAnnotation(
+    item: Annotation,
+    state: NonNullable<typeof resizeState>,
+    dx: number,
+    dy: number
+  ): void {
+    const angle = ((item.style?.rotation ?? 0) * Math.PI) / 180;
+    const along = dx * Math.cos(angle) + dy * Math.sin(angle);
+    const originX = getTextRotationOriginX(item.style?.textAlign);
+    const centred = originX === 0.5;
+    const growth = (state.handle === 'w' ? -along : along) * (centred ? 2 : 1);
+    const width = Math.round(
+      clamp(
+        state.startW + growth,
+        TEXT_MIN_WIDTH_PX,
+        Math.max(TEXT_MIN_WIDTH_PX, formatState.width)
+      )
+    );
+
+    annotationsActions.updateAnnotation(item.id, {
+      position: {
+        x: state.startAnnotationX + (state.startW - width) * originX,
+        y: state.startAnnotationY
+      },
+      positionMode: 'manual',
+      style: {
+        ...(item.style ?? {}),
+        shapeWidth: width
       }
     });
   }
@@ -2497,6 +2537,9 @@
           style:transform={textRotation
             ? `rotate(${textRotation}deg)`
             : undefined}
+          style:transform-origin={textRotation
+            ? `${getTextRotationOriginX(item.style?.textAlign) * 100}% 50%`
+            : undefined}
         >
           <div class="annotation-text" style={getTextStyle(item)}>
             {item.content || ''}
@@ -2958,6 +3001,28 @@
     outline-offset: 0;
     box-shadow: none;
     border-radius: 0;
+  }
+
+  /* A rotated text: the dashed frame turns with the text box, which carries
+     the rotation, rather than staying on the axis-aligned item. */
+  .annotation-item:has(.annotation-text-box[data-rotation]).selected,
+  .annotation-item:has(.annotation-text-box[data-rotation]):hover,
+  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible {
+    outline: none;
+  }
+
+  .annotation-item:has(.annotation-text-box[data-rotation]).selected
+    .annotation-text-box,
+  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-background-brand, #0f62fe);
+  }
+
+  .annotation-item:has(.annotation-text-box[data-rotation]).editable:hover:not(
+      .selected
+    )
+    .annotation-text-box {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
   .annotation-item.dragging {

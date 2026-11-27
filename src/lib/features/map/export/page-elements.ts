@@ -1,3 +1,4 @@
+import { getTextRotationOriginX } from '../utils/annotation-style.utils';
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
 import * as m from '$lib/paraglide/messages';
 import { SVG_MAP_FRAME_CLIP_ID } from './constants';
@@ -640,8 +641,8 @@ function buildAnnotationItem(
 
   const textElement = item.querySelector('.annotation-text');
   if (textElement instanceof HTMLElement) {
-    // A rotated text is measured upright, then turned about its centre,
-    // which the rotation leaves in place.
+    // A rotated text is measured upright, then turned about the point its
+    // alignment anchors, which the rotation leaves in place.
     const textBox = item.querySelector<HTMLElement>('.annotation-text-box');
     const rotation = Number(textBox?.dataset.rotation ?? 0);
     const previousTransform = textBox?.style.transform ?? '';
@@ -651,7 +652,7 @@ function buildAnnotationItem(
     if (rotation && textBox) textBox.style.transform = previousTransform;
     const turned =
       rotation && layer
-        ? `<g transform="rotate(${roundSvgValue(rotation)} ${roundSvgValue(rect.x + rect.width / 2)} ${roundSvgValue(rect.y + rect.height / 2)})">${layer}</g>`
+        ? `<g transform="rotate(${roundSvgValue(rotation)} ${roundSvgValue(rect.x + rect.width * getTextRotationOriginX(item.dataset.textAlign))} ${roundSvgValue(rect.y + rect.height / 2)})">${layer}</g>`
         : layer;
     return injectRootAttribute(turned, nameAttribute);
   }

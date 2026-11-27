@@ -406,14 +406,18 @@
   .dropdown-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--cds-spacing-05);
+    gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-05);
   }
 
+  /* Carbon keeps room for an icon on the right of every button, which
+     wraps « Annuler » in a narrow menu. */
   .dropdown-actions :global(.bx--btn) {
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    padding-right: var(--cds-spacing-04);
+    white-space: nowrap;
   }
 
   /* Same icon room as the eyedropper button (color-hsl-fields.svelte). */

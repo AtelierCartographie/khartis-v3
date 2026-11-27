@@ -610,7 +610,6 @@
                     max={100}
                     step={5}
                     inputWidth="72px"
-                    showSteppers={false}
                     onchange={(value) =>
                       updateItemLayout(item, { entrySpacing: value })}
                   />
@@ -739,10 +738,6 @@
   .legend-item-heading__step {
     color: var(--cds-text-secondary);
     margin-inline: var(--cds-spacing-02);
-  }
-
-  .legend-empty-notice :global(.bx--inline-notification) {
-    max-width: none;
   }
 
   .legend-tool {

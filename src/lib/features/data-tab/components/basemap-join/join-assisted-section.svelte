@@ -2423,7 +2423,6 @@
   }
 
   .join-status-zone :global(.bx--inline-notification) {
-    max-width: none;
     margin: 0;
   }
 

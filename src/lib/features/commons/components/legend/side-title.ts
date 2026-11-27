@@ -30,6 +30,8 @@ export function draw_legend_side_header(
   options: SideTextOptions & {
     title?: string | null;
     subtitle?: string | null;
+    /** Widest the text may run, in pixels; defaults to SIDE_TITLE_MAX_WIDTH scaled to the font. */
+    maxWidth?: number;
   }
 ): LegendSvgDefinition | null {
   const { title, subtitle, fontSize = 12 } = options;
@@ -40,7 +42,8 @@ export function draw_legend_side_header(
   const subtitleSize = subtitle ? fontSize : 0;
   const margin = scaleLegendMetric(10, fontSize);
   const gap = scaleLegendMetric(SIDE_TITLE_GAP, fontSize);
-  const maxWidth = scaleLegendMetric(SIDE_TITLE_MAX_WIDTH, fontSize);
+  const maxWidth =
+    options.maxWidth ?? scaleLegendMetric(SIDE_TITLE_MAX_WIDTH, fontSize);
   const titleFont = createLegendFont({
     fontSize: titleSize,
     fontFamily,

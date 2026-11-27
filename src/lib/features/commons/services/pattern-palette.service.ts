@@ -138,7 +138,8 @@ export function resolveClassPatterns(
   mode: 'sequential' | 'categorical',
   contrast?: ContrastMode,
   inverted = false,
-  divergingSplit?: DivergingSplit
+  divergingSplit?: DivergingSplit,
+  categoryColors?: readonly string[]
 ): ClassPattern[] {
   const categoricalScale = cfg.scale ?? 1;
   const isDiverging =
@@ -164,7 +165,8 @@ export function resolveClassPatterns(
           ],
           fill: cfg.color ?? DEFAULT_PATTERN_COLOR,
           background: 'transparent',
-          colorize: cfg.colorize ?? false,
+          // Category colours, when given, replace ok-palette's own palette.
+          colorize: (cfg.colorize ?? false) && !categoryColors?.length,
           patchSize: false
         });
 
@@ -180,15 +182,19 @@ export function resolveClassPatterns(
 
   const reordered = inverted ? resolved.reverse() : resolved;
 
-  if (mode === 'categorical' && cfg.categoryShapes) {
-    return reordered.map((pattern, i) =>
-      cfg.categoryShapes?.[i]
-        ? { ...pattern, type: cfg.categoryShapes[i] }
-        : pattern
-    );
-  }
+  if (mode !== 'categorical') return reordered;
 
-  return reordered;
+  // Colored patterns take the colour of their category.
+  const colorize = (cfg.colorize ?? false) && (categoryColors?.length ?? 0) > 0;
+  return reordered.map((pattern, i) => {
+    const shape = cfg.categoryShapes?.[i];
+    const color = colorize ? categoryColors?.[i] : undefined;
+    return {
+      ...pattern,
+      ...(shape ? { type: shape } : {}),
+      ...(color ? { fill: toHexFill(color) } : {})
+    };
+  });
 }
 
 const LEGACY_SHAPE_BY_PATTERN_ID: Record<

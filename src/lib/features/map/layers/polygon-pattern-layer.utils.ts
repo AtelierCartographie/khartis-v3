@@ -215,7 +215,9 @@ export function resolveClassPatternPalette(
       pattern,
       'categorical',
       pattern.contrast,
-      classification?.inverted ?? false
+      classification?.inverted ?? false,
+      undefined,
+      classification?.colors
     );
   }
 

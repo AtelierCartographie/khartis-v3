@@ -548,7 +548,6 @@
 
       :global(.bx--inline-notification) {
         margin: 0;
-        max-width: 100%;
       }
     }
 

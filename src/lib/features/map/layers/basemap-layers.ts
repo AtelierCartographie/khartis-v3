@@ -112,13 +112,6 @@ const DASH_EXTENSION = new PathStyleExtension({
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
-const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [
-  ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.shadow
-];
-const BASEMAP_TERRE_SHADOW_OPACITY = 0.65;
-const BASEMAP_TERRE_SHADOW_WIDTH_PX = 5;
-const BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX = 3;
-const BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX = 8;
 
 export const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
 
@@ -281,33 +274,11 @@ export function createTerreLayers(
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
-    const outlineData =
-      config.fillShadow || shouldRenderStroke
-        ? ctx.projection
-          ? parsePathsWithProjection(worldBaseTable, ctx.projection)
-          : parsePaths(worldBaseTable)
-        : null;
-
-    if (config.fillShadow && outlineData) {
-      layers.push(
-        new PathLayer({
-          id: `${layerId}-shadow`,
-          ...createPathLayerProps(outlineData),
-          getColor: withOpacity(
-            BASEMAP_TERRE_SHADOW_COLOR,
-            BASEMAP_TERRE_SHADOW_OPACITY
-          ),
-          widthUnits: 'pixels',
-          getWidth: BASEMAP_TERRE_SHADOW_WIDTH_PX,
-          widthMinPixels: BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX,
-          widthMaxPixels: BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX,
-          ...baseProps,
-          updateTriggers: {
-            getWidth: [config.strokeThickness]
-          }
-        })
-      );
-    }
+    const outlineData = shouldRenderStroke
+      ? ctx.projection
+        ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+        : parsePaths(worldBaseTable)
+      : null;
 
     layers.push(
       new SolidPolygonLayer({

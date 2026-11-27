@@ -261,7 +261,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 0;
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 
   .table-container :global(.advanced-data-table) {

@@ -163,6 +163,13 @@
   const resolvedPatternConfig = $derived<PatternPaletteConfig>(
     draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
   );
+  // Uncolored patterns on a coloured background: nothing shows the colour of
+  // a category, so it is not offered.
+  const hidesCategoryColor = $derived(
+    showCategoryPattern &&
+      !resolvedPatternConfig.colorize &&
+      !!resolvedPatternConfig.background
+  );
   const categoryPatterns = $derived<ClassPattern[] | null>(
     showCategoryPattern &&
       draftCategories.length > 0 &&
@@ -176,7 +183,11 @@
               (category) => category.patternShape
             )
           },
-          'categorical'
+          'categorical',
+          undefined,
+          false,
+          undefined,
+          draftCategories.map((category) => category.color)
         )
       : null
   );
@@ -764,66 +775,16 @@
                         />
                       </div>
                     </div>
-
-                    <div class="common-divider"></div>
-
-                    <div
-                      class="common-field common-field--toggle common-field--full"
-                    >
-                      <span class="field-label">
-                        {m.aspect_common_pattern()}
-                      </span>
-                      <div class="common-toggle-value">
-                        <div class="toggle-control">
-                          <Switch
-                            toggled={draftCommonAspect.pattern}
-                            hideLabel
-                            labelText={m.aspect_common_pattern()}
-                            onchange={(value) =>
-                              handleCommonAspectChange('pattern', value)}
-                          />
-                          <span class="toggle-state">
-                            {draftCommonAspect.pattern ? m.yes() : m.no()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {#if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
-                      <div class="common-field--full">
-                        <PatternPalettePicker
-                          config={resolvedPatternConfig}
-                          onchange={handlePatternConfigChange}
-                        />
-                      </div>
-                    {/if}
                   </div>
                 {:else if primitiveKind === 'polygons'}
                   <div class="common-stack">
-                    <div class="common-grid-row common-grid-row--full">
-                      <span class="field-label">
-                        {m.aspect_common_pattern()}
-                      </span>
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={showCategoryPattern}
-                          disabled={isPatternUnavailable}
-                          hideLabel
-                          labelText={m.aspect_common_pattern()}
-                          onchange={(value) =>
-                            handleCommonAspectChange('pattern', value)}
-                        />
-                        <span class="toggle-state">
-                          {showCategoryPattern ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
+                    <ToggleWithLabel
+                      label={m.aspect_common_pattern()}
+                      toggled={showCategoryPattern}
+                      disabled={isPatternUnavailable}
+                      ontoggle={(value) =>
+                        handleCommonAspectChange('pattern', value)}
+                    />
                     {#if isPatternUnavailable}
                       <InlineNotification
                         kind="info"
@@ -835,13 +796,11 @@
                         })}
                       />
                     {:else if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
+                      <ToggleWithLabel
+                        label={m.pattern_colorize()}
+                        toggled={resolvedPatternConfig.colorize ?? false}
+                        ontoggle={handlePatternColorizeChange}
+                      />
                       <div class="common-field--full">
                         <PatternPalettePicker
                           categorical
@@ -990,16 +949,18 @@
                               </div>
                             {/if}
 
-                            <div class="field-stack">
-                              <span class="field-label">
-                                {m.per_category_color()}
-                              </span>
-                              <SingleColorPreview
-                                color={category.color}
-                                onchange={(hex) =>
-                                  handleCategoryColor(category.id, hex)}
-                              />
-                            </div>
+                            {#if !hidesCategoryColor}
+                              <div class="field-stack">
+                                <span class="field-label">
+                                  {m.per_category_color()}
+                                </span>
+                                <SingleColorPreview
+                                  color={category.color}
+                                  onchange={(hex) =>
+                                    handleCategoryColor(category.id, hex)}
+                                />
+                              </div>
+                            {/if}
 
                             {#if showCategoryPattern && categoryPatterns}
                               <div class="field-stack">
@@ -1279,17 +1240,6 @@
     width: 100%;
     height: 1px;
     background: var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .common-grid-row {
-    display: flex;
-    flex-direction: column;
-    gap: var(--kh-gap-inline);
-    min-width: 0;
-  }
-
-  .common-grid-row--full {
-    grid-column: 1 / -1;
   }
 
   .common-stack {

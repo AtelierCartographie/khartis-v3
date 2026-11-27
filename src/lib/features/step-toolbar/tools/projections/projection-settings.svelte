@@ -122,7 +122,6 @@
           max={180}
           step={longitudeStep}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleLongitudeChange}
         />
@@ -134,7 +133,6 @@
           max={90}
           step={PROJECTION_ANGLE_STEP}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleLatitudeChange}
         />
@@ -146,7 +144,6 @@
           max={180}
           step={PROJECTION_ANGLE_STEP}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleRotationChange}
         />

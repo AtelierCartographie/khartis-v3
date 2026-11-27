@@ -306,7 +306,6 @@
         max={100}
         step={1}
         inputWidth="72px"
-        showSteppers={false}
         onchange={(opacity) => basemapStyleStore.setOpacity(opacity)}
       />
     </div>
@@ -457,6 +456,7 @@
   }
 
   .basemap-style-selector :global(.projection-shortcut-btn) {
-    align-self: flex-start;
+    width: 100%;
+    max-width: none;
   }
 </style>

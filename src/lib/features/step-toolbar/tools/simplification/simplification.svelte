@@ -16,7 +16,7 @@
     InlineNotification,
     Slider
   } from 'carbon-components-svelte';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import SteppedSlider from '$lib/features/commons/components/stepped-slider.svelte';
   import { Earth, LicenseGlobal, Undo } from 'carbon-icons-svelte';
   import type { SimplificationResult } from '../../types/simplification.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -134,17 +134,11 @@
     return geoDatasets[0]?.id;
   });
 
-  const geoDatasetLabel = $derived.by(() => {
-    const selected = datasetsStore.selectedDataset;
-    if (selected?.geometry && !selected.joinedBasemap) return selected.name;
-    return geoDatasets[0]?.name ?? m.simplification_source_geodata();
-  });
-
   const sources = $derived([
     { icon: Earth, label: m.simplification_source_basemap(), iconSize: 16 },
     {
       icon: LicenseGlobal,
-      label: geoDatasetLabel,
+      label: m.simplification_source_geodata(),
       iconSize: 16,
       disabled: !hasGeoDatasets
     }
@@ -311,16 +305,24 @@
           </div>
         </div>
       {:else if !usesMapLibreInterleaved && hasBasemapVariants}
-        <div>
-          <div class="form-label">{m.simplification_level_label()}</div>
-          <SimpleRadioGroup
-            name="simplification-level"
+        {#if availableBasemapLevels.length === 1}
+          <InlineNotification
+            kind="info"
+            lowContrast
+            hideCloseButton
+            subtitle={m.simplification_single_level({
+              level: getLevelLabel(availableBasemapLevels[0])
+            })}
+          />
+        {:else}
+          <SteppedSlider
+            label={m.simplification_level_label()}
             disabled={isBasemapSourceBlocked}
-            items={availableBasemapLevels.map((level) => ({
+            steps={availableBasemapLevels.map((level) => ({
               value: level,
-              labelText: getLevelLabel(level)
+              label: getLevelLabel(level)
             }))}
-            selected={resolvedBasemapLevel}
+            value={resolvedBasemapLevel}
             onchange={(value) => {
               if (isBasemapSourceBlocked) return;
               if (value === resolvedBasemapLevel) return;
@@ -328,7 +330,7 @@
               scheduleSimplificationApply('level-change');
             }}
           />
-        </div>
+        {/if}
       {/if}
     {/if}
 

@@ -260,6 +260,9 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
     margin-bottom: var(--kh-gap-label);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .slider {
@@ -339,7 +342,7 @@
      panel, white on the grey menu of a colour field. */
   .hex {
     width: 100%;
-    height: var(--kh-size-md);
+    height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-05, 16px);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
@@ -359,7 +362,6 @@
   }
 
   .color-fields:not(.on-menu) .hex {
-    height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-04, 12px);
   }
 
@@ -375,7 +377,7 @@
 
   .preview {
     width: 100%;
-    height: var(--kh-size-md);
+    height: var(--kh-size-sm);
     border: 1px solid var(--cds-border-strong-01);
     box-sizing: border-box;
   }

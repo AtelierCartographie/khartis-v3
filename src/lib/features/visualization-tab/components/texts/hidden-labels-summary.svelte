@@ -48,7 +48,4 @@
 {/if}
 
 <style>
-  .hidden-labels :global(.bx--inline-notification) {
-    max-width: none;
-  }
 </style>
