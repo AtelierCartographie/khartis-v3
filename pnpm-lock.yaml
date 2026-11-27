@@ -349,8 +349,8 @@ importers:
         specifier: ^4.3.2
         version: 4.3.2(@types/node@26.6.7)
       '@jcode.labs/ragmir':
-        specifier: ^6.19.0
-        version: 6.19.0(@huggingface/transformers@4.3.2(@types/node@26.6.7))(apache-arrow@18.1.0)
+        specifier: ^6.20.0
+        version: 6.20.0(@huggingface/transformers@4.3.2(@types/node@26.6.7))(apache-arrow@18.1.0)
       apache-arrow:
         specifier: 18.1.0
         version: 18.1.0
@@ -1521,8 +1521,8 @@ packages:
   '@isaacs/nonrecursive-glob-match@1.1.0':
     resolution: {integrity: sha512-GPm/Dbvk5RLmhRnxXIa7nTpK0xtl4E0wj0MslsuNiJ1FIROU+2+9lgUC/dgF7Ey4QCWhfEsgxilMRMCdHPfDfw==}
 
-  '@jcode.labs/ragmir@6.19.0':
-    resolution: {integrity: sha512-P/g/C8mihM61qCR9gUu2clOGA/UkAzzAjDmrSC/z4MGoR2xzcdN8ChfhxwC733LnSYz3cdc8CC8tMcHWL6qUrA==}
+  '@jcode.labs/ragmir@6.20.0':
+    resolution: {integrity: sha512-ukiPDgkVTvwnf1KXqGqCSG4uoRpQ2jYNAPpu/C94ff/a6qFyYaZUPHxRG56kKvVhh0MXJZRRmL21YFr6zgu05A==}
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
@@ -7981,7 +7981,7 @@ snapshots:
 
   '@isaacs/nonrecursive-glob-match@1.1.0': {}
 
-  '@jcode.labs/ragmir@6.19.0(@huggingface/transformers@4.3.2(@types/node@26.6.7))(apache-arrow@18.1.0)':
+  '@jcode.labs/ragmir@6.20.0(@huggingface/transformers@4.3.2(@types/node@26.6.7))(apache-arrow@18.1.0)':
     dependencies:
       '@lancedb/lancedb': 0.30.0(apache-arrow@18.1.0)
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
