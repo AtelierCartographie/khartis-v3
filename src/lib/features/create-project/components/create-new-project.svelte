@@ -942,6 +942,10 @@
     background: var(--khartis-control-surface-background);
   }
 
+  :global(.file-complete-tile > .bx--inline-notification) {
+    margin-top: var(--cds-spacing-03);
+  }
+
   .file-incomplete-tile :global(.bx--tile) {
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-support-warning);

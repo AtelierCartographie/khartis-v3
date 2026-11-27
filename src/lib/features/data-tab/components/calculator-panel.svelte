@@ -434,7 +434,7 @@
     {#if successMessage}
       <InlineNotification
         kind="success"
-        title={successMessage}
+        subtitle={successMessage}
         lowContrast
         hideCloseButton
       />

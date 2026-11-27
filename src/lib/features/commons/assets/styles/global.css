@@ -261,8 +261,7 @@
   padding-right: 2.5rem;
 }
 
-/* Inline notifications shown one after another: one even gap between them
-   instead of Carbon's 1rem margins, which add up differently per container. */
+/* Inline notifications shown one after another, one even gap between them. */
 .kh-notification-stack {
   display: flex;
   flex-direction: column;
@@ -273,16 +272,19 @@
   display: none;
 }
 
-.kh-notification-stack > .bx--inline-notification {
-  margin: 0;
-}
-
-/* Carbon gives inline notifications an 18rem minimum width and a capped
-   maximum: in a narrow panel they overflow into its margins, in a wide one
-   they stop short. They take the width of their container instead. */
+/* Carbon gives inline notifications an 18rem minimum width, a capped maximum
+   and 1rem margins: in a narrow panel they overflow into its margins, in a
+   wide one they stop short, and the margins add to the gap of the container.
+   They take the width of their container, which spaces them. */
 .bx--inline-notification {
   min-width: 0;
   max-width: none;
+  margin: 0;
+}
+
+/* A modal body flows as text: a notification keeps its distance there. */
+.bx--modal-content > .bx--inline-notification {
+  margin-block: var(--cds-spacing-05);
 }
 
 html[theme='g100'] .app-shadow {

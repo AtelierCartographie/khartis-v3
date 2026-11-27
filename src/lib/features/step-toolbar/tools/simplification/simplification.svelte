@@ -264,7 +264,7 @@
     {#if simplState.source === SimplificationSource.Basemap}
       {#if usesMapLibreInterleaved}
         <InlineNotification
-          closeButtonDescription={m.a11y_close_notification()}
+          hideCloseButton
           kind="warning"
           lowContrast
           title={m.simplification_osm_not_available()}
@@ -272,7 +272,7 @@
         />
       {:else if !isImportedBasemap && !hasBasemapVariants}
         <InlineNotification
-          closeButtonDescription={m.a11y_close_notification()}
+          hideCloseButton
           kind="info"
           lowContrast
           title={m.simplification_no_variants()}
@@ -282,7 +282,7 @@
 
       {#if isImportedBasemap && !usesMapLibreInterleaved}
         <InlineNotification
-          closeButtonDescription={m.a11y_close_notification()}
+          hideCloseButton
           kind="warning"
           lowContrast
           title={m.simplification_warning_title()}
@@ -336,7 +336,7 @@
 
     {#if simplState.source === SimplificationSource.Geo}
       <InlineNotification
-        closeButtonDescription={m.a11y_close_notification()}
+        hideCloseButton
         kind="warning"
         lowContrast
         title={m.simplification_warning_title()}
@@ -390,7 +390,7 @@
       closeButtonDescription={m.a11y_close_notification()}
       kind="success"
       lowContrast
-      title={m.simplification_success({
+      subtitle={m.simplification_success({
         originalVertices: lastResult.originalVertices,
         simplifiedVertices: lastResult.simplifiedVertices,
         reductionPercentage: Math.round(lastResult.vertexReduction)

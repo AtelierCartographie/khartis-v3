@@ -2363,4 +2363,8 @@
   .step-content {
     padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
+
+  .step-content > :global(.bx--inline-notification) {
+    margin-bottom: var(--kh-gap-param);
+  }
 </style>

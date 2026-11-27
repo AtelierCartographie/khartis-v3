@@ -2424,10 +2424,6 @@
     gap: var(--kh-gap-inline);
   }
 
-  .join-status-zone :global(.bx--inline-notification) {
-    margin: 0;
-  }
-
   .notification-success {
     display: flex;
     align-items: center;

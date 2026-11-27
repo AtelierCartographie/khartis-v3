@@ -572,11 +572,6 @@
     max-width: 320px;
   }
 
-  .colorblind-notification :global(.bx--inline-notification) {
-    margin: 0;
-    max-width: 100%;
-  }
-
   @media (max-width: 672px) {
     .colorblind-notification {
       left: calc(var(--cds-spacing-05) + var(--safe-area-left));

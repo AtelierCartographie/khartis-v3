@@ -616,6 +616,10 @@
     flex-direction: column;
   }
 
+  #enrich-data-step > :global(.bx--inline-notification) {
+    margin-bottom: var(--kh-gap-param);
+  }
+
   .kh-help {
     color: var(--cds-text-secondary);
     font-size: 0.8125rem;
