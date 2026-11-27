@@ -108,10 +108,10 @@
     if (suggestion.type === 'variable') {
       const beforeCursor = text.slice(0, position);
       const lastQuoteIndex = beforeCursor.lastIndexOf('"');
-      const before = text.slice(0, lastQuoteIndex + 1);
+      const before = text.slice(0, lastQuoteIndex);
       const after = text.slice(position);
-      newValue = before + suggestion.value + '"' + after;
-      newCursorPosition = before.length + suggestion.value.length + 1;
+      newValue = before + suggestion.value + after;
+      newCursorPosition = before.length + suggestion.value.length;
     } else if (suggestion.type === 'function') {
       const { start } = getWordAtCursor(text, position);
       const before = text.slice(0, start);

@@ -1,4 +1,5 @@
 export { Duck, initDuckDB } from './duck';
+export type { DuckClient } from './duck';
 export { waitForQueryIdle } from './core/query-activity';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 export type { CoordinateSystemEntry } from './orchestrator/crs-ops';
@@ -31,8 +32,8 @@ export {
   isGeometryColumnType
 } from './utils/geometry-column.utils';
 export {
-  isMissingDuckTableError,
-  isOutOfMemoryError
+  matchesDuckDBError,
+  type DuckDBErrorKind
 } from './utils/duckdb-error.utils';
 export type {
   AnalysisResult,

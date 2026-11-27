@@ -1,10 +1,15 @@
-import { getTableMetadata, markTableMutated } from './cache/cache-manager';
+import {
+  getTableMetadata,
+  markTableMutated,
+  type TableMutationOptions
+} from './cache/cache-manager';
 import {
   getContext,
   initEngine,
   isInitialized,
   loadMacros
 } from './core/engine';
+import { ensureExtension } from './core/extensions';
 import { executeQuery, executeQueryStreaming } from './core/query';
 import { exportToCsv, exportToParquet } from './io/exporters';
 import { dropRegisteredFile, registerFiles } from './io/file-registry';
@@ -26,12 +31,12 @@ import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
 import { simplification_macros } from './macros/simplification';
 import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 
 import type {
   AnalyseOptions,
   AnalysisResults,
   DuckDBMetadata,
+  ExtensionName,
   QueryOptions,
   ReadGeofileOptions,
   ReadTabularOptions,
@@ -39,6 +44,7 @@ import type {
   SearchStats,
   TableMetadata
 } from './types';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 async function query(
   sql: string,
@@ -77,6 +83,11 @@ export const Duck = {
   },
 
   query,
+
+  /** Loads an extension once per engine (see `ensureExtension`). */
+  async loadExtension(name: ExtensionName): Promise<void> {
+    return ensureExtension(getContext(), name);
+  },
 
   /** Execute a streaming query and return raw Arrow IPC bytes. */
   async queryStreaming(sql: string): Promise<Uint8Array> {
@@ -175,9 +186,30 @@ export const Duck = {
     return searchInTable(ctx, table, searchQuery, options);
   },
 
-  invalidateTableCache(table: string): void {
+  /**
+   * Runs a statement that changes `tables`, then invalidates every cache
+   * derived from them, even when the statement fails part-way. Reads and
+   * temporary tables that nothing caches go through `query`.
+   */
+  async mutate(
+    tables: string | readonly string[],
+    sql: string,
+    options?: QueryOptions & TableMutationOptions
+  ): Promise<unknown> {
     const ctx = getContext();
-    markTableMutated(ctx, table);
+    try {
+      return await executeQuery(ctx.connection, sql, options);
+    } finally {
+      for (const table of typeof tables === 'string' ? [tables] : tables) {
+        markTableMutated(ctx, table, options);
+      }
+    }
+  },
+
+  /** For a table changed outside `mutate`, such as by a file reader. */
+  invalidateTableCache(table: string, options?: TableMutationOptions): void {
+    const ctx = getContext();
+    markTableMutated(ctx, table, options);
   },
 
   /**
@@ -192,12 +224,12 @@ export const Duck = {
     await executeQuery(
       ctx.connection,
       [table, ...derivedTables]
-        .map((name) => `DROP TABLE IF EXISTS "${escapeIdentifier(name)}";`)
+        .map((name) => `DROP TABLE IF EXISTS ${sqlIdentifier(name)};`)
         .join('\n')
     );
     await executeQuery(
       ctx.connection,
-      `DROP SEQUENCE IF EXISTS "${rowIdSequenceName(table)}"`
+      `DROP SEQUENCE IF EXISTS ${sqlIdentifier(rowIdSequenceName(table))}`
     );
     markTableMutated(ctx, table);
     for (const derivedTable of derivedTables) {
@@ -227,6 +259,9 @@ export const Duck = {
     ctx.rowCountCache.delete(tableName);
   }
 };
+
+/** What the orchestrator and pipeline operations receive: the facade itself. */
+export type DuckClient = typeof Duck;
 
 let duckInitPromise: Promise<void> | null = null;
 

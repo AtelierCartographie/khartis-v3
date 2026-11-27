@@ -32,6 +32,14 @@ vi.mock('$lib/features/duckdb', async () => {
 
   return {
     Duck: {
+      mutate(
+        this: { query: (sql: string, options?: never) => unknown },
+        _tables: unknown,
+        sql: string,
+        options?: never
+      ) {
+        return this.query(sql, options);
+      },
       query: (sql: string, options?: Record<string, unknown>) =>
         executeQuery(connection as never, sql, options)
     },

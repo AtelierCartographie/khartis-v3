@@ -1,5 +1,6 @@
 import proj4, { type Converter } from 'proj4';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { sqlString } from '$lib/features/commons/utils/sql.utils';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 
 /**
  * A CRS code read from the PROJ database bundled with the spatial extension.
@@ -83,7 +84,7 @@ async function checkProj4Fidelity(
   const points = samplePoints(projjson);
   const rows = await run(
     `SELECT ST_X(p) AS x, ST_Y(p) AS y FROM (
-       SELECT i, ST_Transform(ST_Point(lon, lat), 'EPSG:4326', '${escapeSqlString(code)}', true) AS p
+       SELECT i, ST_Transform(ST_Point(lon, lat), 'EPSG:4326', ${sqlString(code)}, true) AS p
        FROM (VALUES ${points.map(([lon, lat], i) => `(${i}, ${lon}, ${lat})`).join(', ')}) AS t(i, lon, lat)
      ) ORDER BY i`
   );
@@ -114,11 +115,11 @@ async function readProjjson(
   const path = io.scratchFile(code);
   try {
     await io.exec(
-      `COPY (SELECT ST_Point(0, 0)::GEOMETRY('${escapeSqlString(code)}') AS g)
-       TO '${escapeSqlString(path)}' (FORMAT parquet)`
+      `COPY (SELECT ST_Point(0, 0)::GEOMETRY(${sqlString(code)}) AS g)
+       TO ${sqlString(path)} (FORMAT parquet)`
     );
   } catch (error) {
-    if (/unrecognized coordinate system/i.test(String(error))) {
+    if (matchesDuckDBError(error, 'unknown-crs')) {
       return null;
     }
     throw error;
@@ -126,7 +127,7 @@ async function readProjjson(
   try {
     const rows = await io.run(
       `SELECT decode(value) AS geo
-       FROM parquet_kv_metadata('${escapeSqlString(path)}')
+       FROM parquet_kv_metadata(${sqlString(path)})
        WHERE decode(key) = 'geo'`
     );
     const geo = JSON.parse(String(rows[0]?.geo ?? '{}')) as {

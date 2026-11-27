@@ -1,6 +1,6 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 export type CatalogGeometryKind =
   | 'point'
@@ -90,7 +90,7 @@ export function buildNativeGeoArrowGeometrySql(
     expectedKind
   );
   const dataType = geometryColumn.data_type.replace(/\s+/g, ' ').toUpperCase();
-  const column = `"${escapeIdentifier(geometryColumn.column_name)}"`;
+  const column = `${sqlIdentifier(geometryColumn.column_name)}`;
   const isList = dataType.endsWith('[]');
   const geometry = buildGeometryExpression(geometryKind, column, isList);
   const guardedGeometry = isList
@@ -98,10 +98,10 @@ export function buildNativeGeoArrowGeometrySql(
     : geometry;
 
   return `
-    CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(tempTableName)}" AS
+    CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(tempTableName)} AS
     SELECT
       * EXCLUDE (${column}),
       ${guardedGeometry} AS ${INTERNAL_COLUMN.GEOM}
-    FROM "${escapeIdentifier(rawTableName)}"
+    FROM ${sqlIdentifier(rawTableName)}
   `;
 }

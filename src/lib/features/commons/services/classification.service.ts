@@ -2,7 +2,6 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
-import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
 import {
@@ -31,6 +30,11 @@ import {
   SNAP_STEPS_BELOW_REGULAR,
   snapBreaksToCalendar
 } from '../utils/calendar-breaks.utils';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 const SEQUENTIAL_COLOR_START = '#3cc8a0';
 const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
@@ -92,8 +96,6 @@ export interface DivergingClassificationOptions {
 interface QueryContext {
   tableName: string;
   columnName: string;
-  escapedTable: string;
-  escapedColumn: string;
 }
 
 interface ColumnStats {
@@ -186,9 +188,7 @@ function getQueryContext(
 
   return {
     tableName,
-    columnName,
-    escapedTable: escapeIdentifier(tableName),
-    escapedColumn: escapeIdentifier(columnName)
+    columnName
   };
 }
 
@@ -198,11 +198,11 @@ async function queryColumnStats(
   const result = (await Duck.query(`
       SELECT
         COUNT(*) as row_count,
-        COUNT(DISTINCT "${context.escapedColumn}") as distinct_count,
-        MIN("${context.escapedColumn}") as min_val,
-        MAX("${context.escapedColumn}") as max_val
-      FROM "${context.escapedTable}"
-      WHERE "${context.escapedColumn}" IS NOT NULL
+        COUNT(DISTINCT ${sqlIdentifier(context.columnName)}) as distinct_count,
+        MIN(${sqlIdentifier(context.columnName)}) as min_val,
+        MAX(${sqlIdentifier(context.columnName)}) as max_val
+      FROM ${sqlIdentifier(context.tableName)}
+      WHERE ${sqlIdentifier(context.columnName)} IS NOT NULL
     `)) as Table;
 
   if (result.numRows === 0) {
@@ -281,7 +281,7 @@ async function roundBreaks(
 
   try {
     const breaksListLiteral = `[${breaks.join(', ')}]`;
-    const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(context.tableName)}', '${escapeSqlString(context.columnName)}') as rounded`;
+    const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, ${sqlString(context.tableName)}, ${sqlString(context.columnName)}) as rounded`;
     const roundResult = (await Duck.query(roundQuery)) as Table;
     const rawRounded = roundResult.getChild?.('rounded')?.get(0);
     const rounded = toIterableValues(rawRounded);
@@ -332,7 +332,7 @@ async function roundBounds(
   breaks: number[]
 ): Promise<{ roundedMin: number; roundedMax: number }> {
   try {
-    const boundsQuery = `SELECT round_bounds(${min}, ${max}, '${escapeSqlString(context.tableName)}', '${escapeSqlString(context.columnName)}') as bounds`;
+    const boundsQuery = `SELECT round_bounds(${min}, ${max}, ${sqlString(context.tableName)}, ${sqlString(context.columnName)}) as bounds`;
     const boundsResult = (await Duck.query(boundsQuery)) as Table;
     const bounds = toIterableValues(boundsResult.getChild?.('bounds')?.get(0));
 
@@ -373,10 +373,10 @@ async function queryBreakCounts(
     const lower = allBreaks[index];
     const upper = allBreaks[index + 1];
     const upperOp = index === allBreaks.length - 2 ? '<=' : '<';
-    return `COUNT(*) FILTER (WHERE "${context.escapedColumn}" >= ${lower} AND "${context.escapedColumn}" ${upperOp} ${upper}) as cnt_${index}`;
+    return `COUNT(*) FILTER (WHERE ${sqlIdentifier(context.columnName)} >= ${lower} AND ${sqlIdentifier(context.columnName)} ${upperOp} ${upper}) as cnt_${index}`;
   });
 
-  const countsQuery = `SELECT ${caseParts.join(', ')} FROM "${context.escapedTable}" WHERE "${context.escapedColumn}" IS NOT NULL`;
+  const countsQuery = `SELECT ${caseParts.join(', ')} FROM ${sqlIdentifier(context.tableName)} WHERE ${sqlIdentifier(context.columnName)} IS NOT NULL`;
   const countsResult = (await Duck.query(countsQuery)) as Table;
 
   if (countsResult.numRows > 0) {
@@ -392,7 +392,6 @@ async function queryBreakCounts(
 const breaksCache = new Map<string, BreaksResult>();
 const BREAKS_CACHE_MAX = 50;
 let breaksCacheVersion = 0;
-let temporaryClassificationTableSequence = 0;
 
 function getValueFilterKey(
   filter: ClassificationValueFilter | undefined
@@ -416,7 +415,7 @@ function buildPooledValuesSource(
   const scope = rowScopeClause ? ` WHERE ${rowScopeClause}` : '';
   const selects = pooledColumnNames.map(
     (columnName) =>
-      `SELECT CAST("${escapeIdentifier(columnName)}" AS DOUBLE) AS "${context.escapedColumn}" FROM "${context.escapedTable}"${scope}`
+      `SELECT CAST(${sqlIdentifier(columnName)} AS DOUBLE) AS ${sqlIdentifier(context.columnName)} FROM ${sqlIdentifier(context.tableName)}${scope}`
   );
   return `(${selects.join(' UNION ALL ')})`;
 }
@@ -437,7 +436,7 @@ async function prepareClassificationContext(
     const filterValue = Number(filter.value);
     if (Number.isFinite(filterValue)) {
       conditions.push(
-        `"${context.escapedColumn}" ${filter.operator} ${filterValue}`
+        `${sqlIdentifier(context.columnName)} ${filter.operator} ${filterValue}`
       );
     }
   }
@@ -449,20 +448,18 @@ async function prepareClassificationContext(
     };
   }
 
-  temporaryClassificationTableSequence += 1;
-  const tableName = `kh_classification_${Date.now()}_${temporaryClassificationTableSequence}`;
-  const escapedTable = escapeIdentifier(tableName);
+  const tableName = sqlTempName('kh_classification');
   const source = pooledColumnNames
     ? buildPooledValuesSource(context, pooledColumnNames, rowScopeClause)
-    : `"${context.escapedTable}"`;
+    : sqlIdentifier(context.tableName);
   const whereClause = [
-    `"${context.escapedColumn}" IS NOT NULL`,
+    `${sqlIdentifier(context.columnName)} IS NOT NULL`,
     ...conditions
   ].join(' AND ');
 
   await Duck.query(`
-    CREATE TEMP TABLE "${escapedTable}" AS
-    SELECT "${context.escapedColumn}" AS "${context.escapedColumn}"
+    CREATE TEMP TABLE ${sqlIdentifier(tableName)} AS
+    SELECT ${sqlIdentifier(context.columnName)} AS ${sqlIdentifier(context.columnName)}
     FROM ${source}
     WHERE ${whereClause}
   `);
@@ -470,11 +467,10 @@ async function prepareClassificationContext(
   return {
     context: {
       ...context,
-      tableName,
-      escapedTable
+      tableName
     },
     cleanup: async () => {
-      await Duck.query(`DROP TABLE IF EXISTS "${escapedTable}"`);
+      await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(tableName)}`);
     }
   };
 }
@@ -565,7 +561,7 @@ export async function calculateBreaks(
       ? Math.max(numClasses, DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX)
       : numClasses;
 
-    const query = `SELECT ${macroName}('${escapeSqlString(prepared.context.tableName)}', '${escapeSqlString(columnName)}', ${macroClassCount}) as breaks`;
+    const query = `SELECT ${macroName}(${sqlString(prepared.context.tableName)}, ${sqlString(columnName)}, ${macroClassCount}) as breaks`;
 
     try {
       const result = (await Duck.query(query)) as Table;
@@ -834,7 +830,7 @@ function buildEpochValuesSource(
   const scope = rowScopeClause ? ` WHERE ${rowScopeClause}` : '';
   const selects = columnNames.map(
     (columnName) =>
-      `SELECT epoch_ms("${escapeIdentifier(columnName)}") AS v FROM "${context.escapedTable}"${scope}`
+      `SELECT epoch_ms(${sqlIdentifier(columnName)}) AS v FROM ${sqlIdentifier(context.tableName)}${scope}`
   );
   return `(${selects.join(' UNION ALL ')})`;
 }
@@ -853,7 +849,7 @@ export async function isTemporalColumn(
 
   try {
     const result = (await Duck.query(
-      `SELECT data_type FROM information_schema.columns WHERE table_name = '${escapeSqlString(context.tableName)}' AND column_name = '${escapeSqlString(columnName)}'`
+      `SELECT data_type FROM information_schema.columns WHERE table_name = ${sqlString(context.tableName)} AND column_name = ${sqlString(columnName)}`
     )) as Table;
     const dataType = result.getChild?.('data_type')?.get(0);
     return typeof dataType === 'string' && TEMPORAL_COLUMN_TYPE.test(dataType);
@@ -1126,11 +1122,10 @@ export async function calculateDateDataBreaks(
   );
   const temporaryTables: string[] = [];
   const createValuesTable = async (where: string): Promise<string> => {
-    temporaryClassificationTableSequence += 1;
-    const tableName = `kh_date_classification_${Date.now()}_${temporaryClassificationTableSequence}`;
+    const tableName = sqlTempName('kh_date_classification');
     temporaryTables.push(tableName);
     await Duck.query(
-      `CREATE TEMP TABLE "${escapeIdentifier(tableName)}" AS SELECT v::DOUBLE AS v FROM ${source} AS s WHERE v IS NOT NULL${where}`
+      `CREATE TEMP TABLE ${sqlIdentifier(tableName)} AS SELECT v::DOUBLE AS v FROM ${source} AS s WHERE v IS NOT NULL${where}`
     );
     return tableName;
   };
@@ -1140,7 +1135,7 @@ export async function calculateDateDataBreaks(
   ): Promise<{ breaks: number[]; min: number; max: number } | null> => {
     const tableName = await createValuesTable(where);
     const statsResult = (await Duck.query(
-      `SELECT COUNT(DISTINCT v) AS distinct_count, MIN(v) AS min_val, MAX(v) AS max_val FROM "${escapeIdentifier(tableName)}"`
+      `SELECT COUNT(DISTINCT v) AS distinct_count, MIN(v) AS min_val, MAX(v) AS max_val FROM ${sqlIdentifier(tableName)}`
     )) as Table;
     const distinctCount = Number(
       statsResult.getChild?.('distinct_count')?.get(0) ?? 0
@@ -1155,7 +1150,7 @@ export async function calculateDateDataBreaks(
       return { breaks: [], min, max };
     }
     const result = (await Duck.query(
-      `SELECT ${macroName}('${escapeSqlString(tableName)}', 'v', ${classes}) AS breaks`
+      `SELECT ${macroName}(${sqlString(tableName)}, 'v', ${classes}) AS breaks`
     )) as Table;
     const extracted = toIterableValues(result.getChild?.('breaks')?.get(0));
     return {
@@ -1244,7 +1239,7 @@ export async function calculateDateDataBreaks(
   } finally {
     for (const tableName of temporaryTables) {
       await Duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`
+        `DROP TABLE IF EXISTS ${sqlIdentifier(tableName)}`
       ).catch(() => {});
     }
   }

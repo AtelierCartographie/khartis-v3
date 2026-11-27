@@ -2,10 +2,11 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import { isOutOfMemoryError } from '../utils/duckdb-error.utils';
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
+import { matchesDuckDBError } from '../utils/duckdb-error.utils';
 
 // The repair grid is a fraction of the average perimeter, so it holds whether
 // the coverage is in degrees or in metres. 1e-6 re-nodes what GEOS rejects while
@@ -24,11 +25,6 @@ const MAX_MESH_CELLS_ACROSS_EXTENT = 500;
 // overlapping circles.
 const MAX_OVERLAP_AREA_RATIO = 1.01;
 
-interface DuckDBClientForDerivedGeometry {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  invalidateTableCache?(tableName: string): void;
-}
-
 export function getDerivedLandTableName(sourceTable: string): string {
   return `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.LAND}`;
 }
@@ -42,15 +38,17 @@ export function getDerivedOuterlinesTableName(sourceTable: string): string {
 }
 
 async function createEmptyGeometryTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   tableName: string
 ): Promise<void> {
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
-    SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
+  await duck.mutate(
+    tableName,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS
+    SELECT NULL::GEOMETRY AS ${sqlIdentifier(INTERNAL_COLUMN.GEOM)}
     WHERE FALSE
-  `);
-  duck.invalidateTableCache?.(tableName);
+  `
+  );
 }
 
 type DerivationOutcome = 'built' | 'failed' | 'out-of-memory';
@@ -70,7 +68,7 @@ interface DerivationResult {
 // heap unable to serve the next large allocation: the territory then fails to
 // stream. Only a topology failure is worth another attempt.
 async function createDerivedTable(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   candidates: DerivationCandidate[]
 ): Promise<DerivationResult> {
@@ -81,7 +79,7 @@ async function createDerivedTable(
       return { outcome: 'built', nodingFactor };
     } catch (error) {
       lastError = error;
-      if (isOutOfMemoryError(error)) break;
+      if (matchesDuckDBError(error, 'out-of-memory')) break;
       logger.warn(
         `Retrying the derivation of ${targetTable}`,
         LogCategory.DUCKDB,
@@ -97,17 +95,19 @@ async function createDerivedTable(
   );
   await createEmptyGeometryTable(duck, targetTable);
   return {
-    outcome: isOutOfMemoryError(lastError) ? 'out-of-memory' : 'failed'
+    outcome: matchesDuckDBError(lastError, 'out-of-memory')
+      ? 'out-of-memory'
+      : 'failed'
   };
 }
 
 async function isValidPolygonCoverage(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<boolean> {
   try {
     const rows = (await duck.query(
-      `FROM is_valid_polygon_coverage('${escapeSqlString(sourceTable)}')`,
+      `FROM is_valid_polygon_coverage(${sqlString(sourceTable)})`,
       { format: 'array' }
     )) as Array<{ is_valid: boolean | null }>;
     return rows[0]?.is_valid === true;
@@ -122,10 +122,10 @@ async function isValidPolygonCoverage(
 }
 
 export async function isMeshTooFineForInnerLimits(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string
 ): Promise<boolean> {
-  const geom = `"${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`;
+  const geom = sqlIdentifier(INTERNAL_COLUMN.GEOM);
   try {
     const rows = (await duck.query(
       `SELECT sqrt(sum(ST_Area(${geom})) / count(*)) * ${MAX_MESH_CELLS_ACROSS_EXTENT}
@@ -133,7 +133,7 @@ export async function isMeshTooFineForInnerLimits(
               max(ST_XMax(${geom})) - min(ST_XMin(${geom})),
               max(ST_YMax(${geom})) - min(ST_YMin(${geom}))
             ) AS too_fine
-       FROM "${escapeIdentifier(sourceTable)}"
+       FROM ${sqlIdentifier(sourceTable)}
        WHERE ${geom} IS NOT NULL`,
       { format: 'array' }
     )) as Array<{ too_fine: boolean | null }>;
@@ -149,15 +149,15 @@ export async function isMeshTooFineForInnerLimits(
 }
 
 export async function arePolygonsOverlapping(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string,
   landTable: string
 ): Promise<boolean> {
-  const geom = `"${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`;
+  const geom = sqlIdentifier(INTERNAL_COLUMN.GEOM);
   try {
     const rows = (await duck.query(
-      `SELECT (SELECT sum(ST_Area(${geom})) FROM "${escapeIdentifier(sourceTable)}")
-          > (SELECT sum(ST_Area(geom)) FROM "${escapeIdentifier(landTable)}")
+      `SELECT (SELECT sum(ST_Area(${geom})) FROM ${sqlIdentifier(sourceTable)})
+          > (SELECT sum(ST_Area(geom)) FROM ${sqlIdentifier(landTable)})
             * ${MAX_OVERLAP_AREA_RATIO} AS overlapping`,
       { format: 'array' }
     )) as Array<{ overlapping: boolean | null }>;
@@ -173,15 +173,17 @@ export async function arePolygonsOverlapping(
 }
 
 async function runDerivedTableQuery(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   targetTable: string,
   select: string
 ): Promise<void> {
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(targetTable)}" AS
+  await duck.mutate(
+    targetTable,
+    `
+    CREATE OR REPLACE TABLE ${sqlIdentifier(targetTable)} AS
     ${select}
-  `);
-  duck.invalidateTableCache?.(targetTable);
+  `
+  );
 }
 
 // One row per part: a territory or a set of limits held in a single geometry
@@ -214,13 +216,11 @@ function buildLineSelect(macroCall: string): string {
  * remaining tables are left empty.
  */
 export async function rebuildDerivedGeometryTables(
-  duck: DuckDBClientForDerivedGeometry,
+  duck: DuckClient,
   sourceTable: string,
   { isCurrent = () => true }: { isCurrent?: () => boolean } = {}
 ): Promise<void> {
-  const escapedSource = escapeSqlString(sourceTable);
   const landTable = getDerivedLandTableName(sourceTable);
-  const escapedLand = escapeSqlString(landTable);
   const outerlinesTable = getDerivedOuterlinesTableName(sourceTable);
   const innerlinesTable = getDerivedInnerlinesTableName(sourceTable);
   const coverageIsValid = await isValidPolygonCoverage(duck, sourceTable);
@@ -235,11 +235,17 @@ export async function rebuildDerivedGeometryTables(
 
   const land = await createDerivedTable(duck, landTable, [
     ...(coverageIsValid
-      ? [{ select: landSelect(`extract_coverage_land('${escapedSource}')`) }]
+      ? [
+          {
+            select: landSelect(
+              `extract_coverage_land(${sqlString(sourceTable)})`
+            )
+          }
+        ]
       : []),
     ...nodingFactors().map((nodingFactor) => ({
       select: landSelect(
-        `extract_land('${escapedSource}', noding_factor := ${nodingFactor})`
+        `extract_land(${sqlString(sourceTable)}, noding_factor := ${nodingFactor})`
       ),
       nodingFactor
     }))
@@ -253,7 +259,7 @@ export async function rebuildDerivedGeometryTables(
   }
 
   const outerlines = await createDerivedTable(duck, outerlinesTable, [
-    { select: buildLineSelect(`extract_outerlines('${escapedLand}')`) }
+    { select: buildLineSelect(`extract_outerlines(${sqlString(landTable)})`) }
   ]);
   if (!isCurrent()) return;
 
@@ -274,14 +280,14 @@ export async function rebuildDerivedGeometryTables(
       ? [
           {
             select: buildLineSelect(
-              `extract_coverage_innerlines('${escapedSource}')`
+              `extract_coverage_innerlines(${sqlString(sourceTable)})`
             )
           }
         ]
       : []),
     ...nodingFactors(land.nodingFactor).map((nodingFactor) => ({
       select: buildLineSelect(
-        `extract_innerlines('${escapedSource}', '${escapedLand}', noding_factor := ${nodingFactor})`
+        `extract_innerlines(${sqlString(sourceTable)}, ${sqlString(landTable)}, noding_factor := ${nodingFactor})`
       ),
       nodingFactor
     }))

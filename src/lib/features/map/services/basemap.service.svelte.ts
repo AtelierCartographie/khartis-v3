@@ -24,10 +24,6 @@ import {
   FetchTimeoutError,
   fetchWithTimeout
 } from '../../commons/utils/fetch-with-timeout';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { calculateBoundsFromGeoArrow } from '../core';
 import { isWgs84LikeCrs } from '../utils/dataset-crs.utils';
@@ -56,6 +52,12 @@ import {
 } from './basemap-variants.utils';
 import * as m from '$lib/paraglide/messages';
 import { BASEMAP_FETCH_TIMEOUT_MS } from '../constants/basemap-fetch.constants';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlNamePart,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
 const PROJECTION_PRESETS_PATH = '/basemaps/projection-presets.json';
@@ -95,8 +97,7 @@ function normalizeBasemapDownloadError(
 }
 
 function getCatalogDuckDBFilename(basemapId: string): string {
-  const safeBasemapId = basemapId.replace(/[^a-zA-Z0-9_]/g, '_');
-  return `khartis_basemap_${safeBasemapId}.parquet`;
+  return `khartis_basemap_${sqlNamePart(basemapId)}.parquet`;
 }
 
 async function ensureCatalogParquetRegistered(
@@ -131,7 +132,7 @@ async function materializeCatalogParquetWithSTRead(
   );
 
   await Duck.query(
-    `CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(tempTableName)}" AS SELECT * FROM ST_Read('${escapeSqlString(duckDBFilename)}')`
+    `CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(tempTableName)} AS SELECT * FROM ST_Read(${sqlString(duckDBFilename)})`
   );
 }
 
@@ -188,16 +189,12 @@ function buildWkbGeometrySql(
   tempTableName: string,
   geometryColumnName: string
 ): string {
-  const escapedRawTableName = escapeIdentifier(rawTableName);
-  const escapedTempTableName = escapeIdentifier(tempTableName);
-  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
-
   return `
-    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(tempTableName)} AS
     SELECT
-      * EXCLUDE ("${escapedGeometryColumnName}"),
-      ST_GeomFromWKB("${escapedGeometryColumnName}") AS ${INTERNAL_COLUMN.GEOM}
-    FROM "${escapedRawTableName}"
+      * EXCLUDE (${sqlIdentifier(geometryColumnName)}),
+      ST_GeomFromWKB(${sqlIdentifier(geometryColumnName)}) AS ${INTERNAL_COLUMN.GEOM}
+    FROM ${sqlIdentifier(rawTableName)}
   `;
 }
 
@@ -212,17 +209,15 @@ async function materializeCatalogParquetWithReadParquet(
     arrayBuffer
   );
   const rawTableName = `${tempTableName}_raw`;
-  const escapedRawTableName = escapeIdentifier(rawTableName);
-  const escapedTempTableName = escapeIdentifier(tempTableName);
 
   await Duck.query(
-    `CREATE OR REPLACE TEMP TABLE "${escapedRawTableName}" AS SELECT * FROM read_parquet('${escapeSqlString(duckDBFilename)}')`
+    `CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(rawTableName)} AS SELECT * FROM read_parquet(${sqlString(duckDBFilename)})`
   );
 
   try {
     const columns = (await Duck.query(
       `SELECT column_name, data_type FROM information_schema.columns
-       WHERE table_name = '${escapeSqlString(rawTableName)}'`,
+       WHERE table_name = ${sqlString(rawTableName)}`,
       { format: 'array' }
     )) as DuckTableColumnInfo[];
     const geometryColumn = columns.find(isGeometryColumnCandidate);
@@ -239,16 +234,16 @@ async function materializeCatalogParquetWithReadParquet(
     }
 
     const dataType = geometryColumn.data_type.toUpperCase();
-    const geometryColumnName = escapeIdentifier(geometryColumn.column_name);
+    const geometryColumnName = sqlIdentifier(geometryColumn.column_name);
 
     if (dataType.startsWith('GEOMETRY')) {
       const canonicalGeometrySelect =
         geometryColumn.column_name === INTERNAL_COLUMN.GEOM
           ? '*'
-          : `* EXCLUDE ("${geometryColumnName}"), "${geometryColumnName}" AS ${INTERNAL_COLUMN.GEOM}`;
+          : `* EXCLUDE (${geometryColumnName}), ${geometryColumnName} AS ${INTERNAL_COLUMN.GEOM}`;
 
       await Duck.query(
-        `CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS SELECT ${canonicalGeometrySelect} FROM "${escapedRawTableName}"`
+        `CREATE OR REPLACE TEMP TABLE ${sqlIdentifier(tempTableName)} AS SELECT ${canonicalGeometrySelect} FROM ${sqlIdentifier(rawTableName)}`
       );
       return;
     }
@@ -286,7 +281,7 @@ async function materializeCatalogParquetWithReadParquet(
       }
     );
   } finally {
-    await Duck.query(`DROP TABLE IF EXISTS "${escapedRawTableName}"`);
+    await Duck.query(`DROP TABLE IF EXISTS ${sqlIdentifier(rawTableName)}`);
   }
 }
 
@@ -493,14 +488,11 @@ function createBasemapService() {
         (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
-      const escapedFileId = escapeSqlString(fileId);
-
       const availableBasemaps = getAvailableBasemaps();
       const countsRows = availableBasemaps
         .filter((basemap) => typeof basemap.entity_count === 'number')
         .map(
-          (basemap) =>
-            `('${escapeSqlString(basemap.file)}', ${basemap.entity_count})`
+          (basemap) => `(${sqlString(basemap.file)}, ${basemap.entity_count})`
         )
         .join(', ');
 
@@ -515,11 +507,12 @@ function createBasemapService() {
         );
       }
 
-      const result = await Duck.query(
+      const result = await Duck.mutate(
+        'basemap_attributes',
         `CREATE OR REPLACE TABLE basemap_attributes AS
          WITH flat AS (
            SELECT raw, id, variant, normalized, UNNEST(basemaps) AS basemap
-           FROM parquet_scan('${escapedFileId}')
+           FROM parquet_scan(${sqlString(fileId)})
          ),
          basemap_counts(basemap, basemap_count) AS (VALUES ${countsRows})
          SELECT f.raw, f.id, f.variant, f.normalized, f.basemap, c.basemap_count
@@ -697,11 +690,10 @@ function createBasemapService() {
       return false;
     }
 
-    const escapedTableName = escapeSqlString(tableName);
     const tableExists = (await Duck.query(
       `SELECT table_name
        FROM information_schema.tables
-       WHERE table_name = '${escapedTableName}'`,
+       WHERE table_name = ${sqlString(tableName)}`,
       { format: 'array' }
     )) as Array<{ table_name: string }>;
 
@@ -1015,7 +1007,7 @@ function createBasemapService() {
     const isCustomBasemap = /^custom_basemap_/i.test(resolvedBasemapId);
     const tableName = isCustomBasemap
       ? resolvedBasemapId
-      : `basemap_geom_${resolvedBasemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+      : `basemap_geom_${sqlNamePart(resolvedBasemapId)}`;
 
     if (geometryTablesInDuckDB.has(tableName)) {
       return tableName;
@@ -1059,9 +1051,8 @@ function createBasemapService() {
     }
 
     if (isCustomBasemap) {
-      const escapedBasemapId = escapeSqlString(resolvedBasemapId);
       const existingTable = (await Duck.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedBasemapId}'`,
+        `SELECT table_name FROM information_schema.tables WHERE table_name = ${sqlString(resolvedBasemapId)}`,
         { format: 'array' }
       )) as Array<{ table_name: string }>;
 
@@ -1080,9 +1071,7 @@ function createBasemapService() {
         basemapId: normalizedBasemapId,
         resolvedBasemapId
       });
-      const escapedTableName = escapeIdentifier(tableName);
-      const tempTableName = `tmp_${tableName}_${Date.now()}`;
-      const escapedTempTableName = escapeIdentifier(tempTableName);
+      const tempTableName = sqlTempName('tmp', tableName);
       const catalogGeometryKind = getCatalogGeometryKind(
         availableBasemaps,
         resolvedBasemapId
@@ -1100,7 +1089,9 @@ function createBasemapService() {
           LogCategory.MAP,
           error
         );
-        await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTableName}"`);
+        await Duck.query(
+          `DROP TABLE IF EXISTS ${sqlIdentifier(tempTableName)}`
+        );
         await materializeCatalogParquetWithReadParquet(
           resolvedBasemapId,
           arrayBuffer,
@@ -1112,7 +1103,7 @@ function createBasemapService() {
       try {
         const columns = (await Duck.query(
           `SELECT column_name, data_type FROM information_schema.columns
-           WHERE table_name = '${escapeSqlString(tempTableName)}'`,
+           WHERE table_name = ${sqlString(tempTableName)}`,
           { format: 'array' }
         )) as DuckTableColumnInfo[];
         const geometryColumn = columns.find(isGeometryColumnCandidate);
@@ -1129,19 +1120,22 @@ function createBasemapService() {
           );
         }
 
-        const geometryColumnName = escapeIdentifier(geometryColumn.column_name);
+        const geometryColumnName = sqlIdentifier(geometryColumn.column_name);
         const canonicalGeometrySelect =
           geometryColumn.column_name === INTERNAL_COLUMN.GEOM
             ? '*'
-            : `* EXCLUDE ("${geometryColumnName}"), "${geometryColumnName}" AS ${INTERNAL_COLUMN.GEOM}`;
+            : `* EXCLUDE (${geometryColumnName}), ${geometryColumnName} AS ${INTERNAL_COLUMN.GEOM}`;
 
-        await Duck.query(
-          `CREATE OR REPLACE TABLE "${escapedTableName}" AS SELECT ${canonicalGeometrySelect} FROM "${escapedTempTableName}"`
+        await Duck.mutate(
+          tableName,
+          `CREATE OR REPLACE TABLE ${sqlIdentifier(tableName)} AS SELECT ${canonicalGeometrySelect} FROM ${sqlIdentifier(tempTableName)}`
         );
 
         geometryTablesInDuckDB.add(tableName);
       } finally {
-        await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTableName}"`);
+        await Duck.query(
+          `DROP TABLE IF EXISTS ${sqlIdentifier(tempTableName)}`
+        );
       }
 
       return tableName;

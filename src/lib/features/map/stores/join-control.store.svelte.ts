@@ -1,7 +1,7 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   duckDBOrchestrator,
-  isMissingDuckTableError,
+  matchesDuckDBError,
   type JoinTerritoryStatus,
   type JoinTerritoryStatusRow
 } from '$lib/features/duckdb';
@@ -121,7 +121,7 @@ function createJoinControlStore() {
       if (pendingKey !== key) return;
       // A project switch can drop the table under a pending request.
       const isDatasetGone =
-        isMissingDuckTableError(error) &&
+        matchesDuckDBError(error, 'missing-table') &&
         (!tableName || !duckDBOrchestrator.getDatasetByTable(tableName));
       // The map falls back to the neutral preview; the join panel still
       // reports every bucket.

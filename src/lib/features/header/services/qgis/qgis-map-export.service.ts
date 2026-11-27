@@ -17,9 +17,9 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 import { resolveRowScope } from '$lib/features/commons/services/row-scope.service';
 import {
   CANONICAL_ID_COLUMN,
@@ -289,7 +289,7 @@ function buildReprojection(
   const toWgs84 = (geometry: string) =>
     sourceIsLonLat
       ? geometry
-      : `ST_Transform(${geometry}, '${escapeSqlString(sourceCrs)}', '${WGS84}', true)`;
+      : `ST_Transform(${geometry}, ${sqlString(sourceCrs)}, '${WGS84}', true)`;
   if (crs.status !== 'map') {
     return { sql: toWgs84, fallback: null };
   }
@@ -309,7 +309,7 @@ function buildReprojection(
   }
   return {
     sql: (geometry) =>
-      `ST_Transform(${cut(geometry)}, '${WGS84}', '${escapeSqlString(target)}', true)`,
+      `ST_Transform(${cut(geometry)}, '${WGS84}', ${sqlString(target)}, true)`,
     fallback: null
   };
 }
@@ -324,12 +324,12 @@ async function queryFeatures(options: {
 }): Promise<{ features: GeoPackageFeatureRow[]; dropped: number }> {
   const { from, geometry, columns, reprojection } = options;
   const computed = options.computed ?? {};
-  const quoted = columns.map((column) => `"${escapeIdentifier(column)}"`);
+  const quoted = columns.map((column) => `${sqlIdentifier(column)}`);
   const inner = [
     ...columns.map((column) =>
       Object.hasOwn(computed, column)
-        ? `${computed[column]} AS "${escapeIdentifier(column)}"`
-        : `d."${escapeIdentifier(column)}"`
+        ? `${computed[column]} AS ${sqlIdentifier(column)}`
+        : `d.${sqlIdentifier(column)}`
     ),
     `${geometry} AS ${GEOMETRY_COLUMN}`
   ];
@@ -474,7 +474,7 @@ function lineCoordinates(collection: {
 
 async function listTableColumns(tableName: string): Promise<Set<string>> {
   const rows = (await Duck.query(
-    `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}'`,
+    `SELECT column_name FROM information_schema.columns WHERE table_name = ${sqlString(tableName)}`,
     { format: 'array' }
   )) as Array<{ column_name: string }>;
   return new Set(rows.map((row) => row.column_name));
@@ -490,7 +490,7 @@ async function listTemporalColumns(
     return new Map();
   }
   const rows = (await Duck.query(
-    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}'`,
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ${sqlString(tableName)}`,
     { format: 'array' }
   )) as Array<{ column_name: string; data_type: string }>;
   return new Map(
@@ -507,7 +507,7 @@ async function listTemporalColumns(
 
 // GeoPackage dates are ISO text in a DATE or DATETIME column.
 function temporalSelect(column: string, kind: TemporalKind): string {
-  const field = `d."${escapeIdentifier(column)}"`;
+  const field = `d.${sqlIdentifier(column)}`;
   return kind === 'date'
     ? `strftime(${field}::DATE, '%Y-%m-%d')`
     : `strftime(${field}::TIMESTAMP, '%Y-%m-%dT%H:%M:%S.%gZ')`;
@@ -558,7 +558,7 @@ async function exportPlanLayer(
     computed = {
       ...computed,
       [double.roleField]: 'khartis_roles.role',
-      [double.valueField]: `CASE khartis_roles.role WHEN 'A' THEN TRY_CAST(d."${escapeIdentifier(double.primary)}" AS DOUBLE) ELSE TRY_CAST(d."${escapeIdentifier(double.secondary)}" AS DOUBLE) END`
+      [double.valueField]: `CASE khartis_roles.role WHEN 'A' THEN TRY_CAST(d.${sqlIdentifier(double.primary)} AS DOUBLE) ELSE TRY_CAST(d.${sqlIdentifier(double.secondary)} AS DOUBLE) END`
     };
   }
   // Khartis' own columns (`__id`…) mean nothing outside it.
@@ -589,7 +589,7 @@ async function exportPlanLayer(
     if (centroids && source.joined) {
       // The map anchors on the centroids the basemap ships; a feature
       // without one falls back to the point the map computes.
-      from = `${from} LEFT JOIN "${escapeIdentifier(centroids.tableName)}" c ON CAST(c."${escapeIdentifier(centroids.idColumn)}" AS VARCHAR) = CAST(g."${escapeIdentifier(source.joined.joinColumn)}" AS VARCHAR)`;
+      from = `${from} LEFT JOIN ${sqlIdentifier(centroids.tableName)} c ON CAST(c.${sqlIdentifier(centroids.idColumn)} AS VARCHAR) = CAST(g.${sqlIdentifier(source.joined.joinColumn)} AS VARCHAR)`;
       geometry = `COALESCE(c.geom::GEOMETRY, ${representativePoint(geometry)})`;
     } else {
       geometry = representativePoint(geometry);
@@ -636,9 +636,7 @@ const LABEL_EDIT_FIELDS: LabelEditFields = {
 };
 
 function sqlText(value: string | undefined): string {
-  return value === undefined
-    ? 'NULL::VARCHAR'
-    : `'${escapeSqlString(value)}'::VARCHAR`;
+  return value === undefined ? 'NULL::VARCHAR' : `${sqlString(value)}::VARCHAR`;
 }
 
 function sqlMillimetres(px: number | undefined): string {
@@ -679,7 +677,7 @@ function resolveLabelEdits(
     return null;
   }
   const keyExpression = source.joined
-    ? `'f:' || CAST(g."${escapeIdentifier(source.joined.joinColumn)}" AS VARCHAR)`
+    ? `'f:' || CAST(g.${sqlIdentifier(source.joined.joinColumn)} AS VARCHAR)`
     : available.has(INTERNAL_COLUMN.ID)
       ? `'r:' || CAST(d."${INTERNAL_COLUMN.ID}" AS VARCHAR)`
       : null;
@@ -695,13 +693,13 @@ function resolveLabelEdits(
     ? text.secondaryLabels.labelColumn
     : undefined;
   const computed: Record<string, string> = {
-    [LABEL_EDIT_FIELDS.primary]: `COALESCE(o.primary_text, CAST(d."${escapeIdentifier(text.labelColumn)}" AS VARCHAR))`,
+    [LABEL_EDIT_FIELDS.primary]: `COALESCE(o.primary_text, CAST(d.${sqlIdentifier(text.labelColumn)} AS VARCHAR))`,
     [LABEL_EDIT_FIELDS.dx]: 'o.dx',
     [LABEL_EDIT_FIELDS.dy]: 'o.dy'
   };
   if (secondaryColumn) {
     computed[LABEL_EDIT_FIELDS.secondary ?? ''] =
-      `COALESCE(o.secondary_text, CAST(d."${escapeIdentifier(secondaryColumn)}" AS VARCHAR))`;
+      `COALESCE(o.secondary_text, CAST(d.${sqlIdentifier(secondaryColumn)} AS VARCHAR))`;
   }
   return {
     join: `LEFT JOIN (VALUES ${rows.join(', ')}) AS o(key, primary_text, secondary_text, dx, dy) ON o.key = ${keyExpression}`,
@@ -979,11 +977,11 @@ async function exportBasemapTable(options: {
   );
   const from =
     typeof source === 'string'
-      ? `"${escapeIdentifier(source)}" d`
+      ? `${sqlIdentifier(source)} d`
       : `(SELECT ST_GeomFromText(wkt) AS geom FROM (VALUES ${generatedWkt(
           source
         )
-          .map((wkt) => `('${wkt}')`)
+          .map((wkt) => `(${sqlString(wkt)})`)
           .join(', ')}) AS v(wkt)) d`;
   const { features, dropped } = await queryWithReprojection(
     options.crs,

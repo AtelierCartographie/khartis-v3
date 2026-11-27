@@ -1,11 +1,11 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { ColumnType } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import {
   detectRequiredFonts,
   type RequiredFallbackFont
 } from '../utils/detect-required-fonts';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 
 const SAMPLE_SIZE = 100;
 
@@ -18,12 +18,12 @@ export async function detectFontsInDataset(
     try {
       const textColumns = dataset.columns
         .filter((c) => c.type === ColumnType.TEXT)
-        .map((c) => `"${escapeIdentifier(c.name)}"`)
+        .map((c) => sqlIdentifier(c.name))
         .join(', ');
 
       if (textColumns) {
         const result = await duckDBOrchestrator.runQuery(
-          `SELECT ${textColumns} FROM "${escapeIdentifier(dataset.tableName)}" LIMIT ${SAMPLE_SIZE}`
+          `SELECT ${textColumns} FROM ${sqlIdentifier(dataset.tableName)} LIMIT ${SAMPLE_SIZE}`
         );
         if (result && typeof result.toArray === 'function') {
           for (const row of result.toArray()) {

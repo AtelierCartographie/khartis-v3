@@ -1,11 +1,11 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
 
 /**
  * Date formats DuckDB's CSV sniffer misses or abandons: a single invalid value
@@ -47,7 +47,7 @@ export function buildTextDateExpression(
   columnRef: string,
   format: TextDateFormat
 ): string {
-  const parsed = `try_strptime(trim(${columnRef}::VARCHAR), '${escapeSqlString(format.pattern)}')`;
+  const parsed = `try_strptime(trim(${columnRef}::VARCHAR), ${sqlString(format.pattern)})`;
   return format.hasTime ? parsed : `${parsed}::DATE`;
 }
 
@@ -64,13 +64,13 @@ async function sampleFormatHits(
   tableName: string,
   columnName: string
 ): Promise<{ sampled: number; hits: number[] }> {
-  const ref = `"${escapeIdentifier(columnName)}"`;
+  const ref = sqlIdentifier(columnName);
   const hitColumns = TEXT_DATE_FORMATS.map(
     (format, index) =>
       `COUNT(${buildTextDateExpression('v', format)}) AS hit_${index}`
   );
   const rows = await query(
-    `SELECT COUNT(*) AS sampled, ${hitColumns.join(', ')} FROM (SELECT ${ref} AS v FROM "${escapeIdentifier(tableName)}" WHERE ${presentValueClause(ref)} LIMIT ${DETECTION_SAMPLE_SIZE}) AS sample`
+    `SELECT COUNT(*) AS sampled, ${hitColumns.join(', ')} FROM (SELECT ${ref} AS v FROM ${sqlIdentifier(tableName)} WHERE ${presentValueClause(ref)} LIMIT ${DETECTION_SAMPLE_SIZE}) AS sample`
   );
   const row = rows[0] ?? {};
   return {
@@ -85,9 +85,9 @@ async function countUnparsed(
   columnName: string,
   format: TextDateFormat
 ): Promise<number> {
-  const ref = `"${escapeIdentifier(columnName)}"`;
+  const ref = sqlIdentifier(columnName);
   const rows = await query(
-    `SELECT COUNT(*) FILTER (WHERE ${presentValueClause(ref)} AND ${buildTextDateExpression(ref, format)} IS NULL) AS unparsed FROM "${escapeIdentifier(tableName)}"`
+    `SELECT COUNT(*) FILTER (WHERE ${presentValueClause(ref)} AND ${buildTextDateExpression(ref, format)} IS NULL) AS unparsed FROM ${sqlIdentifier(tableName)}`
   );
   return Number(rows[0]?.unparsed ?? 0);
 }
@@ -146,7 +146,7 @@ export async function promoteTextDateColumns(
   tableName: string
 ): Promise<string[]> {
   const columns = ((await query(
-    `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(tableName)}' AND data_type = 'VARCHAR'`
+    `SELECT column_name FROM information_schema.columns WHERE table_name = ${sqlString(tableName)} AND data_type = 'VARCHAR'`
   )) ?? []) as Array<{ column_name?: unknown }>;
   const promoted: string[] = [];
 
@@ -154,9 +154,9 @@ export async function promoteTextDateColumns(
     if (typeof name !== 'string' || name.startsWith('__')) continue;
     const format = await detectTextDateFormat(query, tableName, name);
     if (!format) continue;
-    const ref = `"${escapeIdentifier(name)}"`;
+    const ref = sqlIdentifier(name);
     await query(
-      `ALTER TABLE "${escapeIdentifier(tableName)}" ALTER COLUMN ${ref} SET DATA TYPE ${format.hasTime ? 'TIMESTAMP' : 'DATE'} USING ${buildTextDateExpression(ref, format)}`
+      `ALTER TABLE ${sqlIdentifier(tableName)} ALTER COLUMN ${ref} SET DATA TYPE ${format.hasTime ? 'TIMESTAMP' : 'DATE'} USING ${buildTextDateExpression(ref, format)}`
     );
     promoted.push(name);
   }

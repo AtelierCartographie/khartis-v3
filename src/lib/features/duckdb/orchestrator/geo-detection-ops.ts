@@ -1,8 +1,9 @@
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import type { ArrowTableLike } from '../types';
+import {
+  sqlIdentifier,
+  sqlString
+} from '$lib/features/commons/utils/sql.utils';
+import type { DuckClient } from '../duck';
 
 export const CATALOG_ATTRIBUTES_TABLE = 'basemap_attributes';
 
@@ -14,10 +15,6 @@ export interface CatalogColumnMatch {
   matchedValues: number;
   /** Catalog basemaps sharing the most values with the column, best first. */
   basemaps: string[];
-}
-
-export interface DuckDBClientForGeoDetection {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
 }
 
 function toStringList(value: unknown): string[] {
@@ -38,17 +35,17 @@ function toStringList(value: unknown): string[] {
 export async function matchColumnsAgainstCatalog(
   tableName: string,
   columns: string[],
-  Duck: DuckDBClientForGeoDetection,
+  Duck: DuckClient,
   attributesTable: string = CATALOG_ATTRIBUTES_TABLE
 ): Promise<CatalogColumnMatch[]> {
   if (columns.length === 0) return [];
 
-  const table = escapeIdentifier(tableName);
-  const attributes = escapeIdentifier(attributesTable);
+  const table = sqlIdentifier(tableName);
+  const attributes = sqlIdentifier(attributesTable);
   const values = columns
     .map((column) => {
-      const identifier = escapeIdentifier(column);
-      return `SELECT '${escapeSqlString(column)}' AS col, normalize_text_join("${identifier}") AS n FROM "${table}" WHERE "${identifier}" IS NOT NULL`;
+      const identifier = sqlIdentifier(column);
+      return `SELECT ${sqlString(column)} AS col, normalize_text_join(${identifier}) AS n FROM ${table} WHERE ${identifier} IS NOT NULL`;
     })
     .join(' UNION ALL ');
 
@@ -59,13 +56,13 @@ export async function matchColumnsAgainstCatalog(
      hits AS (
        SELECT d.col, a.basemap, count(DISTINCT d.n) AS hit_count
        FROM distinct_values d
-       JOIN "${attributes}" a ON a.normalized = d.n
+       JOIN ${attributes} a ON a.normalized = d.n
        GROUP BY d.col, a.basemap
      ),
      matched AS (
        SELECT col, count(*) AS matched_values
        FROM distinct_values d
-       WHERE EXISTS (SELECT 1 FROM "${attributes}" a WHERE a.normalized = d.n)
+       WHERE EXISTS (SELECT 1 FROM ${attributes} a WHERE a.normalized = d.n)
        GROUP BY col
      ),
      top_basemaps AS (

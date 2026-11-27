@@ -1,4 +1,4 @@
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
 import { Duck } from '$lib/features/duckdb';
 
 export interface RankTargetColumnsOptions {
@@ -27,9 +27,7 @@ export async function findBestTargetColumn(
     options;
   if (targetColumns.length === 0) return null;
 
-  const escapedSourceCol = escapeIdentifier(sourceColumn);
-  const escapedSourceTable = escapeIdentifier(sourceTableName);
-  const escapedTargetTable = escapeIdentifier(targetTableName);
+  const source = sqlIdentifier(sourceColumn);
 
   const perColumn = targetColumns
     .map(
@@ -38,17 +36,17 @@ export async function findBestTargetColumn(
         (SELECT COUNT(*) FROM sampled) AS sampled_count
       FROM sampled
       WHERE normalized IN (
-        SELECT normalize_text_join(CAST("${escapeIdentifier(column)}" AS VARCHAR))
-        FROM "${escapedTargetTable}"
+        SELECT normalize_text_join(CAST(${sqlIdentifier(column)} AS VARCHAR))
+        FROM ${sqlIdentifier(targetTableName)}
       )`
     )
     .join('\n      UNION ALL');
 
   const rows = (await Duck.query(
     `WITH sampled AS (
-       SELECT DISTINCT normalize_text_join(CAST("${escapedSourceCol}" AS VARCHAR)) AS normalized
-       FROM "${escapedSourceTable}"
-       WHERE "${escapedSourceCol}" IS NOT NULL
+       SELECT DISTINCT normalize_text_join(CAST(${source} AS VARCHAR)) AS normalized
+       FROM ${sqlIdentifier(sourceTableName)}
+       WHERE ${source} IS NOT NULL
        ORDER BY normalized
        LIMIT ${TARGET_COLUMN_RANKING_SAMPLE}
      )

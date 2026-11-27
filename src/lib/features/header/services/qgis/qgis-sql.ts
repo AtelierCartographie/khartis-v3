@@ -272,8 +272,8 @@ export function densifyLines(geometry: string, step: number): string {
   const along = (line: string, i: string, j: string, axis: 'X' | 'Y') =>
     `ST_${axis}(${point(line, i)}) + (ST_${axis}(${point(line, `${i} + 1`)}) - ST_${axis}(${point(line, i)})) * ${j} / ${pieces(line, i)}`;
   const densified = (line: string) =>
-    `ST_MakeLine(list_append(flatten(list_transform(range(1, ST_NPoints(${line})), i -> list_transform(range(${pieces(line, 'i')}), j -> ST_Point(${along(line, 'i', 'j', 'X')}, ${along(line, 'i', 'j', 'Y')})))), ${point(line, `ST_NPoints(${line})`)}))`;
-  return `(CASE WHEN ST_GeometryType(${geometry}) IN ('LINESTRING', 'MULTILINESTRING') THEN ST_Collect(list_transform(ST_Dump(${geometry}), part -> ${densified('part.geom')})) ELSE ${geometry} END)`;
+    `ST_MakeLine(list_append(flatten(list_transform(range(1, ST_NPoints(${line})), lambda i: list_transform(range(${pieces(line, 'i')}), lambda j: ST_Point(${along(line, 'i', 'j', 'X')}, ${along(line, 'i', 'j', 'Y')})))), ${point(line, `ST_NPoints(${line})`)}))`;
+  return `(CASE WHEN ST_GeometryType(${geometry}) IN ('LINESTRING', 'MULTILINESTRING') THEN ST_Collect(list_transform(ST_Dump(${geometry}), lambda part: ${densified('part.geom')})) ELSE ${geometry} END)`;
 }
 
 export function representativePoint(geometry: string): string {

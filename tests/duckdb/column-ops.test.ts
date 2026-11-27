@@ -5,8 +5,10 @@ import { tmpdir } from 'node:os';
 import {
   addCalculatedColumn,
   changeColumnType,
-  type DuckDBClient
+  refineColumn,
+  validateExpression
 } from '$lib/features/duckdb/orchestrator/column-ops';
+import { RefineOperation } from '$lib/features/duckdb/enums';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { DUCK_CONST } from '$lib/features/duckdb/constants';
 import {
@@ -16,6 +18,7 @@ import {
   run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
+import type { DuckClient } from '$lib/features/duckdb';
 
 let db: TestDuckDB;
 let tempDir: string;
@@ -30,8 +33,16 @@ afterAll(async () => {
   await rm(tempDir, { recursive: true, force: true });
 });
 
-function duckClient(): DuckDBClient {
+function duckClient(): DuckClient {
   return {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     async query(sql: string, options?: { format?: string }): Promise<unknown> {
       if (options?.format === 'array') {
         return query(db, sql);
@@ -40,8 +51,9 @@ function duckClient(): DuckDBClient {
       return undefined;
     },
     analyse: vi.fn(async () => []),
-    drop_rows: vi.fn(async () => undefined)
-  };
+    drop_rows: vi.fn(async () => undefined),
+    loadExtension: async () => undefined
+  } as unknown as DuckClient;
 }
 
 describe('changeColumnType', () => {
@@ -234,6 +246,98 @@ describe('DUCK_CONST.DEFAULT.NULL_VALUES', () => {
   });
 });
 
+describe('validateExpression', () => {
+  const REFUSED = [
+    ['an empty expression', '   '],
+    ['a second statement', '"pop" + 1; DROP TABLE t'],
+    ['a subquery', '(SELECT max("pop") FROM t)'],
+    [
+      'a subquery hidden by a dollar-quoted string',
+      "$x$ ' $x$ || (SELECT s FROM secret)::VARCHAR || ' '"
+    ],
+    [
+      'a subquery between two dollar-quoted strings',
+      "$x$'$x$ || (SELECT max(s) FROM secret) || $y$'$y$"
+    ],
+    ['a FROM clause closing the parenthesis', '1) FROM secret --'],
+    ['a second select item', '1), (2'],
+    ['a file-reading function', "read_csv('x.csv')"],
+    ['a spatial reader', "st_read('x.shp')"],
+    ['a session variable', "getvariable('v')"],
+    ['a setting', "current_setting('threads')"],
+    ['a window function', 'sum("pop") OVER ()'],
+    ['an aggregate', 'max("pop")'],
+    ['a malformed expression', 'round("pop",']
+  ] as const;
+
+  it.each(REFUSED)('should refuse %s', async (_label, expression) => {
+    await expect(
+      validateExpression(expression, duckClient())
+    ).rejects.toBeInstanceOf(DuckDBError);
+  });
+
+  it.each([
+    ['arithmetic and rounding', 'round("births" / "population" * 1000, 2)'],
+    ['keywords inside a string literal', "'DROP and SELECT FROM Paris'"],
+    [
+      'conditions, casts and text',
+      `CASE WHEN "pop" > 1 THEN upper("name") || '!' ELSE NULL END`
+    ],
+    ['the calculator functions', 'list_avg(["a", "b"]) + greatest("a", "b")'],
+    ['a lambda', 'list_sum(list_transform(["a", "b"], lambda x: x * 2))'],
+    ['casts and null handling', 'coalesce(TRY_CAST("code" AS DOUBLE), 0)']
+  ])('should accept %s', async (_label, expression) => {
+    await expect(
+      validateExpression(expression, duckClient())
+    ).resolves.toBeUndefined();
+  });
+
+  it('should leave the table unchanged when a replayed expression hides a subquery', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE "calc_target" AS SELECT 1 AS a');
+    await run(db, 'CREATE OR REPLACE TABLE "secret" AS SELECT 42 AS s');
+
+    await expect(
+      addCalculatedColumn(
+        'calc_target',
+        'leak',
+        "$x$'$x$ || (SELECT max(s) FROM secret) || $y$'$y$",
+        duckClient(),
+        { skipAnalysis: true }
+      )
+    ).rejects.toBeInstanceOf(DuckDBError);
+
+    expect(
+      await query(
+        db,
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'calc_target'`
+      )
+    ).toEqual([{ column_name: 'a' }]);
+  });
+});
+
+describe('refineColumn', () => {
+  it('should capitalize each word and keep NULL when converting to title case', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE "refine_title" AS
+       SELECT * FROM (VALUES ('saint-ÉTIENNE  du rouvray'), (NULL)) t(name)`
+    );
+
+    await refineColumn(
+      'refine_title',
+      'name',
+      RefineOperation.TITLECASE,
+      duckClient(),
+      { skipAnalysis: true }
+    );
+
+    expect(await query(db, 'SELECT name FROM "refine_title"')).toEqual([
+      { name: 'Saint-étienne  Du Rouvray' },
+      { name: null }
+    ]);
+  });
+});
+
 describe('addCalculatedColumn', () => {
   async function createSourceTable(table: string): Promise<void> {
     await run(
@@ -252,25 +356,23 @@ describe('addCalculatedColumn', () => {
     return rows.map((row) => String(row.column_name));
   }
 
-  it('should add the column when the expression ends with a comment or uses a window function', async () => {
+  it('should add the column when the expression ends with a comment', async () => {
     await createSourceTable('calc_valid');
-    const Duck = duckClient();
 
-    await addCalculatedColumn('calc_valid', 'twice', '"a" * 2 -- double', Duck);
     await addCalculatedColumn(
       'calc_valid',
-      'share',
-      '"a" / sum("a") OVER () * 100',
-      Duck
+      'twice',
+      '"a" * 2 -- double',
+      duckClient()
     );
 
     const rows = await query(
       db,
-      'SELECT a, twice, share FROM "calc_valid" ORDER BY a'
+      'SELECT a, twice FROM "calc_valid" ORDER BY a'
     );
     expect(rows).toEqual([
-      { a: 1, twice: 2, share: 25 },
-      { a: 3, twice: 6, share: 75 }
+      { a: 1, twice: 2 },
+      { a: 3, twice: 6 }
     ]);
   });
 
@@ -287,21 +389,5 @@ describe('addCalculatedColumn', () => {
     ).rejects.toThrow(DuckDBError);
 
     expect(await columnNames('calc_comment')).toEqual(['a']);
-  });
-
-  it('should reject a subquery when a dollar-quoted string hides it from the keyword check', async () => {
-    await createSourceTable('calc_dollar');
-    await run(db, 'CREATE OR REPLACE TABLE "calc_other" AS SELECT 42 AS s');
-
-    await expect(
-      addCalculatedColumn(
-        'calc_dollar',
-        'x',
-        "$q$'$q$ || (SELECT max(s) FROM calc_other) || $r$'$r$",
-        duckClient()
-      )
-    ).rejects.toThrow(DuckDBError);
-
-    expect(await columnNames('calc_dollar')).toEqual(['a']);
   });
 });

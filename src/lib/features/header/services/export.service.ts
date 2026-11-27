@@ -22,10 +22,6 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
 import { isDatasetGeometryColumn } from '$lib/features/commons/utils/geometry-column.utils';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -57,6 +53,11 @@ import {
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
 import { shouldUseGpsGeometryExport } from './export-source-selection';
+import {
+  sqlIdentifier,
+  sqlString,
+  sqlTempName
+} from '$lib/features/commons/utils/sql.utils';
 
 export class ExportError extends Error {
   title: string;
@@ -398,8 +399,8 @@ async function getDuckDBColumnType(
   const rows = (await Duck.query(
     `SELECT data_type
      FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(tableName)}'
-       AND column_name = '${escapeSqlString(columnName)}'
+     WHERE table_name = ${sqlString(tableName)}
+       AND column_name = ${sqlString(columnName)}
      LIMIT 1`,
     { format: 'array' }
   )) as Array<{ data_type: string }>;
@@ -412,13 +413,12 @@ function buildGeometryExportSelect(
   duckDBType: string | null,
   sourceCrs: string | null = null
 ): string {
-  const escapedName = escapeIdentifier(columnName);
   const geometryExpression = buildGeometryValueExpression(
     columnName,
     duckDBType,
     { sourceCrs, targetCrs: WGS84_CRS }
   );
-  return `ST_AsGeoJSON(${geometryExpression}) AS "${escapedName}"`;
+  return `ST_AsGeoJSON(${geometryExpression}) AS ${sqlIdentifier(columnName)}`;
 }
 
 function buildGeometryValueExpression(
@@ -426,22 +426,21 @@ function buildGeometryValueExpression(
   duckDBType: string | null,
   options: { sourceCrs?: string | null; targetCrs?: string | null } = {}
 ): string {
-  const escapedName = escapeIdentifier(columnName);
   const normalizedType = duckDBType?.replace(/\s+/g, ' ').toUpperCase() ?? '';
   let expression: string;
 
   if (normalizedType.startsWith('GEOMETRY')) {
-    expression = `"${escapedName}"::GEOMETRY`;
+    expression = `${sqlIdentifier(columnName)}::GEOMETRY`;
   } else if (normalizedType === 'BLOB' || normalizedType.includes('WKB')) {
-    expression = `ST_GeomFromWKB("${escapedName}")`;
+    expression = `ST_GeomFromWKB(${sqlIdentifier(columnName)})`;
   } else {
-    expression = `"${escapedName}"`;
+    expression = sqlIdentifier(columnName);
   }
 
   const sourceCrs = normalizeCrsName(options.sourceCrs);
   const targetCrs = normalizeCrsName(options.targetCrs);
   if (sourceCrs && targetCrs && sourceCrs !== targetCrs) {
-    return `ST_Transform(${expression}, '${escapeSqlString(sourceCrs)}', '${escapeSqlString(targetCrs)}', true)`;
+    return `ST_Transform(${expression}, ${sqlString(sourceCrs)}, ${sqlString(targetCrs)}, true)`;
   }
 
   return expression;
@@ -451,10 +450,8 @@ function buildGpsGeometryValueExpression(gpsColumns: {
   lat: string;
   lon: string;
 }): string {
-  const escapedLat = escapeIdentifier(gpsColumns.lat);
-  const escapedLon = escapeIdentifier(gpsColumns.lon);
-  const latValue = `TRY_CAST("${escapedLat}" AS DOUBLE)`;
-  const lonValue = `TRY_CAST("${escapedLon}" AS DOUBLE)`;
+  const latValue = `TRY_CAST(${sqlIdentifier(gpsColumns.lat)} AS DOUBLE)`;
+  const lonValue = `TRY_CAST(${sqlIdentifier(gpsColumns.lon)} AS DOUBLE)`;
 
   return `CASE
     WHEN ${latValue} BETWEEN -90 AND 90
@@ -464,20 +461,13 @@ function buildGpsGeometryValueExpression(gpsColumns: {
   END`;
 }
 
-function createTempName(prefix: string, value: string = ''): string {
-  const safeValue = value.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 48);
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${prefix}_${safeValue}_${Date.now()}_${suffix}`;
-}
-
 function buildPrefixedColumnSelect(
   columns: ProcessedDataset['columns'],
   prefix: string
 ): string {
   return columns
     .map((column) => {
-      const escapedName = escapeIdentifier(column.name);
-      return `${prefix}."${escapedName}" AS "${escapedName}"`;
+      return `${prefix}.${sqlIdentifier(column.name)} AS ${sqlIdentifier(column.name)}`;
     })
     .join(', ');
 }
@@ -490,10 +480,9 @@ function buildAlignedPropertySelect(
   const available = new Set(availablePropertyColumns);
   return allPropertyColumns
     .map((columnName) => {
-      const escapedName = escapeIdentifier(columnName);
       return available.has(columnName)
-        ? `${sourcePrefix}"${escapedName}" AS "${escapedName}"`
-        : `NULL AS "${escapedName}"`;
+        ? `${sourcePrefix}${sqlIdentifier(columnName)} AS ${sqlIdentifier(columnName)}`
+        : `NULL AS ${sqlIdentifier(columnName)}`;
     })
     .join(', ');
 }
@@ -561,7 +550,7 @@ async function createJoinedGeometryExportView(options: {
 
   const geomColumnsFull = (await Duck.query(
     `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+     WHERE table_name = ${sqlString(geometryTable)}`,
     { format: 'array' }
   )) as Array<{ column_name: string; data_type: string }>;
 
@@ -571,9 +560,6 @@ async function createJoinedGeometryExportView(options: {
   const nativeIdColumn = geomColumnsFull.find(
     (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
   );
-  const escapedDataset = escapeIdentifier(datasetTableName);
-  const escapedGeometry = escapeIdentifier(geometryTable);
-  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
   const datasetColumns = buildPrefixedColumnSelect(
     options.dataset.columns,
     'd'
@@ -584,7 +570,7 @@ async function createJoinedGeometryExportView(options: {
   );
   const basemapIdSelectFrom = (alias: string): string =>
     basemapIdentity
-      ? `, CAST(${alias}."${escapeIdentifier(basemapIdentity.sourceColumn)}" AS VARCHAR) AS "${escapeIdentifier(basemapIdentity.exportName)}"`
+      ? `, CAST(${alias}.${sqlIdentifier(basemapIdentity.sourceColumn)} AS VARCHAR) AS ${sqlIdentifier(basemapIdentity.exportName)}`
       : '';
 
   if (featureIdColumn || nativeIdColumn) {
@@ -593,13 +579,12 @@ async function createJoinedGeometryExportView(options: {
     if (!joinColumn) {
       throw new Error('Unreachable: join column presence already verified');
     }
-    const escapedJoinCol = escapeIdentifier(joinColumn);
     await Duck.query(`
-      CREATE OR REPLACE TEMP VIEW "${options.viewName}" AS
+      CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(options.viewName)} AS
       SELECT ${datasetColumns}${basemapIdSelectFrom('g')}, ${options.geometryExpression('g.geom::GEOMETRY')} AS geom
-      FROM "${escapedGeometry}" g
-      LEFT JOIN "${escapedDataset}" d
-        ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+      FROM ${sqlIdentifier(geometryTable)} g
+      LEFT JOIN ${sqlIdentifier(datasetTableName)} d
+        ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(g.${sqlIdentifier(joinColumn)} AS VARCHAR)
       WHERE g.geom IS NOT NULL
     `);
     return basemapIdentity;
@@ -621,28 +606,28 @@ async function createJoinedGeometryExportView(options: {
 
   if (textColumns.length === 0) {
     await Duck.query(`
-      CREATE OR REPLACE TEMP VIEW "${options.viewName}" AS
+      CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(options.viewName)} AS
       SELECT ${datasetColumns}${basemapIdSelectFrom('g')}, ${options.geometryExpression('g.geom::GEOMETRY')} AS geom
-      FROM "${escapedGeometry}" g
-      LEFT JOIN "${escapedDataset}" d ON FALSE
+      FROM ${sqlIdentifier(geometryTable)} g
+      LEFT JOIN ${sqlIdentifier(datasetTableName)} d ON FALSE
       WHERE g.geom IS NOT NULL
     `);
     return basemapIdentity;
   }
 
   const colList = textColumns
-    .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+    .map((c) => sqlIdentifier(c.column_name))
     .join(', ');
 
   const unpivotBasemapIdSelect = basemapIdentity
-    ? `, CAST(gu._attr_val AS VARCHAR) AS "${escapeIdentifier(basemapIdentity.exportName)}"`
+    ? `, CAST(gu._attr_val AS VARCHAR) AS ${sqlIdentifier(basemapIdentity.exportName)}`
     : '';
 
   await Duck.query(`
-    CREATE OR REPLACE TEMP VIEW "${options.viewName}" AS
+    CREATE OR REPLACE TEMP VIEW ${sqlIdentifier(options.viewName)} AS
     WITH geometry_rows AS (
       SELECT ROW_NUMBER() OVER () AS _geometry_row_id, *
-      FROM "${escapedGeometry}"
+      FROM ${sqlIdentifier(geometryTable)}
     ),
     geom_unpivot AS (
       UNPIVOT geometry_rows
@@ -651,12 +636,12 @@ async function createJoinedGeometryExportView(options: {
     )
     SELECT ${datasetColumns}${unpivotBasemapIdSelect}, ${options.geometryExpression('gu.geom::GEOMETRY')} AS geom
     FROM geom_unpivot gu
-    LEFT JOIN "${escapedDataset}" d
-      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+    LEFT JOIN ${sqlIdentifier(datasetTableName)} d
+      ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
     WHERE gu.geom IS NOT NULL
     QUALIFY ROW_NUMBER() OVER (
       PARTITION BY gu._geometry_row_id
-      ORDER BY CASE WHEN d."${escapedBasemapIdCol}" IS NULL THEN 1 ELSE 0 END
+      ORDER BY CASE WHEN d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} IS NULL THEN 1 ELSE 0 END
     ) = 1
   `);
   return basemapIdentity;
@@ -667,7 +652,7 @@ async function fetchJoinedDatasetWithGeometry(
   joinedBasemapId: string,
   sourceTableName?: string
 ): Promise<GeoJsonExportDataset> {
-  const viewName = createTempName(
+  const viewName = sqlTempName(
     'export_joined',
     sourceTableName ?? dataset.duckdbTableName ?? dataset.id
   );
@@ -680,11 +665,13 @@ async function fetchJoinedDatasetWithGeometry(
     geometryExpression: (geometrySql) => `ST_AsGeoJSON(${geometrySql})`
   });
 
-  const rows = (await Duck.query(`SELECT * FROM "${viewName}"`, {
+  const rows = (await Duck.query(`SELECT * FROM ${sqlIdentifier(viewName)}`, {
     format: 'array'
   })) as Record<string, unknown>[];
 
-  await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
+  await Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`).catch(
+    () => {}
+  );
 
   const allColumnNames = [
     ...dataset.columns.map((c) => c.name),
@@ -752,10 +739,10 @@ async function fetchGpsDatasetWithGeometry(
   const geometryColumnName = INTERNAL_COLUMN.GEOM;
   const geometryExpression = buildGpsGeometryValueExpression(gpsColumns);
   const selectList = [
-    ...dataset.columns.map((column) => `"${escapeIdentifier(column.name)}"`),
-    `ST_AsGeoJSON(${geometryExpression}) AS "${geometryColumnName}"`
+    ...dataset.columns.map((column) => sqlIdentifier(column.name)),
+    `ST_AsGeoJSON(${geometryExpression}) AS ${sqlIdentifier(geometryColumnName)}`
   ].join(', ');
-  const query = `SELECT ${selectList} FROM "${escapeIdentifier(dataset.duckdbTableName)}"`;
+  const query = `SELECT ${selectList} FROM ${sqlIdentifier(dataset.duckdbTableName)}`;
 
   const rows = (await Duck.query(query, { format: 'array' })) as Record<
     string,
@@ -794,7 +781,7 @@ async function buildJoinedGeoPackageExportSource(
   dataset: ProcessedDataset,
   joinedGeometrySource: JoinedGeometryExportSource
 ): Promise<GeoPackageExportSource> {
-  const viewName = createTempName(
+  const viewName = sqlTempName(
     'export_joined_gpkg',
     joinedGeometrySource.tableName ?? dataset.duckdbTableName ?? dataset.id
   );
@@ -825,7 +812,7 @@ async function buildJoinedGeoPackageExportSource(
         propertySelect,
         `ST_AsWKB("geom"::GEOMETRY) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
-      return `SELECT ${selectColumns.join(', ')} FROM "${viewName}" WHERE "geom" IS NOT NULL`;
+      return `SELECT ${selectColumns.join(', ')} FROM ${sqlIdentifier(viewName)} WHERE "geom" IS NOT NULL`;
     }
   };
 }
@@ -838,6 +825,7 @@ async function buildDirectGeoPackageExportSource(
     return null;
   }
 
+  const tableIdentifier = sqlIdentifier(dataset.duckdbTableName);
   const geometryDuckDBType = await getDuckDBColumnType(
     dataset.duckdbTableName,
     geomColumn.name
@@ -852,7 +840,6 @@ async function buildDirectGeoPackageExportSource(
   const propertyColumns = dataset.columns
     .filter((column) => column.name !== geomColumn.name)
     .map((column) => column.name);
-  const escapedTable = escapeIdentifier(dataset.duckdbTableName);
 
   return {
     layerName: dataset.name,
@@ -867,7 +854,7 @@ async function buildDirectGeoPackageExportSource(
         propertySelect,
         `ST_AsWKB(${geometryExpression}) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
-      return `SELECT ${selectColumns.join(', ')} FROM "${escapedTable}" WHERE ${geometryExpression} IS NOT NULL`;
+      return `SELECT ${selectColumns.join(', ')} FROM ${tableIdentifier} WHERE ${geometryExpression} IS NOT NULL`;
     }
   };
 }
@@ -880,9 +867,9 @@ function buildGpsGeoPackageExportSource(
     return null;
   }
 
+  const tableIdentifier = sqlIdentifier(dataset.duckdbTableName);
   const geometryExpression = buildGpsGeometryValueExpression(gpsColumns);
   const propertyColumns = dataset.columns.map((column) => column.name);
-  const escapedTable = escapeIdentifier(dataset.duckdbTableName);
 
   return {
     layerName: dataset.name,
@@ -897,7 +884,7 @@ function buildGpsGeoPackageExportSource(
         propertySelect,
         `ST_AsWKB(${geometryExpression}) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
-      return `SELECT ${selectColumns.join(', ')} FROM "${escapedTable}" WHERE ${geometryExpression} IS NOT NULL`;
+      return `SELECT ${selectColumns.join(', ')} FROM ${tableIdentifier} WHERE ${geometryExpression} IS NOT NULL`;
     }
   };
 }
@@ -998,7 +985,9 @@ async function exportDatasetsToGeoPackage(
       sources
         .flatMap((source) => (source.tempViewName ? [source.tempViewName] : []))
         .map((viewName) =>
-          Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {})
+          Duck.query(`DROP VIEW IF EXISTS ${sqlIdentifier(viewName)}`).catch(
+            () => {}
+          )
         )
     );
   }
@@ -1085,7 +1074,6 @@ async function fetchDatasetsWithGeometry(
       const sourceCrs = resolveDatasetGeometryCrs(dataset);
       const selectList = dataset.columns
         .map((column) => {
-          const escapedName = escapeIdentifier(column.name);
           if (column.name === geomColumn.name) {
             return buildGeometryExportSelect(
               column.name,
@@ -1093,11 +1081,11 @@ async function fetchDatasetsWithGeometry(
               sourceCrs
             );
           }
-          return `"${escapedName}"`;
+          return sqlIdentifier(column.name);
         })
         .join(', ');
 
-      const query = `SELECT ${selectList} FROM "${escapeIdentifier(dataset.duckdbTableName)}"`;
+      const query = `SELECT ${selectList} FROM ${sqlIdentifier(dataset.duckdbTableName)}`;
 
       const rows = (await Duck.query(query, { format: 'array' })) as Record<
         string,
@@ -1189,8 +1177,7 @@ export async function resolveDatasetGeometrySource(
   const geomColumn = resolveDatasetGeometryColumn(dataset);
   const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
   const gpsColumns = resolveDatasetGpsColumns(dataset);
-  const escapedTable = escapeIdentifier(tableName);
-  const rows = `(SELECT * FROM "${escapedTable}"${rowFilter ? ` WHERE ${rowFilter}` : ''}) d`;
+  const rows = `(SELECT * FROM ${sqlIdentifier(tableName)}${rowFilter ? ` WHERE ${rowFilter}` : ''}) d`;
   const attributeColumns = dataset.columns
     .map((column) => column.name)
     .filter((name) => name !== geomColumn?.name);
@@ -1233,7 +1220,7 @@ export async function resolveDatasetGeometrySource(
   );
   const geometryColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
+     WHERE table_name = ${sqlString(geometryTable)}`,
     { format: 'array' }
   )) as Array<{ column_name: string }>;
   const joinColumn =
@@ -1246,7 +1233,7 @@ export async function resolveDatasetGeometrySource(
     return null;
   }
   return {
-    from: `${rows} JOIN "${escapeIdentifier(geometryTable)}" g ON CAST(d."${escapeIdentifier(JOINED_BASEMAP_COLUMN.ID)}" AS VARCHAR) = CAST(g."${escapeIdentifier(joinColumn)}" AS VARCHAR)`,
+    from: `${rows} JOIN ${sqlIdentifier(geometryTable)} g ON CAST(d.${sqlIdentifier(JOINED_BASEMAP_COLUMN.ID)} AS VARCHAR) = CAST(g.${sqlIdentifier(joinColumn)} AS VARCHAR)`,
     geometry: 'g.geom::GEOMETRY',
     sourceCrs: WGS84_CRS,
     attributeColumns,

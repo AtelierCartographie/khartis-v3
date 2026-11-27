@@ -26,6 +26,14 @@ function createDuck(
 } {
   const queries: string[] = [];
   const duck = {
+    mutate(
+      this: { query: (sql: string, options?: never) => unknown },
+      _tables: unknown,
+      sql: string,
+      options?: never
+    ) {
+      return this.query(sql, options);
+    },
     query: vi.fn(async (sql: string) => {
       queries.push(sql);
       if (shouldFail(sql)) {

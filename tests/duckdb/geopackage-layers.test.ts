@@ -55,7 +55,7 @@ function createContext(): DuckDBContext {
     table_metadata: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
-    extensionsLoaded: { spatial: false, httpfs: false }
+    extensionLoads: new Map()
   } as unknown as DuckDBContext;
 }
 

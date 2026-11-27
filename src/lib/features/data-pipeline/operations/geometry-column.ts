@@ -1,14 +1,6 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { isGeometryColumnType } from '$lib/features/duckdb';
-
-interface DuckDBGeometryColumnClient {
-  query(sql: string, options?: { format?: string }): Promise<unknown>;
-  describe_table(
-    tableName: string
-  ): Promise<{ name: string[]; type: string[] }>;
-  invalidateTableCache?(tableName: string): void;
-}
+import { sqlIdentifier } from '$lib/features/commons/utils/sql.utils';
+import { isGeometryColumnType, type DuckClient } from '$lib/features/duckdb';
 
 /**
  * The derived layers, simplification and the basemap renderer read a geometry
@@ -18,7 +10,7 @@ interface DuckDBGeometryColumnClient {
  */
 export async function normalizeGeometryColumnName(
   tableName: string,
-  Duck: DuckDBGeometryColumnClient,
+  Duck: DuckClient,
   preferredColumn?: string
 ): Promise<void> {
   const description = await Duck.describe_table(tableName);
@@ -36,8 +28,8 @@ export async function normalizeGeometryColumnName(
     preferredColumn && geometryColumns.includes(preferredColumn)
       ? preferredColumn
       : geometryColumns[0];
-  await Duck.query(
-    `ALTER TABLE "${escapeIdentifier(tableName)}" RENAME COLUMN "${escapeIdentifier(geometryColumn)}" TO "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"`
+  await Duck.mutate(
+    tableName,
+    `ALTER TABLE ${sqlIdentifier(tableName)} RENAME COLUMN ${sqlIdentifier(geometryColumn)} TO ${sqlIdentifier(INTERNAL_COLUMN.GEOM)}`
   );
-  Duck.invalidateTableCache?.(tableName);
 }

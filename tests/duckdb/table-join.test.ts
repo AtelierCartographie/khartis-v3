@@ -24,9 +24,9 @@ import {
   createEnrichedTable,
   getJoinTargetValues,
   invalidateSimilarityCache,
-  prepareTableJoinTarget,
-  type DuckDBClientForJoin
+  prepareTableJoinTarget
 } from '$lib/features/duckdb/orchestrator/join-ops';
+import type { DuckClient } from '$lib/features/duckdb';
 import {
   createTestInstance,
   destroyTestInstance,
@@ -41,7 +41,10 @@ async function query(sql: string): Promise<unknown> {
   return reader.getRowObjectsJson();
 }
 
-const Duck: DuckDBClientForJoin = { query };
+const Duck = {
+  query,
+  mutate: (_tables: unknown, sql: string) => query(sql)
+} as unknown as DuckClient;
 
 vi.mock('$lib/features/duckdb', async (importOriginal) => ({
   ...(await importOriginal<typeof import('$lib/features/duckdb')>()),

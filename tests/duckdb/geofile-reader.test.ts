@@ -53,8 +53,7 @@ function createContext(): DuckDBContext {
     table_metadata: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
-    extensionsLoaded: { spatial: true, httpfs: false },
-    extensionLoadPromises: { spatial: null, httpfs: null },
+    extensionLoads: new Map([['spatial', Promise.resolve()]]),
     localExtensionRepositoryConfigured: false,
     bundleVariant: 'eh'
   };
