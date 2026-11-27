@@ -1,5 +1,7 @@
 <script lang="ts">
   import { formatBasemapValidity } from '$lib/features/map/utils/basemap-validity.utils';
+  import { getDisplayedMatchScore } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import ThumbnailPreview from '$lib/features/commons/components/thumbnail-preview.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
@@ -87,7 +89,12 @@
   );
 
   const matchPercentage = $derived(
-    matchScore !== undefined ? Math.round(matchScore) : undefined
+    matchScore !== undefined ? getDisplayedMatchScore(matchScore) : undefined
+  );
+  const matchLabel = $derived(
+    matchPercentage !== undefined
+      ? `${formatValue(matchPercentage, { maxFractionDigits: 1 })} %`
+      : ''
   );
 
   const isImportedFile = $derived(Boolean(basemap.isCustom) && !isOSMBasemap);
@@ -190,7 +197,7 @@
         >
           <div class="progress-fill" style="width: {matchPercentage}%"></div>
         </div>
-        <span class="match-value">{matchPercentage} %</span>
+        <span class="match-value">{matchLabel}</span>
       </div>
     </div>
   {/if}
