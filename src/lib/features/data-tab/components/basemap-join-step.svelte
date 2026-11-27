@@ -18,6 +18,7 @@
   import {
     basemapCatalogService,
     rankBasemapsByJoinSynthesis,
+    selectRelevantBasemapSuggestions,
     shouldPreferTextBasemapRefinementForGPS
   } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -106,6 +107,9 @@
   import type { SerializedProjectData } from '$lib/types/serialization.types';
 
   const BASEMAP_SUGGESTION_LIMIT = 3;
+  // The rankers return every candidate: relevance and the limit are applied
+  // once, after the project geo files join the ranking.
+  const RANK_ALL = Number.POSITIVE_INFINITY;
 
   function handleBasemapSourceChange(source: BasemapSource): void {
     dataTabActions.setBasemapSource(source);
@@ -389,6 +393,7 @@
   let previousLinkedVariableName: string | null = null;
   let loadSuggestionsAbortController: AbortController | null = null;
   let hasDismissedSuggestedBasemap = $state(false);
+  let suggestionsRankedBy = $state<'values' | 'extent'>('values');
   // A table holding coordinates may still be geolocated by its entities.
   const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
@@ -413,27 +418,30 @@
   );
 
   const suggestedBasemaps = $derived.by(() => {
-    const catalogSuggestions = basemapSuggestions
-      .map((s: BasemapSuggestion) => ({
-        basemap: allBasemapsForLookup.find(
-          (b: BasemapMetadata) => b.file === s.file
-        ),
-        score: s.matchScore,
-        matchesData: s.matchesData
-      }))
-      .filter((item) => item.basemap !== undefined) as {
-      basemap: BasemapMetadata;
-      score: number;
-      matchesData: boolean;
-    }[];
+    const basemapsByFile = new Map(
+      allBasemapsForLookup.map((basemap) => [basemap.file, basemap])
+    );
+    const catalogSuggestions = basemapSuggestions.flatMap(
+      (suggestion: BasemapSuggestion) => {
+        const basemap = basemapsByFile.get(suggestion.file);
+        return basemap
+          ? [
+              {
+                basemap,
+                score: suggestion.matchScore,
+                matchesData: suggestion.matchesData
+              }
+            ]
+          : [];
+      }
+    );
     const projectSuggestions = projectGeoBasemapCards.flatMap(
       ({ basemap, score }) =>
         score === undefined ? [] : [{ basemap, score, matchesData: true }]
     );
-    return mergeProjectGeoSuggestions(
-      catalogSuggestions,
-      projectSuggestions,
-      BASEMAP_SUGGESTION_LIMIT
+    return selectRelevantBasemapSuggestions(
+      mergeProjectGeoSuggestions(catalogSuggestions, projectSuggestions),
+      { limit: BASEMAP_SUGGESTION_LIMIT, rankedBy: suggestionsRankedBy }
     );
   });
 
@@ -1609,6 +1617,7 @@
       }
 
       let suggestions: BasemapSuggestion[] = [];
+      let rankedBy: 'values' | 'extent' = 'values';
 
       if (hasGPSMode && resolvedDatasetId) {
         let gpsSuggestions: BasemapSuggestion[] = [];
@@ -1617,10 +1626,13 @@
         if (controller.signal.aborted) return;
 
         if (gpsBounds) {
-          gpsSuggestions =
-            basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
+          gpsSuggestions = basemapCatalogService.getSuggestionsByGPSBbox(
+            gpsBounds,
+            RANK_ALL
+          );
         }
         suggestions = gpsSuggestions;
+        rankedBy = 'extent';
 
         const textGeoColumns =
           processedDataset.geoDetection?.geoColumns?.filter(
@@ -1642,7 +1654,7 @@
             const ranked = rankBasemapsByJoinSynthesis(
               basemapCatalogService.basemaps,
               synthesis,
-              BASEMAP_SUGGESTION_LIMIT
+              RANK_ALL
             );
             const topScore = ranked[0]?.matchScore ?? 0;
 
@@ -1665,6 +1677,7 @@
           bestTextSuggestions.length > 0
         ) {
           suggestions = bestTextSuggestions;
+          rankedBy = 'values';
         }
       } else {
         if (geoColumn && resolvedDatasetId) {
@@ -1678,7 +1691,7 @@
             suggestions = rankBasemapsByJoinSynthesis(
               basemapCatalogService.basemaps,
               synthesis,
-              BASEMAP_SUGGESTION_LIMIT
+              RANK_ALL
             );
           } catch (err) {
             if (isDatasetNotFoundError(err)) {
@@ -1690,7 +1703,7 @@
         if (suggestions.length === 0) {
           suggestions = basemapCatalogService.getSuggestions(
             processedDataset,
-            BASEMAP_SUGGESTION_LIMIT,
+            RANK_ALL,
             geoColumn
           );
         }
@@ -1715,6 +1728,7 @@
       if (controller.signal.aborted) return;
 
       basemapSuggestions = suggestions;
+      suggestionsRankedBy = rankedBy;
       projectGeoScores = projectScores;
       suggestionsGeoColumn = geoColumn ?? null;
       suggestionsTableFilterKey = requestedTableFilterKey;
