@@ -348,6 +348,7 @@
     {@const terreView = isLandLayer ? landConfig : getConfig('terre')}
     <LayerConfigTerre
       fillColor={terreView?.fillColor}
+      fillShadow={terreView?.fillShadow}
       fillOpacity={terreView?.fillOpacity}
       strokeVisible={terreView?.strokeVisible}
       strokeColor={terreView?.strokeColor}

@@ -58,7 +58,7 @@
       kind="warning"
       lowContrast
       hideCloseButton
-      title={m.delete_rows_visualization_warning({
+      subtitle={m.delete_rows_visualization_warning({
         count: affectedVisualizationCount
       })}
     />

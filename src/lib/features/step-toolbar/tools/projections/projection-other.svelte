@@ -545,10 +545,6 @@
         margin: 0;
         overflow-wrap: anywhere;
       }
-
-      :global(.bx--inline-notification) {
-        margin: 0;
-      }
     }
 
     .code-status-recognized {

@@ -143,12 +143,4 @@
     overflow-y: auto;
     padding: var(--cds-spacing-05);
   }
-
-  /* Carbon forces min-width: 18rem on inline notifications, wider than this
-     fixed 280px panel, so they overflow the right edge. Constrain every tool
-     panel's notifications to the available content width. */
-  .panel-content :global(.bx--inline-notification) {
-    margin-top: 0;
-    margin-bottom: 0;
-  }
 </style>

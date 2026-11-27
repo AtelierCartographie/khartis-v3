@@ -957,7 +957,7 @@
       kind="error"
       role="alert"
       lowContrast
-      title={typeChangeError}
+      subtitle={typeChangeError}
       on:close={() => (typeChangeError = null)}
     />
   {/if}
@@ -1041,6 +1041,10 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--cds-border-subtle-00, #e0e0e0);
+  }
+
+  .advanced-data-table > :global(.bx--inline-notification) {
+    margin: var(--cds-spacing-03);
   }
 
   .table-wrapper {

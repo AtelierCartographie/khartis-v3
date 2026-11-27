@@ -509,11 +509,6 @@
     max-width: calc(100% - 2 * var(--cds-spacing-05));
   }
 
-  :global(#khartis-colorblindness-notification .bx--inline-notification) {
-    max-width: 100%;
-    margin: 0;
-  }
-
   .step-header {
     display: flex;
     flex-direction: column;

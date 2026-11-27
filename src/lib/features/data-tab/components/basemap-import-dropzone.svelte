@@ -183,6 +183,10 @@
     padding-top: var(--cds-spacing-04);
   }
 
+  .basemap-import > :global(.bx--inline-notification) {
+    margin-top: var(--cds-spacing-04);
+  }
+
   .import-title {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 0.875rem;

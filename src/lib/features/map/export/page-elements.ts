@@ -657,6 +657,35 @@ function buildAnnotationItem(
     return injectRootAttribute(turned, nameAttribute);
   }
 
+  // A turned shape, drawing or image is measured upright, then turned about
+  // its centre, as on screen.
+  const turnable = item.querySelector<HTMLElement | SVGElement>(
+    '.annotation-turnable[data-rotation]'
+  );
+  const rotation = Number(turnable?.dataset.rotation ?? 0);
+  const previousTransform = turnable?.style.transform ?? '';
+  if (rotation && turnable) turnable.style.transform = 'none';
+  const turnedRect =
+    rotation && turnable ? getRelativeRect(turnable, pageContainer) : null;
+  const layer = buildUprightAnnotationContent(
+    item,
+    pageContainer,
+    id,
+    nameAttribute
+  );
+  if (rotation && turnable) turnable.style.transform = previousTransform;
+
+  return turnedRect && layer
+    ? `<g transform="rotate(${roundSvgValue(rotation)} ${roundSvgValue(turnedRect.x + turnedRect.width / 2)} ${roundSvgValue(turnedRect.y + turnedRect.height / 2)})">${layer}</g>`
+    : layer;
+}
+
+function buildUprightAnnotationContent(
+  item: HTMLElement,
+  pageContainer: HTMLElement,
+  id: string,
+  nameAttribute: string
+): string {
   const svgElement = item.querySelector('svg');
   if (svgElement instanceof SVGElement) {
     const svgRect = getRelativeRect(svgElement, pageContainer);

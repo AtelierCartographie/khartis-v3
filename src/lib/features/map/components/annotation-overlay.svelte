@@ -841,13 +841,62 @@
     return [];
   }
 
+  // A drawing is placed by the corner of the box around its points, and turns
+  // about the centre of that box. When the points change, the box does too:
+  // the position moves so the points left as they were stay where they are.
+  function keepDrawingInPlace(
+    item: Annotation,
+    nextPoints: VectorPoint[]
+  ): { x: number; y: number } {
+    const previousPoints = getEditablePoints(item);
+    const strokeWidth = getVectorStyle(item.style).strokeWidth;
+    const smoothness = item.style?.smoothness ?? 0;
+    const closed = item.style?.drawingType === DrawingType.ZONE;
+    const before = computeDrawingBounds(
+      previousPoints,
+      strokeWidth,
+      smoothness,
+      closed
+    );
+    const after = computeDrawingBounds(
+      nextPoints,
+      strokeWidth,
+      smoothness,
+      closed
+    );
+    const angle = ((item.style?.rotation ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const shiftX =
+      before.originX + before.width / 2 - (after.originX + after.width / 2);
+    const shiftY =
+      before.originY + before.height / 2 - (after.originY + after.height / 2);
+    return {
+      x:
+        item.position.x +
+        before.width / 2 -
+        after.width / 2 -
+        (shiftX * cos - shiftY * sin),
+      y:
+        item.position.y +
+        before.height / 2 -
+        after.height / 2 -
+        (shiftX * sin + shiftY * cos)
+    };
+  }
+
   function applyEditablePoints(
     item: Annotation,
     points: VectorPoint[],
     controlOffsets?: number[]
   ): void {
     if (item.type === AnnotationKind.DRAWING) {
-      annotationsActions.updateAnnotation(item.id, { content: points });
+      const position = keepDrawingInPlace(item, points);
+      annotationsActions.updateAnnotation(item.id, {
+        content: points,
+        position
+      });
+      refreshMapAnchorIfPresent(item, position);
       return;
     }
     annotationsActions.updateAnnotation(item.id, {
@@ -948,8 +997,15 @@
     );
     if (!item) return;
     const scale = Math.max(pageScale * getMapScaleFactor(item), 0.0001);
-    const dx = (event.clientX - anchorDragState.startClientX) / scale;
-    const dy = (event.clientY - anchorDragState.startClientY) / scale;
+    const screenDx = (event.clientX - anchorDragState.startClientX) / scale;
+    const screenDy = (event.clientY - anchorDragState.startClientY) / scale;
+    // A turned drawing takes the pointer move back into its own frame.
+    const angle =
+      item.type === AnnotationKind.DRAWING
+        ? (-(item.style?.rotation ?? 0) * Math.PI) / 180
+        : 0;
+    const dx = screenDx * Math.cos(angle) - screenDy * Math.sin(angle);
+    const dy = screenDx * Math.sin(angle) + screenDy * Math.cos(angle);
     const newPoints = anchorDragState.startPoints.map((point, index) =>
       index === anchorDragState!.pointIndex
         ? { x: point.x + dx, y: point.y + dy }
@@ -1698,30 +1754,22 @@
     event.stopPropagation();
     cancelFocusedAnnotationReset();
 
-    const scope = getAnnotationScope(item);
-    const layer = getInteractionLayer(scope);
-    if (!layer) return;
-
-    const scale = getPageScale();
-    const rect = layer.getBoundingClientRect();
-    const shapeType = String(item.content ?? '');
-    const defaultSize = getShapeDefaultSize(shapeType);
-    const shapeW = item.style?.shapeWidth ?? defaultSize.width;
-    const shapeH = item.style?.shapeHeight ?? defaultSize.height;
-
-    const renderedPosition = getRenderedPosition(item);
-    const localPosition =
-      scope === 'page'
-        ? renderedPosition
-        : {
-            x: renderedPosition.x - mapArea.left,
-            y: renderedPosition.y - mapArea.top
-          };
-    const mapFactor = getMapScaleFactor(item);
-    const centerX =
-      rect.left + (localPosition.x + (shapeW / 2) * mapFactor) * scale;
-    const centerY =
-      rect.top + (localPosition.y + (shapeH / 2) * mapFactor) * scale;
+    // The pivot is read on screen from the turned element, measured upright:
+    // its centre, or for a text the point its alignment anchors.
+    const turnable = (event.currentTarget as Element | null)
+      ?.closest('.annotation-item')
+      ?.querySelector<HTMLElement | SVGElement>('.annotation-turnable');
+    if (!turnable) return;
+    const previousTransform = turnable.style.transform;
+    turnable.style.transform = 'none';
+    const upright = turnable.getBoundingClientRect();
+    turnable.style.transform = previousTransform;
+    const originX =
+      item.type === AnnotationKind.TEXT
+        ? getTextRotationOriginX(item.style?.textAlign)
+        : 0.5;
+    const centerX = upright.left + upright.width * originX;
+    const centerY = upright.top + upright.height / 2;
 
     const startAngle =
       Math.atan2(event.clientY - centerY, event.clientX - centerX) *
@@ -2228,6 +2276,16 @@
   }
 </script>
 
+{#snippet rotateHandle(item: Annotation)}
+  <div
+    class="rotate-handle"
+    role="button"
+    tabindex="-1"
+    aria-label={m.annotations_rotate_handle()}
+    onpointerdown={(e: PointerEvent) => handleRotatePointerDown(e, item)}
+  ></div>
+{/snippet}
+
 <div
   class="annotation-overlay"
   class:drawing-mode={isDrawingMode}
@@ -2532,7 +2590,7 @@
       {#if item.type === AnnotationKind.TEXT}
         {@const textRotation = item.style?.rotation ?? 0}
         <div
-          class="annotation-text-box"
+          class="annotation-text-box annotation-turnable"
           data-rotation={textRotation || undefined}
           style:transform={textRotation
             ? `rotate(${textRotation}deg)`
@@ -2555,6 +2613,7 @@
                   handleResizePointerDown(e, item, edge)}
               ></div>
             {/each}
+            {@render rotateHandle(item)}
           {/if}
         </div>
       {:else if item.type === AnnotationKind.SHAPE}
@@ -2673,7 +2732,8 @@
             style="width: {shapeW}px; height: {shapeH}px;"
           >
             <div
-              class="shape-content"
+              class="shape-content annotation-turnable"
+              data-rotation={rotation || undefined}
               style="transform: rotate({rotation}deg);"
             >
               <svg
@@ -2787,14 +2847,7 @@
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'w')}
                 ></div>
-                <div
-                  class="rotate-handle"
-                  role="button"
-                  tabindex="-1"
-                  aria-label={m.annotations_shape_rotate_handle()}
-                  onpointerdown={(e: PointerEvent) =>
-                    handleRotatePointerDown(e, item)}
-                ></div>
+                {@render rotateHandle(item)}
               </div>
             {/if}
           </div>
@@ -2813,69 +2866,86 @@
           )}
           {@const isDrawingSelected =
             isAnnotationEditing && selectedId === item.id}
-          <svg
-            width={drawingBounds.width}
-            height={drawingBounds.height}
-            viewBox={drawingBounds.viewBox}
-            class="annotation-drawing"
-            class:annotation-drawing--editable={isDrawingSelected}
-            style="opacity: {drawingStyle.opacity};"
+          {@const drawingRotation = item.style?.rotation ?? 0}
+          <div
+            class="drawing-frame annotation-turnable"
+            data-rotation={drawingRotation || undefined}
+            style:transform={drawingRotation
+              ? `rotate(${drawingRotation}deg)`
+              : undefined}
           >
-            <path
-              d={smoothDrawingPath(points, smoothness, isClosed)}
-              fill={isClosed ? drawingStyle.fill : 'none'}
-              stroke={drawingStyle.stroke}
-              stroke-width={drawingStyle.strokeWidth}
-              stroke-dasharray={drawingStyle.strokeDasharray}
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-            {#if isDrawingSelected}
+            <svg
+              width={drawingBounds.width}
+              height={drawingBounds.height}
+              viewBox={drawingBounds.viewBox}
+              class="annotation-drawing"
+              class:annotation-drawing--editable={isDrawingSelected}
+              style="opacity: {drawingStyle.opacity};"
+            >
               <path
-                class="drawing-hit-path"
-                role="button"
-                aria-label={m.annotations_drawing_add_anchor()}
-                tabindex="-1"
                 d={smoothDrawingPath(points, smoothness, isClosed)}
-                fill="transparent"
-                stroke="transparent"
-                stroke-width={Math.max(drawingStyle.strokeWidth + 10, 14)}
-                ondblclick={(event: MouseEvent) =>
-                  handleDrawingPathDoubleClick(event, item)}
+                fill={isClosed ? drawingStyle.fill : 'none'}
+                stroke={drawingStyle.stroke}
+                stroke-width={drawingStyle.strokeWidth}
+                stroke-dasharray={drawingStyle.strokeDasharray}
+                stroke-linejoin="round"
+                stroke-linecap="round"
               />
-              {#each drawingSmoothing.adjusting ? [] : getDrawingAnchorPoints(points, smoothness, isClosed) as point, pointIndex (pointIndex)}
-                <circle
-                  class="drawing-anchor"
+              {#if isDrawingSelected}
+                <path
+                  class="drawing-hit-path"
                   role="button"
-                  aria-label={m.annotations_drawing_edit_anchor()}
+                  aria-label={m.annotations_drawing_add_anchor()}
                   tabindex="-1"
-                  cx={point.x}
-                  cy={point.y}
-                  r="5"
-                  fill="white"
-                  stroke="var(--cds-background-brand, #0f62fe)"
-                  stroke-width="2"
-                  onpointerdown={(event: PointerEvent) =>
-                    handleAnchorPointerDown(event, item, pointIndex)}
+                  d={smoothDrawingPath(points, smoothness, isClosed)}
+                  fill="transparent"
+                  stroke="transparent"
+                  stroke-width={Math.max(drawingStyle.strokeWidth + 10, 14)}
                   ondblclick={(event: MouseEvent) =>
-                    handleAnchorDoubleClick(event, item, pointIndex)}
+                    handleDrawingPathDoubleClick(event, item)}
                 />
-              {/each}
+                {#each drawingSmoothing.adjusting ? [] : getDrawingAnchorPoints(points, smoothness, isClosed) as point, pointIndex (pointIndex)}
+                  <circle
+                    class="drawing-anchor"
+                    role="button"
+                    aria-label={m.annotations_drawing_edit_anchor()}
+                    tabindex="-1"
+                    cx={point.x}
+                    cy={point.y}
+                    r="5"
+                    fill="white"
+                    stroke="var(--cds-background-brand, #0f62fe)"
+                    stroke-width="2"
+                    onpointerdown={(event: PointerEvent) =>
+                      handleAnchorPointerDown(event, item, pointIndex)}
+                    ondblclick={(event: MouseEvent) =>
+                      handleAnchorDoubleClick(event, item, pointIndex)}
+                  />
+                {/each}
+              {/if}
+            </svg>
+            {#if isDrawingSelected}
+              {@render rotateHandle(item)}
             {/if}
-          </svg>
+          </div>
         {/if}
       {:else if item.type === AnnotationKind.IMAGE}
         {@const imgSrc = String(item.content ?? '')}
         {@const size = item.style?.size ?? 200}
         {@const opacity = toOpacityUnit(item.style?.opacity)}
         {@const isImageSelected = isAnnotationEditing && selectedId === item.id}
+        {@const imageRotation = item.style?.rotation ?? 0}
         {#if imgSrc}
           <div class="image-frame">
             <img
               src={imgSrc}
               alt={m.annotationImageAlt()}
-              class="annotation-image"
+              class="annotation-image annotation-turnable"
+              data-rotation={imageRotation || undefined}
               style="width: {size}px; height: auto; opacity: {opacity};"
+              style:transform={imageRotation
+                ? `rotate(${imageRotation}deg)`
+                : undefined}
             />
             {#if isImageSelected}
               <div class="shape-handles" role="presentation">
@@ -2889,6 +2959,7 @@
                       handleResizePointerDown(e, item, handle)}
                   ></div>
                 {/each}
+                {@render rotateHandle(item)}
               </div>
             {/if}
           </div>
@@ -3003,25 +3074,35 @@
     border-radius: 0;
   }
 
-  /* A rotated text: the dashed frame turns with the text box, which carries
-     the rotation, rather than staying on the axis-aligned item. */
-  .annotation-item:has(.annotation-text-box[data-rotation]).selected,
-  .annotation-item:has(.annotation-text-box[data-rotation]):hover,
-  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible {
+  /* A rotated text or drawing: the dashed frame turns with the box that
+     carries the rotation, rather than staying on the axis-aligned item. */
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ).selected,
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ):hover,
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ):focus-visible {
     outline: none;
   }
 
-  .annotation-item:has(.annotation-text-box[data-rotation]).selected
-    .annotation-text-box,
-  .annotation-item:has(.annotation-text-box[data-rotation]):focus-visible
-    .annotation-text-box {
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ).selected
+    .annotation-turnable,
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ):focus-visible
+    .annotation-turnable {
     outline: 1px dashed var(--cds-background-brand, #0f62fe);
   }
 
-  .annotation-item:has(.annotation-text-box[data-rotation]).editable:hover:not(
-      .selected
-    )
-    .annotation-text-box {
+  .annotation-item:has(
+      :is(.annotation-text-box, .drawing-frame)[data-rotation]
+    ).editable:hover:not(.selected)
+    .annotation-turnable {
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
@@ -3160,6 +3241,11 @@
 
   .annotation-text-box {
     position: relative;
+  }
+
+  .drawing-frame {
+    position: relative;
+    line-height: 0;
   }
 
   .text-resize-edge {

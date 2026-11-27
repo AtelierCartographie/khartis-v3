@@ -165,13 +165,13 @@
     min-width: 0;
     height: var(--kh-size-sm);
     padding: 0 var(--kh-pad-panel);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
 
     &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
+      background: var(--cds-field-hover);
     }
   }
 

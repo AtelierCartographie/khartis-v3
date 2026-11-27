@@ -809,7 +809,7 @@
   }
 
   #khartis-create-new-project :global(.bx--text-area) {
-    background-color: var(--cds-field-01);
+    background-color: var(--cds-field);
   }
 
   /* The feedback covers the field alone, not the actions under it. */
@@ -940,6 +940,10 @@
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-border-subtle);
     background: var(--khartis-control-surface-background);
+  }
+
+  :global(.file-complete-tile > .bx--inline-notification) {
+    margin-top: var(--cds-spacing-03);
   }
 
   .file-incomplete-tile :global(.bx--tile) {

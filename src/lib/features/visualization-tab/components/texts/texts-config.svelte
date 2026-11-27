@@ -858,7 +858,7 @@
   }
 
   :global(.text-input-field .bx--text-input__field-wrapper) {
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
   }
 
   :global(.texts-panel-shell .field-picker .bx--label) {
@@ -867,6 +867,6 @@
 
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
     min-height: var(--kh-size-sm);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
   }
 </style>
