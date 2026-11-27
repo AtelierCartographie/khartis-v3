@@ -67828,6 +67828,1734 @@
     }
   },
   {
+    "file": "royaume-uni-lad-2018-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 391 local authority districts du Royaume-Uni au 31 décembre 2018 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2018) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2018. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 391 local authority districts of the United Kingdom as at 31 December 2018: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2018) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2018. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2018",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2018-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2018-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2018-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2018-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2018-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2018-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2018-high",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2018-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 391,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2018-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 391 local authority districts du Royaume-Uni au 31 décembre 2018 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2018) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2018. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 391 local authority districts of the United Kingdom as at 31 December 2018: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2018) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2018. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2018",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2018-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2018-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2018-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2018-low",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2018-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2018-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2018-low",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2018-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 391,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2019-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 382 local authority districts du Royaume-Uni au 31 décembre 2019 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2019) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2019. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 382 local authority districts of the United Kingdom as at 31 December 2019: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2019) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2019. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2019",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2019-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2019-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2019-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2019-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2019-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2019-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2019-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2019-high",
+        "style": "land",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-2018-high" }
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 382,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2019-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 382 local authority districts du Royaume-Uni au 31 décembre 2019 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2019) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2019. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 382 local authority districts of the United Kingdom as at 31 December 2019: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2019) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2019. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2019",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2019-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2019-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2019-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2019-low",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2019-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2019-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2019-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2019-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 382,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2020-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 379 local authority districts du Royaume-Uni au 31 décembre 2020 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2020) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2020. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 379 local authority districts of the United Kingdom as at 31 December 2020: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2020) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2020. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2020",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2020-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2020-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2020-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2020-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2020-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2020-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2020-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2020-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 379,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2020-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 379 local authority districts du Royaume-Uni au 31 décembre 2020 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2020) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2020. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 379 local authority districts of the United Kingdom as at 31 December 2020: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2020) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2020. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2020",
+    "valid_from": null,
+    "valid_to": null,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2020-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2020-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2020-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2020-low",
+        "style": "limit-level-2",
+        "step": null,
+        "pack": { "file": "royaume-uni-nation-limites-2019-low" }
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2020-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2020-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2020-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2020-low",
+        "style": "land",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-2019-low" }
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 379,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2022-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 374 local authority districts du Royaume-Uni au 31 décembre 2022 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2022) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2022. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 374 local authority districts of the United Kingdom as at 31 December 2022: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2022) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2022. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2022",
+    "valid_from": 2021,
+    "valid_to": 2022,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2022-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2022-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2022-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2022-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2022-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2022-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2022-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2022-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 374,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2022-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 374 local authority districts du Royaume-Uni au 31 décembre 2022 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2022) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2022. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 374 local authority districts of the United Kingdom as at 31 December 2022: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2022) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2022. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2022",
+    "valid_from": 2021,
+    "valid_to": 2022,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2022-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2022-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2022-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2022-low",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2022-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2022-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2022-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2022-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 374,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2024-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 361 local authority districts du Royaume-Uni au 31 décembre 2024 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 361 local authority districts of the United Kingdom as at 31 December 2024: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 2023,
+    "valid_to": 2024,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2024-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2024-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-high",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 361,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2024-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 361 local authority districts du Royaume-Uni au 31 décembre 2024 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 361 local authority districts of the United Kingdom as at 31 December 2024: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 2023,
+    "valid_to": 2024,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2024-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2024-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-low",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 361,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-lad-2024-medium",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par districts (local authorities)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by local authority districts",
+    "description_fr": "Les 361 local authority districts du Royaume-Uni au 31 décembre 2024 : unitary authorities, districts, metropolitan districts et London boroughs en Angleterre, unitary authorities au pays de Galles, council areas en Écosse, local government districts en Irlande du Nord — le maillage des estimations de population de l'ONS. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The 361 local authority districts of the United Kingdom as at 31 December 2024: unitary authorities, districts, metropolitan districts and London boroughs in England, unitary authorities in Wales, council areas in Scotland, local government districts in Northern Ireland — the geography of ONS population estimates. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 2023,
+    "valid_to": 2024,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des districts",
+        "title_en": "Local authority district centroids",
+        "type": "centroid",
+        "file": "royaume-uni-lad-centroids-2024-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des districts",
+        "title_en": "Local authority district boundaries",
+        "type": "limit",
+        "file": "royaume-uni-lad-limites-2024-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-medium",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-medium",
+        "style": "limit-level-2",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 361,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-lad"
+    }
+  },
+  {
+    "file": "royaume-uni-nation-2024-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par nations",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by countries",
+    "description_fr": "Les quatre nations du Royaume-Uni : Angleterre, pays de Galles, Écosse et Irlande du Nord. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The four countries of the United Kingdom: England, Wales, Scotland and Northern Ireland. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1921,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des nations",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "royaume-uni-nation-centroids-2024-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 4,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-nation"
+    }
+  },
+  {
+    "file": "royaume-uni-nation-2024-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par nations",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by countries",
+    "description_fr": "Les quatre nations du Royaume-Uni : Angleterre, pays de Galles, Écosse et Irlande du Nord. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The four countries of the United Kingdom: England, Wales, Scotland and Northern Ireland. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1921,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des nations",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "royaume-uni-nation-centroids-2024-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 4,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-nation"
+    }
+  },
+  {
+    "file": "royaume-uni-nation-2024-medium",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par nations",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by countries",
+    "description_fr": "Les quatre nations du Royaume-Uni : Angleterre, pays de Galles, Écosse et Irlande du Nord. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The four countries of the United Kingdom: England, Wales, Scotland and Northern Ireland. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1921,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des nations",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "royaume-uni-nation-centroids-2024-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 4,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-nation"
+    }
+  },
+  {
+    "file": "royaume-uni-region-2024-high",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par régions (ITL 1)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by regions (ITL 1)",
+    "description_fr": "Les neuf régions de l'Angleterre, le pays de Galles, l'Écosse et l'Irlande du Nord : le niveau 1 des International Territorial Levels (ITL), ex-NUTS 1, et celui des « regions » de la statistique britannique. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The nine regions of England, Wales, Scotland and Northern Ireland: level 1 of the International Territorial Levels (ITL), formerly NUTS 1, and the regions of UK official statistics. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BUC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1998,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des régions",
+        "title_en": "Region centroids",
+        "type": "centroid",
+        "file": "royaume-uni-region-centroids-2024-high",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-high",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-high",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-high",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-high",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-high",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-high" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-high",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 12,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-region"
+    }
+  },
+  {
+    "file": "royaume-uni-region-2024-low",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par régions (ITL 1)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by regions (ITL 1)",
+    "description_fr": "Les neuf régions de l'Angleterre, le pays de Galles, l'Écosse et l'Irlande du Nord : le niveau 1 des International Territorial Levels (ITL), ex-NUTS 1, et celui des « regions » de la statistique britannique. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The nine regions of England, Wales, Scotland and Northern Ireland: level 1 of the International Territorial Levels (ITL), formerly NUTS 1, and the regions of UK official statistics. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BGC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1998,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des régions",
+        "title_en": "Region centroids",
+        "type": "centroid",
+        "file": "royaume-uni-region-centroids-2024-low",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-low",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-low",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-low",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-low",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-low",
+        "style": "limit-context",
+        "step": null,
+        "pack": { "file": "royaume-uni-voisins-limites-2018-low" }
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-low",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 12,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-region"
+    }
+  },
+  {
+    "file": "royaume-uni-region-2024-medium",
+    "title_fr": "Royaume-Uni",
+    "subtitle_fr": "par régions (ITL 1)",
+    "title_en": "United Kingdom",
+    "subtitle_en": "by regions (ITL 1)",
+    "description_fr": "Les neuf régions de l'Angleterre, le pays de Galles, l'Écosse et l'Irlande du Nord : le niveau 1 des International Territorial Levels (ITL), ex-NUTS 1, et celui des « regions » de la statistique britannique. Limites : ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Pays voisins : Eurostat GISCO.",
+    "description_en": "The nine regions of England, Wales, Scotland and Northern Ireland: level 1 of the International Territorial Levels (ITL), formerly NUTS 1, and the regions of UK official statistics. Boundaries: ONS, Local Authority Districts (December 2024) Boundaries UK BSC. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Contains OS data © Crown copyright and database right 2024. Neighbouring countries: Eurostat GISCO.",
+    "source": "ONS",
+    "date": "2024",
+    "valid_from": 1998,
+    "valid_to": 2025,
+    "bbox": [-8.65, 49.8648, 1.7637, 60.8608],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "ROYAUME_UNI_BNG",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des régions",
+        "title_en": "Region centroids",
+        "type": "centroid",
+        "file": "royaume-uni-region-centroids-2024-medium",
+        "style": null,
+        "step": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "royaume-uni-region-limites-2024-medium",
+        "style": "limit-level-0",
+        "step": null
+      },
+      {
+        "title_fr": "Limites des nations",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "royaume-uni-nation-limites-2024-medium",
+        "style": "limit-level-1",
+        "step": null
+      },
+      {
+        "title_fr": "Frontière du Royaume-Uni",
+        "title_en": "United Kingdom border",
+        "type": "limit",
+        "file": "royaume-uni-limites-2024-medium",
+        "style": "limit-country",
+        "step": null
+      },
+      {
+        "title_fr": "Graticules (2°)",
+        "title_en": "Graticules (2°)",
+        "type": "graticule",
+        "file": "royaume-uni-graticule-2",
+        "style": "graticule",
+        "step": 2,
+        "pack": { "file": "allemagne-graticule-2" }
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "royaume-uni-land-2024-medium",
+        "style": "nuts-land",
+        "step": null
+      },
+      {
+        "title_fr": "Frontières des pays voisins",
+        "title_en": "Neighbouring country borders",
+        "type": "limit",
+        "file": "royaume-uni-voisins-limites-2024-medium",
+        "style": "limit-context",
+        "step": null
+      },
+      {
+        "title_fr": "Pays voisins",
+        "title_en": "Neighbouring countries",
+        "type": "land",
+        "file": "royaume-uni-voisins-2024-medium",
+        "style": "land",
+        "step": null
+      }
+    ],
+    "display_id_fr": "nom",
+    "display_id_en": "nom",
+    "entity_count": 12,
+    "catalog": {
+      "zone": "country",
+      "area": "royaume-uni",
+      "extent": "whole",
+      "level": "royaume-uni-region"
+    }
+  },
+  {
     "file": "suisse-canton-2026-high",
     "title_fr": "Suisse",
     "subtitle_fr": "par cantons",
