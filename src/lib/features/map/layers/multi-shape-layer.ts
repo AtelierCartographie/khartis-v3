@@ -176,6 +176,14 @@ void main(void) {
     scatterplot.radiusMinPixels, scatterplot.radiusMaxPixels
   );
 
+  // A zero size (a zero value in proportional mode) draws nothing, as in the
+  // SVG export: the outline is grown outside the shape and would otherwise
+  // paint a ring, and the zero-height spike SDF is 0 over the whole quad.
+  if (shapeRadiusPixels <= 0.0) {
+    gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
+    return;
+  }
+
   bool linearShape = isBottomAnchoredShape(instanceShapes);
 
   // 2D SDF shapes are authored within SYMBOL_SDF_EXTENT of their radius:
