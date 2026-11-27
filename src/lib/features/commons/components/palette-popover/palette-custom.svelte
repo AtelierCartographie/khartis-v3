@@ -141,6 +141,16 @@
     });
   });
 
+  // The popover seeds its draft contrast after this panel has mounted, so the
+  // colour contrast follows the prop; a motif carries its own contrast.
+  $effect(() => {
+    const next = contrast;
+    untrack(() => {
+      if (patternPaletteConfig) return;
+      contrastMode = next ?? 'normal';
+    });
+  });
+
   const resolvedContrast = $derived<ContrastMode | undefined>(
     contrastMode === 'normal' ? undefined : contrastMode
   );
