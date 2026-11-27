@@ -102,7 +102,7 @@
     flex-direction: column;
     gap: var(--kh-gap-param);
     padding: var(--cds-spacing-05, 16px);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
   }
 
   .text-style-section--disabled {
@@ -177,7 +177,7 @@
     height: var(--kh-size-sm);
     display: flex;
     align-items: center;
-    background: var(--cds-field-02, #ffffff);
+    background: var(--cds-field);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 

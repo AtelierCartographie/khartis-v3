@@ -3,7 +3,7 @@ import type {
   ProjectNavigationOptions
 } from '../types/navigation.types';
 import { goto } from '$app/navigation';
-import { base } from '$app/paths';
+import { resolve } from '$app/paths';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 
@@ -19,7 +19,7 @@ export function useProjectNavigation(
     globalState.isCreateProjectModalOpen = false;
     createProjectActions.resetAllTabs();
     options.onClose?.();
-    await goto(base || '/', { replaceState: true });
+    await goto(resolve('/'), { replace: true });
   }
 
   return { navigateAfterAction };

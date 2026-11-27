@@ -8,8 +8,11 @@ import {
 import { createHash } from 'node:crypto';
 import { extname, resolve, sep } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
+import { optimizeCss, optimizeImports } from 'carbon-preprocess-svelte';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -176,53 +179,49 @@ const contentRevision = (staticPath: string): string => {
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const verifyServiceWorkerPrecache = (basePath: string): Plugin => {
-  let isServerBuild = false;
-
-  return {
-    name: 'verify-sw-precache',
-    apply: 'build',
-    configResolved(config) {
-      isServerBuild = Boolean(config.build.ssr);
-    },
-    closeBundle: {
-      sequential: true,
-      order: 'post',
-      handler() {
-        // SvelteKit writes build/ with the adapter when the server build
-        // closes, after its nested client build: only then can the Service
-        // Worker that ships be checked.
-        if (!isServerBuild) return;
-        const swPath = resolve(process.cwd(), 'build/sw.js');
-        if (!existsSync(swPath)) {
-          throw new Error(
-            `[verify-sw-precache] ${swPath} is missing; refusing to ship without a Service Worker. Check where VitePWA writes it.`
-          );
-        }
-        const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
-        const requiredPrecacheUrls = [
-          navigationFallbackUrl,
-          `${basePath}/basemaps/all-basemaps-metadata.json`,
-          `${basePath}/basemaps/projection-presets.json`,
-          `${basePath}/basemaps/style-presets.json`,
-          `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`
-        ];
-        const content = readFileSync(swPath, 'utf8');
-        const missingPrecacheUrls = requiredPrecacheUrls.filter(
-          (url) =>
-            !new RegExp(`["']?url["']?:["']${escapeRegExp(url)}["']`).test(
-              content
-            )
+const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
+  name: 'verify-sw-precache',
+  apply: 'build',
+  buildApp: {
+    // SvelteKit writes build/ with the adapter in its own post buildApp hook,
+    // which runs first because sveltekit() comes earlier in the plugin list:
+    // only then can the Service Worker that ships be checked.
+    order: 'post',
+    async handler() {
+      const swPath = resolve(process.cwd(), 'build/sw.js');
+      if (!existsSync(swPath)) {
+        throw new Error(
+          `[verify-sw-precache] ${swPath} is missing; refusing to ship without a Service Worker. Check where VitePWA writes it.`
         );
-        if (missingPrecacheUrls.length > 0) {
-          throw new Error(
-            `[verify-sw-precache] ${swPath} does not precache ${missingPrecacheUrls.join(', ')}; refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
-          );
-        }
+      }
+      const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
+      const requiredPrecacheUrls = [
+        navigationFallbackUrl,
+        `${basePath}/basemaps/all-basemaps-metadata.json`,
+        `${basePath}/basemaps/projection-presets.json`,
+        `${basePath}/basemaps/style-presets.json`,
+        `${basePath}/${BASEMAP_ATTRIBUTES_PATH}`
+      ];
+      const content = readFileSync(swPath, 'utf8');
+      const missingPrecacheUrls = requiredPrecacheUrls.filter(
+        (url) =>
+          !new RegExp(`["']?url["']?:["']${escapeRegExp(url)}["']`).test(
+            content
+          )
+      );
+      if (missingPrecacheUrls.length > 0) {
+        throw new Error(
+          `[verify-sw-precache] ${swPath} does not precache ${missingPrecacheUrls.join(', ')}; refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
+        );
+      }
+      if (!/_app\/immutable\//.test(content)) {
+        throw new Error(
+          `[verify-sw-precache] ${swPath} precaches no _app/immutable file; VitePWA globbed the wrong directory. Check its outDir.`
+        );
       }
     }
-  };
-};
+  }
+});
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -288,10 +287,42 @@ export default defineConfig(({ mode }) => {
           template: 'treemap'
         }),
       serveTestDatasets(basePath),
-      sveltekit(),
+      sveltekit({
+        preprocess: [
+          vitePreprocess(),
+          optimizeImports(),
+          // button-native and icon-button-native build these classes from
+          // their props at runtime, where prop-aware pruning cannot read them.
+          optimizeCss({ safelist: [/^\.bx--btn--/] })
+        ],
+        // SvelteKit 3 no longer generates $lib. The rewrite to the #lib subpath
+        // import touches every feature, so it waits for the open branches.
+        alias: { $lib: 'src/lib' },
+        adapter: adapter({
+          pages: 'build',
+          assets: 'build',
+          fallback: 'index.html',
+          // CI only checks that the build succeeds; a deployed build keeps the
+          // Brotli and gzip sidecars, which deploy-local.mjs requires.
+          precompress: process.env.KHARTIS_SKIP_PRECOMPRESS !== 'true',
+          strict: true
+        }),
+        paths: {
+          // SvelteKit rejects a base path that does not start with "/".
+          base: basePath as '' | `/${string}`,
+          relative: false
+        },
+        version: {
+          ...(env.VITE_APP_VERSION ? { name: env.VITE_APP_VERSION } : {}),
+          pollInterval: 5 * 60 * 1000
+        }
+      }),
       paraglideVitePlugin({
         project: './project.inlang',
         outdir: './src/lib/paraglide',
+        // `pnpm check` compiles the same outdir through the CLI, whose
+        // default layout is message-modules: the plugin writes the same files.
+        outputStructure: 'message-modules',
         emitTsDeclarations: true
       }),
       crossOriginIsolationAssets(),
@@ -302,6 +333,10 @@ export default defineConfig(({ mode }) => {
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.ts',
+        // SvelteKit 3 builds the client as a Vite environment, so the default
+        // outDir is the top-level dist/. The client output is what the adapter
+        // copies into build/, and what the precache manifest must list.
+        outDir: '.svelte-kit/output/client',
         includeAssets: [
           'favicon.ico',
           'apple-touch-icon-180x180.png',

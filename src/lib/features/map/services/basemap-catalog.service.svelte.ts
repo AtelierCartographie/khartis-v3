@@ -371,6 +371,129 @@ export function rankBasemapsByJoinSynthesis(
     }));
 }
 
+export interface RankedBasemapSuggestion {
+  basemap: BasemapMetadata;
+  score: number;
+  matchesData: boolean;
+}
+
+export interface BasemapVintage {
+  basemap: BasemapMetadata;
+  score: number;
+}
+
+export interface RelevantBasemapSuggestion extends RankedBasemapSuggestion {
+  /**
+   * The relevant vintages of the basemap, best score first and latest first
+   * on an exact tie. `basemap` and `score` are those of the first one.
+   */
+  vintages: BasemapVintage[];
+}
+
+// An alternative is offered only when it stands close to the top suggestion:
+// a basemap that finds 10 % of the values next to one that finds 95 % is noise.
+const ALTERNATIVE_MIN_SCORE = 50;
+const ALTERNATIVE_MIN_SHARE_OF_TOP = 0.75;
+// On extent, every bbox that encloses the data scores 100 %, from the region
+// up to the world, and a neighbouring region's bbox can enclose it too
+// (Centre-Val de Loire around Île-de-France, 3.4 times its area). Past this
+// ratio of the top suggestion's area, the data fills a small part of the map.
+const EXTENT_ALTERNATIVE_MAX_AREA_RATIO = 3;
+const VINTAGE_YEAR_SUFFIX_REGEX = /-\d{4}$/;
+
+/** The basemap with its simplification level and its vintage left out. */
+export function getBasemapVintageFamily(file: string): string {
+  return getBasemapVariantFamily(file).replace(VINTAGE_YEAR_SUFFIX_REGEX, '');
+}
+
+function isRelevantAlternative(
+  top: RankedBasemapSuggestion,
+  candidate: RankedBasemapSuggestion,
+  rankedBy: 'values' | 'extent'
+): boolean {
+  if (candidate.matchesData !== top.matchesData) return false;
+  if (candidate.score < ALTERNATIVE_MIN_SCORE) return false;
+  if (candidate.score < top.score * ALTERNATIVE_MIN_SHARE_OF_TOP) return false;
+  if (rankedBy === 'values') return true;
+
+  const topArea = getBBoxArea(top.basemap.bbox);
+  return (
+    topArea <= 0 ||
+    getBBoxArea(candidate.basemap.bbox) <=
+      topArea * EXTENT_ALTERNATIVE_MAX_AREA_RATIO
+  );
+}
+
+function compareVintages(left: BasemapVintage, right: BasemapVintage): number {
+  const scoreDelta = right.score - left.score;
+  if (Math.abs(scoreDelta) > GPS_SCORE_EPSILON) return scoreDelta;
+  return getBasemapYearValue(right.basemap) - getBasemapYearValue(left.basemap);
+}
+
+/**
+ * Keeps, from suggestions ranked best first, the ones worth offering: the top
+ * one, then the alternatives close to it, up to `limit` cards. The relevant
+ * vintages of one basemap share a card, so they do not crowd out another
+ * basemap, and the card leads with the vintage that matches best: the data
+ * often tells vintages apart by a few values only (OFS 2022 communes: 100 %
+ * on 2022, 99.77 % on 2021), while GPS points or an extent never do.
+ */
+export function selectRelevantBasemapSuggestions(
+  ranked: readonly RankedBasemapSuggestion[],
+  options: { limit: number; rankedBy: 'values' | 'extent' }
+): RelevantBasemapSuggestion[] {
+  const top = ranked[0];
+  if (!top) return [];
+
+  const stacks: Array<{
+    family: string;
+    suggestion: RankedBasemapSuggestion;
+    vintages: BasemapVintage[];
+  }> = [];
+  for (const candidate of ranked) {
+    if (
+      candidate !== top &&
+      !isRelevantAlternative(top, candidate, options.rankedBy)
+    ) {
+      continue;
+    }
+
+    const family = candidate.basemap.isCustom
+      ? `custom:${candidate.basemap.file}`
+      : getBasemapVintageFamily(candidate.basemap.file);
+    const vintage = { basemap: candidate.basemap, score: candidate.score };
+    const stack = stacks.find((existing) => existing.family === family);
+    if (stack) {
+      stack.vintages.push(vintage);
+    } else if (stacks.length < options.limit) {
+      stacks.push({ family, suggestion: candidate, vintages: [vintage] });
+    }
+  }
+
+  return stacks.map(({ suggestion, vintages }) => {
+    const ordered = [...vintages].sort(compareVintages);
+    const best = ordered[0] ?? vintages[0];
+    return {
+      ...suggestion,
+      basemap: best.basemap,
+      score: best.score,
+      vintages: ordered
+    };
+  });
+}
+
+/**
+ * The share shown on a suggestion card, truncated so that it never claims more
+ * than the data holds: rounding would show 100 % for a basemap that misses a
+ * few values, the one thing that tells two vintages apart. Above 99 it keeps a
+ * decimal.
+ */
+export function getDisplayedMatchScore(score: number): number {
+  if (score >= 100) return 100;
+  if (score >= 99) return Math.floor(score * 10) / 10;
+  return Math.floor(score);
+}
+
 function getSearchableText(basemap: BasemapMetadata): string {
   return [
     basemap.title_fr,

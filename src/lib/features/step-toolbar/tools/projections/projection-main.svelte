@@ -447,8 +447,10 @@
             type="button"
             class="projection-tag"
             class:projection-tag--selected={activeFilter === opt.id}
-            onclick={() => setFilter(opt.id)}>{opt.label}</button
+            onclick={() => setFilter(opt.id)}
           >
+            {opt.label}
+          </button>
         {/each}
       </div>
 
@@ -483,8 +485,10 @@
           icon={MagicWandFilled}
           class="show-more-btn"
           disabled={!suggestionCardsEnabled}
-          on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+          on:click={showMoreSuggestions}
         >
+          {m.show_other_suggestions()}
+        </Button>
       {/if}
     {:else if hasSuggestionItems}
       {#if unclassifiedGridSuggestions.length > 0}

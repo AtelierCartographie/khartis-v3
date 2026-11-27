@@ -144,7 +144,7 @@
     margin: 0;
     min-width: 0;
     color: var(--cds-text-secondary);
-    font-size: var(--cds-body-short-02-font-size, 1rem);
+    font-size: var(--cds-body-compact-02-font-size, 1rem);
     font-weight: 600;
     line-height: 1.375rem;
     text-align: left;

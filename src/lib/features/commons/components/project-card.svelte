@@ -89,7 +89,7 @@
     blue: 'var(--cds-blue)',
     textGray: 'var(--cds-text-gray)',
     darkBlue: 'var(--cds-dark-blue)',
-    text01: 'var(--cds-text-01)',
+    text01: 'var(--cds-text-primary)',
     white: 'white'
   } as const;
 
@@ -194,8 +194,8 @@
 
   .top-section.variant-gray:not(.has-thumbnail),
   .bottom-section.variant-gray {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    color: var(--cds-text-primary, var(--cds-text-01, #161616));
+    background-color: var(--khartis-control-surface-background, #f4f4f4);
+    color: var(--cds-text-primary, var(--cds-text-primary, #161616));
   }
 
   .bottom-section.variant-gray :global(.text-grey) {

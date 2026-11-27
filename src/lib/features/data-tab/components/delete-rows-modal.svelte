@@ -37,6 +37,7 @@
 </script>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   bind:open={open}
   modalHeading={m.delete_rows_modal_title()}
@@ -57,7 +58,7 @@
       kind="warning"
       lowContrast
       hideCloseButton
-      title={m.delete_rows_visualization_warning({
+      subtitle={m.delete_rows_visualization_warning({
         count: affectedVisualizationCount
       })}
     />

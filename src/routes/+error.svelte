@@ -10,7 +10,7 @@
   // leaving SvelteKit's raw 404 page where the map canvas should be.
   onMount(() => {
     if (page.status === 404) {
-      void goto(resolve('/'), { replaceState: true });
+      void goto(resolve('/'), { replace: true });
     }
   });
 </script>

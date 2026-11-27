@@ -456,6 +456,7 @@
     {/if}
 
     <Modal
+      preventCloseOnClickOutside={false}
       iconDescription={m.a11y_close_dialog()}
       open={pendingKhImport !== null}
       modalHeading={m.project_import_url_confirm_title()}
@@ -525,7 +526,7 @@
     /* The side panel slides in from past the right edge: clipped there, it
        gives the body nothing to scroll to when its content takes focus. */
     overflow-x: clip;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
   }
 
   /* The side panel floats over the right edge and slides; the workspace
@@ -569,11 +570,6 @@
     right: calc(var(--cds-spacing-05) + var(--safe-area-right));
     z-index: var(--z-content);
     max-width: 320px;
-  }
-
-  .colorblind-notification :global(.bx--inline-notification) {
-    margin: 0;
-    max-width: 100%;
   }
 
   @media (max-width: 672px) {

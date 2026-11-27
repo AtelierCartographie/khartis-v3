@@ -49,6 +49,18 @@ jobs:
       - name: Fetch semantic-release notes
         run: git fetch origin 'refs/notes/semantic-release:refs/notes/semantic-release' || true
 
+      # The stable tag sits on main's promotion merge commit. Until the return
+      # pull request brings that commit into staging, semantic-release would
+      # number staging prereleases from an older stable tag.
+      - name: Require the latest stable tag to be reachable
+        if: github.ref_name == 'staging'
+        run: |
+          latest=$(git tag --list 'v[0-9]*' --sort=-v:refname | awk '!/-/ { print; exit }')
+          if [ -n "$latest" ] && ! git merge-base --is-ancestor "$latest" HEAD; then
+            echo "::error::$latest is not reachable from staging. Merge the return pull request from main first (docs/CONTRIBUER_ET_TESTER.md, « Numéros de version »)."
+            exit 1
+          fi
+
       - uses: ./.github/actions/setup
 
       - name: Run semantic-release

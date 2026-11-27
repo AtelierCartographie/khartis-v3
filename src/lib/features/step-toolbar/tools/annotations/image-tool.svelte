@@ -132,10 +132,22 @@
       max={1000}
       step={1}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(size) => {
         if ((effectiveStyle.size || 200) === size) return;
         annotationsActions.applyStyle({ size });
+      }}
+    />
+
+    <SliderWithInput
+      label={m.annotations_rotation()}
+      value={effectiveStyle.rotation ?? 0}
+      min={0}
+      max={359}
+      step={1}
+      inputWidth="72px"
+      onchange={(rotation) => {
+        if ((effectiveStyle.rotation ?? 0) === rotation) return;
+        annotationsActions.applyStyle({ rotation });
       }}
     />
 
@@ -146,7 +158,6 @@
       max={100}
       step={5}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(opacity) => {
         if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
         annotationsActions.applyStyle({ opacity });

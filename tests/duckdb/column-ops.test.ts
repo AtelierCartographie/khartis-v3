@@ -3,9 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  addCalculatedColumn,
   changeColumnType,
   type DuckDBClient
 } from '$lib/features/duckdb/orchestrator/column-ops';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { DUCK_CONST } from '$lib/features/duckdb/constants';
 import {
   createTestInstance,
@@ -229,5 +231,77 @@ describe('DUCK_CONST.DEFAULT.NULL_VALUES', () => {
     );
 
     expect(rows).toEqual([{ null_count: 1, numeric_count: 1 }]);
+  });
+});
+
+describe('addCalculatedColumn', () => {
+  async function createSourceTable(table: string): Promise<void> {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE "${table}" AS FROM (VALUES (1), (3)) v(a)`
+    );
+  }
+
+  async function columnNames(table: string): Promise<string[]> {
+    const rows = await query(
+      db,
+      `SELECT column_name FROM duckdb_columns()
+       WHERE table_name = '${table}'
+       ORDER BY column_index`
+    );
+    return rows.map((row) => String(row.column_name));
+  }
+
+  it('should add the column when the expression ends with a comment or uses a window function', async () => {
+    await createSourceTable('calc_valid');
+    const Duck = duckClient();
+
+    await addCalculatedColumn('calc_valid', 'twice', '"a" * 2 -- double', Duck);
+    await addCalculatedColumn(
+      'calc_valid',
+      'share',
+      '"a" / sum("a") OVER () * 100',
+      Duck
+    );
+
+    const rows = await query(
+      db,
+      'SELECT a, twice, share FROM "calc_valid" ORDER BY a'
+    );
+    expect(rows).toEqual([
+      { a: 1, twice: 2, share: 25 },
+      { a: 3, twice: 6, share: 75 }
+    ]);
+  });
+
+  it('should leave the table untouched when a comment would swallow the closing parenthesis', async () => {
+    await createSourceTable('calc_comment');
+
+    await expect(
+      addCalculatedColumn(
+        'calc_comment',
+        'x\nAS y FROM calc_comment --',
+        '1) --',
+        duckClient()
+      )
+    ).rejects.toThrow(DuckDBError);
+
+    expect(await columnNames('calc_comment')).toEqual(['a']);
+  });
+
+  it('should reject a subquery when a dollar-quoted string hides it from the keyword check', async () => {
+    await createSourceTable('calc_dollar');
+    await run(db, 'CREATE OR REPLACE TABLE "calc_other" AS SELECT 42 AS s');
+
+    await expect(
+      addCalculatedColumn(
+        'calc_dollar',
+        'x',
+        "$q$'$q$ || (SELECT max(s) FROM calc_other) || $r$'$r$",
+        duckClient()
+      )
+    ).rejects.toThrow(DuckDBError);
+
+    expect(await columnNames('calc_dollar')).toEqual(['a']);
   });
 });

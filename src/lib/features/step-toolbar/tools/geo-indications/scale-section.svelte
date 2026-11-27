@@ -183,9 +183,9 @@
               role="group"
               aria-labelledby="scale-form-label"
             >
-              <span id="scale-form-label" class="bx--label"
-                >{m.geo_style()}</span
-              >
+              <span id="scale-form-label" class="bx--label">
+                {m.geo_style()}
+              </span>
               <ToggleTabs
                 size="sm"
                 items={formOptions.map((option) => ({ label: option.text }))}
@@ -318,7 +318,6 @@
               max={100}
               step={1}
               inputWidth="72px"
-              showSteppers={false}
               onchange={store.setScaleOpacity}
             />
           </Column>
@@ -329,12 +328,12 @@
 </ExpandableSection>
 
 <style>
-  .section-content :global(.bx--inline-notification) {
-    max-width: none;
-  }
-
-  .section-content :global(.bx--row + .bx--row) {
-    margin-top: var(--cds-spacing-05);
+  /* A gap rather than sibling margins: the line thickness row sits in a
+     display: contents wrapper, which breaks .bx--row + .bx--row. */
+  .section-content :global(.bx--grid) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
   }
 
   .scale-center-note {

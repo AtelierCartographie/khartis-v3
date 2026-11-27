@@ -407,5 +407,89 @@
         "layout": { "x": 0, "y": 0.753, "width": 0.2889, "height": 0.247 }
       }
     ]
+  },
+  "ROYAUME_UNI_BNG": {
+    "description_fr": "Royaume-Uni en British National Grid (Mercator transverse de l'Ordnance Survey, EPSG:27700), cadre RECTANGULAIRE qui sert de masque, centré sur le territoire, marge de 10 % ; Shetland en place, sans encart",
+    "description_en": "United Kingdom in the British National Grid (Ordnance Survey transverse Mercator, EPSG:27700), RECTANGULAR frame used as a mask, centred on the territory, 10% margin; Shetland in place, no inset",
+    "name_fr": "OSGB36 / British National Grid",
+    "name_en": "OSGB36 / British National Grid",
+    "epsg": "27700",
+    "layoutAspect": 0.6167,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=tmerc +lat_0=0 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +units=m +no_defs",
+        "bounds": [
+          [-9.0977, 48.7436],
+          [3.1282, 61.7676]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=tmerc +lat_0=0 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +units=m +no_defs",
+        "bounds": [
+          [1.2162, 58.72],
+          [1.2838, 58.78]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
+  },
+  "ITALIE_FUSO": {
+    "description_fr": "Italie dans le Fuso Italia de l'IGM (RDN2008 / Italy zone, EPSG:7794 : transverse de Mercator, méridien 12° E, facteur d'échelle 0,9985), cadre RECTANGULAIRE qui sert de masque, centré sur le territoire, marge de 10 %",
+    "description_en": "Italy in the IGM Fuso Italia (RDN2008 / Italy zone, EPSG:7794: transverse Mercator, 12° E meridian, scale factor 0.9985), RECTANGULAR frame used as a mask, centred on the territory, 10% margin",
+    "name_fr": "RDN2008 / Italy zone (Fuso Italia)",
+    "name_en": "RDN2008 / Italy zone (Fuso Italia)",
+    "epsg": "7794",
+    "layoutAspect": 0.8001,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=tmerc +lat_0=0 +lon_0=12 +k=0.9985 +x_0=7000000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [6.0191, 34.1874],
+          [19.4226, 48.01]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=tmerc +lat_0=0 +lon_0=12 +k=0.9985 +x_0=7000000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [10.2196, 38.72],
+          [10.2804, 38.78]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
+  },
+  "SUISSE_LV95": {
+    "description_fr": "Suisse en CH1903+ / LV95 (EPSG:2056), cadre RECTANGULAIRE qui sert de masque, centré sur le territoire, marge de 10 % ; entrée « cadre » hors du cadre, en mer Ligure (pays sans littoral)",
+    "description_en": "Switzerland in CH1903+ / LV95 (EPSG:2056), RECTANGULAR frame used as a mask, centred on the territory, 10% margin; \"cadre\" entry outside the frame, in the Ligurian Sea (landlocked country)",
+    "name_fr": "CH1903+ / LV95",
+    "name_en": "CH1903+ / LV95",
+    "epsg": "2056",
+    "layoutAspect": 1.4399,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=somerc +lat_0=46.9524055555556 +lon_0=7.43958333333333 +k_0=1 +x_0=2600000 +y_0=1200000 +ellps=bessel +towgs84=674.374,15.056,405.346,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [5.5275, 45.4995],
+          [10.8755, 48.0768]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=somerc +lat_0=46.9524055555556 +lon_0=7.43958333333333 +k_0=1 +x_0=2600000 +y_0=1200000 +ellps=bessel +towgs84=674.374,15.056,405.346,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [7.6907, 43.22],
+          [7.8093, 43.28]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
   }
 }

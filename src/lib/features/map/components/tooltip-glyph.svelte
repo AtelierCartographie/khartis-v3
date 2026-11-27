@@ -73,8 +73,10 @@
       text-anchor="middle"
       font-size="11"
       font-weight="700"
-      fill={color}>T</text
+      fill={color}
     >
+      T
+    </text>
   {:else if glyph.primitive === PrimitiveFilterType.LINE}
     <path
       d="M0.5 5h9"

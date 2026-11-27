@@ -24,7 +24,7 @@ Chemins relatifs à `src/lib/features/`.
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Métadonnées, chargement et cache des fonds  | `map/services/basemap.service.svelte.ts`                                                                                           |
 | Lecture GeoParquet et métadonnées GeoArrow  | `map/services/read-geoparquet-arrow.service.ts`                                                                                    |
-| Recherche dans le catalogue                 | `map/services/basemap-catalog.service.svelte.ts`                                                                                   |
+| Recherche et suggestions du catalogue       | `map/services/basemap-catalog.service.svelte.ts`                                                                                   |
 | Import d'un fond                            | `map/services/basemap-import.service.ts`                                                                                           |
 | Chargement et cadrage du fond de référence  | `map/hooks/use-map-reference-basemap.svelte.ts`                                                                                    |
 | Styles MapLibre et OSM                      | `map/hooks/use-map-basemap.svelte.ts`                                                                                              |
@@ -177,6 +177,73 @@ Les types se limitent à `identifier`, `latitude` et `longitude`. Le niveau
 administratif ne se devine pas à partir du nom de la colonne : il se lit dans
 les fonds qui partagent les valeurs.
 
+## Suggestions de fonds
+
+L'étape Fond de carte et l'enrichissement proposent au plus trois fonds, et
+souvent moins : une suggestion n'est affichée que si elle vaut la peine d'être
+comparée à la première. Le calcul se fait en deux temps, dans
+`map/services/basemap-catalog.service.svelte.ts`.
+
+**1. Classement.** Chaque fonction de classement renvoie tous les candidats,
+sans limite, sur une échelle de 0 à 100 :
+
+| Données                                | Fonction                        | Score                                                                         |
+| -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| Colonne géographique (noms, codes)     | `rankBasemapsByJoinSynthesis`   | part des valeurs de la colonne trouvées dans le fond (synthèse de jointure)   |
+| Coordonnées GPS, fichier géographique  | `rankBasemapsByGPSBbox`         | part de l'emprise des données couverte par l'emprise du fond                  |
+| Aucune correspondance dans les valeurs | `rankBasemapsByGeoColumn`       | indices tirés du nom de la colonne et de l'année du fond (`matchesData` faux) |
+| Fichier géographique du projet         | `scoreProjectGeoBasemapOptions` | part des valeurs trouvées dans sa meilleure colonne, fusionnée au catalogue   |
+
+En mode GPS, une colonne texte reconnue peut remplacer le classement par emprise
+quand celui-ci ne trouve aucun fond qui contienne toutes les données
+(`shouldPreferTextBasemapRefinementForGPS`).
+
+**2. Sélection.** `selectRelevantBasemapSuggestions` parcourt ce classement :
+
+- la première suggestion est toujours gardée ;
+- une alternative n'est gardée que si elle repose sur le même type de score
+  (données ou métadonnées seules), atteint **au moins 50 %** et **au moins
+  75 % du score de la première** : 95 % puis 10 % ne donne qu'une carte ;
+  si la première n'atteint que 40 %, aucune alternative n'est proposée ;
+- sur une emprise (GPS ou fichier géographique), tout fond qui contient les
+  données obtient 100 %, de la région jusqu'au monde. Une alternative n'y est
+  gardée que si sa surface ne dépasse pas **3 fois** celle de la première ;
+- les **millésimes** d'un même fond (même fichier une fois retirés le niveau de
+  simplification et l'année finale, `getBasemapVintageFamily`) qui passent ces
+  critères partagent une seule carte, qui ne compte qu'une fois dans la limite
+  de trois. Ils y sont rangés **par score décroissant**, le plus récent ne
+  passant devant qu'en cas d'égalité exacte. La carte mène avec le millésime
+  qui correspond le mieux et indique le nombre de millésimes.
+
+Les données départagent souvent les millésimes de quelques valeurs seulement :
+sur les communes suisses de 2022 (OFS), le fond 2022 trouve 100 % des codes, le
+fond 2021 99,77 %, le fond 2020 99,49 %. Sur les codes ISTAT de 2024, les fonds
+2025 et 2026 trouvent tous deux 100 % et le fond 2024 99,96 %. Les points GPS
+ou une emprise, eux, ne départagent jamais deux millésimes : tous obtiennent le
+même score et le plus récent mène.
+
+Le score affiché est **tronqué**, jamais arrondi vers le haut
+(`getDisplayedMatchScore`) : à l'entier en dessous de 99 %, à une décimale
+au-dessus. 100 % signifie donc que toutes les valeurs ont été trouvées, et
+99,9 % qu'il en manque quelques-unes.
+
+Les seuils sont des constantes du service ; les cas limites sont fixés par
+`basemap-catalog.service.svelte.test.ts`.
+
+La première suggestion est présélectionnée si son score repose sur les données
+(`shouldAutoSelectSuggestedBasemap`). Quand la carte sélectionnée regroupe
+plusieurs millésimes, un bandeau sous les suggestions permet d'en choisir un,
+dans l'ordre de la carte ; chaque millésime y porte son score quand les scores
+diffèrent. La carte affiche alors le millésime retenu et son score.
+
+**Limite connue.** Le score GPS compare des rectangles, pas des points dans des
+polygones. Une région voisine dont le rectangle englobe celui des données
+obtient 100 % sans contenir un seul point : le Centre-Val de Loire autour des
+sites Seveso d'Île-de-France, écarté seulement par le ratio de surface. À
+l'inverse, un fond qui contient une partie des points (la Métropole du Grand
+Paris, 47 % des sites Seveso) n'est noté que sur la part d'emprise couverte
+(15 %).
+
 ## Jointures
 
 Lors d'une jointure, vérifier :
@@ -326,7 +393,7 @@ SCR de la carte, et un mémo de ce qui n'a pas pu être reproduit.
 - La page Khartis compte en points (A4 = 842 × 595) : tailles en millimètres
   = unités × 25,4/72, textes en points = unités.
 - Le projet contient une mise en page QGIS « Khartis » au format de la page.
-  `measureMapPage` (`map-export.utils.ts`) mesure la page telle qu'elle
+  `measureMapPage` (`map/export/measure-page.ts`) mesure la page telle qu'elle
   s'exporte : cadre de la carte, textes avec leur style calculé, cadres de
   légende (`data-legend-item-id`), échelle, nord, titres des cartes d'une
   collection. Le cadre de la carte prend l'emprise exacte de

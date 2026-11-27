@@ -117,7 +117,8 @@
       categoriesMode ? 'categorical' : 'sequential',
       config.contrast,
       inverted,
-      categoriesMode ? undefined : divergingSplit
+      categoriesMode ? undefined : divergingSplit,
+      categoriesMode ? colors : undefined
     );
     return sampleForPreview(
       patterns.map((pattern) => buildClassPatternSvgBackground(pattern))
@@ -134,6 +135,10 @@
       ? resolvePaletteForType(palette, paletteType).id
       : (normalizePaletteId(selectedPaletteId) ?? selectedPaletteId);
   });
+  // Patterns replace the palette: no palette of the list is applied.
+  const dropdownSelectedPaletteId = $derived(
+    classification?.pattern ? '__custom__' : normalizedSelectedPaletteId
+  );
   const resolvedClassCount = $derived(
     classification?.numClasses ??
       classification?.classes ??
@@ -215,7 +220,8 @@
       inverted,
       patternId: palette.patternId ?? undefined,
       patternParams: undefined,
-      pattern: undefined
+      pattern: undefined,
+      contrast: undefined
     });
     dropdownOpen = false;
   }
@@ -352,7 +358,8 @@
     palette: Palette | undefined,
     newColors: string[],
     nextInverted: boolean,
-    patternPaletteConfig?: PatternPaletteConfig
+    patternPaletteConfig?: PatternPaletteConfig,
+    contrast?: 'low' | 'high'
   ) {
     if (palette) {
       onselect?.(palette);
@@ -363,7 +370,8 @@
       paletteId: palette?.id ?? '__custom__',
       patternId: undefined,
       patternParams: undefined,
-      pattern: patternPaletteConfig
+      pattern: patternPaletteConfig,
+      contrast
     };
     onClassificationChange?.(changes);
     popoverOpen = false;
@@ -418,7 +426,7 @@
 <PaletteDropdown
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
-  selectedPaletteId={normalizedSelectedPaletteId}
+  selectedPaletteId={dropdownSelectedPaletteId}
   paletteType={paletteType}
   numClasses={resolvedClassCount}
   previewCount={dropdownPreviewCount}
@@ -441,6 +449,7 @@
   currentPatternId={classification?.patternId}
   currentPatternParams={classification?.patternParams}
   currentPatternPaletteConfig={classification?.pattern}
+  currentContrast={classification?.contrast}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />
@@ -477,13 +486,13 @@
     min-width: 0;
     height: var(--kh-size-sm);
     padding: 0 var(--kh-pad-panel);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
 
     &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
+      background: var(--cds-field-hover);
     }
   }
 

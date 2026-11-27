@@ -1,5 +1,5 @@
-import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
-import type { Matrix4 } from '@math.gl/core';
+import type { Layer } from '@deck.gl/core';
+import { Matrix4 } from '@math.gl/core';
 import {
   GeoJsonLayer,
   PathLayer,
@@ -108,17 +108,18 @@ import {
 
 const DASH_EXTENSION = new PathStyleExtension({
   dash: true,
-  highPrecisionDash: true
+  dashMode: 'path'
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
-const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
+// The land drop shadow: a copy of the land, offset down and to the right in
+// map pixels and drawn under it, with no blur, so the SVG export draws the
+// same shape through the same model matrix.
 const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [
   ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.shadow
 ];
-const BASEMAP_TERRE_SHADOW_OPACITY = 0.65;
-const BASEMAP_TERRE_SHADOW_WIDTH_PX = 5;
-const BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX = 3;
-const BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX = 8;
+const BASEMAP_TERRE_SHADOW_OPACITY = 0.35;
+const BASEMAP_TERRE_SHADOW_OFFSET_PX = 1.5;
+const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
 
 export const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
 
@@ -160,6 +161,15 @@ function getBaseLayerProps(ctx: BasemapLayerContext): BaseLayerProps {
     autoHighlight: false,
     modelMatrix: ctx.modelMatrix ?? undefined
   };
+}
+
+function offsetModelMatrix(
+  modelMatrix: Matrix4 | null | undefined,
+  offsetPx: number
+): Matrix4 {
+  // The orthographic view keeps y pointing up (flipY: false): down is -y.
+  const offset = new Matrix4().translate([offsetPx, -offsetPx, 0]);
+  return modelMatrix ? offset.multiplyRight(modelMatrix) : offset;
 }
 
 function buildLayerId(
@@ -281,30 +291,27 @@ export function createTerreLayers(
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
-    const outlineData =
-      config.fillShadow || shouldRenderStroke
-        ? ctx.projection
-          ? parsePathsWithProjection(worldBaseTable, ctx.projection)
-          : parsePaths(worldBaseTable)
-        : null;
+    const outlineData = shouldRenderStroke
+      ? ctx.projection
+        ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+        : parsePaths(worldBaseTable)
+      : null;
 
-    if (config.fillShadow && outlineData) {
+    // The offset needs map pixels: under MapLibre the land is in degrees.
+    if (config.fillShadow && ctx.projection) {
       layers.push(
-        new PathLayer({
+        new SolidPolygonLayer({
           id: `${layerId}-shadow`,
-          ...createPathLayerProps(outlineData),
-          getColor: withOpacity(
+          ...createCompatibleSolidPolygonLayerProps(polyData),
+          getFillColor: withOpacity(
             BASEMAP_TERRE_SHADOW_COLOR,
             BASEMAP_TERRE_SHADOW_OPACITY
           ),
-          widthUnits: 'pixels',
-          getWidth: BASEMAP_TERRE_SHADOW_WIDTH_PX,
-          widthMinPixels: BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX,
-          widthMaxPixels: BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX,
           ...baseProps,
-          updateTriggers: {
-            getWidth: [config.strokeThickness]
-          }
+          modelMatrix: offsetModelMatrix(
+            ctx.modelMatrix,
+            BASEMAP_TERRE_SHADOW_OFFSET_PX
+          )
         })
       );
     }
@@ -377,7 +384,7 @@ export function createMersLayer(
         return new SolidPolygonLayer({
           id: `${baseLayerId}-sphere`,
           ...polygonProps,
-          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          coordinateSystem: 'cartesian',
           getFillColor: withOpacity(fillColor, opacity),
           parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
           ...getBaseLayerProps(ctx),
@@ -405,7 +412,7 @@ export function createMersLayer(
         data: projectedCompositeOceanData,
         filled: true,
         stroked: false,
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        coordinateSystem: 'cartesian',
         getFillColor: withOpacity(fillColor, opacity),
         parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
         ...getBaseLayerProps(ctx),

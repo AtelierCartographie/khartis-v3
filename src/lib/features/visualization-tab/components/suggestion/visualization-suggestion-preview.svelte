@@ -59,8 +59,10 @@
         stroke-width="3"
         text-anchor="middle"
         paint-order="stroke"
-        stroke-linejoin="round">{shape.value}</text
+        stroke-linejoin="round"
       >
+        {shape.value}
+      </text>
     {/if}
   {/each}
 </svg>

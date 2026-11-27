@@ -161,9 +161,9 @@
   >
     <div class="trigger-value">
       {#if isCollectionEnabled && collectionCount > 1}
-        <span class="collection-count"
-          >{m.facets_variables_count({ count: collectionCount })}</span
-        >
+        <span class="collection-count">
+          {m.facets_variables_count({ count: collectionCount })}
+        </span>
       {:else if isCollectionEnabled && triggerLabel}
         <VariableBadge
           label={triggerLabel.text}
@@ -251,14 +251,14 @@
     width: 100%;
     height: 32px;
     padding: 7px var(--cds-spacing-05);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
     text-align: left;
 
     &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
+      background: var(--cds-field-hover);
     }
 
     &:focus-visible {
@@ -303,7 +303,7 @@
     left: 0;
     right: 0;
     z-index: var(--z-dropdown);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
@@ -367,7 +367,7 @@
   .dropdown-footer {
     border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
 
     &.disabled {
       opacity: 0.5;

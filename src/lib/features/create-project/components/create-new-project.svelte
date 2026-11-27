@@ -505,6 +505,7 @@
         closeButtonDescription={m.a11y_close_notification()}
         lowContrast
         kind="error"
+        role="alert"
         title={m.create_project_error_label()}
         subtitle={createProjectState.newProject.error}
         on:close={() => createProjectActions.setNewProjectError()}
@@ -534,6 +535,7 @@
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
+          role="alert"
           title={m.create_project_validation_errors()}
           subtitle={globalValidationErrors.join(m.separator_comma_space())}
           lowContrast
@@ -688,20 +690,20 @@
                       <Tag size="sm" type={fileTag.color}>
                         {fileTag.label}
                       </Tag>
-                      <span class="file-name" title={file.name}
-                        >{file.name}</span
-                      >
+                      <span class="file-name" title={file.name}>
+                        {file.name}
+                      </span>
                     </div>
                     {#if rowCount > 0}
                       <div class="file-metrics">
-                        <span data-testid="file-row-count"
-                          >{formatValue(rowCount)}</span
-                        >
+                        <span data-testid="file-row-count">
+                          {formatValue(rowCount)}
+                        </span>
                         {rowsLabel(rowCount)}
                         {m.separator_middle_dot_space()}
-                        <span data-testid="file-column-count"
-                          >{formatValue(columnCount)}</span
-                        >
+                        <span data-testid="file-column-count">
+                          {formatValue(columnCount)}
+                        </span>
                         {columnsLabel(columnCount)}
                       </div>
                     {/if}
@@ -732,6 +734,7 @@
                   <InlineNotification
                     lowContrast
                     kind="error"
+                    role="alert"
                     title={m.create_project_error_status()}
                     subtitle={file.validation.errors.join(
                       m.separator_comma_space()
@@ -806,7 +809,7 @@
   }
 
   #khartis-create-new-project :global(.bx--text-area) {
-    background-color: var(--cds-field-01);
+    background-color: var(--cds-field);
   }
 
   /* The feedback covers the field alone, not the actions under it. */
@@ -822,7 +825,7 @@
 
   .learn-more {
     align-self: end;
-    color: var(--cds-text-05);
+    color: var(--cds-text-helper);
   }
 
   .learn-more :global(.bx--link) {
@@ -840,7 +843,7 @@
     justify-content: center;
     gap: var(--kh-gap-label);
     padding: var(--cds-spacing-04);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
     border: 2px solid var(--cds-support-success);
     pointer-events: none;
     text-align: center;
@@ -936,13 +939,17 @@
   .file-complete-tile :global(.bx--tile) {
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-border-subtle);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
+  }
+
+  :global(.file-complete-tile > .bx--inline-notification) {
+    margin-top: var(--cds-spacing-03);
   }
 
   .file-incomplete-tile :global(.bx--tile) {
     padding: var(--cds-spacing-04);
     border: 1px solid var(--cds-support-warning);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
   }
 
   .file-header {
@@ -1054,7 +1061,7 @@
     align-items: flex-start;
     padding: 0.6875rem var(--cds-spacing-05);
     line-height: 1.25rem;
-    color: var(--cds-text-05);
+    color: var(--cds-text-helper);
   }
 
   @media (max-width: 672px) {
@@ -1080,7 +1087,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--cds-spacing-04);
-    background: var(--cds-layer-01);
+    background: var(--khartis-control-surface-background);
     border: 1px solid var(--cds-border-subtle);
     border-radius: var(--cds-spacing-02);
   }

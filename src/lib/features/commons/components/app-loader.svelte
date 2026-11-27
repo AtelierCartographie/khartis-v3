@@ -84,7 +84,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--cds-ui-background);
+    background-color: var(--cds-background);
     z-index: var(--z-overlay);
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
@@ -109,7 +109,7 @@
     width: 40px;
     height: 40px;
     border: 3px solid var(--cds-border-subtle);
-    border-top-color: var(--cds-interactive-01);
+    border-top-color: var(--cds-background-brand);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
@@ -137,7 +137,7 @@
     min-height: var(--kh-size-md);
     padding: 0 var(--cds-spacing-05);
     border: 1px solid var(--cds-border-strong-01, #8d8d8d);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     color: var(--cds-text-primary, #161616);
     cursor: pointer;
     font: inherit;

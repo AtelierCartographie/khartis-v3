@@ -167,10 +167,6 @@
     padding: var(--kh-gap-inline) var(--kh-pad-panel);
   }
 
-  .projection-tiled-notice :global(.bx--inline-notification) {
-    max-width: none;
-  }
-
   #khartis-projection-tool .expandable-stack :global(.section-container) {
     margin-bottom: 0;
   }

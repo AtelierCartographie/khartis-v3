@@ -63,13 +63,13 @@
 
   /* Same help text as the Importer tab. */
   .kh-help {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.8125rem;
     line-height: 1.25rem;
   }
 
   .osm-note {
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     font-size: 0.875rem;
     line-height: 1.375rem;
     margin: 0;

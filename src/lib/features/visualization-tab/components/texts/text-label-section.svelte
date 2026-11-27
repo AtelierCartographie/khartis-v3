@@ -131,7 +131,7 @@
     min-height: var(--kh-size-sm) !important;
     padding: 0 !important;
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
-    background: var(--cds-layer-01, #ffffff) !important;
+    background: var(--khartis-control-surface-background, #ffffff) !important;
     color: var(--cds-text-secondary, #6f6f6f) !important;
     font-size: var(--kh-font-body) !important;
     font-weight: 600 !important;

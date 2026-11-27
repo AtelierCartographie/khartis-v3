@@ -143,11 +143,9 @@
     <div class="imported-file">
       <span class="file-label">{m.basemap_import_file_imported()}</span>
       <div class="file-row">
-        <span class="file-name"
-          >{lang === 'fr'
-            ? importedBasemap.title_fr
-            : importedBasemap.title_en}</span
-        >
+        <span class="file-name">
+          {lang === 'fr' ? importedBasemap.title_fr : importedBasemap.title_en}
+        </span>
         <CheckmarkFilled size={20} class="icon-success" />
       </div>
     </div>
@@ -157,6 +155,7 @@
     <InlineNotification
       closeButtonDescription={m.a11y_close_notification()}
       kind="error"
+      role="alert"
       title={m.basemap_custom_error()}
       subtitle={error}
       hideCloseButton={false}
@@ -184,16 +183,20 @@
     padding-top: var(--cds-spacing-04);
   }
 
+  .basemap-import > :global(.bx--inline-notification) {
+    margin-top: var(--cds-spacing-04);
+  }
+
   .import-title {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .section-description {
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     margin-bottom: var(--cds-spacing-04);
   }
 
@@ -214,18 +217,18 @@
 
   .dropzone:hover,
   .dropzone:focus {
-    border-color: var(--cds-interactive-01);
+    border-color: var(--cds-background-brand);
     background-color: var(--cds-layer-hover-02);
   }
 
   .dropzone.dropzone-active {
-    border-color: var(--cds-interactive-01);
+    border-color: var(--cds-background-brand);
     background-color: var(--cds-layer-selected-02);
   }
 
   .dropzone-text {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     text-align: center;
   }
 
@@ -238,7 +241,7 @@
 
   .url-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .url-import-row {
@@ -260,7 +263,7 @@
 
   .file-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .file-row {
@@ -275,7 +278,7 @@
 
   .file-name {
     font-size: 0.875rem;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .file-row :global(.icon-success) {

@@ -136,7 +136,6 @@
       <div class="name-input-section">
         <TextInput
           size="sm"
-          light
           labelText={m.duplicate_project_modal_new_name()}
           placeholder={m.duplicate_project_modal_name_placeholder()}
           value={newProjectName}
@@ -162,7 +161,7 @@
   }
 
   .no-projects-message {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     text-align: center;
     padding: var(--cds-spacing-05) 0;
   }
@@ -176,7 +175,7 @@
   .project-selection h5 {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .name-input-section {

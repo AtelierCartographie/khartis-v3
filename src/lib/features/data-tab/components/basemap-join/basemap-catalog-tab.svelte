@@ -13,7 +13,12 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import {
+    getDisplayedMatchScore,
+    type RelevantBasemapSuggestion,
+    sortCatalogBasemapsForDisplay
+  } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import type {
     BasemapExtent,
     BasemapMetadata,
@@ -36,12 +41,6 @@
     readCarbonStringValue
   } from '$lib/features/commons/utils/carbon-events.utils';
 
-  interface SuggestedBasemap {
-    basemap: BasemapMetadata;
-    score: number;
-    matchesData: boolean;
-  }
-
   interface SearchComboBoxItem {
     id: string;
     text: string;
@@ -49,7 +48,7 @@
   }
 
   interface Props {
-    suggestedBasemaps: SuggestedBasemap[];
+    suggestedBasemaps: RelevantBasemapSuggestion[];
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
@@ -306,6 +305,41 @@
     return () => observer.disconnect();
   });
 
+  // The vintages of a basemap share a card, best match first; once the card
+  // is selected, the user can pick another vintage under the suggestions.
+  const selectedVintageStack = $derived(
+    suggestedBasemaps.find(
+      ({ vintages }) =>
+        vintages.length > 1 &&
+        vintages.some((vintage) => vintage.basemap.file === basemapSelected)
+    )
+  );
+  const vintageItems = $derived.by(() => {
+    if (!selectedVintageStack) return [];
+    const { vintages, matchesData } = selectedVintageStack;
+    // GPS points or an extent score every vintage alike: the score would
+    // only repeat itself next to each year.
+    const showScore =
+      matchesData && vintages.some(({ score }) => score !== vintages[0].score);
+    return vintages.map(({ basemap, score }) => ({
+      id: basemap.file,
+      text: showScore
+        ? `${formatBasemapValidity(basemap)} · ${formatValue(
+            getDisplayedMatchScore(score),
+            { maxFractionDigits: 1 }
+          )} %`
+        : formatBasemapValidity(basemap)
+    }));
+  });
+
+  function handleVintageSelect(file: string): void {
+    if (file === basemapSelected) return;
+    const vintage = selectedVintageStack?.vintages.find(
+      (candidate) => candidate.basemap.file === file
+    );
+    if (vintage) onSelectBasemap(vintage.basemap);
+  }
+
   const suggestionsPanelOpen = $derived(
     suggestionsOpen ?? suggestedBasemaps.length > 0
   );
@@ -412,17 +446,37 @@
         </p>
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
-            {#each suggestedBasemaps as { basemap, score, matchesData } (basemap.file)}
+            {#each suggestedBasemaps as { basemap, vintages, score, matchesData } (basemap.file)}
+              {@const shown = vintages.find(
+                (vintage) => vintage.basemap.file === basemapSelected
+              ) ?? { basemap, score }}
               <BasemapCardVertical
-                basemap={basemap}
-                matchScore={score}
+                basemap={shown.basemap}
+                vintageCount={vintages.length}
+                matchScore={shown.score}
                 showMatchScore={matchesData}
-                selected={basemap.file === basemapSelected}
-                onclick={() => onSelectBasemap(basemap)}
+                selected={shown.basemap.file === basemapSelected}
+                onclick={() => onSelectBasemap(shown.basemap)}
               />
             {/each}
           </div>
         </div>
+        {#if selectedVintageStack}
+          <div class="vintage-band">
+            <p class="vintage-band-text">{m.basemap_vintage_picker_desc()}</p>
+            <div class="vintage-band-picker">
+              <Dropdown
+                translateWithId={translateCarbonId}
+                translateWithIdSelection={translateCarbonId}
+                size="sm"
+                labelText={m.basemap_vintage_picker_label()}
+                items={vintageItems}
+                selectedId={basemapSelected}
+                on:select={(e) => handleVintageSelect(e.detail.selectedId)}
+              />
+            </div>
+          </div>
+        {/if}
       {:else}
         <div class="suggestions-notification">
           <InlineNotification
@@ -645,6 +699,32 @@
     gap: var(--cds-spacing-03);
     width: max-content;
     padding-bottom: var(--cds-spacing-03);
+    /* Room for the layers drawn behind the last card of a vintage stack. */
+    padding-inline-end: var(--cds-spacing-02);
+  }
+
+  .vintage-band {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--cds-spacing-03) var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+    border-left: 3px solid
+      var(--khartis-additions-border-strong-01-suggestions, #1192e8);
+  }
+
+  .vintage-band-text {
+    flex: 1 1 14rem;
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  .vintage-band-picker {
+    flex: 0 0 11rem;
   }
 
   .basemap-slider-track :global(.basemap-card) {
@@ -684,14 +764,14 @@
   }
 
   .funnel-facet.active :global(.bx--list-box__label) {
-    color: var(--cds-link-01);
+    color: var(--cds-link-primary);
     font-weight: 600;
   }
 
   .no-results {
     margin: 2rem 0;
     text-align: center;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.875rem;
   }
 

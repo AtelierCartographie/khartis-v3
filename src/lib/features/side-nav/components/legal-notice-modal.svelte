@@ -35,7 +35,12 @@
   {m.sidenav_data_privacy()}
 </Button>
 
-<ComposedModal bind:open={isOpen} size="sm" on:close={closeModal}>
+<ComposedModal
+  preventCloseOnClickOutside={false}
+  bind:open={isOpen}
+  size="sm"
+  on:close={closeModal}
+>
   <ModalHeader
     iconDescription={m.a11y_close_dialog()}
     title={m.sidenav_data_privacy()}
@@ -124,9 +129,9 @@
         <li>
           <strong>{m.data_privacy_modal_license_software_label()} :</strong>
           {m.data_privacy_modal_license_software_text()}
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
-            >{m.data_privacy_modal_license_software_link()}</a
-          >.
+          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
+            {m.data_privacy_modal_license_software_link()}
+          </a>.
         </li>
         <li>
           <strong>{m.data_privacy_modal_license_data_label()} :</strong>
@@ -157,12 +162,12 @@
   :global(.data-privacy-body h3) {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .data-privacy-intro {
     margin: 0;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     line-height: 1.5;
   }
 
@@ -172,11 +177,11 @@
     gap: var(--cds-spacing-02);
     margin: 0;
     padding-left: 1.25rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     line-height: 1.5;
   }
 
   .data-privacy-list strong {
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 </style>

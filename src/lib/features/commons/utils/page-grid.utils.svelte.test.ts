@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getAreaGridOrigin,
   getDragBounds,
+  getPageGridOrigin,
   getGridAlignedRange,
   LAYOUT_UNIT_PX,
   PAGE_GRID_SIZE_PX,
@@ -106,5 +108,40 @@ describe('page-grid utils', () => {
       minY: 0,
       maxY: 0
     });
+  });
+
+  it('centres the grid so the gaps to opposite page edges differ by at most a pixel', () => {
+    for (const extent of [595, 640, 842, 1000, 1191, 600]) {
+      const { x } = getPageGridOrigin({ width: extent, height: extent });
+      const lastPoint =
+        x + Math.floor((extent - x) / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
+      const startGap = x;
+      const endGap = extent - lastPoint;
+      expect(Number.isInteger(x)).toBe(true);
+      expect(endGap - startGap).toBeGreaterThanOrEqual(0);
+      expect(endGap - startGap).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('snaps page positions onto the centred grid points', () => {
+    const page = { width: 595, height: 640 };
+    const origin = getPageGridOrigin(page);
+    expect(origin).toEqual({ x: 3, y: 2 });
+    expect(snapToPageGrid(13, true, origin.x)).toBe(15);
+    expect(snapPointToPageGrid({ x: 13, y: 13 }, true, origin)).toEqual({
+      x: 15,
+      y: 14
+    });
+    expect(getGridAlignedRange(0, 20, origin.x)).toEqual({ min: 3, max: 19 });
+  });
+
+  it('expresses the page grid origin in the coordinates of an area', () => {
+    const page = { width: 595, height: 640 };
+    const areaOrigin = getAreaGridOrigin(page, { x: 32, y: 69 });
+    const snapped = snapPointToPageGrid({ x: 10, y: 10 }, true, areaOrigin);
+    const onPage = { x: snapped.x + 32, y: snapped.y + 69 };
+    const pageOrigin = getPageGridOrigin(page);
+    expect((onPage.x - pageOrigin.x) % PAGE_SNAP_STEP_PX).toBe(0);
+    expect((onPage.y - pageOrigin.y) % PAGE_SNAP_STEP_PX).toBe(0);
   });
 });

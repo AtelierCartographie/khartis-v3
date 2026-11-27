@@ -22,6 +22,27 @@ Carbon (`carbon-components-svelte`) ships as Svelte 4 source, so some events and
 - Button colors come from the Carbon tokens overridden in `commons/assets/styles/global.css`, including the modal cancel button. A dialog does not restyle its own buttons.
 - `patches/carbon-components-svelte.patch` is applied. Understand why before bumping Carbon, and re-check these traps after an upgrade.
 
+## Carbon v11 tokens and surfaces
+
+- Carbon 0.114 follows Carbon v11. Read v11 token names (`--cds-text-primary`, `--cds-layer-01`, `--cds-border-subtle-00`…). The v10 names (`--cds-ui-01`, `--cds-text-02`, `--cds-interactive-01`…) are no longer declared and resolve to nothing, without an error.
+- `global.css` overrides the brand tokens in both themes (`--cds-button-*`, `--cds-background-brand`, `--cds-interactive`, `--cds-link-*`, `--cds-focus*`). Carbon components read `--cds-layer-01` themselves: Khartis's white control surface is `--khartis-control-surface-background`, not an override of `--cds-layer-01`.
+- `light` no longer exists: a field that sits on another surface goes in a `<Layer>`. Fields in a modal already sit on a layer.
+- A field always stands out from the surface that carries it: grey on a white surface, white on a grey one. Carbon fields read the contextual `--cds-field` (and `--cds-field-hover`), which is `field-01` (grey) by default. A hand-built field reads the same tokens, never `--cds-field-01`, `--cds-field-02` or `--khartis-control-surface-background`, and is never transparent. A grey surface that carries fields declares `--cds-field: var(--cds-field-02)` and `--cds-field-hover: var(--cds-field-hover-02)` once (the colour menu of `color-picker.svelte`, the join table); its fields then follow without an override of their own.
+- A transactional modal stays open on an outside click unless it sets `preventCloseOnClickOutside={false}`, as Khartis's modals do. Notifications default to `role="status"`; errors pass `role="alert"`.
+
+## Inline notifications
+
+Every `InlineNotification` is `lowContrast`. `global.css` takes away Carbon's width limits and margins: a notification spans its container, and the container spaces it (a flex `gap`, `.kh-notification-stack` for several in a row). A modal body keeps a margin around it. The usage sets the rest:
+
+| Usage                                           | `kind`                  | Close button                         | Text                                                            |
+| ----------------------------------------------- | ----------------------- | ------------------------------------ | --------------------------------------------------------------- |
+| State of a panel, shown while a condition holds | `info`, `warning`       | none: it leaves with its condition   | `subtitle`, plus a `title` when there is a heading and a detail |
+| Error after a user action                       | `error`, `role="alert"` | yes, and closing clears the error    | `title` names the failure, `subtitle` says why or what to do    |
+| Confirmation of an action                       | `success`               | yes                                  | `subtitle`                                                      |
+| Suggestion the user may set aside               | `info`                  | yes, and the dismissal is remembered | `title` and `subtitle`                                          |
+
+A one-sentence message goes in `subtitle`: a `title` alone sets a whole sentence in bold.
+
 ## Snippets, portals, click-outside
 
 - Use `Snippet` with `{@render}` instead of `<slot>`. Overlays and portals render at the component root, never inside a snippet.

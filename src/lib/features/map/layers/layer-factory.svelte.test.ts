@@ -1157,6 +1157,73 @@ describe('createPolygonLayers', () => {
     );
   });
 
+  it('should hide the whole representative symbol when its fill category is disabled', () => {
+    const pointData = {
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    };
+    parsePointDataMock.mockReturnValue(pointData);
+    parsePointDataWithProjectionMock.mockReturnValue(pointData);
+    createScatterplotLayerPropsMock.mockImplementation((data) => ({
+      data: {
+        length: data.length,
+        featureIds: data.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      fillMode: FillMode.CATEGORIES,
+      fillCategoryColumn: 'kind',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['urban', 'rural'],
+        categoryValues: ['urban', 'rural'],
+        colors: ['#3366cc', '#dc3912'],
+        disabledLabels: ['rural']
+      },
+      strokeMode: StrokeMode.UNIQUE,
+      strokeWidth: 3
+    };
+    const table = createTableWithRows(
+      [
+        { kind: 'urban', geometry: null },
+        { kind: 'rural', geometry: null }
+      ],
+      ['kind', 'geometry']
+    );
+
+    const layers = createPolygonLayers(table, createGeometryInfo(), {
+      ...createContext(visualization),
+      representativePointTable: table,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      }
+    });
+    const { attributes } = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    )?.props.data as {
+      attributes: Record<
+        'getFillColor' | 'getLineColor' | 'getRadius',
+        { value: ArrayLike<number> }
+      >;
+    };
+
+    // The rural symbol keeps neither its fill, nor its ring, nor its size.
+    expect(Array.from(attributes.getFillColor.value).slice(4)).toEqual([
+      0, 0, 0, 0
+    ]);
+    expect(Array.from(attributes.getLineColor.value).slice(4)).toEqual([
+      0, 0, 0, 0
+    ]);
+    expect(attributes.getRadius.value[1]).toBe(0);
+  });
+
   it('omits the binary polygon stroke layer when contour mode is none', () => {
     const visualization = createVisualization(FillMode.UNIQUE);
     visualization.polygon = {
@@ -2120,6 +2187,74 @@ describe('createPointLayers', () => {
     ]);
   });
 
+  it('should hide a double proportional stroke when its value is missing and missing data is hidden', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: { value: new Float32Array([0, 0, 10, 10]), size: 2 }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.DOUBLE,
+      sizeColumn: 'population',
+      valueColumn: 'income',
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'density',
+      strokeClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        breaks: [0, 5, 10],
+        colors: ['#101010', '#202020']
+      },
+      missingData: {
+        show: false,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#123456',
+        label: 'N/A'
+      }
+    };
+
+    const [overlayLayer] = createPointLayers(
+      createTableWithRows(
+        [
+          { population: 25, income: 100, density: 3 },
+          { population: 100, income: 25, density: null }
+        ],
+        ['population', 'income', 'density']
+      ),
+      createPointGeometryInfo(),
+      {
+        ...createContext(visualization),
+        statistics: { min: 25, max: 100 },
+        secondaryStatistics: { min: 25, max: 100 }
+      }
+    );
+    const data = overlayLayer.props.data as {
+      featureIds: Uint32Array;
+      attributes: { getLineColor: { value: Uint8Array } };
+    };
+    const strokeAlphas = Array.from(data.featureIds).flatMap(
+      (featureId, index) =>
+        featureId === 1
+          ? [data.attributes.getLineColor.value[index * 4 + 3]]
+          : []
+    );
+
+    expect(strokeAlphas).toEqual([0, 0]);
+  });
+
   it('separates double proportional symbols in juxtaposition without overlap', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
@@ -2359,6 +2494,121 @@ describe('createPointLayers', () => {
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
     expect(pointLayer.props.dashed).toBe(true);
     expect(pointLayer.props.dotLength).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['a unique colour', { fillMode: FillMode.UNIQUE }],
+    [
+      'categories',
+      {
+        fillMode: FillMode.CATEGORIES,
+        fillCategoryColumn: 'category',
+        fillClassification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 1,
+          labels: ['public'],
+          categoryValues: ['public'],
+          colors: ['#00ad92']
+        }
+      }
+    ]
+  ])(
+    'should apply the symbol opacity once on native points when the fill uses %s',
+    (_, fillConfig) => {
+      parsePointDataWithProjectionMock.mockReturnValue({
+        length: 1,
+        featureIds: new Uint32Array([0])
+      });
+      createScatterplotLayerPropsMock.mockReturnValue({
+        data: { attributes: {}, featureIds: new Uint32Array([0]) }
+      });
+
+      const visualization = createSymbolVisualization();
+      visualization.symbol = {
+        ...visualization.symbol!,
+        opacity: 0.5,
+        ...fillConfig
+      };
+
+      const [pointLayer] = createPointLayers(
+        createTableWithRows([{ category: 'public' }], ['category']),
+        createPointGeometryInfo(),
+        createContext(visualization)
+      );
+      const fillAttribute = (
+        pointLayer.props.data as {
+          attributes: { getFillColor?: { value: Uint8Array } };
+        }
+      ).attributes.getFillColor;
+      const fill = fillAttribute
+        ? Array.from(fillAttribute.value)
+        : (pointLayer.props.getFillColor as number[]);
+
+      // deck.gl gamma-corrects the layer opacity: it would apply the opacity a
+      // second time, and to the stroke as well.
+      expect(pointLayer.props.opacity).toBe(1);
+      expect(fill[3]).toBe(128);
+    }
+  );
+
+  it('should give a native point the missing-data colour when its fill category is missing', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: { value: new Float32Array([0, 0, 10, 10]), size: 2 }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population',
+      fillMode: FillMode.CATEGORIES,
+      fillCategoryColumn: 'category',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['public'],
+        categoryValues: ['public'],
+        colors: ['#00ad92']
+      },
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#123456',
+        label: 'N/A'
+      }
+    };
+
+    const [pointLayer] = createPointLayers(
+      createTableWithRows(
+        [
+          { population: 10, category: 'public' },
+          { population: 20, category: null }
+        ],
+        ['population', 'category']
+      ),
+      createPointGeometryInfo(),
+      { ...createContext(visualization), statistics: { min: 10, max: 20 } }
+    );
+    const data = pointLayer.props.data as {
+      featureIds: Uint32Array;
+      attributes: { getFillColor: { value: Uint8Array } };
+    };
+    const offset = Array.from(data.featureIds).indexOf(1) * 4;
+
+    expect(
+      Array.from(data.attributes.getFillColor.value.slice(offset, offset + 3))
+    ).toEqual([18, 52, 86]);
   });
 });
 

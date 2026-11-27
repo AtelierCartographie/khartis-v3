@@ -142,6 +142,7 @@
       closeButtonDescription={m.a11y_close_notification()}
       lowContrast
       kind="error"
+      role="alert"
       title={m.create_project_error_label()}
       subtitle={m.add_data_modal_import_error()}
       on:close={() => (importError = false)}

@@ -100,6 +100,10 @@ Test projects, fixtures and browser checks are detailed in
 - Write [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`,
   `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `build:`, `ci:`, `chore:`).
   Husky checks the message and formats staged files.
+- Name the branch `<type>/<scope>-<subject>` in kebab-case, with the same
+  types (`feat/legend-date-classes`, `fix/join-fuzzy-cap`). Rename a local
+  work branch before its first push: renaming the head branch of an open pull
+  request closes it.
 - Never commit environment files, credentials, private keys, data exports or
   source datasets.
 - In the description, state the observable behavior, the checks you ran and

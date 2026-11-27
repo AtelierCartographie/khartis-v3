@@ -2040,7 +2040,7 @@
     width: 8px;
     height: 8px;
     background: white;
-    border: 2px solid var(--cds-interactive-01, #0072c3);
+    border: 2px solid var(--cds-background-brand, #0072c3);
     border-radius: 2px;
     transform: translate(-50%, -50%) scale(var(--_handle-scale, 1));
     opacity: 0;

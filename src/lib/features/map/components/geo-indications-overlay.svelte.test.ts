@@ -453,9 +453,8 @@ describe('geo indications overlay dragging', () => {
     // …and the rendered offset multiplies it back, so on screen the figure
     // follows the cursor 1:1 (240/60, not 120/30).
     await waitFor(() => {
-      const style = orientation.getAttribute('style') ?? '';
-      expect(style).toContain('left: 240px');
-      expect(style).toContain('top: 60px');
+      expect(orientation.style.left).toBe('240px');
+      expect(orientation.style.top).toBe('60px');
     });
   });
 

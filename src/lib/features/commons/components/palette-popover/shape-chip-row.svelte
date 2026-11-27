@@ -58,12 +58,12 @@
     width: 32px;
     height: 32px;
     padding: 0;
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     cursor: pointer;
 
     &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
+      background: var(--cds-field-hover);
     }
 
     &.active {

@@ -875,14 +875,14 @@
                     </div>
                     {#if effectiveShowSummaryPlots}
                       <div class="row-index-stats">
-                        <span class="row-index-count"
-                          >{formatValue(filters.filterStats.total)}</span
-                        >
-                        <span class="row-index-label"
-                          >{isSingularCount(filters.filterStats.total)
+                        <span class="row-index-count">
+                          {formatValue(filters.filterStats.total)}
+                        </span>
+                        <span class="row-index-label">
+                          {isSingularCount(filters.filterStats.total)
                             ? m.rows_one()
-                            : m.rows()}</span
-                        >
+                            : m.rows()}
+                        </span>
                       </div>
                     {/if}
                   </div>
@@ -955,14 +955,16 @@
     <InlineNotification
       closeButtonDescription={m.a11y_close_notification()}
       kind="error"
+      role="alert"
       lowContrast
-      title={typeChangeError}
+      subtitle={typeChangeError}
       on:close={() => (typeChangeError = null)}
     />
   {/if}
 </div>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   bind:open={renameModalOpen}
   modalHeading={m.column_rename_title()}
@@ -996,6 +998,7 @@
 </Modal>
 
 <Modal
+  preventCloseOnClickOutside={false}
   iconDescription={m.a11y_close_dialog()}
   bind:open={deleteConfirmOpen}
   modalHeading={m.delete_column_title()}
@@ -1032,12 +1035,16 @@
 
 <style>
   .advanced-data-table {
-    background-color: var(--cds-ui-background);
+    background-color: var(--cds-background);
     padding: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--cds-border-subtle-00, #e0e0e0);
+  }
+
+  .advanced-data-table > :global(.bx--inline-notification) {
+    margin: var(--cds-spacing-03);
   }
 
   .table-wrapper {
@@ -1048,7 +1055,7 @@
   .table-container {
     overflow-y: auto;
     overflow-x: auto;
-    background-color: var(--cds-ui-01, #ffffff);
+    background-color: var(--cds-layer-01, #ffffff);
   }
 
   .table-container::-webkit-scrollbar {
@@ -1153,7 +1160,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     font-weight: 600;
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
     line-height: 1;
   }
 
@@ -1161,7 +1168,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 10px;
     font-weight: 400;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     line-height: 1;
   }
 
@@ -1174,19 +1181,19 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     cursor: pointer;
     transition: color 0.15s;
   }
 
   .histogram-toggle:hover {
-    color: var(--cds-text-01, #161616);
+    color: var(--cds-text-primary, #161616);
   }
 
   .skeleton-overlay {
     position: absolute;
     inset: 0;
-    background-color: var(--cds-ui-background);
+    background-color: var(--cds-background);
     z-index: var(--z-content-header);
     overflow: hidden;
   }
@@ -1195,14 +1202,14 @@
   .error-message {
     padding: var(--cds-spacing-07);
     text-align: center;
-    color: var(--cds-text-02, #525252);
-    background-color: var(--cds-layer-01, #f4f4f4);
+    color: var(--cds-text-secondary, #525252);
+    background-color: var(--khartis-control-surface-background, #f4f4f4);
     border-radius: 4px;
   }
 
   .error-message {
     color: var(--cds-text-error);
-    border: 1px solid var(--cds-support-01);
+    border: 1px solid var(--cds-support-error);
   }
 
   :global(.rename-modal-content) {
@@ -1212,7 +1219,7 @@
   }
 
   :global(.rename-modal-description) {
-    color: var(--cds-text-02, #525252);
+    color: var(--cds-text-secondary, #525252);
     margin-bottom: var(--cds-spacing-03);
   }
 </style>

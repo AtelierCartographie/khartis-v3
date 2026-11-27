@@ -2585,7 +2585,7 @@
 {:else}
   <div class="page-container" style="{pageStyle}{colorBlindnessFilterStyle}">
     {#if showPageGrid}
-      <PageGridOverlay displayScale={pageDisplayScale} />
+      <PageGridOverlay page={pageSize} displayScale={pageDisplayScale} />
     {/if}
     {#if !isFacetCell}
       <PageGuidesOverlay displayScale={pageDisplayScale} />
@@ -2714,17 +2714,23 @@
     line-height: 1rem;
   }
 
-  /* The credit stays readable on demand but recedes: it is not exported. */
+  /* The credit stays readable on demand but recedes. */
   :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
     background: color-mix(
       in srgb,
-      var(--cds-layer-01, #ffffff) 70%,
+      var(--khartis-control-surface-background, #ffffff) 70%,
       transparent
     );
     color: var(--cds-text-secondary);
     opacity: 0.6;
     filter: grayscale(1);
     transition: opacity 150ms ease;
+  }
+
+  /* Hidden from the exports but kept in the layout: the scale stacked with
+     it in the same corner stays where the map shows it. */
+  :global(.is-exporting-map .maplibregl-ctrl-attrib) {
+    visibility: hidden;
   }
 
   :global(.maplibregl-ctrl-attrib.maplibregl-compact:hover),

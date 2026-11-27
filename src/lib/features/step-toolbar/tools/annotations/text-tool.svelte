@@ -334,7 +334,6 @@
       max={359}
       step={1}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(rotation) => {
         if ((effectiveStyle.rotation ?? 0) === rotation) return;
         annotationsActions.applyStyle({ rotation });
@@ -348,7 +347,6 @@
       max={100}
       step={5}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(opacity) => {
         if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
         annotationsActions.applyStyle({ opacity });

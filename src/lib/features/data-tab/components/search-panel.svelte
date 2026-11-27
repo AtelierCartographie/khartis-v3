@@ -477,7 +477,7 @@
 
   .result-count {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .results-navigation {
@@ -489,7 +489,7 @@
 
   .result-text {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .nav-buttons {
@@ -507,12 +507,6 @@
     font-size: 0.75rem;
     color: var(--cds-text-helper);
     font-style: italic;
-  }
-
-  :global(.search-panel .bx--inline-notification) {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: unset !important;
   }
 
   :global(.search-panel .bx--inline-notification__text-wrapper) {

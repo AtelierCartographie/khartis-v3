@@ -2,14 +2,13 @@
   import SwitchedContent from '$lib/features/commons/components/switched-content.svelte';
   import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import SteppedSlider from '$lib/features/commons/components/stepped-slider.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPalettePicker from './pattern-palette-picker.svelte';
-  import {
-    ColorSelector,
-    ToggleWithLabel
-  } from '$lib/features/commons/components/viz-controls';
+  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
+  import ColorHslFields from '$lib/features/commons/components/color-hsl-fields.svelte';
+  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
   import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
@@ -29,7 +28,10 @@
     inverted?: boolean;
     allowPattern?: boolean;
     patternPaletteConfig?: PatternPaletteConfig;
+    /** Contrast stored with the colours; absent means normal. */
+    contrast?: 'low' | 'high';
     onColorsChange?: (colors: string[]) => void;
+    onContrastChange?: (contrast: 'low' | 'high' | undefined) => void;
     onPatternPaletteChange?: (config: PatternPaletteConfig) => void;
     onInvertToggle?: (value: boolean) => void;
   }
@@ -42,7 +44,9 @@
     inverted = false,
     allowPattern = true,
     patternPaletteConfig,
+    contrast,
     onColorsChange,
+    onContrastChange,
     onPatternPaletteChange,
     onInvertToggle
   }: Props = $props();
@@ -63,7 +67,9 @@
   let singleColor = $state(FALLBACK_END_COLOR);
   let startColor = $state(FALLBACK_START_COLOR);
   let endColor = $state(FALLBACK_END_COLOR);
-  let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
+  let contrastMode = $state<'low' | 'normal' | 'high'>(
+    untrack(() => contrast) ?? 'normal'
+  );
   let motifEnabled = $state(false);
   let emittedColors: string[] = [];
 
@@ -72,6 +78,21 @@
   );
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
+
+  // The single colour is set straight from its sliders. They follow the
+  // colour from outside (a suggestion), except the one they just sent.
+  let singleColorFields = $state({
+    hex: FALLBACK_END_COLOR,
+    ...hexToHsl(FALLBACK_END_COLOR)
+  });
+  $effect(() => {
+    const color = singleColor;
+    untrack(() => {
+      if (color.toLowerCase() !== singleColorFields.hex.toLowerCase()) {
+        singleColorFields = { hex: color, ...hexToHsl(color) };
+      }
+    });
+  });
 
   const tabLabels = $derived(
     allowPattern
@@ -117,6 +138,16 @@
       if (!activeTabInitialized && activeTab !== 2) {
         activeTab = isDiverging ? 1 : 0;
       }
+    });
+  });
+
+  // The popover seeds its draft contrast after this panel has mounted, so the
+  // colour contrast follows the prop; a motif carries its own contrast.
+  $effect(() => {
+    const next = contrast;
+    untrack(() => {
+      if (patternPaletteConfig) return;
+      contrastMode = next ?? 'normal';
     });
   });
 
@@ -206,6 +237,7 @@
     const next = value as 'low' | 'normal' | 'high';
     if (next === contrastMode) return;
     contrastMode = next;
+    onContrastChange?.(next === 'normal' ? undefined : next);
 
     if (activeTab === 0) {
       emitColors(buildColors([singleColor]));
@@ -273,9 +305,9 @@
 
 <div class="palette-custom">
   <div class="section-heading">
-    <span class="section-heading-text"
-      >{isQualitative ? m.palette_custom_color() : m.palette_custom()}</span
-    >
+    <span class="section-heading-text">
+      {isQualitative ? m.palette_custom_color() : m.palette_custom()}
+    </span>
     <div class="section-heading-line"></div>
   </div>
 
@@ -283,10 +315,13 @@
     <!-- Under a motif the flat color is not drawn: the motif has its own
          color and background. -->
     {#if !(allowPattern && motifEnabled)}
-      <ColorSelector
-        label={m.color()}
-        value={singleColor}
-        onchange={handleSingleColorChange}
+      <ColorHslFields
+        variant="inline"
+        bind:hex={singleColorFields.hex}
+        bind:hue={singleColorFields.hue}
+        bind:saturation={singleColorFields.saturation}
+        bind:lightness={singleColorFields.lightness}
+        onchange={(color) => handleSingleColorChange(color.hex)}
       />
     {/if}
 
@@ -347,15 +382,14 @@
     </div>
 
     <div class="contrast-section">
-      <span class="field-label">{m.contrast_label()}</span>
-      <SimpleRadioGroup
-        name="palette-contrast"
-        items={[
-          { value: 'low', labelText: m.contrast_low() },
-          { value: 'normal', labelText: m.contrast_normal() },
-          { value: 'high', labelText: m.contrast_high() }
+      <SteppedSlider
+        label={m.contrast_label()}
+        steps={[
+          { value: 'low', label: m.contrast_low() },
+          { value: 'normal', label: m.contrast_normal() },
+          { value: 'high', label: m.contrast_high() }
         ]}
-        selected={contrastMode}
+        value={contrastMode}
         onchange={(value) => handleContrastChange(value)}
       />
     </div>

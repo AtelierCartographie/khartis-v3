@@ -7,9 +7,12 @@ import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import {
   clampToRange,
+  getAreaGridOrigin,
+  getPageGridOrigin,
   PAGE_GRID_SIZE_PX,
   remapPointToResizedArea,
-  snapPointWithinBounds
+  snapPointWithinBounds,
+  type PageGridPoint
 } from '$lib/features/commons/utils/page-grid.utils';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
@@ -108,6 +111,22 @@ export function isGridEnabled(): boolean {
   return getFormatState().gridEnabled;
 }
 
+/**
+ * Where the page grid starts in an annotation's coordinates: the page, or the
+ * map frame for an annotation placed on the map, so both snap on the visible
+ * grid points.
+ */
+export function getAnnotationGridOrigin(
+  coordinateSpace: AnnotationCoordinateSpace,
+  page: Pick<PageLayout, 'width' | 'height'> = getFormatState()
+): PageGridPoint {
+  if (coordinateSpace === 'page') {
+    return getPageGridOrigin(page);
+  }
+  const { mapFrame } = getFormatState();
+  return getAreaGridOrigin(page, { x: mapFrame.left, y: mapFrame.top });
+}
+
 function resolveMapFrame(layout: PageLayout): PageFrame {
   const left = layout.margins.left;
   const top = layout.margins.top;
@@ -182,7 +201,8 @@ export function clampPageElementPosition(
       minY: 0,
       maxY: Math.max(0, layout.height - PAGE_ELEMENT_HEIGHTS[role])
     },
-    isGridEnabled() && snapToGridEnabled
+    isGridEnabled() && snapToGridEnabled,
+    getPageGridOrigin(layout)
   );
 }
 
@@ -223,6 +243,45 @@ export function remapPageElementPosition(
     to
   );
   return { x: textEdge.x - alignFactor * toBox, y: textEdge.y };
+}
+
+// Projects saved before the half-page caption box kept the left edge of a
+// fixed 216 px box.
+const LEGACY_CAPTION_BOX_WIDTH = 216;
+
+/**
+ * Puts a restored page element back on the page. A caption box that crosses
+ * the page edge can only come from an older project: the text keeps the edge
+ * its alignment anchored in the narrower box, then the box is clamped.
+ */
+export function fitRestoredPageElementPosition(
+  position: { x: number; y: number },
+  role: PageElementRole,
+  layout: PageLayout,
+  style?: AnnotationStyle
+): { x: number; y: number } {
+  const boxWidth = getPageElementBoxWidth(role, layout, style);
+  if (
+    style?.rotation ||
+    boxWidth === undefined ||
+    position.x + boxWidth <= layout.width + 1
+  ) {
+    return position;
+  }
+
+  const alignFactor = style?.shapeWidth
+    ? 0
+    : TEXT_ALIGN_FACTOR[style?.textAlign ?? TextAlign.Left];
+  return clampPageElementPosition(
+    {
+      x: position.x + alignFactor * (LEGACY_CAPTION_BOX_WIDTH - boxWidth),
+      y: position.y
+    },
+    role,
+    layout,
+    false,
+    style
+  );
 }
 
 export function resolvePageLayout(overrides?: {
@@ -319,7 +378,8 @@ export function clampAnnotationPosition(
       minY,
       maxY
     },
-    isGridEnabled()
+    isGridEnabled(),
+    getAnnotationGridOrigin(coordinateSpace, layout)
   );
 }
 

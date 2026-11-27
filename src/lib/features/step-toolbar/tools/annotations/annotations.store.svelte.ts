@@ -39,6 +39,8 @@ import { resolveAnnotationCoordinateSpace } from '../../types/annotations.types'
 import {
   clampAnnotationPosition,
   clampPageElementPosition,
+  fitRestoredPageElementPosition,
+  getAnnotationGridOrigin,
   getNonPageAnnotationSpawnPosition,
   getPageElementPosition,
   getPageNoteSpawnPosition,
@@ -96,6 +98,7 @@ const DEFAULT_STATE: AnnotationsState = {
 
 type AnnotationsActions = {
   setVisibility: (visible: boolean) => void;
+  setState: (newState: Partial<AnnotationsState>) => void;
   addAnnotation: (type: AnnotationKind, content: string) => void;
   beginPlacement: (type: AnnotationKind, content: unknown) => void;
   updatePlacement: (previewGeometry: AnnotationPlacementPreview | null) => void;
@@ -509,6 +512,33 @@ const { actions, getState } = createToolStore<
 >(
   DEFAULT_STATE,
   (s) => ({
+    // The project restore goes through here, after the format store: page
+    // texts saved in an older layout come back on the page whatever step
+    // opens first.
+    setState: (newState: Partial<AnnotationsState>) => {
+      const layout = resolvePageLayout();
+      Object.assign(
+        s,
+        newState.items
+          ? {
+              ...newState,
+              items: newState.items.map((item) =>
+                isPageElementRole(item.role)
+                  ? {
+                      ...item,
+                      position: fitRestoredPageElementPosition(
+                        item.position,
+                        item.role,
+                        layout,
+                        item.style
+                      )
+                    }
+                  : item
+              )
+            }
+          : newState
+      );
+    },
     setVisibility: (visible: boolean) => {
       s.visible = visible;
       if (!visible) {
@@ -829,7 +859,8 @@ const { actions, getState } = createToolStore<
               x: original.position.x + 20,
               y: original.position.y + 20
             },
-            isGridEnabled()
+            isGridEnabled(),
+            getAnnotationGridOrigin(resolveAnnotationCoordinateSpace(original))
           )
         };
         s.items = [...s.items, duplicate];
@@ -850,7 +881,13 @@ const { actions, getState } = createToolStore<
                     true,
                     item.style
                   )
-                : snapPointToPageGrid(newPosition, isGridEnabled()),
+                : snapPointToPageGrid(
+                    newPosition,
+                    isGridEnabled(),
+                    getAnnotationGridOrigin(
+                      resolveAnnotationCoordinateSpace(item)
+                    )
+                  ),
               positionMode: 'manual'
             }
           : item

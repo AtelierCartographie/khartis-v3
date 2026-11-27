@@ -46,10 +46,8 @@
     shouldIncludePersistedSuggestion
   } from '../utils/suggestion-selection.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
-  import {
-    computeVisualizationSuggestions,
-    resolveColumnBadgeType
-  } from '../utils/compute-suggestions.utils';
+  import { computeVisualizationSuggestions } from '../utils/compute-suggestions.utils';
+  import { resolveColumnBadgeType } from '$lib/features/commons/utils/variable-badge.utils';
 
   interface Props {
     onCreateVisualization?: () => void;

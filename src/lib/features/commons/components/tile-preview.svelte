@@ -58,7 +58,7 @@
     );
     color: var(
       --tile-preview-color,
-      var(--tile-preview-default-color, var(--cds-interactive-03, #726e6e))
+      var(--tile-preview-default-color, var(--cds-button-tertiary, #726e6e))
     );
     text-align: center;
     box-sizing: border-box;

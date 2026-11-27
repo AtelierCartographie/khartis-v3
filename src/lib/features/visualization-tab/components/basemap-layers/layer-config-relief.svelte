@@ -94,7 +94,6 @@
     step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     inputWidth="64px"
-    showSteppers={false}
     onchange={handleOpacityChange}
   />
 </div>

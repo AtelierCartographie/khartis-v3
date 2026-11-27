@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { InlineNotification } from 'carbon-components-svelte';
   import { rowScopeStore } from '$lib/features/map';
   import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -59,6 +60,7 @@
   import type { LabelFieldItem } from '../../hooks/use-dataset-analysis.svelte';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import { facetsStore } from '../../adapters/facets-adapter';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
@@ -150,6 +152,10 @@
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
   });
+  // Label placement is not computed per map of a collection yet.
+  const isPositionLocked = $derived(
+    facetsStore.enabled && facetsStore.facetVisualizations.length > 0
+  );
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -675,17 +681,29 @@
         />
 
         <SectionHeading title={m.text_position_title()} />
-        <p class="texts-config__helper">{m.text_position_helper()}</p>
+        {#if isPositionLocked}
+          <div class="kh-notification-stack texts-config__notice">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              subtitle={m.text_position_facets_unavailable()}
+            />
+          </div>
+        {:else}
+          <p class="texts-config__helper">{m.text_position_helper()}</p>
+        {/if}
         <ToggleWithLabel
           label={m.text_automatic_placement()}
           toggled={automaticPlacement}
+          disabled={isPositionLocked}
           infoText={m.text_automatic_placement_info()}
           ontoggle={handleAutomaticPlacementToggle}
         />
         <ToggleWithLabel
           label={m.text_label_columns()}
           toggled={automaticPlacement && labelColumns}
-          disabled={!automaticPlacement}
+          disabled={isPositionLocked || !automaticPlacement}
           infoText={m.text_label_columns_info()}
           ontoggle={handleLabelColumnsToggle}
         />
@@ -693,11 +711,12 @@
           <ToggleWithLabel
             label={m.text_filtered_labels_optional()}
             toggled={filteredLabelsOptional}
+            disabled={isPositionLocked}
             infoText={m.text_filtered_labels_optional_info()}
             ontoggle={handleFilteredLabelsOptionalToggle}
           />
         {/if}
-        {#if automaticPlacement && visualization}
+        {#if automaticPlacement && visualization && !isPositionLocked}
           <HiddenLabelsSummary vizId={visualization.id} />
         {/if}
 
@@ -839,7 +858,7 @@
   }
 
   :global(.text-input-field .bx--text-input__field-wrapper) {
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
   }
 
   :global(.texts-panel-shell .field-picker .bx--label) {
@@ -848,6 +867,6 @@
 
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
     min-height: var(--kh-size-sm);
-    background: var(--cds-field-01, #f4f4f4);
+    background: var(--cds-field);
   }
 </style>

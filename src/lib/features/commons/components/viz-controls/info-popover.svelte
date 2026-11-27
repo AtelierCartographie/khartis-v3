@@ -212,11 +212,11 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--cds-icon-secondary, var(--cds-text-02));
+    color: var(--cds-icon-secondary, var(--cds-text-secondary));
     flex-shrink: 0;
 
     &:hover {
-      color: var(--cds-icon-primary, var(--cds-text-01));
+      color: var(--cds-icon-primary, var(--cds-text-primary));
     }
 
     &:focus {
@@ -246,8 +246,8 @@
   :global(.info-tooltip) {
     position: fixed;
     transform: translateX(-50%);
-    background-color: var(--cds-inverse-01, #393939);
-    color: var(--cds-inverse-02, #fff);
+    background-color: var(--cds-background, #393939);
+    color: var(--cds-background-inverse, #fff);
     padding: var(--cds-spacing-03) var(--cds-spacing-04);
     border-radius: 4px;
     max-width: 240px;
@@ -271,7 +271,7 @@
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-bottom: 6px solid var(--cds-inverse-01, #393939);
+    border-bottom: 6px solid var(--cds-background, #393939);
   }
 
   :global(.info-tooltip--top .info-tooltip-arrow) {
@@ -283,7 +283,7 @@
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-top: 6px solid var(--cds-inverse-01, #393939);
+    border-top: 6px solid var(--cds-background, #393939);
   }
 
   :global(.info-tooltip-title) {
@@ -319,7 +319,7 @@
     padding: 2px 8px;
     border-radius: 12px;
     background-color: rgba(255, 255, 255, 0.16);
-    color: var(--cds-inverse-02, #fff);
+    color: var(--cds-background-inverse, #fff);
     font-size: 0.6875rem;
     line-height: 1rem;
     font-weight: 500;
