@@ -169,3 +169,6 @@ CLAUDE.local.md
 .ragmir/
 .claude/skills/ragmir
 .agents/skills/ragmir
+.kimi/skills/ragmir
+.opencode/skills/ragmir
+.cline/skills/ragmir
