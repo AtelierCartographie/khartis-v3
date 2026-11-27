@@ -316,7 +316,6 @@
     </nav>
 
     <ToolPopover
-      light
       open={!!globalState.selectedTool}
       align="top"
       viewMode={globalState.projectionViewMode ?? 'list'}
@@ -395,10 +394,9 @@
         <Icon size={20} />
       </button>
       {#if showLegendBadge}
-        <span id="mobile-legend-tool-badge" class="notification-badge"
-          ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-          ></span
-        >
+        <span id="mobile-legend-tool-badge" class="notification-badge">
+          <span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span>
+        </span>
       {/if}
     </div>
   {:else}
@@ -425,7 +423,7 @@
     left: 0;
     right: 0;
     bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-    background: var(--cds-ui-01);
+    background: var(--cds-layer-01);
     z-index: var(--z-mobile-toolbar);
     transform: translateY(calc(100% + 80px));
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -450,8 +448,8 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
-    border-bottom: 1px solid var(--cds-ui-03);
-    background: var(--cds-ui-01);
+    border-bottom: 1px solid var(--cds-border-subtle-00);
+    background: var(--cds-layer-01);
     flex-shrink: 0;
   }
 
@@ -462,7 +460,7 @@
   }
 
   .header-left :global(svg) {
-    fill: var(--cds-text-01);
+    fill: var(--cds-text-primary);
   }
 
   .header-actions {
@@ -495,8 +493,8 @@
     display: flex;
     position: sticky;
     bottom: 0;
-    background: var(--cds-ui-01);
-    border-top: 1px solid var(--cds-ui-03);
+    background: var(--cds-layer-01);
+    border-top: 1px solid var(--cds-border-subtle-00);
     flex-shrink: 0;
   }
 
@@ -506,7 +504,7 @@
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
@@ -514,12 +512,12 @@
   }
 
   .sub-tab:active {
-    background: var(--cds-hover-ui);
+    background: var(--cds-layer-hover-01);
   }
 
   .sub-tab.selected {
-    color: var(--cds-text-01);
-    border-bottom-color: var(--cds-interactive-01);
+    color: var(--cds-text-primary);
+    border-bottom-color: var(--cds-background-brand);
   }
 
   .styling-empty-state {
@@ -531,7 +529,7 @@
   }
 
   .styling-hint {
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-size: 0.875rem;
     text-align: center;
   }
@@ -551,17 +549,17 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     cursor: pointer;
     transition: background-color 0.15s ease;
   }
 
   .mobile-tool-btn:hover {
-    background: var(--cds-hover-ui);
+    background: var(--cds-layer-hover-01);
   }
 
   .mobile-tool-btn:active {
-    background: var(--cds-active-ui);
+    background: var(--cds-layer-active-01);
   }
 
   .mobile-tool-btn.active {
@@ -569,7 +567,7 @@
   }
 
   .mobile-tool-btn :global(svg) {
-    fill: var(--cds-text-01);
+    fill: var(--cds-text-primary);
   }
 
   .tool-active-indicator {
@@ -620,7 +618,7 @@
     align-items: stretch;
     justify-content: space-around;
     background: var(--cds-background);
-    border-top: 1px solid var(--cds-ui-03);
+    border-top: 1px solid var(--cds-border-subtle-00);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: var(--z-toolbar);
     height: calc(60px + env(safe-area-inset-bottom, 0px));
@@ -636,13 +634,13 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-02);
     background: none;
     border: none;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .nav-tab:active {
-    background: var(--cds-hover-ui);
+    background: var(--cds-layer-hover-01);
   }
 
   .nav-tab.selected {
@@ -655,7 +653,7 @@
   }
 
   .nav-tab :global(svg) {
-    fill: var(--cds-text-02);
+    fill: var(--cds-text-secondary);
   }
 
   .nav-tab span {

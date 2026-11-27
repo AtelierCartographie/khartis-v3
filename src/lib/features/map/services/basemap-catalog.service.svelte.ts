@@ -371,6 +371,102 @@ export function rankBasemapsByJoinSynthesis(
     }));
 }
 
+export interface RankedBasemapSuggestion {
+  basemap: BasemapMetadata;
+  score: number;
+  matchesData: boolean;
+}
+
+export interface RelevantBasemapSuggestion extends RankedBasemapSuggestion {
+  /** Vintages the score cannot tell apart, latest first; `basemap` is one. */
+  vintages: BasemapMetadata[];
+}
+
+// An alternative is offered only when it stands close to the top suggestion:
+// a basemap that finds 10 % of the values next to one that finds 95 % is noise.
+const ALTERNATIVE_MIN_SCORE = 50;
+const ALTERNATIVE_MIN_SHARE_OF_TOP = 0.75;
+// On extent, every bbox that encloses the data scores 100 %, from the region
+// up to the world, and a neighbouring region's bbox can enclose it too
+// (Centre-Val de Loire around Île-de-France, 3.4 times its area). Past this
+// ratio of the top suggestion's area, the data fills a small part of the map.
+const EXTENT_ALTERNATIVE_MAX_AREA_RATIO = 3;
+const VINTAGE_YEAR_SUFFIX_REGEX = /-\d{4}$/;
+
+/** The basemap with its simplification level and its vintage left out. */
+export function getBasemapVintageFamily(file: string): string {
+  return getBasemapVariantFamily(file).replace(VINTAGE_YEAR_SUFFIX_REGEX, '');
+}
+
+function isRelevantAlternative(
+  top: RankedBasemapSuggestion,
+  candidate: RankedBasemapSuggestion,
+  rankedBy: 'values' | 'extent'
+): boolean {
+  if (candidate.matchesData !== top.matchesData) return false;
+  if (candidate.score < ALTERNATIVE_MIN_SCORE) return false;
+  if (candidate.score < top.score * ALTERNATIVE_MIN_SHARE_OF_TOP) return false;
+  if (rankedBy === 'values') return true;
+
+  const topArea = getBBoxArea(top.basemap.bbox);
+  return (
+    topArea <= 0 ||
+    getBBoxArea(candidate.basemap.bbox) <=
+      topArea * EXTENT_ALTERNATIVE_MAX_AREA_RATIO
+  );
+}
+
+/**
+ * Keeps, from suggestions ranked best first, the ones worth offering: the top
+ * one, then the alternatives close to it, up to `limit` cards. Vintages of a
+ * basemap whose scores tie share one card, so they do not crowd out another
+ * basemap: GPS points or an extent cannot tell two vintages apart.
+ */
+export function selectRelevantBasemapSuggestions(
+  ranked: readonly RankedBasemapSuggestion[],
+  options: { limit: number; rankedBy: 'values' | 'extent' }
+): RelevantBasemapSuggestion[] {
+  const top = ranked[0];
+  if (!top) return [];
+
+  const selected: RelevantBasemapSuggestion[] = [];
+  for (const candidate of ranked) {
+    const family = candidate.basemap.isCustom
+      ? candidate.basemap.file
+      : getBasemapVintageFamily(candidate.basemap.file);
+    const stack = selected.find(
+      (suggestion) =>
+        !suggestion.basemap.isCustom &&
+        getBasemapVintageFamily(suggestion.basemap.file) === family &&
+        Math.abs(suggestion.score - candidate.score) <= BBOX_COVERAGE_TOLERANCE
+    );
+    if (stack) {
+      stack.vintages.push(candidate.basemap);
+      continue;
+    }
+
+    if (selected.length >= options.limit) continue;
+    if (
+      candidate !== top &&
+      !isRelevantAlternative(top, candidate, options.rankedBy)
+    ) {
+      continue;
+    }
+    selected.push({ ...candidate, vintages: [candidate.basemap] });
+  }
+
+  return selected.map((suggestion) => {
+    const vintages = [...suggestion.vintages].sort(
+      (left, right) => getBasemapYearValue(right) - getBasemapYearValue(left)
+    );
+    return {
+      ...suggestion,
+      basemap: vintages[0] ?? suggestion.basemap,
+      vintages
+    };
+  });
+}
+
 function getSearchableText(basemap: BasemapMetadata): string {
   return [
     basemap.title_fr,

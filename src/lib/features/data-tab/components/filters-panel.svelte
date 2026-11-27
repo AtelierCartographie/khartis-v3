@@ -362,9 +362,9 @@
       {:else if currentOperator.requiresLimit}
         <div class="field-group">
           <div class="labeled-input">
-            <label class="input-label" for="filter-count-input"
-              >{m.filter_count()}</label
-            >
+            <label class="input-label" for="filter-count-input">
+              {m.filter_count()}
+            </label>
             <CompactNumberInput
               id="filter-count-input"
               bind:value={newFilter.limit}
@@ -392,6 +392,7 @@
       <InlineNotification
         closeButtonDescription={m.a11y_close_notification()}
         kind="error"
+        role="alert"
         lowContrast
         subtitle={filterError}
         on:close={() => (filterError = null)}
@@ -401,14 +402,16 @@
     {#if filters.length > 0}
       <div class="active-filters">
         <div class="filters-header">
-          <span class="filters-title"
-            >{m.filter_active()} ({filters.length})</span
-          >
+          <span class="filters-title">
+            {m.filter_active()} ({filters.length})
+          </span>
           <Button
             kind={hasNoResults ? 'danger-ghost' : 'ghost'}
             size="small"
-            onclick={clearAllFilters}>{m.filter_clear_all()}</Button
+            onclick={clearAllFilters}
           >
+            {m.filter_clear_all()}
+          </Button>
         </div>
         <ul class="filters-list">
           {#each filters as filter (filter.id)}
@@ -468,19 +471,19 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--cds-spacing-03);
-    background: var(--cds-ui-02);
+    background: var(--cds-layer-02);
     border-radius: var(--cds-spacing-02);
   }
 
   .stats-text {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .stats-percentage {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .filter-form {
@@ -497,12 +500,17 @@
 
   .input-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     font-weight: 400;
   }
 
   .form-actions {
     padding-top: var(--cds-spacing-02);
+  }
+
+  .form-actions :global(.bx--btn) {
+    width: 100%;
+    max-width: none;
   }
 
   .active-filters {
@@ -520,7 +528,7 @@
   .filters-title {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .filters-list {

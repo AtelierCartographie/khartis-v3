@@ -53,9 +53,9 @@
       </span>
     {/if}
     <span class="layer-text">
-      <span class="layer-name" class:layer-name--strong={isVizPrimitive}
-        >{title}</span
-      >
+      <span class="layer-name" class:layer-name--strong={isVizPrimitive}>
+        {title}
+      </span>
       {#if layer.subtitle}
         <span class="layer-subtitle">{layer.subtitle}</span>
       {/if}
@@ -86,7 +86,7 @@
     min-height: var(--kh-size-md);
     padding: 0 8px 0 0;
     gap: 8px;
-    background-color: var(--cds-layer-01, #f4f4f4);
+    background-color: var(--khartis-control-surface-background, #f4f4f4);
     border: 1px solid var(--cds-border-tile-01, #c6c6c6);
     cursor: grab;
     transition: background-color 0.15s ease;

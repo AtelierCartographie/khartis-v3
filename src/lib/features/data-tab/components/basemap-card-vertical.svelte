@@ -18,6 +18,8 @@
     showMetadata?: boolean;
     variant?: 'blue' | 'gray';
     disabled?: boolean;
+    /** Vintages stacked behind this card; above one, the card shows a stack. */
+    vintageCount?: number;
     onclick?: () => void;
   }
 
@@ -29,8 +31,14 @@
     showMetadata = true,
     variant = 'blue',
     disabled = false,
+    vintageCount = 1,
     onclick
   }: BasemapCardVerticalProps = $props();
+
+  const isStacked = $derived(vintageCount > 1);
+  const vintageLabel = $derived(
+    isStacked ? m.basemap_vintage_count({ count: vintageCount }) : ''
+  );
 
   const lang = $derived(getLocale());
   const isOSMBasemap = $derived(basemap.file.startsWith('osm_'));
@@ -73,7 +81,8 @@
       'basemap-card--suggestion': isSuggestion,
       'basemap-card--default': !isSuggestion,
       selected,
-      disabled
+      disabled,
+      stacked: isStacked
     })
   );
 
@@ -105,9 +114,9 @@
   tabindex={disabled ? -1 : 0}
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
-  aria-label={subtitle
-    ? `${title}${m.aria_label_separator()}${subtitle}`
-    : title}
+  aria-label={[title, subtitle, vintageLabel]
+    .filter(Boolean)
+    .join(m.aria_label_separator())}
   aria-pressed={selected}
   aria-disabled={disabled}
 >
@@ -160,6 +169,9 @@
             <span>{formatBasemapValidity(basemap)}</span>
           </span>
         {/if}
+        {#if isStacked}
+          <span class="vintages">{vintageLabel}</span>
+        {/if}
       </div>
     {/if}
   </div>
@@ -186,10 +198,13 @@
 
 <style>
   .basemap-card {
-    --basemap-card-background: var(--cds-layer-01, #f4f4f4);
+    --basemap-card-background: var(
+      --khartis-control-surface-background,
+      #f4f4f4
+    );
     --basemap-card-border-color: var(--cds-border-subtle-01, #c6c6c6);
     --basemap-card-border-width: 1px;
-    --basemap-card-focus-color: var(--cds-interactive-03, #726e6e);
+    --basemap-card-focus-color: var(--cds-button-tertiary, #726e6e);
     --kh-card-radio-color: #161616;
     --kh-card-radio-disabled-color: var(
       --cds-icon-disabled,
@@ -208,6 +223,15 @@
     background: var(--basemap-card-background);
     border: var(--basemap-card-border-width) solid
       var(--basemap-card-border-color);
+  }
+
+  /* Two layers peek out from behind the card: one per further vintage, at most. */
+  .basemap-card.stacked {
+    box-shadow:
+      3px 3px 0 -1px var(--basemap-card-background),
+      3px 3px 0 0 var(--basemap-card-border-color),
+      6px 6px 0 -1px var(--basemap-card-background),
+      6px 6px 0 0 var(--basemap-card-border-color);
   }
 
   .basemap-card.disabled {
@@ -296,7 +320,7 @@
     box-sizing: border-box;
     background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
-    --tile-preview-color: var(--cds-interactive-03, #726e6e);
+    --tile-preview-color: var(--cds-button-tertiary, #726e6e);
   }
 
   .basemap-card--suggestion .preview-section {
@@ -420,8 +444,17 @@
     color: var(--cds-text-secondary, #525252);
   }
 
+  .vintages {
+    font-size: 0.75rem;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    font-weight: 600;
+    color: var(--cds-text-secondary, #525252);
+  }
+
   .basemap-card--suggestion .source,
-  .basemap-card--suggestion .date {
+  .basemap-card--suggestion .date,
+  .basemap-card--suggestion .vintages {
     color: var(--khartis-additions-text-secondary-suggestions, #00539a);
   }
 
@@ -468,7 +501,7 @@
 
   .progress-fill {
     height: 100%;
-    background: var(--cds-interactive-03, #726e6e);
+    background: var(--cds-button-tertiary, #726e6e);
   }
 
   .basemap-card--suggestion .progress-bar {

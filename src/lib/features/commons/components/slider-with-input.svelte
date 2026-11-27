@@ -14,7 +14,6 @@
     disabled?: boolean;
     id?: string;
     showLabel?: boolean;
-    showSteppers?: boolean;
     debounceMs?: number;
     onchange?: (value: number) => void;
   }
@@ -29,7 +28,6 @@
     disabled = false,
     id,
     showLabel = true,
-    showSteppers = true,
     debounceMs = 120,
     onchange
   }: Props = $props();
@@ -126,7 +124,8 @@
       width={inputWidth}
       valueMinWidth="3.5rem"
       disabled={disabled}
-      showSteppers={showSteppers}
+      height="var(--kh-size-xs)"
+      stepperWidth="var(--kh-size-xs)"
       ariaLabel={accessibleLabel}
       onchange={handleInputChange}
     />

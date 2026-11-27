@@ -296,7 +296,6 @@
   </div>
 
   <ToolPopover
-    light
     open={!!globalState.selectedTool}
     align="right-top"
     viewMode={popoverViewMode}
@@ -365,7 +364,7 @@
   }
 
   header span {
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     font-weight: bold;
     font-size: var(--kh-font-group);
   }
@@ -377,7 +376,7 @@
 
   button {
     background: none;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
   }
 
   .step-container {
@@ -423,7 +422,7 @@
   :global(#khartis-step-toolbar .nav-item svg) {
     width: var(--kh-icon-step);
     height: var(--kh-icon-step);
-    fill: var(--cds-text-01);
+    fill: var(--cds-text-primary);
   }
 
   .nav-item span {

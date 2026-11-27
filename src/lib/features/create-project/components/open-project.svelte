@@ -273,7 +273,7 @@
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
-  <header class="mb-4">
+  <header>
     <h6 class="mb-3">{m.open_project_select_backup()}</h6>
 
     <span class="text-grey">
@@ -302,6 +302,7 @@
       closeButtonDescription={m.a11y_close_notification()}
       lowContrast
       kind="error"
+      role="alert"
       title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
@@ -377,9 +378,9 @@
                       size={16}
                       style="color: var(--calendar-color); fill: var(--calendar-color);"
                     />
-                    <span class="ml-2 text-sm"
-                      >{formatDate(project.updatedAt)}</span
-                    >
+                    <span class="ml-2 text-sm">
+                      {formatDate(project.updatedAt)}
+                    </span>
                   </div>
                   <div class="flex items-center">
                     <DataBase
@@ -387,9 +388,9 @@
                       title={m.open_project_storage_size()}
                       style="color: var(--calendar-color); fill: var(--calendar-color);"
                     />
-                    <span class="ml-2 text-sm"
-                      >{formatApproximateSize(project.storageBytes)}</span
-                    >
+                    <span class="ml-2 text-sm">
+                      {formatApproximateSize(project.storageBytes)}
+                    </span>
                   </div>
                 </div>
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -458,7 +459,7 @@
     </div>
   {/if}
 
-  <div class="mt-5">
+  <div class="mt-3">
     <header>
       <h6 class="mb-3">{m.open_project_import_project()}</h6>
 
@@ -467,7 +468,7 @@
       </span>
     </header>
 
-    <div class="flex items-end gap-3 mt-5 mb-3">
+    <div class="flex items-end gap-3 mt-3">
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
         accept={KHARTIS_FILE_EXTENSIONS}
@@ -481,6 +482,7 @@
   {#if showDeleteConfirm}
     <div use:portal>
       <Modal
+        preventCloseOnClickOutside={false}
         iconDescription={m.a11y_close_dialog()}
         danger
         bind:open={showDeleteConfirm}
@@ -507,6 +509,7 @@
   {#if showDeleteAllConfirm}
     <div use:portal>
       <Modal
+        preventCloseOnClickOutside={false}
         iconDescription={m.a11y_close_dialog()}
         danger
         bind:open={showDeleteAllConfirm}
@@ -529,7 +532,7 @@
 <style>
   #khartis-open-project :global(.bx--file__drop-container) {
     line-height: 1.25rem;
-    color: var(--cds-text-05);
+    color: var(--cds-text-helper);
   }
 
   #khartis-open-project :global(.bx--file-browse-btn) {

@@ -120,8 +120,8 @@
 
 <style>
   #khartis-header :global(.bx--header) {
-    background-color: var(--cds-ui-background) !important;
-    border-color: var(--cds-ui-03) !important;
+    background-color: var(--cds-background) !important;
+    border-color: var(--cds-border-subtle-00) !important;
     height: var(--cds-header-height);
     padding-top: var(--safe-area-top);
   }
@@ -159,7 +159,7 @@
   }
 
   #khartis-header :global(.bx--header__menu-trigger > svg) {
-    fill: var(--cds-icon-01) !important;
+    fill: var(--cds-icon-primary) !important;
   }
 
   #khartis-header :global(.bx--header__action:hover) {
@@ -170,15 +170,15 @@
     #khartis-header
     :global(.header-help-button.bx--btn--tertiary) {
     border-color: var(--cds-border-subtle-01);
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   :global(html[theme='g100'])
     #khartis-header
     :global(.header-help-button.bx--btn--tertiary:hover) {
     border-color: var(--cds-border-strong-01);
-    background-color: var(--cds-hover-ui);
-    color: var(--cds-text-01);
+    background-color: var(--cds-layer-hover-01);
+    color: var(--cds-text-primary);
   }
 
   @media (max-width: 1023px) {

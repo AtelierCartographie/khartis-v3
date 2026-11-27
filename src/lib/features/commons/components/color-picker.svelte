@@ -267,8 +267,9 @@
     bind:this={triggerEl}
   >
     <div class="swatch" style={`background:${hex}`}></div>
-    <span class:open={colorOpen} class="chevron"><ChevronDown size={20} /></span
-    >
+    <span class:open={colorOpen} class="chevron">
+      <ChevronDown size={20} />
+    </span>
   </button>
 
   {#if colorOpen}
@@ -297,8 +298,10 @@
             revertPreviewState();
             onCancel();
             colorOpen = false;
-          }}>{m.button_cancel()}</Button
+          }}
         >
+          {m.button_cancel()}
+        </Button>
         <Button
           kind="primary"
           size="small"
@@ -340,10 +343,10 @@
     gap: var(--cds-spacing-03);
     background: var(--cds-field-01);
     border: 0;
-    border-bottom: 1px solid var(--cds-ui-04);
+    border-bottom: 1px solid var(--cds-border-strong-01);
     padding: 0 var(--cds-spacing-05) 0 var(--cds-spacing-03);
     cursor: pointer;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     text-align: left;
   }
 
@@ -366,7 +369,7 @@
     width: 100%;
     margin-right: 20px;
     height: 1.25rem;
-    border: 1px solid var(--cds-ui-04);
+    border: 1px solid var(--cds-border-strong-01);
   }
 
   .chevron {
@@ -385,7 +388,7 @@
     z-index: var(--z-overlay);
     background: var(--cds-field-01);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--cds-ui-04);
+    border: 1px solid var(--cds-border-strong-01);
     box-sizing: border-box;
     padding: var(--cds-spacing-05);
     max-width: calc(100vw - 2 * var(--cds-spacing-05));
@@ -403,14 +406,18 @@
   .dropdown-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--cds-spacing-05);
+    gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-05);
   }
 
+  /* Carbon keeps room for an icon on the right of every button, which
+     wraps « Annuler » in a narrow menu. */
   .dropdown-actions :global(.bx--btn) {
     width: 100%;
     min-width: 0;
     max-width: 100%;
+    padding-right: var(--cds-spacing-04);
+    white-space: nowrap;
   }
 
   /* Same icon room as the eyedropper button (color-hsl-fields.svelte). */

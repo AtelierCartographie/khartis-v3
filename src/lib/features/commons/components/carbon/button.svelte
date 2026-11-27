@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button as CarbonButton } from 'carbon-components-svelte';
-  import type { Snippet } from 'svelte';
+  import type { ComponentProps, Snippet } from 'svelte';
   import TooltipBubble, { type TooltipLine } from './tooltip-bubble.svelte';
   import type {
     CarbonTooltipAlignment,
@@ -21,7 +21,7 @@
     portalTooltip?: boolean;
     showDisabledTooltip?: boolean;
     disabled?: boolean;
-    icon?: unknown;
+    icon?: ComponentProps<CarbonButton>['icon'];
   }
 
   const {

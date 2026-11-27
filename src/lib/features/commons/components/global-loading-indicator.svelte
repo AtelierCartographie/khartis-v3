@@ -26,7 +26,7 @@
     width: 1.25rem;
     height: 1.25rem;
     border: 2px solid var(--cds-border-subtle-01);
-    border-top-color: var(--cds-interactive-01);
+    border-top-color: var(--cds-background-brand);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }

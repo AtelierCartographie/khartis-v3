@@ -299,7 +299,7 @@
     align-items: center;
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
     position: sticky;
     top: 0;
@@ -309,7 +309,7 @@
   .section-header.collapsed {
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
   }
 
@@ -408,7 +408,7 @@
   .section-body {
     background-color: var(
       --khartis-expandable-section-background,
-      var(--cds-layer-01)
+      var(--khartis-control-surface-background)
     );
     padding: var(
       --khartis-expandable-section-body-padding,

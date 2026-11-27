@@ -231,7 +231,7 @@
     position: fixed;
     inset: 0;
     z-index: var(--z-overlay);
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
     display: flex;
     flex-direction: column;
     padding-top: var(--safe-area-top);
@@ -245,9 +245,9 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    border-bottom: 1px solid var(--cds-ui-03);
+    border-bottom: 1px solid var(--cds-border-subtle-00);
     flex-shrink: 0;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
   }
 
   .header-title {
@@ -261,7 +261,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 0;
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 
   .table-container :global(.advanced-data-table) {
@@ -274,7 +274,7 @@
     border: none;
     font-size: 1.25rem;
     font-weight: 400;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     cursor: text;
     padding: 4px 8px;
     margin: -4px -8px;
@@ -283,16 +283,16 @@
   }
 
   .title-button:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .title-input {
     font-size: 1.25rem;
     font-weight: 400;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     background: transparent;
     border: none;
-    border-bottom: 2px solid var(--cds-interactive-01);
+    border-bottom: 2px solid var(--cds-background-brand);
     padding: 4px 8px;
     margin: -4px 0 -4px -8px;
     outline: none;
@@ -301,7 +301,7 @@
   .extension {
     font-size: 1.25rem;
     font-weight: 400;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .collapse-btn {
@@ -313,7 +313,7 @@
     background: transparent;
     border: none;
     border-radius: 0;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary);
     font-size: 0.875rem;
     font-family: inherit;
     cursor: pointer;
@@ -322,7 +322,7 @@
   }
 
   .collapse-btn:hover {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .collapse-btn:focus-visible {

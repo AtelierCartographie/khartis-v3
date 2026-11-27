@@ -443,6 +443,7 @@
     {#if errorMessage}
       <InlineNotification
         kind="error"
+        role="alert"
         title={m.error_prefix()}
         subtitle={errorMessage}
         lowContrast
@@ -480,7 +481,7 @@
 
   .help-text {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
     margin: 0;
     line-height: 1.4;
   }
@@ -503,16 +504,24 @@
 
   .test-result {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
-    background: var(--cds-ui-02);
+    color: var(--cds-text-secondary);
+    background: var(--cds-layer-02);
     padding: var(--cds-spacing-03);
     border-radius: var(--cds-spacing-02);
     margin: 0;
   }
 
   .actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--cds-spacing-03);
     padding-top: var(--cds-spacing-03);
+  }
+
+  .actions :global(.bx--btn) {
+    width: 100%;
+    max-width: none;
+    padding-right: var(--cds-spacing-04);
+    white-space: nowrap;
   }
 </style>

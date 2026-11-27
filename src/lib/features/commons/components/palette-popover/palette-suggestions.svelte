@@ -141,9 +141,9 @@
 
 <div class="palette-suggestions">
   <div class="section-heading">
-    <span class="section-heading-text kh-thinking-text"
-      >{m.palette_suggestions()}</span
-    >
+    <span class="section-heading-text kh-thinking-text">
+      {m.palette_suggestions()}
+    </span>
     <span class="section-heading-icon kh-thinking-icon">
       <MagicWandFilled size={16} />
     </span>
@@ -393,7 +393,7 @@
 
   .intensity-row {
     display: flex;
-    height: var(--kh-size-sm);
+    height: var(--kh-size-xs);
     overflow: hidden;
   }
 

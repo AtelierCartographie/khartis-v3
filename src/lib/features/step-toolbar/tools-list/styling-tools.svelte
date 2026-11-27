@@ -86,10 +86,9 @@
           aria-describedby={showLegendBadge ? 'legend-tool-badge' : undefined}
         />
         {#if showLegendBadge}
-          <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-            ></span
-          >
+          <span id="legend-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}>
+            <span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span>
+          </span>
         {/if}
       </div>
     </Column>
@@ -146,10 +145,11 @@
           <span
             id="color-blindness-tool-badge"
             class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden"
-              >{m.a11y_tool_badge_active()}</span
-            ></span
           >
+            <span class="bx--visually-hidden">
+              {m.a11y_tool_badge_active()}
+            </span>
+          </span>
         {/if}
       </div>
     </Column>

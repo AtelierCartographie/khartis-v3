@@ -110,7 +110,7 @@
     transform: translateY(-50%);
     width: 280px;
     max-height: var(--kh-floating-window-max-height);
-    background: var(--cds-ui-02);
+    background: var(--cds-layer-02);
     border: 1px solid var(--cds-border-subtle);
     z-index: var(--z-dropdown);
     display: flex;
@@ -148,8 +148,6 @@
      fixed 280px panel, so they overflow the right edge. Constrain every tool
      panel's notifications to the available content width. */
   .panel-content :global(.bx--inline-notification) {
-    min-width: 0;
-    max-width: 100%;
     margin-top: 0;
     margin-bottom: 0;
   }

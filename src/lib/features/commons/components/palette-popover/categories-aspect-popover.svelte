@@ -163,6 +163,13 @@
   const resolvedPatternConfig = $derived<PatternPaletteConfig>(
     draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
   );
+  // Uncolored patterns on a coloured background: nothing shows the colour of
+  // a category, so it is not offered.
+  const hidesCategoryColor = $derived(
+    showCategoryPattern &&
+      !resolvedPatternConfig.colorize &&
+      !!resolvedPatternConfig.background
+  );
   const categoryPatterns = $derived<ClassPattern[] | null>(
     showCategoryPattern &&
       draftCategories.length > 0 &&
@@ -176,7 +183,11 @@
               (category) => category.patternShape
             )
           },
-          'categorical'
+          'categorical',
+          undefined,
+          false,
+          undefined,
+          draftCategories.map((category) => category.color)
         )
       : null
   );
@@ -588,9 +599,9 @@
             {#if showCommonAspectSection}
               <section class="aspect-section">
                 <div class="section-heading">
-                  <span class="section-heading-text"
-                    >{m.aspect_common_section()}</span
-                  >
+                  <span class="section-heading-text">
+                    {m.aspect_common_section()}
+                  </span>
                   <div class="section-heading-line"></div>
                 </div>
 
@@ -610,9 +621,9 @@
                           )}
                       >
                         {#each shapeChoices as shapeChoice (shapeChoice.id)}
-                          <option value={shapeChoice.id}
-                            >{shapeChoice.label}</option
-                          >
+                          <option value={shapeChoice.id}>
+                            {shapeChoice.label}
+                          </option>
                         {/each}
                       </select>
                     </div>
@@ -644,9 +655,9 @@
                       class="common-paired-row common-paired-row--with-input"
                     >
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_size_unique()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_size_unique()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -682,9 +693,9 @@
 
                     <div class="common-paired-row">
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_stroke_yesno()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_stroke_yesno()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -702,9 +713,9 @@
                       </div>
 
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_auto_color()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_auto_color()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -727,9 +738,9 @@
                       class="common-paired-row common-paired-row--with-input"
                     >
                       <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_stroke_unique()}</span
-                        >
+                        <span class="field-label">
+                          {m.aspect_common_stroke_unique()}
+                        </span>
                         <div class="common-toggle-value">
                           <div class="toggle-control">
                             <Switch
@@ -764,66 +775,16 @@
                         />
                       </div>
                     </div>
-
-                    <div class="common-divider"></div>
-
-                    <div
-                      class="common-field common-field--toggle common-field--full"
-                    >
-                      <span class="field-label"
-                        >{m.aspect_common_pattern()}</span
-                      >
-                      <div class="common-toggle-value">
-                        <div class="toggle-control">
-                          <Switch
-                            toggled={draftCommonAspect.pattern}
-                            hideLabel
-                            labelText={m.aspect_common_pattern()}
-                            onchange={(value) =>
-                              handleCommonAspectChange('pattern', value)}
-                          />
-                          <span class="toggle-state">
-                            {draftCommonAspect.pattern ? m.yes() : m.no()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {#if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
-                      <div class="common-field--full">
-                        <PatternPalettePicker
-                          config={resolvedPatternConfig}
-                          onchange={handlePatternConfigChange}
-                        />
-                      </div>
-                    {/if}
                   </div>
                 {:else if primitiveKind === 'polygons'}
                   <div class="common-stack">
-                    <div class="common-grid-row common-grid-row--full">
-                      <span class="field-label"
-                        >{m.aspect_common_pattern()}</span
-                      >
-                      <div class="toggle-control">
-                        <Switch
-                          toggled={showCategoryPattern}
-                          disabled={isPatternUnavailable}
-                          hideLabel
-                          labelText={m.aspect_common_pattern()}
-                          onchange={(value) =>
-                            handleCommonAspectChange('pattern', value)}
-                        />
-                        <span class="toggle-state">
-                          {showCategoryPattern ? m.yes() : m.no()}
-                        </span>
-                      </div>
-                    </div>
+                    <ToggleWithLabel
+                      label={m.aspect_common_pattern()}
+                      toggled={showCategoryPattern}
+                      disabled={isPatternUnavailable}
+                      ontoggle={(value) =>
+                        handleCommonAspectChange('pattern', value)}
+                    />
                     {#if isPatternUnavailable}
                       <InlineNotification
                         kind="info"
@@ -835,13 +796,11 @@
                         })}
                       />
                     {:else if draftCommonAspect.pattern}
-                      <div class="common-field--full">
-                        <ToggleWithLabel
-                          label={m.pattern_colorize()}
-                          toggled={resolvedPatternConfig.colorize ?? false}
-                          ontoggle={handlePatternColorizeChange}
-                        />
-                      </div>
+                      <ToggleWithLabel
+                        label={m.pattern_colorize()}
+                        toggled={resolvedPatternConfig.colorize ?? false}
+                        ontoggle={handlePatternColorizeChange}
+                      />
                       <div class="common-field--full">
                         <PatternPalettePicker
                           categorical
@@ -967,9 +926,9 @@
                           <div class="category-aspect-body">
                             {#if showCategoryShapePicker}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_shape()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_shape()}
+                                </span>
                                 <select
                                   class="common-select"
                                   aria-label={m.per_category_shape()}
@@ -990,22 +949,24 @@
                               </div>
                             {/if}
 
-                            <div class="field-stack">
-                              <span class="field-label"
-                                >{m.per_category_color()}</span
-                              >
-                              <SingleColorPreview
-                                color={category.color}
-                                onchange={(hex) =>
-                                  handleCategoryColor(category.id, hex)}
-                              />
-                            </div>
+                            {#if !hidesCategoryColor}
+                              <div class="field-stack">
+                                <span class="field-label">
+                                  {m.per_category_color()}
+                                </span>
+                                <SingleColorPreview
+                                  color={category.color}
+                                  onchange={(hex) =>
+                                    handleCategoryColor(category.id, hex)}
+                                />
+                              </div>
+                            {/if}
 
                             {#if showCategoryPattern && categoryPatterns}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.pattern_shape()}</span
-                                >
+                                <span class="field-label">
+                                  {m.pattern_shape()}
+                                </span>
                                 <ShapeChipRow
                                   value={categoryPatterns[index]?.type as
                                     PatternShape | undefined}
@@ -1020,9 +981,9 @@
 
                             {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_size()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_size()}
+                                </span>
                                 <CompactNumberInput
                                   value={category.customSize ??
                                     draftCommonAspect.size}
@@ -1039,9 +1000,9 @@
 
                             {#if showPerCategoryStrokeColor}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_stroke_color()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_stroke_color()}
+                                </span>
                                 <SingleColorPreview
                                   color={category.strokeColor ?? '#000000'}
                                   onchange={(hex) =>
@@ -1052,9 +1013,9 @@
 
                             {#if showPerCategoryStrokeWidth}
                               <div class="field-stack">
-                                <span class="field-label"
-                                  >{m.per_category_stroke_width()}</span
-                                >
+                                <span class="field-label">
+                                  {m.per_category_stroke_width()}
+                                </span>
                                 <CompactNumberInput
                                   value={category.customStrokeWidth ??
                                     draftCommonAspect.strokeSize}
@@ -1281,17 +1242,6 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .common-grid-row {
-    display: flex;
-    flex-direction: column;
-    gap: var(--kh-gap-inline);
-    min-width: 0;
-  }
-
-  .common-grid-row--full {
-    grid-column: 1 / -1;
-  }
-
   .common-stack {
     display: flex;
     flex-direction: column;
@@ -1358,7 +1308,7 @@
   .hidden-count-note {
     margin: var(--kh-gap-inline) 0 0;
     padding: var(--kh-gap-inline) var(--kh-gap-param);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     border: 1px dashed var(--cds-border-subtle-01, #c6c6c6);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: var(--kh-font-label);
@@ -1372,7 +1322,7 @@
     flex-direction: column;
     gap: var(--kh-gap-label);
     padding: var(--kh-gap-inline);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 

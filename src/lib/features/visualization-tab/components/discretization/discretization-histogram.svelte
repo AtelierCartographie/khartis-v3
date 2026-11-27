@@ -103,7 +103,7 @@
         <div class="histogram-bar-wrapper">
           <div
             class="histogram-bar"
-            style="width: {widthPercent}%; background-color: {histogramColor}"
+            style="width: {widthPercent}%; background: {histogramColor}"
             title="{displayBound(breakItem.min, 'start')} - {displayBound(
               breakItem.max,
               'end'
@@ -215,11 +215,13 @@
     padding-right: var(--cds-spacing-02);
   }
 
+  /* The data bounds: Carbon's disabled field, greyed out. */
   .histogram-input-wrapper :global(.bx--text-input:disabled) {
-    background-color: transparent;
-    border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
-    color: var(--cds-text-secondary, #525252);
-    -webkit-text-fill-color: var(--cds-text-secondary, #525252);
+    background-color: var(--cds-field);
+    border-bottom-color: transparent;
+    color: var(--cds-text-disabled);
+    -webkit-text-fill-color: var(--cds-text-disabled);
+    cursor: not-allowed;
   }
 
   .histogram-caret {

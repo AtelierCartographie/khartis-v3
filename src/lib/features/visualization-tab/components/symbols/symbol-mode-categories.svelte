@@ -523,11 +523,11 @@
 <div class="categories-aspect-row">
   <span class="field-label">{m.category_aspect()}</span>
   <div class="categories-aspect-value">
-    <span
-      >{(isSingularCount(categoryCount)
+    <span>
+      {(isSingularCount(categoryCount)
         ? m.categories_count_one
-        : m.categories_count)({ count: formatValue(categoryCount) })}</span
-    >
+        : m.categories_count)({ count: formatValue(categoryCount) })}
+    </span>
     <Button
       class="categories-aspect-settings"
       kind="ghost"

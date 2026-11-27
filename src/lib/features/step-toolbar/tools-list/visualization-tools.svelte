@@ -115,9 +115,9 @@
           <span
             id="projection-tool-badge"
             class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-            ></span
           >
+            <span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span>
+          </span>
         {/if}
       </div>
     </Column>
@@ -154,10 +154,9 @@
           aria-describedby={showFacetsBadge ? 'facets-tool-badge' : undefined}
         />
         {#if showFacetsBadge}
-          <span id="facets-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}
-            ><span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span
-            ></span
-          >
+          <span id="facets-tool-badge" class={CSS_CLASSES.NOTIFICATION_BADGE}>
+            <span class="bx--visually-hidden">{m.a11y_tool_badge_new()}</span>
+          </span>
         {/if}
       </div>
     </Column>

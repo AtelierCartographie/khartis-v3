@@ -477,7 +477,7 @@
 
   .result-count {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .results-navigation {
@@ -489,7 +489,7 @@
 
   .result-text {
     font-size: 0.875rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-secondary);
   }
 
   .nav-buttons {

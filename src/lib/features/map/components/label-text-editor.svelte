@@ -178,7 +178,7 @@
     flex-direction: column;
     gap: var(--kh-gap-param);
     padding: var(--cds-spacing-04);
-    background: var(--cds-ui-01, #f4f4f4);
+    background: var(--cds-layer-01, #f4f4f4);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   }
 

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,12 +13,14 @@ const {
   assertBuildMatchesDeployment,
   assertReleaseCommitBelongsToBranch,
   assertTagCommitMatchesRemote,
+  buildAssetPropagationDelays,
   createTerminationCoordinator,
   findCompressedWasmAssetPath,
   findSuccessfulReleaseRun,
   findUnchangedLiveFiles,
   findUnchangedReleaseFiles,
   findUnchangedStaticFiles,
+  parseAssetWait,
   parseGitStaticTree,
   parseReleaseFileManifest,
   parseRemoteBranchHead,
@@ -32,10 +35,12 @@ const {
   selectPropagationSample,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
+  trapUncaughtErrors,
   verifyPublicInfrastructure,
   verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
+  withSftpCleanupClient,
   writeReleaseAssetManifest,
   writeReleaseFileManifest
 } = await import(deployScriptUrl);
@@ -1362,6 +1367,65 @@ describe('local deployment remote lock', () => {
   });
 });
 
+describe('local deployment lost SFTP connection', () => {
+  const lockDir = '/srv/html/prod.deploy-lock';
+
+  it('should reject the remote work when the SFTP client throws a lost connection from a timer', async () => {
+    const target = new EventEmitter();
+    const trap = trapUncaughtErrors(target);
+    const lost = new Error('uploadFiles: Keepalive timeout');
+
+    const remoteWork = trap.race(new Promise(() => undefined));
+    target.emit('uncaughtException', lost);
+
+    await expect(remoteWork).rejects.toBe(lost);
+    expect(trap.error).toBe(lost);
+    trap.dispose();
+    expect(target.listenerCount('uncaughtException')).toBe(0);
+  });
+
+  it('should release the lock through a new SFTP connection when the first one is lost', async () => {
+    const config = { host: 'sftp.example.test' };
+    const lostClient = { rmdir: vi.fn() };
+    const freshClient = {
+      connect: vi.fn(async () => undefined),
+      end: vi.fn(async () => undefined),
+      rmdir: vi.fn(async () => undefined)
+    };
+
+    await withSftpCleanupClient(
+      config,
+      lostClient,
+      true,
+      (client: typeof freshClient) =>
+        releaseRemoteDeploymentLock(client, lockDir),
+      () => freshClient
+    );
+
+    expect(freshClient.connect).toHaveBeenCalledWith(config);
+    expect(freshClient.rmdir).toHaveBeenCalledWith(lockDir, false);
+    expect(freshClient.end).toHaveBeenCalledTimes(1);
+    expect(lostClient.rmdir).not.toHaveBeenCalled();
+  });
+
+  it('should release the lock through the current SFTP connection when it is still alive', async () => {
+    const liveClient = { rmdir: vi.fn(async () => undefined) };
+    const createClient = vi.fn();
+
+    await withSftpCleanupClient(
+      { host: 'sftp.example.test' },
+      liveClient,
+      false,
+      (client: typeof liveClient) =>
+        releaseRemoteDeploymentLock(client, lockDir),
+      createClient
+    );
+
+    expect(liveClient.rmdir).toHaveBeenCalledWith(lockDir, false);
+    expect(createClient).not.toHaveBeenCalled();
+  });
+});
+
 describe('local deployment termination safety', () => {
   it('should finish swap and validation after a signal during the second rename', async () => {
     const exitProcess = vi.fn();
@@ -1940,9 +2004,34 @@ describe('local deployment new asset publication before the swap', () => {
       `${liveDir}/_app/immutable/entry/start.N1.js.br`
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(String(fetchImpl.mock.calls[1][0])).toMatch(
+    const [firstUrl, secondUrl] = fetchImpl.mock.calls.map(([url]) =>
+      String(url)
+    );
+    expect(secondUrl).toMatch(
       /^https:\/\/example\.org\/cartographie\/khartis\/_app\/immutable\/entry\/start\.N1\.js\?khartis-deploy-check=/
     );
+    // A cache that kept the first 404 must not answer the next check.
+    expect(new URL(secondUrl).search).not.toBe(new URL(firstUrl).search);
+  });
+
+  it('should spread the asset wait over growing delays capped at one minute', () => {
+    expect(buildAssetPropagationDelays(150_000)).toEqual([
+      5_000, 10_000, 15_000, 30_000, 60_000, 30_000
+    ]);
+    const delays: number[] = buildAssetPropagationDelays(10 * 60_000);
+    expect(delays.slice(0, 4)).toEqual([5_000, 10_000, 15_000, 30_000]);
+    expect(Math.max(...delays)).toBe(60_000);
+    expect(delays.reduce((sum, delayMs) => sum + delayMs, 0)).toBe(600_000);
+    expect(buildAssetPropagationDelays(0)).toEqual([]);
+  });
+
+  it('should read --asset-wait in seconds or minutes and refuse anything else', () => {
+    expect(parseAssetWait('90s')).toBe(90_000);
+    expect(parseAssetWait(' 20m ')).toBe(1_200_000);
+    for (const value of ['20', '1h', 'm', '-5m', '', undefined]) {
+      expect(() => parseAssetWait(value)).toThrow('--asset-wait expects');
+    }
+    expect(() => parseAssetWait('61m')).toThrow('cannot exceed 1h00m');
   });
 
   it('should refuse to go on when a backend never serves the new assets', async () => {

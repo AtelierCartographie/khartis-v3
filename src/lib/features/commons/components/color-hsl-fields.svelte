@@ -211,17 +211,19 @@
               size="small"
               class="pick-button"
               icon={Eyedropper}
-              onclick={pickScreenColor}>{m.color_pick_from_screen()}</Button
+              onclick={pickScreenColor}
             >
+              {m.color_pick_from_screen()}
+            </Button>
           </Column>
         </Row>
       {/if}
     {/snippet}
 
     {#snippet hexField()}
-      <label class="form-label mb-2" for="{idPrefix}-hex"
-        >{m.color_hex_code()}</label
-      >
+      <label class="form-label mb-2" for="{idPrefix}-hex">
+        {m.color_hex_code()}
+      </label>
       <input
         id="{idPrefix}-hex"
         class="hex"
@@ -258,6 +260,9 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
     margin-bottom: var(--kh-gap-label);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .slider {
@@ -269,11 +274,11 @@
   }
 
   .slider :global(.bx--slider__track) {
-    background: var(--cds-ui-03);
+    background: var(--cds-layer-accent-01);
   }
 
   .slider :global(.bx--slider__filled-track) {
-    background: var(--cds-text-01);
+    background: var(--cds-text-primary);
   }
 
   .slider.rainbow :global(.bx--slider__track) {
@@ -311,7 +316,7 @@
     height: var(--cds-spacing-05);
     background: var(--cds-field-01);
     box-shadow:
-      0 0 0 2px var(--cds-text-01),
+      0 0 0 2px var(--cds-text-primary),
       0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
@@ -337,7 +342,7 @@
      panel, white on the grey menu of a colour field. */
   .hex {
     width: 100%;
-    height: var(--kh-size-md);
+    height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-05, 16px);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
@@ -357,7 +362,6 @@
   }
 
   .color-fields:not(.on-menu) .hex {
-    height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-04, 12px);
   }
 
@@ -373,8 +377,8 @@
 
   .preview {
     width: 100%;
-    height: var(--kh-size-md);
-    border: 1px solid var(--cds-ui-04);
+    height: var(--kh-size-sm);
+    border: 1px solid var(--cds-border-strong-01);
     box-sizing: border-box;
   }
 

@@ -383,8 +383,10 @@
             ? m.data_step_status_clean()
             : m.join_status_pending()
           : m.go_to_visualization()}
-        size="small">{m.data_tab_visualize()}</Button
+        size="small"
       >
+        {m.data_tab_visualize()}
+      </Button>
     </footer>
   {/if}
 </nav>
@@ -397,10 +399,10 @@
     position: absolute;
     top: 0;
     right: 0;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
     box-shadow:
       0 2px 6px 0 rgba(0, 0, 0, 0.1),
-      800px 0 0 0 var(--cds-ui-01);
+      800px 0 0 0 var(--cds-layer-01);
     transition:
       transform 300ms cubic-bezier(0.2, 0, 0.38, 0.9),
       visibility 0s;
@@ -409,7 +411,7 @@
   :global(html[theme='g100']) #khartis-main-toolbar {
     box-shadow:
       0 2px 6px 0 rgba(0, 0, 0, 0.5),
-      800px 0 0 0 var(--cds-ui-01);
+      800px 0 0 0 var(--cds-layer-01);
   }
 
   #khartis-main-toolbar.panel-hidden {
@@ -432,7 +434,7 @@
   nav {
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--cds-ui-01);
+    border-left: 1px solid var(--cds-layer-01);
     z-index: var(--z-main-toolbar);
     height: calc(100dvh - var(--cds-header-height));
     overflow: hidden;
@@ -476,7 +478,7 @@
      selected tab takes the panel's colour. */
   .main-toolbar-header {
     top: 1px !important;
-    background-color: var(--cds-ui-background);
+    background-color: var(--cds-background);
     /* A shadow rather than a border: the selected tab paints over it. */
     box-shadow: inset 0 -1px 0 var(--cds-border-subtle-01);
   }
@@ -499,7 +501,7 @@
 
   .toolbar-footer {
     flex-shrink: 0;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-layer-01);
     border-color: var(--cds-border-subtle-00);
     display: flex;
     align-items: center;

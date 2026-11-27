@@ -122,7 +122,6 @@
           max={180}
           step={longitudeStep}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleLongitudeChange}
         />
@@ -134,7 +133,6 @@
           max={90}
           step={PROJECTION_ANGLE_STEP}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleLatitudeChange}
         />
@@ -146,7 +144,6 @@
           max={180}
           step={PROJECTION_ANGLE_STEP}
           inputWidth="3.5rem"
-          showSteppers={false}
           debounceMs={0}
           onchange={handleRotationChange}
         />
@@ -161,8 +158,10 @@
           size="small"
           disabled={!isDirty || !canApplyProjectionSettings}
           icon={Renew}
-          on:click={resetAll}>{m.projection_settings_reset()}</Button
+          on:click={resetAll}
         >
+          {m.projection_settings_reset()}
+        </Button>
       {/if}
       <ProjectionDefinition />
     </div>

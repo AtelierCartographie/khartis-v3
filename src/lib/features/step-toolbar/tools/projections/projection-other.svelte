@@ -17,6 +17,7 @@
     ComboBox,
     InlineLoading,
     InlineNotification,
+    Layer,
     TextArea
   } from 'carbon-components-svelte';
   import {
@@ -398,15 +399,16 @@
         <div class="code-view">
           <p class="intro">{codeIntro}</p>
           <div class="code-form">
-            <TextArea
-              value={crsCode}
-              labelText={codeLabel}
-              placeholder={codePlaceholder}
-              helperText={codeHelper}
-              rows={8}
-              light={true}
-              on:input={handleCrsCodeInput}
-            />
+            <Layer>
+              <TextArea
+                value={crsCode}
+                labelText={codeLabel}
+                placeholder={codePlaceholder}
+                helperText={codeHelper}
+                rows={8}
+                on:input={handleCrsCodeInput}
+              />
+            </Layer>
             <div class="code-status" role="status" aria-live="polite">
               {#if diagnosis.status === 'valid'}
                 {#if isDiagnosisApplied}
@@ -470,6 +472,7 @@
               {#if diagnosisError}
                 <InlineNotification
                   kind="error"
+                  role="alert"
                   lowContrast
                   hideCloseButton
                   title=""
@@ -482,14 +485,18 @@
                 kind="tertiary"
                 size="small"
                 disabled={isEmpty()}
-                on:click={onReset}>{resetLabel}</Button
+                on:click={onReset}
               >
+                {resetLabel}
+              </Button>
               <Button
                 kind="primary"
                 size="small"
                 disabled={!canApply || isDiagnosisApplied}
-                on:click={onApply}>{submitLabel}</Button
+                on:click={onApply}
               >
+                {submitLabel}
+              </Button>
             </div>
           </div>
         </div>
@@ -509,7 +516,7 @@
 
   .code-view {
     padding: var(--cds-spacing-04);
-    background: var(--cds-ui-01);
+    background: var(--cds-layer-01);
     border-radius: 4px;
     gap: var(--cds-spacing-05);
     display: flex;
@@ -541,7 +548,6 @@
 
       :global(.bx--inline-notification) {
         margin: 0;
-        max-width: 100%;
       }
     }
 
@@ -626,7 +632,7 @@
     gap: var(--cds-spacing-02);
     padding: var(--cds-spacing-05);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--khartis-control-surface-background, #f4f4f4);
     color: var(--cds-text-primary, #161616);
   }
 

@@ -35,6 +35,7 @@
       <ToastNotification
         closeButtonDescription={m.a11y_close_notification()}
         kind={getKind(notification.type)}
+        role={notification.type === NotificationType.ERROR ? 'alert' : 'status'}
         title={notification.title}
         subtitle={notification.subtitle}
         caption={notification.caption}

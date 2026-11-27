@@ -862,6 +862,7 @@
 
     {#if isCsvFile}
       <Modal
+        preventCloseOnClickOutside={false}
         iconDescription={m.a11y_close_dialog()}
         bind:open={confirmReimportOpen}
         modalHeading={m.csv_confirm_reimport_title()}

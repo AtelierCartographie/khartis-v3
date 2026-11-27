@@ -978,8 +978,9 @@
                 onclick={() => handleFacetTitleClick(descriptor.title)}
                 onkeydown={(event: KeyboardEvent) =>
                   handleFacetTitleKeydown(descriptor.title, event)}
-                >{resolveFacetTitle(descriptor.title)}</span
               >
+                {resolveFacetTitle(descriptor.title)}
+              </span>
             {:else}
               {resolveFacetTitle(descriptor.title)}
             {/if}

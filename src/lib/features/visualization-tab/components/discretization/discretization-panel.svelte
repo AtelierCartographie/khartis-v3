@@ -58,6 +58,8 @@
     showHistogram?: boolean;
     sizePreview?: SizePreview;
     binFillStrategy?: BinFillStrategy;
+    /** CSS backgrounds of the class patterns, when patterns replace the colors. */
+    patternBackgrounds?: string[];
     /** The classified column is a date: calendar step or manual dates only. */
     isDateValue?: boolean;
     /** Calendar steps that fit the series. */
@@ -93,6 +95,7 @@
     showHistogram = true,
     sizePreview,
     binFillStrategy = { mode: 'unique', colors: [] },
+    patternBackgrounds,
     isDateValue = false,
     calendarStepOptions = [],
     calendarStepId = '',
@@ -302,6 +305,8 @@
   }
 
   function resolveHistogramColor(breakItem: ClassBreak, index: number): string {
+    const patternBackground = patternBackgrounds?.[index];
+    if (patternBackground) return patternBackground;
     if (binFillStrategy.colors.length === 0) {
       return breakItem.color;
     }
@@ -540,7 +545,7 @@
             {#each paletteStripColors as color, index (`${index}-${color}`)}
               <div
                 class="palette-swatch"
-                style="background-color: {color}"
+                style="background: {patternBackgrounds?.[index] ?? color}"
               ></div>
             {/each}
           </div>

@@ -210,7 +210,6 @@
       max={10}
       step={1}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(strokeWidth) => {
         if (effectiveStyle.strokeWidth === strokeWidth) return;
         annotationsActions.applyStyle({ strokeWidth });
@@ -236,7 +235,6 @@
         max={100}
         step={1}
         inputWidth="72px"
-        showSteppers={false}
         onchange={(smoothness) => {
           if ((effectiveStyle.smoothness ?? 0) === smoothness) return;
           drawingSmoothing.changed();
@@ -285,7 +283,6 @@
       max={100}
       step={5}
       inputWidth="72px"
-      showSteppers={false}
       onchange={(opacity) => {
         if (toOpacityPercent(effectiveStyle.opacity) === opacity) return;
         annotationsActions.applyStyle({ opacity });

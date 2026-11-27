@@ -1,4 +1,4 @@
-import proj4 from 'proj4';
+import proj4, { type Converter } from 'proj4';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 
 /**
@@ -73,7 +73,7 @@ async function checkProj4Fidelity(
   code: string,
   projjson: Record<string, unknown>
 ): Promise<boolean> {
-  let converter: proj4.Converter;
+  let converter: Converter;
   try {
     converter = proj4('EPSG:4326', new proj4.Proj(projjson as never));
   } catch {
