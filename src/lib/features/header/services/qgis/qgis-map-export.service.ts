@@ -1136,6 +1136,9 @@ async function exportBasemapLayers(run: ExportRun): Promise<BasemapExport> {
             layer
           );
         }
+        if (config.fillShadow) {
+          result.skipped.push(m.qgis_basemap_land_shadow());
+        }
         break;
       }
       case 'lacs': {

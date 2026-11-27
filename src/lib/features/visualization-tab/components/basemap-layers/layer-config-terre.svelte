@@ -17,6 +17,7 @@
     showFillSection?: boolean;
     showStrokeSection?: boolean;
     fillColor?: string;
+    fillShadow?: boolean;
     fillOpacity?: number;
     strokeVisible?: boolean;
     strokeColor?: string;
@@ -31,6 +32,7 @@
     showFillSection = true,
     showStrokeSection = true,
     fillColor = NEUTRAL_CARTOGRAPHY_COLORS.land,
+    fillShadow = false,
     fillOpacity = 100,
     strokeVisible = true,
     strokeColor = NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
@@ -48,6 +50,10 @@
 
   function handleFillColorChange(value: string) {
     onchange?.({ fillColor: value });
+  }
+
+  function handleFillShadowToggle(value: boolean) {
+    onchange?.({ fillShadow: value });
   }
 
   function handleFillOpacityChange(value: number) {
@@ -92,6 +98,12 @@
           presets={fillColorPresets}
           allowPattern={false}
           onchange={handleFillColorChange}
+        />
+
+        <ToggleWithLabel
+          label={m.basemap_config_shadow()}
+          toggled={fillShadow}
+          ontoggle={handleFillShadowToggle}
         />
 
         <SliderWithInput
