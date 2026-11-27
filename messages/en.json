@@ -167,7 +167,7 @@
   "sidenav_dark_theme": "Dark theme",
   "sidenav_compact_density": "Compact density",
   "sidenav_version": "Khartis v{version}",
-  "sidenav_copyright": "© Atelier de cartographie / Sciences Po, {year}",
+  "sidenav_copyright": "© Atelier de cartographie at Sciences Po, {year}",
   "sidenav_install_help_title": "Install Khartis",
   "sidenav_install_help_intro_title": "Manual installation",
   "sidenav_install_help_intro_generic": "The browser does not always expose the native install button. Follow the section that matches your device.",
