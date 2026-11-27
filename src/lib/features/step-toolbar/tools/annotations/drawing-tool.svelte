@@ -277,6 +277,19 @@
     />
 
     <SliderWithInput
+      label={m.annotations_rotation()}
+      value={effectiveStyle.rotation ?? 0}
+      min={0}
+      max={359}
+      step={1}
+      inputWidth="72px"
+      onchange={(rotation) => {
+        if ((effectiveStyle.rotation ?? 0) === rotation) return;
+        annotationsActions.applyStyle({ rotation });
+      }}
+    />
+
+    <SliderWithInput
       label={m.opacity()}
       value={toOpacityPercent(effectiveStyle.opacity)}
       min={0}
