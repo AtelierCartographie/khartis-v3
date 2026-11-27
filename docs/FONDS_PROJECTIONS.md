@@ -209,20 +209,32 @@ quand celui-ci ne trouve aucun fond qui contienne toutes les données
   données obtient 100 %, de la région jusqu'au monde. Une alternative n'y est
   gardée que si sa surface ne dépasse pas **3 fois** celle de la première ;
 - les **millésimes** d'un même fond (même fichier une fois retirés le niveau de
-  simplification et l'année finale, `getBasemapVintageFamily`) dont les scores
-  sont à égalité, à 1 point près, partagent une seule carte. Ils ne comptent
-  pas dans la limite de trois cartes. La carte montre le millésime le plus
-  récent et le nombre de millésimes. Quand les données départagent les
-  millésimes (99 % contre 92 % sur les communes), ils restent des cartes
-  distinctes, car l'écart informe.
+  simplification et l'année finale, `getBasemapVintageFamily`) qui passent ces
+  critères partagent une seule carte, qui ne compte qu'une fois dans la limite
+  de trois. Ils y sont rangés **par score décroissant**, le plus récent ne
+  passant devant qu'en cas d'égalité exacte. La carte mène avec le millésime
+  qui correspond le mieux et indique le nombre de millésimes.
+
+Les données départagent souvent les millésimes de quelques valeurs seulement :
+sur les communes suisses de 2022 (OFS), le fond 2022 trouve 100 % des codes, le
+fond 2021 99,77 %, le fond 2020 99,49 %. Sur les codes ISTAT de 2024, les fonds
+2025 et 2026 trouvent tous deux 100 % et le fond 2024 99,96 %. Les points GPS
+ou une emprise, eux, ne départagent jamais deux millésimes : tous obtiennent le
+même score et le plus récent mène.
+
+Le score affiché est **tronqué**, jamais arrondi vers le haut
+(`getDisplayedMatchScore`) : à l'entier en dessous de 99 %, à une décimale
+au-dessus. 100 % signifie donc que toutes les valeurs ont été trouvées, et
+99,9 % qu'il en manque quelques-unes.
 
 Les seuils sont des constantes du service ; les cas limites sont fixés par
 `basemap-catalog.service.svelte.test.ts`.
 
 La première suggestion est présélectionnée si son score repose sur les données
 (`shouldAutoSelectSuggestedBasemap`). Quand la carte sélectionnée regroupe
-plusieurs millésimes, un bandeau sous les suggestions permet d'en choisir un ;
-la carte affiche alors le millésime retenu.
+plusieurs millésimes, un bandeau sous les suggestions permet d'en choisir un,
+dans l'ordre de la carte ; chaque millésime y porte son score quand les scores
+diffèrent. La carte affiche alors le millésime retenu et son score.
 
 **Limite connue.** Le score GPS compare des rectangles, pas des points dans des
 polygones. Une région voisine dont le rectangle englobe celui des données

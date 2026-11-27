@@ -377,9 +377,17 @@ export interface RankedBasemapSuggestion {
   matchesData: boolean;
 }
 
+export interface BasemapVintage {
+  basemap: BasemapMetadata;
+  score: number;
+}
+
 export interface RelevantBasemapSuggestion extends RankedBasemapSuggestion {
-  /** Vintages the score cannot tell apart, latest first; `basemap` is one. */
-  vintages: BasemapMetadata[];
+  /**
+   * The relevant vintages of the basemap, best score first and latest first
+   * on an exact tie. `basemap` and `score` are those of the first one.
+   */
+  vintages: BasemapVintage[];
 }
 
 // An alternative is offered only when it stands close to the top suggestion:
@@ -416,11 +424,19 @@ function isRelevantAlternative(
   );
 }
 
+function compareVintages(left: BasemapVintage, right: BasemapVintage): number {
+  const scoreDelta = right.score - left.score;
+  if (Math.abs(scoreDelta) > GPS_SCORE_EPSILON) return scoreDelta;
+  return getBasemapYearValue(right.basemap) - getBasemapYearValue(left.basemap);
+}
+
 /**
  * Keeps, from suggestions ranked best first, the ones worth offering: the top
- * one, then the alternatives close to it, up to `limit` cards. Vintages of a
- * basemap whose scores tie share one card, so they do not crowd out another
- * basemap: GPS points or an extent cannot tell two vintages apart.
+ * one, then the alternatives close to it, up to `limit` cards. The relevant
+ * vintages of one basemap share a card, so they do not crowd out another
+ * basemap, and the card leads with the vintage that matches best: the data
+ * often tells vintages apart by a few values only (OFS 2022 communes: 100 %
+ * on 2022, 99.77 % on 2021), while GPS points or an extent never do.
  */
 export function selectRelevantBasemapSuggestions(
   ranked: readonly RankedBasemapSuggestion[],
@@ -429,42 +445,53 @@ export function selectRelevantBasemapSuggestions(
   const top = ranked[0];
   if (!top) return [];
 
-  const selected: RelevantBasemapSuggestion[] = [];
+  const stacks: Array<{
+    family: string;
+    suggestion: RankedBasemapSuggestion;
+    vintages: BasemapVintage[];
+  }> = [];
   for (const candidate of ranked) {
-    const family = candidate.basemap.isCustom
-      ? candidate.basemap.file
-      : getBasemapVintageFamily(candidate.basemap.file);
-    const stack = selected.find(
-      (suggestion) =>
-        !suggestion.basemap.isCustom &&
-        getBasemapVintageFamily(suggestion.basemap.file) === family &&
-        Math.abs(suggestion.score - candidate.score) <= BBOX_COVERAGE_TOLERANCE
-    );
-    if (stack) {
-      stack.vintages.push(candidate.basemap);
-      continue;
-    }
-
-    if (selected.length >= options.limit) continue;
     if (
       candidate !== top &&
       !isRelevantAlternative(top, candidate, options.rankedBy)
     ) {
       continue;
     }
-    selected.push({ ...candidate, vintages: [candidate.basemap] });
+
+    const family = candidate.basemap.isCustom
+      ? `custom:${candidate.basemap.file}`
+      : getBasemapVintageFamily(candidate.basemap.file);
+    const vintage = { basemap: candidate.basemap, score: candidate.score };
+    const stack = stacks.find((existing) => existing.family === family);
+    if (stack) {
+      stack.vintages.push(vintage);
+    } else if (stacks.length < options.limit) {
+      stacks.push({ family, suggestion: candidate, vintages: [vintage] });
+    }
   }
 
-  return selected.map((suggestion) => {
-    const vintages = [...suggestion.vintages].sort(
-      (left, right) => getBasemapYearValue(right) - getBasemapYearValue(left)
-    );
+  return stacks.map(({ suggestion, vintages }) => {
+    const ordered = [...vintages].sort(compareVintages);
+    const best = ordered[0] ?? vintages[0];
     return {
       ...suggestion,
-      basemap: vintages[0] ?? suggestion.basemap,
-      vintages
+      basemap: best.basemap,
+      score: best.score,
+      vintages: ordered
     };
   });
+}
+
+/**
+ * The share shown on a suggestion card, truncated so that it never claims more
+ * than the data holds: rounding would show 100 % for a basemap that misses a
+ * few values, the one thing that tells two vintages apart. Above 99 it keeps a
+ * decimal.
+ */
+export function getDisplayedMatchScore(score: number): number {
+  if (score >= 100) return 100;
+  if (score >= 99) return Math.floor(score * 10) / 10;
+  return Math.floor(score);
 }
 
 function getSearchableText(basemap: BasemapMetadata): string {

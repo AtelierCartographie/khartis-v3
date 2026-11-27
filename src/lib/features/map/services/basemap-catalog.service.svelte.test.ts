@@ -6,6 +6,7 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   rankBasemapsByGPSBbox,
+  getDisplayedMatchScore,
   rankBasemapsByJoinSynthesis,
   selectRelevantBasemapSuggestions,
   shouldPreferTextBasemapRefinementForGPS,
@@ -394,7 +395,7 @@ describe('selectRelevantBasemapSuggestions', () => {
   ) {
     return suggestions.map((suggestion) => [
       suggestion.basemap.file,
-      suggestion.vintages.map((vintage) => vintage.file)
+      suggestion.vintages.map((vintage) => vintage.basemap.file)
     ]);
   }
 
@@ -416,16 +417,16 @@ describe('selectRelevantBasemapSuggestions', () => {
   it('should keep close alternatives and drop those under the floor when the top is strong', () => {
     const suggestions = selectRelevantBasemapSuggestions(
       [
-        ranked('france-commune-2026-medium', 99),
-        ranked('france-commune-2023-medium', 82),
+        ranked('france-departement-2025-medium', 99),
+        ranked('europe-nuts3-2024-medium', 82),
         ranked('france-canton-2025-medium', 60)
       ],
       { limit: 3, rankedBy: 'values' }
     );
 
     expect(suggestions.map((suggestion) => suggestion.basemap.file)).toEqual([
-      'france-commune-2026-medium',
-      'france-commune-2023-medium'
+      'france-departement-2025-medium',
+      'europe-nuts3-2024-medium'
     ]);
   });
 
@@ -483,21 +484,55 @@ describe('selectRelevantBasemapSuggestions', () => {
     ]);
   });
 
-  it('should keep vintages apart when the data tells them apart', () => {
+  it('should show the best-matching vintage first when the data tells vintages apart', () => {
+    // Shares measured on the OFS 2022 communes against the catalog.
     const suggestions = selectRelevantBasemapSuggestions(
       [
-        ranked('france-commune-2026-medium', 100),
-        ranked('france-commune-2024-medium', 97),
-        ranked('france-commune-2025-medium', 97)
+        ranked('suisse-commune-2022-high', 100),
+        ranked('suisse-commune-2021-high', 99.77),
+        ranked('suisse-commune-2020-high', 99.49),
+        ranked('suisse-commune-2023-high', 99.16),
+        ranked('suisse-commune-2026-high', 98.4),
+        ranked('suisse-district-2026-high', 12)
       ],
       { limit: 3, rankedBy: 'values' }
     );
 
     expect(summary(suggestions)).toEqual([
-      ['france-commune-2026-medium', ['france-commune-2026-medium']],
       [
-        'france-commune-2025-medium',
-        ['france-commune-2025-medium', 'france-commune-2024-medium']
+        'suisse-commune-2022-high',
+        [
+          'suisse-commune-2022-high',
+          'suisse-commune-2021-high',
+          'suisse-commune-2020-high',
+          'suisse-commune-2023-high',
+          'suisse-commune-2026-high'
+        ]
+      ]
+    ]);
+    expect(suggestions[0]?.score).toBe(100);
+    expect(suggestions[0]?.vintages[1]?.score).toBe(99.77);
+  });
+
+  it('should prefer the latest vintage only among vintages that tie exactly', () => {
+    // ISTAT 2024 codes: the 2025 and 2026 boundaries hold every one of them.
+    const suggestions = selectRelevantBasemapSuggestions(
+      [
+        ranked('italie-comune-2025-medium', 100),
+        ranked('italie-comune-2026-medium', 100),
+        ranked('italie-comune-2024-medium', 99.96)
+      ],
+      { limit: 3, rankedBy: 'values' }
+    );
+
+    expect(summary(suggestions)).toEqual([
+      [
+        'italie-comune-2026-medium',
+        [
+          'italie-comune-2026-medium',
+          'italie-comune-2025-medium',
+          'italie-comune-2024-medium'
+        ]
       ]
     ]);
   });
@@ -539,5 +574,14 @@ describe('selectRelevantBasemapSuggestions', () => {
       'france-iris-2026-medium'
     ]);
     expect(suggestions[0]?.vintages).toHaveLength(3);
+  });
+});
+
+describe('getDisplayedMatchScore', () => {
+  it('should never round a score up when every value does not match', () => {
+    expect(getDisplayedMatchScore(100)).toBe(100);
+    expect(getDisplayedMatchScore(99.96)).toBe(99.9);
+    expect(getDisplayedMatchScore(99.77)).toBe(99.7);
+    expect(getDisplayedMatchScore(98.88)).toBe(98);
   });
 });

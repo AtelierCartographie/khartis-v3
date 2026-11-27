@@ -14,9 +14,11 @@
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import {
+    getDisplayedMatchScore,
     type RelevantBasemapSuggestion,
     sortCatalogBasemapsForDisplay
   } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import type {
     BasemapExtent,
     BasemapMetadata,
@@ -303,28 +305,39 @@
     return () => observer.disconnect();
   });
 
-  // GPS points or an extent cannot tell vintages apart: their card stacks
-  // them, and the user picks one once the card is selected.
+  // The vintages of a basemap share a card, best match first; once the card
+  // is selected, the user can pick another vintage under the suggestions.
   const selectedVintageStack = $derived(
     suggestedBasemaps.find(
       ({ vintages }) =>
         vintages.length > 1 &&
-        vintages.some((vintage) => vintage.file === basemapSelected)
+        vintages.some((vintage) => vintage.basemap.file === basemapSelected)
     )
   );
-  const vintageItems = $derived(
-    selectedVintageStack?.vintages.map((vintage) => ({
-      id: vintage.file,
-      text: formatBasemapValidity(vintage)
-    })) ?? []
-  );
+  const vintageItems = $derived.by(() => {
+    if (!selectedVintageStack) return [];
+    const { vintages, matchesData } = selectedVintageStack;
+    // GPS points or an extent score every vintage alike: the score would
+    // only repeat itself next to each year.
+    const showScore =
+      matchesData && vintages.some(({ score }) => score !== vintages[0].score);
+    return vintages.map(({ basemap, score }) => ({
+      id: basemap.file,
+      text: showScore
+        ? `${formatBasemapValidity(basemap)} · ${formatValue(
+            getDisplayedMatchScore(score),
+            { maxFractionDigits: 1 }
+          )} %`
+        : formatBasemapValidity(basemap)
+    }));
+  });
 
   function handleVintageSelect(file: string): void {
     if (file === basemapSelected) return;
     const vintage = selectedVintageStack?.vintages.find(
-      (candidate) => candidate.file === file
+      (candidate) => candidate.basemap.file === file
     );
-    if (vintage) onSelectBasemap(vintage);
+    if (vintage) onSelectBasemap(vintage.basemap);
   }
 
   const suggestionsPanelOpen = $derived(
@@ -434,16 +447,16 @@
         <div class="basemap-slider" class:compact-slider={isCompact}>
           <div class="basemap-slider-track">
             {#each suggestedBasemaps as { basemap, vintages, score, matchesData } (basemap.file)}
-              {@const shown =
-                vintages.find((vintage) => vintage.file === basemapSelected) ??
-                basemap}
+              {@const shown = vintages.find(
+                (vintage) => vintage.basemap.file === basemapSelected
+              ) ?? { basemap, score }}
               <BasemapCardVertical
-                basemap={shown}
+                basemap={shown.basemap}
                 vintageCount={vintages.length}
-                matchScore={score}
+                matchScore={shown.score}
                 showMatchScore={matchesData}
-                selected={shown.file === basemapSelected}
-                onclick={() => onSelectBasemap(shown)}
+                selected={shown.basemap.file === basemapSelected}
+                onclick={() => onSelectBasemap(shown.basemap)}
               />
             {/each}
           </div>
@@ -711,7 +724,7 @@
   }
 
   .vintage-band-picker {
-    flex: 0 0 9rem;
+    flex: 0 0 11rem;
   }
 
   .basemap-slider-track :global(.basemap-card) {
